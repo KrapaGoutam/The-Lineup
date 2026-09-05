@@ -89,25 +89,24 @@ function buildInitialHistory() {
 function TableEntry({
   value,
   disabled,
-  showReasonField,
   onSubmit,
 }: {
   value: string | null;
   disabled: boolean;
-  showReasonField: boolean;
-  onSubmit: (value: string, reason?: string) => void;
+  onSubmit: (value: string) => void;
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const input = form.get("table");
-    const reason = String(form.get("reason") ?? "").trim();
     if (typeof input !== "string" || !input.trim()) return;
-    // Feature 011 revision: a reason is never required to submit — only
-    // attribution (who/what column/when) is, and that's recorded by the
-    // caller unconditionally for any cross-column write, with or without
-    // a reason. Blocking the edit here was the exact friction dropped.
-    onSubmit(input, reason || undefined);
+    // Feature 011, revised twice: a reason was first made optional, then
+    // removed entirely — one input, no second field under it, for every
+    // column regardless of whose it is. Attribution (who/what column/
+    // when) is recorded by the caller unconditionally for any
+    // cross-column write; that was always the actual safeguard, not the
+    // reason text.
+    onSubmit(input);
     event.currentTarget.reset();
   }
   if (value) {
@@ -122,32 +121,22 @@ function TableEntry({
     );
   }
   return (
-    <form onSubmit={submit} className="space-y-1.5">
-      <div className="flex min-h-14 gap-2">
-        <Input
-          name="table"
-          aria-label="Table number or combined tables"
-          placeholder={disabled ? "Not available" : "Table #"}
-          disabled={disabled}
-          className="min-w-0 font-mono"
-        />
-        <Button
-          size="icon"
-          type="submit"
-          disabled={disabled}
-          aria-label="Add table"
-        >
-          <Plus aria-hidden="true" />
-        </Button>
-      </div>
-      {showReasonField && !disabled ? (
-        <Input
-          name="reason"
-          aria-label="Reason for editing another server's column"
-          placeholder="Reason (optional)"
-          className="h-9 text-xs"
-        />
-      ) : null}
+    <form onSubmit={submit} className="flex min-h-14 gap-2">
+      <Input
+        name="table"
+        aria-label="Table number or combined tables"
+        placeholder={disabled ? "Not available" : "Table #"}
+        disabled={disabled}
+        className="min-w-0 font-mono"
+      />
+      <Button
+        size="icon"
+        type="submit"
+        disabled={disabled}
+        aria-label="Add table"
+      >
+        <Plus aria-hidden="true" />
+      </Button>
     </form>
   );
 }
@@ -156,7 +145,6 @@ type CrossEditEntry = {
   at: string;
   actorName: string;
   columnName: string;
-  reason?: string;
 };
 
 export function AllocationWorkspace({
@@ -590,8 +578,7 @@ export function AllocationWorkspace({
                         <TableEntry
                           value={cell?.tableLabel ?? null}
                           disabled={!canWrite}
-                          showReasonField={crossColumn}
-                          onSubmit={(tableLabel, reason) => {
+                          onSubmit={(tableLabel) => {
                             execute({
                               type: "assign",
                               roundId: round.id,
@@ -599,9 +586,8 @@ export function AllocationWorkspace({
                               tableLabel,
                             });
                             // Attribution is recorded for every
-                            // cross-column write regardless of whether a
-                            // reason was given — the reason is optional,
-                            // the who/what/when trail is not.
+                            // cross-column write, unconditionally — there
+                            // is no reason field to gate it on anymore.
                             if (crossColumn) {
                               setCrossEditLog((log) => [
                                 ...log,
@@ -609,7 +595,6 @@ export function AllocationWorkspace({
                                   at: new Date().toISOString(),
                                   actorName: user.name,
                                   columnName: column.name,
-                                  reason,
                                 },
                               ]);
                             }
@@ -632,8 +617,7 @@ export function AllocationWorkspace({
             <p className="text-muted-foreground text-xs">
               Anyone can edit any column now — every edit to someone else&apos;s
               column is recorded here with who did it and when, visible to the
-              whole team, not just managers. A reason is optional and never
-              required to make the edit.
+              whole team, not just managers.
             </p>
           </CardHeader>
           <CardContent className="space-y-1.5 text-xs">
@@ -646,7 +630,6 @@ export function AllocationWorkspace({
                     {entry.actorName}
                   </span>{" "}
                   edited {entry.columnName}&apos;s column
-                  {entry.reason ? ` — ${entry.reason}` : ""}
                 </p>
               ))}
           </CardContent>

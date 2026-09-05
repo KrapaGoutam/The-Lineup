@@ -271,10 +271,12 @@ export function getWorkingRound(
 /**
  * Writing to your own column is unattributed, same as always. Writing to
  * someone else's is always recorded (who, what column, when) so a
- * dispute has a trail — but per Feature 011's revision, a reason is
- * optional, not required: it must never block the edit itself. Kept as a
- * named export (was `writeRequiresReason` when a reason was mandatory)
- * so the one "is this a cross-column write" check stays in one place.
+ * dispute has a trail. Feature 011 was revised twice: a reason was
+ * first made optional, then dropped from the UI entirely — there is no
+ * reason field anywhere in the allocation board anymore, only this
+ * unconditional attribution. Kept as a named export (was
+ * `writeRequiresReason` when a reason was mandatory) so the one "is
+ * this a cross-column write" check stays in one place.
  */
 export function isCrossColumnEdit(input: {
   profileId: string;

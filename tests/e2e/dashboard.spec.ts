@@ -89,14 +89,14 @@ test("server sees published schedule, can edit any column (Feature 011), and see
     0,
   );
   // But Feature 011 opens plain column writes to everyone: a server sees
-  // more than just their own enabled input, and a reason field appears
-  // for editing someone else's column.
+  // more than just their own enabled input — one input, no second field
+  // under it, for every column regardless of whose it is.
   await expect(
     page.locator('input[aria-label="Table number or combined tables"]:enabled'),
   ).not.toHaveCount(0);
   await expect(
     page.getByLabel("Reason for editing another server's column"),
-  ).not.toHaveCount(0);
+  ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Tip split", exact: true }).click();
   await expect(
@@ -338,29 +338,23 @@ test("editing another server's column succeeds without a reason, and is still at
     .locator('input[aria-label="Table number or combined tables"]:enabled')
     .first()
     .fill("99");
-  // No reason typed — the field is optional and must never block the edit.
+  // No reason field exists to fill in anymore — the edit still succeeds.
   await page.getByRole("button", { name: "Add table" }).first().click();
   await expect(page.getByText("Table 99")).toBeVisible();
   await expect(page.getByText(/edited .* column/)).toBeVisible();
 });
 
-test("a reason is recorded and shown for a cross-column edit", async ({
+test("no reason field renders anywhere on the allocation board", async ({
   page,
 }) => {
   await signIn(page, "2468");
   await page
     .getByRole("button", { name: "Table allocation", exact: true })
     .click();
-  await page
-    .locator('input[aria-label="Table number or combined tables"]:enabled')
-    .first()
-    .fill("99");
-  await page
-    .getByLabel("Reason for editing another server's column")
-    .first()
-    .fill("Covering a break");
-  await page.getByRole("button", { name: "Add table" }).first().click();
-  await expect(page.getByText("Covering a break")).toBeVisible();
+  await expect(
+    page.getByLabel("Reason for editing another server's column"),
+  ).toHaveCount(0);
+  await expect(page.getByPlaceholder(/[Rr]eason/)).toHaveCount(0);
 });
 
 test("board locks once tips are finalized, and a manager can reopen it", async ({
