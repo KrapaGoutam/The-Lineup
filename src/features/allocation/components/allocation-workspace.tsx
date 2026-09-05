@@ -34,13 +34,16 @@ import {
   type BoardHistory,
 } from "@/features/allocation/domain/rotation-board";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
-import { team } from "@/lib/demo-data";
+import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
 
 function buildInitialHistory() {
   let history = createBoardHistory(
     createRotationBoard(
-      team.slice(0, 4).map((member, position) => ({
+      // Seeds the board's starting four columns from the static demo
+      // roster once, at first mount only — unrelated to who can be added
+      // live afterward (that reads the `team` prop below, not this seed).
+      seedTeam.slice(0, 4).map((member, position) => ({
         id: member.id,
         name: member.name,
         position,
@@ -160,11 +163,13 @@ type CrossEditEntry = {
 
 export function AllocationWorkspace({
   user,
+  team,
   boardLocked,
   onReopenTips,
   tipsAuditLog,
 }: {
   user: SignedInUser;
+  team: TeamMember[];
   boardLocked: boolean;
   onReopenTips: (reason: string) => void;
   tipsAuditLog: TipsAuditEntry[];

@@ -450,11 +450,16 @@ export function RestaurantOperationsApp({
 
       <main className="mx-auto max-w-[1540px] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
         {tab === "schedule" ? (
-          <ScheduleWorkspace user={user} shiftDefaults={shiftDefaults} />
+          <ScheduleWorkspace
+            user={user}
+            team={demoTeam}
+            shiftDefaults={shiftDefaults}
+          />
         ) : null}
         {tab === "allocation" ? (
           <AllocationWorkspace
             user={user}
+            team={demoTeam}
             boardLocked={tipsStatus === "finalized"}
             onReopenTips={reopenTips}
             tipsAuditLog={tipsAuditLog}
@@ -463,6 +468,7 @@ export function RestaurantOperationsApp({
         {tab === "tips" ? (
           <TipWorkspace
             user={user}
+            team={demoTeam}
             status={tipsStatus}
             onFinalize={finalizeTips}
             onReopen={reopenTips}

@@ -27,7 +27,7 @@ import type {
   TipsAuditEntry,
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
-import { initialTipIntervals, team } from "@/lib/demo-data";
+import { initialTipIntervals, type TeamMember } from "@/lib/demo-data";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -40,12 +40,14 @@ function money(cents: number) {
 
 export function TipWorkspace({
   user,
+  team,
   status,
   onFinalize,
   onReopen,
   auditLog,
 }: {
   user: SignedInUser;
+  team: TeamMember[];
   status: TipsDayStatus;
   onFinalize: () => void;
   onReopen: (reason: string) => void;
@@ -352,8 +354,12 @@ export function TipWorkspace({
             </div>
             <fieldset disabled={status === "finalized"}>
               <legend className="text-sm font-medium">Who was working?</legend>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Everyone active at this restaurant is selectable — the original
+                active-floor suggestion is preselected below.
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {team.slice(0, 4).map((member) => (
+                {team.map((member, index) => (
                   <Label
                     key={member.id}
                     className="border-border bg-secondary has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 font-normal"
@@ -362,7 +368,12 @@ export function TipWorkspace({
                       type="checkbox"
                       name="participants"
                       value={member.id}
-                      defaultChecked
+                      // The first four members are the original demo
+                      // "active floor" suggestion. Anyone added later
+                      // (e.g. via self-serve registration) is selectable
+                      // but starts unchecked, same as any other person a
+                      // manager would need to add deliberately.
+                      defaultChecked={index < 4}
                       className="accent-[var(--primary)]"
                     />
                     <span

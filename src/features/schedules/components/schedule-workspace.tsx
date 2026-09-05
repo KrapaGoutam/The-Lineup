@@ -25,7 +25,11 @@ import {
   type ShiftDefaults,
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
-import { initialShifts, team, type DemoShift } from "@/lib/demo-data";
+import {
+  initialShifts,
+  type DemoShift,
+  type TeamMember,
+} from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
 
 const weekDates = [
@@ -92,9 +96,11 @@ function ShiftBlock({
 }
 
 function ShiftEditor({
+  team,
   onAdd,
   shiftDefaults,
 }: {
+  team: TeamMember[];
   onAdd: (shifts: DemoShift[]) => void;
   shiftDefaults: ShiftDefaults;
 }) {
@@ -258,9 +264,11 @@ function ShiftEditor({
 
 export function ScheduleWorkspace({
   user,
+  team,
   shiftDefaults,
 }: {
   user: SignedInUser;
+  team: TeamMember[];
   shiftDefaults: ShiftDefaults;
 }) {
   const isManager = user.role !== "server";
@@ -342,6 +350,7 @@ export function ScheduleWorkspace({
 
       {showEditor && isManager ? (
         <ShiftEditor
+          team={team}
           shiftDefaults={shiftDefaults}
           onAdd={(added) => setShifts((current) => [...current, ...added])}
         />
@@ -431,7 +440,7 @@ export function ScheduleWorkspace({
                   </div>
                 ))}
               </div>
-              {(isManager ? team : team).map((member) => (
+              {team.map((member) => (
                 <div
                   key={member.id}
                   className={cn(
