@@ -29,4 +29,9 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 9. Backup, recovery, usage monitoring, and incident runbook
 10. CSV/PDF export and configurable restaurant policies
 
+## Deferred (spec written, not scheduled)
+
+- [ ] Light/dark theme toggle — `docs/features/012-theme-toggle.md`. Spec only; a light palette doesn't exist yet in `globals.css` and needs designing before this can be built, not just a toggle wired up.
+- [ ] Virtual numeric keypad on login — `docs/features/013-virtual-numeric-keypad.md`. Spec only; additive alongside the typed passcode input, not a replacement.
+
 POS, reservations, payroll, SMS, and native apps require separate product discovery after pilot evidence.
