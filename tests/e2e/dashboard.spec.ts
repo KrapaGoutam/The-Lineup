@@ -6,6 +6,39 @@ async function signIn(page: Page, passcode: string) {
   await page.getByRole("button", { name: "Open workspace" }).click();
 }
 
+test("manager can bulk-import shifts via CSV", async ({ page }) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Import CSV" }).click();
+  await page.setInputFiles('input[type="file"]', {
+    name: "shifts.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "employee_name,shift_kind,from_date,to_date,custom_start,custom_end,note\nMia Chen,morning,2026-09-20,,,,",
+    ),
+  });
+  await expect(page.getByText("Valid")).toBeVisible();
+  await page.getByRole("button", { name: /Create 1 draft shift/ }).click();
+  await expect(page.getByText("Import shifts from CSV")).toHaveCount(0);
+});
+
+test("CSV import blocks commit on an unresolved row error", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Import CSV" }).click();
+  await page.setInputFiles('input[type="file"]', {
+    name: "shifts.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "employee_name,shift_kind,from_date,to_date,custom_start,custom_end,note\nGhost Person,morning,2026-09-20,,,,",
+    ),
+  });
+  await expect(page.getByText(/Unknown employee/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Create.*draft shift/ }),
+  ).toBeDisabled();
+});
+
 test("manager can use all three operational modules", async ({ page }) => {
   await signIn(page, "2468");
 

@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Plus,
   Send,
+  Upload,
 } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
@@ -17,6 +18,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { CsvImportPanel } from "@/features/schedules/components/csv-import-panel";
 import {
   createShiftInstances,
   findShiftConflicts,
@@ -264,6 +266,7 @@ export function ScheduleWorkspace({
   const isManager = user.role !== "server";
   const [view, setView] = useState<"week" | "month">("week");
   const [showEditor, setShowEditor] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
   const [shifts, setShifts] = useState<DemoShift[]>(initialShifts);
   const visibleShifts = useMemo(
     () => shifts.filter((shift) => isManager || shift.status === "published"),
@@ -325,6 +328,11 @@ export function ScheduleWorkspace({
             </Button>
           ) : null}
           {isManager ? (
+            <Button variant="secondary" onClick={() => setShowCsvImport(true)}>
+              <Upload aria-hidden="true" /> Import CSV
+            </Button>
+          ) : null}
+          {isManager ? (
             <Button onClick={publishDraft} disabled={draftCount === 0}>
               <Send aria-hidden="true" /> Publish {draftCount || ""}
             </Button>
@@ -336,6 +344,15 @@ export function ScheduleWorkspace({
         <ShiftEditor
           shiftDefaults={shiftDefaults}
           onAdd={(added) => setShifts((current) => [...current, ...added])}
+        />
+      ) : null}
+
+      {showCsvImport && isManager ? (
+        <CsvImportPanel
+          employees={team.map(({ id, name }) => ({ id, name }))}
+          shiftDefaults={shiftDefaults}
+          onCommit={(added) => setShifts((current) => [...current, ...added])}
+          onClose={() => setShowCsvImport(false)}
         />
       ) : null}
 
