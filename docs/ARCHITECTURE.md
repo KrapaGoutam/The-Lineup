@@ -108,7 +108,7 @@ Assignment objectives, in order:
 
 The first version may use a deterministic greedy allocator. Exact optimization is deferred until pilot data demonstrates a real failure.
 
-The delivered table-allocation board is a smaller append-only operational model: active/paused/removed server columns, numbered rounds, table labels, and actor-stamped board events. A complete active row creates one empty trailing row. In the client, history snapshots power immediate undo/redo; Supabase mode persists equivalent inverse events.
+The delivered table-allocation board is a smaller append-only operational model: active/paused/removed server columns, numbered rounds, table labels, and actor-stamped board events. A complete active row creates one empty trailing row. In the client, history snapshots power immediate undo/redo; Supabase mode persists equivalent inverse events. Column order (`position`) is manager/owner-reorderable at any time, including mid-round; because entries are keyed by column identity rather than position, reordering only changes who is considered "next" for future turns, never any already-recorded assignment (Feature 010). Any active member may record a table against any column, not only their own — attribution (`assigned_by`) stays real and unspoofable regardless, and a write to someone else's column requires a short, recorded reason (Feature 011). The board is entirely read-only, for every role, once that service date's tip pool is finalized, and reopening it is a manager/owner-only, reason-required action.
 
 ## Tip splitting
 

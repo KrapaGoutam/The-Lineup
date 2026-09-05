@@ -87,21 +87,23 @@ Default effective workload:
 
 ## RLS matrix
 
-| Data                  | Owner/GM | Shift manager          | Host       | Server                      |
-| --------------------- | -------- | ---------------------- | ---------- | --------------------------- |
-| Organization settings | Manage   | Read assigned location | No         | No                          |
-| Staff roster draft    | Manage   | Manage assigned shifts | Read today | Own/read published          |
-| Published schedule    | Manage   | Read                   | Read       | Read assigned location      |
-| Floor configuration   | Manage   | Manage                 | Read       | Read own section            |
-| Live service          | Manage   | Manage                 | Operate    | Read own status             |
-| Audit events          | Read     | Read assigned location | No         | No                          |
-| Table allocation rows | Manage   | Manage                 | Read       | Write own active column     |
-| Tip inputs/totals     | Manage   | Manage                 | No         | Own allocation only         |
-| Registrations         | Manage   | Read                   | No         | Self-serve via server route |
+| Data                  | Owner/GM                | Shift manager           | Host                    | Server                      |
+| --------------------- | ----------------------- | ----------------------- | ----------------------- | --------------------------- |
+| Organization settings | Manage                  | Read assigned location  | No                      | No                          |
+| Staff roster draft    | Manage                  | Manage assigned shifts  | Read today              | Own/read published          |
+| Published schedule    | Manage                  | Read                    | Read                    | Read assigned location      |
+| Floor configuration   | Manage                  | Manage                  | Read                    | Read own section            |
+| Live service          | Manage                  | Manage                  | Operate                 | Read own status             |
+| Audit events          | Read                    | Read assigned location  | No                      | No                          |
+| Table allocation rows | Manage (+ reorder/lock) | Manage (+ reorder/lock) | Write any active column | Write any active column     |
+| Tip inputs/totals     | Manage                  | Manage                  | No                      | Own allocation only         |
+| Registrations         | Manage                  | Read                    | No                      | Self-serve via server route |
 
 Policies combine `to authenticated` with an indexed membership/location predicate. `to authenticated` by itself is not authorization. Update policies include both `using` and `with check`.
 
 `memberships.roles` is an enum array so one person can operate in more than one restaurant role without duplicating their membership. General managers may manage operational roles but cannot grant, edit, or remove owner/general-manager roles; an owner must do that.
+
+**Table allocation writes (Feature 011)**: `table_rotation_entries` is writable by any active member for any column, not only their own — `assigned_by` is still always the caller's own `auth.uid()` and can never be spoofed to attribute an edit to someone else. A write to a column that isn't the actor's own additionally requires a UI-collected reason (application-layer, not a new column — carried in `board_events.payload` for a cross-column event). Manager-only actions (pause/remove/reorder/clear) keep their own separate manager-scoped policies, unaffected by this change. `rotation_members.position` (Feature 010) is the reorder target: it changes who is "next" for future turns without touching any already-recorded `table_rotation_entries` row, since entries are keyed by `rotation_member_id`, not position. All allocation-board writes are denied — for every role, including owner — once that service date's `tip_pools` row is `finalized`; the reverse transition (`tip_pools_reopen_manager`) is manager/owner-only and requires clearing `finalized_at`/`finalized_by` together with the status change, matching the existing check constraint.
 
 ## Data API exposure
 

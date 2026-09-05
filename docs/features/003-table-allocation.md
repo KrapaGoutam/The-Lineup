@@ -2,14 +2,16 @@
 
 Status: schema and UI complete but disconnected. The Postgres schema (`rotation_rounds`, `table_rotation_entries`, `board_events`), RLS, and pgTAP coverage are production-ready; `allocation-workspace.tsx` runs the pure `rotation-board.ts` reducer entirely on in-memory `useState` and never writes `board_events` or subscribes to Realtime. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
 
+**Superseded in part by Features 009, 010, and 011** (2026-09-05): the "own active column only" rule below is a deliberate reversal, not an oversight — see `docs/features/011-allocation-board-open-editing.md` for the reasoning (including the tip-math question it required answering) and `docs/SECURITY.md`'s "Allocation-board open editing" section for the full authorization treatment. The quick-add list was never actually schedule-filtered (Feature 009 proved and locked that instead of changing it), and column reordering (Feature 010) is a genuinely new capability this spec didn't originally include.
+
 ## User outcome
 
 The floor team maintains a live rotation board whose server columns can change during service. Each filled round creates the next row automatically and every destructive action is recoverable through history.
 
 ## Rules
 
-- Active server memberships become ordered columns; managers can add, remove, pause, and resume them.
-- Employees may add a table only to their own active column. Managers may edit any column.
+- Active memberships become ordered columns — any active employee, scheduled for the shift or not (Feature 009); managers can add, remove, pause, resume, and reorder them (reorder: Feature 010).
+- ~~Employees may add a table only to their own active column. Managers may edit any column.~~ Superseded by Feature 011: any signed-in active member may write a table entry against any column; editing someone else's requires a short, recorded reason, own-column writes stay frictionless. The board locks for everyone once that date's tips are finalized.
 - A cell may contain one table or a combined-table label such as `12 + 13`.
 - A new empty round appears only when every active, non-paused column in the current round is filled.
 - Paused or removed columns do not block the next round and history remains visible.
@@ -30,10 +32,10 @@ The floor team maintains a live rotation board whose server columns can change d
 
 ## Tests
 
-- Auto-row, pause/remove behavior, employee ownership, manager clear, and undo/redo domain tests.
+- Auto-row, pause/remove behavior, any-column writes with cross-column reason enforcement, reorder, manager clear, and undo/redo domain tests.
 - RLS and no-anon database checks.
-- Playwright employee self-column and manager board-control flows.
+- Playwright any-column write, reorder, finalized-day lock, and manager board-control flows.
 
 ## Codex build prompt
 
-Implement the approved event-backed allocation board. Keep the reducer pure, enforce employee self-column writes and manager clears twice (application plus RLS), and verify touch and keyboard behavior.
+Superseded — Features 009, 010, and 011 were implemented directly (Claude, not Codex) per explicit division-of-labor change for that batch; see `docs/features/005-self-serve-registration.md`'s implementation note for the full context.

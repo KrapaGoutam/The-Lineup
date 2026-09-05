@@ -43,6 +43,22 @@ See `docs/features/006-four-digit-passcodes.md` for the full design and the alte
 - Views exposed to browser roles use `security_invoker = true`.
 - `SECURITY DEFINER` is prohibited by default. An exception requires a private schema, explicit identity checks, fixed empty search path, revoked public execute, and security review.
 
+### Allocation-board open editing (Feature 011) — a deliberate, scoped exception
+
+The self-or-manager write restriction on `table_rotation_entries` is dropped. Any active member of the organization — server, host, shift manager, general manager, or owner — may now write a table entry against **any** column on the live board, not only their own. This is an intentional, narrow exception to the app's normal role-gating, confined to this one table; every other role gate in this document (schedule drafts, tip inputs, team/registration, passcode credentials) is unchanged.
+
+**What was asked and answered before this shipped**: table allocation data feeds tip splitting, so an unrestricted board could in principle let one person shift who gets credited for which tables and, downstream, the tip math. Three things hold that risk down, not one:
+
+1. **Attribution is never relaxed.** `table_rotation_entries.assigned_by` is still always the caller's own `auth.uid()`, enforced in the `with check` clause of the replacement policy — a user can act on any column, but can never claim someone else made the edit. Every write remains fully traceable to a real, verified identity.
+2. **A cross-column write requires a reason.** Writing to a column that is not the actor's own additionally requires a short, non-empty reason, surfaced in the UI and shown to the whole team (not hidden in an audit log a manager has to think to open) — this is a _new_ requirement not previously needed, since editing your own column carries no such friction. Same-column writes remain exactly as frictionless as before this feature.
+3. **Tip participant selection is a standing invariant, not a technical accident.** As of this writing, `tip-workspace.tsx` has zero dependency on allocation-board data — participants are a separate, manager-entered and manager-confirmed list, verified by reading the code before this feature was designed, not assumed. This feature commits to that separation staying true: allocation-board activity may inform a future "suggest participants from the live floor" feature (`docs/PRD.md`), but must never be treated as ground truth that bypasses manager confirmation. Anyone building that suggestion feature later must preserve this invariant explicitly.
+
+**The finalized-day lock**: once a `tip_pools` row for a service date is `finalized`, `table_rotation_entries` writes for that date's session are denied to every role, owner included, via a `not exists (...)` clause in the RLS policy that joins `rotation_rounds` → `service_sessions` → `tip_pools`. This closes the window during which "who worked which table" could still change after the money tied to it has been counted.
+
+**The lock needs an unlock, or it's a worse failure than the problem it solves.** A finalized-early manager who needs to correct that day's allocation reopens tips — manager/owner only, requires a reason — which is the same action that lifts the board lock, since the lock is derived from tip-pool status rather than a second, independently-settable flag that could drift out of sync with it. This uncovered a real, pre-existing gap: the original `tip_pools_update_draft_manager` policy's `using` clause required the row to _already_ be `draft`, so no policy permitted the finalized → draft transition in either direction before this feature. The new `tip_pools_reopen_manager` policy adds exactly that missing transition, and requires `finalized_at`/`finalized_by` to be cleared in the same update, matching the table's existing check constraint. Every finalize and every reopen is recorded (an `audit_events` row in real mode; a visible in-app log in demo mode) with actor and reason.
+
+**Residual risk, named rather than hidden**: a manager who doesn't think to check the cross-edit log could still be misled by the board's appearance alone when manually picking tip participants. The reason requirement makes cross-edits visible in the normal flow of using the board, not just in a log a manager has to remember exists — but this is a real, accepted trade-off, not a claim that the risk is eliminated.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.
@@ -73,7 +89,9 @@ Database tests must cover:
 - attempts to change `organization_id` during update;
 - audit mutation denial.
 - published schedule visibility versus draft denial;
-- server writes limited to their active table-allocation column;
+- a server can write a table-allocation entry against **any** active column, not only their own (Feature 011), and `assigned_by` cannot be spoofed to another identity;
+- pause/remove/reorder/clear on the allocation board remain manager/owner-only;
+- all table-allocation writes are denied for every role, owner included, once that service date's tip pool is finalized, and the finalized → draft reopen transition is manager/owner-only;
 - tip allocation visibility limited to the authenticated person;
 - exact reconciliation of interval cents, including remainder cents;
 - passcode uniqueness enforced within one organization and allowed reuse across organizations;
