@@ -26,10 +26,10 @@ import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
+  isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
   undoBoard,
-  writeRequiresReason,
   type BoardAction,
   type BoardHistory,
 } from "@/features/allocation/domain/rotation-board";
@@ -83,27 +83,24 @@ function buildInitialHistory() {
 function TableEntry({
   value,
   disabled,
-  requiresReason,
+  showReasonField,
   onSubmit,
 }: {
   value: string | null;
   disabled: boolean;
-  requiresReason: boolean;
+  showReasonField: boolean;
   onSubmit: (value: string, reason?: string) => void;
 }) {
-  const [error, setError] = useState("");
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
     const form = new FormData(event.currentTarget);
     const input = form.get("table");
     const reason = String(form.get("reason") ?? "").trim();
     if (typeof input !== "string" || !input.trim()) return;
-    if (requiresReason && reason.length < 3) {
-      setError("Add a short reason for editing another server's column.");
-      return;
-    }
+    // Feature 011 revision: a reason is never required to submit — only
+    // attribution (who/what column/when) is, and that's recorded by the
+    // caller unconditionally for any cross-column write, with or without
+    // a reason. Blocking the edit here was the exact friction dropped.
     onSubmit(input, reason || undefined);
     event.currentTarget.reset();
   }
@@ -137,18 +134,13 @@ function TableEntry({
           <Plus aria-hidden="true" />
         </Button>
       </div>
-      {requiresReason && !disabled ? (
+      {showReasonField && !disabled ? (
         <Input
           name="reason"
           aria-label="Reason for editing another server's column"
-          placeholder="Reason (editing another column)"
+          placeholder="Reason (optional)"
           className="h-9 text-xs"
         />
-      ) : null}
-      {error ? (
-        <p className="text-destructive text-xs" aria-live="polite">
-          {error}
-        </p>
       ) : null}
     </form>
   );
@@ -158,7 +150,7 @@ type CrossEditEntry = {
   at: string;
   actorName: string;
   columnName: string;
-  reason: string;
+  reason?: string;
 };
 
 export function AllocationWorkspace({
@@ -567,7 +559,7 @@ export function AllocationWorkspace({
                       column.status === "active" &&
                       mayWriteColumn() &&
                       !boardLocked;
-                    const requiresReason = writeRequiresReason({
+                    const crossColumn = isCrossColumnEdit({
                       profileId: user.profileId,
                       columnId: column.id,
                     });
@@ -582,7 +574,7 @@ export function AllocationWorkspace({
                         <TableEntry
                           value={cell?.tableLabel ?? null}
                           disabled={!canWrite}
-                          requiresReason={requiresReason}
+                          showReasonField={crossColumn}
                           onSubmit={(tableLabel, reason) => {
                             execute({
                               type: "assign",
@@ -590,7 +582,11 @@ export function AllocationWorkspace({
                               columnId: column.id,
                               tableLabel,
                             });
-                            if (reason) {
+                            // Attribution is recorded for every
+                            // cross-column write regardless of whether a
+                            // reason was given — the reason is optional,
+                            // the who/what/when trail is not.
+                            if (crossColumn) {
                               setCrossEditLog((log) => [
                                 ...log,
                                 {
@@ -619,8 +615,9 @@ export function AllocationWorkspace({
             <h2 className="text-sm font-semibold">Cross-column edits</h2>
             <p className="text-muted-foreground text-xs">
               Anyone can edit any column now — every edit to someone else&apos;s
-              column is recorded here with who did it and why, visible to the
-              whole team, not just managers.
+              column is recorded here with who did it and when, visible to the
+              whole team, not just managers. A reason is optional and never
+              required to make the edit.
             </p>
           </CardHeader>
           <CardContent className="space-y-1.5 text-xs">
@@ -632,7 +629,8 @@ export function AllocationWorkspace({
                   <span className="text-foreground font-medium">
                     {entry.actorName}
                   </span>{" "}
-                  edited {entry.columnName}&apos;s column — {entry.reason}
+                  edited {entry.columnName}&apos;s column
+                  {entry.reason ? ` — ${entry.reason}` : ""}
                 </p>
               ))}
           </CardContent>

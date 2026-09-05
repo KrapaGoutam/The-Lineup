@@ -228,11 +228,14 @@ export function mayWriteColumn() {
 }
 
 /**
- * Writing to your own column stays frictionless; writing to someone
- * else's now requires a short reason, so a cross-column edit is
- * deliberate and visible in the event log, not silent.
+ * Writing to your own column is unattributed, same as always. Writing to
+ * someone else's is always recorded (who, what column, when) so a
+ * dispute has a trail — but per Feature 011's revision, a reason is
+ * optional, not required: it must never block the edit itself. Kept as a
+ * named export (was `writeRequiresReason` when a reason was mandatory)
+ * so the one "is this a cross-column write" check stays in one place.
  */
-export function writeRequiresReason(input: {
+export function isCrossColumnEdit(input: {
   profileId: string;
   columnId: string;
 }) {

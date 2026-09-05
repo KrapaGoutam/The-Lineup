@@ -234,7 +234,9 @@ test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
   ).toBeDisabled();
 });
 
-test("editing another server's column requires a reason", async ({ page }) => {
+test("editing another server's column succeeds without a reason, and is still attributed", async ({
+  page,
+}) => {
   await signIn(page, "2468");
   await page
     .getByRole("button", { name: "Table allocation", exact: true })
@@ -243,8 +245,10 @@ test("editing another server's column requires a reason", async ({ page }) => {
     .locator('input[aria-label="Table number or combined tables"]:enabled')
     .first()
     .fill("99");
+  // No reason typed — the field is optional and must never block the edit.
   await page.getByRole("button", { name: "Add table" }).first().click();
-  await expect(page.getByText(/Add a short reason/)).toBeVisible();
+  await expect(page.getByText("Table 99")).toBeVisible();
+  await expect(page.getByText(/edited .* column/)).toBeVisible();
 });
 
 test("a reason is recorded and shown for a cross-column edit", async ({

@@ -4,10 +4,10 @@ import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
+  isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
   undoBoard,
-  writeRequiresReason,
 } from "./rotation-board";
 
 const columns = [
@@ -242,12 +242,10 @@ describe("rotation board", () => {
     expect(mayWriteColumn()).toBe(true);
   });
 
-  it("requires a reason for a cross-column write, not for your own", () => {
-    expect(writeRequiresReason({ profileId: "mia", columnId: "mia" })).toBe(
+  it("identifies a cross-column write for attribution, but never blocks it on a reason", () => {
+    expect(isCrossColumnEdit({ profileId: "mia", columnId: "mia" })).toBe(
       false,
     );
-    expect(writeRequiresReason({ profileId: "mia", columnId: "leo" })).toBe(
-      true,
-    );
+    expect(isCrossColumnEdit({ profileId: "mia", columnId: "leo" })).toBe(true);
   });
 });
