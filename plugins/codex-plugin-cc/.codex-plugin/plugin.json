@@ -1,0 +1,18 @@
+{
+  "name": "codex-plugin-cc",
+  "version": "0.1.0",
+  "description": "A shared Claude-planning, Codex-building workflow for ServiceFlow restaurant roster features.",
+  "author": {
+    "name": "Krapa Goutam"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ServiceFlow Feature Dev",
+    "shortDescription": "Plan with Claude; build and verify with Codex.",
+    "longDescription": "Turns one restaurant roster feature into an approved written contract, a bounded implementation, and an evidence-based review.",
+    "developerName": "Krapa Goutam",
+    "category": "Productivity",
+    "capabilities": ["Planning", "Implementation", "Code review"],
+    "defaultPrompt": "Plan or implement one approved ServiceFlow roster feature."
+  }
+}

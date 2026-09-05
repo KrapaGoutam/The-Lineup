@@ -1,0 +1,4 @@
+interface:
+  display_name: "Restaurant Feature Dev"
+  short_description: "Plan with Claude, build and verify with Codex."
+  default_prompt: "Plan and implement one restaurant roster feature from the approved specification."

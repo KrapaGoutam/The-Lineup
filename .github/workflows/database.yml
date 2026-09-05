@@ -1,0 +1,33 @@
+name: Database
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/database.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrations-and-policies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx supabase start
+      - run: npm run db:reset
+      - run: npm run db:test
+      - if: always()
+        run: npx supabase stop --no-backup

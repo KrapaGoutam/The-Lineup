@@ -1,0 +1,24 @@
+language: en-US
+tone_instructions: >-
+  Be concise and evidence-based. Prioritize tenant isolation, role authorization,
+  schedule time-zone correctness, live-seating concurrency, idempotency, and tests.
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: true
+  path_instructions:
+    - path: "supabase/migrations/**"
+      instructions: >-
+        Check explicit grants, RLS on every exposed table, indexed policy predicates,
+        forward-only compatibility, and safe SECURITY DEFINER search paths.
+    - path: "src/features/rotation/**"
+      instructions: >-
+        Check deterministic fairness, eligibility, concurrency assumptions,
+        idempotency, override reasons, and audit behavior.
+    - path: "src/features/schedules/**"
+      instructions: >-
+        Check location time zones, overnight shifts, versioning, and conflicts.
+chat:
+  auto_reply: false

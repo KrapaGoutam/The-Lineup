@@ -1,0 +1,2 @@
+-- Keep the committed seed deterministic and free of real customer or employee data.
+-- A feature slice may add local-only demo fixtures after its schema and RLS tests exist.
