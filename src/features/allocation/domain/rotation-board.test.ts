@@ -36,56 +36,105 @@ function computeNextColumnId(board: ReturnType<typeof createRotationBoard>) {
 }
 
 describe("rotation board", () => {
-  it("keeps one empty row completely untouched while a single column fills the working row", () => {
+  it("opens a new empty row the moment the trailing row gets its first value, not once every column fills it", () => {
     let history = createBoardHistory(createRotationBoard(columns));
-    const roundId = history.present.rounds[0].id;
-    history = executeBoardAction(history, {
-      type: "assign",
-      roundId,
-      columnId: "mia",
-      tableLabel: "12",
-    });
     expect(history.present.rounds).toHaveLength(1);
-    expect(history.present.rounds[0].sequence).toBe(1);
-  });
-
-  it("opens a working row AND a fresh empty buffer row once every active column is filled, so an early finisher is never blocked on a straggler", () => {
-    let history = createBoardHistory(createRotationBoard(columns));
     const roundId = history.present.rounds[0].id;
+
+    // A single column's first value is enough -- leo hasn't gone yet.
     history = executeBoardAction(history, {
       type: "assign",
       roundId,
       columnId: "mia",
       tableLabel: "12",
     });
+    expect(history.present.rounds).toHaveLength(2);
+    expect(
+      history.present.rounds[1].cells.every((cell) => cell.tableLabel === null),
+    ).toBe(true);
+
+    // Leo completing the same row doesn't push a second extra row --
+    // the fresh buffer row (still untouched) already covers it.
     history = executeBoardAction(history, {
       type: "assign",
       roundId,
       columnId: "leo",
       tableLabel: "14 + 15",
     });
-    expect(history.present.rounds).toHaveLength(3);
-    const [round1, round2, round3] = history.present.rounds;
-    expect(round1.cells.every((cell) => cell.tableLabel)).toBe(true);
-    expect(round2.cells.every((cell) => cell.tableLabel === null)).toBe(true);
-    expect(round3.cells.every((cell) => cell.tableLabel === null)).toBe(true);
+    expect(history.present.rounds).toHaveLength(2);
+  });
 
-    // Finishing round 2 (the working row, not the buffer) is what should
-    // advance the buffer again -- not touching the buffer itself.
+  it("fills rows sequentially and opens a new row at each row's first value, never waiting for the row to complete", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+
     history = executeBoardAction(history, {
       type: "assign",
-      roundId: round2.id,
+      roundId: round1,
       columnId: "mia",
-      tableLabel: "9",
+      tableLabel: "1",
+    });
+    expect(history.present.rounds).toHaveLength(2); // row 2 opened already
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "leo",
+      tableLabel: "2",
+    });
+    expect(history.present.rounds).toHaveLength(2); // row 1 now complete, no new row yet
+
+    const round2 = history.present.rounds[1].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "mia",
+      tableLabel: "3",
+    });
+    expect(history.present.rounds).toHaveLength(3); // row 3 opened on row 2's first value
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "leo",
+      tableLabel: "4",
     });
     expect(history.present.rounds).toHaveLength(3);
-    history = executeBoardAction(history, {
-      type: "assign",
-      roundId: round2.id,
-      columnId: "leo",
-      tableLabel: "5",
-    });
+  });
+
+  it("an uneven floor -- two columns racing far ahead while others never fill a single row -- still always gets a trailing empty row (reproduces the reported stuck-at-N-rows bug)", () => {
+    const fourColumns = [
+      { id: "mia", name: "Mia", position: 0, status: "active" as const },
+      { id: "leo", name: "Leo", position: 1, status: "active" as const },
+      { id: "ava", name: "Ava", position: 2, status: "active" as const },
+      { id: "noah", name: "Noah", position: 3, status: "active" as const },
+    ];
+    let history = createBoardHistory(createRotationBoard(fourColumns));
+
+    // Mia and Leo fill three whole rows between themselves; Ava and Noah
+    // never fill a single cell, in any row -- the exact shape of the
+    // reported bug (per-round-completion never fires, so no new row
+    // ever appears no matter how far ahead the fast columns get).
+    for (let round = 0; round < 3; round += 1) {
+      const roundId = history.present.rounds[round].id;
+      history = executeBoardAction(history, {
+        type: "assign",
+        roundId,
+        columnId: "mia",
+        tableLabel: `${round}-mia`,
+      });
+      history = executeBoardAction(history, {
+        type: "assign",
+        roundId,
+        columnId: "leo",
+        tableLabel: `${round}-leo`,
+      });
+    }
+
+    // A 4th, completely empty row must exist -- Ava and Noah having
+    // never gone must never block it.
     expect(history.present.rounds).toHaveLength(4);
+    expect(
+      history.present.rounds[3].cells.every((cell) => cell.tableLabel === null),
+    ).toBe(true);
   });
 
   it("does not wait for paused columns", () => {
@@ -101,7 +150,7 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(3);
+    expect(history.present.rounds).toHaveLength(2);
   });
 
   it("a manager can add a row on demand, on top of the automatic buffer, and undo/redo it like any other action", () => {

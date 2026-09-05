@@ -67,10 +67,12 @@ function buildInitialHistory() {
       tableLabel,
     });
   }
-  // Completing round 1 now also opens a standing empty buffer row past
-  // round 2 (see `ensureTrailingRound`'s doc comment) — round 2 itself,
-  // not the trailing buffer, is where the demo's partial second turn
-  // belongs.
+  // Mia's very first assignment above already opened round 2 (see
+  // `ensureTrailingRound`'s doc comment — a round's first value is what
+  // creates the next one, not waiting for the whole round to fill), so
+  // round 2 already exists as index 1 by the time this runs. It's round
+  // 2 itself, not whatever trailing buffer exists past it, where the
+  // demo's partial second turn belongs.
   const second = history.present.rounds[1].id;
   for (const [columnId, tableLabel] of [
     ["mia", "15"],

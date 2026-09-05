@@ -67,38 +67,21 @@ function ensureTrailingRound(board: RotationBoard) {
     board.nextRoundNumber += 1;
     return;
   }
-  const activeIds = new Set(
-    board.columns
-      .filter((column) => column.status === "active")
-      .map((column) => column.id),
-  );
-  const isRoundComplete = (round: RotationRound) =>
-    activeIds.size > 0 &&
-    [...activeIds].every((columnId) =>
-      round.cells.some(
-        (cell) => cell.columnId === columnId && Boolean(cell.tableLabel),
-      ),
-    );
-  // A fresh empty row is kept ready one full row ahead of whichever row
-  // people are actually filling in, instead of only appearing once that
-  // row itself is completely done. Concretely: once a fully-empty
-  // trailing "buffer" row exists, the row being worked is the one right
-  // before it (the second-to-last row); finishing *that* one is what
-  // advances the buffer, not finishing the buffer itself. Before a
-  // buffer exists yet (board.rounds.length === 1), the single row is
-  // both — finishing it behaves the same way it always has.
-  //
-  // Without this, whoever finishes their column first in the row being
-  // worked has nowhere to go until the last straggler in that same row
-  // catches up — exactly the "waits too long" bug this fixes.
-  for (;;) {
-    const rounds = board.rounds;
-    const workingRound =
-      rounds.length >= 2
-        ? rounds[rounds.length - 2]
-        : rounds[rounds.length - 1];
-    if (!isRoundComplete(workingRound)) break;
-    rounds.push(makeRound(board));
+  // A fresh empty row is kept ready one row ahead of wherever anyone is
+  // actually working, the moment the trailing round gets its first
+  // value — not once every active column has filled it. That
+  // "everyone" condition was the bug: with an uneven floor (some
+  // columns racing ahead, one lagging every round), a row that always
+  // has at least one unfilled active column never counts as complete,
+  // so no new row ever appears, no matter how far ahead the fast
+  // columns get. A single value is the actual per-board signal that
+  // work has started on this row and a clean one should already exist
+  // past it — not a per-column one, and not one that waits for the
+  // slowest column on the floor.
+  const last = board.rounds.at(-1)!;
+  const hasAnyValue = last.cells.some((cell) => Boolean(cell.tableLabel));
+  if (hasAnyValue) {
+    board.rounds.push(makeRound(board));
     board.nextRoundNumber += 1;
   }
 }
