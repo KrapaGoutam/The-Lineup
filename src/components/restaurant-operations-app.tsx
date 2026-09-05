@@ -392,7 +392,7 @@ export function RestaurantOperationsApp({
                 ServiceFlow
               </span>
               <span className="text-muted-foreground block text-[11px]">
-                Autumn House
+                The Monk&apos;s
               </span>
             </span>
           </button>

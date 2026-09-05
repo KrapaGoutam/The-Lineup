@@ -7,7 +7,7 @@ import { LoginScreen } from "./login-screen";
 describe("LoginScreen numeric keypad (Feature 013)", () => {
   it("tapping digits fills the passcode field, capped at 4 digits", async () => {
     render(
-      <LoginScreen demoMode restaurantSlug="autumn-house" onSignIn={vi.fn()} />,
+      <LoginScreen demoMode restaurantSlug="the-monks" onSignIn={vi.fn()} />,
     );
     const input = screen.getByLabelText("Restaurant passcode");
     await userEvent.click(screen.getByRole("button", { name: "Digit 2" }));
@@ -23,7 +23,7 @@ describe("LoginScreen numeric keypad (Feature 013)", () => {
 
   it("backspace removes exactly one digit", async () => {
     render(
-      <LoginScreen demoMode restaurantSlug="autumn-house" onSignIn={vi.fn()} />,
+      <LoginScreen demoMode restaurantSlug="the-monks" onSignIn={vi.fn()} />,
     );
     const input = screen.getByLabelText("Restaurant passcode");
     await userEvent.click(screen.getByRole("button", { name: "Digit 2" }));
@@ -34,7 +34,7 @@ describe("LoginScreen numeric keypad (Feature 013)", () => {
 
   it("typing and tapping write to the same passcode state", async () => {
     render(
-      <LoginScreen demoMode restaurantSlug="autumn-house" onSignIn={vi.fn()} />,
+      <LoginScreen demoMode restaurantSlug="the-monks" onSignIn={vi.fn()} />,
     );
     const input = screen.getByLabelText("Restaurant passcode");
     await userEvent.type(input, "24");
@@ -44,7 +44,7 @@ describe("LoginScreen numeric keypad (Feature 013)", () => {
 
   it("the typed input stays fully usable alongside the keypad", async () => {
     render(
-      <LoginScreen demoMode restaurantSlug="autumn-house" onSignIn={vi.fn()} />,
+      <LoginScreen demoMode restaurantSlug="the-monks" onSignIn={vi.fn()} />,
     );
     const input = screen.getByLabelText("Restaurant passcode");
     await userEvent.click(screen.getByRole("button", { name: "Digit 1" }));

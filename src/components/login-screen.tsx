@@ -231,7 +231,7 @@ export function LoginScreen({
             S
           </div>
           <p className="text-primary mt-5 text-xs font-bold tracking-[0.2em] uppercase">
-            Autumn House · River Oaks
+            The Monk&apos;s · River Oaks
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
             {mode === "login"

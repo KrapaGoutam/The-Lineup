@@ -2,8 +2,7 @@ import { RestaurantOperationsApp } from "@/components/restaurant-operations-app"
 import { getCurrentUser } from "@/lib/current-user";
 
 export default async function Home() {
-  const restaurantSlug =
-    process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "autumn-house";
+  const restaurantSlug = process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "the-monks";
   const demoMode =
     process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||

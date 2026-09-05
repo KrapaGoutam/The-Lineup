@@ -142,7 +142,7 @@ export function DashboardOverview() {
           <span className="bg-border hidden h-5 w-px md:block" />
           <button className="hidden min-h-11 items-center gap-2 rounded-xl px-2 text-left text-sm md:flex">
             <span>
-              <span className="block font-semibold">Autumn House</span>
+              <span className="block font-semibold">The Monk&apos;s</span>
               <span className="text-muted-foreground block text-xs">
                 River Oaks · Dinner
               </span>
