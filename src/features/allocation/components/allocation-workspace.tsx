@@ -571,7 +571,7 @@ export function AllocationWorkspace({
                         key={`${round.id}-${column.id}`}
                         className={cn(
                           "border-border min-h-20 border-t border-r p-3 last:border-r-0",
-                          column.status === "paused" && "bg-black/20",
+                          column.status === "paused" && "bg-muted",
                         )}
                       >
                         <TableEntry

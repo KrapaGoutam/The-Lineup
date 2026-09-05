@@ -38,6 +38,7 @@ import {
   type SignedInUser,
 } from "./login-screen";
 import { OrgLockoutBanner } from "./org-lockout-banner";
+import { ThemeToggle } from "./theme-toggle";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
@@ -344,7 +345,7 @@ export function RestaurantOperationsApp({
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
-      <header className="bg-background/90 sticky top-0 z-40 border-b border-white/8 backdrop-blur-xl">
+      <header className="bg-background/90 border-border sticky top-0 z-40 border-b backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-[1540px] items-center gap-3 px-4 sm:px-6 lg:px-8">
           <button
             onClick={() => setTab("schedule")}
@@ -420,6 +421,7 @@ export function RestaurantOperationsApp({
                 <Settings2 />
               </Button>
             ) : null}
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="icon"
@@ -430,7 +432,7 @@ export function RestaurantOperationsApp({
             </Button>
           </div>
         </div>
-        <div className="border-t border-white/5 px-4 py-2 md:hidden">
+        <div className="border-border border-t px-4 py-2 md:hidden">
           <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 text-xs">
             <span>{clock.dateTime}</span>
             <span className="text-primary font-mono">
@@ -478,7 +480,7 @@ export function RestaurantOperationsApp({
 
       <nav
         className={cn(
-          "bg-background/95 fixed inset-x-0 bottom-0 z-40 grid border-t border-white/10 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
+          "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
           isManager ? "grid-cols-4" : "grid-cols-3",
         )}
         aria-label="Mobile navigation"

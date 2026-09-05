@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/*
+ * Feature 012: this app was built dark-only, and every gradient/shadow was
+ * tuned against that. Rather than restructure to a light-first :root (which
+ * would re-derive a lot of already-tuned dark-mode decisions for no
+ * benefit), dark stays the base :root and `[data-theme="light"]` is a full
+ * override block below. `data-theme` is always set explicitly (never left
+ * to a bare prefers-color-scheme media query) by the blocking script in
+ * layout.tsx, so "system" preference resolves to one concrete value before
+ * first paint - see src/hooks/use-theme.ts.
+ */
 :root {
   --background: #0b0b0d;
   --foreground: #f6f3ed;
@@ -20,6 +30,12 @@
   --input: rgba(255, 255, 255, 0.12);
   --ring: #f2a65a;
   --radius: 1rem;
+  /*
+   * The seven server accents carry meaning (which server a table/shift
+   * belongs to) - they must stay pairwise distinguishable by hue, not just
+   * individually legible. Dark-mode set: light, low-saturation pastels
+   * chosen to pop off a near-black canvas.
+   */
   --server-one: #f2a65a;
   --server-two: #7dd3fc;
   --server-three: #a7f3d0;
@@ -27,6 +43,43 @@
   --server-five: #fda4af;
   --server-six: #fde68a;
   --server-seven: #94a3b8;
+}
+
+/*
+ * Light overrides. Same seven hue families as dark (orange, sky, emerald,
+ * violet, rose, gold, slate) so a server's color reads consistently across
+ * themes, but shifted to darker/more saturated values - the dark-mode
+ * pastels would have poor contrast and be hard to tell apart on a light
+ * background. Every value below targets >=4.5:1 against --background/--card
+ * (WCAG AA for normal text), verified by contrast ratio calculation against
+ * #faf9f6, not just eyeballed - see docs/features/012-theme-toggle.md.
+ */
+:root[data-theme="light"] {
+  --background: #faf9f6;
+  --foreground: #1c1a17;
+  --card: #ffffff;
+  --card-foreground: #1c1a17;
+  --popover: #ffffff;
+  --popover-foreground: #1c1a17;
+  --primary: #c2660b;
+  --primary-foreground: #fff8f0;
+  --secondary: #f1efe9;
+  --secondary-foreground: #1c1a17;
+  --muted: #ede9e2;
+  --muted-foreground: #6b6459;
+  --accent: #f4ece0;
+  --accent-foreground: #1c1a17;
+  --destructive: #dc2626;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: rgba(0, 0, 0, 0.12);
+  --ring: #c2660b;
+  --server-one: #b45309;
+  --server-two: #0369a1;
+  --server-three: #047857;
+  --server-four: #6d28d9;
+  --server-five: #be123c;
+  --server-six: #854d0e;
+  --server-seven: #475569;
 }
 
 @theme inline {

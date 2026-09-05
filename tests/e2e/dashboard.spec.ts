@@ -158,6 +158,36 @@ test("server never sees the Team tab", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("theme toggle switches and persists the theme across reload", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  const html = page.locator("html");
+  const initialTheme = await html.getAttribute("data-theme");
+  expect(initialTheme === "light" || initialTheme === "dark").toBe(true);
+
+  const otherTheme = initialTheme === "light" ? "dark" : "light";
+  const toggleName =
+    initialTheme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  await page.getByRole("button", { name: toggleName }).click();
+  await expect(html).toHaveAttribute("data-theme", otherTheme);
+
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", otherTheme);
+});
+
+test("theme toggle is reachable from the login screen before signing in", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const html = page.locator("html");
+  const initialTheme = await html.getAttribute("data-theme");
+  const toggleName =
+    initialTheme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  await page.getByRole("button", { name: toggleName }).click();
+  await expect(html).not.toHaveAttribute("data-theme", initialTheme ?? "");
+});
+
 test("an unrostered employee can be added to the live allocation board", async ({
   page,
 }) => {
