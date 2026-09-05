@@ -1,6 +1,6 @@
 # Feature 003 — Live table-allocation rotation
 
-Status: implemented (interactive reference UI and production schema)
+Status: schema and UI complete but disconnected. The Postgres schema (`rotation_rounds`, `table_rotation_entries`, `board_events`), RLS, and pgTAP coverage are production-ready; `allocation-workspace.tsx` runs the pure `rotation-board.ts` reducer entirely on in-memory `useState` and never writes `board_events` or subscribes to Realtime. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
 
 ## User outcome
 

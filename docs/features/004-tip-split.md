@@ -1,6 +1,6 @@
 # Feature 004 — Interval-based tip split
 
-Status: implemented (interactive reference UI and production schema)
+Status: schema and UI complete but disconnected. The Postgres schema, the `recalculate_tip_pool` function, RLS, and pgTAP coverage are production-ready; `tip-workspace.tsx` runs the pure `calculate-tip-splits.ts` logic entirely on in-memory `useState` and never calls `recalculate_tip_pool` or persists a `tip_pool`. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
 
 ## User outcome
 

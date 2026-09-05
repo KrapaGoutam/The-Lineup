@@ -1,6 +1,6 @@
 # Feature 002 — Weekly and monthly schedule roster
 
-Status: implemented (interactive reference UI and production schema)
+Status: schema and UI complete but disconnected. The Postgres schema, RLS, and pgTAP coverage are production-ready; `schedule-workspace.tsx` runs entirely on in-memory `useState` demo data and does not read or write Supabase. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
 
 ## User outcome
 

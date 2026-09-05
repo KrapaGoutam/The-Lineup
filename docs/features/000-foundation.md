@@ -36,6 +36,10 @@ A product team can open a credible restaurant-operations dashboard, vary the num
 
 Record final command output and screenshots in the implementing pull request. Local Docker is unavailable in the generated workspace, so the database reset/pgTAP step is delegated to `.github/workflows/database.yml` until run on a Docker-capable machine.
 
+## Note on dead code
+
+`src/components/dashboard-overview.tsx` (the "Tonight at a glance" dashboard referenced in Acceptance above) is no longer reachable: Feature 001 replaced it as the app's entry point, and both `/` and `/r/[restaurantSlug]` now render `RestaurantOperationsApp` (passcode gate → schedule/allocation/tips workspaces) instead. `dashboard-overview.tsx` still exists and still builds, but nothing imports it. It is left in place deliberately for now — not deleted — pending an explicit decision to remove or repurpose it. See `docs/AUDIT.md` (2026-09-05).
+
 ## Next feature
 
 Use `/feature-dev` to plan `001-authenticated-app-shell.md`, approve the file, then ask Codex to implement only that contract.
