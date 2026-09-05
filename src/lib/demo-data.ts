@@ -228,7 +228,7 @@ export const demoAccounts: Record<
   string,
   { profileId: string; name: string; role: AppRole }
 > = {
-  "246810": { profileId: "manager-maya", name: "Maya Singh", role: "manager" },
-  "135790": { profileId: "mia", name: "Mia Chen", role: "server" },
-  "86420975": { profileId: "owner-krapa", name: "Krapa Goutam", role: "owner" },
+  "2468": { profileId: "manager-maya", name: "Maya Singh", role: "manager" },
+  "1357": { profileId: "mia", name: "Mia Chen", role: "server" },
+  "9999": { profileId: "owner-krapa", name: "Krapa Goutam", role: "owner" },
 };

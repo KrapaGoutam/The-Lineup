@@ -20,11 +20,11 @@ npm run dev
 
 Open `http://localhost:3000` and use:
 
-| Role    | Passcode   |
-| ------- | ---------- |
-| Manager | `246810`   |
-| Server  | `135790`   |
-| Owner   | `86420975` |
+| Role    | Passcode |
+| ------- | -------- |
+| Manager | `2468`   |
+| Server  | `1357`   |
+| Owner   | `9999`   |
 
 Demo data lives in browser memory and resets on refresh. Connect Supabase for persistent users and operational records.
 

@@ -7,7 +7,7 @@ async function signIn(page: Page, passcode: string) {
 }
 
 test("manager can use all three operational modules", async ({ page }) => {
-  await signIn(page, "246810");
+  await signIn(page, "2468");
 
   await expect(
     page.getByRole("heading", { name: "Weekly & monthly roster" }),
@@ -32,7 +32,7 @@ test("manager can use all three operational modules", async ({ page }) => {
 test("server sees published schedule, own allocation input, and own tip estimate", async ({
   page,
 }) => {
-  await signIn(page, "135790");
+  await signIn(page, "1357");
 
   await expect(page.getByText("Server access")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add shift" })).toHaveCount(0);

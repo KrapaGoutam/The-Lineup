@@ -5,14 +5,19 @@ import {
   normalizeDatabaseRole,
 } from "@/features/auth/domain/passcode";
 import {
+  FINGERPRINT_WINDOW_MINUTES,
+  ORGANIZATION_WINDOW_MINUTES,
+  RECENT_SUCCESS_EXEMPTION_HOURS,
+  organizationCountWindowStart,
+  shouldLockFingerprint,
+  shouldLockOrganization,
+} from "@/features/auth/domain/rate-limit";
+import {
   createPasscodeLocator,
   createRequestFingerprint,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-
-const MAX_ATTEMPTS = 8;
-const WINDOW_MINUTES = 15;
 
 type LoginBody = { restaurantSlug?: string; passcode?: string };
 
@@ -58,20 +63,76 @@ export async function POST(request: Request) {
   }
 
   const fingerprint = clientFingerprint(request);
-  const windowStart = new Date(
-    Date.now() - WINDOW_MINUTES * 60_000,
+
+  const fingerprintWindowStart = new Date(
+    Date.now() - FINGERPRINT_WINDOW_MINUTES * 60_000,
   ).toISOString();
-  const { count } = await admin
+  const { count: fingerprintFailures } = await admin
     .from("passcode_login_attempts")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organization.id)
     .eq("fingerprint", fingerprint)
     .eq("succeeded", false)
-    .gte("attempted_at", windowStart);
+    .gte("attempted_at", fingerprintWindowStart);
 
-  if ((count ?? 0) >= MAX_ATTEMPTS) {
+  if (shouldLockFingerprint(fingerprintFailures ?? 0)) {
     return NextResponse.json(
       { error: "Too many attempts. Try again in 15 minutes." },
+      { status: 429, headers: { "Retry-After": "900" } },
+    );
+  }
+
+  // Organization-wide check: degrades instead of denying. A fingerprint
+  // that has succeeded here recently is exempt, and a manager already
+  // signed in can clear the lock — see docs/features/006-four-digit-passcodes.md.
+  const orgWindowStart = new Date(
+    Date.now() - ORGANIZATION_WINDOW_MINUTES * 60_000,
+  );
+  const recentSuccessCutoff = new Date(
+    Date.now() - RECENT_SUCCESS_EXEMPTION_HOURS * 60 * 60_000,
+  ).toISOString();
+
+  const [{ count: recentSuccessCount }, { data: lastReset }] =
+    await Promise.all([
+      admin
+        .from("passcode_login_attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .eq("fingerprint", fingerprint)
+        .eq("succeeded", true)
+        .gte("attempted_at", recentSuccessCutoff),
+      admin
+        .from("passcode_lockout_resets")
+        .select("cleared_at")
+        .eq("organization_id", organization.id)
+        .order("cleared_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const organizationCountStart = organizationCountWindowStart({
+    windowStart: orgWindowStart,
+    lastResetAt: lastReset ? new Date(lastReset.cleared_at) : null,
+  });
+  const { count: organizationFailures } = await admin
+    .from("passcode_login_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organization.id)
+    .eq("succeeded", false)
+    .gte("attempted_at", organizationCountStart.toISOString());
+
+  if (
+    shouldLockOrganization({
+      failureCountInWindow: organizationFailures ?? 0,
+      fingerprintSucceededRecently: (recentSuccessCount ?? 0) > 0,
+    })
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Too many failed attempts across this restaurant right now. Ask a manager who's already signed in to clear the lockout, or try again shortly.",
+        code: "org_lockout",
+      },
       { status: 429, headers: { "Retry-After": "900" } },
     );
   }

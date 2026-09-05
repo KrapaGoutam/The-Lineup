@@ -9,15 +9,29 @@
 
 ## Authentication
 
-- Login asks only for a restaurant-scoped 6–8 digit passcode; there is no username field.
+- Login asks only for a restaurant-scoped 4-digit passcode; there is no username field.
 - The restaurant URL/slug supplies the first lookup scope. A keyed HMAC locator identifies the credential without storing the raw passcode.
 - The same passcode is verified by Supabase Auth against a synthetic internal email account. Synthetic emails are never shown to users.
-- Rate-limit failed attempts by restaurant and a keyed hash of the request address; do not store the raw address. Use a generic error so account existence is not leaked.
-- New users submit an access request. A manager must approve and provision the account; public self-registration does not grant membership.
+- New users submit an access request. A manager must approve and provision the account; public self-registration does not grant membership. (Pending Feature 005: this reverses to self-serve registration with an immediate active account — this line updates when that feature ships, not before.)
 - Use Supabase Auth with the current `@supabase/ssr` pattern.
 - Refresh sessions in `proxy.ts` and verify protected server access with `getClaims()`.
 - Do not use the user object from an unverified client session as authorization evidence.
 - Keep sensitive access tokens short-lived and revoke sessions before destructive user removal when strict invalidation is required.
+
+### Passcode uniqueness within a restaurant
+
+Two people in the same organization can never hold the same passcode: the credential locator is `HMAC(APP_PIN_PEPPER, organization_id + ":" + passcode)`, and `passcode_credentials` carries a `unique (organization_id, locator)` constraint — two people choosing the same 4-digit code in the same organization collide on that constraint at the database level, not through an application-side check that could race or be bypassed. The same passcode is allowed across two different organizations, since the locator is namespaced by `organization_id`.
+
+### Rate limiting — what it compensates for, and why it degrades instead of denies
+
+A 4-digit passcode is a 10,000-combination space, materially weaker than the 6–8 digit codes this app used before. Two layers compensate for that reduced entropy, both keyed by a request fingerprint (`clientFingerprint()` in `passcode/route.ts`, derived from the connecting IP — do not store the raw address, only its keyed hash):
+
+- **Per-fingerprint**: 5 failed attempts / rolling 15 minutes blocks that one fingerprint (`429`, `Retry-After: 900`). Proportionate blast radius — it only affects the one device that's failing.
+- **Per-organization**: 30 failed attempts across _any_ fingerprints / rolling 15 minutes is a signal, not a blanket block. A fingerprint that has succeeded for that organization within the last 24 hours is exempt from it — in practice, a restaurant's shared host-stand device/network stays continuously exempt because staff sign in there repeatedly through a normal shift, so the cap falls almost exclusively on genuinely unrecognized traffic. **This is deliberately not a hard block**: a hard organization-wide cap is itself a cheap denial-of-service vector, since a fingerprint is tied to public IP and a phone's IP resets for free on reconnect (confirmed against Vercel's own documented behavior — Vercel overwrites `X-Forwarded-For` with the real connecting IP and does not forward a client-supplied value, so this is about IP churn, not header spoofing) — meaning one person on one phone could otherwise lock out an entire restaurant mid-service for the cost of reconnecting between guesses.
+- Any manager/owner already signed in to the organization can clear an active organization-wide lockout immediately from within the app (a required reason, recorded as an audit event in `audit_events` and as an append-only row in `passcode_lockout_resets` — the reset moves the failure-counting window forward, it never deletes `passcode_login_attempts` history).
+- Use a generic error for a rejected passcode so account existence is not leaked; the organization-wide lockout response is intentionally distinct from that generic error (it tells the truth about what's happening and what to do), since hiding it would leave a legitimate server with no path forward at the terminal.
+
+See `docs/features/006-four-digit-passcodes.md` for the full design and the alternatives considered and rejected (progressive delay alone, CAPTCHA/cooldown).
 
 ## Authorization
 
@@ -61,7 +75,9 @@ Database tests must cover:
 - published schedule visibility versus draft denial;
 - server writes limited to their active table-allocation column;
 - tip allocation visibility limited to the authenticated person;
-- exact reconciliation of interval cents, including remainder cents.
+- exact reconciliation of interval cents, including remainder cents;
+- passcode uniqueness enforced within one organization and allowed reuse across organizations;
+- passcode lockout resets insertable only by manager/owner roles, denied to `anon` and plain `authenticated`.
 
 Run Supabase database advisors after schema changes and before production release.
 

@@ -40,7 +40,7 @@ export function LoginScreen({
     event.preventDefault();
     setError("");
     if (!isValidPasscode(passcode)) {
-      setError("Enter your 6–8 digit restaurant passcode.");
+      setError("Enter your 4-digit restaurant passcode.");
       return;
     }
     if (demoMode) {
@@ -62,9 +62,14 @@ export function LoginScreen({
       const payload = (await response.json()) as {
         user?: SignedInUser;
         error?: string;
+        code?: string;
       };
       if (!response.ok || !payload.user) {
-        setError(payload.error ?? "Unable to sign in.");
+        setError(
+          payload.code === "org_lockout"
+            ? "Too many failed attempts across this restaurant right now. Ask a manager who's already signed in to clear the lockout, or try again shortly."
+            : (payload.error ?? "Unable to sign in."),
+        );
         return;
       }
       onSignIn(payload.user);
@@ -145,14 +150,17 @@ export function LoginScreen({
                       id="passcode"
                       aria-describedby="passcode-help"
                       autoComplete="current-password"
+                      type="tel"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      maxLength={8}
+                      maxLength={4}
                       value={passcode}
                       onChange={(event) =>
-                        setPasscode(event.target.value.replace(/\D/g, ""))
+                        setPasscode(
+                          event.target.value.replace(/\D/g, "").slice(0, 4),
+                        )
                       }
-                      placeholder="••••••"
+                      placeholder="••••"
                       className="h-14 pl-11 text-center font-mono text-xl tracking-[0.35em]"
                       autoFocus
                     />
@@ -249,10 +257,9 @@ export function LoginScreen({
               Interactive demo
             </p>
             <p className="mt-1">
-              Manager: <span className="text-foreground font-mono">246810</span>{" "}
-              · Server:{" "}
-              <span className="text-foreground font-mono">135790</span> · Owner:{" "}
-              <span className="text-foreground font-mono">86420975</span>
+              Manager: <span className="text-foreground font-mono">2468</span> ·
+              Server: <span className="text-foreground font-mono">1357</span> ·
+              Owner: <span className="text-foreground font-mono">9999</span>
             </p>
           </div>
         ) : null}

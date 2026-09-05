@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { LoginScreen, type SignedInUser } from "./login-screen";
+import { OrgLockoutBanner } from "./org-lockout-banner";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
@@ -341,6 +342,10 @@ export function RestaurantOperationsApp({
           </div>
         </div>
       </header>
+
+      {!demoMode && isManager ? (
+        <OrgLockoutBanner restaurantSlug={restaurantSlug} />
+      ) : null}
 
       <main className="mx-auto max-w-[1540px] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
         {tab === "schedule" ? (

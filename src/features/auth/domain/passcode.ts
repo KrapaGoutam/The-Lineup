@@ -35,7 +35,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
 };
 
 export function isValidPasscode(passcode: string) {
-  return /^\d{6,8}$/.test(passcode);
+  return /^\d{4}$/.test(passcode);
 }
 
 export function can(role: AppRole, capability: Capability) {
