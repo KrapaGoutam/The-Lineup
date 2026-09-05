@@ -1,4 +1,4 @@
-import type { AppRole } from "@/features/auth/domain/passcode";
+import type { AppRole, Designation } from "@/features/auth/domain/passcode";
 import type { ShiftKind } from "@/features/schedules/domain/shift-planning";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
 
@@ -7,6 +7,11 @@ export type TeamMember = {
   name: string;
   shortName: string;
   role: AppRole;
+  // Feature 014: `role` is derived from `designation` (via
+  // `designationToRole`) and must never be set independently of it --
+  // see `changeDemoMemberDesignation` in restaurant-operations-app.tsx,
+  // the one place both are written together.
+  designation: Designation;
   color: string;
 };
 
@@ -29,6 +34,7 @@ export const team: TeamMember[] = [
     name: "Mia Chen",
     shortName: "Mia",
     role: "server",
+    designation: "staff",
     color: "var(--server-one)",
   },
   {
@@ -36,6 +42,7 @@ export const team: TeamMember[] = [
     name: "Leo Park",
     shortName: "Leo",
     role: "server",
+    designation: "staff",
     color: "var(--server-two)",
   },
   {
@@ -43,6 +50,7 @@ export const team: TeamMember[] = [
     name: "Ava Brooks",
     shortName: "Ava",
     role: "server",
+    designation: "staff",
     color: "var(--server-three)",
   },
   {
@@ -50,6 +58,7 @@ export const team: TeamMember[] = [
     name: "Noah Diaz",
     shortName: "Noah",
     role: "server",
+    designation: "staff",
     color: "var(--server-four)",
   },
   {
@@ -57,6 +66,7 @@ export const team: TeamMember[] = [
     name: "Zara Reed",
     shortName: "Zara",
     role: "server",
+    designation: "staff",
     color: "var(--server-five)",
   },
   {
@@ -64,6 +74,7 @@ export const team: TeamMember[] = [
     name: "Sam Ellis",
     shortName: "Sam",
     role: "server",
+    designation: "staff",
     color: "var(--server-six)",
   },
   {
@@ -71,6 +82,7 @@ export const team: TeamMember[] = [
     name: "Ivy Tran",
     shortName: "Ivy",
     role: "server",
+    designation: "staff",
     // Deliberately has no entries in initialShifts below — Feature 009
     // proves an employee who was never rostered can still be added to the
     // live allocation board.
@@ -236,9 +248,24 @@ export const initialTipIntervals: TipIntervalInput[] = [
 
 export const demoAccounts: Record<
   string,
-  { profileId: string; name: string; role: AppRole }
+  { profileId: string; name: string; role: AppRole; designation: Designation }
 > = {
-  "2468": { profileId: "manager-maya", name: "Maya Singh", role: "manager" },
-  "1357": { profileId: "mia", name: "Mia Chen", role: "server" },
-  "9999": { profileId: "owner-krapa", name: "Krapa Goutam", role: "owner" },
+  "2468": {
+    profileId: "manager-maya",
+    name: "Maya Singh",
+    role: "manager",
+    designation: "manager",
+  },
+  "1357": {
+    profileId: "mia",
+    name: "Mia Chen",
+    role: "server",
+    designation: "staff",
+  },
+  "9999": {
+    profileId: "owner-krapa",
+    name: "Krapa Goutam",
+    role: "owner",
+    designation: "owner",
+  },
 };

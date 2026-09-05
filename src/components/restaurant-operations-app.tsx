@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
+import {
+  designationToRole,
+  type Designation,
+} from "@/features/auth/domain/passcode";
 import { ScheduleWorkspace } from "@/features/schedules/components/schedule-workspace";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
@@ -265,6 +269,7 @@ export function RestaurantOperationsApp({
       profileId,
       name: input.displayName,
       role: "server",
+      designation: "staff",
     };
     setDemoTeam((current) => [
       ...current,
@@ -273,6 +278,7 @@ export function RestaurantOperationsApp({
         name: input.displayName,
         shortName: input.displayName.split(" ")[0] || input.displayName,
         role: "server",
+        designation: "staff",
         color: "var(--server-one)",
       },
     ]);
@@ -283,15 +289,41 @@ export function RestaurantOperationsApp({
     return { ok: true, account };
   }
 
-  function changeDemoMemberRole(
-    memberId: string,
-    nextRole: TeamMember["role"],
-  ) {
+  /**
+   * Feature 014. Updates both the roster row's designation AND its
+   * derived AppRole together (never one without the other — see the
+   * comment on TeamMember.designation), and also syncs the matching
+   * `demoAccounts` login-identity entry if this member has one, so a
+   * promotion or demotion actually takes effect the next time they sign
+   * in. It does NOT retroactively change an already-open session's
+   * `user` state (that would need a session-claim refresh in real mode
+   * too) — signing out and back in is what picks up the new designation,
+   * same as a real RLS-backed session would need a fresh JWT.
+   */
+  function changeDemoMemberDesignation(memberId: string, next: Designation) {
+    const nextRole = designationToRole(next);
     setDemoTeam((current) =>
       current.map((member) =>
-        member.id === memberId ? { ...member, role: nextRole } : member,
+        member.id === memberId
+          ? { ...member, designation: next, role: nextRole }
+          : member,
       ),
     );
+    setDemoAccounts((current) => {
+      let changed = false;
+      const updated = { ...current };
+      for (const [passcode, account] of Object.entries(current)) {
+        if (account.profileId === memberId) {
+          updated[passcode] = {
+            ...account,
+            designation: next,
+            role: nextRole,
+          };
+          changed = true;
+        }
+      }
+      return changed ? updated : current;
+    });
   }
 
   if (!user) {
@@ -479,7 +511,7 @@ export function RestaurantOperationsApp({
           <TeamWorkspace
             user={user}
             team={demoTeam}
-            onChangeRole={changeDemoMemberRole}
+            onChangeDesignation={changeDemoMemberDesignation}
           />
         ) : null}
       </main>

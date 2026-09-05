@@ -4,20 +4,21 @@ import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import type { Designation } from "@/features/auth/domain/passcode";
 import {
-  canChangeRole,
-  otherAssignableRole,
-} from "@/features/team/domain/roles";
+  assignableDesignations,
+  designationLabel,
+} from "@/features/team/domain/designations";
 import type { TeamMember } from "@/lib/demo-data";
 
 export function TeamWorkspace({
   user,
   team,
-  onChangeRole,
+  onChangeDesignation,
 }: {
   user: SignedInUser;
   team: TeamMember[];
-  onChangeRole: (memberId: string, nextRole: TeamMember["role"]) => void;
+  onChangeDesignation: (memberId: string, next: Designation) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -27,9 +28,11 @@ export function TeamWorkspace({
         </div>
         <h1 className="text-3xl font-semibold tracking-[-0.04em]">Team</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-          Everyone active at this restaurant. Owners can change any role;
-          managers can promote a server or step a manager back down, but
-          can&apos;t change an owner.
+          Everyone active at this restaurant. Owner, Manager, and Assistant
+          Manager all have the same full access; Staff has today&apos;s regular
+          employee access. An owner can set anyone&apos;s designation; a manager
+          can only move someone between Assistant Manager and Staff, and never
+          touch an owner or another manager.
         </p>
       </div>
 
@@ -40,15 +43,14 @@ export function TeamWorkspace({
         <CardContent className="divide-border divide-y p-0 pt-4">
           {team.map((member) => {
             const own = member.id === user.profileId;
-            const nextRole = otherAssignableRole(member.role);
-            const allowed = canChangeRole({
-              actorRole: user.role,
-              targetCurrentRole: member.role,
+            const options = assignableDesignations({
+              actorDesignation: user.designation,
+              targetCurrentDesignation: member.designation,
             });
             return (
               <div
                 key={member.id}
-                className="flex items-center gap-3 px-5 py-4"
+                className="flex flex-wrap items-center gap-3 px-5 py-4"
               >
                 <span
                   className="size-3 rounded-full"
@@ -64,18 +66,24 @@ export function TeamWorkspace({
                       </span>
                     ) : null}
                   </p>
-                  <p className="text-muted-foreground mt-0.5 text-xs capitalize">
-                    {member.role}
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    {designationLabel(member.designation)}
                   </p>
                 </div>
-                {allowed && nextRole ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => onChangeRole(member.id, nextRole)}
-                  >
-                    Make {nextRole}
-                  </Button>
+                {options.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {options.map((option) => (
+                      <Button
+                        key={option}
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Set ${member.name} to ${designationLabel(option)}`}
+                        onClick={() => onChangeDesignation(member.id, option)}
+                      >
+                        Make {designationLabel(option)}
+                      </Button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             );
@@ -85,8 +93,10 @@ export function TeamWorkspace({
 
       <p className="text-muted-foreground text-xs">
         This session-only roster mirrors every other module in demo mode. In
-        Supabase mode, role changes write to the same <code>memberships</code>{" "}
-        row the RLS policies already govern.
+        Supabase mode, a designation maps onto the same <code>roles</code> array
+        the RLS policies already govern (Manager = <code>general_manager</code>,
+        Assistant Manager = <code>shift_manager</code>) — no separate
+        designation column or additional permission tier.
       </p>
     </div>
   );

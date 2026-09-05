@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { SignedInUser } from "@/components/login-screen";
-import { normalizeDatabaseRole } from "@/features/auth/domain/passcode";
+import {
+  designationForRoles,
+  normalizeDatabaseRole,
+} from "@/features/auth/domain/passcode";
 import { createClient } from "@/lib/supabase/server";
 
 export async function getCurrentUser(
@@ -38,5 +41,6 @@ export async function getCurrentUser(
     profileId: authData.user.id,
     name: profile.display_name,
     role: normalizeDatabaseRole(membership.roles),
+    designation: designationForRoles(membership.roles),
   };
 }

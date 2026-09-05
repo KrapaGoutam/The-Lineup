@@ -2,6 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function signIn(page: Page, passcode: string) {
   await page.goto("/");
+  await signInOnCurrentPage(page, passcode);
+}
+
+// For signing back in after "Sign out" within the same test, without a
+// page.goto() -- a full navigation would reload the page and wipe every
+// bit of in-memory demo state (team roster, accounts, board, etc.), not
+// just end the session, which isn't what "sign out and back in" means.
+async function signInOnCurrentPage(page: Page, passcode: string) {
   await page.getByLabel("Restaurant passcode").fill(passcode);
   await page.getByRole("button", { name: "Open workspace" }).click();
 }
@@ -141,14 +149,72 @@ test("registering with a passcode already in use shows an error", async ({
   await expect(page.getByText("That passcode is already in use")).toBeVisible();
 });
 
-test("manager can promote a server via the Team tab", async ({ page }) => {
+test("manager can promote a staff member to Assistant Manager, and back", async ({
+  page,
+}) => {
   await signIn(page, "2468");
   await page.getByRole("button", { name: "Team", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
-  await page.getByRole("button", { name: "Make manager" }).first().click();
+  await page
+    .getByRole("button", { name: "Set Ava Brooks to Assistant Manager" })
+    .click();
   await expect(
-    page.getByRole("button", { name: "Make server" }).first(),
+    page.getByText("Assistant Manager", { exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Set Ava Brooks to Staff" }).click();
+  await expect(
+    page.getByText("Assistant Manager", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("a manager is never offered the ability to grant Manager or Owner", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: /Set .* to Manager$/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Set .* to Owner$/ }),
+  ).toHaveCount(0);
+});
+
+test("an owner can promote someone to Manager, after which a manager can no longer change that person's designation", async ({
+  page,
+}) => {
+  await signIn(page, "9999");
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await page.getByRole("button", { name: "Set Zara Reed to Manager" }).click();
+  await expect(
+    page.getByText("Manager", { exact: true }).first(),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await signInOnCurrentPage(page, "2468");
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: /^Set Zara Reed to/ }),
+  ).toHaveCount(0);
+});
+
+test("promoting someone to Assistant Manager gives them full manager-level access once they sign back in", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Set Mia Chen to Assistant Manager" })
+    .click();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await signInOnCurrentPage(page, "1357");
+  await expect(page.getByText("Server access")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add shift" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
 });
 
 test("server never sees the Team tab", async ({ page }) => {

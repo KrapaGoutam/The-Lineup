@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isValidPasscode, type AppRole } from "@/features/auth/domain/passcode";
+import {
+  isValidPasscode,
+  type AppRole,
+  type Designation,
+} from "@/features/auth/domain/passcode";
 import {
   isValidContact,
   isValidDisplayName,
@@ -19,6 +23,11 @@ export type SignedInUser = {
   profileId: string;
   name: string;
   role: AppRole;
+  // Feature 014: the finer 4-value label `role` is derived from
+  // (`designationToRole`). Every capability check still reads `role`;
+  // `designation` exists so the Team tab can gate who may change whose
+  // label without a fourth permission tier.
+  designation: Designation;
 };
 
 export type RegisterDemoResult =

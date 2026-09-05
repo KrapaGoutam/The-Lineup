@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
+  designationForRoles,
   isValidPasscode,
   normalizeDatabaseRole,
 } from "@/features/auth/domain/passcode";
@@ -161,6 +162,7 @@ export async function POST(request: Request) {
       profileId: userId,
       name: displayName,
       role: normalizeDatabaseRole(["server"]),
+      designation: designationForRoles(["server"]),
     },
   });
 }
