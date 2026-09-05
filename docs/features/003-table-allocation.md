@@ -11,7 +11,7 @@ The floor team maintains a live rotation board whose server columns can change d
 ## Rules
 
 - Active memberships become ordered columns — any active employee, scheduled for the shift or not (Feature 009); managers can add, remove, pause, resume, and reorder them (reorder: Feature 010).
-- ~~Employees may add a table only to their own active column. Managers may edit any column.~~ Superseded by Feature 011: any signed-in active member may write a table entry against any column; editing someone else's requires a short, recorded reason, own-column writes stay frictionless. The board locks for everyone once that date's tips are finalized.
+- ~~Employees may add a table only to their own active column. Managers may edit any column.~~ Superseded by Feature 011 (revised twice): any signed-in active member may write a table entry against any column; editing someone else's is always attributed (recorded and shown to the whole team) with no reason field or reason data involved at all — own-column and cross-column writes are now identical, one input each. The board locks for everyone once that date's tips are finalized.
 - A cell may contain one table or a combined-table label such as `12 + 13`.
 - A new empty round appears only when every active, non-paused column in the current round is filled.
 - Paused or removed columns do not block the next round and history remains visible.
@@ -32,7 +32,7 @@ The floor team maintains a live rotation board whose server columns can change d
 
 ## Tests
 
-- Auto-row, pause/remove behavior, any-column writes with cross-column reason enforcement, reorder, manager clear, and undo/redo domain tests.
+- Auto-row (opened on a row's first value, per-board, not per-column completion), pause/remove behavior, any-column writes with unconditional cross-column attribution (no reason mechanism), reorder, manager clear, and undo/redo domain tests.
 - RLS and no-anon database checks.
 - Playwright any-column write, reorder, finalized-day lock, and manager board-control flows.
 

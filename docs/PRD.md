@@ -61,9 +61,9 @@ One person can hold multiple roles. Authorization is derived from membership row
 
 - Display one flexible ordered column for each server currently on the floor. Any active employee can be added, whether or not they were scheduled for the shift (Feature 009).
 - Managers add/remove/pause/clear columns and reorder the rotation order at any time, including mid-round (Feature 010); reordering never changes a round's already-recorded assignments.
-- Any signed-in person may record a table against any active column, not only their own (Feature 011) — editing someone else's column is always attributed and shown to the whole team; a reason is optional context, never a requirement to complete the edit. Manager-only actions (pause/remove/reorder/clear) are unaffected. The board locks for everyone, managers included, once that service date's tips are finalized, and stays locked until a manager or owner reopens it with a reason.
+- Any signed-in person may record a table against any active column, not only their own (Feature 011) — editing someone else's column is always attributed and shown to the whole team, with a single input identical to editing your own column; there is no reason field anywhere on the board. Manager-only actions (pause/remove/reorder/clear) are unaffected. The board locks for everyone, managers included, once that service date's tips are finalized, and stays locked until a manager or owner reopens it with a reason.
 - Support combined-table entries.
-- Keep a standing empty row ready one full row ahead of whichever row people are actively filling, so an early finisher is never blocked on a straggler in their own row. A manager can also add an extra row on demand.
+- Keep a standing empty row ready one row ahead of wherever people are actually working — opened the moment the row being filled gets its first value, not once every column on the floor has filled it — so an early finisher is never blocked on a straggler, however far behind. A manager can also add an extra row on demand.
 - Support undo/redo plus manager-only clear row, clear column, and clear board.
 - Persist changes as events and update open boards through Realtime.
 

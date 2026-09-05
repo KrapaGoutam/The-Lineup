@@ -29,7 +29,7 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 13. [x] Bulk schedule CSV import: template, preview, per-row errors, draft-only commit (Feature 008)
 14. [x] Add any active employee to the rotation, scheduled or not (Feature 009)
 15. [x] Reorder servers in the live rotation without disturbing recorded rounds (Feature 010)
-16. [x] Drop the self-or-manager write restriction on the allocation board; any-column edits require a reason for cross-column writes; the board locks once tips are finalized until a manager/owner reopens it (Feature 011)
+16. [x] Drop the self-or-manager write restriction on the allocation board; cross-column edits are always attributed with no reason mechanism (revised twice post-ship); the board locks once tips are finalized until a manager/owner reopens it (Feature 011)
 17. [ ] Mobile/tablet responsive pass, including the allocation board's narrow-screen restructure (Feature 007 — specced, not yet implemented)
 18. [x] Light/dark theme toggle, persisted, OS-preference-aware on first visit, full contrast-audited light palette including all seven server accents (Feature 012)
 19. [x] Virtual numeric keypad on login, additive alongside the typed passcode input, tablet/phone only (Feature 013)
