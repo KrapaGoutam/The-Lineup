@@ -7,6 +7,7 @@ import {
   mayWriteColumn,
   redoBoard,
   undoBoard,
+  writeRequiresReason,
 } from "./rotation-board";
 
 const columns = [
@@ -237,12 +238,16 @@ describe("rotation board", () => {
     expect(computeNextColumnId(history.present)).toBe("ava");
   });
 
-  it("limits employees to their own column", () => {
-    expect(
-      mayWriteColumn({ isManager: false, profileId: "mia", columnId: "mia" }),
-    ).toBe(true);
-    expect(
-      mayWriteColumn({ isManager: false, profileId: "mia", columnId: "leo" }),
-    ).toBe(false);
+  it("Feature 011: any signed-in member may write to any column", () => {
+    expect(mayWriteColumn()).toBe(true);
+  });
+
+  it("requires a reason for a cross-column write, not for your own", () => {
+    expect(writeRequiresReason({ profileId: "mia", columnId: "mia" })).toBe(
+      false,
+    );
+    expect(writeRequiresReason({ profileId: "mia", columnId: "leo" })).toBe(
+      true,
+    );
   });
 });

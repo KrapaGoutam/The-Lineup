@@ -4,7 +4,7 @@ export type Capability =
   | "schedule:manage"
   | "schedule:view-team"
   | "allocation:manage"
-  | "allocation:write-own"
+  | "allocation:write-any"
   | "tips:manage"
   | "tips:view-own"
   | "settings:manage";
@@ -14,7 +14,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "schedule:manage",
     "schedule:view-team",
     "allocation:manage",
-    "allocation:write-own",
+    "allocation:write-any",
     "tips:manage",
     "tips:view-own",
     "settings:manage",
@@ -23,13 +23,13 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "schedule:manage",
     "schedule:view-team",
     "allocation:manage",
-    "allocation:write-own",
+    "allocation:write-any",
     "tips:manage",
     "tips:view-own",
   ]),
   server: new Set([
     "schedule:view-team",
-    "allocation:write-own",
+    "allocation:write-any",
     "tips:view-own",
   ]),
 };

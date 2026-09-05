@@ -216,10 +216,25 @@ export function redoBoard(history: BoardHistory): BoardHistory {
   };
 }
 
-export function mayWriteColumn(input: {
-  isManager: boolean;
+/**
+ * Feature 011: any signed-in active member may write to any column — the
+ * self-or-manager restriction is dropped for the allocation board only.
+ * Kept as a named export, rather than inlining `true` at call sites, so a
+ * future board-level lock (see `writeRequiresReason` and the finalized-day
+ * freeze in allocation-workspace.tsx) has one obvious place to extend.
+ */
+export function mayWriteColumn() {
+  return true;
+}
+
+/**
+ * Writing to your own column stays frictionless; writing to someone
+ * else's now requires a short reason, so a cross-column edit is
+ * deliberate and visible in the event log, not silent.
+ */
+export function writeRequiresReason(input: {
   profileId: string;
   columnId: string;
 }) {
-  return input.isManager || input.profileId === input.columnId;
+  return input.profileId !== input.columnId;
 }

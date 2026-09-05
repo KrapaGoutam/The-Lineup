@@ -62,7 +62,7 @@ test("manager can use all three operational modules", async ({ page }) => {
   await expect(page.getByText("$5.00", { exact: true }).first()).toBeVisible();
 });
 
-test("server sees published schedule, own allocation input, and own tip estimate", async ({
+test("server sees published schedule, can edit any column (Feature 011), and sees own tip estimate", async ({
   page,
 }) => {
   await signIn(page, "1357");
@@ -73,12 +73,22 @@ test("server sees published schedule, own allocation input, and own tip estimate
   await page
     .getByRole("button", { name: "Table allocation", exact: true })
     .click();
+  // Manage-only actions (clear board, reorder) stay manager/owner-only.
   await expect(page.getByRole("button", { name: "Clear board" })).toHaveCount(
     0,
   );
+  await expect(page.getByRole("button", { name: /^Move .* up$/ })).toHaveCount(
+    0,
+  );
+  // But Feature 011 opens plain column writes to everyone: a server sees
+  // more than just their own enabled input, and a reason field appears
+  // for editing someone else's column.
   await expect(
     page.locator('input[aria-label="Table number or combined tables"]:enabled'),
-  ).toHaveCount(1);
+  ).not.toHaveCount(0);
+  await expect(
+    page.getByLabel("Reason for editing another server's column"),
+  ).not.toHaveCount(0);
 
   await page.getByRole("button", { name: "Tip split", exact: true }).click();
   await expect(
@@ -172,4 +182,57 @@ test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Move Leo Park up" }),
   ).toBeDisabled();
+});
+
+test("editing another server's column requires a reason", async ({ page }) => {
+  await signIn(page, "2468");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await page
+    .locator('input[aria-label="Table number or combined tables"]:enabled')
+    .first()
+    .fill("99");
+  await page.getByRole("button", { name: "Add table" }).first().click();
+  await expect(page.getByText(/Add a short reason/)).toBeVisible();
+});
+
+test("a reason is recorded and shown for a cross-column edit", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await page
+    .locator('input[aria-label="Table number or combined tables"]:enabled')
+    .first()
+    .fill("99");
+  await page
+    .getByLabel("Reason for editing another server's column")
+    .first()
+    .fill("Covering a break");
+  await page.getByRole("button", { name: "Add table" }).first().click();
+  await expect(page.getByText("Covering a break")).toBeVisible();
+});
+
+test("board locks once tips are finalized, and a manager can reopen it", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Tip split", exact: true }).click();
+  await page.getByRole("button", { name: "Finalize day" }).click();
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await expect(page.getByText(/board is locked for everyone/)).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Reopen tips for corrections" })
+    .click();
+  await page
+    .getByLabel("Reason for reopening tips")
+    .fill("Wrong table for Noah");
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(/board is locked for everyone/)).toHaveCount(0);
 });

@@ -17,6 +17,10 @@ import { ScheduleWorkspace } from "@/features/schedules/components/schedule-work
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
+import type {
+  TipsAuditEntry,
+  TipsDayStatus,
+} from "@/features/tips/domain/tips-status";
 import {
   type DayHours,
   useRestaurantClock,
@@ -223,6 +227,8 @@ export function RestaurantOperationsApp({
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   const [tab, setTab] = useState<AppTab>("schedule");
+  const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>("estimating");
+  const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>([]);
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(() =>
     weekDays.map(() => ({
       opening: "11:00",
@@ -301,6 +307,34 @@ export function RestaurantOperationsApp({
 
   const isManager = user.role !== "server";
   const visibleTabs = isManager ? [...tabs, teamTab] : tabs;
+  // Narrowing doesn't cross into the nested function declarations below —
+  // capture a non-null local so TypeScript can see it there too.
+  const currentUser = user;
+
+  function finalizeTips() {
+    setTipsAuditLog((log) => [
+      ...log,
+      {
+        action: "finalized",
+        actorName: currentUser.name,
+        at: new Date().toISOString(),
+      },
+    ]);
+    setTipsStatus("finalized");
+  }
+
+  function reopenTips(reason: string) {
+    setTipsAuditLog((log) => [
+      ...log,
+      {
+        action: "reopened",
+        actorName: currentUser.name,
+        reason,
+        at: new Date().toISOString(),
+      },
+    ]);
+    setTipsStatus("estimating");
+  }
 
   async function signOut() {
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
@@ -416,8 +450,23 @@ export function RestaurantOperationsApp({
         {tab === "schedule" ? (
           <ScheduleWorkspace user={user} shiftDefaults={shiftDefaults} />
         ) : null}
-        {tab === "allocation" ? <AllocationWorkspace user={user} /> : null}
-        {tab === "tips" ? <TipWorkspace user={user} /> : null}
+        {tab === "allocation" ? (
+          <AllocationWorkspace
+            user={user}
+            boardLocked={tipsStatus === "finalized"}
+            onReopenTips={reopenTips}
+            tipsAuditLog={tipsAuditLog}
+          />
+        ) : null}
+        {tab === "tips" ? (
+          <TipWorkspace
+            user={user}
+            status={tipsStatus}
+            onFinalize={finalizeTips}
+            onReopen={reopenTips}
+            auditLog={tipsAuditLog}
+          />
+        ) : null}
         {tab === "team" && isManager ? (
           <TeamWorkspace
             user={user}

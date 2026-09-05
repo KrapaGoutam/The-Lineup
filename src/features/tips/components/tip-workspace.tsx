@@ -7,6 +7,7 @@ import {
   Clock3,
   DollarSign,
   Plus,
+  RotateCcw,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -22,6 +23,10 @@ import {
   dollarsToCents,
   type TipIntervalInput,
 } from "@/features/tips/domain/calculate-tip-splits";
+import type {
+  TipsAuditEntry,
+  TipsDayStatus,
+} from "@/features/tips/domain/tips-status";
 import { initialTipIntervals, team } from "@/lib/demo-data";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -33,14 +38,25 @@ function money(cents: number) {
   return currency.format(cents / 100);
 }
 
-export function TipWorkspace({ user }: { user: SignedInUser }) {
+export function TipWorkspace({
+  user,
+  status,
+  onFinalize,
+  onReopen,
+  auditLog,
+}: {
+  user: SignedInUser;
+  status: TipsDayStatus;
+  onFinalize: () => void;
+  onReopen: (reason: string) => void;
+  auditLog: TipsAuditEntry[];
+}) {
   const isManager = user.role !== "server";
   const [intervals, setIntervals] =
     useState<TipIntervalInput[]>(initialTipIntervals);
-  const [status, setStatus] = useState<"estimating" | "finalized">(
-    "estimating",
-  );
   const [error, setError] = useState("");
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [reopenError, setReopenError] = useState("");
   const split = useMemo(() => calculateTipSplits(intervals), [intervals]);
   const ownTotal =
     split.totals.find(({ participantId }) => participantId === user.profileId)
@@ -50,7 +66,9 @@ export function TipWorkspace({ user }: { user: SignedInUser }) {
     event.preventDefault();
     setError("");
     if (status === "finalized") {
-      setError("This tip pool is finalized. An owner correction is required.");
+      setError(
+        "This tip pool is finalized. A manager or owner must reopen it first.",
+      );
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -74,6 +92,22 @@ export function TipWorkspace({ user }: { user: SignedInUser }) {
       );
     }
   }
+
+  function submitReopen(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setReopenError("");
+    const reason = String(
+      new FormData(event.currentTarget).get("reason") ?? "",
+    ).trim();
+    if (reason.length < 3) {
+      setReopenError("Enter a short reason (at least 3 characters).");
+      return;
+    }
+    onReopen(reason);
+    setShowReopenForm(false);
+  }
+
+  const lastAuditEntry = auditLog.at(-1);
 
   if (!isManager) {
     const ownIntervals = split.intervals.filter((interval) =>
@@ -173,15 +207,59 @@ export function TipWorkspace({ user }: { user: SignedInUser }) {
           <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
             Split each interval among the people actually working. Participants
             begin as the active-floor suggestion and remain manager-confirmed.
+            Finalizing also locks the table allocation board for everyone until
+            it&apos;s reopened.
           </p>
         </div>
-        <Button
-          onClick={() => setStatus("finalized")}
-          disabled={status === "finalized"}
-        >
-          <CheckCircle2 aria-hidden="true" />{" "}
-          {status === "finalized" ? "Finalized" : "Finalize day"}
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          {status === "finalized" ? (
+            showReopenForm ? (
+              <form
+                onSubmit={submitReopen}
+                className="flex flex-wrap items-center justify-end gap-2"
+              >
+                <Input
+                  name="reason"
+                  placeholder="Reason for reopening"
+                  aria-label="Reason for reopening tips"
+                  className="h-9 w-48"
+                  required
+                  minLength={3}
+                />
+                <Button type="submit" size="sm">
+                  Confirm
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowReopenForm(false)}
+                >
+                  Cancel
+                </Button>
+              </form>
+            ) : (
+              <Button variant="outline" onClick={() => setShowReopenForm(true)}>
+                <RotateCcw aria-hidden="true" /> Reopen for corrections
+              </Button>
+            )
+          ) : (
+            <Button onClick={onFinalize}>
+              <CheckCircle2 aria-hidden="true" /> Finalize day
+            </Button>
+          )}
+          {reopenError ? (
+            <p className="text-destructive text-xs" aria-live="polite">
+              {reopenError}
+            </p>
+          ) : null}
+          {lastAuditEntry ? (
+            <p className="text-muted-foreground text-xs">
+              Last: {lastAuditEntry.action} by {lastAuditEntry.actorName}
+              {lastAuditEntry.reason ? ` — ${lastAuditEntry.reason}` : ""}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Tip summary">

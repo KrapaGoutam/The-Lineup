@@ -10,6 +10,7 @@ import {
   Plus,
   Redo2,
   RotateCcw,
+  ShieldAlert,
   Trash2,
   Undo2,
   UserPlus,
@@ -28,9 +29,11 @@ import {
   mayWriteColumn,
   redoBoard,
   undoBoard,
+  writeRequiresReason,
   type BoardAction,
   type BoardHistory,
 } from "@/features/allocation/domain/rotation-board";
+import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team } from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
 
@@ -77,19 +80,29 @@ function buildInitialHistory() {
 function TableEntry({
   value,
   disabled,
+  requiresReason,
   onSubmit,
 }: {
   value: string | null;
   disabled: boolean;
-  onSubmit: (value: string) => void;
+  requiresReason: boolean;
+  onSubmit: (value: string, reason?: string) => void;
 }) {
+  const [error, setError] = useState("");
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const input = new FormData(event.currentTarget).get("table");
-    if (typeof input === "string" && input.trim()) {
-      onSubmit(input);
-      event.currentTarget.reset();
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const input = form.get("table");
+    const reason = String(form.get("reason") ?? "").trim();
+    if (typeof input !== "string" || !input.trim()) return;
+    if (requiresReason && reason.length < 3) {
+      setError("Add a short reason for editing another server's column.");
+      return;
     }
+    onSubmit(input, reason || undefined);
+    event.currentTarget.reset();
   }
   if (value) {
     return (
@@ -103,30 +116,65 @@ function TableEntry({
     );
   }
   return (
-    <form onSubmit={submit} className="flex min-h-14 gap-2">
-      <Input
-        name="table"
-        aria-label="Table number or combined tables"
-        placeholder={disabled ? "Not available" : "Table #"}
-        disabled={disabled}
-        className="min-w-0 font-mono"
-      />
-      <Button
-        size="icon"
-        type="submit"
-        disabled={disabled}
-        aria-label="Add table"
-      >
-        <Plus aria-hidden="true" />
-      </Button>
+    <form onSubmit={submit} className="space-y-1.5">
+      <div className="flex min-h-14 gap-2">
+        <Input
+          name="table"
+          aria-label="Table number or combined tables"
+          placeholder={disabled ? "Not available" : "Table #"}
+          disabled={disabled}
+          className="min-w-0 font-mono"
+        />
+        <Button
+          size="icon"
+          type="submit"
+          disabled={disabled}
+          aria-label="Add table"
+        >
+          <Plus aria-hidden="true" />
+        </Button>
+      </div>
+      {requiresReason && !disabled ? (
+        <Input
+          name="reason"
+          aria-label="Reason for editing another server's column"
+          placeholder="Reason (editing another column)"
+          className="h-9 text-xs"
+        />
+      ) : null}
+      {error ? (
+        <p className="text-destructive text-xs" aria-live="polite">
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 }
 
-export function AllocationWorkspace({ user }: { user: SignedInUser }) {
+type CrossEditEntry = {
+  at: string;
+  actorName: string;
+  columnName: string;
+  reason: string;
+};
+
+export function AllocationWorkspace({
+  user,
+  boardLocked,
+  onReopenTips,
+  tipsAuditLog,
+}: {
+  user: SignedInUser;
+  boardLocked: boolean;
+  onReopenTips: (reason: string) => void;
+  tipsAuditLog: TipsAuditEntry[];
+}) {
   const isManager = user.role !== "server";
   const [history, setHistory] = useState<BoardHistory>(buildInitialHistory);
   const [eventCount, setEventCount] = useState(6);
+  const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>([]);
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [reopenError, setReopenError] = useState("");
   const board = history.present;
   const visibleColumns = useMemo(
     () =>
@@ -147,9 +195,29 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
   );
 
   function execute(action: BoardAction) {
+    // Defense in depth, same principle as RLS re-checking eligibility
+    // server-side: the freeze banner disables the UI, but the mutation path
+    // itself refuses too, in case a control somehow slips through disabled.
+    if (boardLocked) return;
     setHistory((current) => executeBoardAction(current, action));
     setEventCount((count) => count + 1);
   }
+
+  function submitReopen(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setReopenError("");
+    const reason = String(
+      new FormData(event.currentTarget).get("reason") ?? "",
+    ).trim();
+    if (reason.length < 3) {
+      setReopenError("Enter a short reason (at least 3 characters).");
+      return;
+    }
+    onReopenTips(reason);
+    setShowReopenForm(false);
+  }
+
+  const lastTipsAuditEntry = tipsAuditLog.at(-1);
 
   return (
     <div className="space-y-4">
@@ -174,18 +242,18 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
           <Button
             variant="secondary"
             onClick={() => setHistory((current) => undoBoard(current))}
-            disabled={history.past.length === 0}
+            disabled={history.past.length === 0 || boardLocked}
           >
             <Undo2 aria-hidden="true" /> Undo
           </Button>
           <Button
             variant="secondary"
             onClick={() => setHistory((current) => redoBoard(current))}
-            disabled={history.future.length === 0}
+            disabled={history.future.length === 0 || boardLocked}
           >
             <Redo2 aria-hidden="true" /> Redo
           </Button>
-          {isManager ? (
+          {isManager && !boardLocked ? (
             <Button
               variant="outline"
               onClick={() => execute({ type: "clear-board" })}
@@ -195,6 +263,69 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
           ) : null}
         </div>
       </div>
+
+      {boardLocked ? (
+        <Card className="border-amber-400/30 bg-amber-400/10">
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-center gap-2 text-sm font-medium text-amber-100">
+              <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
+              Tips are finalized for today — the board is locked for everyone.
+            </p>
+            {isManager ? (
+              showReopenForm ? (
+                <form
+                  onSubmit={submitReopen}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <Input
+                    name="reason"
+                    placeholder="Reason for reopening"
+                    aria-label="Reason for reopening tips"
+                    className="h-9 w-48"
+                    required
+                    minLength={3}
+                  />
+                  <Button type="submit" size="sm">
+                    Confirm
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowReopenForm(false)}
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowReopenForm(true)}
+                >
+                  Reopen tips for corrections
+                </Button>
+              )
+            ) : null}
+          </CardContent>
+          {reopenError ? (
+            <CardContent className="pt-0">
+              <p className="text-destructive text-xs" aria-live="polite">
+                {reopenError}
+              </p>
+            </CardContent>
+          ) : null}
+          {lastTipsAuditEntry ? (
+            <CardContent className="text-muted-foreground pt-0 text-xs">
+              Last: {lastTipsAuditEntry.action} by{" "}
+              {lastTipsAuditEntry.actorName}
+              {lastTipsAuditEntry.reason
+                ? ` — ${lastTipsAuditEntry.reason}`
+                : ""}
+            </CardContent>
+          ) : null}
+        </Card>
+      ) : null}
 
       <section
         className="grid gap-3 sm:grid-cols-3"
@@ -233,7 +364,7 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
         </Card>
       </section>
 
-      {isManager && availableMembers.length ? (
+      {isManager && !boardLocked && availableMembers.length ? (
         <Card className="border-primary/15">
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -323,7 +454,7 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
                     <p className="text-muted-foreground mt-1 text-[11px] capitalize">
                       {column.status}
                     </p>
-                    {isManager ? (
+                    {isManager && !boardLocked ? (
                       <div className="mt-2 flex flex-wrap gap-1">
                         <Button
                           variant="ghost"
@@ -409,7 +540,7 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
                     <span className="font-mono text-sm font-bold">
                       {round.sequence}
                     </span>
-                    {isManager ? (
+                    {isManager && !boardLocked ? (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -429,11 +560,12 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
                     );
                     const canWrite =
                       column.status === "active" &&
-                      mayWriteColumn({
-                        isManager,
-                        profileId: user.profileId,
-                        columnId: column.id,
-                      });
+                      mayWriteColumn() &&
+                      !boardLocked;
+                    const requiresReason = writeRequiresReason({
+                      profileId: user.profileId,
+                      columnId: column.id,
+                    });
                     return (
                       <div
                         key={`${round.id}-${column.id}`}
@@ -445,14 +577,26 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
                         <TableEntry
                           value={cell?.tableLabel ?? null}
                           disabled={!canWrite}
-                          onSubmit={(tableLabel) =>
+                          requiresReason={requiresReason}
+                          onSubmit={(tableLabel, reason) => {
                             execute({
                               type: "assign",
                               roundId: round.id,
                               columnId: column.id,
                               tableLabel,
-                            })
-                          }
+                            });
+                            if (reason) {
+                              setCrossEditLog((log) => [
+                                ...log,
+                                {
+                                  at: new Date().toISOString(),
+                                  actorName: user.name,
+                                  columnName: column.name,
+                                  reason,
+                                },
+                              ]);
+                            }
+                          }}
                         />
                       </div>
                     );
@@ -463,6 +607,32 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
           </div>
         </CardContent>
       </Card>
+
+      {crossEditLog.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <h2 className="text-sm font-semibold">Cross-column edits</h2>
+            <p className="text-muted-foreground text-xs">
+              Anyone can edit any column now — every edit to someone else&apos;s
+              column is recorded here with who did it and why, visible to the
+              whole team, not just managers.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-1.5 text-xs">
+            {crossEditLog
+              .slice(-5)
+              .reverse()
+              .map((entry, index) => (
+                <p key={index} className="text-muted-foreground">
+                  <span className="text-foreground font-medium">
+                    {entry.actorName}
+                  </span>{" "}
+                  edited {entry.columnName}&apos;s column — {entry.reason}
+                </p>
+              ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <p className="text-muted-foreground text-xs">
         Undo and redo restore the previous board state. In Supabase mode the
