@@ -28,7 +28,7 @@ erDiagram
 
 | Group       | Tables                                                                                                                   | Purpose                                            |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| Identity    | `profiles`, `organizations`, `memberships`, `locations`, `passcode_credentials`, `access_requests`                       | Tenant, passcode access, people, roles, time zones |
+| Identity    | `profiles`, `organizations`, `memberships`, `locations`, `passcode_credentials`, `registrations`                         | Tenant, passcode access, people, roles, time zones |
 | Scheduling  | `operating_hours`, `shift_kind_defaults`, `schedule_periods`, `shifts`, `shift_assignments`                              | Configurable labels/times and published roster     |
 | Allocation  | `service_sessions`, `rotation_members`, `rotation_rounds`, `table_rotation_entries`, `board_events`                      | Flexible live table board and reversible history   |
 | Tips        | `tip_pools`, `tip_intervals`, `tip_interval_participants`, `tip_allocations`                                             | Manager inputs and person-private estimates        |
@@ -87,17 +87,17 @@ Default effective workload:
 
 ## RLS matrix
 
-| Data                  | Owner/GM | Shift manager          | Host       | Server                  |
-| --------------------- | -------- | ---------------------- | ---------- | ----------------------- |
-| Organization settings | Manage   | Read assigned location | No         | No                      |
-| Staff roster draft    | Manage   | Manage assigned shifts | Read today | Own/read published      |
-| Published schedule    | Manage   | Read                   | Read       | Read assigned location  |
-| Floor configuration   | Manage   | Manage                 | Read       | Read own section        |
-| Live service          | Manage   | Manage                 | Operate    | Read own status         |
-| Audit events          | Read     | Read assigned location | No         | No                      |
-| Table allocation rows | Manage   | Manage                 | Read       | Write own active column |
-| Tip inputs/totals     | Manage   | Manage                 | No         | Own allocation only     |
-| Access requests       | Manage   | Review                 | No         | Submit via server route |
+| Data                  | Owner/GM | Shift manager          | Host       | Server                      |
+| --------------------- | -------- | ---------------------- | ---------- | --------------------------- |
+| Organization settings | Manage   | Read assigned location | No         | No                          |
+| Staff roster draft    | Manage   | Manage assigned shifts | Read today | Own/read published          |
+| Published schedule    | Manage   | Read                   | Read       | Read assigned location      |
+| Floor configuration   | Manage   | Manage                 | Read       | Read own section            |
+| Live service          | Manage   | Manage                 | Operate    | Read own status             |
+| Audit events          | Read     | Read assigned location | No         | No                          |
+| Table allocation rows | Manage   | Manage                 | Read       | Write own active column     |
+| Tip inputs/totals     | Manage   | Manage                 | No         | Own allocation only         |
+| Registrations         | Manage   | Read                   | No         | Self-serve via server route |
 
 Policies combine `to authenticated` with an indexed membership/location predicate. `to authenticated` by itself is not authorization. Update policies include both `using` and `with check`.
 

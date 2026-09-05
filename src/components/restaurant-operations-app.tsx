@@ -7,6 +7,7 @@ import {
   LogOut,
   Settings2,
   Table2,
+  Users,
   WalletCards,
   X,
 } from "lucide-react";
@@ -14,14 +15,24 @@ import {
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import { ScheduleWorkspace } from "@/features/schedules/components/schedule-workspace";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
+import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
 import {
   type DayHours,
   useRestaurantClock,
 } from "@/hooks/use-restaurant-clock";
+import {
+  demoAccounts as staticDemoAccounts,
+  team as initialTeam,
+  type TeamMember,
+} from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
 
-import { LoginScreen, type SignedInUser } from "./login-screen";
+import {
+  LoginScreen,
+  type RegisterDemoResult,
+  type SignedInUser,
+} from "./login-screen";
 import { OrgLockoutBanner } from "./org-lockout-banner";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -29,13 +40,15 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-type AppTab = "schedule" | "allocation" | "tips";
+type AppTab = "schedule" | "allocation" | "tips" | "team";
 
 const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
   { id: "schedule", label: "Schedule", icon: CalendarDays },
   { id: "allocation", label: "Table allocation", icon: Table2 },
   { id: "tips", label: "Tip split", icon: WalletCards },
 ];
+
+const teamTab = { id: "team" as const, label: "Team", icon: Users };
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -225,17 +238,69 @@ export function RestaurantOperationsApp({
   const [showHours, setShowHours] = useState(false);
   const clock = useRestaurantClock("America/Chicago", operatingHours);
 
+  const [demoTeam, setDemoTeam] = useState<TeamMember[]>(initialTeam);
+  const [demoAccounts, setDemoAccounts] = useState<
+    Record<string, SignedInUser>
+  >(() => ({ ...staticDemoAccounts }));
+
+  function registerDemoMember(input: {
+    displayName: string;
+    passcode: string;
+  }): RegisterDemoResult {
+    if (demoAccounts[input.passcode]) {
+      return {
+        ok: false,
+        error: "That passcode is already in use — choose a different one.",
+      };
+    }
+    const profileId = `demo-${Date.now()}`;
+    const account: SignedInUser = {
+      profileId,
+      name: input.displayName,
+      role: "server",
+    };
+    setDemoTeam((current) => [
+      ...current,
+      {
+        id: profileId,
+        name: input.displayName,
+        shortName: input.displayName.split(" ")[0] || input.displayName,
+        role: "server",
+        color: "var(--server-one)",
+      },
+    ]);
+    setDemoAccounts((current) => ({
+      ...current,
+      [input.passcode]: account,
+    }));
+    return { ok: true, account };
+  }
+
+  function changeDemoMemberRole(
+    memberId: string,
+    nextRole: TeamMember["role"],
+  ) {
+    setDemoTeam((current) =>
+      current.map((member) =>
+        member.id === memberId ? { ...member, role: nextRole } : member,
+      ),
+    );
+  }
+
   if (!user) {
     return (
       <LoginScreen
         demoMode={demoMode}
         restaurantSlug={restaurantSlug}
         onSignIn={setUser}
+        demoAccounts={demoAccounts}
+        onRegisterDemo={registerDemoMember}
       />
     );
   }
 
   const isManager = user.role !== "server";
+  const visibleTabs = isManager ? [...tabs, teamTab] : tabs;
 
   async function signOut() {
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
@@ -269,7 +334,7 @@ export function RestaurantOperationsApp({
             className="ml-4 hidden items-center gap-1 lg:flex"
             aria-label="Primary navigation"
           >
-            {tabs.map(({ id, label, icon: Icon }) => (
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
               <Button
                 key={id}
                 variant={tab === id ? "secondary" : "ghost"}
@@ -353,13 +418,23 @@ export function RestaurantOperationsApp({
         ) : null}
         {tab === "allocation" ? <AllocationWorkspace user={user} /> : null}
         {tab === "tips" ? <TipWorkspace user={user} /> : null}
+        {tab === "team" && isManager ? (
+          <TeamWorkspace
+            user={user}
+            team={demoTeam}
+            onChangeRole={changeDemoMemberRole}
+          />
+        ) : null}
       </main>
 
       <nav
-        className="bg-background/95 fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-white/10 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
+        className={cn(
+          "bg-background/95 fixed inset-x-0 bottom-0 z-40 grid border-t border-white/10 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
+          isManager ? "grid-cols-4" : "grid-cols-3",
+        )}
         aria-label="Mobile navigation"
       >
-        {tabs.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}

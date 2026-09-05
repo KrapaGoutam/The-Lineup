@@ -12,7 +12,7 @@
 - Login asks only for a restaurant-scoped 4-digit passcode; there is no username field.
 - The restaurant URL/slug supplies the first lookup scope. A keyed HMAC locator identifies the credential without storing the raw passcode.
 - The same passcode is verified by Supabase Auth against a synthetic internal email account. Synthetic emails are never shown to users.
-- New users submit an access request. A manager must approve and provision the account; public self-registration does not grant membership. (Pending Feature 005: this reverses to self-serve registration with an immediate active account — this line updates when that feature ships, not before.)
+- New users self-register with a name, contact, and a chosen passcode, and are provisioned and signed in immediately as a server — no manager approval step. The restaurant URL/slug is the access boundary. New accounts always get `roles: ['server']`, enforced in the registration route, not by a DB constraint; only an owner or general manager can promote a member further, matching the existing `memberships_update_manager` RLS policy. Self-served registrations are still recorded append-only in `registrations` (renamed and repurposed from `access_requests`) for audit history.
 - Use Supabase Auth with the current `@supabase/ssr` pattern.
 - Refresh sessions in `proxy.ts` and verify protected server access with `getClaims()`.
 - Do not use the user object from an unverified client session as authorization evidence.

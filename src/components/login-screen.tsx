@@ -1,20 +1,18 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import {
-  ArrowLeft,
-  KeyRound,
-  ShieldCheck,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, KeyRound, Sparkles, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isValidPasscode, type AppRole } from "@/features/auth/domain/passcode";
-import { demoAccounts } from "@/lib/demo-data";
+import {
+  isValidContact,
+  isValidDisplayName,
+} from "@/features/auth/domain/registration";
+import { demoAccounts as staticDemoAccounts } from "@/lib/demo-data";
 
 export type SignedInUser = {
   profileId: string;
@@ -22,16 +20,29 @@ export type SignedInUser = {
   role: AppRole;
 };
 
+export type RegisterDemoResult =
+  | { ok: true; account: SignedInUser }
+  | { ok: false; error: string };
+
 export function LoginScreen({
   demoMode,
   restaurantSlug,
   onSignIn,
+  demoAccounts = staticDemoAccounts,
+  onRegisterDemo,
 }: {
   demoMode: boolean;
   restaurantSlug: string;
   onSignIn: (user: SignedInUser) => void;
+  /** Demo mode only: the current session's passcode -> account lookup, extended live by registration. */
+  demoAccounts?: Record<string, SignedInUser>;
+  /** Demo mode only: registers a new in-memory team member for this session. */
+  onRegisterDemo?: (input: {
+    displayName: string;
+    passcode: string;
+  }) => RegisterDemoResult;
 }) {
-  const [mode, setMode] = useState<"login" | "request" | "sent">("login");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -46,7 +57,7 @@ export function LoginScreen({
     if (demoMode) {
       const account = demoAccounts[passcode];
       if (!account) {
-        setError("Passcode not recognized. Check it or request access.");
+        setError("Passcode not recognized. Check it or register.");
         return;
       }
       onSignIn(account);
@@ -80,32 +91,69 @@ export function LoginScreen({
     }
   }
 
-  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+  async function submitRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
     const form = new FormData(event.currentTarget);
     const displayName = String(form.get("displayName") ?? "").trim();
     const contact = String(form.get("contact") ?? "").trim();
-    if (displayName.length < 2) {
+    const chosenPasscode = String(form.get("passcode") ?? "").replace(
+      /\D/g,
+      "",
+    );
+
+    if (!isValidDisplayName(displayName)) {
       setError("Enter the name your manager knows you by.");
       return;
     }
-    if (!demoMode) {
-      setPending(true);
-      try {
-        const response = await fetch("/api/access-requests", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ restaurantSlug, displayName, contact }),
-        });
-        if (!response.ok) throw new Error("request failed");
-      } catch {
-        setError("Unable to send the request right now.");
-        setPending(false);
+    if (!isValidContact(contact)) {
+      setError("Enter a phone number or email so you can be reached.");
+      return;
+    }
+    if (!isValidPasscode(chosenPasscode)) {
+      setError("Choose a 4-digit passcode.");
+      return;
+    }
+
+    if (demoMode) {
+      const result = onRegisterDemo?.({
+        displayName,
+        passcode: chosenPasscode,
+      });
+      if (!result || !result.ok) {
+        setError(result?.error ?? "Unable to register right now.");
         return;
       }
+      onSignIn(result.account);
+      return;
+    }
+
+    setPending(true);
+    try {
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          restaurantSlug,
+          displayName,
+          contact,
+          passcode: chosenPasscode,
+        }),
+      });
+      const payload = (await response.json()) as {
+        user?: SignedInUser;
+        error?: string;
+      };
+      if (!response.ok || !payload.user) {
+        setError(payload.error ?? "Unable to register right now.");
+        return;
+      }
+      onSignIn(payload.user);
+    } catch {
+      setError("The restaurant service is unavailable. Please try again.");
+    } finally {
       setPending(false);
     }
-    setMode("sent");
   }
 
   return (
@@ -122,16 +170,12 @@ export function LoginScreen({
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
             {mode === "login"
               ? "Your shift starts here"
-              : mode === "request"
-                ? "Request restaurant access"
-                : "Request sent"}
+              : "Create your account"}
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-6">
             {mode === "login"
               ? "One private passcode opens your schedule, table rotation, and tip estimate."
-              : mode === "request"
-                ? "Your manager will approve the request and give you a private passcode."
-                : "A manager can now review your request. You can return when you receive your passcode."}
+              : "Choose a 4-digit passcode. You'll be signed in immediately as a server — a manager can promote you later."}
           </p>
         </div>
 
@@ -184,16 +228,16 @@ export function LoginScreen({
                 <button
                   type="button"
                   onClick={() => {
-                    setMode("request");
+                    setMode("register");
                     setError("");
                   }}
                   className="text-muted-foreground hover:text-foreground min-h-11 w-full text-sm font-medium"
                 >
-                  Not registered? Request access
+                  Not registered? Create an account
                 </button>
               </form>
-            ) : mode === "request" ? (
-              <form onSubmit={submitRequest} className="space-y-5">
+            ) : (
+              <form onSubmit={submitRegister} className="space-y-5">
                 <button
                   type="button"
                   onClick={() => {
@@ -224,28 +268,35 @@ export function LoginScreen({
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="register-passcode">Choose a passcode</Label>
+                  <Input
+                    id="register-passcode"
+                    name="passcode"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    autoComplete="new-password"
+                    placeholder="••••"
+                    className="font-mono tracking-[0.35em]"
+                    required
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    4 digits. Must be different from every other passcode at
+                    this restaurant.
+                  </p>
+                </div>
                 {error ? (
                   <p className="text-destructive text-sm" aria-live="polite">
                     {error}
                   </p>
                 ) : null}
                 <Button type="submit" className="w-full" disabled={pending}>
-                  <Users className="size-4" aria-hidden="true" />{" "}
-                  {pending ? "Sending…" : "Send request"}
+                  <UserPlus className="size-4" aria-hidden="true" />{" "}
+                  {pending ? "Creating account…" : "Create account"}
                 </Button>
               </form>
-            ) : (
-              <div className="text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-emerald-400/10 text-emerald-300">
-                  <ShieldCheck className="size-7" aria-hidden="true" />
-                </span>
-                <Button
-                  className="mt-6 w-full"
-                  onClick={() => setMode("login")}
-                >
-                  Return to sign in
-                </Button>
-              </div>
             )}
           </CardContent>
         </Card>

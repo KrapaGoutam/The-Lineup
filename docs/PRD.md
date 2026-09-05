@@ -39,7 +39,7 @@ One person can hold multiple roles. Authorization is derived from membership row
 
 - Create one organization with one or more restaurant locations.
 - Open a restaurant-specific URL/QR and sign in with one PIN field—no username field.
-- Register through an expiring manager invite or submit an access request for approval.
+- Register with a name, contact, and a chosen 4-digit passcode; the account is provisioned and signed in immediately as a server, with no manager approval step (Feature 005). Promotion beyond server remains owner/manager-only.
 - Configure location time zone, opening/closing hours, dining areas, and tables.
 - Show restaurant-local date/time and a countdown to closing on every authenticated screen.
 - Deactivate staff and tables without deleting history.
