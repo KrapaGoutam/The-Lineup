@@ -1,10 +1,12 @@
 # Feature 011 — Drop role restrictions on the allocation board only
 
-Status: discovery
+Status: shipped, later revised
 
-**Implementation note**: same division-of-labor change as Feature 005 — Claude implements this batch directly, Codex is not in this loop. See 005 for the full note.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex was not in this loop.
 
-**Build note**: kept on its own commit, separate from 009/010 — the permissions reasoning below needs its own diff to review.
+**Build note**: kept on its own commit, separate from 009/010 — the permissions reasoning below needed its own diff to review.
+
+**Revision (post-ship)**: the reason-required mechanism described below (mechanism 2, and the matching acceptance criterion) was dropped after real usage showed it was friction mid-service producing dishonest or perfunctory text under pressure, not a meaningful safeguard. A reason is now optional; unconditional attribution (who edited what column, when — recorded and shown to the whole team regardless of whether a reason was given) is what actually does the safeguard work, and now applies more broadly than before (previously a write without a reason was refused outright, not logged without one). See `docs/SECURITY.md`'s "Allocation-board open editing" section and `docs/DATA_MODEL.md` for the current authoritative description; the body below is kept as the original design record, with the specific superseded claims marked inline.
 
 ## The required answer, first: can this let a server manipulate tip math?
 
@@ -20,7 +22,7 @@ Traced through the actual code before writing anything else, not deferred as out
 **What stops it, concretely — three mechanisms, not one:**
 
 1. **Attribution is never relaxed, only the write-target restriction is.** `assigned_by` / `actor_profile_id` stays server-set from the authenticated session on every board write — never client-supplied, never spoofable. Anyone can edit any column, but _who actually made the edit_ is always known and already recorded in `board_events`/`table_rotation_entries`, exactly as it is today. Opening up _who can write where_ does not open up _who gets credited for writing it_.
-2. **New requirement, not previously needed**: writing to a column that isn't the actor's own now requires a short reason, using the same override-reason pattern already established elsewhere in this codebase (`AGENTS.md`: "Manual overrides require a reason and audit event"). This makes cross-editing deliberate and textually visible in the event log, not silent — "Ava recorded Table 12 for Mia's column: reason — covering while Mia bussed a table." Editing your own column still requires no reason, since that's the normal case this feature is designed to also loosen; today's own-column writes remain exactly as frictionless as before.
+2. **~~New requirement, not previously needed: writing to a column that isn't the actor's own now requires a short reason~~ — superseded, see the Revision note at the top.** As shipped, this required a short reason using the override-reason pattern in `AGENTS.md` ("Manual overrides require a reason and audit event"). In practice that was friction mid-service that produced dishonest or perfunctory text, so the requirement was dropped: the reason field is now optional, and what actually does the safeguard work is that a cross-column write is _unconditionally_ recorded and shown to the whole team — "Ava recorded Table 12 for Mia's column" (with a reason appended if one was given) — regardless of whether a reason was typed. Editing your own column still carries no such record at all, since that's the normal case this feature is designed to also loosen; own-column writes remain exactly as frictionless as before.
 3. **Standing invariant, made explicit rather than assumed**: tip participant selection stays a separate, manager-confirmed action, never silently auto-derived from allocation-board data. This is already true of the current code (§ above) and this feature commits to it staying true — anyone implementing the PRD's "suggest from the live floor" feature later must treat allocation-board data as a _suggestion input a manager reviews_, never as ground truth that bypasses manager confirmation. This is the actual load-bearing protection against the scenario in the question, both today and after the modules are eventually connected.
 
 Additionally, a genuine new lock: **once a tip pool is finalized for a service date, the allocation board for that date's service session becomes read-only for everyone** — not just role-restricted, actually frozen. Today's schema already makes `tip_intervals`/`tip_allocations`/`tip_interval_participants` immutable once `tip_pools.status = 'finalized'` (the `*_draft_only` restrictive RLS policies). This feature adds the equivalent freeze on the allocation board's own writes for that date, so there's a hard temporal boundary after which "who gets credited for which table" can no longer be edited by anyone, matching the point at which it could actually matter financially.
@@ -34,7 +36,7 @@ Any signed-in person at a restaurant — server, host, manager, owner — can re
 **In**
 
 - Remove the `mayWriteColumn` self-or-manager check for the allocation board specifically: any signed-in, active member of the organization can write to any column while it's active.
-- New reason-required prompt when writing to a column that is not the actor's own (see mechanism 2 above); no prompt when writing to your own column.
+- New, optional reason field when writing to a column that is not the actor's own (see mechanism 2 above, revised); no field at all when writing to your own column.
 - Allocation-board writes freeze once the service date's tip pool is finalized (see the new lock above) — this applies regardless of who's writing, closing the loop the permissions change opens.
 - RLS: collapse `table_rotation_entries_write_own` and `table_rotation_entries_write_manager` into one policy allowing any active member to write, while keeping `assigned_by = auth.uid()` non-negotiable in the `with check` clause (you can act on any column, you can never claim someone else acted).
 
@@ -46,44 +48,44 @@ Any signed-in person at a restaurant — server, host, manager, owner — can re
 
 ## Acceptance criteria
 
-- [ ] A server can write a table label into another active server's column.
-- [ ] Writing to another person's column requires a non-empty reason before it's accepted; writing to your own column does not.
-- [ ] `board_events`/the equivalent demo event record always carries the true actor's identity, regardless of whose column was edited.
-- [ ] Pause, remove, reorder (Feature 010), and clear actions remain manager/owner-only — unaffected by this change.
-- [ ] Once the service date's tip pool is finalized, no one — including managers — can write to that date's allocation board.
-- [ ] Schedule, tips, and Team-tab role gates are unchanged; a targeted regression check confirms none of them were accidentally loosened alongside this one.
+- [x] A server can write a table label into another active server's column.
+- [x] ~~Writing to another person's column requires a non-empty reason before it's accepted~~ — superseded: writing to another person's column always succeeds, with or without a reason; a reason is optional context, never a requirement.
+- [x] `board_events`/the equivalent demo event record always carries the true actor's identity, regardless of whose column was edited — and, as revised, is recorded for every cross-column write regardless of whether a reason was given, not only when one was.
+- [x] Pause, remove, reorder (Feature 010), and clear actions remain manager/owner-only — unaffected by this change.
+- [x] Once the service date's tip pool is finalized, no one — including managers — can write to that date's allocation board.
+- [x] Schedule, tips, and Team-tab role gates are unchanged; a targeted regression check confirms none of them were accidentally loosened alongside this one.
 
 ## UX contract
 
 - Entry point: the existing per-cell "Add table" input, now enabled for every active column regardless of who's signed in.
 - Own column: unchanged — type and submit, no extra step.
-- Someone else's column: submitting the table number opens a one-line reason prompt (matching the existing override-reason UI pattern) before the write is recorded.
+- Someone else's column: an optional one-line reason field is shown alongside the input; submitting the table number always records the write (and always logs the cross-column attribution), with the reason attached if one was given.
 - Finalized-date lock: the "Add table" input is disabled everywhere on the board for that date, with visible text (not color alone) explaining why — "Tips are finalized for this day; the board is locked."
 - Permission denied: n/a for column writes now; pause/remove/reorder/clear still show their existing manager-only gating.
 - Keyboard/screen reader: the reason prompt follows the same accessible pattern as other confirmation inputs in the app (labeled, `aria-live` errors).
 
 ## Data and authorization
 
-- Tables/columns: no new columns needed on `table_rotation_entries` for the reason — the existing `board_events.payload` jsonb can carry an `on_behalf_of_reason` field for a cross-column write event, keeping the schema stable.
+- Tables/columns: no new columns needed on `table_rotation_entries` for the reason — the existing `board_events.payload` jsonb can carry an optional `on_behalf_of_reason` field for a cross-column write event, keeping the schema stable.
 - Constraints/indexes: none new.
 - Grants/RLS: replace `table_rotation_entries_write_manager` and `table_rotation_entries_write_own` with one policy — `for all to authenticated using (assigned_by = auth.uid() and has_org_role(organization_id, [owner,general_manager,shift_manager,host,server]) and <service session's tip pool is not finalized>) with check (same)`. Manager-only actions (pause/remove/clear/reorder) keep their existing separate manager-scoped policies on `rotation_members`/`rotation_rounds` — untouched.
 - Roles/capabilities: `allocation:write-own` capability (in `src/features/auth/domain/passcode.ts`) is replaced by `allocation:write-any` for all roles; `allocation:manage` (pause/remove/reorder/clear) is unchanged and stays manager/owner-only.
-- Audit events: every board write already records an actor; this feature adds the reason field for cross-column writes specifically, and never allows finalized-date writes at all (audit is moot on a write that RLS itself now rejects).
+- Audit events: every board write already records an actor; every cross-column write is now logged unconditionally (an optional reason field is attached if one was given), and finalized-date writes are never allowed at all (audit is moot on a write that RLS itself now rejects).
 - Idempotency/concurrency: unchanged — the existing per-round uniqueness (`rotation_round_id, rotation_member_id`) constraint already prevents two different actors from racing to fill the same cell twice; last-write-wins on the client applies exactly as it does for self-writes today.
 - Time-zone behavior: the finalized-date lock is scoped by the location's service date (already timezone-resolved via `service_sessions.service_date`), not by wall-clock instant — consistent with the rest of the app's time-zone handling rules.
 
 ## Implementation map
 
 - `src/features/auth/domain/passcode.ts`: `allocation:write-own` → `allocation:write-any` capability.
-- `src/features/allocation/domain/rotation-board.ts`: `mayWriteColumn` simplified to "any signed-in active member" (still exported so the UI can still distinguish "own column, no reason" from "other column, reason required").
-- `src/features/allocation/components/allocation-workspace.tsx`: reason-prompt flow for cross-column writes; finalized-date lock check and disabled state.
+- `src/features/allocation/domain/rotation-board.ts`: `mayWriteColumn` simplified to "any signed-in active member"; `isCrossColumnEdit` (renamed from `writeRequiresReason` when the reason requirement was dropped) still exported so the UI can distinguish "own column, unattributed" from "other column, attributed with an optional reason".
+- `src/features/allocation/components/allocation-workspace.tsx`: optional-reason field for cross-column writes, unconditional attribution logging; finalized-date lock check and disabled state.
 - Migration: RLS policy replacement described above.
 
 ## Test plan
 
-- Unit: `rotation-board.ts`'s write-permission helper — any active member can write any column; reason is required only for a non-own column; no one can write once the date is locked.
+- Unit: `rotation-board.ts`'s write-permission helper — any active member can write any column; `isCrossColumnEdit` identifies a non-own column for attribution purposes only, never blocks it; no one can write once the date is locked.
 - Database/RLS: pgTAP — a server can now insert `table_rotation_entries` for another server's `rotation_member_id`; `assigned_by` spoofing (claiming another actor) is still rejected; writes are rejected once the date's `tip_pools.status = 'finalized'`; pause/remove/reorder/clear stay manager-only (regression cases, not new ones).
-- Playwright: a server successfully edits another server's column with a reason prompt; a server cannot edit without providing a reason for someone else's column; the board is read-only for everyone once a demo "finalize day" action has run for that date; schedule/tips/team permission tests are re-run unchanged to confirm no collateral loosening.
+- Playwright: a server successfully edits another server's column without providing a reason, and the edit is still attributed in the visible log; providing a reason attaches it to that same log entry; the board is read-only for everyone once a demo "finalize day" action has run for that date; schedule/tips/team permission tests are re-run unchanged to confirm no collateral loosening.
 
 ## Rollout and rollback
 
@@ -94,7 +96,8 @@ Any signed-in person at a restaurant — server, host, manager, owner — can re
 
 ## Decisions and risks
 
-- **Decision**: three-part answer to the tip-math question (attribution stays real, cross-column writes need a reason, tip participants stay manager-confirmed and never auto-derived) plus a genuine new finalized-date lock — not a single mechanism, because no single one of the three options originally offered fully covers both "today" and "once the modules are eventually connected."
-- **Risk**: a manager who doesn't know to check `board_events` for cross-column edits could still be misled by board appearance alone when manually picking tip participants. Mitigation: the reason prompt makes cross-edits visible in the normal flow of using the board, not just in an audit log a manager has to think to open — but this is a real residual risk worth naming, not eliminated.
+- **Decision**: three-part answer to the tip-math question (attribution stays real, cross-column writes are always logged, tip participants stay manager-confirmed and never auto-derived) plus a genuine new finalized-date lock — not a single mechanism, because no single one of the three options originally offered fully covers both "today" and "once the modules are eventually connected."
+- **Decision, post-ship**: dropped the mandatory reason (originally mechanism 2) after real usage showed it was service-time friction producing dishonest or perfunctory text, not a meaningful safeguard. Unconditional attribution — which was always mechanism 1, not the reason text — is what was actually doing the safeguard work; making it unconditional regardless of reason presence is a strictly wider guarantee than before.
+- **Risk**: a manager who doesn't know to check `board_events` for cross-column edits could still be misled by board appearance alone when manually picking tip participants. Mitigation: the unconditional attribution log keeps cross-edits visible in the normal flow of using the board, not just in an audit log a manager has to think to open — but this is a real residual risk worth naming, not eliminated.
 - **Risk**: collapsing two RLS policies into one is a genuine security-relevant migration — flagged for careful review per `docs/SECURITY.md`'s stated bar for authorization changes.
 - Open questions: none remaining.

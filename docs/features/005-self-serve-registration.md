@@ -1,6 +1,6 @@
 # Feature 005 — Self-serve registration and role promotion
 
-Status: discovery
+Status: shipped
 
 **Implementation note**: for this batch (features 005–008), Claude implements directly — the user explicitly changed the default Claude-plans/Codex-builds division of responsibility from `CLAUDE.md` for this batch only. Codex is not in this loop. The default split resumes for future feature work unless the user says otherwise again. This note exists so it doesn't need repeating per feature.
 
@@ -30,11 +30,11 @@ A new person at `/r/<restaurant-slug>` registers with a name and a passcode they
 
 ## Acceptance criteria
 
-- [ ] Given an unregistered person on `/r/<slug>`, when they submit a name and a valid 4-digit passcode not already used in that organization (contact optional, left blank or filled), then they are immediately signed in as an active server and appear in the organization's member list.
-- [ ] Given a chosen passcode already used by someone else in the same organization, when they submit, then registration fails with "That passcode is already in use — choose a different one" and no orphaned Auth user / profile / membership row remains.
-- [ ] Given a manager/owner on the Team tab, when they change another member's role, then: owner can grant any role; `general_manager` cannot grant `owner`/`general_manager`; `shift_manager`/`host`/`server` cannot change roles at all (this already matches the existing `memberships_update_manager` RLS policy — no policy change needed, only a UI that exercises it).
-- [ ] Given demo mode, when a person registers, then they're added to the in-memory team roster for that session and can sign in with their chosen passcode for the rest of the session (resets on refresh, consistent with every other demo-mode surface).
-- [ ] Given a successful self-serve registration, then one append-only `registrations` row records who/when; application roles cannot update or delete it.
+- [x] Given an unregistered person on `/r/<slug>`, when they submit a name and a valid 4-digit passcode not already used in that organization (contact optional, left blank or filled), then they are immediately signed in as an active server and appear in the organization's member list.
+- [x] Given a chosen passcode already used by someone else in the same organization, when they submit, then registration fails with "That passcode is already in use — choose a different one" and no orphaned Auth user / profile / membership row remains.
+- [x] Given a manager/owner on the Team tab, when they change another member's role, then: owner can grant any role; `general_manager` cannot grant `owner`/`general_manager`; `shift_manager`/`host`/`server` cannot change roles at all (this already matches the existing `memberships_update_manager` RLS policy — no policy change needed, only a UI that exercises it).
+- [x] Given demo mode, when a person registers, then they're added to the in-memory team roster for that session and can sign in with their chosen passcode for the rest of the session (resets on refresh, consistent with every other demo-mode surface).
+- [x] Given a successful self-serve registration, then one append-only `registrations` row records who/when; application roles cannot update or delete it.
 
 ## UX contract
 

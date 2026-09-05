@@ -1,8 +1,8 @@
 # Feature 006 — Four-digit passcodes and tightened rate limiting
 
-Status: discovery
+Status: shipped
 
-**Implementation note**: same division-of-labor change as Feature 005 — Claude implements this batch directly, Codex is not in this loop. See 005 for the full note.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 
 ## User outcome
 
@@ -16,13 +16,13 @@ Passcodes shrink to 4 digits everywhere (faster entry on a phone mid-shift), whi
 
 ## Acceptance criteria
 
-- [ ] `isValidPasscode` accepts exactly 4 digits; rejects 3, 5, 6, 8-digit, and non-digit input.
-- [ ] The login field accepts at most 4 digits and opens a numeric keypad on a real mobile browser (`type="tel"`).
-- [ ] A fingerprint that fails 5 times within 15 minutes is locked out for that window (down from 8).
-- [ ] An organization that accumulates 30 failed attempts, across _any_ fingerprints, within a rolling 15 minutes, blocks passcode logins for that organization — **except** for a fingerprint with a successful login there in the last 24 hours, which is unaffected.
-- [ ] While an org-wide lockout is active, any already-signed-in manager/owner in that organization sees a "Clear login lockout" control and can lift it immediately by supplying a reason, recorded as an audit event.
-- [ ] Two different people in the same organization cannot both hold the same 4-digit passcode (proven via Feature 005's registration collision test and the existing `passcode_credentials` unique constraint).
-- [ ] The same 4-digit passcode is allowed across two different organizations (the locator is HMAC'd with `organization_id`, already namespaced).
+- [x] `isValidPasscode` accepts exactly 4 digits; rejects 3, 5, 6, 8-digit, and non-digit input.
+- [x] The login field accepts at most 4 digits and opens a numeric keypad on a real mobile browser (`type="tel"`).
+- [x] A fingerprint that fails 5 times within 15 minutes is locked out for that window (down from 8).
+- [x] An organization that accumulates 30 failed attempts, across _any_ fingerprints, within a rolling 15 minutes, blocks passcode logins for that organization — **except** for a fingerprint with a successful login there in the last 24 hours, which is unaffected.
+- [x] While an org-wide lockout is active, any already-signed-in manager/owner in that organization sees a "Clear login lockout" control and can lift it immediately by supplying a reason, recorded as an audit event.
+- [x] Two different people in the same organization cannot both hold the same 4-digit passcode (proven via Feature 005's registration collision test and the existing `passcode_credentials` unique constraint).
+- [x] The same 4-digit passcode is allowed across two different organizations (the locator is HMAC'd with `organization_id`, already namespaced).
 
 ## Rate limiting — revised design: degrade, don't deny
 

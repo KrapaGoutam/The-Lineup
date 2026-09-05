@@ -6,7 +6,7 @@ ServiceFlow is a passcode-only restaurant workspace with exactly three operating
 2. live table-allocation rotation;
 3. interval-based tip splitting.
 
-Managers and owners can plan, publish, clear, undo, calculate, and configure restaurant hours. Servers can read the published team schedule, write only in their own active table column, and see only their own tip estimate.
+Managers and owners can plan, publish, clear, undo, calculate, and configure restaurant hours. Anyone signed in can write to any active table column on the live allocation board, with attribution always recorded (Feature 011). Servers can read the published team schedule and see only their own tip estimate. An owner or manager can set anyone's designation — Owner, Manager, Assistant Manager, or Staff; Manager and Assistant Manager get identical full operational access (Feature 014).
 
 ## Working demo
 
@@ -73,4 +73,4 @@ Follow [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Secrets never use a `NEXT_PUB
 
 ## Current delivery state
 
-The responsive interactive MVP, domain tests, passcode/access-request route handlers, session refresh proxy, and forward Supabase migrations are implemented. Hosted Supabase persistence and Vercel deployment require the project credentials and Git remote described in the deployment runbook.
+The responsive interactive MVP, domain tests, passcode/self-serve-registration route handlers, session refresh proxy, and forward Supabase migrations are implemented. Hosted Supabase persistence and Vercel deployment require the project credentials and Git remote described in the deployment runbook.

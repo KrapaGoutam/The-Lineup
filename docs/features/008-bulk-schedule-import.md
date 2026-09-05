@@ -1,8 +1,8 @@
 # Feature 008 — Bulk schedule CSV import
 
-Status: discovery
+Status: shipped
 
-**Implementation note**: same division-of-labor change as Feature 005 — Claude implements this batch directly, Codex is not in this loop. See 005 for the full note.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 
 ## User outcome
 
@@ -20,13 +20,13 @@ Columns: `employee_name`, `shift_kind` (`morning` / `evening` / `full_day`), `fr
 
 ## Acceptance criteria
 
-- [ ] Manager can download a CSV template with the documented columns and one example row.
-- [ ] Uploading a valid CSV shows a preview table with every row marked valid and a count of shifts that will be created.
-- [ ] Any row with a bad date, a lone custom-start/end (missing its pair), an unresolved or ambiguous employee name, or a duplicate within the file shows a specific per-row error.
-- [ ] Commit is blocked while any row has an unresolved error; a manager can explicitly toggle a bad row to "skip this row" to commit the remaining valid rows rather than being silently blocked by one typo (no silent partial commit — see Decisions).
-- [ ] Commit creates shifts with `status: draft` only — none are published.
-- [ ] A file over 500 data rows is rejected up front with a top-level message before any per-row parsing.
-- [ ] Servers (non-managers) never see the import control.
+- [x] Manager can download a CSV template with the documented columns and one example row.
+- [x] Uploading a valid CSV shows a preview table with every row marked valid and a count of shifts that will be created.
+- [x] Any row with a bad date, a lone custom-start/end (missing its pair), an unresolved or ambiguous employee name, or a duplicate within the file shows a specific per-row error.
+- [x] Commit is blocked while any row has an unresolved error; a manager can explicitly toggle a bad row to "skip this row" to commit the remaining valid rows rather than being silently blocked by one typo (no silent partial commit — see Decisions).
+- [x] Commit creates shifts with `status: draft` only — none are published.
+- [x] A file over 500 data rows is rejected up front with a top-level message before any per-row parsing.
+- [x] Servers (non-managers) never see the import control.
 
 ## UX contract
 

@@ -25,13 +25,14 @@ ServiceFlow combines labor scheduling with a live floor roster. A manager publis
 
 ## Personas and permissions
 
-| Persona | Main job                                          | Default permissions                            |
-| ------- | ------------------------------------------------- | ---------------------------------------------- |
-| Owner   | Configure the restaurant and review operations    | All restaurant data and role management        |
-| Manager | Plan schedules, operate the floor, calculate tips | Assigned locations                             |
-| Server  | Work service and review personal information      | Published schedule, own table column, own tips |
+| Persona           | Main job                                          | Default permissions                              |
+| ----------------- | ------------------------------------------------- | ------------------------------------------------ |
+| Owner             | Configure the restaurant and review operations    | All restaurant data and role management          |
+| Manager           | Plan schedules, operate the floor, calculate tips | Assigned locations                               |
+| Assistant Manager | Same job as Manager                               | Assigned locations, except changing designations |
+| Server            | Work service and review personal information      | Published schedule, own table column, own tips   |
 
-One person can hold multiple roles. Authorization is derived from membership rows, never from editable profile metadata.
+One person can hold multiple roles. Authorization is derived from membership rows, never from editable profile metadata. Owner, Manager, and Assistant Manager are display **designations** over the same underlying permission tier (Feature 014) — Manager and Assistant Manager have identical operational access; only who may change someone's designation differs. See `docs/features/014-team-designations.md`.
 
 ## MVP requirements
 
@@ -60,9 +61,9 @@ One person can hold multiple roles. Authorization is derived from membership row
 
 - Display one flexible ordered column for each server currently on the floor. Any active employee can be added, whether or not they were scheduled for the shift (Feature 009).
 - Managers add/remove/pause/clear columns and reorder the rotation order at any time, including mid-round (Feature 010); reordering never changes a round's already-recorded assignments.
-- Any signed-in person may record a table against any active column, not only their own (Feature 011) — editing someone else's column requires a short reason, which is recorded and shown to the whole team. Manager-only actions (pause/remove/reorder/clear) are unaffected. The board locks for everyone, managers included, once that service date's tips are finalized, and stays locked until a manager or owner reopens it with a reason.
+- Any signed-in person may record a table against any active column, not only their own (Feature 011) — editing someone else's column is always attributed and shown to the whole team; a reason is optional context, never a requirement to complete the edit. Manager-only actions (pause/remove/reorder/clear) are unaffected. The board locks for everyone, managers included, once that service date's tips are finalized, and stays locked until a manager or owner reopens it with a reason.
 - Support combined-table entries.
-- Add the next rotation row automatically after every active column in the current row is filled.
+- Keep a standing empty row ready one full row ahead of whichever row people are actively filling, so an early finisher is never blocked on a straggler in their own row. A manager can also add an extra row on demand.
 - Support undo/redo plus manager-only clear row, clear column, and clear board.
 - Persist changes as events and update open boards through Realtime.
 

@@ -1,10 +1,12 @@
 # Feature 009 — Add any active employee to the rotation
 
-Status: discovery
+Status: shipped, later revised
 
-**Implementation note**: same division-of-labor change as Feature 005 — Claude implements this batch directly, Codex is not in this loop. See 005 for the full note.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex was not in this loop.
 
 **Build note**: implemented together with Feature 010 in one session (both touch `rotation-board.ts` and its undo/redo logic), committed separately.
+
+**Revision (post-ship)**: the claim below that quick-add "already lists everyone" was true only of the static demo roster this feature tested against (`team` in `lib/demo-data.ts`). It stopped being true the moment a live roster could grow beyond that static list — a self-serve registration (Feature 005) never appeared in quick-add, because `availableMembers` filtered the static import, not the live `demoTeam` state registration actually writes to. Root cause: same seam existed in the schedule grid and tip participant picker too. Fixed by lifting `team` into a prop threaded from the single source of truth in all three operational workspaces — see the commit "fix: quick-add, schedule roster, and tip participants all read the live team." The "not schedule-filtered" invariant this feature set out to test and protect remains true and unaffected; only the roster _source_ was wrong.
 
 ## User outcome
 
@@ -31,9 +33,9 @@ The demo has no example of a genuinely unrostered person to prove this with: eve
 
 ## Acceptance criteria
 
-- [ ] A demo employee with no shifts in `initialShifts` (Ivy Tran) appears in the "Floor team changed?" quick-add list and can be added as a column.
-- [ ] Adding a column — scheduled or not — does not reset, rebuild, or clear the board: existing rounds' recorded table labels are unchanged, the round count is unchanged, and undo/redo history (`past`/`future`) is unaffected. This is already true of the existing `applyBoardAction`'s `"add-column"` case (verified by reading `rotation-board.ts`: it pushes an empty cell for the new column into every existing round and only re-evaluates whether a _new_ round is needed, which it isn't, since the new column's empty cell makes the last round newly incomplete) — this feature adds the test that locks that behavior in, not new reducer logic.
-- [ ] Undoing an add-column action removes exactly that column and its appended empty cells, restoring the prior board state.
+- [x] A demo employee with no shifts in `initialShifts` (Ivy Tran) appears in the "Floor team changed?" quick-add list and can be added as a column.
+- [x] Adding a column — scheduled or not — does not reset, rebuild, or clear the board: existing rounds' recorded table labels are unchanged, the round count is unchanged, and undo/redo history (`past`/`future`) is unaffected. This is already true of the existing `applyBoardAction`'s `"add-column"` case (verified by reading `rotation-board.ts`: it pushes an empty cell for the new column into every existing round and only re-evaluates whether a _new_ round is needed, which it isn't, since the new column's empty cell makes the last round newly incomplete) — this feature adds the test that locks that behavior in, not new reducer logic.
+- [x] Undoing an add-column action removes exactly that column and its appended empty cells, restoring the prior board state.
 
 ## UX contract
 

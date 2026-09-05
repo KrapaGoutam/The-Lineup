@@ -84,7 +84,7 @@ The database function is `SECURITY INVOKER`, has an empty search path, is execut
 
 Every business row carries `organization_id`; location-owned rows also carry `location_id`. Policies use indexed membership lookups. Role checks live in non-exposed helper functions only when a simple indexed `exists` policy is insufficient. UI permission checks improve experience but never replace RLS.
 
-Role order is `owner > general_manager > shift_manager > host > server`; permissions are explicit capabilities rather than string comparisons in application code.
+Role order is `owner > general_manager > shift_manager > host > server`; permissions are explicit capabilities rather than string comparisons in application code. `general_manager` and `shift_manager` already carry identical operational grants; the UI's "designation" labels them Manager and Assistant Manager respectively (Feature 014) — a display concept, not a new permission tier. `host`/`server` both display as Staff.
 
 ## Time model
 
@@ -108,7 +108,7 @@ Assignment objectives, in order:
 
 The first version may use a deterministic greedy allocator. Exact optimization is deferred until pilot data demonstrates a real failure.
 
-The delivered table-allocation board is a smaller append-only operational model: active/paused/removed server columns, numbered rounds, table labels, and actor-stamped board events. A complete active row creates one empty trailing row. In the client, history snapshots power immediate undo/redo; Supabase mode persists equivalent inverse events. Column order (`position`) is manager/owner-reorderable at any time, including mid-round; because entries are keyed by column identity rather than position, reordering only changes who is considered "next" for future turns, never any already-recorded assignment (Feature 010). Any active member may record a table against any column, not only their own — attribution (`assigned_by`) stays real and unspoofable regardless, and a write to someone else's column requires a short, recorded reason (Feature 011). The board is entirely read-only, for every role, once that service date's tip pool is finalized, and reopening it is a manager/owner-only, reason-required action.
+The delivered table-allocation board is a smaller append-only operational model: active/paused/removed server columns, numbered rounds, table labels, and actor-stamped board events. A standing empty row is kept ready one full row ahead of whichever row is actually being filled — not appended only once that row is completely done — so an early finisher is never blocked on a straggler in the row before theirs; a manager can also add a row on demand. In the client, history snapshots power immediate undo/redo; Supabase mode persists equivalent inverse events. Column order (`position`) is manager/owner-reorderable at any time, including mid-round; because entries are keyed by column identity rather than position, reordering only changes who is considered "next" for future turns, never any already-recorded assignment (Feature 010). Any active member may record a table against any column, not only their own — attribution (`assigned_by`) stays real, unspoofable, and unconditionally recorded regardless of whose column was edited; a reason is optional context, never a gate on the write (Feature 011, revised — a mandatory reason was dropped as service-time friction). The board is entirely read-only, for every role, once that service date's tip pool is finalized, and reopening it is a manager/owner-only, reason-required action.
 
 ## Tip splitting
 

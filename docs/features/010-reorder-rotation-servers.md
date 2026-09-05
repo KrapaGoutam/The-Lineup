@@ -1,8 +1,8 @@
 # Feature 010 — Reorder servers in the rotation
 
-Status: discovery
+Status: shipped
 
-**Implementation note**: same division-of-labor change as Feature 005 — Claude implements this batch directly, Codex is not in this loop. See 005 for the full note.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 
 **Build note**: implemented together with Feature 009 in one session (both touch `rotation-board.ts` and its undo/redo logic), committed separately.
 
@@ -38,13 +38,13 @@ Concretely:
 
 ## Acceptance criteria
 
-- [ ] Moving a column up or down swaps its position with the adjacent visible column; columns beyond it are unaffected.
-- [ ] Moving the first column up, or the last column down, is a no-op — no board mutation, no history entry.
-- [ ] All previously recorded cell data is byte-for-byte unchanged after a reorder — only `columns[].position` differs.
-- [ ] "Next up" is recomputed against the new order immediately, including mid-round.
-- [ ] The move is undoable/redoable like any other board action.
-- [ ] The up/down controls meet the 44×44 CSS px touch-target minimum and are keyboard-operable (native buttons, no pointer-only interaction).
-- [ ] Servers cannot reorder columns — manager/owner only, matching the existing pause/remove/clear capability gating.
+- [x] Moving a column up or down swaps its position with the adjacent visible column; columns beyond it are unaffected.
+- [x] Moving the first column up, or the last column down, is a no-op — no board mutation, no history entry.
+- [x] All previously recorded cell data is byte-for-byte unchanged after a reorder — only `columns[].position` differs.
+- [x] "Next up" is recomputed against the new order immediately, including mid-round.
+- [x] The move is undoable/redoable like any other board action.
+- [x] The up/down controls meet the 44×44 CSS px touch-target minimum and are keyboard-operable (native buttons, no pointer-only interaction).
+- [x] Servers cannot reorder columns — manager/owner only, matching the existing pause/remove/clear capability gating.
 
 ## UX contract
 

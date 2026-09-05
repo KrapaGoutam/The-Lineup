@@ -21,7 +21,7 @@ Build a reliable restaurant scheduling and table-rotation product one vertical f
 - Use Server Components for reads by default; use Server Actions or Route Handlers for validated mutations.
 - Keep the table-rotation decision engine pure and deterministic. Persist decisions and overrides separately.
 - Do not move an occupied table during floor rebalancing.
-- Manual overrides require a reason and an audit event.
+- Manual overrides require an audit event; a reason is required too unless a specific, approved feature spec scopes a narrower exception (the allocation board's cross-column edit, Feature 011 as revised, records attribution unconditionally but never blocks the edit on a reason — see `docs/features/011-allocation-board-open-editing.md`).
 - Use semantic shadcn primitives before inventing controls. Preserve keyboard and touch usability.
 - Motion must be purposeful and honor `prefers-reduced-motion`.
 - Do not add a dependency until the platform or existing code cannot reasonably solve the requirement.

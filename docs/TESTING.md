@@ -20,7 +20,7 @@
 - DST transition fixtures preserve location-local shift intent.
 - A user from organization A cannot read or mutate organization B.
 - Tip allocations sum exactly to every interval amount in integer cents.
-- A full table-allocation row creates one empty trailing row.
+- A standing empty table-allocation row stays ready one full row ahead of whichever row is actually being filled.
 - Undo and redo restore complete table-board snapshots.
 
 ## Commands
