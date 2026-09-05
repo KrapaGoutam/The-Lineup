@@ -71,6 +71,19 @@ test("unregistered user can self-register and lands in the app", async ({
   await expect(page.getByText("Server access")).toBeVisible();
 });
 
+test("self-registers with no phone or email — only name and passcode are required", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Not registered? Create an account" })
+    .click();
+  await page.getByLabel("Your name").fill("No Contact Server");
+  await page.getByLabel("Choose a passcode").fill("5150");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByText("Server access")).toBeVisible();
+});
+
 test("registering with a passcode already in use shows an error", async ({
   page,
 }) => {

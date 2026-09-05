@@ -20,12 +20,17 @@ describe("isValidDisplayName", () => {
 });
 
 describe("isValidContact", () => {
-  it("accepts a phone number or email", () => {
+  it("is optional — empty or whitespace-only is valid", () => {
+    expect(isValidContact("")).toBe(true);
+    expect(isValidContact("   ")).toBe(true);
+  });
+
+  it("accepts a phone number or email when provided", () => {
     expect(isValidContact("server@example.com")).toBe(true);
     expect(isValidContact("555-0100")).toBe(true);
   });
 
-  it("rejects too short or too long", () => {
+  it("rejects a too-short non-empty value or a too-long one", () => {
     expect(isValidContact("ab")).toBe(false);
     expect(isValidContact("a".repeat(201))).toBe(false);
   });

@@ -27,7 +27,7 @@ const registerSchema = z.object({
     .string()
     .refine(
       isValidContact,
-      "Enter a phone number or email so you can be reached.",
+      "Leave this blank or enter a valid phone number or email.",
     ),
   passcode: z.string(),
 });
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
   await admin.from("registrations").insert({
     organization_id: organization.id,
     display_name: displayName,
-    contact,
+    contact: contact.trim().length > 0 ? contact.trim() : null,
     status: "approved",
     profile_id: userId,
     self_served: true,

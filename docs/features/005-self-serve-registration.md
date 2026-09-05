@@ -6,7 +6,9 @@ Status: discovery
 
 ## User outcome
 
-A new person at `/r/<restaurant-slug>` registers with a name, a contact, and a passcode they choose, and is immediately signed in as an active server — no manager approval step blocks them. Managers/owners retain the sole ability to promote someone beyond server role, through a new Team view.
+A new person at `/r/<restaurant-slug>` registers with a name and a passcode they choose — contact is optional — and is immediately signed in as an active server — no manager approval step blocks them. Managers/owners retain the sole ability to promote someone beyond server role, through a new Team view.
+
+**Amended 2026-09-05**: contact (phone/email) is optional. Only the display name and the chosen passcode are mandatory.
 
 ## Scope
 
@@ -28,7 +30,7 @@ A new person at `/r/<restaurant-slug>` registers with a name, a contact, and a p
 
 ## Acceptance criteria
 
-- [ ] Given an unregistered person on `/r/<slug>`, when they submit name + contact + a valid 4-digit passcode not already used in that organization, then they are immediately signed in as an active server and appear in the organization's member list.
+- [ ] Given an unregistered person on `/r/<slug>`, when they submit a name and a valid 4-digit passcode not already used in that organization (contact optional, left blank or filled), then they are immediately signed in as an active server and appear in the organization's member list.
 - [ ] Given a chosen passcode already used by someone else in the same organization, when they submit, then registration fails with "That passcode is already in use — choose a different one" and no orphaned Auth user / profile / membership row remains.
 - [ ] Given a manager/owner on the Team tab, when they change another member's role, then: owner can grant any role; `general_manager` cannot grant `owner`/`general_manager`; `shift_manager`/`host`/`server` cannot change roles at all (this already matches the existing `memberships_update_manager` RLS policy — no policy change needed, only a UI that exercises it).
 - [ ] Given demo mode, when a person registers, then they're added to the in-memory team roster for that session and can sign in with their chosen passcode for the rest of the session (resets on refresh, consistent with every other demo-mode surface).
@@ -39,14 +41,14 @@ A new person at `/r/<restaurant-slug>` registers with a name, a contact, and a p
 - Entry point: "Register" link on the passcode login screen, replacing "Request access."
 - Desktop / tablet / mobile: single-column form, same visual treatment as the existing login card.
 - Loading: submit button shows "Creating your account…".
-- Error: inline `aria-live` text for invalid name / contact / passcode format / passcode-already-taken.
+- Error: inline `aria-live` text for invalid name / passcode format / passcode-already-taken / a contact value that's non-empty but malformed (empty contact is always valid).
 - Success: immediate sign-in, no intermediate screen.
 - Permission denied: Team tab and its controls are not rendered at all for non-managers.
 - Keyboard/screen reader: same labeled-input + `aria-live` + 44px-target pattern as the existing login form.
 
 ## Data and authorization
 
-- Tables/columns: rename `access_requests` → `registrations`; add `profile_id uuid references profiles(id) on delete set null`, `self_served boolean not null default true`.
+- Tables/columns: rename `access_requests` → `registrations`; add `profile_id uuid references profiles(id) on delete set null`, `self_served boolean not null default true`; `contact` made nullable (only `display_name` and the passcode are mandatory — a follow-up migration relaxed the original `not null` + length-check to allow null while still bounding a provided value's length).
 - Constraints/indexes: no new constraint required — the existing `unique (organization_id, locator)` on `passcode_credentials` is the collision guard.
 - Grants/RLS: `registrations` grants drop `update` for `authenticated` (no more accept/decline action) and keep `select` (managers can view registration history) and the existing `grant all ... to service_role`. No change to `profiles`/`memberships`/`passcode_credentials` RLS — the route writes through the service-role admin client exactly like `/api/auth/passcode` already does today, bypassing RLS by design (same trust boundary already in the codebase).
 - Roles/capabilities: new registrants always get `roles = ['server']`, enforced in the route, not by a DB trigger — flagged as an application-layer invariant (same trust model as the rest of the admin-client pattern).

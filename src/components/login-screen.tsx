@@ -107,7 +107,7 @@ export function LoginScreen({
       return;
     }
     if (!isValidContact(contact)) {
-      setError("Enter a phone number or email so you can be reached.");
+      setError("Leave this blank or enter a valid phone number or email.");
       return;
     }
     if (!isValidPasscode(chosenPasscode)) {
@@ -259,13 +259,17 @@ export function LoginScreen({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contact">Phone or email</Label>
+                  <Label htmlFor="contact">
+                    Phone or email{" "}
+                    <span className="text-muted-foreground font-normal">
+                      (optional)
+                    </span>
+                  </Label>
                   <Input
                     id="contact"
                     name="contact"
                     placeholder="So your manager can reach you"
                     autoComplete="email"
-                    required
                   />
                 </div>
                 <div className="space-y-2">
