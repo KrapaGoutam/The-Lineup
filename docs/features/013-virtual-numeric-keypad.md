@@ -1,8 +1,10 @@
 # Feature 013 — Virtual numeric keypad on login
 
-Status: deferred (spec only — do not implement)
+Status: shipped
 
-**Implementation note**: same division-of-labor change as Feature 005 would apply if this were built — moot while deferred.
+**Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this directly, Codex was not in this loop.
+
+**What shipped**: a `NumericKeypad` component local to `login-screen.tsx` (not extracted to its own file, per the spec's explicit "not created speculatively now" — no second consumer exists yet), rendered directly below the passcode `<Input>`, `lg:hidden` (visible at phone/tablet widths, hidden at desktop). Nine digit buttons plus 0 and backspace in a 3×3+1 grid; each tap/backspace writes through the exact same `setPasscode((current) => ...).slice(0, 4)` rule the typed input already uses, so there's one source of truth for the cap, not two. Built against Feature 012's finished theme (`--primary`/`--border`/`--radius` tokens via the existing `Button` component's `secondary` variant), not a second contrast pass, per the requested build order.
 
 ## User outcome
 
@@ -27,13 +29,13 @@ On a tablet or phone, a server can tap an on-screen number pad to enter their 4-
 
 ## Acceptance criteria
 
-- [ ] The keypad is visible at tablet and phone widths and hidden at desktop width.
-- [ ] Tapping a digit updates the same passcode value the typed input shows, capped at 4 digits, identically to typing.
-- [ ] Tapping past 4 digits does nothing (matches the existing typed-input cap behavior).
-- [ ] Backspace removes exactly one digit.
-- [ ] The typed input remains fully functional and focus-visible the whole time — this is additive, not a takeover.
-- [ ] Every key meets the 44×44 CSS px touch-target minimum.
-- [ ] The keypad is operable by screen reader (each key is a real, labeled button) even though its primary use case is touch.
+- [x] The keypad is visible at tablet and phone widths and hidden at desktop width.
+- [x] Tapping a digit updates the same passcode value the typed input shows, capped at 4 digits, identically to typing.
+- [x] Tapping past 4 digits does nothing (matches the existing typed-input cap behavior).
+- [x] Backspace removes exactly one digit.
+- [x] The typed input remains fully functional and focus-visible the whole time — this is additive, not a takeover.
+- [x] Every key meets the 44×44 CSS px touch-target minimum.
+- [x] The keypad is operable by screen reader (each key is a real, labeled button) even though its primary use case is touch.
 
 ## UX contract
 
@@ -46,15 +48,14 @@ On a tablet or phone, a server can tap an on-screen number pad to enter their 4-
 
 None — pure client-side UI state, no schema, RLS, route, or migration.
 
-## Implementation map (for whenever this is built)
+## Implementation map
 
-- `src/components/login-screen.tsx`: new keypad grid rendered below the passcode `<Input>`, `hidden md:hidden`-equivalent (visible below the tablet breakpoint, hidden at and above it), digit taps calling the same `setPasscode` updater the input's `onChange` already uses.
-- Possibly a small extracted `<NumericKeypad>` component if the same pattern is ever reused (registration's passcode-choice field, e.g.) — not created speculatively now.
+- `src/components/login-screen.tsx`: local `NumericKeypad` function component rendered below the passcode `<Input>`, `lg:hidden` (visible below the desktop breakpoint, hidden at and above it), digit taps calling the same `setPasscode` updater the input's `onChange` already uses. Not extracted to its own file — no second consumer exists yet.
 
 ## Test plan
 
-- Component: tapping digits updates the passcode value identically to typing; the 4-digit cap holds; backspace removes one digit; keypad hidden at desktop viewport width, visible at tablet/phone.
-- Playwright: a tablet-width viewport test taps a full 4-digit passcode via the keypad alone and successfully signs in; a desktop-width viewport test confirms the keypad isn't rendered at all.
+- Component: `login-screen.test.tsx` — tapping digits updates the passcode value identically to typing (capped at 4); backspace removes exactly one digit; typing and tapping interleave into the same value.
+- Playwright: a 390×844 (phone) viewport test taps a full 4-digit passcode via the keypad alone and successfully signs in; a 1280×800 (desktop) viewport test confirms no digit buttons render at all.
 - Manual viewports: iPhone SE (375px), iPad portrait/landscape — confirm key sizing and spacing feel right for a thumb, not just technically meet the 44px minimum.
 
 ## Rollout and rollback
@@ -69,4 +70,4 @@ None — pure client-side UI state, no schema, RLS, route, or migration.
 - **Decision**: additive alongside the typed input, never a replacement, exactly as directed — both input methods write to the same state, so there's no divergence risk between them.
 - **Decision**: scoped to the login screen's passcode field only, not extended to registration's passcode-choice field in this pass, to keep the change small and reviewable.
 - **Risk**: a 3×4 grid at 44px minimum keys plus spacing needs real vertical space on a short phone screen (iPhone SE class) alongside the existing card content above it — worth a specific layout check at build time rather than assuming it fits.
-- Open questions: none remaining — this spec is deliberately deferred, not blocked on an unresolved decision.
+- Open questions: none remaining.

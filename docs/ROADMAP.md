@@ -32,6 +32,7 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 16. [x] Drop the self-or-manager write restriction on the allocation board; any-column edits require a reason for cross-column writes; the board locks once tips are finalized until a manager/owner reopens it (Feature 011)
 17. [ ] Mobile/tablet responsive pass, including the allocation board's narrow-screen restructure (Feature 007 — specced, not yet implemented)
 18. [x] Light/dark theme toggle, persisted, OS-preference-aware on first visit, full contrast-audited light palette including all seven server accents (Feature 012)
+19. [x] Virtual numeric keypad on login, additive alongside the typed passcode input, tablet/phone only (Feature 013)
 
 ## Phase 5 — Pilot hardening
 
@@ -39,9 +40,5 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 8. Performance/load test for concurrent board writes
 9. Backup, recovery, usage monitoring, and incident runbook
 10. CSV/PDF export and configurable restaurant policies
-
-## Deferred (spec written, not scheduled)
-
-- [ ] Virtual numeric keypad on login — `docs/features/013-virtual-numeric-keypad.md`. Spec only; additive alongside the typed passcode input, not a replacement.
 
 POS, reservations, payroll, SMS, and native apps require separate product discovery after pilot evidence.

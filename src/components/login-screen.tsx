@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ArrowLeft, KeyRound, Sparkles, UserPlus } from "lucide-react";
+import { ArrowLeft, Delete, KeyRound, Sparkles, UserPlus } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,61 @@ export type SignedInUser = {
 export type RegisterDemoResult =
   | { ok: true; account: SignedInUser }
   | { ok: false; error: string };
+
+const KEYPAD_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/**
+ * Feature 013: additive alongside the typed input, never a replacement —
+ * both write to the same `passcode` state via the same capped-at-4 rule,
+ * so there's no divergence between typing and tapping. Hidden at desktop
+ * width (`lg:hidden`); desktop already has a physical keyboard.
+ */
+function NumericKeypad({
+  onDigit,
+  onBackspace,
+}: {
+  onDigit: (digit: string) => void;
+  onBackspace: () => void;
+}) {
+  return (
+    <div
+      className="mt-3 grid grid-cols-3 gap-2 lg:hidden"
+      aria-label="Numeric keypad"
+    >
+      {KEYPAD_DIGITS.map((digit) => (
+        <Button
+          key={digit}
+          type="button"
+          variant="secondary"
+          className="h-14 font-mono text-lg font-semibold"
+          aria-label={`Digit ${digit}`}
+          onClick={() => onDigit(digit)}
+        >
+          {digit}
+        </Button>
+      ))}
+      <div aria-hidden="true" />
+      <Button
+        type="button"
+        variant="secondary"
+        className="h-14 font-mono text-lg font-semibold"
+        aria-label="Digit 0"
+        onClick={() => onDigit("0")}
+      >
+        0
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        className="h-14"
+        aria-label="Backspace"
+        onClick={onBackspace}
+      >
+        <Delete aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
 
 export function LoginScreen({
   demoMode,
@@ -218,6 +273,14 @@ export function LoginScreen({
                     No username is required. Your restaurant link identifies the
                     location.
                   </p>
+                  <NumericKeypad
+                    onDigit={(digit) =>
+                      setPasscode((current) => (current + digit).slice(0, 4))
+                    }
+                    onBackspace={() =>
+                      setPasscode((current) => current.slice(0, -1))
+                    }
+                  />
                 </div>
                 {error ? (
                   <p className="text-destructive text-sm" aria-live="polite">

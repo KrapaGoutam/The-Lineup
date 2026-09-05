@@ -188,6 +188,26 @@ test("theme toggle is reachable from the login screen before signing in", async 
   await expect(html).not.toHaveAttribute("data-theme", initialTheme ?? "");
 });
 
+test("numeric keypad completes a full sign-in via taps alone at phone width", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  for (const digit of ["2", "4", "6", "8"]) {
+    await page.getByRole("button", { name: `Digit ${digit}` }).click();
+  }
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Weekly & monthly roster" }),
+  ).toBeVisible();
+});
+
+test("numeric keypad is hidden at desktop width", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Digit 1" })).toHaveCount(0);
+});
+
 test("an unrostered employee can be added to the live allocation board", async ({
   page,
 }) => {
