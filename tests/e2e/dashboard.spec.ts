@@ -147,3 +147,15 @@ test("server never sees the Team tab", async ({ page }) => {
     page.getByRole("button", { name: "Team", exact: true }),
   ).toHaveCount(0);
 });
+
+test("an unrostered employee can be added to the live allocation board", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await expect(page.getByText("Floor team changed?")).toBeVisible();
+  await page.getByRole("button", { name: "Ivy" }).click();
+  await expect(page.getByText("Ivy Tran")).toBeVisible();
+});

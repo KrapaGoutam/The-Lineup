@@ -66,6 +66,16 @@ export const team: TeamMember[] = [
     role: "server",
     color: "var(--server-six)",
   },
+  {
+    id: "ivy",
+    name: "Ivy Tran",
+    shortName: "Ivy",
+    role: "server",
+    // Deliberately has no entries in initialShifts below — Feature 009
+    // proves an employee who was never rostered can still be added to the
+    // live allocation board.
+    color: "var(--server-seven)",
+  },
 ];
 
 const published = "published" as const;

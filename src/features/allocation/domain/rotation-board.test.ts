@@ -88,6 +88,53 @@ describe("rotation board", () => {
     ).toBe(true);
   });
 
+  it("adding a column mid-board preserves every existing round's cell data and does not rebuild the board", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const firstRoundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: firstRoundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: firstRoundId,
+      columnId: "leo",
+      tableLabel: "14",
+    });
+    // Board is now on round 2 (round 1 complete). Snapshot before adding.
+    const roundsBefore = JSON.parse(JSON.stringify(history.present.rounds));
+    const roundCountBefore = history.present.rounds.length;
+
+    history = executeBoardAction(history, {
+      type: "add-column",
+      column: { id: "ivy", name: "Ivy", position: 2, status: "active" },
+    });
+
+    // An unrostered employee (no schedule entry) can be added at all —
+    // the reducer has no concept of "scheduled" to filter on.
+    expect(history.present.columns.some((c) => c.id === "ivy")).toBe(true);
+    // Prior rounds' recorded cell data is untouched.
+    for (let index = 0; index < roundsBefore.length; index += 1) {
+      const before = roundsBefore[index].cells.filter(
+        (cell: { columnId: string }) => cell.columnId !== "ivy",
+      );
+      const after = history.present.rounds[index].cells.filter(
+        (cell) => cell.columnId !== "ivy",
+      );
+      expect(after).toEqual(before);
+    }
+    // The new column only ever appends an empty cell — it never creates an
+    // extra round beyond what completeness already required.
+    expect(history.present.rounds).toHaveLength(roundCountBefore);
+
+    // Undo removes exactly the new column and its cells, nothing else.
+    const undone = undoBoard(history);
+    expect(undone.present.columns.some((c) => c.id === "ivy")).toBe(false);
+    expect(undone.present.rounds).toEqual(roundsBefore);
+  });
+
   it("limits employees to their own column", () => {
     expect(
       mayWriteColumn({ isManager: false, profileId: "mia", columnId: "mia" }),
