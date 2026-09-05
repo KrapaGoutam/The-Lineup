@@ -9,6 +9,7 @@ import {
   Play,
   Plus,
   Redo2,
+  Rows3,
   RotateCcw,
   ShieldAlert,
   Trash2,
@@ -26,6 +27,7 @@ import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
+  getWorkingRound,
   isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
@@ -65,7 +67,11 @@ function buildInitialHistory() {
       tableLabel,
     });
   }
-  const second = history.present.rounds.at(-1)!.id;
+  // Completing round 1 now also opens a standing empty buffer row past
+  // round 2 (see `ensureTrailingRound`'s doc comment) — round 2 itself,
+  // not the trailing buffer, is where the demo's partial second turn
+  // belongs.
+  const second = history.present.rounds[1].id;
   for (const [columnId, tableLabel] of [
     ["mia", "15"],
     ["leo", "10"],
@@ -183,7 +189,9 @@ export function AllocationWorkspace({
   const availableMembers = team.filter(
     (member) => !visibleColumns.some(({ id }) => id === member.id),
   );
-  const currentRound = board.rounds.at(-1);
+  // The row people are actually filling in, not the standing empty
+  // buffer row past it (see `getWorkingRound`'s doc comment).
+  const currentRound = getWorkingRound(board);
   const nextColumn = visibleColumns.find(
     (column) =>
       column.status === "active" &&
@@ -250,6 +258,14 @@ export function AllocationWorkspace({
           >
             <Redo2 aria-hidden="true" /> Redo
           </Button>
+          {isManager && !boardLocked ? (
+            <Button
+              variant="outline"
+              onClick={() => execute({ type: "add-row" })}
+            >
+              <Rows3 aria-hidden="true" /> Add row
+            </Button>
+          ) : null}
           {isManager && !boardLocked ? (
             <Button
               variant="outline"

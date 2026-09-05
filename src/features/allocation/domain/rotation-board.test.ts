@@ -4,6 +4,7 @@ import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
+  getWorkingRound,
   isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
@@ -15,24 +16,27 @@ const columns = [
   { id: "leo", name: "Leo", position: 1, status: "active" as const },
 ];
 
-// Mirrors the `nextColumn` derivation in allocation-workspace.tsx exactly,
-// so Feature 010's "next up recomputes immediately" claim is proven at the
+// Mirrors the `nextColumn` derivation in allocation-workspace.tsx exactly
+// (including using the same `getWorkingRound`, not the raw trailing
+// round, now that a standing empty buffer row can sit past it), so
+// Feature 010's "next up recomputes immediately" claim is proven at the
 // domain layer, not just asserted.
 function computeNextColumnId(board: ReturnType<typeof createRotationBoard>) {
   const visible = [...board.columns]
     .filter((column) => column.status !== "removed")
     .sort((a, b) => a.position - b.position);
-  const lastRound = board.rounds.at(-1);
+  const workingRound = getWorkingRound(board);
   const next = visible.find(
     (column) =>
       column.status === "active" &&
-      !lastRound?.cells.find((cell) => cell.columnId === column.id)?.tableLabel,
+      !workingRound?.cells.find((cell) => cell.columnId === column.id)
+        ?.tableLabel,
   );
   return next?.id ?? null;
 }
 
 describe("rotation board", () => {
-  it("adds a new row after every active column is filled", () => {
+  it("keeps one empty row completely untouched while a single column fills the working row", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const roundId = history.present.rounds[0].id;
     history = executeBoardAction(history, {
@@ -43,13 +47,45 @@ describe("rotation board", () => {
     });
     expect(history.present.rounds).toHaveLength(1);
     expect(history.present.rounds[0].sequence).toBe(1);
+  });
+
+  it("opens a working row AND a fresh empty buffer row once every active column is filled, so an early finisher is never blocked on a straggler", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
     history = executeBoardAction(history, {
       type: "assign",
       roundId,
       columnId: "leo",
       tableLabel: "14 + 15",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
+    const [round1, round2, round3] = history.present.rounds;
+    expect(round1.cells.every((cell) => cell.tableLabel)).toBe(true);
+    expect(round2.cells.every((cell) => cell.tableLabel === null)).toBe(true);
+    expect(round3.cells.every((cell) => cell.tableLabel === null)).toBe(true);
+
+    // Finishing round 2 (the working row, not the buffer) is what should
+    // advance the buffer again -- not touching the buffer itself.
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2.id,
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    expect(history.present.rounds).toHaveLength(3);
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2.id,
+      columnId: "leo",
+      tableLabel: "5",
+    });
+    expect(history.present.rounds).toHaveLength(4);
   });
 
   it("does not wait for paused columns", () => {
@@ -65,7 +101,24 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
+  });
+
+  it("a manager can add a row on demand, on top of the automatic buffer, and undo/redo it like any other action", () => {
+    const initial = createBoardHistory(createRotationBoard(columns));
+    const countBefore = initial.present.rounds.length;
+    const added = executeBoardAction(initial, { type: "add-row" });
+    expect(added.present.rounds).toHaveLength(countBefore + 1);
+    expect(
+      added.present.rounds
+        .at(-1)!
+        .cells.every((cell) => cell.tableLabel === null),
+    ).toBe(true);
+
+    const undone = undoBoard(added);
+    expect(undone.present.rounds).toHaveLength(countBefore);
+    const redone = redoBoard(undone);
+    expect(redone.present.rounds).toHaveLength(countBefore + 1);
   });
 
   it("undoes and redoes board writing", () => {

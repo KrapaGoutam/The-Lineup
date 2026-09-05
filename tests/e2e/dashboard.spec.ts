@@ -220,6 +220,33 @@ test("an unrostered employee can be added to the live allocation board", async (
   await expect(page.getByText("Ivy Tran")).toBeVisible();
 });
 
+test("manager can add a row on demand, and undo removes it; a server never sees the control", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  const rowsBadge = page.getByText(/^\d+ rows$/);
+  const before = Number((await rowsBadge.textContent())?.match(/\d+/)?.[0]);
+
+  await page.getByRole("button", { name: "Add row" }).click();
+  await expect(rowsBadge).toHaveText(`${before + 1} rows`);
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(rowsBadge).toHaveText(`${before} rows`);
+});
+
+test("a server never sees the manual add-row control on the allocation board", async ({
+  page,
+}) => {
+  await signIn(page, "1357");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await expect(page.getByRole("button", { name: "Add row" })).toHaveCount(0);
+});
+
 test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
   await signIn(page, "2468");
   await page

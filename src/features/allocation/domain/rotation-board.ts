@@ -31,7 +31,8 @@ export type BoardAction =
   | { type: "clear-row"; roundId: string }
   | { type: "clear-column"; columnId: string }
   | { type: "clear-board" }
-  | { type: "move-column"; columnId: string; direction: "up" | "down" };
+  | { type: "move-column"; columnId: string; direction: "up" | "down" }
+  | { type: "add-row" };
 
 export type BoardHistory = {
   past: RotationBoard[];
@@ -71,16 +72,33 @@ function ensureTrailingRound(board: RotationBoard) {
       .filter((column) => column.status === "active")
       .map((column) => column.id),
   );
-  const last = board.rounds.at(-1)!;
-  const isComplete =
+  const isRoundComplete = (round: RotationRound) =>
     activeIds.size > 0 &&
     [...activeIds].every((columnId) =>
-      last.cells.some(
+      round.cells.some(
         (cell) => cell.columnId === columnId && Boolean(cell.tableLabel),
       ),
     );
-  if (isComplete) {
-    board.rounds.push(makeRound(board));
+  // A fresh empty row is kept ready one full row ahead of whichever row
+  // people are actually filling in, instead of only appearing once that
+  // row itself is completely done. Concretely: once a fully-empty
+  // trailing "buffer" row exists, the row being worked is the one right
+  // before it (the second-to-last row); finishing *that* one is what
+  // advances the buffer, not finishing the buffer itself. Before a
+  // buffer exists yet (board.rounds.length === 1), the single row is
+  // both — finishing it behaves the same way it always has.
+  //
+  // Without this, whoever finishes their column first in the row being
+  // worked has nowhere to go until the last straggler in that same row
+  // catches up — exactly the "waits too long" bug this fixes.
+  for (;;) {
+    const rounds = board.rounds;
+    const workingRound =
+      rounds.length >= 2
+        ? rounds[rounds.length - 2]
+        : rounds[rounds.length - 1];
+    if (!isRoundComplete(workingRound)) break;
+    rounds.push(makeRound(board));
     board.nextRoundNumber += 1;
   }
 }
@@ -174,6 +192,15 @@ export function applyBoardAction(
       swapping.position = swap;
       break;
     }
+    case "add-row":
+      // A manager can always add an extra row on top of the automatic
+      // buffer below — e.g. to hold a spot ahead of a known table turn.
+      // ensureTrailingRound never removes rows, so this is a plain
+      // append; it composes fine with the automatic buffer already in
+      // place.
+      board.rounds.push(makeRound(board));
+      board.nextRoundNumber += 1;
+      break;
   }
   ensureTrailingRound(board);
   return board;
@@ -220,11 +247,25 @@ export function redoBoard(history: BoardHistory): BoardHistory {
  * Feature 011: any signed-in active member may write to any column — the
  * self-or-manager restriction is dropped for the allocation board only.
  * Kept as a named export, rather than inlining `true` at call sites, so a
- * future board-level lock (see `writeRequiresReason` and the finalized-day
+ * future board-level lock (see `isCrossColumnEdit` and the finalized-day
  * freeze in allocation-workspace.tsx) has one obvious place to extend.
  */
 export function mayWriteColumn() {
   return true;
+}
+
+/**
+ * The row people are actually filling in right now — as opposed to
+ * `rounds.at(-1)`, which is the standing empty buffer row once one
+ * exists (see `ensureTrailingRound`). Consumers that need "who's up
+ * next" (the allocation workspace's summary card, `computeNextColumnId`
+ * in tests) must derive it from this, not from the literal last round,
+ * or they'll compute against a row nobody has touched yet.
+ */
+export function getWorkingRound(
+  board: RotationBoard,
+): RotationRound | undefined {
+  return board.rounds.length >= 2 ? board.rounds.at(-2) : board.rounds.at(-1);
 }
 
 /**
