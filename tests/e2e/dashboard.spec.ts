@@ -159,3 +159,17 @@ test("an unrostered employee can be added to the live allocation board", async (
   await page.getByRole("button", { name: "Ivy" }).click();
   await expect(page.getByText("Ivy Tran")).toBeVisible();
 });
+
+test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
+  await signIn(page, "2468");
+  await page
+    .getByRole("button", { name: "Table allocation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Move Mia Chen up" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Move Leo Park up" }).click();
+  await expect(
+    page.getByRole("button", { name: "Move Leo Park up" }),
+  ).toBeDisabled();
+});

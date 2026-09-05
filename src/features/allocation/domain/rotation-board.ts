@@ -30,7 +30,8 @@ export type BoardAction =
   | { type: "set-column-status"; columnId: string; status: ColumnStatus }
   | { type: "clear-row"; roundId: string }
   | { type: "clear-column"; columnId: string }
-  | { type: "clear-board" };
+  | { type: "clear-board" }
+  | { type: "move-column"; columnId: string; direction: "up" | "down" };
 
 export type BoardHistory = {
   past: RotationBoard[];
@@ -150,6 +151,29 @@ export function applyBoardAction(
       board.rounds = [];
       board.nextRoundNumber = 1;
       break;
+    case "move-column": {
+      // Swap `position` with the adjacent *visible* column only. Cell data
+      // is keyed by columnId, never by position, so no round's recorded
+      // data changes — only who's considered "next" is affected, and only
+      // for computations made after this action (see rotation-board's
+      // consumers: `nextColumn` always derives fresh from current
+      // positions). See docs/features/010-reorder-rotation-servers.md.
+      const visible = board.columns
+        .filter((column) => column.status !== "removed")
+        .sort((a, b) => a.position - b.position);
+      const index = visible.findIndex(({ id }) => id === action.columnId);
+      if (index === -1) return current;
+      const targetIndex = action.direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= visible.length) return current;
+      const moving = board.columns.find(({ id }) => id === visible[index].id)!;
+      const swapping = board.columns.find(
+        ({ id }) => id === visible[targetIndex].id,
+      )!;
+      const swap = moving.position;
+      moving.position = swapping.position;
+      swapping.position = swap;
+      break;
+    }
   }
   ensureTrailingRound(board);
   return board;

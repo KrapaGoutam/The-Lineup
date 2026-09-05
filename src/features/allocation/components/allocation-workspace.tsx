@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   Eraser,
   Pause,
   Play,
@@ -297,7 +299,7 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
               <div className="border-border bg-secondary text-muted-foreground sticky left-0 z-20 border-r p-3 text-xs font-semibold">
                 Turn
               </div>
-              {visibleColumns.map((column) => {
+              {visibleColumns.map((column, columnIndex) => {
                 const member = team.find(({ id }) => id === column.id);
                 const own = column.id === user.profileId;
                 return (
@@ -323,6 +325,36 @@ export function AllocationWorkspace({ user }: { user: SignedInUser }) {
                     </p>
                     {isManager ? (
                       <div className="mt-2 flex flex-wrap gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Move ${column.name} up`}
+                          disabled={columnIndex === 0}
+                          onClick={() =>
+                            execute({
+                              type: "move-column",
+                              columnId: column.id,
+                              direction: "up",
+                            })
+                          }
+                        >
+                          <ChevronUp />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Move ${column.name} down`}
+                          disabled={columnIndex === visibleColumns.length - 1}
+                          onClick={() =>
+                            execute({
+                              type: "move-column",
+                              columnId: column.id,
+                              direction: "down",
+                            })
+                          }
+                        >
+                          <ChevronDown />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
