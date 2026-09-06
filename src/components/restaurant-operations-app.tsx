@@ -17,8 +17,18 @@ import {
   designationToRole,
   type Designation,
 } from "@/features/auth/domain/passcode";
+import {
+  addShiftAction,
+  publishScheduleAction,
+  saveScheduleConfigAction,
+} from "@/features/schedules/actions/schedule-actions";
 import { ScheduleWorkspace } from "@/features/schedules/components/schedule-workspace";
-import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
+import type { ScheduleContext } from "@/features/schedules/data/schedule-data";
+import {
+  getMonthDates,
+  getWeekDates,
+  type ShiftDefaults,
+} from "@/features/schedules/domain/shift-planning";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
 import type {
@@ -30,8 +40,10 @@ import {
   useRestaurantClock,
 } from "@/hooks/use-restaurant-clock";
 import {
+  DEMO_ORGANIZATION_ID,
   demoAccounts as staticDemoAccounts,
-  team as initialTeam,
+  team as staticDemoTeam,
+  type DemoShift,
   type TeamMember,
 } from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
@@ -61,14 +73,33 @@ const teamTab = { id: "team" as const, label: "Team", icon: Users };
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Demo mode's fixed "today" -- chosen so getWeekDates/getMonthDates
+// reproduce the exact September 2026 week this app has always demoed
+// with (verified: getWeekDates("2026-09-10") === the original hardcoded
+// array), rather than duplicating that date logic.
+const DEMO_ANCHOR_DATE = "2026-09-10";
+const DEMO_OPERATING_HOURS: DayHours[] = weekDays.map(() => ({
+  opening: "11:00",
+  closing: "23:00",
+  closed: false,
+}));
+const DEMO_SHIFT_DEFAULTS: ShiftDefaults = {
+  morning: { start: "11:00", end: "16:00" },
+  evening: { start: "16:00", end: "23:00" },
+  full_day: { start: "11:00", end: "23:00" },
+};
+const DEMO_TIME_ZONE = "America/Chicago";
+
 function HoursDialog({
   hours,
   shiftDefaults,
+  timeZone,
   onClose,
   onSave,
 }: {
   hours: DayHours[];
   shiftDefaults: ShiftDefaults;
+  timeZone: string;
   onClose: () => void;
   onSave: (hours: DayHours[], shiftDefaults: ShiftDefaults) => void;
 }) {
@@ -169,7 +200,7 @@ function HoursDialog({
             <div className="border-border bg-background/60 text-muted-foreground rounded-xl border p-3 text-xs leading-5">
               Each row is opening then closing. Overnight closing times are
               supported. Time zone:{" "}
-              <span className="text-foreground">America/Chicago</span>.
+              <span className="text-foreground">{timeZone}</span>.
             </div>
             <fieldset>
               <legend className="text-sm font-semibold">
@@ -225,34 +256,51 @@ export function RestaurantOperationsApp({
   demoMode,
   restaurantSlug,
   initialUser = null,
+  initialScheduleContext = null,
 }: {
   demoMode: boolean;
   restaurantSlug: string;
   initialUser?: SignedInUser | null;
+  initialScheduleContext?: ScheduleContext | null;
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   const [tab, setTab] = useState<AppTab>("schedule");
-  const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>("estimating");
-  const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>([]);
-  const [operatingHours, setOperatingHours] = useState<DayHours[]>(() =>
-    weekDays.map(() => ({
-      opening: "11:00",
-      closing: "23:00",
-      closed: false,
-    })),
-  );
-  const [shiftDefaults, setShiftDefaults] = useState<ShiftDefaults>({
-    morning: { start: "11:00", end: "16:00" },
-    evening: { start: "16:00", end: "23:00" },
-    full_day: { start: "11:00", end: "23:00" },
-  });
-  const [showHours, setShowHours] = useState(false);
-  const clock = useRestaurantClock("America/Chicago", operatingHours);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const [demoTeam, setDemoTeam] = useState<TeamMember[]>(initialTeam);
+  // Feature 015 (Phase B): real mode seeds every one of these from the
+  // Server Component's initial fetch; demo mode keeps its original fixed
+  // values. Same state shape either way -- only where it starts from
+  // differs, matching the pattern already used for the Team tab.
+  const locationId = initialScheduleContext?.locationId ?? null;
+  const timeZone = initialScheduleContext?.timeZone ?? DEMO_TIME_ZONE;
+
+  const [team, setTeam] = useState<TeamMember[]>(
+    () => initialScheduleContext?.team ?? staticDemoTeam,
+  );
   const [demoAccounts, setDemoAccounts] = useState<
     Record<string, SignedInUser>
   >(() => ({ ...staticDemoAccounts }));
+
+  const [operatingHours, setOperatingHours] = useState<DayHours[]>(
+    () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
+  );
+  const [shiftDefaults, setShiftDefaults] = useState<ShiftDefaults>(
+    () => initialScheduleContext?.shiftDefaults ?? DEMO_SHIFT_DEFAULTS,
+  );
+  const [weekDates] = useState<string[]>(
+    () => initialScheduleContext?.weekDates ?? getWeekDates(DEMO_ANCHOR_DATE),
+  );
+  const [monthDates] = useState<string[]>(
+    () => initialScheduleContext?.monthDates ?? getMonthDates(DEMO_ANCHOR_DATE),
+  );
+  const [shifts, setShifts] = useState<DemoShift[]>(
+    () => initialScheduleContext?.shifts ?? [],
+  );
+  const [showHours, setShowHours] = useState(false);
+  const clock = useRestaurantClock(timeZone, operatingHours);
+
+  const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>("estimating");
+  const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>([]);
 
   function registerDemoMember(input: {
     displayName: string;
@@ -270,8 +318,9 @@ export function RestaurantOperationsApp({
       name: input.displayName,
       role: "server",
       designation: "staff",
+      organizationId: DEMO_ORGANIZATION_ID,
     };
-    setDemoTeam((current) => [
+    setTeam((current) => [
       ...current,
       {
         id: profileId,
@@ -302,7 +351,7 @@ export function RestaurantOperationsApp({
    */
   function changeDemoMemberDesignation(memberId: string, next: Designation) {
     const nextRole = designationToRole(next);
-    setDemoTeam((current) =>
+    setTeam((current) =>
       current.map((member) =>
         member.id === memberId
           ? { ...member, designation: next, role: nextRole }
@@ -343,6 +392,75 @@ export function RestaurantOperationsApp({
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
+
+  async function addShifts(added: DemoShift[]) {
+    if (added.length === 0) return;
+    if (demoMode) {
+      setShifts((current) => [...current, ...added]);
+      return;
+    }
+    if (!locationId) return;
+    const result = await addShiftAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      locationId,
+      timeZone,
+      shifts: added.map((shift) => ({
+        employeeId: shift.employeeId,
+        serviceDate: shift.serviceDate,
+        endDate: shift.endDate,
+        shiftKind: shift.shiftKind,
+        startLocal: shift.startLocal,
+        endLocal: shift.endLocal,
+        usesDefaultTime: shift.usesDefaultTime,
+        note: shift.note,
+      })),
+    });
+    if (!result.ok) {
+      setActionError(result.error);
+      return;
+    }
+    setShifts((current) => [...current, ...result.data]);
+  }
+
+  async function publishSchedule() {
+    if (!demoMode) {
+      if (!locationId) return;
+      const result = await publishScheduleAction({
+        restaurantSlug,
+        locationId,
+        timeZone,
+      });
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+    }
+    setShifts((current) =>
+      current.map((shift) => ({ ...shift, status: "published" as const })),
+    );
+  }
+
+  async function saveScheduleConfig(
+    nextHours: DayHours[],
+    nextShiftDefaults: ShiftDefaults,
+  ) {
+    if (!demoMode && locationId) {
+      const result = await saveScheduleConfigAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        locationId,
+        operatingHours: nextHours,
+        shiftDefaults: nextShiftDefaults,
+      });
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+    }
+    setOperatingHours(nextHours);
+    setShiftDefaults(nextShiftDefaults);
+  }
 
   function finalizeTips() {
     setTipsAuditLog((log) => [
@@ -480,18 +598,37 @@ export function RestaurantOperationsApp({
         <OrgLockoutBanner restaurantSlug={restaurantSlug} />
       ) : null}
 
+      {actionError ? (
+        <div className="border-destructive/30 bg-destructive/10 border-b px-4 py-2 text-center text-sm sm:px-6 lg:px-8">
+          <span className="text-destructive">{actionError}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground ml-3 text-xs underline"
+            onClick={() => setActionError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <main className="mx-auto max-w-[1540px] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
         {tab === "schedule" ? (
           <ScheduleWorkspace
             user={user}
-            team={demoTeam}
+            team={team}
             shiftDefaults={shiftDefaults}
+            shifts={shifts}
+            weekDates={weekDates}
+            monthDates={monthDates}
+            timeZone={timeZone}
+            onAddShifts={addShifts}
+            onPublish={publishSchedule}
           />
         ) : null}
         {tab === "allocation" ? (
           <AllocationWorkspace
             user={user}
-            team={demoTeam}
+            team={team}
             boardLocked={tipsStatus === "finalized"}
             onReopenTips={reopenTips}
             tipsAuditLog={tipsAuditLog}
@@ -500,7 +637,7 @@ export function RestaurantOperationsApp({
         {tab === "tips" ? (
           <TipWorkspace
             user={user}
-            team={demoTeam}
+            team={team}
             status={tipsStatus}
             onFinalize={finalizeTips}
             onReopen={reopenTips}
@@ -510,7 +647,7 @@ export function RestaurantOperationsApp({
         {tab === "team" && isManager ? (
           <TeamWorkspace
             user={user}
-            team={demoTeam}
+            team={team}
             onChangeDesignation={changeDemoMemberDesignation}
           />
         ) : null}
@@ -545,11 +682,9 @@ export function RestaurantOperationsApp({
         <HoursDialog
           hours={operatingHours}
           shiftDefaults={shiftDefaults}
+          timeZone={timeZone}
           onClose={() => setShowHours(false)}
-          onSave={(nextHours, nextShiftDefaults) => {
-            setOperatingHours(nextHours);
-            setShiftDefaults(nextShiftDefaults);
-          }}
+          onSave={saveScheduleConfig}
         />
       ) : null}
     </div>

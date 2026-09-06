@@ -201,6 +201,7 @@ export async function POST(request: Request) {
       name: profile.display_name,
       role: normalizeDatabaseRole(membership.roles),
       designation: designationForRoles(membership.roles),
+      organizationId: organization.id,
     },
   });
 }

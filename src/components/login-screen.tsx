@@ -28,6 +28,12 @@ export type SignedInUser = {
   // `designation` exists so the Team tab can gate who may change whose
   // label without a fourth permission tier.
   designation: Designation;
+  // Feature 015: scopes every real-mode query (schedule, allocation,
+  // tips, roster). Demo mode never queries anything with it, but every
+  // SignedInUser still carries a value -- a stable placeholder
+  // ("demo-org") for demo accounts -- so the type stays one shape
+  // instead of an optional field threaded through every consumer.
+  organizationId: string;
 };
 
 export type RegisterDemoResult =

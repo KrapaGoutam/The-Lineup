@@ -25,22 +25,9 @@ import {
   type ShiftDefaults,
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
-import {
-  initialShifts,
-  type DemoShift,
-  type TeamMember,
-} from "@/lib/demo-data";
+import type { DemoShift, TeamMember } from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
 
-const weekDates = [
-  "2026-09-07",
-  "2026-09-08",
-  "2026-09-09",
-  "2026-09-10",
-  "2026-09-11",
-  "2026-09-12",
-  "2026-09-13",
-];
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const shiftLabels: Record<ShiftKind, string> = {
@@ -60,6 +47,40 @@ function displayTime(value: string) {
   const suffix = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function monthDayLabel(isoDate: string) {
+  const [, month, day] = isoDate.split("-").map(Number);
+  const monthName = new Intl.DateTimeFormat("en-US", { month: "short" }).format(
+    new Date(Date.UTC(2000, month - 1, 1)),
+  );
+  return `${monthName} ${day}`;
+}
+
+function weekRangeLabel(weekDates: string[]) {
+  const [startYear, startMonth] = weekDates[0].split("-").map(Number);
+  const [endYear, endMonth] = weekDates.at(-1)!.split("-").map(Number);
+  const sameMonth = startYear === endYear && startMonth === endMonth;
+  const start = monthDayLabel(weekDates[0]);
+  const end = sameMonth
+    ? weekDates.at(-1)!.split("-")[2]
+    : monthDayLabel(weekDates.at(-1)!);
+  return `${start}–${end}`;
+}
+
+function monthLabel(anyDateInMonth: string) {
+  const [year, month] = anyDateInMonth.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+/** 0 = the month's 1st falls on a Monday .. 6 = falls on a Sunday. */
+function leadingBlankCount(firstOfMonth: string) {
+  const [year, month, day] = firstOfMonth.split("-").map(Number);
+  const utcDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=Sun..6=Sat
+  return (utcDay + 6) % 7;
 }
 
 function ShiftBlock({
@@ -99,10 +120,12 @@ function ShiftEditor({
   team,
   onAdd,
   shiftDefaults,
+  defaultFromDate,
 }: {
   team: TeamMember[];
   onAdd: (shifts: DemoShift[]) => void;
   shiftDefaults: ShiftDefaults;
+  defaultFromDate: string;
 }) {
   const [error, setError] = useState("");
 
@@ -165,7 +188,11 @@ function ShiftEditor({
         >
           <div className="space-y-2">
             <Label htmlFor="employeeId">Person</Label>
-            <Select id="employeeId" name="employeeId" defaultValue="mia">
+            <Select
+              id="employeeId"
+              name="employeeId"
+              defaultValue={team[0]?.id}
+            >
               {team.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.name}
@@ -196,7 +223,7 @@ function ShiftEditor({
               id="fromDate"
               name="fromDate"
               type="date"
-              defaultValue="2026-09-07"
+              defaultValue={defaultFromDate}
               required
             />
           </div>
@@ -266,16 +293,27 @@ export function ScheduleWorkspace({
   user,
   team,
   shiftDefaults,
+  shifts,
+  weekDates,
+  monthDates,
+  timeZone,
+  onAddShifts,
+  onPublish,
 }: {
   user: SignedInUser;
   team: TeamMember[];
   shiftDefaults: ShiftDefaults;
+  shifts: DemoShift[];
+  weekDates: string[];
+  monthDates: string[];
+  timeZone: string;
+  onAddShifts: (shifts: DemoShift[]) => void;
+  onPublish: () => void;
 }) {
   const isManager = user.role !== "server";
   const [view, setView] = useState<"week" | "month">("week");
   const [showEditor, setShowEditor] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
-  const [shifts, setShifts] = useState<DemoShift[]>(initialShifts);
   const visibleShifts = useMemo(
     () => shifts.filter((shift) => isManager || shift.status === "published"),
     [isManager, shifts],
@@ -284,12 +322,7 @@ export function ScheduleWorkspace({
     visibleShifts.map((shift) => ({ ...shift })),
   ).length;
   const draftCount = shifts.filter(({ status }) => status === "draft").length;
-
-  function publishDraft() {
-    setShifts((current) =>
-      current.map((shift) => ({ ...shift, status: "published" })),
-    );
-  }
+  const leadingBlanks = leadingBlankCount(monthDates[0]);
 
   return (
     <div className="space-y-4">
@@ -341,7 +374,7 @@ export function ScheduleWorkspace({
             </Button>
           ) : null}
           {isManager ? (
-            <Button onClick={publishDraft} disabled={draftCount === 0}>
+            <Button onClick={onPublish} disabled={draftCount === 0}>
               <Send aria-hidden="true" /> Publish {draftCount || ""}
             </Button>
           ) : null}
@@ -352,7 +385,8 @@ export function ScheduleWorkspace({
         <ShiftEditor
           team={team}
           shiftDefaults={shiftDefaults}
-          onAdd={(added) => setShifts((current) => [...current, ...added])}
+          defaultFromDate={weekDates[0]}
+          onAdd={onAddShifts}
         />
       ) : null}
 
@@ -360,7 +394,7 @@ export function ScheduleWorkspace({
         <CsvImportPanel
           employees={team.map(({ id, name }) => ({ id, name }))}
           shiftDefaults={shiftDefaults}
-          onCommit={(added) => setShifts((current) => [...current, ...added])}
+          onCommit={onAddShifts}
           onClose={() => setShowCsvImport(false)}
         />
       ) : null}
@@ -405,10 +439,9 @@ export function ScheduleWorkspace({
         <Card className="overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <h2 className="font-semibold">September 7–13</h2>
+              <h2 className="font-semibold">{weekRangeLabel(weekDates)}</h2>
               <p className="text-muted-foreground mt-1 text-xs">
-                America/Chicago · default hours applied when custom times are
-                blank
+                {timeZone} · default hours applied when custom times are blank
               </p>
             </div>
             <div className="flex">
@@ -435,7 +468,7 @@ export function ScheduleWorkspace({
                       {weekdayLabels[index]}
                     </p>
                     <p className="text-muted-foreground mt-1 font-mono text-xs">
-                      Sep {Number(date.slice(-2))}
+                      {monthDayLabel(date)}
                     </p>
                   </div>
                 ))}
@@ -495,7 +528,7 @@ export function ScheduleWorkspace({
                 aria-hidden="true"
               />
               <div>
-                <h2 className="font-semibold">September 2026</h2>
+                <h2 className="font-semibold">{monthLabel(monthDates[0])}</h2>
                 <p className="text-muted-foreground text-xs">
                   Select Week for exact staff-by-day detail.
                 </p>
@@ -512,15 +545,14 @@ export function ScheduleWorkspace({
                   {day}
                 </div>
               ))}
-              {Array.from({ length: 1 }, (_, index) => (
+              {Array.from({ length: leadingBlanks }, (_, index) => (
                 <div
                   key={`blank-${index}`}
                   className="bg-background/70 min-h-24"
                 />
               ))}
-              {Array.from({ length: 30 }, (_, index) => {
-                const day = index + 1;
-                const date = `2026-09-${String(day).padStart(2, "0")}`;
+              {monthDates.map((date) => {
+                const day = Number(date.split("-")[2]);
                 const dayShifts = visibleShifts.filter(
                   (shift) => shift.serviceDate === date,
                 );

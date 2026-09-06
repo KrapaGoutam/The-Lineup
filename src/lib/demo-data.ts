@@ -2,6 +2,10 @@ import type { AppRole, Designation } from "@/features/auth/domain/passcode";
 import type { ShiftKind } from "@/features/schedules/domain/shift-planning";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
 
+// Feature 015: a stable placeholder so every SignedInUser carries an
+// organizationId, even in demo mode where nothing ever queries with it.
+export const DEMO_ORGANIZATION_ID = "demo-org";
+
 export type TeamMember = {
   id: string;
   name: string;
@@ -248,24 +252,33 @@ export const initialTipIntervals: TipIntervalInput[] = [
 
 export const demoAccounts: Record<
   string,
-  { profileId: string; name: string; role: AppRole; designation: Designation }
+  {
+    profileId: string;
+    name: string;
+    role: AppRole;
+    designation: Designation;
+    organizationId: string;
+  }
 > = {
   "2468": {
     profileId: "manager-maya",
     name: "Maya Singh",
     role: "manager",
     designation: "manager",
+    organizationId: DEMO_ORGANIZATION_ID,
   },
   "1357": {
     profileId: "mia",
     name: "Mia Chen",
     role: "server",
     designation: "staff",
+    organizationId: DEMO_ORGANIZATION_ID,
   },
   "9999": {
     profileId: "owner-krapa",
     name: "Krapa Goutam",
     role: "owner",
     designation: "owner",
+    organizationId: DEMO_ORGANIZATION_ID,
   },
 };
