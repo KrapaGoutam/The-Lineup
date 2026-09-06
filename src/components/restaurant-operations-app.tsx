@@ -645,12 +645,15 @@ export function RestaurantOperationsApp({
 
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right md:block">
-              <p className="text-xs font-medium">{clock.dateTime}</p>
+              <p className="text-xs font-medium" suppressHydrationWarning>
+                {clock.dateTime}
+              </p>
               <p
                 className={cn(
                   "mt-0.5 font-mono text-[11px]",
                   clock.isClosed ? "text-muted-foreground" : "text-primary",
                 )}
+                suppressHydrationWarning
               >
                 <Clock3 className="mr-1 inline size-3" aria-hidden="true" />
                 {clock.isClosed
@@ -694,8 +697,8 @@ export function RestaurantOperationsApp({
         </div>
         <div className="border-border border-t px-4 py-2 md:hidden">
           <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 text-xs">
-            <span>{clock.dateTime}</span>
-            <span className="text-primary font-mono">
+            <span suppressHydrationWarning>{clock.dateTime}</span>
+            <span className="text-primary font-mono" suppressHydrationWarning>
               {clock.isClosed
                 ? clock.countdown
                 : `Closes in ${clock.countdown}`}
