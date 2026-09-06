@@ -1,6 +1,6 @@
 # Feature 015 — Hosted Supabase persistence and Vercel deployment
 
-Status: Phases A, B, and D shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase D: tips reads/writes real data. Phase C (allocation + Realtime) and Phase E (registration/team/CSV writes) remain.
+Status: Phases A, B, C, and D shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase C: allocation reads/writes real data, with Realtime. Phase D: tips reads/writes real data. Phase E (registration/team/CSV writes) remains.
 
 **Numbering note**: you called this "feature 009," but `docs/features/009-add-any-employee-to-rotation.md` already exists (shipped). This is filed as **015** — the next free number, no collisions with any existing `docs/features/*.md`. This is also the item that was deliberately _not_ scoped as a numbered feature earlier this session ("leave it as the existing unchecked ROADMAP Phase 2 item 6") — that instruction is superseded now that you're asking for it directly.
 
@@ -212,14 +212,32 @@ Built together in one session, in separate commits, per explicit direction (sche
 - **Tips needed no new time-zone logic**: the question raised at the start of this pairing — answered here — is that `zonedWallTimeToInstant`/`zonedWallTimeFromInstant` from Phase B cover tips' interval start/end conversion exactly as built; nothing schedule-specific in that utility needed generalizing.
 - **`addTipIntervalAction`'s return shape carries the tip pool id** (`{interval, tipPoolId}`, not just the interval) so the client can capture a lazily-created pool's id without a second read — the pool doesn't exist until the first interval is added, so there's no id to pass in on the initiating call.
 
+## Phase C build notes — what actually happened versus what was specced
+
+Built on `feature/schedule-tips-persistence` after Phases B and D shipped and their bugs were fixed, in separate commits (migration, application layer, then two more migrations for gaps found live-testing). `npm run check`/`npm test`/`npm run build` pass at every commit; `npm run db:test` (pgTAP, against a fresh local instance built from the migrations alone) passes at 77 assertions across 7 files by the final commit.
+
+- **Column identity is a person's profile id, not `rotation_members.id`** — `rotation-board.ts`'s pure model wasn't touched (per this section's own scope note), and its `isCrossColumnEdit` compares a `RotationColumn.id` directly against the signed-in user's `profileId`. `allocation-data.ts` and `allocation-actions.ts` each do one direction of the resulting translation (member row → profile id for display; profile id → session-scoped member id before calling an RPC) rather than changing the pure model to speak in database row ids.
+- **Ten RPCs, not eight** — the spec named one per `BoardAction` variant; `board_undo`/`board_redo` were added too, since `board_events.event_type` has carried `'undo'`/`'redo'` as its own logged kind since the very first migration, and `undone_at`/`payload`/`inverse_payload` exist for exactly this, per ARCHITECTURE.md's already-stated "Supabase mode persists equivalent inverse events." Real-mode undo/redo is one shared server-side timeline per session, not a per-tab stack — the only design that makes sense once the board is shared across devices.
+- **Realtime scoped to one table, not the three the spec implied**: every RPC inserts a `board_events` row regardless of which other table it changed, so a single subscription on `board_events` filtered to `service_session_id` covers `rotation_members`/`rotation_rounds`/`table_rotation_entries` changes too. Before a session exists (an empty board), a separate subscription on `service_sessions` scoped to the organization catches the moment one gets created.
+- **Four real RLS/grant gaps, not the "verify, add a policy only if a real gap turns up" contingency the spec allowed for** — three found by literally running the RPCs as two different real signed-in accounts (a throwaway manager and a throwaway server, both deleted after) against the hosted project, the fourth by cross-checking DATA_MODEL.md's RLS matrix against what got built:
+  1. The three private helper functions had execute revoked from `authenticated` — SECURITY INVOKER doesn't change the calling role partway through a chain, so the very first "Add column" click failed with a raw permission error.
+  2. `table_rotation_entries_write_any_member` (Feature 011) let any member modify or delete only rows _they_ created — invisible for a fresh assign, but it silently no-opped `board_undo` reversing someone else's action, and would have done the same to clear-row/column/board.
+  3. `rotation_rounds_write_manager` was manager-only, but the standing-empty-round auto-open is a side effect of any member's ordinary assign.
+  4. Fixing 2 and 3 made `table_rotation_entries`/`rotation_rounds` any-member-writable, which is right for assign and undo/redo but wrong for clear-row/column/board and add-row (DATA_MODEL's matrix has always scoped those to owner/general_manager/shift_manager/host) — fixed with an explicit role check inside each of those four RPCs specifically, rather than at the table-policy level.
+
+  Full accounts in `docs/SECURITY.md`'s "Feature 015 Phase C" subsection and each fixup migration's own comments.
+
+- **A fifth migration mistake, caught applying rather than reviewing**: `alter table ... alter constraint ... deferrable` only works on foreign keys in Postgres — the position-swap unique constraint had to be dropped and recreated deferrable, not altered. And `rotation_rounds` was already a realtime publication member on the live project before this migration touched it (`table_rotation_entries`/`board_events` were not) — the `alter publication` statements are now individually guarded against `pg_publication_tables` instead of one list that aborts entirely on the first already-a-member table.
+- **`useEffect` + `setState` to resync from a fresh Server Component prop hit a lint error** (`react-hooks/set-state-in-effect`) that Phase B/D's schedule/tips state never ran into, because this is the first module that needs to resync _without_ a full page reload (Realtime). Fixed by doing the resync during render (React's own documented pattern for "adjust state when a prop changes"), not inside an effect.
+
 ## Sequence
 
 1. ~~This spec — stop here for your approval.~~ Done.
 2. ~~Phase A. Full validation (`npm run check`, `npm test`, `npm run build`), doc sweep, stop for you to test sign-in against the real project.~~ Done — see the Phase A sections above.
 3. ~~Phase B. Same cadence, stop.~~ Done — see "Phase B/D build notes" above. Built together with Phase D per explicit direction (shared Server Component read + Server Action pattern), as separate commits on `feature/schedule-tips-persistence`.
-4. Phase C. Same cadence, stop. **Next.**
+4. ~~Phase C. Same cadence, stop.~~ Done — see "Phase C build notes" above.
 5. ~~Phase D. Same cadence, stop.~~ Done — see "Phase B/D build notes" above.
-6. Phase E. Same cadence, stop.
+6. Phase E. Same cadence, stop. **Next.**
 
 Phase A landed directly on `main` (pushed after the user verified sign-in against the real project themselves); Phases B/D happened on `feature/schedule-tips-persistence`, branched off the updated `main`. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow were three commits, not one; Phase B and Phase D were two commits, not one) — exact split decided at build time, same as every prior feature this session.
 
