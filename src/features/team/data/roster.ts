@@ -38,10 +38,22 @@ export async function getOrganizationRoster(
     .eq("active", true)
     .order("created_at", { ascending: true });
 
+  if (error) console.error("getOrganizationRoster", error);
   if (error || !data) return [];
 
   return data.map((row, index) => {
-    const name = row.profiles?.[0]?.display_name ?? "Unknown";
+    // Supabase's generated types mark this embed as an array because
+    // `memberships_profile_id_fkey`'s `isOneToOne` metadata is false --
+    // but at runtime PostgREST always returns a single object for an
+    // embed across the *embedding* table's own FK column (many
+    // memberships to one profile), confirmed against the live project
+    // directly. Indexing this as an array (as an earlier version of
+    // this function did, to satisfy the compiler) silently produced
+    // `undefined` for every real row -- every registered member showed
+    // as "Unknown" until this was traced back to the live database.
+    // See DATA_MODEL.md's "PostgREST embed cardinality" section.
+    const profile = row.profiles as unknown as { display_name: string } | null;
+    const name = profile?.display_name ?? "Unknown";
     const designation = designationForRoles(row.roles ?? []);
     return {
       id: row.profile_id,
