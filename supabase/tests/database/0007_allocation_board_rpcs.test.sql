@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(26);
 
 -- The ten RPCs this phase adds, each SECURITY INVOKER (so they rely on the
 -- caller's own RLS, never elevate it) and callable by authenticated.
@@ -162,6 +162,64 @@ select ok(
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'board_events'
   ),
   'board_events is on the realtime publication'
+);
+
+-- Real gap found live-testing undo (see that migration's own comments):
+-- the private helpers are SECURITY INVOKER, so the *calling* role
+-- (authenticated) needs EXECUTE on them too, not just the public board_*
+-- wrapper -- an invoker chain doesn't inherit anything the way a
+-- SECURITY DEFINER chain would.
+select ok(
+  has_function_privilege('authenticated', 'private.get_or_create_active_session(uuid,uuid,date)', 'EXECUTE'),
+  'authenticated can execute get_or_create_active_session'
+);
+select ok(
+  has_function_privilege('authenticated', 'private.ensure_trailing_round(uuid,bigint)', 'EXECUTE'),
+  'authenticated can execute ensure_trailing_round'
+);
+select ok(
+  has_function_privilege('authenticated', 'private.assert_board_not_locked(uuid,bigint)', 'EXECUTE'),
+  'authenticated can execute assert_board_not_locked'
+);
+
+-- Real gap found live-testing undo of someone else's assign, and would
+-- equally have blocked board_clear_row/column/board deleting any entry
+-- not created by whoever clicked Clear: the single any-member policy
+-- required assigned_by = auth.uid() in `using`, which only a fresh
+-- INSERT's `with check` can ever unconditionally satisfy. Split into
+-- insert/update/delete so update/delete carry no such requirement on the
+-- pre-existing row.
+select ok(
+  not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'table_rotation_entries'
+      and policyname = 'table_rotation_entries_write_any_member'
+  ),
+  'the old single any-member write policy is gone'
+);
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'table_rotation_entries'
+      and policyname = 'table_rotation_entries_insert_any_member'
+  ),
+  'table_rotation_entries has the any-member insert policy'
+);
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'table_rotation_entries'
+      and policyname = 'table_rotation_entries_update_any_member'
+  ),
+  'table_rotation_entries has the any-member update policy'
+);
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'table_rotation_entries'
+      and policyname = 'table_rotation_entries_delete_any_member'
+  ),
+  'table_rotation_entries has the any-member delete policy'
 );
 
 select * from finish();
