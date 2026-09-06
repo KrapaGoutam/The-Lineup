@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronUp,
@@ -24,6 +25,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  executeBoardActionRemote,
+  redoBoardAction,
+  undoBoardAction,
+} from "@/features/allocation/actions/allocation-actions";
+import type {
+  AllocationContext,
+  CrossEditEntry,
+} from "@/features/allocation/data/allocation-data";
+import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
@@ -34,10 +44,18 @@ import {
   undoBoard,
   type BoardAction,
   type BoardHistory,
+  type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
+import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+
+const EMPTY_BOARD: RotationBoard = {
+  columns: [],
+  rounds: [],
+  nextRoundNumber: 1,
+};
 
 function buildInitialHistory() {
   let history = createBoardHistory(
@@ -143,32 +161,115 @@ function TableEntry({
   );
 }
 
-type CrossEditEntry = {
-  at: string;
-  actorName: string;
-  columnName: string;
-};
-
 export function AllocationWorkspace({
   user,
   team,
   boardLocked,
   onReopenTips,
   tipsAuditLog,
+  demoMode,
+  restaurantSlug,
+  initialContext = null,
 }: {
   user: SignedInUser;
   team: TeamMember[];
   boardLocked: boolean;
   onReopenTips: (reason: string) => void;
   tipsAuditLog: TipsAuditEntry[];
+  demoMode: boolean;
+  restaurantSlug: string;
+  initialContext?: AllocationContext | null;
 }) {
+  const router = useRouter();
   const isManager = user.role !== "server";
-  const [history, setHistory] = useState<BoardHistory>(buildInitialHistory);
-  const [eventCount, setEventCount] = useState(6);
-  const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>([]);
+  const [history, setHistory] = useState<BoardHistory>(() =>
+    demoMode
+      ? buildInitialHistory()
+      : createBoardHistory(initialContext?.board ?? EMPTY_BOARD),
+  );
+  const [eventCount, setEventCount] = useState(
+    () => initialContext?.eventCount ?? 6,
+  );
+  const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>(
+    () => initialContext?.crossEditLog ?? [],
+  );
+  const [serviceSessionId, setServiceSessionId] = useState<number | null>(
+    () => initialContext?.serviceSessionId ?? null,
+  );
+  const [canUndo, setCanUndo] = useState(
+    () => initialContext?.canUndo ?? false,
+  );
+  const [canRedo, setCanRedo] = useState(
+    () => initialContext?.canRedo ?? false,
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
   const board = history.present;
+
+  // A fresh initialContext arrives either from this browser's own action
+  // completing (revalidatePath re-fetches automatically) or from the
+  // Realtime subscription below calling router.refresh() after someone
+  // else's change. Either way, it's the authoritative state -- resync
+  // local state from it rather than leaving the lazy useState initializer
+  // stuck on whatever was true at first mount (the same staleness bug
+  // Phase B/D already hit once with schedule/tips state). Done during
+  // render (React's own documented pattern for "adjust state when a prop
+  // changes"), not in an effect -- an effect would commit the stale frame
+  // first and only correct it a tick later.
+  const [syncedContext, setSyncedContext] = useState(initialContext);
+  if (!demoMode && initialContext !== syncedContext) {
+    setSyncedContext(initialContext);
+    setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
+    setEventCount(initialContext?.eventCount ?? 0);
+    setCrossEditLog(initialContext?.crossEditLog ?? []);
+    setServiceSessionId(initialContext?.serviceSessionId ?? null);
+    setCanUndo(initialContext?.canUndo ?? false);
+    setCanRedo(initialContext?.canRedo ?? false);
+  }
+
+  // Realtime: every board-mutating RPC inserts a board_events row
+  // regardless of which table it actually changed, so subscribing to
+  // that one table, filtered to this session, is sufficient to learn
+  // about every kind of change -- scoped to service_session_id, not
+  // organization-wide, per the spec. Before a session exists yet (an
+  // all-empty board), subscribe to service_sessions instead, scoped to
+  // the organization, just to learn the moment one gets created.
+  useEffect(() => {
+    if (demoMode) return;
+    const supabase = createBrowserSupabaseClient();
+    const channel =
+      serviceSessionId !== null
+        ? supabase
+            .channel(`allocation-board-${serviceSessionId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "board_events",
+                filter: `service_session_id=eq.${serviceSessionId}`,
+              },
+              () => router.refresh(),
+            )
+            .subscribe()
+        : supabase
+            .channel(`allocation-session-watch-${user.organizationId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "service_sessions",
+                filter: `organization_id=eq.${user.organizationId}`,
+              },
+              () => router.refresh(),
+            )
+            .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [demoMode, serviceSessionId, user.organizationId, router]);
   const visibleColumns = useMemo(
     () =>
       board.columns
@@ -189,13 +290,66 @@ export function AllocationWorkspace({
         ?.tableLabel,
   );
 
-  function execute(action: BoardAction) {
+  async function execute(action: BoardAction) {
     // Defense in depth, same principle as RLS re-checking eligibility
     // server-side: the freeze banner disables the UI, but the mutation path
     // itself refuses too, in case a control somehow slips through disabled.
     if (boardLocked) return;
+
+    // Applied immediately in both modes -- demo mode has nothing else;
+    // real mode gets the same instant feedback while the write is still
+    // in flight, then either stays (the common case) or gets corrected by
+    // the automatic refresh that follows a successful revalidatePath, or
+    // rolled back below if the write itself failed.
+    const previousHistory = history;
     setHistory((current) => executeBoardAction(current, action));
     setEventCount((count) => count + 1);
+
+    if (demoMode) return;
+
+    const result = await executeBoardActionRemote({
+      restaurantSlug,
+      organizationId: user.organizationId,
+      locationId: initialContext?.locationId ?? "",
+      timeZone: initialContext?.timeZone ?? "America/Chicago",
+      serviceSessionId,
+      action,
+    });
+    if (!result.ok) {
+      setHistory(previousHistory);
+      setEventCount((count) => count - 1);
+      setActionError(result.error);
+      return;
+    }
+    setServiceSessionId(result.data.serviceSessionId);
+  }
+
+  async function undo() {
+    if (demoMode) {
+      setHistory((current) => undoBoard(current));
+      return;
+    }
+    if (serviceSessionId === null) return;
+    const result = await undoBoardAction({
+      restaurantSlug,
+      organizationId: user.organizationId,
+      serviceSessionId,
+    });
+    if (!result.ok) setActionError(result.error);
+  }
+
+  async function redo() {
+    if (demoMode) {
+      setHistory((current) => redoBoard(current));
+      return;
+    }
+    if (serviceSessionId === null) return;
+    const result = await redoBoardAction({
+      restaurantSlug,
+      organizationId: user.organizationId,
+      serviceSessionId,
+    });
+    if (!result.ok) setActionError(result.error);
   }
 
   function submitReopen(event: FormEvent<HTMLFormElement>) {
@@ -216,6 +370,18 @@ export function AllocationWorkspace({
 
   return (
     <div className="space-y-4">
+      {actionError ? (
+        <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
+          <span className="text-destructive">{actionError}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setActionError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -236,15 +402,19 @@ export function AllocationWorkspace({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
-            onClick={() => setHistory((current) => undoBoard(current))}
-            disabled={history.past.length === 0 || boardLocked}
+            onClick={undo}
+            disabled={
+              (demoMode ? history.past.length === 0 : !canUndo) || boardLocked
+            }
           >
             <Undo2 aria-hidden="true" /> Undo
           </Button>
           <Button
             variant="secondary"
-            onClick={() => setHistory((current) => redoBoard(current))}
-            disabled={history.future.length === 0 || boardLocked}
+            onClick={redo}
+            disabled={
+              (demoMode ? history.future.length === 0 : !canRedo) || boardLocked
+            }
           >
             <Redo2 aria-hidden="true" /> Redo
           </Button>

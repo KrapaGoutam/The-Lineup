@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
+import type { AllocationContext } from "@/features/allocation/data/allocation-data";
 import {
   designationToRole,
   type Designation,
@@ -265,12 +266,14 @@ export function RestaurantOperationsApp({
   initialUser = null,
   initialScheduleContext = null,
   initialTipsContext = null,
+  initialAllocationContext = null,
 }: {
   demoMode: boolean;
   restaurantSlug: string;
   initialUser?: SignedInUser | null;
   initialScheduleContext?: ScheduleContext | null;
   initialTipsContext?: TipsContext | null;
+  initialAllocationContext?: AllocationContext | null;
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   const [tab, setTab] = useState<AppTab>("schedule");
@@ -713,6 +716,9 @@ export function RestaurantOperationsApp({
             boardLocked={tipsStatus === "finalized"}
             onReopenTips={reopenTips}
             tipsAuditLog={tipsAuditLog}
+            demoMode={demoMode}
+            restaurantSlug={restaurantSlug}
+            initialContext={initialAllocationContext}
           />
         ) : null}
         {tab === "tips" ? (

@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  getAllocationContext,
+  type AllocationContext,
+} from "@/features/allocation/data/allocation-data";
 import type { SignedInUser } from "@/components/login-screen";
 import {
   getScheduleContext,
@@ -16,14 +20,15 @@ export type PageData = {
   initialUser: SignedInUser | null;
   scheduleContext: ScheduleContext | null;
   tipsContext: TipsContext | null;
+  allocationContext: AllocationContext | null;
 };
 
 /**
  * Shared by both entry routes (`/` and `/r/[restaurantSlug]`, which
  * otherwise duplicate this exact orchestration) -- resolves demo mode,
- * the signed-in user, and (Feature 015 Phases B/D) the real schedule and
- * tips data for their organization, all in one place so both routes stay
- * in sync as more phases land.
+ * the signed-in user, and (Feature 015 Phases B/C/D) the real schedule,
+ * allocation, and tips data for their organization, all in one place so
+ * both routes stay in sync as more phases land.
  */
 export async function loadPageData(restaurantSlug: string): Promise<PageData> {
   const demoMode =
@@ -37,6 +42,7 @@ export async function loadPageData(restaurantSlug: string): Promise<PageData> {
       initialUser: null,
       scheduleContext: null,
       tipsContext: null,
+      allocationContext: null,
     };
   }
 
@@ -47,13 +53,21 @@ export async function loadPageData(restaurantSlug: string): Promise<PageData> {
       initialUser: null,
       scheduleContext: null,
       tipsContext: null,
+      allocationContext: null,
     };
   }
 
-  const [scheduleContext, tipsContext] = await Promise.all([
+  const [scheduleContext, tipsContext, allocationContext] = await Promise.all([
     getScheduleContext(initialUser.organizationId),
     getTipsContext(initialUser.organizationId),
+    getAllocationContext(initialUser.organizationId),
   ]);
 
-  return { demoMode, initialUser, scheduleContext, tipsContext };
+  return {
+    demoMode,
+    initialUser,
+    scheduleContext,
+    tipsContext,
+    allocationContext,
+  };
 }

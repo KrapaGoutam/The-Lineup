@@ -7,8 +7,13 @@ export default async function RestaurantPage({
   params: Promise<{ restaurantSlug: string }>;
 }) {
   const { restaurantSlug } = await params;
-  const { demoMode, initialUser, scheduleContext, tipsContext } =
-    await loadPageData(restaurantSlug);
+  const {
+    demoMode,
+    initialUser,
+    scheduleContext,
+    tipsContext,
+    allocationContext,
+  } = await loadPageData(restaurantSlug);
 
   return (
     <RestaurantOperationsApp
@@ -17,6 +22,7 @@ export default async function RestaurantPage({
       initialUser={initialUser}
       initialScheduleContext={scheduleContext}
       initialTipsContext={tipsContext}
+      initialAllocationContext={allocationContext}
     />
   );
 }
