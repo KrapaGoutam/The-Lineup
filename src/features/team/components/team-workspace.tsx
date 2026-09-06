@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { KeyRound } from "lucide-react";
+
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,19 +10,33 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { Designation } from "@/features/auth/domain/passcode";
 import {
   assignableDesignations,
+  canChangeDesignation,
   designationLabel,
 } from "@/features/team/domain/designations";
 import type { TeamMember } from "@/lib/demo-data";
+
+import {
+  PasscodeResetDialog,
+  type ResetPasscodeResult,
+} from "./passcode-reset-dialog";
 
 export function TeamWorkspace({
   user,
   team,
   onChangeDesignation,
+  onResetPasscode,
 }: {
   user: SignedInUser;
   team: TeamMember[];
   onChangeDesignation: (memberId: string, next: Designation) => void;
+  onResetPasscode: (input: {
+    targetProfileId: string;
+    reason: string;
+    newPasscode?: string;
+  }) => Promise<ResetPasscodeResult>;
 }) {
+  const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
+
   return (
     <div className="space-y-4">
       <div>
@@ -44,6 +61,15 @@ export function TeamWorkspace({
           {team.map((member) => {
             const own = member.id === user.profileId;
             const options = assignableDesignations({
+              actorDesignation: user.designation,
+              targetCurrentDesignation: member.designation,
+            });
+            // Feature 016: reset authorization mirrors designation-change
+            // authorization exactly (a credential reset is at least as
+            // sensitive as a designation change) -- so it's gated on the
+            // same predicate, not re-derived, and hidden entirely rather
+            // than shown-then-disabled for a target the actor can't touch.
+            const canReset = canChangeDesignation({
               actorDesignation: user.designation,
               targetCurrentDesignation: member.designation,
             });
@@ -85,6 +111,17 @@ export function TeamWorkspace({
                     ))}
                   </div>
                 ) : null}
+                {canReset ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Reset ${member.name}'s passcode`}
+                    onClick={() => setResetTarget(member)}
+                  >
+                    <KeyRound aria-hidden="true" />
+                    Reset passcode
+                  </Button>
+                ) : null}
               </div>
             );
           })}
@@ -99,6 +136,14 @@ export function TeamWorkspace({
         <code> shift_manager</code>) — no separate designation column or
         additional permission tier.
       </p>
+
+      {resetTarget ? (
+        <PasscodeResetDialog
+          member={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onSubmit={onResetPasscode}
+        />
+      ) : null}
     </div>
   );
 }
