@@ -92,11 +92,12 @@ export function TeamWorkspace({
       </Card>
 
       <p className="text-muted-foreground text-xs">
-        This session-only roster mirrors every other module in demo mode. In
-        Supabase mode, a designation maps onto the same <code>roles</code> array
-        the RLS policies already govern (Manager = <code>general_manager</code>,
-        Assistant Manager = <code>shift_manager</code>) — no separate
-        designation column or additional permission tier.
+        In demo mode this roster is session-only. In real mode it&apos;s the
+        organization&apos;s actual membership list, and a designation maps onto
+        the same <code>roles</code> array the RLS policies already govern
+        (Manager = <code>general_manager</code>, Assistant Manager =
+        <code> shift_manager</code>) — no separate designation column or
+        additional permission tier.
       </p>
     </div>
   );

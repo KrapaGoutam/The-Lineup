@@ -1,6 +1,6 @@
 # Feature 005 — Self-serve registration and role promotion
 
-Status: shipped
+Status: shipped. **Update (Feature 015, Phase E)**: `/api/auth/register` needed no changes to go real — it was already real-mode code, as this document's own "Out" section already said; `login-screen.tsx`'s `submitRegister` was already calling it whenever `demoMode` is false. Verified live: a throwaway account self-registered through the real UI and showed up under its real name everywhere the roster is read (this was worth checking specifically — see `docs/DATA_MODEL.md`'s "PostgREST embed cardinality" section for the unrelated bug that once made real names show as "Unknown," fixed in Feature 015 Phase B, before this phase, not by it). The Team tab's promotion control is covered separately in `docs/features/014-team-designations.md`.
 
 **Implementation note**: for this batch (features 005–008), Claude implements directly — the user explicitly changed the default Claude-plans/Codex-builds division of responsibility from `CLAUDE.md` for this batch only. Codex is not in this loop. The default split resumes for future feature work unless the user says otherwise again. This note exists so it doesn't need repeating per feature.
 
@@ -19,7 +19,7 @@ A new person at `/r/<restaurant-slug>` registers with a name and a passcode they
 - Migration: rename and repurpose `access_requests` → `registrations`, an append-only self-serve registration log (kept, not dropped — see Decisions).
 - `login-screen.tsx`: "Request access" mode becomes "Register" (name, contact, chosen passcode); the old "Request sent" confirmation screen is removed since success signs the person in directly.
 - Demo mode: an in-memory registration path (session-local state) so the flow is exercisable with `NEXT_PUBLIC_DEMO_MODE=true` and no backend, mirroring how demo login already works.
-- New manager/owner-only **Team** tab (4th tab alongside Schedule/Allocation/Tips): lists active members and their role(s), with a promote/demote control. Demo-mode/in-memory for this batch, consistent with every other module's current persistence state — not a real Supabase write yet.
+- New manager/owner-only **Team** tab (4th tab alongside Schedule/Allocation/Tips): lists active members and their role(s), with a promote/demote control. Demo-mode/in-memory for this batch, consistent with every other module's current persistence state at the time — real writes landed in Feature 015 Phase E.
 
 **Out**
 

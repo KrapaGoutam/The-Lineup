@@ -1,6 +1,6 @@
 # Feature 015 — Hosted Supabase persistence and Vercel deployment
 
-Status: Phases A, B, C, and D shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase C: allocation reads/writes real data, with Realtime. Phase D: tips reads/writes real data. Phase E (registration/team/CSV writes) remains.
+Status: all five phases shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase C: allocation reads/writes real data, with Realtime. Phase D: tips reads/writes real data. Phase E: registration and CSV import were already real (verified, not rebuilt); team designations now write to `memberships.roles`. Every screen named in this spec's "User outcome" now reads from and writes to the real database in production mode.
 
 **Numbering note**: you called this "feature 009," but `docs/features/009-add-any-employee-to-rotation.md` already exists (shipped). This is filed as **015** — the next free number, no collisions with any existing `docs/features/*.md`. This is also the item that was deliberately _not_ scoped as a numbered feature earlier this session ("leave it as the existing unchecked ROADMAP Phase 2 item 6") — that instruction is superseded now that you're asking for it directly.
 
@@ -230,6 +230,16 @@ Built on `feature/schedule-tips-persistence` after Phases B and D shipped and th
 - **A fifth migration mistake, caught applying rather than reviewing**: `alter table ... alter constraint ... deferrable` only works on foreign keys in Postgres — the position-swap unique constraint had to be dropped and recreated deferrable, not altered. And `rotation_rounds` was already a realtime publication member on the live project before this migration touched it (`table_rotation_entries`/`board_events` were not) — the `alter publication` statements are now individually guarded against `pg_publication_tables` instead of one list that aborts entirely on the first already-a-member table.
 - **`useEffect` + `setState` to resync from a fresh Server Component prop hit a lint error** (`react-hooks/set-state-in-effect`) that Phase B/D's schedule/tips state never ran into, because this is the first module that needs to resync _without_ a full page reload (Realtime). Fixed by doing the resync during render (React's own documented pattern for "adjust state when a prop changes"), not inside an effect.
 
+## Phase E build notes — smaller than specced, because two-thirds of it was already done
+
+Built on `feature/registration-team-csv-real`, branched from `feature/schedule-tips-persistence`'s tip (not from `main` directly, since Phase E depends on Phase B's `addShiftAction`/roster helpers and Phase B/C/D hadn't merged yet) — to be rebased onto `main` once the Phase B/C/D PR merges.
+
+- **Registration and CSV import needed zero code changes** — both turned out to already be real-mode-functional: registration since Phase A verified `/api/auth/register` was already real code and `login-screen.tsx` was already calling it conditionally on `demoMode`; CSV import as the documented side effect of Phase B's shift-creation wiring (`docs/features/008-bulk-schedule-import.md`). This phase's actual scope narrowed to confirming both live (per explicit instruction not to assume) and building the one piece that was genuinely still demo-only: team designations.
+- **Team designations**: `updateTeamDesignationAction` needed no new migration or policy — `memberships_update_manager` already governed exactly this, unchanged since Feature 014. The action only translates a `Designation` into the `roles` array that policy checks.
+- **The "Unknown" question, confirmed, not assumed**: registered members display their real name in the Team tab and everywhere else the roster renders — that bug (a PostgREST embed indexed as an array when it's a single object at runtime) was fixed in Feature 015 Phase B (`eca845a`), before Phase C or D even started. Re-verified live with a fresh self-registered throwaway account for this phase specifically, rather than trusting the earlier fix without a new check.
+- **Field-naming consistency**: the registration form ("Your name") and the schedule week-grid's row-header column ("Team member") were different words for the same visible concept. The underlying code-level chain (`profiles.display_name` → `displayName` API payload → `TeamMember.name`/`SignedInUser.name` domain field) was already a coherent wire-to-domain transformation, not the actual inconsistency — renaming the domain field to match the wire format everywhere it's used would have been a wide, risky refactor for a cosmetic complaint. Fixed the one real visible mismatch instead: the column header now reads "Name."
+- **The React #418 hydration warning**, spotted at the end of the Phase C session, was `useRestaurantClock`'s `now` state being seeded via `useState(() => new Date())` — computed once at two different real moments (server render, client hydration). Fixed with `suppressHydrationWarning` on the four text nodes that render the ticking values, which is React's own documented approach for exactly this class of value.
+
 ## Sequence
 
 1. ~~This spec — stop here for your approval.~~ Done.
@@ -237,7 +247,7 @@ Built on `feature/schedule-tips-persistence` after Phases B and D shipped and th
 3. ~~Phase B. Same cadence, stop.~~ Done — see "Phase B/D build notes" above. Built together with Phase D per explicit direction (shared Server Component read + Server Action pattern), as separate commits on `feature/schedule-tips-persistence`.
 4. ~~Phase C. Same cadence, stop.~~ Done — see "Phase C build notes" above.
 5. ~~Phase D. Same cadence, stop.~~ Done — see "Phase B/D build notes" above.
-6. Phase E. Same cadence, stop. **Next.**
+6. ~~Phase E. Same cadence, stop.~~ Done — see "Phase E build notes" above. **All five phases shipped.**
 
 Phase A landed directly on `main` (pushed after the user verified sign-in against the real project themselves); Phases B/D happened on `feature/schedule-tips-persistence`, branched off the updated `main`. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow were three commits, not one; Phase B and Phase D were two commits, not one) — exact split decided at build time, same as every prior feature this session.
 
