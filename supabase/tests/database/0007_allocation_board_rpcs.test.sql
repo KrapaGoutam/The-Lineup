@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(28);
 
 -- The ten RPCs this phase adds, each SECURITY INVOKER (so they rely on the
 -- caller's own RLS, never elevate it) and callable by authenticated.
@@ -220,6 +220,26 @@ select ok(
       and policyname = 'table_rotation_entries_delete_any_member'
   ),
   'table_rotation_entries has the any-member delete policy'
+);
+
+-- Real gap found cross-checking DATA_MODEL.md's RLS matrix against what
+-- was actually built (see that migration's own comments): clear-row/
+-- column/board and add-row write table_rotation_entries/rotation_rounds,
+-- both of which had to become any-active-member-writable for unrelated
+-- reasons (the auto-open side effect of an ordinary assign; any member
+-- being able to undo). Without an explicit guard, any active member
+-- could call these four directly, bypassing the UI's manager-only gate
+-- entirely.
+select ok(
+  exists (
+    select 1 from pg_proc
+    where pronamespace = 'private'::regnamespace and proname = 'assert_is_board_manager'
+  ),
+  'assert_is_board_manager exists'
+);
+select ok(
+  has_function_privilege('authenticated', 'private.assert_is_board_manager(uuid)', 'EXECUTE'),
+  'authenticated can execute assert_is_board_manager'
 );
 
 select * from finish();
