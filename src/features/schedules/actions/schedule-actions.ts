@@ -7,6 +7,7 @@ import type {
   ShiftDefaults,
   ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
+import { nextPublishedVersion } from "@/features/schedules/domain/schedule-versioning";
 import type { DemoShift } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeToInstant } from "@/lib/timezone";
@@ -187,7 +188,7 @@ export async function publishScheduleAction(input: {
 
   const { data: draft } = await supabase
     .from("schedule_periods")
-    .select("id, published_version")
+    .select("id")
     .eq("location_id", input.locationId)
     .eq("starts_on", startsOn)
     .eq("ends_on", endsOn)
@@ -200,11 +201,25 @@ export async function publishScheduleAction(input: {
     return { ok: false, error: "No draft schedule to publish." };
   }
 
+  // published_version is unique per (location_id, starts_on, ends_on),
+  // not per row -- see nextPublishedVersion's doc comment. Every period
+  // matching this location/year, published or still draft, has to be
+  // considered, not just the row being published.
+  const { data: periodsForRange } = await supabase
+    .from("schedule_periods")
+    .select("published_version")
+    .eq("location_id", input.locationId)
+    .eq("starts_on", startsOn)
+    .eq("ends_on", endsOn);
+  const nextVersion = nextPublishedVersion(
+    (periodsForRange ?? []).map((row) => row.published_version),
+  );
+
   const { error } = await supabase
     .from("schedule_periods")
     .update({
       status: "published",
-      published_version: draft.published_version + 1,
+      published_version: nextVersion,
       published_at: new Date().toISOString(),
     })
     .eq("id", draft.id);
