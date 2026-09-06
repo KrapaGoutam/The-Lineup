@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(23);
 
 select has_table('public', 'operating_hours', 'operating hours exist');
 select has_table('public', 'shift_kind_defaults', 'shift defaults exist');
@@ -40,6 +40,33 @@ select ok(
 select ok(
   has_table_privilege('authenticated', 'public.tip_allocations', 'SELECT'),
   'authenticated role reaches tip allocations through RLS'
+);
+
+-- Feature 016 (passcode change and reset) reads and writes this table
+-- exclusively through the service-role admin client (see
+-- rotatePasscodeCredential) -- never through a browser-authenticated
+-- session. These pin down "zero grants for anon/authenticated" as a
+-- named regression, not just the pre-existing authenticated-SELECT check
+-- above, so a future migration that widens access here fails loudly.
+select ok(
+  not has_table_privilege('anon', 'public.passcode_credentials', 'SELECT'),
+  'anon cannot read passcode credentials'
+);
+select ok(
+  not has_table_privilege('anon', 'public.passcode_credentials', 'INSERT'),
+  'anon cannot write passcode credentials'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.passcode_credentials', 'INSERT'),
+  'authenticated browser clients cannot insert passcode credentials'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.passcode_credentials', 'UPDATE'),
+  'authenticated browser clients cannot update passcode credentials'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.passcode_credentials', 'DELETE'),
+  'authenticated browser clients cannot delete passcode credentials'
 );
 
 select * from finish();
