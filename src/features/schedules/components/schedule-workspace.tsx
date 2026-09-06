@@ -457,7 +457,7 @@ export function ScheduleWorkspace({
             <div className="border-border min-w-[960px] border-t">
               <div className="bg-muted grid grid-cols-[160px_repeat(7,minmax(110px,1fr))]">
                 <div className="border-border text-muted-foreground border-r p-3 text-xs font-semibold">
-                  Team member
+                  Name
                 </div>
                 {weekDates.map((date, index) => (
                   <div
