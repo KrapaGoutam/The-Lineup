@@ -66,10 +66,10 @@ export async function getScheduleContext(
     weekDates[6] > monthDates.at(-1)! ? weekDates[6] : monthDates.at(-1)!;
 
   const [
-    { data: hoursRows },
-    { data: defaultsRows },
+    { data: hoursRows, error: hoursError },
+    { data: defaultsRows, error: defaultsError },
     team,
-    { data: shiftRows },
+    { data: shiftRows, error: shiftsError },
   ] = await Promise.all([
     supabase
       .from("operating_hours")
@@ -82,13 +82,32 @@ export async function getScheduleContext(
     getOrganizationRoster(organizationId),
     supabase
       .from("shifts")
+      // `shifts` has two foreign keys to `schedule_periods` (a plain
+      // one and a tenant-composite one) and two to `shift_assignments`'
+      // parent side likewise -- PostgREST refuses to embed either
+      // without picking a constraint name explicitly, confirmed
+      // against the live project (a bare `schedule_periods(status)`
+      // returns a PGRST201 "more than one relationship found" error,
+      // not the rows). Picking the tenant-composite constraint for
+      // both matches this schema's general defense-in-depth pattern.
       .select(
-        "id, service_date, end_date, kind, starts_at, ends_at, uses_default_time, notes, schedule_periods(status), shift_assignments(profile_id)",
+        "id, service_date, end_date, kind, starts_at, ends_at, uses_default_time, notes, schedule_periods!shifts_period_tenant_fk(status), shift_assignments!shift_assignments_shift_tenant_fk(profile_id)",
       )
       .eq("organization_id", organizationId)
       .gte("service_date", queryStart)
       .lte("service_date", queryEnd),
   ]);
+
+  // None of these should ever silently become an empty array -- that
+  // failure mode is indistinguishable from "nothing was saved" to
+  // whoever is looking at the UI. Logged, not thrown: a partial
+  // failure here still degrades to sensible fallbacks below rather
+  // than blanking the whole page.
+  if (hoursError)
+    console.error("getScheduleContext: operating_hours", hoursError);
+  if (defaultsError)
+    console.error("getScheduleContext: shift_kind_defaults", defaultsError);
+  if (shiftsError) console.error("getScheduleContext: shifts", shiftsError);
 
   const operatingHours = FALLBACK_OPERATING_HOURS.map((fallback, day) => {
     const row = hoursRows?.find((candidate) => candidate.day_of_week === day);
@@ -124,6 +143,19 @@ export async function getScheduleContext(
         new Date(row.ends_at),
         location.time_zone,
       );
+      // Supabase's generated types mark this embed as an array because
+      // the underlying FK's `isOneToOne` metadata is false -- but at
+      // runtime PostgREST always returns a single object for an embed
+      // across the *embedding* table's own FK column (many shifts to
+      // one schedule_period), confirmed against the live project
+      // directly (`schedule_periods!shifts_period_tenant_fk(status)`
+      // returns `{"status": "..."}`, not an array). The array typing
+      // is a known supabase-js/postgrest-js type-inference gap, not
+      // the actual response shape -- see DATA_MODEL.md's "PostgREST
+      // embed cardinality" section.
+      const period = row.schedule_periods as unknown as {
+        status: string;
+      } | null;
       return {
         id: String(row.id),
         employeeId: assignment.profile_id,
@@ -133,8 +165,7 @@ export async function getScheduleContext(
         startLocal: start.time,
         endLocal: end.time,
         usesDefaultTime: row.uses_default_time,
-        status:
-          row.schedule_periods?.[0]?.status === "draft" ? "draft" : "published",
+        status: period?.status === "draft" ? "draft" : "published",
         note: row.notes ?? undefined,
       };
     })
