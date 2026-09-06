@@ -3,7 +3,7 @@ import { loadPageData } from "@/lib/page-data";
 
 export default async function Home() {
   const restaurantSlug = process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "the-monks";
-  const { demoMode, initialUser, scheduleContext } =
+  const { demoMode, initialUser, scheduleContext, tipsContext } =
     await loadPageData(restaurantSlug);
 
   return (
@@ -12,6 +12,7 @@ export default async function Home() {
       restaurantSlug={restaurantSlug}
       initialUser={initialUser}
       initialScheduleContext={scheduleContext}
+      initialTipsContext={tipsContext}
     />
   );
 }

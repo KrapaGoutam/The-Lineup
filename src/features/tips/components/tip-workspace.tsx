@@ -27,7 +27,7 @@ import type {
   TipsAuditEntry,
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
-import { initialTipIntervals, type TeamMember } from "@/lib/demo-data";
+import type { TeamMember } from "@/lib/demo-data";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -42,6 +42,8 @@ export function TipWorkspace({
   user,
   team,
   status,
+  intervals,
+  onAddInterval,
   onFinalize,
   onReopen,
   auditLog,
@@ -49,13 +51,15 @@ export function TipWorkspace({
   user: SignedInUser;
   team: TeamMember[];
   status: TipsDayStatus;
+  intervals: TipIntervalInput[];
+  onAddInterval: (
+    interval: TipIntervalInput,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onFinalize: () => void;
   onReopen: (reason: string) => void;
   auditLog: TipsAuditEntry[];
 }) {
   const isManager = user.role !== "server";
-  const [intervals, setIntervals] =
-    useState<TipIntervalInput[]>(initialTipIntervals);
   const [error, setError] = useState("");
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
@@ -64,7 +68,7 @@ export function TipWorkspace({
     split.totals.find(({ participantId }) => participantId === user.profileId)
       ?.amountCents ?? 0;
 
-  function addInterval(event: FormEvent<HTMLFormElement>) {
+  async function addInterval(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     if (status === "finalized") {
@@ -74,6 +78,7 @@ export function TipWorkspace({
       return;
     }
     const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
     try {
       const participantIds = form.getAll("participants").map(String);
       const next: TipIntervalInput = {
@@ -83,9 +88,16 @@ export function TipWorkspace({
         amountCents: dollarsToCents(String(form.get("amount"))),
         participantIds,
       };
+      // Client-side shape/amount validation, same as before -- runs
+      // before anything is persisted, so a bad amount or empty
+      // participant list never round-trips to the server first.
       calculateTipSplits([...intervals, next]);
-      setIntervals((current) => [...current, next]);
-      event.currentTarget.reset();
+      const result = await onAddInterval(next);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      formElement.reset();
     } catch (caught) {
       setError(
         caught instanceof Error

@@ -30,11 +30,18 @@ import {
   type ShiftDefaults,
 } from "@/features/schedules/domain/shift-planning";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
+import {
+  addTipIntervalAction,
+  finalizeTipsAction,
+  reopenTipsAction,
+} from "@/features/tips/actions/tips-actions";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
+import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
 import type {
   TipsAuditEntry,
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
+import type { TipsContext } from "@/features/tips/data/tips-data";
 import {
   type DayHours,
   useRestaurantClock,
@@ -257,25 +264,37 @@ export function RestaurantOperationsApp({
   restaurantSlug,
   initialUser = null,
   initialScheduleContext = null,
+  initialTipsContext = null,
 }: {
   demoMode: boolean;
   restaurantSlug: string;
   initialUser?: SignedInUser | null;
   initialScheduleContext?: ScheduleContext | null;
+  initialTipsContext?: TipsContext | null;
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   const [tab, setTab] = useState<AppTab>("schedule");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Feature 015 (Phase B): real mode seeds every one of these from the
+  // Feature 015 (Phases B/D): real mode seeds every one of these from the
   // Server Component's initial fetch; demo mode keeps its original fixed
   // values. Same state shape either way -- only where it starts from
   // differs, matching the pattern already used for the Team tab.
-  const locationId = initialScheduleContext?.locationId ?? null;
-  const timeZone = initialScheduleContext?.timeZone ?? DEMO_TIME_ZONE;
+  const locationId =
+    initialScheduleContext?.locationId ??
+    initialTipsContext?.locationId ??
+    null;
+  const timeZone =
+    initialScheduleContext?.timeZone ??
+    initialTipsContext?.timeZone ??
+    DEMO_TIME_ZONE;
+  const tipsServiceDate = initialTipsContext?.serviceDate ?? DEMO_ANCHOR_DATE;
 
   const [team, setTeam] = useState<TeamMember[]>(
-    () => initialScheduleContext?.team ?? staticDemoTeam,
+    () =>
+      initialScheduleContext?.team ??
+      initialTipsContext?.team ??
+      staticDemoTeam,
   );
   const [demoAccounts, setDemoAccounts] = useState<
     Record<string, SignedInUser>
@@ -299,8 +318,18 @@ export function RestaurantOperationsApp({
   const [showHours, setShowHours] = useState(false);
   const clock = useRestaurantClock(timeZone, operatingHours);
 
-  const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>("estimating");
-  const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>([]);
+  const [tipPoolId, setTipPoolId] = useState<number | null>(
+    () => initialTipsContext?.tipPoolId ?? null,
+  );
+  const [tipIntervals, setTipIntervals] = useState<TipIntervalInput[]>(
+    () => initialTipsContext?.intervals ?? [],
+  );
+  const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>(
+    () => initialTipsContext?.status ?? "estimating",
+  );
+  const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>(
+    () => initialTipsContext?.auditLog ?? [],
+  );
 
   function registerDemoMember(input: {
     displayName: string;
@@ -462,7 +491,45 @@ export function RestaurantOperationsApp({
     setShiftDefaults(nextShiftDefaults);
   }
 
-  function finalizeTips() {
+  async function addTipInterval(
+    interval: TipIntervalInput,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      setTipIntervals((current) => [...current, interval]);
+      return { ok: true };
+    }
+    if (!locationId) return { ok: false, error: "Not ready yet." };
+    const result = await addTipIntervalAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      locationId,
+      timeZone,
+      serviceDate: tipsServiceDate,
+      start: interval.start,
+      end: interval.end,
+      amountCents: interval.amountCents,
+      participantIds: interval.participantIds,
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+    setTipPoolId(result.data.tipPoolId);
+    setTipIntervals((current) => [...current, result.data.interval]);
+    return { ok: true };
+  }
+
+  async function finalizeTips() {
+    if (!demoMode) {
+      if (!locationId || tipPoolId === null) return;
+      const result = await finalizeTipsAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        locationId,
+        tipPoolId,
+      });
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+    }
     setTipsAuditLog((log) => [
       ...log,
       {
@@ -474,7 +541,21 @@ export function RestaurantOperationsApp({
     setTipsStatus("finalized");
   }
 
-  function reopenTips(reason: string) {
+  async function reopenTips(reason: string) {
+    if (!demoMode) {
+      if (!locationId || tipPoolId === null) return;
+      const result = await reopenTipsAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        locationId,
+        tipPoolId,
+        reason,
+      });
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+    }
     setTipsAuditLog((log) => [
       ...log,
       {
@@ -639,6 +720,8 @@ export function RestaurantOperationsApp({
             user={user}
             team={team}
             status={tipsStatus}
+            intervals={tipIntervals}
+            onAddInterval={addTipInterval}
             onFinalize={finalizeTips}
             onReopen={reopenTips}
             auditLog={tipsAuditLog}
