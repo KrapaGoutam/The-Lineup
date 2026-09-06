@@ -67,9 +67,15 @@ function parseArgs(argv) {
   return out;
 }
 
+// Throws rather than calling process.exit() directly: exiting synchronously
+// while an async Supabase/undici network handle is still closing crashes
+// with a native libuv assertion on Windows (found while testing the guard
+// below) instead of the clean one-line message this is supposed to print.
+// Throwing propagates to run().catch() at the bottom, which prints just the
+// message and sets process.exitCode, letting Node exit on its own once the
+// event loop drains -- no forced kill, no assertion.
 function fail(message) {
-  console.error(message);
-  process.exit(1);
+  throw new Error(message);
 }
 
 function required(name, value) {
@@ -77,50 +83,50 @@ function required(name, value) {
   return value;
 }
 
-const args = parseArgs(process.argv.slice(2));
+async function run() {
+  const args = parseArgs(process.argv.slice(2));
 
-const orgName = required("org", args.org);
-const slug = required("slug", args.slug);
-const locationName = required("location", args.location);
-const timeZone = required("timezone", args.timezone);
-const ownerName = required("owner-name", args.ownerName);
-const generatedPasscode = String(randomInt(0, 10000)).padStart(4, "0");
-const passcode = args.passcode ?? generatedPasscode;
+  const orgName = required("org", args.org);
+  const slug = required("slug", args.slug);
+  const locationName = required("location", args.location);
+  const timeZone = required("timezone", args.timezone);
+  const ownerName = required("owner-name", args.ownerName);
+  const generatedPasscode = String(randomInt(0, 10000)).padStart(4, "0");
+  const passcode = args.passcode ?? generatedPasscode;
 
-if (!/^\d{4}$/.test(passcode)) fail("Passcode must be exactly 4 digits.");
-if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-  fail(
-    "Slug must be lowercase alphanumeric segments separated by single hyphens.",
-  );
-}
+  if (!/^\d{4}$/.test(passcode)) fail("Passcode must be exactly 4 digits.");
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    fail(
+      "Slug must be lowercase alphanumeric segments separated by single hyphens.",
+    );
+  }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secretKey = process.env.SUPABASE_SECRET_KEY;
-const pepper = process.env.APP_PIN_PEPPER;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  const pepper = process.env.APP_PIN_PEPPER;
 
-if (!supabaseUrl || !secretKey) {
-  fail(
-    "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY must be set (.env.local or the environment).",
-  );
-}
-if (!pepper || pepper.length < 32) {
-  fail(
-    "APP_PIN_PEPPER must be set and at least 32 characters (.env.local or the environment).",
-  );
-}
+  if (!supabaseUrl || !secretKey) {
+    fail(
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY must be set (.env.local or the environment).",
+    );
+  }
+  if (!pepper || pepper.length < 32) {
+    fail(
+      "APP_PIN_PEPPER must be set and at least 32 characters (.env.local or the environment).",
+    );
+  }
 
-// Mirrors src/lib/passcode-security.ts's createPasscodeLocator exactly.
-function createPasscodeLocator(organizationId, code) {
-  return createHmac("sha256", pepper)
-    .update(`${organizationId}:${code}`)
-    .digest("hex");
-}
+  // Mirrors src/lib/passcode-security.ts's createPasscodeLocator exactly.
+  function createPasscodeLocator(organizationId, code) {
+    return createHmac("sha256", pepper)
+      .update(`${organizationId}:${code}`)
+      .digest("hex");
+  }
 
-const admin = createClient(supabaseUrl, secretKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+  const admin = createClient(supabaseUrl, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
-async function main() {
   console.log(`Target project:  ${supabaseUrl}`);
   console.log(`Organization:    ${orgName} (${slug})`);
   console.log(`Location:        ${locationName} · ${timeZone}`);
@@ -235,6 +241,7 @@ async function main() {
   console.log("Open that file, note the passcode, then delete it.");
 }
 
-main().catch((error) => {
-  fail(`Unexpected error: ${error?.message ?? error}`);
+run().catch((error) => {
+  console.error(error?.message ?? String(error));
+  process.exitCode = 1;
 });
