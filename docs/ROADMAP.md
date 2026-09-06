@@ -13,14 +13,14 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 ## Phase 1 — Shared foundation
 
 1. [x] Restaurant-scoped passcode shell, role modes, hours, local clock, and countdown (self-serve registration replaced the original manager-reviewed access request UI — see Phase 3, Feature 005)
-2. [ ] Link hosted Supabase and create the first owner/invite through the setup runbook
+2. [x] Link hosted Supabase and create the first owner/invite through the setup runbook (Feature 015, Phase A)
 
 ## Phase 2 — Three operational modules
 
 3. [x] Weekly/monthly Morning, Evening, and Full Day roster with defaults, optional overrides/ranges, and publish state
 4. [x] Flexible table-allocation columns, auto rows, manager clear, undo, and redo (any-column writes replaced the original employee-self-column-only rule — see Phase 3, Feature 011)
 5. [x] Interval-based tip split with active-floor suggestion, cent accuracy, manager controls, and employee-own estimate
-6. [ ] Connect the interactive reference UI to hosted Supabase mutations and Realtime subscriptions
+6. [ ] Connect the interactive reference UI to hosted Supabase mutations and Realtime subscriptions (Feature 015, Phases B–E — schedule, allocation, tips, then registration/team/CSV import)
 
 ## Phase 3 — Post-MVP scope changes
 

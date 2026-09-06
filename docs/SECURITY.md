@@ -74,6 +74,18 @@ This directly answers the concern that prompted the design review: an assistant 
 
 **Gap flagged, not fixed by this feature**: no pgTAP test in `supabase/tests/database/` currently exercises `memberships_insert_manager`/`memberships_update_manager` directly (confirmed by searching the test suite before writing this section) — the manager-cannot-touch-a-fellow-manager boundary this feature leans on is enforced by the schema today but has no automated regression coverage. This predates Feature 014 and applies regardless of designation; it becomes more load-bearing now that a UI feature depends on it. Real-mode Team tab wiring is still out of scope (demo-only, matching Feature 005's existing boundary) — worth closing before that wiring happens, not before this doc sweep.
 
+### First-owner bootstrap (Feature 015, Phase A) — a script, not a route, with a database-state guard
+
+The very first owner has no one to sign in as to promote them — self-serve registration always creates a `server`-role membership, and there is no other in-app path to `owner`. `scripts/bootstrap-owner.mjs` fills exactly that one gap, once.
+
+**Why a local script and not an HTTP setup route**: a route is permanently deployed, reachable-by-URL attack surface, no matter how it's gated. Even "refuse if an owner already exists" as a route-level check is still shippable code sitting in production forever, relying entirely on that one guard holding under every future refactor. A script that only runs when someone with the real `SUPABASE_SECRET_KEY` deliberately invokes it on their own machine is never live attack surface at all — there's no URL to find. Manual SQL was also rejected: it would mean re-deriving the passcode locator's HMAC by hand outside the one function that already computes it correctly, with no compiler or test to catch a mismatch.
+
+**The guard is a query, not a policy of restraint**: before creating anything, the script runs `select count(*) from memberships where 'owner' = any(roles)` against the real database. If that's non-zero, it exits without writing a single row. This means a second invocation — run on purpose, by accident, or by someone who finds the script later — is structurally inert: the condition it checks for is exactly what a successful first run produces, so there is no state the script can be in where running it again does anything. This was verified by actually running it a second time against the real project (not just asserted), including a second time after a bug fix that changed its exit path — the refusal held both times.
+
+**Credential handling matches everywhere else in this document**: the script reuses the identical HMAC-locator computation `createPasscodeLocator` already uses (inlined rather than imported, since `src/lib/passcode-security.ts` is marked `"server-only"`, a Next.js build-time guard with no real package to resolve outside Next's own bundler — confirmed, not assumed, while writing the script). The generated passcode is written to a local, gitignored file, never to stdout, a log line, or a second environment variable — the same "never a second copy of the real passcode anywhere" rule the registration and passcode-reset flows already follow.
+
+**Residual risk, named**: the script's compensating rollback (deleting the just-created Auth user on a later step's failure) mirrors `/api/auth/register`'s pattern but has not been exercised by an actual injected failure, only by reading the code — worth a real fault-injection test before this becomes a repeated operational procedure rather than a one-time bootstrap.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.

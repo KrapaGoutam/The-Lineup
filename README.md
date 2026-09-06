@@ -73,4 +73,4 @@ Follow [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Secrets never use a `NEXT_PUB
 
 ## Current delivery state
 
-The responsive interactive MVP, domain tests, passcode/self-serve-registration route handlers, session refresh proxy, and forward Supabase migrations are implemented. Hosted Supabase persistence and Vercel deployment require the project credentials and Git remote described in the deployment runbook.
+The responsive interactive MVP, domain tests, passcode/self-serve-registration route handlers, session refresh proxy, and forward Supabase migrations are implemented. A hosted Supabase project is live and migrated, with the first owner provisioned (Feature 015, Phase A) — authentication, passcode sign-in, and self-serve registration already run against it. The three operational modules (schedule, allocation, tips) and Team/CSV import still run on in-memory demo state even with `NEXT_PUBLIC_DEMO_MODE=false`; wiring them to real persistence is Feature 015's Phases B–E, one module at a time. See `docs/DEPLOYMENT.md` for the full setup runbook.
