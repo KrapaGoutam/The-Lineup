@@ -1,6 +1,6 @@
 # Feature 008 — Bulk schedule CSV import
 
-Status: shipped. **Update (Feature 015, Phase B)**: this feature's own scope was demo-mode-only (see "Out" below), but `csv-import-panel.tsx`'s `onCommit` was always wired to the same handler as the manual "Add shift" flow — when Phase B lifted that handler to call `addShiftAction` in real mode, CSV import inherited real persistence for free, without any code change to this feature's files. Documented here rather than left silently stale; see `docs/features/015-hosted-supabase-persistence.md`'s Phase B notes.
+Status: shipped. **Update (Feature 015, Phase B)**: this feature's own scope was demo-mode-only (see "Out" below), but `csv-import-panel.tsx`'s `onCommit` was always wired to the same handler as the manual "Add shift" flow — when Phase B lifted that handler to call `addShiftAction` in real mode, CSV import inherited real persistence for free, without any code change to this feature's files. Documented here rather than left silently stale; see `docs/features/015-hosted-supabase-persistence.md`'s Phase B notes. **Confirmed live (Feature 015, Phase E)**: a real CSV file was uploaded through the actual UI and its row confirmed as a real `shifts` table row afterward, since Phase E's own instructions were not to assume this still worked without checking.
 
 **Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 

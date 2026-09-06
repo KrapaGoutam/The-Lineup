@@ -1,6 +1,6 @@
 # Feature 014 — Team designations
 
-Status: shipped
+Status: shipped. **Update (Feature 015, Phase E)**: the Team tab's promotion control now writes to the real `memberships.roles` column in real mode, via `updateTeamDesignationAction` — this required no schema or RLS change, exactly as this document's "Data and authorization" section anticipated (`roles` was always the sole authorization source; only a read-side label was needed for display, and that already existed via `designationForRoles`). `changeDemoMemberDesignation` (Implementation map, below) was renamed `changeDesignation` and now branches on `demoMode`. Verified live: a manager promoted a real member to Assistant Manager and the write was confirmed directly in `memberships.roles`, not just in the UI.
 
 **Implementation note**: same division-of-labor change as Features 005/012/013 — Claude implemented this directly, Codex was not in this loop.
 
@@ -60,7 +60,7 @@ Direct answer to "can an assistant manager demote the owner?": no — an assista
 
 **Out**
 
-- A real-mode, Supabase-backed Team tab — stays demo-only, same boundary Feature 005 already documented. `designationForRoles` exists so the mapping is exercised and typed, but nothing in real mode calls it yet.
+- A real-mode, Supabase-backed Team tab — stayed demo-only at the time this feature shipped, same boundary Feature 005 documented; wired in Feature 015 Phase E (see the status note above).
 - Tightening the owner-unilateral-transfer quirk noted above — flagged, left as-is per the approved plan.
 - A `host`-designation login identity or flow — `host` has no current app flow that creates one; it folds into "staff" alongside `server`, same as `normalizeDatabaseRole` already does.
 
@@ -92,7 +92,7 @@ Direct answer to "can an assistant manager demote the owner?": no — an assista
 - `src/features/auth/domain/passcode.ts`: `Designation`, `designationToRole`, `designationForRoles`.
 - `src/features/team/domain/designations.ts` (new, replaces `roles.ts`): `canChangeDesignation`, `assignableDesignations`, `designationLabel`.
 - `src/features/team/components/team-workspace.tsx`: per-member designation label + assignable-designation buttons.
-- `src/components/restaurant-operations-app.tsx`: `changeDemoMemberDesignation` (replaces `changeDemoMemberRole`), syncs `demoTeam` and any matching `demoAccounts` entry together.
+- `src/components/restaurant-operations-app.tsx`: `changeDesignation` (originally `changeDemoMemberDesignation`, which replaced `changeDemoMemberRole`; renamed and made dual-mode in Feature 015 Phase E), syncs `team` and any matching `demoAccounts` entry together in demo mode, calls `updateTeamDesignationAction` in real mode.
 - `src/components/login-screen.tsx`: `SignedInUser.designation`.
 - `src/lib/demo-data.ts`: `TeamMember.designation`; seed data and `demoAccounts` given explicit designations.
 - `src/app/api/auth/passcode/route.ts`, `src/app/api/auth/register/route.ts`, `src/lib/current-user.ts`: populate `designation` on every real-mode `SignedInUser` construction site.
