@@ -1,6 +1,6 @@
 # Feature 015 — Hosted Supabase persistence and Vercel deployment
 
-Status: discovery (spec only — no code written yet)
+Status: Phases A, B, and D shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase D: tips reads/writes real data. Phase C (allocation + Realtime) and Phase E (registration/team/CSV writes) remain.
 
 **Numbering note**: you called this "feature 009," but `docs/features/009-add-any-employee-to-rotation.md` already exists (shipped). This is filed as **015** — the next free number, no collisions with any existing `docs/features/*.md`. This is also the item that was deliberately _not_ scoped as a numbered feature earlier this session ("leave it as the existing unchecked ROADMAP Phase 2 item 6") — that instruction is superseded now that you're asking for it directly.
 
@@ -198,16 +198,29 @@ Per phase, whichever of these actually changed:
 - Affected `docs/features/*.md` — 002/003/004 (currently marked "schema and UI complete but disconnected") get their status lines corrected phase by phase as they stop being disconnected.
 - **CLAUDE.md/AGENTS.md** — only if a rule actually changes; I don't expect one, but I'll say explicitly per phase if I find otherwise rather than skipping the check.
 
+## Phase B/D build notes — what actually happened versus what was specced
+
+Built together in one session, in separate commits, per explicit direction (schedule first, then tips, on `feature/schedule-tips-persistence`). `npm run check`/`npm test`/`npm run build` all pass at both the Phase B commit and the Phase D commit independently — each commit was validated on its own, not only at the end of the branch.
+
+- **`organizationId` threaded onto `SignedInUser`**: not explicitly specced, but both phases' Server Actions need an `organization_id` to scope every write, and the only place that value was available client-side was the signed-in user. Added as a required field (`current-user.ts`, both auth routes, `demo-data.ts`'s accounts) rather than an optional one, so every construction site gets it at once instead of a partial rollout with an optional field threaded through every consumer. Demo mode uses a stable placeholder (`DEMO_ORGANIZATION_ID = "demo-org"`) since nothing in demo mode ever queries with it.
+- **`getPrimaryLocation`/`getOrganizationRoster` extracted as shared data-layer helpers** (`src/features/locations/data/primary-location.ts`, `src/features/team/data/roster.ts`) the moment a second real consumer (tips) needed the same lookup schedule had already written — the single-location-per-pilot simplification (`getPrimaryLocation` takes the org's first location by `created_at`) is documented at the source, not assumed.
+- **`schedule_periods` uses a simplified one-draft-period-per-(location, year) model**, not the full per-batch-versioned model DATA_MODEL.md describes — see that document's "Schedule versions" section for the reasoning. This was a scope decision made during Phase B build, not called out in this spec beforehand.
+- **CSV import (Feature 008) became real-mode-functional as a side effect** of `ShiftEditor`'s `onAdd` and `CsvImportPanel`'s `onCommit` sharing the same lifted `onAddShifts` handler — not a deliberate pull-forward of Phase E, just an honest consequence of the plumbing. Documented in `docs/features/008-bulk-schedule-import.md` rather than left silently stale.
+- **PostgREST embed cardinality gotcha**: `schedule_periods(status)` and `profiles(display_name)` embeds both typechecked as one-element arrays, not single objects, despite being to-one relationships — see DATA_MODEL.md's new "PostgREST embed cardinality" section. Cost real debugging time during Phase B build; documented so Phase C/E don't rediscover it.
+- **`audit_events` has no direct FK to `profiles`** for PostgREST embedding (its actual FK is a composite to `memberships`) — `getTipsContext()`'s audit-log actor-name resolution goes through a `Map` built from the already-fetched roster instead of a second query.
+- **Tips needed no new time-zone logic**: the question raised at the start of this pairing — answered here — is that `zonedWallTimeToInstant`/`zonedWallTimeFromInstant` from Phase B cover tips' interval start/end conversion exactly as built; nothing schedule-specific in that utility needed generalizing.
+- **`addTipIntervalAction`'s return shape carries the tip pool id** (`{interval, tipPoolId}`, not just the interval) so the client can capture a lazily-created pool's id without a second read — the pool doesn't exist until the first interval is added, so there's no id to pass in on the initiating call.
+
 ## Sequence
 
-1. This spec — stop here for your approval.
-2. Phase A. Full validation (`npm run check`, `npm test`, `npm run build`), doc sweep, stop for you to test sign-in against the real project.
-3. Phase B. Same cadence, stop.
-4. Phase C. Same cadence, stop.
-5. Phase D. Same cadence, stop.
+1. ~~This spec — stop here for your approval.~~ Done.
+2. ~~Phase A. Full validation (`npm run check`, `npm test`, `npm run build`), doc sweep, stop for you to test sign-in against the real project.~~ Done — see the Phase A sections above.
+3. ~~Phase B. Same cadence, stop.~~ Done — see "Phase B/D build notes" above. Built together with Phase D per explicit direction (shared Server Component read + Server Action pattern), as separate commits on `feature/schedule-tips-persistence`.
+4. Phase C. Same cadence, stop. **Next.**
+5. ~~Phase D. Same cadence, stop.~~ Done — see "Phase B/D build notes" above.
 6. Phase E. Same cadence, stop.
 
-All work happens on one new branch off `main` (which already has every feature through 014 merged) — branch name `feature/hosted-supabase-persistence` unless you want a different one. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow are plausibly three commits, not one) — exact split decided at build time, same as every prior feature this session.
+Phase A landed directly on `main` (pushed after the user verified sign-in against the real project themselves); Phases B/D happened on `feature/schedule-tips-persistence`, branched off the updated `main`. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow were three commits, not one; Phase B and Phase D were two commits, not one) — exact split decided at build time, same as every prior feature this session.
 
 ## Decisions and risks
 

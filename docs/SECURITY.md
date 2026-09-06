@@ -86,6 +86,10 @@ The very first owner has no one to sign in as to promote them — self-serve reg
 
 **Residual risk, named**: the script's compensating rollback (deleting the just-created Auth user on a later step's failure) mirrors `/api/auth/register`'s pattern but has not been exercised by an actual injected failure, only by reading the code — worth a real fault-injection test before this becomes a repeated operational procedure rather than a one-time bootstrap.
 
+### Schedule and tips real-mode writes (Feature 015, Phases B/D) — no new authorization surface
+
+`addShiftAction`, `publishScheduleAction`, `saveScheduleConfigAction`, `addTipIntervalAction`, `finalizeTipsAction`, and `reopenTipsAction` all call `createClient()` — the cookie/session-based, RLS-respecting server client already used by every other real-mode code path in this app — never `createAdminClient()`. This was a deliberate check, not an assumption: none of these six actions had a reason to bypass RLS, since every table they touch (`shifts`, `shift_assignments`, `operating_hours`, `shift_kind_defaults`, `schedule_periods`, `tip_pools`, `tip_intervals`, `tip_interval_participants`, `audit_events`) already has a manager/owner-scoped write policy from the original schema (confirmed in the RLS matrix above). No new policy was added by either phase; a signed-in server attempting to call one of these actions directly (bypassing the UI's own manager-only gating) is still rejected by the same RLS policy that would reject a raw Data API call.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.

@@ -47,6 +47,7 @@ Features may import from `components`, `lib`, and `types`. A feature does not re
 - Server Components perform initial reads with the authenticated server client.
 - Queries select only required columns and filter organization/location early.
 - Client subscriptions invalidate or patch the small live floor state; they do not duplicate the entire database.
+- **Implemented (Feature 015, Phases B/D)**: `getScheduleContext()` and `getTipsContext()` are the first real Server Component reads in the app, called once from `loadPageData()` (shared by both entry routes) and passed down as initial props; the client component seeds its state from them when present and falls back to the original demo constants when not (`demoMode` or no organization resolved yet).
 
 ### Mutations
 
@@ -55,6 +56,7 @@ Features may import from `components`, `lib`, and `types`. A feature does not re
 - Single-table edits use normal Data API mutations.
 - Multi-row seating and schedule publishing use transaction-safe database functions.
 - The caller supplies an idempotency key for actions that may be retried.
+- **Implemented (Feature 015, Phases B/D)**: `schedule-actions.ts` (`addShiftAction`, `publishScheduleAction`, `saveScheduleConfigAction`) and `tips-actions.ts` (`addTipIntervalAction`, `finalizeTipsAction`, `reopenTipsAction`) are the first real Server Actions in the app, all using the RLS-respecting server client (never the admin client) and returning a uniform `ActionResult<T> = {ok:true; data:T} | {ok:false; error:string}` so the client can surface a real-mode failure without throwing. Multi-step writes that must not partially land (a shift insert followed by its assignment insert, a tip interval insert followed by its participant rows) use a compensating delete on failure rather than a database transaction, since Supabase's JS client has no client-side transaction API — noted as a known gap versus a true `BEGIN`/`COMMIT`, acceptable at this write volume.
 
 ### Passcode sign-in
 
@@ -93,6 +95,7 @@ Role order is `owner > general_manager > shift_manager > host > server`; permiss
 - A `service_date` stores the restaurant-local operating date for grouping.
 - The app converts at input/output boundaries and never assumes the Vercel or database server time zone.
 - Overnight shifts are allowed; `ends_at` must be later than `starts_at`.
+- **Implemented (Feature 015, Phase B)**: `src/lib/timezone.ts`'s `zonedWallTimeToInstant`/`zonedWallTimeFromInstant` are the conversion at that boundary, built on native `Intl.DateTimeFormat` (no new dependency), with explicit, tested policies for both DST edge cases: a spring-forward gap resolves to the instant just after the gap, a fall-back overlap resolves to the earlier occurrence. Not marked `"server-only"` — it has no server-only dependency itself, and staying plain-importable is what lets it be unit-tested under Vitest outside Next's bundler. Both schedule (Phase B) and tips (Phase D) share this one utility; tips needed no DST logic of its own beyond calling it.
 
 ## Table assignment and rotation
 

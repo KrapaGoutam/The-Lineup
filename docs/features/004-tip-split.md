@@ -1,6 +1,6 @@
 # Feature 004 — Interval-based tip split
 
-Status: schema and UI complete but disconnected. The Postgres schema, the `recalculate_tip_pool` function, RLS, and pgTAP coverage are production-ready; `tip-workspace.tsx` runs the pure `calculate-tip-splits.ts` logic entirely on in-memory `useState` and never calls `recalculate_tip_pool` or persists a `tip_pool`. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
+Status: wired to hosted Supabase (Feature 015, Phase D). In real mode, `tip-workspace.tsx` no longer owns interval state itself — it reads `getTipsContext()` (a Server Component read of today's `tip_pools`/`tip_intervals`/`tip_interval_participants` plus the resolved audit log) and writes through `addTipIntervalAction`/`finalizeTipsAction`/`reopenTipsAction`, each calling `recalculate_tip_pool` or the finalize/reopen policy as appropriate; `NEXT_PUBLIC_DEMO_MODE=true` still runs the original in-memory `useState` path unchanged. A tip pool is created lazily on the first interval add for a service date, not pre-seeded. See `docs/AUDIT.md` (2026-09-05) for the pre-Phase-D state.
 
 ## User outcome
 

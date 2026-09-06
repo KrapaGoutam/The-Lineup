@@ -57,6 +57,8 @@ erDiagram
 
 `schedule_periods` represent a restaurant-local date range and have `draft`, `published`, or `archived` status. `published_version` increases on each publish. Shifts stay editable in a draft; publishing records a snapshot identifier and an audit event. A later change creates a new version rather than rewriting what staff previously saw.
 
+**Feature 015 Phase B — a simplified stand-in for the versioned-period model above**: `schedule-actions.ts`'s `getOrCreateDraftPeriod` creates at most one draft `schedule_periods` row per `(location_id, calendar year)`, not one per publish batch. This is deliberately simpler than the date-range-versioned model described above, chosen because the UI has no period-scoped navigation yet to make finer-grained periods meaningful. The "a later change creates a new version rather than rewriting" invariant is still honored: if the year's most recent period is already published, a fresh draft period is created alongside it rather than reopening the published one. Revisit this once the UI needs to distinguish between periods within the same year.
+
 ## Rotation model
 
 `rotation_members` stores current operational state:
@@ -108,6 +110,16 @@ Policies combine `to authenticated` with an indexed membership/location predicat
 **Table allocation writes (Feature 011, revised twice)**: `table_rotation_entries` is writable by any active member for any column, not only their own — `assigned_by` is still always the caller's own `auth.uid()` and can never be spoofed to attribute an edit to someone else. A write to a column that isn't the actor's own is always attributed (recorded and shown to the whole team); there is no reason field or reason data involved anywhere in this flow (originally shipped as reason-required, made optional as service-time friction, then removed from the UI entirely once testing showed the empty field itself was unwanted — see `docs/features/011-allocation-board-open-editing.md`). Manager-only actions (pause/remove/reorder/clear) keep their own separate manager-scoped policies, unaffected by this change. `rotation_members.position` (Feature 010) is the reorder target: it changes who is "next" for future turns without touching any already-recorded `table_rotation_entries` row, since entries are keyed by `rotation_member_id`, not position. All allocation-board writes are denied — for every role, including owner — once that service date's `tip_pools` row is `finalized`; the reverse transition (`tip_pools_reopen_manager`) is manager/owner-only and requires clearing `finalized_at`/`finalized_by` together with the status change, matching the existing check constraint.
 
 **Standing empty-row trigger, corrected**: the buffer row described above originally opened only once every active column had filled the row before it — in effect a per-column-agreement condition, even though it reads as "the row." On a floor where one or more columns never catch up to the others in any given round, no round ever satisfies that condition, so no new row ever appeared no matter how far ahead the fast columns got. The trigger is now a round's first value, not its last — a per-board signal that work has started, independent of how many (or which) columns have gone.
+
+## Tip pool lifecycle (Feature 015 Phase D)
+
+`tip_pools` rows are created lazily, on the first `tip_intervals` insert for a `(location_id, service_date)` — there is no pre-seeded pool waiting for a service date to arrive. `getTipsContext()` returns an empty, all-draft context (`tipPoolId: null`, `status: "estimating"`, no intervals) when no pool exists yet for today; `addTipIntervalAction` creates the pool on demand and returns its id so the client can capture it without a second read.
+
+## PostgREST embed cardinality is inferred from the select string, not the schema
+
+Supabase-js infers whether an embedded relation (`table(...)` inside `.select()`) is single or array-shaped from the query string alone, not from the actual foreign-key cardinality in `database.generated.ts`. A to-one embed across a foreign key — `shifts.select("...schedule_periods(status)...")`, `memberships.select("...profiles(display_name)...")` — is still typed as a one-element array (`{status: ...}[]`), and callers must index `[0]` rather than reading the field directly. Confirmed while writing `schedule-data.ts` and `roster.ts` (Feature 015 Phases B/D) — both needed the `?.[0]?.field` form to typecheck.
+
+`audit_events.actor_profile_id` has no direct foreign key to `profiles` for the same embedding purpose — its actual FK is a composite `(organization_id, actor_profile_id) → memberships(organization_id, profile_id)`, not a direct reference to `profiles`. Resolving an actor's display name (`getTipsContext()`'s audit log) goes through a `Map` built from an already-fetched roster array instead of a second embedded query.
 
 ## Data API exposure
 

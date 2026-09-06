@@ -1,6 +1,6 @@
 # Feature 002 — Weekly and monthly schedule roster
 
-Status: schema and UI complete but disconnected. The Postgres schema, RLS, and pgTAP coverage are production-ready; `schedule-workspace.tsx` runs entirely on in-memory `useState` demo data and does not read or write Supabase. Wiring is tracked as `docs/ROADMAP.md` Phase 2 item 6. See `docs/AUDIT.md` (2026-09-05).
+Status: wired to hosted Supabase (Feature 015, Phase B). In real mode, `schedule-workspace.tsx` reads `getScheduleContext()` (a Server Component read of `shifts`/`shift_assignments`/`operating_hours`/`shift_kind_defaults` joined for the visible week and month) and writes through `addShiftAction`/`publishScheduleAction`/`saveScheduleConfigAction`; `NEXT_PUBLIC_DEMO_MODE=true` still runs the original in-memory `useState` path unchanged. `schedule_periods` uses a simplified "one draft period per (location, calendar year)" model rather than the full per-batch-versioned model this document originally implied — see `docs/features/015-hosted-supabase-persistence.md`'s Phase B notes for why. See `docs/AUDIT.md` (2026-09-05) for the pre-Phase-B state.
 
 ## User outcome
 

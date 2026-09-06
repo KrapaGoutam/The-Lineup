@@ -1,6 +1,6 @@
 # Feature 008 — Bulk schedule CSV import
 
-Status: shipped
+Status: shipped. **Update (Feature 015, Phase B)**: this feature's own scope was demo-mode-only (see "Out" below), but `csv-import-panel.tsx`'s `onCommit` was always wired to the same handler as the manual "Add shift" flow — when Phase B lifted that handler to call `addShiftAction` in real mode, CSV import inherited real persistence for free, without any code change to this feature's files. Documented here rather than left silently stale; see `docs/features/015-hosted-supabase-persistence.md`'s Phase B notes.
 
 **Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 
@@ -12,7 +12,7 @@ A manager uploads a CSV of shifts and gets a bulk draft schedule created in one 
 
 **In**: downloadable CSV template, upload → parse → preview UI, per-row validation reusing the existing `createShiftInstances` domain function, name-based employee matching with explicit ambiguous/unresolved-name row errors, a 500-row file cap, duplicate-row-in-file detection, commit creates shifts in the same in-memory demo state the manual "Add shift" flow already uses.
 
-**Out**: any real Supabase persistence — this stays demo-mode/in-memory like the rest of the app, per explicit direction; real persistence remains tracked as the existing unchecked `docs/ROADMAP.md` Phase 2 item 6, not pulled forward by this feature. Also out: CSV export, group-editing an already-imported batch (undo works through the existing schedule state, nothing special added for imports).
+**Out**: any real Supabase persistence — this stayed demo-mode/in-memory like the rest of the app at the time this feature shipped, per explicit direction, with real persistence tracked as the then-unchecked `docs/ROADMAP.md` Phase 2 item 6. (As of Feature 015 Phase B, real persistence arrived anyway as a side effect of the schedule module's own wiring — see the status note above.) Also out: CSV export, group-editing an already-imported batch (undo works through the existing schedule state, nothing special added for imports).
 
 ## CSV format
 
@@ -42,14 +42,14 @@ Columns: `employee_name`, `shift_kind` (`morning` / `evening` / `full_day`), `fr
 
 ## Data and authorization
 
-None — demo-mode-only, no schema, RLS, migration, routes, or server actions.
+None added by this feature — no new schema, RLS, migration, routes, or server actions. As of Feature 015 Phase B, a real-mode commit goes through that phase's `addShiftAction` (the same one the manual "Add shift" form uses), so it is subject to that action's own authorization and data rules, not anything specific to this feature.
 
 ## Implementation map
 
 - `src/features/schedules/domain/parse-schedule-csv.ts` (new, pure parser/validator reusing `createShiftInstances`)
 - `src/features/schedules/components/csv-import-panel.tsx` (new, wired into `schedule-workspace.tsx`)
 - Static template asset (e.g. `public/templates/shift-import-template.csv`, or generated client-side from a constant)
-- No routes, server actions, RPCs, Realtime, migration, or generated types.
+- No routes, server actions, RPCs, Realtime, migration, or generated types added by this feature itself.
 
 ## Test plan
 
