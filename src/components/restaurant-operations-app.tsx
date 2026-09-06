@@ -30,6 +30,7 @@ import {
   getWeekDates,
   type ShiftDefaults,
 } from "@/features/schedules/domain/shift-planning";
+import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import {
   addTipIntervalAction,
@@ -370,43 +371,6 @@ export function RestaurantOperationsApp({
     return { ok: true, account };
   }
 
-  /**
-   * Feature 014. Updates both the roster row's designation AND its
-   * derived AppRole together (never one without the other — see the
-   * comment on TeamMember.designation), and also syncs the matching
-   * `demoAccounts` login-identity entry if this member has one, so a
-   * promotion or demotion actually takes effect the next time they sign
-   * in. It does NOT retroactively change an already-open session's
-   * `user` state (that would need a session-claim refresh in real mode
-   * too) — signing out and back in is what picks up the new designation,
-   * same as a real RLS-backed session would need a fresh JWT.
-   */
-  function changeDemoMemberDesignation(memberId: string, next: Designation) {
-    const nextRole = designationToRole(next);
-    setTeam((current) =>
-      current.map((member) =>
-        member.id === memberId
-          ? { ...member, designation: next, role: nextRole }
-          : member,
-      ),
-    );
-    setDemoAccounts((current) => {
-      let changed = false;
-      const updated = { ...current };
-      for (const [passcode, account] of Object.entries(current)) {
-        if (account.profileId === memberId) {
-          updated[passcode] = {
-            ...account,
-            designation: next,
-            role: nextRole,
-          };
-          changed = true;
-        }
-      }
-      return changed ? updated : current;
-    });
-  }
-
   if (!user) {
     return (
       <LoginScreen
@@ -569,6 +533,68 @@ export function RestaurantOperationsApp({
       },
     ]);
     setTipsStatus("estimating");
+  }
+
+  /**
+   * Feature 014's demo behavior, now dual-mode (Feature 015 Phase E).
+   * Updates both the roster row's designation AND its derived AppRole
+   * together (never one without the other — see the comment on
+   * TeamMember.designation), and in demo mode also syncs the matching
+   * `demoAccounts` login-identity entry if this member has one, so a
+   * promotion or demotion actually takes effect the next time they sign
+   * in. Neither mode retroactively changes an already-open session's
+   * `user` state (that would need a session-claim refresh in real mode
+   * too) — signing out and back in is what picks up the new designation,
+   * same as a real RLS-backed session needs a fresh JWT. Who may change
+   * whose designation is enforced by the existing `memberships_update_manager`
+   * RLS policy in real mode (unchanged by this feature); the client only
+   * ever offers an allowed option via `assignableDesignations`.
+   */
+  async function changeDesignation(memberId: string, next: Designation) {
+    if (!demoMode) {
+      const result = await updateTeamDesignationAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        targetProfileId: memberId,
+        nextDesignation: next,
+      });
+      if (!result.ok) {
+        setActionError(result.error);
+        return;
+      }
+      setTeam((current) =>
+        current.map((member) =>
+          member.id === memberId
+            ? { ...member, designation: next, role: designationToRole(next) }
+            : member,
+        ),
+      );
+      return;
+    }
+
+    const nextRole = designationToRole(next);
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === memberId
+          ? { ...member, designation: next, role: nextRole }
+          : member,
+      ),
+    );
+    setDemoAccounts((current) => {
+      let changed = false;
+      const updated = { ...current };
+      for (const [passcode, account] of Object.entries(current)) {
+        if (account.profileId === memberId) {
+          updated[passcode] = {
+            ...account,
+            designation: next,
+            role: nextRole,
+          };
+          changed = true;
+        }
+      }
+      return changed ? updated : current;
+    });
   }
 
   async function signOut() {
@@ -737,7 +763,7 @@ export function RestaurantOperationsApp({
           <TeamWorkspace
             user={user}
             team={team}
-            onChangeDesignation={changeDemoMemberDesignation}
+            onChangeDesignation={changeDesignation}
           />
         ) : null}
       </main>
