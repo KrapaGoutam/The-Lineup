@@ -7,7 +7,7 @@ select plan(18);
 select has_table('public', 'operating_hours', 'operating hours exist');
 select has_table('public', 'shift_kind_defaults', 'shift defaults exist');
 select has_table('public', 'passcode_credentials', 'passcode credentials exist');
-select has_table('public', 'access_requests', 'access requests exist');
+select has_table('public', 'registrations', 'registrations exist');
 select has_table('public', 'rotation_rounds', 'rotation rounds exist');
 select has_table('public', 'table_rotation_entries', 'table entries exist');
 select has_table('public', 'board_events', 'board events exist');
