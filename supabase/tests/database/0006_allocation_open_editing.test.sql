@@ -4,14 +4,18 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(5);
 
+-- Originally one collapsed "for all" policy; split by Feature 015 Phase C
+-- into insert/update/delete (0007_allocation_board_rpcs.test.sql covers
+-- the split itself and the real gap that caused it) -- this just confirms
+-- the any-member write capability itself is still there in some form.
 select ok(
   exists (
     select 1 from pg_policies
     where schemaname = 'public'
       and tablename = 'table_rotation_entries'
-      and policyname = 'table_rotation_entries_write_any_member'
+      and policyname = 'table_rotation_entries_insert_any_member'
   ),
-  'the collapsed any-member write policy exists'
+  'the any-member insert policy exists'
 );
 select ok(
   not exists (

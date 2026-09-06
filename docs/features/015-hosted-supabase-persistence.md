@@ -1,6 +1,6 @@
 # Feature 015 — Hosted Supabase persistence and Vercel deployment
 
-Status: discovery (spec only — no code written yet)
+Status: Phases A, B, C, and D shipped. Phase A: hosted Supabase project linked, migrations applied, first owner bootstrapped. Phase B: schedule reads/writes real data. Phase C: allocation reads/writes real data, with Realtime. Phase D: tips reads/writes real data. Phase E (registration/team/CSV writes) remains.
 
 **Numbering note**: you called this "feature 009," but `docs/features/009-add-any-employee-to-rotation.md` already exists (shipped). This is filed as **015** — the next free number, no collisions with any existing `docs/features/*.md`. This is also the item that was deliberately _not_ scoped as a numbered feature earlier this session ("leave it as the existing unchecked ROADMAP Phase 2 item 6") — that instruction is superseded now that you're asking for it directly.
 
@@ -198,16 +198,48 @@ Per phase, whichever of these actually changed:
 - Affected `docs/features/*.md` — 002/003/004 (currently marked "schema and UI complete but disconnected") get their status lines corrected phase by phase as they stop being disconnected.
 - **CLAUDE.md/AGENTS.md** — only if a rule actually changes; I don't expect one, but I'll say explicitly per phase if I find otherwise rather than skipping the check.
 
+## Phase B/D build notes — what actually happened versus what was specced
+
+Built together in one session, in separate commits, per explicit direction (schedule first, then tips, on `feature/schedule-tips-persistence`). `npm run check`/`npm test`/`npm run build` all pass at both the Phase B commit and the Phase D commit independently — each commit was validated on its own, not only at the end of the branch.
+
+- **`organizationId` threaded onto `SignedInUser`**: not explicitly specced, but both phases' Server Actions need an `organization_id` to scope every write, and the only place that value was available client-side was the signed-in user. Added as a required field (`current-user.ts`, both auth routes, `demo-data.ts`'s accounts) rather than an optional one, so every construction site gets it at once instead of a partial rollout with an optional field threaded through every consumer. Demo mode uses a stable placeholder (`DEMO_ORGANIZATION_ID = "demo-org"`) since nothing in demo mode ever queries with it.
+- **`getPrimaryLocation`/`getOrganizationRoster` extracted as shared data-layer helpers** (`src/features/locations/data/primary-location.ts`, `src/features/team/data/roster.ts`) the moment a second real consumer (tips) needed the same lookup schedule had already written — the single-location-per-pilot simplification (`getPrimaryLocation` takes the org's first location by `created_at`) is documented at the source, not assumed.
+- **`schedule_periods` uses a simplified one-draft-period-per-(location, year) model**, not the full per-batch-versioned model DATA_MODEL.md describes — see that document's "Schedule versions" section for the reasoning. This was a scope decision made during Phase B build, not called out in this spec beforehand.
+- **CSV import (Feature 008) became real-mode-functional as a side effect** of `ShiftEditor`'s `onAdd` and `CsvImportPanel`'s `onCommit` sharing the same lifted `onAddShifts` handler — not a deliberate pull-forward of Phase E, just an honest consequence of the plumbing. Documented in `docs/features/008-bulk-schedule-import.md` rather than left silently stale.
+- **PostgREST embed cardinality gotcha — this one shipped as two real bugs, not just a typecheck annoyance**: `schedule_periods(status)` and `profiles(display_name)` both typechecked as one-element arrays, and both were "fixed" at the time by indexing `[0]` to satisfy the compiler. That was wrong: `shifts→schedule_periods` and `memberships→profiles` are both many-to-one embeds that PostgREST returns as a single object, confirmed by querying the live project directly — `[0]` on a real object reads `undefined`. This shipped in the Phase B/D commits and surfaced as user-reported bugs (registered members showing as "Unknown"; the `shifts` query separately erroring outright on the unrelated ambiguous-FK issue below) rather than being caught before merge, since no local test exercises the real Supabase client. Fixed in the two commits after this section was first written — see DATA_MODEL.md's "PostgREST embed cardinality" section for the corrected rule and both fixes.
+- **A second, independent PostgREST issue on the same `shifts` query**: `shifts` has two foreign keys to `schedule_periods` and `shift_assignments` has two back to `shifts`, so the bare embeds in `getScheduleContext()` returned a `PGRST201` ambiguous-relationship error on every request — an error the code never checked, so it read as an empty result, not a failure. This is the reason schedules appeared not to persist: writes were succeeding, reads were silently failing. Fixed by naming the tenant-composite constraint explicitly in the select string.
+- **`audit_events` has no direct FK to `profiles`** for PostgREST embedding (its actual FK is a composite to `memberships`) — `getTipsContext()`'s audit-log actor-name resolution goes through a `Map` built from the already-fetched roster instead of a second query.
+- **Tips needed no new time-zone logic**: the question raised at the start of this pairing — answered here — is that `zonedWallTimeToInstant`/`zonedWallTimeFromInstant` from Phase B cover tips' interval start/end conversion exactly as built; nothing schedule-specific in that utility needed generalizing.
+- **`addTipIntervalAction`'s return shape carries the tip pool id** (`{interval, tipPoolId}`, not just the interval) so the client can capture a lazily-created pool's id without a second read — the pool doesn't exist until the first interval is added, so there's no id to pass in on the initiating call.
+
+## Phase C build notes — what actually happened versus what was specced
+
+Built on `feature/schedule-tips-persistence` after Phases B and D shipped and their bugs were fixed, in separate commits (migration, application layer, then two more migrations for gaps found live-testing). `npm run check`/`npm test`/`npm run build` pass at every commit; `npm run db:test` (pgTAP, against a fresh local instance built from the migrations alone) passes at 77 assertions across 7 files by the final commit.
+
+- **Column identity is a person's profile id, not `rotation_members.id`** — `rotation-board.ts`'s pure model wasn't touched (per this section's own scope note), and its `isCrossColumnEdit` compares a `RotationColumn.id` directly against the signed-in user's `profileId`. `allocation-data.ts` and `allocation-actions.ts` each do one direction of the resulting translation (member row → profile id for display; profile id → session-scoped member id before calling an RPC) rather than changing the pure model to speak in database row ids.
+- **Ten RPCs, not eight** — the spec named one per `BoardAction` variant; `board_undo`/`board_redo` were added too, since `board_events.event_type` has carried `'undo'`/`'redo'` as its own logged kind since the very first migration, and `undone_at`/`payload`/`inverse_payload` exist for exactly this, per ARCHITECTURE.md's already-stated "Supabase mode persists equivalent inverse events." Real-mode undo/redo is one shared server-side timeline per session, not a per-tab stack — the only design that makes sense once the board is shared across devices.
+- **Realtime scoped to one table, not the three the spec implied**: every RPC inserts a `board_events` row regardless of which other table it changed, so a single subscription on `board_events` filtered to `service_session_id` covers `rotation_members`/`rotation_rounds`/`table_rotation_entries` changes too. Before a session exists (an empty board), a separate subscription on `service_sessions` scoped to the organization catches the moment one gets created.
+- **Four real RLS/grant gaps, not the "verify, add a policy only if a real gap turns up" contingency the spec allowed for** — three found by literally running the RPCs as two different real signed-in accounts (a throwaway manager and a throwaway server, both deleted after) against the hosted project, the fourth by cross-checking DATA_MODEL.md's RLS matrix against what got built:
+  1. The three private helper functions had execute revoked from `authenticated` — SECURITY INVOKER doesn't change the calling role partway through a chain, so the very first "Add column" click failed with a raw permission error.
+  2. `table_rotation_entries_write_any_member` (Feature 011) let any member modify or delete only rows _they_ created — invisible for a fresh assign, but it silently no-opped `board_undo` reversing someone else's action, and would have done the same to clear-row/column/board.
+  3. `rotation_rounds_write_manager` was manager-only, but the standing-empty-round auto-open is a side effect of any member's ordinary assign.
+  4. Fixing 2 and 3 made `table_rotation_entries`/`rotation_rounds` any-member-writable, which is right for assign and undo/redo but wrong for clear-row/column/board and add-row (DATA_MODEL's matrix has always scoped those to owner/general_manager/shift_manager/host) — fixed with an explicit role check inside each of those four RPCs specifically, rather than at the table-policy level.
+
+  Full accounts in `docs/SECURITY.md`'s "Feature 015 Phase C" subsection and each fixup migration's own comments.
+
+- **A fifth migration mistake, caught applying rather than reviewing**: `alter table ... alter constraint ... deferrable` only works on foreign keys in Postgres — the position-swap unique constraint had to be dropped and recreated deferrable, not altered. And `rotation_rounds` was already a realtime publication member on the live project before this migration touched it (`table_rotation_entries`/`board_events` were not) — the `alter publication` statements are now individually guarded against `pg_publication_tables` instead of one list that aborts entirely on the first already-a-member table.
+- **`useEffect` + `setState` to resync from a fresh Server Component prop hit a lint error** (`react-hooks/set-state-in-effect`) that Phase B/D's schedule/tips state never ran into, because this is the first module that needs to resync _without_ a full page reload (Realtime). Fixed by doing the resync during render (React's own documented pattern for "adjust state when a prop changes"), not inside an effect.
+
 ## Sequence
 
-1. This spec — stop here for your approval.
-2. Phase A. Full validation (`npm run check`, `npm test`, `npm run build`), doc sweep, stop for you to test sign-in against the real project.
-3. Phase B. Same cadence, stop.
-4. Phase C. Same cadence, stop.
-5. Phase D. Same cadence, stop.
-6. Phase E. Same cadence, stop.
+1. ~~This spec — stop here for your approval.~~ Done.
+2. ~~Phase A. Full validation (`npm run check`, `npm test`, `npm run build`), doc sweep, stop for you to test sign-in against the real project.~~ Done — see the Phase A sections above.
+3. ~~Phase B. Same cadence, stop.~~ Done — see "Phase B/D build notes" above. Built together with Phase D per explicit direction (shared Server Component read + Server Action pattern), as separate commits on `feature/schedule-tips-persistence`.
+4. ~~Phase C. Same cadence, stop.~~ Done — see "Phase C build notes" above.
+5. ~~Phase D. Same cadence, stop.~~ Done — see "Phase B/D build notes" above.
+6. Phase E. Same cadence, stop. **Next.**
 
-All work happens on one new branch off `main` (which already has every feature through 014 merged) — branch name `feature/hosted-supabase-persistence` unless you want a different one. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow are plausibly three commits, not one) — exact split decided at build time, same as every prior feature this session.
+Phase A landed directly on `main` (pushed after the user verified sign-in against the real project themselves); Phases B/D happened on `feature/schedule-tips-persistence`, branched off the updated `main`. Separate commits within a phase where the work naturally splits (e.g., Phase A's migration-apply vs. bootstrap-script vs. CI-workflow were three commits, not one; Phase B and Phase D were two commits, not one) — exact split decided at build time, same as every prior feature this session.
 
 ## Decisions and risks
 

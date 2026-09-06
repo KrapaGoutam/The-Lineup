@@ -163,6 +163,7 @@ export async function POST(request: Request) {
       name: displayName,
       role: normalizeDatabaseRole(["server"]),
       designation: designationForRoles(["server"]),
+      organizationId: organization.id,
     },
   });
 }

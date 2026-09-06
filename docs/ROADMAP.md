@@ -20,7 +20,7 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 3. [x] Weekly/monthly Morning, Evening, and Full Day roster with defaults, optional overrides/ranges, and publish state
 4. [x] Flexible table-allocation columns, auto rows, manager clear, undo, and redo (any-column writes replaced the original employee-self-column-only rule — see Phase 3, Feature 011)
 5. [x] Interval-based tip split with active-floor suggestion, cent accuracy, manager controls, and employee-own estimate
-6. [ ] Connect the interactive reference UI to hosted Supabase mutations and Realtime subscriptions (Feature 015, Phases B–E — schedule, allocation, tips, then registration/team/CSV import)
+6. [ ] Connect the interactive reference UI to hosted Supabase mutations and Realtime subscriptions (Feature 015, Phases B–E — schedule, table allocation (the first module with a live Realtime subscription), and tips wired, CSV import wired as a side effect of schedule; registration and team designations still pending, Phase E)
 
 ## Phase 3 — Post-MVP scope changes
 

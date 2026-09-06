@@ -1944,6 +1944,77 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      board_add_column: {
+        Args: {
+          p_location_id: string;
+          p_organization_id: string;
+          p_position: number;
+          p_server_profile_id: string;
+          p_service_date: string;
+        };
+        Returns: number;
+      };
+      board_add_row: {
+        Args: { p_organization_id: string; p_service_session_id: number };
+        Returns: number;
+      };
+      board_assign: {
+        Args: {
+          p_location_id: string;
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_date: string;
+          p_table_label: string;
+        };
+        Returns: number;
+      };
+      board_clear_board: {
+        Args: { p_organization_id: string; p_service_session_id: number };
+        Returns: undefined;
+      };
+      board_clear_column: {
+        Args: {
+          p_member_id: number;
+          p_organization_id: string;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
+      board_clear_row: {
+        Args: {
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
+      board_move_column: {
+        Args: {
+          p_direction: string;
+          p_member_id: number;
+          p_organization_id: string;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
+      board_redo: {
+        Args: { p_organization_id: string; p_service_session_id: number };
+        Returns: undefined;
+      };
+      board_set_column_status: {
+        Args: {
+          p_member_id: number;
+          p_organization_id: string;
+          p_service_session_id: number;
+          p_status: string;
+        };
+        Returns: undefined;
+      };
+      board_undo: {
+        Args: { p_organization_id: string; p_service_session_id: number };
+        Returns: undefined;
+      };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
         Returns: undefined;

@@ -42,5 +42,6 @@ export async function getCurrentUser(
     name: profile.display_name,
     role: normalizeDatabaseRole(membership.roles),
     designation: designationForRoles(membership.roles),
+    organizationId: organization.id,
   };
 }

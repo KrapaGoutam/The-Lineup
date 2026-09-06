@@ -17,11 +17,11 @@
 - A retried seating key creates one seating only.
 - Two simultaneous host actions do not consume the same next turn incorrectly.
 - A floor rebalance preserves occupied tables.
-- DST transition fixtures preserve location-local shift intent.
+- DST transition fixtures preserve location-local shift intent. Covered by `src/lib/timezone.test.ts` (Feature 015, Phase B): plain conversion, spring-forward gap, fall-back overlap, and an overnight shift's real elapsed duration (7 or 9 hours across a transition, not a naive 8).
 - A user from organization A cannot read or mutate organization B.
 - Tip allocations sum exactly to every interval amount in integer cents.
 - A standing empty table-allocation row stays ready one row ahead of wherever work is actually happening, opened on a row's first value rather than waiting for every column to fill it.
-- Undo and redo restore complete table-board snapshots.
+- Undo and redo restore complete table-board snapshots. In real mode (Feature 015 Phase C), this is one shared server-side timeline per session rather than a per-tab stack — covered by `supabase/tests/database/0007_allocation_board_rpcs.test.sql` (RPC existence, SECURITY INVOKER-only, the four RLS/grant gaps and their fixes) and live-verified against the hosted project with two real signed-in accounts, since Realtime propagation and cross-account RLS behavior aren't things a unit test can prove.
 
 ## Commands
 

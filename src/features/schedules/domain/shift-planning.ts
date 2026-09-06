@@ -43,6 +43,45 @@ function nextDate(date: string) {
   return formatIsoDate(value);
 }
 
+/**
+ * The Monday-Sunday week containing `anchorDate` (an ISO date), as 7
+ * consecutive ISO date strings starting on Monday -- matching the
+ * schedule grid's fixed Mon..Sun column order. Feature 015 (Phase B):
+ * real mode needs the actual current week, computed from the location's
+ * local "today"; demo mode keeps its own fixed September 2026 week
+ * (matching its seeded shift data) rather than calling this.
+ */
+export function getWeekDates(anchorDate: string): string[] {
+  const anchor = parseIsoDate(anchorDate);
+  // getUTCDay(): 0=Sun..6=Sat. Days to subtract to reach that week's Monday.
+  const daysSinceMonday = (anchor.getUTCDay() + 6) % 7;
+  const monday = new Date(anchor);
+  monday.setUTCDate(anchor.getUTCDate() - daysSinceMonday);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setUTCDate(monday.getUTCDate() + index);
+    return formatIsoDate(date);
+  });
+}
+
+/**
+ * Every date in the calendar month containing `anchorDate`, in order.
+ * Feature 015 (Phase B): drives the month view's grid (day count and
+ * which weekday it starts on) from the actual month, replacing a
+ * hardcoded 30-cell September grid -- used for both demo and real mode,
+ * since demo's fixed anchor date already resolves to the same September
+ * 2026 grid this replaces.
+ */
+export function getMonthDates(anchorDate: string): string[] {
+  const anchor = parseIsoDate(anchorDate);
+  const year = anchor.getUTCFullYear();
+  const month = anchor.getUTCMonth();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return Array.from({ length: daysInMonth }, (_, index) =>
+    formatIsoDate(new Date(Date.UTC(year, month, index + 1))),
+  );
+}
+
 export function expandDateRange(fromDate: string, toDate?: string) {
   const start = parseIsoDate(fromDate);
   const end = parseIsoDate(toDate || fromDate);
