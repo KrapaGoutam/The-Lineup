@@ -2,8 +2,8 @@
 
 **Name:** Member deactivation and session kill
 **Owner:** Krapa Goutam
-**Status:** approved (spec only — no code written yet)
-**Issue/PR:**
+**Status:** built and live-verified against the hosted project — see "Build notes" below
+**Issue/PR:** (opened after this commit — see the PR description for the URL)
 
 ## Numbering note
 
@@ -103,3 +103,26 @@ Written to the approved decisions above (best-effort/no-revert write handling, n
 - **Decision**: write ordering and partial-failure handling — **best-effort, in order, no revert.** Order: `memberships.active = false` first (the RLS kill switch — most important to land, and the one write every other layer of defense depends on), then `passcode_credentials.active = false`, then the Auth ban last. If a later write fails after an earlier one succeeded, this feature does **not** attempt to revert the earlier writes — it reports exactly which of the three landed and which didn't, so a manager can see e.g. "membership deactivated, credential deactivated, Auth ban failed" and retry just the remainder, rather than the whole action. Mirrors `rotatePasscodeCredential` naming its own worst case rather than pretending failure can't happen — the difference here is there's no single clean revert target, so the honest answer is "tell the truth about partial state," not "pretend a revert covers every case."
 - **Decision**: no proactive Realtime kick for a genuinely idle tab in this version. RLS already blocks every actual read or write the instant `memberships.active` is false (confirmed live) — an idle tab can only show stale, already-loaded numbers on screen, it cannot do anything with them. Closing that display lag would need a standing Realtime subscription on _every_ signed-in session, not just the allocation board's, for a gap that's already bounded to zero real access. Left as a named, accepted residual risk, addressable later without touching anything this spec covers.
 - **Decision**: reactivation is in scope for this feature, not deferred — the natural, symmetric reverse of the same three writes (`active = true`, `active = true`, `ban_duration: "none"`), so a rehired person picks back up under their existing profile and history instead of needing an entirely new registration.
+
+## Build notes — what actually happened versus what was specced
+
+Built as specced, plus one real, load-bearing finding this spec's own live-tested claims couldn't have surfaced without actually writing the pgTAP test.
+
+**What matched the spec exactly**: the three-write order and best-effort/no-revert handling, `canDeactivateMember` (reusing `canChangeDesignation` plus the unconditional self-target refusal), the "no Realtime kick" decision, reactivation built in the same PR, the `MemberStatusDialog` UX (one component for both directions, hidden-not-disabled, "Inactive" badge). Commits: `a231277` (spec), `d6a60a1`/`ce9b62a` (core implementation, amended once to fix a shell-mangled commit message), `ad7d2c8` (tests).
+
+**Confirmed live, exactly as the spec's "What already exists" section claimed, before any code was written**: banning a Supabase Auth account invalidates an already-issued token's `getUser()` calls immediately (proven with a real throwaway account: sign in, capture the token, ban, retry the same token — fails). That same token still passes a direct RLS read (proven the same way) — confirming `memberships.active`, not the ban, is what actually has to block data access, which is exactly how the code was built.
+
+**A real gap this feature's own pgTAP test found, not something assumed correct**: `private.has_org_role` — the function nearly every RLS policy in this schema calls — has a second clause granting an organization's `created_by` full access regardless of `memberships.active`. Discovered while writing `supabase/tests/database/0008_member_deactivation.test.sql`: an early draft used one throwaway account as both the org's creator and the deactivation subject, and the "deactivated but still passes `has_org_role`" assertion failed. Fixed the test (two separate throwaway accounts — the realistic shape, since almost every real deactivation targets someone who didn't create the organization) and added a fifth assertion confirming the bypass explicitly, so it's documented rather than silently working around it. **Not patched in this feature**: `has_org_role` backs nearly every policy in the schema, and changing it is a bigger, separate decision than this feature's approved scope — flagged in both `docs/SECURITY.md` and `docs/DATA_MODEL.md` for whoever reviews this PR to decide whether and when to address it. Practical exposure today: none, since self-deactivation is refused for everyone and there's currently only ever one owner per organization who could be the creator.
+
+**Live verification — completed against the hosted project**: a throwaway owner and staff account were created, and, using the real running app:
+
+1. Signed in as staff (a live, valid session). Directly applied the three deactivation writes (bypassing the UI, to isolate the "already-open session" claim from the route/UI layer, which was verified separately below). Attempted "Change your passcode" from the still-open staff tab — it was cleanly signed out and returned to the passcode screen, with no raw error banner. This is the exact call that previously would have shown "Not signed in." as static dialog text before this feature's `sessionInvalid` wiring existed.
+2. Confirmed the deactivated passcode is rejected on a fresh sign-in attempt (generic "Passcode not recognized," matching the acceptance criterion that deactivation isn't distinguishable from a wrong guess).
+3. Reactivated (directly), confirmed sign-in succeeds again with the exact original passcode — the credential row's locator was never touched, only `active` and the ban.
+4. Ran the full flow through the real UI this time: owner signs in, Team tab, Deactivate with a reason (dialog confirms, row flips to show only "Reactivate" plus an "Inactive" badge, no other actions), Reactivate with a reason (dialog confirms, row returns to its full normal action set).
+5. Confirmed via direct database query: both `audit_events` rows present with the correct actor, target, action, and reason; final `memberships.active`/`passcode_credentials.active` both `true`.
+6. Confirmed server-side self-deactivation refusal independent of the UI hiding the button: a raw authenticated `fetch` to `/api/team/deactivate` with the owner's own profile id as the target returned `403` with the expected message.
+
+All throwaway accounts, the organization, and every scratch script used were deleted afterward.
+
+**CI migration job**: confirmed by reading `.github/workflows/database.yml`, not assumed. This feature has zero new migration files. The PR-triggered `migrations-and-policies` job runs on any `supabase/**` path change — the new pgTAP file (`0008_member_deactivation.test.sql`) qualifies, so this PR does exercise it, and it passes locally (87 assertions). The push-triggered `deploy-migrations` job (`supabase db push`, main only) will find nothing new to apply once this merges — a safe no-op, not a risk of drift.
