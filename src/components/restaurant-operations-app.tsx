@@ -87,8 +87,11 @@ const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
 ];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
-// Feature 018: manager/owner-only, gated exactly like Team -- added to
-// visibleTabs only when isManager, same as teamTab below.
+// Feature 019: visible to every signed-in role -- unlike Feature 018,
+// which gated the whole tab manager/owner-only. What's inside it is now
+// scoped by getAttendanceAccessAction's server-resolved answer instead
+// (see attendance-report.tsx), so the tab itself no longer needs a
+// client-side role gate.
 const attendanceTab = {
   id: "attendance" as const,
   label: "Attendance",
@@ -414,7 +417,11 @@ export function RestaurantOperationsApp({
   }
 
   const isManager = user.role !== "server";
-  const visibleTabs = isManager ? [...tabs, teamTab, attendanceTab] : tabs;
+  // Feature 019: attendanceTab is now always included -- Team stays
+  // manager-only.
+  const visibleTabs = isManager
+    ? [...tabs, teamTab, attendanceTab]
+    : [...tabs, attendanceTab];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -1119,11 +1126,12 @@ export function RestaurantOperationsApp({
             onReactivate={reactivateTeamMember}
           />
         ) : null}
-        {tab === "attendance" && isManager ? (
+        {tab === "attendance" ? (
           <AttendanceReport
             restaurantSlug={restaurantSlug}
             demoMode={demoMode}
             timeZone={timeZone}
+            user={user}
           />
         ) : null}
       </main>
@@ -1131,7 +1139,7 @@ export function RestaurantOperationsApp({
       <nav
         className={cn(
           "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
-          isManager ? "grid-cols-5" : "grid-cols-3",
+          isManager ? "grid-cols-5" : "grid-cols-4",
         )}
         aria-label="Mobile navigation"
       >
