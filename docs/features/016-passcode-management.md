@@ -2,8 +2,8 @@
 
 **Name:** Passcode change and reset
 **Owner:** Krapa Goutam
-**Status:** discovery (spec only — no code written yet)
-**Issue/PR:**
+**Status:** built and live-verified against the hosted project — see "Build notes" below
+**Issue/PR:** https://github.com/KrapaGoutam/The-Lineup/pull/12
 
 ## Numbering note
 
@@ -187,6 +187,13 @@ Built as specced, with one real blocker this spec's own "Risk" section correctly
 
 **What shipped instead**: the Auth password is now a derived value (`createAuthPassword`, a second domain-separated HMAC), never the raw passcode — see "How the HMAC locator and the Supabase Auth password stay in sync" above for the full design and the "reuse the locator" alternative that was considered and rejected. Every credential that predates this change is migrated lazily, on its own next successful sign-in, via `verifyPasscode`'s derived-then-legacy fallback — see "Migration" above. `bootstrap-owner.mjs` was also updated (it independently mirrors `createAuthPassword`, the same pattern it already used for the locator, since it can't import the `"server-only"`-marked `src/lib/passcode-security.ts`) so a freshly bootstrapped owner starts pre-migrated rather than needing to be.
 
-**Live verification status**: `npm run check`, `npm test`, and `npm run build` all pass against the revised code (derived password, migration path, updated/added unit tests). The live Playwright round trip against the hosted project — including a simulated legacy account, to prove the migration-on-login path actually works and not just the already-migrated path — runs next, before this is considered fully done.
+**Live verification — completed against the hosted project**: `npm run check`, `npm test` (113 passed), and `npm run build` all pass against the revised code. A throwaway organization with an owner and a staff account was created with the RAW passcode as their Auth password on purpose (the exact legacy shape every pre-existing account has), then, using the real running app end to end via Playwright:
+
+1. **Legacy sign-in and migration**: signed in as the legacy owner with their raw passcode — succeeded via `verifyPasscode`'s fallback path. Confirmed the migration actually happened by attempting `signInWithPassword` directly (not through the app) with both values afterward: the raw passcode now fails (`Invalid login credentials`), the derived password now succeeds — the account was upgraded by that one ordinary sign-in, exactly as designed.
+2. **Self-change round trip**: changed the passcode from the header dialog — this is the exact call that previously failed with a 500 (`AuthWeakPasswordError`) before the derivation fix; it now succeeds. Signed out, confirmed the old passcode is rejected and the new one signs in successfully.
+3. **Manager reset round trip**: as the owner, reset the staff account's passcode from the Team tab (reason required, auto-generated new code shown once). Signed out, confirmed the old staff passcode is rejected and the new one signs in as that staff account with the correct (server) role and no manager-only UI visible.
+4. **Direct database confirmation** (service-role client, not the app): both `passcode_credentials` rows show `updated_at` bumped and `synthetic_email` unchanged (the identity account never needs to change). `audit_events` has exactly one `passcode_changed` row (actor = target = the owner, `reason: null`) and one `passcode_reset` row (actor = owner, entity = the staff profile, `reason: "QA live verification test"`) — matching the acceptance criteria exactly.
+
+All throwaway accounts, the organization, and every scratch script used for this were deleted afterward; nothing QA-related was left in the hosted project or committed to the repository.
 
 **Smaller, unspecced additions made while building the UI**: the reset dialog includes a copy-to-clipboard affordance for the newly issued passcode (the spec asked for "a copy affordance not a download," this is the direct implementation of that line) and a radio toggle between "Generate randomly" and "Choose one" rather than always showing a passcode input (keeps the common case — most resets don't need a specific number — to one click). Demo mode's `resetMemberPasscode` also issues a first login credential for a roster member who has never had one (most of the static demo roster), rather than requiring a `demoAccounts` entry to already exist — not explicitly specced, but a natural reading of "reset" that avoids a dead-end UI state for that roster's majority.
