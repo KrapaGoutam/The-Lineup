@@ -417,13 +417,12 @@ function PersonSection({
                     <td className="py-1.5 pr-3">{row.date}</td>
                     <td className="py-1.5 pr-3">{row.clockIn ?? "—"}</td>
                     <td className="py-1.5 pr-3">
-                      {row.clockOut ? (
-                        row.clockOut
-                      ) : row.autoClockedOut ? (
-                        <Badge tone="warning">Auto-closed</Badge>
-                      ) : (
-                        "—"
-                      )}
+                      {row.clockOut ?? "—"}
+                      {row.autoClockedOut ? (
+                        <Badge tone="warning" className="ml-1.5">
+                          Auto-closed
+                        </Badge>
+                      ) : null}
                     </td>
                     <td className="py-1.5">
                       {row.hoursWorked === null

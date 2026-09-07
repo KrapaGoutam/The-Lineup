@@ -122,6 +122,22 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     hoursWorked: 8,
     autoClockedOut: false,
   },
+  {
+    id: 108,
+    userId: 4,
+    date: "2026-09-06",
+    clockIn: "11:00:00",
+    // Live-verified against the real system: auto_clocked_out=true rows
+    // usually still carry a real clock_out time (the system fills one in
+    // when it force-closes a shift) -- a null clock_out turned out to
+    // correlate with auto_clocked_out=false in practice (a shift left
+    // genuinely open, never closed at all). Both real shapes are
+    // demoed: this row (auto-closed, time present) and row 102 above
+    // (auto-closed, no time -- the rarer but still real combination).
+    clockOut: "19:15:00",
+    hoursWorked: 8.25,
+    autoClockedOut: true,
+  },
   // Zoya Khan (userId 5) has no September rows at all -- demos the
   // zero-attendance-this-period state when explicitly selected. She does
   // have an August row, so "Previous month" isn't empty for her.
