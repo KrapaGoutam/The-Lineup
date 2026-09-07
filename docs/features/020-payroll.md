@@ -2,7 +2,7 @@
 
 **Name:** Payroll (rates, generation, payments, balance, dashboard, export)
 **Owner:** Krapa Goutam
-**Status:** Phase 1 (schema + RLS) complete, PR #16, branched off `feature/attendance-access-and-dashboard` (PR #15). Includes a second hardening pass added after a Phase 2 worked-sequence review found the regenerate boundary had no database-level backstop (see Decisions and risks). Payroll PRs target the previous phase's branch, not `main` — the two features are meant to merge together once payroll is done. If the stack ever gets unwieldy to review or rebase, that's flagged rather than pushed through silently.
+**Status:** Phase 1 (schema + RLS) complete, PR #16, branched off `feature/attendance-access-and-dashboard` (PR #15). Includes two follow-on hardening passes, both found via worked-sequence review rather than assumed safe: the regenerate boundary (after Phase 2) and a confirmed payment's target period/organization (after Phase 3) — see Decisions and risks. Payroll PRs target the previous phase's branch, not `main` — the two features are meant to merge together once payroll is done. If the stack ever gets unwieldy to review or rebase, that's flagged rather than pushed through silently.
 **Issue/PR:**
 
 ## Tips and payroll are fully independent systems
@@ -141,6 +141,8 @@ Both new indexes on `payroll_payments` exist because Postgres never indexes a fo
 
 **A real bypass was found and closed during schema review, before Phase 2**: the first draft of the trigger only guarded `amount_cents`/`payment_date`/`comment` when `old.status = 'confirmed'` _at the time of that specific update_ — it never guarded `status` itself. Any privileged role could flip `status` back to `'draft'` (an update the original guard didn't touch, so it passed) and then edit the now-"unconfirmed" row freely in a second statement, silently rewriting a payment that was supposed to be locked — reachable through the normal app connection, no elevated database access required. Fixed by also forbidding `status` from ever changing away from `'confirmed'` once set: there is no un-confirm path, for any role, ever. A second trigger independently blocks _deleting_ a confirmed row too, as defense in depth beyond the delete policy's own `using` clause (verified directly: even with RLS bypassed entirely, the trigger alone still rejects it — see `supabase/tests/database/0010_payroll_schema_rls.test.sql`).
 
+**A second real bypass was found and closed during a Phase 3 worked-sequence review**: a confirmed payment's amount was frozen, but nothing froze which period it counted against. A raw `update` re-pointing `payroll_period_id` (or `organization_id`) didn't touch any of the guarded columns, so it passed silently — proven live: a confirmed $400 payment against August was re-pointed to September with one `update`, moving its entire credit from August's balance to September's without editing the payment's amount, date, comment, or status at all. Reachable by any privileged role through the normal app connection, since `payroll_payments_update_privileged`'s RLS only asks "is this caller privileged for this organization," never "which columns is this update touching." Fixed by extending the same trigger to also guard `payroll_period_id` and `organization_id` once confirmed — a payment's target, not only its amount, is now exactly as frozen. Re-verified live after the fix: the identical re-point attempt now fails, and both periods' balances are provably unchanged.
+
 ```sql
 create or replace function private.forbid_confirmed_payment_edit()
 returns trigger language plpgsql set search_path = '' as $$
@@ -151,7 +153,9 @@ begin
   if old.status = 'confirmed'
      and (new.amount_cents is distinct from old.amount_cents
           or new.payment_date is distinct from old.payment_date
-          or new.comment is distinct from old.comment) then
+          or new.comment is distinct from old.comment
+          or new.payroll_period_id is distinct from old.payroll_period_id
+          or new.organization_id is distinct from old.organization_id) then
     raise exception 'Cannot edit a confirmed payment; record a correction instead.';
   end if;
   return new;
@@ -355,7 +359,7 @@ Five phases, one per session, full validation (`npm run check`, `npm test`, `npm
 
 ## Decisions and risks
 
-- **Decision**: unconfirmed payments count toward balance immediately, to prevent double-payment risk; confirm's role is locking the record for audit integrity and gating self-visibility, not gating whether the money "counts."
+- **Decision, superseded in Phase 3**: this section originally had unconfirmed payments counting toward balance immediately, to prevent double-payment risk. Revised once adjustments existed as the formal correction path: balance now counts confirmed payments only; an outstanding draft is surfaced as a separate, always-visible figure instead of being blended into the number. See Phase 3's build notes.
 - **Decision**: corrections are always new rows (`reverses_payment_id`), never mutations of a confirmed row — matches the append-only discipline `audit_events` already establishes elsewhere in this codebase.
 - **Decision**: `payroll_rates`/`payroll_periods` key on `neon_user_id`, not `profile_id` — payroll must be generatable for every active Neon user a manager wants to pay, regardless of whether that person has (or ever gets) a linked Lineup account; the `attendance_identity_links` table from [[019]] is consulted only to resolve a _regular signed-in user's own_ scope, never as a requirement for generation itself.
 - **Risk**: no overtime-rate support in this version — flat rate × hours only. Flagged, not built, per your instruction to keep scope to what's specified.
@@ -364,6 +368,7 @@ Five phases, one per session, full validation (`npm run check`, `npm test`, `npm
 - **Decision, found during schema review before Phase 2**: the first draft of the confirmed-payment trigger didn't guard `status` itself, leaving a two-statement bypass (un-confirm, then edit) reachable by any privileged role with no elevated access. Closed by forbidding `status` from ever leaving `'confirmed'`. `payroll_payments` also gained a delete policy scoped to `status = 'draft'` only, so a wrong-person draft is removable without corrupting the audit trail by editing which person it belongs to — a confirmed row stays permanently undeletable, backed by both the policy and an independent trigger.
 - **Decision**: the post-payment correction mechanism is a manual `payroll_adjustments` line item (delta + mandatory reason), never an edit to a generated snapshot or a payment — designed now, built in a later phase, so Phase 2's generation/regeneration logic can be written against a settled design instead of guessing at it.
 - **Decision, found during a Phase 2 worked-sequence review, before Phase 3**: "a payment exists → regeneration is refused" was true, but only as an application-layer guard (`regeneratePayrollPeriodAction`'s own payment-count check) — a raw `update` against `payroll_periods`, issued directly and bypassing the Server Action entirely, was proven (not merely suspected) to succeed even with a payment on record. Closed by `private.forbid_payroll_period_snapshot_edit`, a trigger scoped to exactly `hours_snapshot`/`rate_cents_snapshot`/`gross_cents` that rejects any change to those columns once a `payroll_payments` row exists for the period — independent of caller, role, or code path, the same standard already applied to confirmed-payment immutability. Verified twice: pgTAP (four new assertions: a zero-payment period's snapshot is freely updatable, a period with a payment rejects the identical shape of update, and locking a paid period still works), and a worked SQL sequence re-run before and after the fix, showing the exact error message the raw update now produces.
+- **Decision, found during a Phase 3 worked-sequence review**: a confirmed payment's amount was frozen, but its _target_ wasn't — a raw `update` re-pointing `payroll_period_id` (or `organization_id`) to a different period didn't touch any of the columns the original trigger guarded, so it passed silently, proven live by moving a real $400 credit from August's balance to September's with one `update`. Closed by extending `forbid_confirmed_payment_edit` to also guard `payroll_period_id` and `organization_id` once confirmed. Verified the same way as the regenerate-boundary finding: three new pgTAP assertions, and the identical worked SQL sequence (RLS bypassed entirely, no Server Action involved) re-run before and after the fix, showing both periods' balances provably unchanged afterward.
 
 ## Open questions for your approval
 

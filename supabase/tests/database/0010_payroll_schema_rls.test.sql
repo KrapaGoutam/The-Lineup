@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(53);
 
 -- Table/RLS/grant shape ------------------------------------------------
 
@@ -409,6 +409,43 @@ select lives_ok(
     where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'
   $$,
   'locking a period that already has a payment still works -- the trigger only guards the snapshot columns, not status'
+);
+
+-- A confirmed payment's TARGET is frozen too, not just its amount -- found
+-- during a Phase 3 worked-sequence review: re-pointing payroll_period_id
+-- (or organization_id) doesn't touch amount_cents/payment_date/comment/
+-- status, so the original trigger let it through, silently moving a
+-- confirmed payment's credit from one period's balance to another's.
+select throws_ok(
+  format(
+    $$
+      update public.payroll_payments
+      set payroll_period_id = %L
+      where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 40000
+    $$,
+    (select id from public.payroll_periods
+     where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-07-01')
+  ),
+  'P0001',
+  'Cannot edit a confirmed payment; record a correction instead.',
+  'the trigger rejects re-pointing a confirmed payment to a different period, even within the same organization'
+);
+select throws_ok(
+  $$
+    update public.payroll_payments
+    set organization_id = '00000000-0000-0000-0000-000000020102'
+    where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 40000
+  $$,
+  'P0001',
+  'Cannot edit a confirmed payment; record a correction instead.',
+  'the trigger rejects re-pointing a confirmed payment to a different organization'
+);
+select is(
+  (select payroll_period_id from public.payroll_payments
+   where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 40000),
+  (select id from public.payroll_periods
+   where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'),
+  'the confirmed payment still targets its original August period after both rejected re-point attempts'
 );
 
 -- Rate changes never touch an already-generated period -------------------
