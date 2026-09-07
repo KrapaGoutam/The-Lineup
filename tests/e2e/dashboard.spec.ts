@@ -270,7 +270,9 @@ test("a manager can link attendance and the server then sees only that record", 
   // day/week/month/selected-period dashboard tiles and the row total all
   // derive from the same single demo attendance row) -- assert the actual
   // table cell specifically, not just that the text exists anywhere.
-  await expect(page.getByRole("cell", { name: "8.5h", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "8.5h", exact: true }),
+  ).toBeVisible();
 });
 
 test("theme toggle switches and persists the theme across reload", async ({
