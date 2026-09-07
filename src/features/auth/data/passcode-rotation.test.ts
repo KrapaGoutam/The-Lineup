@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createAuthPassword } from "@/lib/passcode-security";
+
 // rotatePasscodeCredential takes its admin client as an argument rather than
 // constructing one, so this fake is passed in directly -- no module mock
 // needed. It only needs to support the exact chains the function calls:
@@ -75,7 +77,7 @@ describe("rotatePasscodeCredential", () => {
     process.env.APP_PIN_PEPPER = "x".repeat(32);
   });
 
-  it("updates the locator and the Auth password on full success", async () => {
+  it("updates the locator and the Auth password (derived, never the raw passcode) on full success", async () => {
     const { rotatePasscodeCredential } = await import("./passcode-rotation");
     const { admin, updateUserById } = makeFakeAdmin({
       credential: { id: "cred-1", locator: "old-locator" },
@@ -88,9 +90,16 @@ describe("rotatePasscodeCredential", () => {
     });
 
     expect(result.ok).toBe(true);
+    // Never the raw "1234" -- a raw 4-digit value is what got rejected by
+    // the real hosted project's password-strength check in the first
+    // place (AuthWeakPasswordError). Must be the derived value.
     expect(updateUserById).toHaveBeenCalledWith(profileId, {
-      password: "1234",
+      password: createAuthPassword(organizationId, "1234"),
     });
+    expect(updateUserById).not.toHaveBeenCalledWith(
+      profileId,
+      expect.objectContaining({ password: "1234" }),
+    );
   });
 
   it("fails clearly, with no Auth update attempted, when the new locator collides", async () => {

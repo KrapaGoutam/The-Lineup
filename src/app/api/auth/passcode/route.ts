@@ -14,6 +14,10 @@ import {
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
 import {
+  migrateLegacyAuthPassword,
+  verifyPasscode,
+} from "@/features/auth/data/passcode-verify";
+import {
   createPasscodeLocator,
   createRequestFingerprint,
 } from "@/lib/passcode-security";
@@ -161,15 +165,27 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: credential.synthetic_email,
-    password: passcode,
+  const verification = await verifyPasscode(supabase, {
+    syntheticEmail: credential.synthetic_email,
+    organizationId: organization.id,
+    passcode,
   });
-  if (signInError) {
+  if (!verification.ok) {
     return NextResponse.json(
       { error: "Passcode not recognized." },
       { status: 401 },
     );
+  }
+  // The only caller that opportunistically migrates a legacy account:
+  // the passcode isn't changing here, so this sign-in is the only chance
+  // to upgrade it before the next one. Awaited, but never allowed to
+  // turn this successful sign-in into a failure (see its own doc comment).
+  if (verification.verifiedVia === "legacy") {
+    await migrateLegacyAuthPassword(admin, {
+      profileId: credential.profile_id,
+      organizationId: organization.id,
+      passcode,
+    });
   }
 
   const [{ data: profile }, { data: membership }] = await Promise.all([

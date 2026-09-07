@@ -12,7 +12,10 @@ import {
   isValidContact,
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
-import { createPasscodeLocator } from "@/lib/passcode-security";
+import {
+  createAuthPassword,
+  createPasscodeLocator,
+} from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -81,11 +84,16 @@ export async function POST(request: Request) {
 
   const locator = createPasscodeLocator(organization.id, passcode);
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
+  // New accounts start pre-migrated to the derived-password scheme
+  // (createAuthPassword) rather than the raw passcode -- see that
+  // function's comment. There's no legacy weight to carry for a brand
+  // new account.
+  const authPassword = createAuthPassword(organization.id, passcode);
 
   const { data: created, error: createError } =
     await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password: passcode,
+      password: authPassword,
       email_confirm: true,
     });
   if (createError || !created.user) {
@@ -145,7 +153,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: syntheticEmail,
-    password: passcode,
+    password: authPassword,
   });
   if (signInError) {
     return NextResponse.json(

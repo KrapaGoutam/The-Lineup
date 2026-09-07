@@ -19,6 +19,43 @@ export function createPasscodeLocator(
     .digest("hex");
 }
 
+/**
+ * Feature 016 (revised): the string actually sent to Supabase Auth as a
+ * person's password, in place of the raw 4-digit passcode. Two things
+ * forced this:
+ *
+ * 1. Supabase's hosted Auth enforces a hard 6-character password minimum
+ *    that cannot be lowered from the dashboard -- a raw 4-digit passcode
+ *    is rejected outright by `admin.auth.admin.updateUserById` (confirmed
+ *    live against the hosted project; `createUser`/`signInWithPassword`
+ *    happened not to enforce it, which is why login and registration ever
+ *    worked, but that was never something to keep relying on). A 64-hex-char
+ *    HMAC digest clears any minimum a password policy could reasonably set.
+ * 2. It must NOT be `createPasscodeLocator`'s output. The locator is a
+ *    lookup key that legitimately appears in a `passcode_credentials` row,
+ *    a support screenshot of the login-attempt table, a database backup --
+ *    none of those should also hand someone a working Auth password. A
+ *    second HMAC with its own domain-separated input (`"authpw:"` prefix,
+ *    where the locator has none) guarantees the two outputs can never
+ *    collide for the same input, even though both derive from the same
+ *    pepper, organization, and passcode.
+ *
+ * `organizationId` is included for the same reason the locator includes
+ * it: this is derived, not stored, so nothing requires it, but keeping
+ * the two functions symmetric costs nothing and means the same passcode
+ * in two different organizations never derives the same Auth password
+ * either.
+ *
+ * See "How the HMAC locator and the Supabase Auth password stay in sync"
+ * in docs/features/016-passcode-management.md for the migration this
+ * required for every credential that predates this function.
+ */
+export function createAuthPassword(organizationId: string, passcode: string) {
+  return createHmac("sha256", getPepper())
+    .update(`authpw:${organizationId}:${passcode}`)
+    .digest("hex");
+}
+
 export function createRequestFingerprint(value: string) {
   return createHmac("sha256", getPepper())
     .update(`request:${value}`)

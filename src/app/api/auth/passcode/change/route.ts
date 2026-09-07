@@ -10,6 +10,7 @@ import {
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
 import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
+import { verifyPasscode } from "@/features/auth/data/passcode-verify";
 import { getCurrentUser } from "@/lib/current-user";
 import { createRequestFingerprint } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -160,18 +161,24 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
-    email: credential.synthetic_email,
-    password: currentPasscode,
+  // No migration attempt here (unlike /api/auth/passcode's login route):
+  // rotatePasscodeCredential below is about to write a brand new derived
+  // password for the NEW passcode regardless of how this one verified, so
+  // migrating the current password first would just be overwritten a
+  // moment later.
+  const verification = await verifyPasscode(supabase, {
+    syntheticEmail: credential.synthetic_email,
+    organizationId: currentUser.organizationId,
+    passcode: currentPasscode,
   });
 
   await admin.from("passcode_login_attempts").insert({
     organization_id: currentUser.organizationId,
     fingerprint,
-    succeeded: !verifyError,
+    succeeded: verification.ok,
   });
 
-  if (verifyError) {
+  if (!verification.ok) {
     return NextResponse.json(
       { error: "Current passcode not recognized." },
       { status: 401 },

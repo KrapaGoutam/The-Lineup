@@ -123,6 +123,16 @@ async function run() {
       .digest("hex");
   }
 
+  // Mirrors src/lib/passcode-security.ts's createAuthPassword exactly
+  // (Feature 016, revised) -- the owner's Auth account is created
+  // pre-migrated to the derived-password scheme like every other new
+  // account now is, not with the raw passcode as its Auth password.
+  function createAuthPassword(organizationId, code) {
+    return createHmac("sha256", pepper)
+      .update(`authpw:${organizationId}:${code}`)
+      .digest("hex");
+  }
+
   const admin = createClient(supabaseUrl, secretKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -157,11 +167,21 @@ async function run() {
     return;
   }
 
+  // createAuthPassword needs the organization's id, which doesn't exist
+  // until after the organization row is inserted below -- but that insert
+  // needs a real user id for created_by first. Created with a throwaway
+  // random password to break that chicken-and-egg ordering, then
+  // immediately overwritten with the real derived password the moment
+  // org.id exists (a few lines down), before this script ever hands the
+  // passcode to anyone. If anything fails between here and that
+  // overwrite, rollbackUser() deletes the account outright -- the
+  // throwaway password is never a value anyone could sign in with on
+  // purpose, since it's discarded with the rest of this closure.
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
   const { data: created, error: createUserError } =
     await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password: passcode,
+      password: randomUUID(),
       email_confirm: true,
     });
   if (createUserError || !created.user) {
@@ -186,6 +206,17 @@ async function run() {
   if (orgError || !org) {
     await rollbackUser();
     fail(`Could not create the organization: ${orgError?.message}`);
+  }
+
+  const { error: authPasswordError } = await admin.auth.admin.updateUserById(
+    userId,
+    { password: createAuthPassword(org.id, passcode) },
+  );
+  if (authPasswordError) {
+    await rollbackUser();
+    fail(
+      `Could not set the owner's real passcode: ${authPasswordError.message}`,
+    );
   }
 
   const { error: locationError } = await admin.from("locations").insert({

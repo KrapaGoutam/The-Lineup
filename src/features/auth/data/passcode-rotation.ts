@@ -1,6 +1,9 @@
 import "server-only";
 
-import { createPasscodeLocator } from "@/lib/passcode-security";
+import {
+  createAuthPassword,
+  createPasscodeLocator,
+} from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -88,9 +91,14 @@ export async function rotatePasscodeCredential(
     };
   }
 
+  // Sent as the derived password (createAuthPassword), never the raw
+  // passcode -- see that function's comment for why: a raw 4-digit value
+  // is flatly rejected by updateUserById's password-strength check
+  // (confirmed against the hosted project), and reusing the locator here
+  // instead would make a leaked locator also a working Auth password.
   const { error: authError } = await admin.auth.admin.updateUserById(
     input.profileId,
-    { password: input.newPasscode },
+    { password: createAuthPassword(input.organizationId, input.newPasscode) },
   );
   if (!authError) {
     return { ok: true };
