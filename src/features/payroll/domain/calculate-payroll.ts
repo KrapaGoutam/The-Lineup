@@ -107,3 +107,77 @@ export function computeBalanceCents(input: {
 export function isFullyPaid(balanceCents: number): boolean {
   return balanceCents <= 0;
 }
+
+export type PayrollLedgerLine = {
+  date: string;
+  description: string;
+  /** Signed effect on the running balance this line produces: positive
+   * increases what's owed, negative reduces it. */
+  amountCents: number;
+  /** The balance immediately after this line is applied. */
+  runningBalanceCents: number;
+};
+
+/**
+ * Feature 020 Phase 5. The one place a printable/exportable statement's
+ * line items and running balance are built -- shared by both the print
+ * view and the CSV export, so the two formats can never show different
+ * numbers for the same period. Confirmed payments and adjustments only
+ * (never drafts -- a statement is a finalized document, matching the
+ * same confirmed-only rule the balance itself already follows), merged
+ * into one chronological ledger:
+ *
+ * - "Payroll generated" is always the first line, for `grossCents` --
+ *   the frozen snapshot itself, never recomputed here.
+ * - Every confirmed payment is a line reducing the balance by its
+ *   `amountCents`.
+ * - Every adjustment is a line changing the balance by the OPPOSITE of
+ *   its own signed `deltaCents` -- consistent with `computeBalanceCents`
+ *   (`balance = gross - payments - adjustments`), so a negative
+ *   adjustment (the spec's own "$400 should have been $40" example)
+ *   correctly shows as a line that INCREASES the running balance.
+ *
+ * Everything here is integer cents; the running total is a plain
+ * running sum of already-integer amounts, so it carries no rounding
+ * risk of its own -- the only rounding in the whole payroll pipeline
+ * remains `computeGrossCents`'s single `Math.round`, upstream of this.
+ */
+export function buildPayrollLedgerLines(input: {
+  grossCents: number;
+  periodMonth: string;
+  confirmedPayments: Array<{
+    paymentDate: string;
+    amountCents: number;
+    comment: string | null;
+  }>;
+  adjustments: Array<{ createdAt: string; deltaCents: number; reason: string }>;
+}): PayrollLedgerLine[] {
+  const generatedLine = {
+    date: input.periodMonth,
+    description: "Payroll generated",
+    effectCents: input.grossCents,
+  };
+  const otherLines = [
+    ...input.confirmedPayments.map((payment) => ({
+      date: payment.paymentDate,
+      description: payment.comment ? `Payment — ${payment.comment}` : "Payment",
+      effectCents: -payment.amountCents,
+    })),
+    ...input.adjustments.map((adjustment) => ({
+      date: adjustment.createdAt.slice(0, 10),
+      description: `Adjustment — ${adjustment.reason}`,
+      effectCents: -adjustment.deltaCents,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  let runningBalanceCents = 0;
+  return [generatedLine, ...otherLines].map((line) => {
+    runningBalanceCents += line.effectCents;
+    return {
+      date: line.date,
+      description: line.description,
+      amountCents: line.effectCents,
+      runningBalanceCents,
+    };
+  });
+}

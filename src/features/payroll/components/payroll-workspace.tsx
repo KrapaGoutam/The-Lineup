@@ -34,6 +34,7 @@ import type {
   PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
 import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
+import { buildPayrollLedgerLines } from "@/features/payroll/domain/calculate-payroll";
 import { dollarsToCents } from "@/features/tips/domain/calculate-tip-splits";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
@@ -64,27 +65,31 @@ function Header() {
     <div>
       <div className="mb-2 flex items-center gap-2">
         <Badge tone="accent">Module 6</Badge>
-        <Badge tone="warning">Phase 3 of 5</Badge>
+        <Badge tone="warning">Phase 5 of 5</Badge>
       </div>
       <h1 className="text-3xl font-semibold tracking-[-0.04em]">Payroll</h1>
       <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-        Generated payroll, recorded payments, and manual adjustments, all backed
-        by real Supabase tables. A dashboard and export arrive in later phases.
+        Generated payroll, recorded payments, manual adjustments, a dashboard,
+        and printable/downloadable statements — all backed by real Supabase
+        tables.
       </p>
     </div>
   );
 }
 
 /**
- * Feature 020 Phase 3. Real mode only -- demo mode parity is still
+ * Feature 020, Phases 2-5. Real mode only -- demo mode parity is still
  * deliberately deferred (see Phase 2's build notes; unchanged reasoning).
  * A privileged viewer (owner/manager/assistant manager) manages rates,
- * generation, payments, and adjustments for everyone; a regular member
- * sees a read-only view of their own periods and their own confirmed
- * payments/adjustments only -- exactly the same three-way access model
+ * generation, payments, and adjustments for everyone, and can print/export
+ * any period's statement; a regular member sees a read-only view of their
+ * own periods and their own confirmed payments/adjustments only, and can
+ * print/export only their own -- exactly the same three-way access model
  * (all/self/unlinked) Feature 019 established for Attendance, resolved
  * server-side by `getPayrollAccessAction`, never guessed from `user.role`
- * client-side.
+ * client-side. Export reuses the identical `getPayrollLedgerAction` fetch
+ * already scoped for the interactive ledger view -- there is no separate,
+ * differently-authorized export action to audit.
  */
 export function PayrollWorkspace({
   restaurantSlug,
@@ -157,12 +162,17 @@ export function PayrollWorkspace({
     );
   }
   if (access.scope === "self") {
+    const personLabel = access.person
+      ? (buildDisplayLabels([access.person]).get(access.person.id) ??
+        access.person.fullName)
+      : "Your attendance";
     return (
       <div className="space-y-4">
         <Header />
         <SelfPayrollView
           restaurantSlug={restaurantSlug}
           todayLocalDate={todayLocalDate}
+          personLabel={personLabel}
         />
       </div>
     );
@@ -300,6 +310,17 @@ function PrivilegedPayrollView({
           periodId={selectedPeriodId}
           readOnly={false}
           onChanged={reloadEverything}
+          personLabel={(() => {
+            const selectedPeriod = periods?.find(
+              (period) => period.id === selectedPeriodId,
+            );
+            const label = selectedPeriod
+              ? buildDisplayLabels(rateOptions?.users ?? []).get(
+                  selectedPeriod.neonUserId,
+                )
+              : undefined;
+            return label ?? "This person";
+          })()}
         />
       ) : null}
     </>
@@ -309,9 +330,11 @@ function PrivilegedPayrollView({
 function SelfPayrollView({
   restaurantSlug,
   todayLocalDate,
+  personLabel,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
+  personLabel: string;
 }) {
   const [periods, setPeriods] = useState<PayrollPeriod[] | null>(null);
   const [periodsError, setPeriodsError] = useState<string | null>(null);
@@ -397,6 +420,7 @@ function SelfPayrollView({
           periodId={selectedPeriodId}
           readOnly
           onChanged={() => setReloadKey((key) => key + 1)}
+          personLabel={personLabel}
         />
       ) : null}
     </div>
@@ -1042,6 +1066,40 @@ function formatPaymentDate(isoDate: string): string {
   });
 }
 
+// Feature 020 Phase 5. Quotes a CSV field only when it needs it (contains
+// a comma, quote, or newline), doubling any internal quotes -- the
+// standard RFC 4180 escaping rule, hand-rolled here rather than pulling
+// in a CSV library for one function's worth of logic.
+function csvField(value: string | number): string {
+  const text = String(value);
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+// No new dependency for the download itself either -- a Blob and a
+// throwaway anchor click, the same technique this codebase already
+// avoids adding a library for anywhere else it needs a client-side file
+// save.
+function downloadCsv(filename: string, csvContent: string) {
+  // A leading BOM so Excel opens the UTF-8 file with special characters
+  // (an em dash in "Payment — comment", say) displaying correctly instead
+  // of mojibake -- CSV has no built-in encoding declaration, and Excel
+  // specifically defaults to the system codepage without one.
+  const blob = new Blob(["﻿" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Feature 020 Phase 3. The ledger for one period -- balance, every
  * payment, every adjustment -- and, for a privileged (non-readOnly)
@@ -1057,11 +1115,13 @@ function PeriodLedgerPanel({
   periodId,
   readOnly,
   onChanged,
+  personLabel,
 }: {
   restaurantSlug: string;
   periodId: number;
   readOnly: boolean;
   onChanged: () => void;
+  personLabel: string;
 }) {
   const [ledger, setLedger] = useState<PayrollLedger | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1106,16 +1166,80 @@ function PeriodLedgerPanel({
     );
   }
 
-  const { period, payments, adjustments, balance } = ledger;
+  const { period, payments, adjustments, balance, organizationName } = ledger;
+
+  // Confirmed only, matching the balance figure itself -- a printed or
+  // exported statement is a finalized document, never showing money that
+  // could still change. The exact same line list feeds both the print
+  // view and the CSV, so the two formats can never disagree.
+  const confirmedPayments = payments.filter(
+    (payment) => payment.status === "confirmed",
+  );
+  const ledgerLines = buildPayrollLedgerLines({
+    grossCents: period.grossCents,
+    periodMonth: period.periodMonth,
+    confirmedPayments: confirmedPayments.map((payment) => ({
+      paymentDate: payment.paymentDate,
+      amountCents: payment.amountCents,
+      comment: payment.comment,
+    })),
+    adjustments: adjustments.map((adjustment) => ({
+      createdAt: adjustment.createdAt,
+      deltaCents: adjustment.deltaCents,
+      reason: adjustment.reason,
+    })),
+  });
+  const printAreaId = `payroll-print-statement-${period.id}`;
+
+  function downloadStatementCsv() {
+    const rows: (string | number)[][] = [
+      [organizationName],
+      ["Payroll Statement"],
+      [personLabel],
+      [monthLabel(period.periodMonth)],
+      [],
+      ["Date", "Description", "Amount", "Running balance"],
+      ...ledgerLines.map((line) => [
+        line.date,
+        line.description,
+        (line.amountCents / 100).toFixed(2),
+        (line.runningBalanceCents / 100).toFixed(2),
+      ]),
+      [],
+      ["Final balance", "", "", (balance.balanceCents / 100).toFixed(2)],
+      ...(balance.fullyPaid ? [["Status", "Paid"]] : []),
+    ];
+    const csv = rows.map((row) => row.map(csvField).join(",")).join("\r\n");
+    const safeName = personLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    downloadCsv(`payroll-${safeName}-${period.periodMonth}.csv`, csv);
+  }
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold">
           {monthLabel(period.periodMonth)} ledger
         </h2>
+        <div className="flex gap-1.5 print:hidden">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => window.print()}
+          >
+            Print statement
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={downloadStatementCsv}
+          >
+            Download CSV
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-0">
+      <CardContent className="space-y-4 pt-0 print:hidden">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <BalanceTile label="Generated" value={money(balance.grossCents)} />
           <BalanceTile
@@ -1226,6 +1350,61 @@ function PeriodLedgerPanel({
           </div>
         )}
       </CardContent>
+
+      {/* Printed/exported statement -- hidden on screen, shown only when
+          printing. The isolation rule below hides everything else on the
+          page (including the app's own header/nav, which this component
+          has no other way to reach) so "Print statement" produces just
+          this document, not a screenshot of the whole tab. Built from the
+          exact same `ledgerLines` the CSV download uses, so the two
+          formats can never show different numbers for the same period. */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #${printAreaId}, #${printAreaId} * { visibility: visible; }
+          #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
+        }
+      `}</style>
+      <div id={printAreaId} className="hidden print:block">
+        <h1 className="text-2xl font-bold">{organizationName}</h1>
+        <h2 className="mt-1 text-lg font-semibold">Payroll Statement</h2>
+        <p className="mt-1 text-sm">
+          {personLabel} — {monthLabel(period.periodMonth)}
+        </p>
+        <table className="mt-6 w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-black">
+              <th className="py-1 pr-4 font-medium">Date</th>
+              <th className="py-1 pr-4 font-medium">Description</th>
+              <th className="py-1 pr-4 text-right font-medium">Amount</th>
+              <th className="py-1 text-right font-medium">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ledgerLines.map((line, index) => (
+              <tr key={index} className="border-b border-gray-300">
+                <td className="py-1 pr-4">{line.date}</td>
+                <td className="py-1 pr-4">{line.description}</td>
+                <td className="py-1 pr-4 text-right font-mono">
+                  {line.amountCents < 0 ? "−" : ""}
+                  {money(Math.abs(line.amountCents))}
+                </td>
+                <td className="py-1 text-right font-mono">
+                  {money(line.runningBalanceCents)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-4 text-right text-base font-semibold">
+          Final balance: {money(balance.balanceCents)}
+          {balance.fullyPaid ? " — Paid" : ""}
+        </p>
+        <p className="text-muted-foreground mt-10 text-xs">
+          Printed {new Date().toLocaleDateString()} · ServiceFlow payroll
+          statement · confirmed payments and adjustments only
+        </p>
+      </div>
     </Card>
   );
 }

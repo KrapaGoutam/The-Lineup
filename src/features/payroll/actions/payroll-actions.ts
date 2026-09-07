@@ -23,6 +23,7 @@ import {
   deleteDraftPayment,
   editDraftPayment,
   generatePayrollPeriod,
+  getOrganizationName,
   getPaymentById,
   getPayrollBalance,
   getPayrollDefaultRateCents,
@@ -319,6 +320,8 @@ export type PayrollLedger = {
   payments: PayrollPayment[];
   adjustments: PayrollAdjustment[];
   balance: PayrollBalance;
+  /** Feature 020 Phase 5: for the printed/exported statement header. */
+  organizationName: string;
 };
 
 /**
@@ -363,15 +366,25 @@ export async function getPayrollLedgerAction(input: {
     return { ok: false, error: "That payroll period could not be found." };
   }
 
-  const [paymentsResult, adjustmentsResult, balanceResult] = await Promise.all([
+  const [
+    paymentsResult,
+    adjustmentsResult,
+    balanceResult,
+    organizationNameResult,
+  ] = await Promise.all([
     listPaymentsForPeriod(supabase, { periodId: period.id }),
     listAdjustmentsForPeriod(supabase, { periodId: period.id }),
     getPayrollBalance(supabase, { period }),
+    getOrganizationName(supabase, {
+      organizationId: resolved.user.organizationId,
+    }),
   ]);
   if (!paymentsResult.ok) return { ok: false, error: paymentsResult.error };
   if (!adjustmentsResult.ok)
     return { ok: false, error: adjustmentsResult.error };
   if (!balanceResult.ok) return { ok: false, error: balanceResult.error };
+  if (!organizationNameResult.ok)
+    return { ok: false, error: organizationNameResult.error };
 
   return {
     ok: true,
@@ -380,6 +393,7 @@ export async function getPayrollLedgerAction(input: {
       payments: paymentsResult.data,
       adjustments: adjustmentsResult.data,
       balance: balanceResult.data,
+      organizationName: organizationNameResult.data,
     },
   };
 }
