@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(39);
+select plan(46);
 
 -- Table/RLS/grant shape ------------------------------------------------
 
@@ -34,8 +34,8 @@ select ok(
   not has_table_privilege('authenticated', 'public.payroll_settings', 'DELETE')
   and has_table_privilege('authenticated', 'public.payroll_rates', 'DELETE')
   and not has_table_privilege('authenticated', 'public.payroll_periods', 'DELETE')
-  and not has_table_privilege('authenticated', 'public.payroll_payments', 'DELETE'),
-  'delete is grantable only on payroll_rates -- the other three are financial history'
+  and has_table_privilege('authenticated', 'public.payroll_payments', 'DELETE'),
+  'delete is grantable on payroll_rates (config) and payroll_payments (draft-only via RLS); settings and periods never delete'
 );
 
 -- No coupling to Tip Split, checked at the database level, not just by
@@ -79,6 +79,7 @@ values
 
 insert into public.memberships (organization_id, profile_id, roles, active)
 values
+  ('00000000-0000-0000-0000-000000020101', '00000000-0000-0000-0000-000000020001', array['owner']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000020101', '00000000-0000-0000-0000-000000020002', array['general_manager']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000020101', '00000000-0000-0000-0000-000000020003', array['server']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000020101', '00000000-0000-0000-0000-000000020004', array['server']::public.app_role[], true),
@@ -279,6 +280,92 @@ select lives_ok(
     where organization_id = '00000000-0000-0000-0000-000000020101'
   $$,
   'the trigger allows touching an unprotected column on a confirmed payment'
+);
+
+-- The un-confirm loophole, closed: flipping status back to 'draft' would
+-- otherwise let a second update slip an amount/date/comment edit past the
+-- guard above (old.status would read 'draft' by then). No privileged role
+-- -- owner, manager, or assistant manager -- may move a confirmed payment
+-- out of 'confirmed' at all.
+select throws_ok(
+  $$
+    update public.payroll_payments
+    set status = 'draft'
+    where organization_id = '00000000-0000-0000-0000-000000020101'
+  $$,
+  'P0001',
+  'Cannot un-confirm a confirmed payment.',
+  'the trigger rejects moving a confirmed payment back to draft, closing the two-step edit bypass'
+);
+
+-- Confirmed payments are undeletable -- checked twice, at both layers.
+-- First, the normal path: even the organization's OWNER (not just a
+-- manager) deleting through RLS affects zero rows, because the delete
+-- policy's `using` clause requires status = 'draft'.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020001', true);
+delete from public.payroll_payments
+where organization_id = '00000000-0000-0000-0000-000000020101'
+  and amount_cents = 40000;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020002', true);
+select is(
+  (select count(*) from public.payroll_payments
+   where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 40000),
+  1::bigint,
+  'even the owner deleting a confirmed payment through the normal RLS path affects zero rows'
+);
+
+-- Second, independent of RLS entirely: the BEFORE DELETE trigger is its
+-- own backstop, not solely reliant on the delete policy's `using` clause
+-- staying correctly scoped forever. Proven by bypassing RLS altogether
+-- (dropping to the connection's original, RLS-exempt role) and attempting
+-- the same delete directly -- the trigger still raises.
+reset role;
+select throws_ok(
+  $$
+    delete from public.payroll_payments
+    where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 40000
+  $$,
+  'P0001',
+  'Cannot delete a confirmed payment; record a correction instead.',
+  'the delete trigger blocks removing a confirmed payment even with RLS bypassed entirely'
+);
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020002', true);
+
+-- Drafts: deletable by a privileged role, not by a regular member.
+select lives_ok(
+  $$
+    insert into public.payroll_payments (organization_id, payroll_period_id, amount_cents, payment_date, created_by)
+    select '00000000-0000-0000-0000-000000020101', id, 500, '2026-09-05', '00000000-0000-0000-0000-000000020002'
+    from public.payroll_periods
+    where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201
+  $$,
+  'seed a second draft payment to exercise delete'
+);
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020003', true);
+delete from public.payroll_payments
+where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 500;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020002', true);
+select is(
+  (select count(*) from public.payroll_payments
+   where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 500),
+  1::bigint,
+  'a server''s delete of a draft payment affects zero rows'
+);
+
+select lives_ok(
+  $$
+    delete from public.payroll_payments
+    where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 500
+  $$,
+  'a manager can delete a draft payment'
+);
+select is(
+  (select count(*) from public.payroll_payments
+   where organization_id = '00000000-0000-0000-0000-000000020101' and amount_cents = 500),
+  0::bigint,
+  'the draft payment is actually gone after the manager''s delete'
 );
 
 -- Rate changes never touch an already-generated period -------------------

@@ -135,14 +135,19 @@ Both new indexes on `payroll_payments` exist because Postgres never indexes a fo
 
 ## Confirm/draft semantics — exactly what "confirm" locks
 
-- **Draft** (the default on creation): amount, date, and comment are all still editable by a privileged member. Counts toward balance immediately — the money already left hand-to-hand when it was recorded; draft only means "not yet reconciled/finalized," not "didn't happen."
-- **Confirm**: sets `status = 'confirmed'`, `confirmed_at`, `confirmed_by`. From that instant, **amount, date, and comment become immutable** — enforced by a database trigger (below), not merely disabled buttons in the UI. Confirming is also the visibility gate for the regular employee's own view: a payment only ever appears to the person it belongs to once it's confirmed, matching your instruction verbatim ("never draft entries").
-- **Correcting a confirmed payment**: never an update to the confirmed row. A privileged member records a new payment with `reverses_payment_id` pointing at the original (negative-effect correction handled as a same-signed new row with an explicit reversal reference, not a negative `amount_cents` — the check constraint requires `amount_cents > 0`, so a reversal is modeled as _its own_ draft/confirm-able entry whose comment and `reverses_payment_id` make the correction traceable, and the balance math naturally accounts for it once confirmed). This preserves the same never-mutate-financial-history discipline the rest of this spec relies on.
+- **Draft** (the default on creation): amount, date, comment, and `payroll_period_id` are all still editable by a privileged member, and the row is fully **deletable** by one too (owner/manager/assistant manager) — a payment recorded against the wrong person entirely needs to be removable, not just editable, since editing which person it belongs to would corrupt the audit trail worse than deleting a row that was never confirmed. Counts toward balance immediately — the money already left hand-to-hand when it was recorded; draft only means "not yet reconciled/finalized," not "didn't happen."
+- **Confirm**: sets `status = 'confirmed'`, `confirmed_at`, `confirmed_by`. From that instant, **amount, date, comment, and status itself all become immutable, and the row becomes undeletable** — enforced by database triggers (below), not merely disabled buttons in the UI. Confirming is also the visibility gate for the regular employee's own view: a payment only ever appears to the person it belongs to once it's confirmed, matching your instruction verbatim ("never draft entries").
+- **Correcting a confirmed payment**: never an update to the confirmed row, and never a delete. A privileged member records a new payment with `reverses_payment_id` pointing at the original (negative-effect correction handled as a same-signed new row with an explicit reversal reference, not a negative `amount_cents` — the check constraint requires `amount_cents > 0`, so a reversal is modeled as _its own_ draft/confirm-able entry whose comment and `reverses_payment_id` make the correction traceable, and the balance math naturally accounts for it once confirmed). This preserves the same never-mutate-financial-history discipline the rest of this spec relies on. (This is distinct from `payroll_adjustments`, below — a reversal payment corrects a wrong _payment_; an adjustment corrects a wrong _generated snapshot_ when regeneration is no longer possible. Different problem, different mechanism.)
+
+**A real bypass was found and closed during schema review, before Phase 2**: the first draft of the trigger only guarded `amount_cents`/`payment_date`/`comment` when `old.status = 'confirmed'` _at the time of that specific update_ — it never guarded `status` itself. Any privileged role could flip `status` back to `'draft'` (an update the original guard didn't touch, so it passed) and then edit the now-"unconfirmed" row freely in a second statement, silently rewriting a payment that was supposed to be locked — reachable through the normal app connection, no elevated database access required. Fixed by also forbidding `status` from ever changing away from `'confirmed'` once set: there is no un-confirm path, for any role, ever. A second trigger independently blocks _deleting_ a confirmed row too, as defense in depth beyond the delete policy's own `using` clause (verified directly: even with RLS bypassed entirely, the trigger alone still rejects it — see `supabase/tests/database/0010_payroll_schema_rls.test.sql`).
 
 ```sql
 create or replace function private.forbid_confirmed_payment_edit()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin
+  if old.status = 'confirmed' and new.status is distinct from old.status then
+    raise exception 'Cannot un-confirm a confirmed payment.';
+  end if;
   if old.status = 'confirmed'
      and (new.amount_cents is distinct from old.amount_cents
           or new.payment_date is distinct from old.payment_date
@@ -156,7 +161,23 @@ $$;
 create trigger forbid_confirmed_payment_edit
   before update on public.payroll_payments
   for each row execute function private.forbid_confirmed_payment_edit();
+
+create or replace function private.forbid_confirmed_payment_delete()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if old.status = 'confirmed' then
+    raise exception 'Cannot delete a confirmed payment; record a correction instead.';
+  end if;
+  return old;
+end;
+$$;
+
+create trigger forbid_confirmed_payment_delete
+  before delete on public.payroll_payments
+  for each row execute function private.forbid_confirmed_payment_delete();
 ```
+
+**No role can bypass either trigger through the app.** Triggers fire for every `update`/`delete` statement against the table regardless of which role issued it — unlike RLS, which only governs _whether a row is targeted at all_, a trigger fires once a row is targeted and cannot be skipped by having more privilege. `service_role` (used narrowly elsewhere in this app for Supabase Auth Admin calls, never for payroll writes) bypasses RLS but **not** triggers — RLS bypass and trigger execution are unrelated mechanisms in Postgres. The only way to bypass either trigger is direct Postgres superuser/table-owner access executing `alter table ... disable trigger ...` or setting `session_replication_role = 'replica'` — a database-administration action entirely outside this app's authorization model, not a role reachable by owner, manager, assistant manager, or server through the application.
 
 ## Data and authorization — real RLS
 
@@ -253,13 +274,27 @@ create policy "payroll_payments_update_privileged" on public.payroll_payments
   for update to authenticated
   using ((select private.has_org_role(organization_id, array['owner','general_manager','shift_manager']::public.app_role[])))
   with check ((select private.has_org_role(organization_id, array['owner','general_manager','shift_manager']::public.app_role[])));
+
+-- Privileged AND draft-only: a wrong-person draft is fully removable by
+-- owner/manager/assistant manager (a server, per the select-only policy
+-- above, has no write grant on this table at all). A confirmed payment
+-- never matches `status = 'draft'`, so this policy alone already excludes
+-- it from any DELETE's target set -- and the forbid_confirmed_payment_delete
+-- trigger above is a second, independent backstop that doesn't rely on this
+-- clause staying correctly scoped forever.
+create policy "payroll_payments_delete_privileged_draft" on public.payroll_payments
+  for delete to authenticated
+  using (
+    status = 'draft'
+    and (select private.has_org_role(organization_id, array['owner','general_manager','shift_manager']::public.app_role[]))
+  );
 ```
 
-No `delete` policy on `payroll_settings`, `payroll_periods`, or `payroll_payments` — every row on those three tables is financial history and is only ever superseded (a payment is corrected via a reversal row, never removed; a period is regenerated, in place, only pre-payment). `payroll_rates` is the sole exception, as shown above: an override is current configuration, not history, and deleting one has no effect on any already-generated period's frozen snapshot.
+No `delete` policy on `payroll_settings` or `payroll_periods` — every row on those two tables is either configuration-of-record or a financial snapshot, and is only ever superseded, never removed (a period is regenerated, in place, only pre-payment). `payroll_rates` allows delete because an override is current configuration, not history — deleting one has no effect on any already-generated period's frozen snapshot. `payroll_payments` allows delete, but **only** for draft rows, and only for the same three privileged roles as every other write — a confirmed payment is permanently undeletable, enforced twice (the policy's `status = 'draft'` clause, and independently by `forbid_confirmed_payment_delete`).
 
-**Grants follow the same least-privilege discipline as everywhere else**: `revoke all ... from anon, authenticated` first, then only the specific verbs each table's policies actually support (`select, insert, update` for `payroll_settings`/`payroll_periods`/`payroll_payments`; `select, insert, update, delete` for `payroll_rates`) — RLS still governs which _rows_, this only governs which _operations_ are possible at all. Every identity sequence gets `usage` only, not `select` — `nextval()` doesn't need read access to the sequence's own state, the same fix Feature 019's hardening pass made after finding the broader grant was unnecessary.
+**Grants follow the same least-privilege discipline as everywhere else**: `revoke all ... from anon, authenticated` first, then only the specific verbs each table's policies actually support (`select, insert, update` for `payroll_settings`/`payroll_periods`; `select, insert, update, delete` for `payroll_rates` and `payroll_payments`) — RLS still governs which _rows_, this only governs which _operations_ are possible at all. Every identity sequence gets `usage` only, not `select` — `nextval()` doesn't need read access to the sequence's own state, the same fix Feature 019's hardening pass made after finding the broader grant was unnecessary.
 
-**Audit events** — one row per: `payroll_rate_changed` (before/after `rate_cents`), `payroll_period_generated`, `payroll_period_regenerated` (before/after `gross_cents`), `payroll_period_locked`, `payroll_payment_recorded`, `payroll_payment_confirmed`, `payroll_payment_edited` (draft-only edits), `payroll_payment_reversed`.
+**Audit events** — one row per: `payroll_rate_changed` (before/after `rate_cents`), `payroll_period_generated`, `payroll_period_regenerated` (before/after `gross_cents`), `payroll_period_locked`, `payroll_payment_recorded`, `payroll_payment_confirmed`, `payroll_payment_edited` (draft-only edits), `payroll_payment_deleted` (draft-only), `payroll_payment_reversed`.
 
 ## Views
 
@@ -326,6 +361,7 @@ Five phases, one per session, full validation (`npm run check`, `npm test`, `npm
 - **Risk**: no overtime-rate support in this version — flat rate × hours only. Flagged, not built, per your instruction to keep scope to what's specified.
 - **Risk**: true `.xlsx` export (vs. CSV) is a real new dependency decision, deliberately left open below rather than assumed.
 - **Decision**: payroll and tips are fully independent systems, confirmed above — no shared tables, no shared functions, no derived figures in either direction.
+- **Decision, found during schema review before Phase 2**: the first draft of the confirmed-payment trigger didn't guard `status` itself, leaving a two-statement bypass (un-confirm, then edit) reachable by any privileged role with no elevated access. Closed by forbidding `status` from ever leaving `'confirmed'`. `payroll_payments` also gained a delete policy scoped to `status = 'draft'` only, so a wrong-person draft is removable without corrupting the audit trail by editing which person it belongs to — a confirmed row stays permanently undeletable, backed by both the policy and an independent trigger.
 - **Decision**: the post-payment correction mechanism is a manual `payroll_adjustments` line item (delta + mandatory reason), never an edit to a generated snapshot or a payment — designed now, built in a later phase, so Phase 2's generation/regeneration logic can be written against a settled design instead of guessing at it.
 
 ## Open questions for your approval
