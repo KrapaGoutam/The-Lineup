@@ -97,7 +97,8 @@ The visible allocation board is the operational order. The next round does not s
 
 ## Out of scope for MVP
 
-- Payroll, clock-in/out, POS settlement, reservations, and waitlist marketplace integrations — **except** read-only display of already-existing attendance data from a separate external system (Feature 018), approved as a narrow, explicit carve-out: no write path into it, no clock-in/out capability built here, and no computation on the hours (payroll, overtime, compliance) performed by this app
+- Clock-in/out, POS settlement, reservations, and waitlist marketplace integrations — **except** read-only display of already-existing attendance data from a separate external system (Feature 018), approved as a narrow, explicit carve-out: no write path into it, no clock-in/out capability built here.
+- **Payroll is no longer out of scope — a deliberate MVP expansion (Feature 020), not a second narrow carve-out.** Unlike Feature 018's read-only display exception, payroll computes money from attendance hours and persists financial records: monthly pay generation (hours × rate, snapshotted), payments against a person's month, and a running balance — entirely in Supabase, with its own tables, RLS, and audit trail (never in Neon, never client-only state). Tax withholding, deductions, and other payroll-compliance computation beyond gross hours × rate remain out of scope, as does any real money movement (this system records that a payment happened outside it; it never sends money) and multi-currency. See `docs/features/020-payroll.md`.
 - AI-generated schedules without manager approval
 - Native iOS/Android apps
 - Offline conflict resolution across multiple host devices

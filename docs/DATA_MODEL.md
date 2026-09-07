@@ -91,17 +91,18 @@ Default effective workload:
 
 ## RLS matrix
 
-| Data                  | Owner/GM                | Shift manager           | Host                    | Server                      |
-| --------------------- | ----------------------- | ----------------------- | ----------------------- | --------------------------- |
-| Organization settings | Manage                  | Read assigned location  | No                      | No                          |
-| Staff roster draft    | Manage                  | Manage assigned shifts  | Read today              | Own/read published          |
-| Published schedule    | Manage                  | Read                    | Read                    | Read assigned location      |
-| Floor configuration   | Manage                  | Manage                  | Read                    | Read own section            |
-| Live service          | Manage                  | Manage                  | Operate                 | Read own status             |
-| Audit events          | Read                    | Read assigned location  | No                      | No                          |
-| Table allocation rows | Manage (+ reorder/lock) | Manage (+ reorder/lock) | Write any active column | Write any active column     |
-| Tip inputs/totals     | Manage                  | Manage                  | No                      | Own allocation only         |
-| Registrations         | Manage                  | Read                    | No                      | Self-serve via server route |
+| Data                  | Owner/GM                | Shift manager           | Host                    | Server                                        |
+| --------------------- | ----------------------- | ----------------------- | ----------------------- | --------------------------------------------- |
+| Organization settings | Manage                  | Read assigned location  | No                      | No                                            |
+| Staff roster draft    | Manage                  | Manage assigned shifts  | Read today              | Own/read published                            |
+| Published schedule    | Manage                  | Read                    | Read                    | Read assigned location                        |
+| Floor configuration   | Manage                  | Manage                  | Read                    | Read own section                              |
+| Live service          | Manage                  | Manage                  | Operate                 | Read own status                               |
+| Audit events          | Read                    | Read assigned location  | No                      | No                                            |
+| Table allocation rows | Manage (+ reorder/lock) | Manage (+ reorder/lock) | Write any active column | Write any active column                       |
+| Tip inputs/totals     | Manage                  | Manage                  | No                      | Own allocation only                           |
+| Registrations         | Manage                  | Read                    | No                      | Self-serve via server route                   |
+| Payroll (Feature 020) | Manage everyone         | Manage everyone         | No                      | Read own period + own confirmed payments only |
 
 Policies combine `to authenticated` with an indexed membership/location predicate. `to authenticated` by itself is not authorization. Update policies include both `using` and `with check`.
 
@@ -136,6 +137,10 @@ Migrations explicitly grant only the verbs required by the application roles. Gr
 `passcode_credentials` and `passcode_login_attempts` have no browser-role policies or grants. The service role is used only inside route handlers. Composite `(id, organization_id)` foreign keys prevent child rows from referencing a record in another tenant.
 
 **Neon attendance data (Feature 018) is outside this data model entirely.** `src/features/attendance/` reads a separate Neon Postgres database (`users`, `attendance`) over a read-only connection — nothing it reads is ever written into any table above, so none of this section's grants/RLS discussion applies to it; see `docs/SECURITY.md`'s Feature 018 subsection for the full account. One real limitation worth recording here: Neon's `users` table has no organization/tenant column, so this integration cannot be scoped per-organization the way every table above is — it assumes a single restaurant uses this deployment, the only reality that exists today.
+
+**`attendance_identity_links` (Feature 019) is the tenant-scoped bridge between the two identity systems.** Each row maps exactly one Supabase membership to exactly one positive Neon `users.id` within an organization. Unique constraints on `(organization_id, profile_id)` and `(organization_id, neon_user_id)` prevent multiple identities in either direction. Composite foreign keys from `(organization_id, profile_id)` and `(organization_id, linked_by)` to `memberships` prevent cross-tenant targets and actors; reverse-order indexes support self-policy and foreign-key lookups. The table stores no Neon attendance rows or credentials. Manager-tier members may manage links, while regular members may select only their own link through RLS.
+
+**Payroll (Feature 020, Phase 1 — schema and RLS only, no application code yet) persists entirely in Supabase, on its own four tables, independent of both Neon and Tip Split.** `payroll_settings` (one row per organization, the default hourly rate) and `payroll_rates` (per-person overrides, keyed by Neon `users.id`) hold only _current_ configuration — never consulted for a month already generated. `payroll_periods` is a frozen snapshot (`hours_snapshot`, `rate_cents_snapshot`, `gross_cents`), one row per `(organization_id, neon_user_id, period_month)`, written once at generation and never recomputed automatically. `payroll_payments` holds every payment recorded against a period; a database trigger (`private.forbid_confirmed_payment_edit`) makes a confirmed payment's `amount_cents`/`payment_date`/`comment` immutable, so a correction is always a new row (`reverses_payment_id`), never a mutation of financial history. Every actor column across all four tables is a composite `(organization_id, profile_id) → memberships` foreign key, and `reverses_payment_id` is a composite self-reference against `payroll_payments (organization_id, id)` — both applied from the start here, the direct lesson from `attendance_identity_links`' own post-apply hardening migration. A regular member's own scope is resolved by joining through `attendance_identity_links` (the same table Feature 019 built), never by a new identity mechanism — see `docs/SECURITY.md`'s Feature 020 subsection for the full policy walkthrough. Money is integer cents throughout (`amount_cents`, `*_cents` columns), matching `tip_intervals.amount_cents` — no dollar-typed or floating-point column anywhere in this schema, and no foreign key or function shared with any `tip_*` table in either direction.
 
 ## Generated types
 

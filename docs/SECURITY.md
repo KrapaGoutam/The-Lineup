@@ -147,6 +147,44 @@ Unlike every other feature in this document, `src/features/attendance/` never to
 
 **No tenant scoping is possible on the Neon side**: its `users` table has no organization column at all. This integration assumes a single restaurant/organization uses this deployment — the only reality that exists today. A second organization sharing this codebase would see the identical Neon data the first one does; there is no key to filter by. Named here and in `docs/DATA_MODEL.md`, not discovered later.
 
+### Attendance identity scope (Feature 019) — server-enforced access with an RLS-protected mapping
+
+Feature 019 makes Attendance visible to every active member but does not trust the browser to choose scope. Every attendance Server Action validates its input, resolves the authenticated member, and chooses one of three server-side scopes: all active Neon users for owner/manager/assistant-manager; one linked Neon id for a regular member; or no query at all for an unlinked member. A regular caller's submitted `userIds` are replaced with the stored link, so tampering cannot widen the Neon query or disclose whether another id exists.
+
+`attendance_identity_links` is the Supabase-side authorization bridge. RLS allows a regular member to select only their own link and allows owner/general-manager/shift-manager roles to manage links across the organization. Separate insert/update/delete policies pair with explicit grants. Tenant-composite membership foreign keys prevent either the target or `linked_by` actor from belonging to another organization, and the two organization-scoped unique constraints prevent one Lineup profile claiming multiple Neon identities or two profiles claiming the same Neon identity.
+
+Link, relink, and unlink operations write an immutable `audit_events` row. If the audit insert fails after the link mutation, the data layer performs a compensating restore/delete and reports failure rather than claiming an unaudited success. This is not a single database transaction, so a rollback failure is logged as an operational incident; the normal success path never omits attribution.
+
+### Payroll (Feature 020) — real Supabase persistence, real RLS, no coupling to Tip Split
+
+Phase 1 only: four tables (`payroll_settings`, `payroll_rates`, `payroll_periods`, `payroll_payments`), no application code yet. Recorded here now because the schema and its RLS are the actual security boundary later phases build on, not something to retrofit.
+
+**Independent of Tip Split, structurally, not just by convention.** No payroll table or policy references `tip_pools`, `tip_intervals`, `tip_interval_participants`, `tip_allocations`, or `recalculate_tip_pool` — verified directly at the database level in `supabase/tests/database/0010_payroll_schema_rls.test.sql` (a query over `pg_constraint` asserting zero foreign keys from any `payroll_*` table to any `tip_*` table), not merely asserted in prose. Tips split a shared pool per shift; payroll pays wages from a month of attendance hours × a rate — different money, different timelines, computed from different inputs, and nothing in this schema lets one influence the other.
+
+**Walking through the policy that stops a regular member reading someone else's payments** — `payroll_payments_select_self`:
+
+```sql
+create policy "payroll_payments_select_self" on public.payroll_payments
+  for select to authenticated
+  using (
+    status = 'confirmed'
+    and payroll_period_id in (
+      select p.id from public.payroll_periods p
+      join public.attendance_identity_links l
+        on l.organization_id = p.organization_id and l.neon_user_id = p.neon_user_id
+      where l.profile_id = (select auth.uid())
+    )
+  );
+```
+
+A forged query for another person's `payroll_payments` rows — any `select`, with any `where` clause, from any client — is rewritten by Postgres to also satisfy this `using` clause before a single row is returned, regardless of what the query itself asked for. Reading it right to left: `attendance_identity_links` is filtered to the one row (if any) where `profile_id = auth.uid()` — the caller's own linked Neon identity, never anyone else's, since that table's own RLS (Feature 019) enforces the same restriction independently one layer down. That's joined to `payroll_periods` on `(organization_id, neon_user_id)`, narrowing to the periods that actually belong to the caller's own linked person within their own organization — a period belonging to a different Neon person, or to a different organization entirely, never matches this join, no matter what `payroll_period_id` a forged request specifies. Finally, `payroll_period_id in (...)` restricts the payment rows themselves to only those attached to one of the caller's own periods, and `status = 'confirmed'` additionally hides any draft — so a payment that's real, belongs to the caller, but hasn't been confirmed yet is invisible to them too. A request for `payroll_period_id = <someone else's id>` doesn't error and doesn't leak whether that id exists; the subquery it has to satisfy simply never contains it, so the row set that comes back is empty, identical to querying for a row that never existed at all.
+
+**Tenant-composite foreign keys, applied from the start** (Feature 019's post-apply hardening lesson, not repeated as a follow-up migration here): every actor column (`updated_by`, `generated_by`, `regenerated_by`, `locked_by`, `created_by`, `confirmed_by`) is a composite foreign key against `memberships (organization_id, profile_id)`, so a row can never be attributed to an actor outside its own organization — verified directly (an insert attempting to attribute a row to an actor from a different organization is rejected with a foreign-key violation, independent of whether the inserting session itself passes RLS). `payroll_payments.reverses_payment_id` is similarly a composite self-reference against `payroll_payments (organization_id, id)`, so a correction can never point at another organization's payment.
+
+**Confirmed-payment immutability is a trigger, not an application convention**: `private.forbid_confirmed_payment_edit()` raises on any attempt to change `amount_cents`, `payment_date`, or `comment` once `status = 'confirmed'` — enforced on every `update` regardless of caller, verified with both a raw SQL update attempt and confirmation that an unrelated column (`updated_at`) remains editable. A correction is always a new row (`reverses_payment_id`), never a mutation of financial history already on the books.
+
+**`payroll_rates` is the one table in this feature with a `delete` policy** — a rate override is current configuration, not financial history, and removing one only changes what the _next_ generation uses; every already-generated `payroll_periods` row keeps its own frozen `rate_cents_snapshot` regardless. The other three tables have no `delete` policy at all.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.

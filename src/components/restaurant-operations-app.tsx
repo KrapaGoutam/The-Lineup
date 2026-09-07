@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import {
+  Banknote,
   CalendarDays,
   CalendarSearch,
   Clock3,
@@ -16,11 +17,19 @@ import {
 
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
+import {
+  getAttendanceLinkOptionsAction,
+  removeAttendanceIdentityLinkAction,
+  setAttendanceIdentityLinkAction,
+  type AttendanceLinkOptions,
+} from "@/features/attendance/actions/attendance-actions";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
+import { demoNeonUsers } from "@/features/attendance/demo-data";
 import {
   designationToRole,
   type Designation,
 } from "@/features/auth/domain/passcode";
+import { PayrollWorkspace } from "@/features/payroll/components/payroll-workspace";
 import {
   addShiftAction,
   publishScheduleAction,
@@ -78,7 +87,13 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-type AppTab = "schedule" | "allocation" | "tips" | "team" | "attendance";
+type AppTab =
+  | "schedule"
+  | "allocation"
+  | "tips"
+  | "team"
+  | "attendance"
+  | "payroll";
 
 const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
   { id: "schedule", label: "Schedule", icon: CalendarDays },
@@ -87,12 +102,24 @@ const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
 ];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
-// Feature 018: manager/owner-only, gated exactly like Team -- added to
-// visibleTabs only when isManager, same as teamTab below.
+// Feature 019: visible to every signed-in role -- unlike Feature 018,
+// which gated the whole tab manager/owner-only. What's inside it is now
+// scoped by getAttendanceAccessAction's server-resolved answer instead
+// (see attendance-report.tsx), so the tab itself no longer needs a
+// client-side role gate.
 const attendanceTab = {
   id: "attendance" as const,
   label: "Attendance",
   icon: CalendarSearch,
+};
+// Feature 020 Phase 2: manager/owner-only, real mode only -- gated exactly
+// like Team was before Feature 019, plus !demoMode, since this phase has
+// no demo-mode data source built for it yet (deliberately deferred, see
+// docs/features/020-payroll.md's build notes).
+const payrollTab = {
+  id: "payroll" as const,
+  label: "Payroll",
+  icon: Banknote,
 };
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -332,6 +359,9 @@ export function RestaurantOperationsApp({
   const [demoAccounts, setDemoAccounts] = useState<
     Record<string, SignedInUser>
   >(() => ({ ...staticDemoAccounts }));
+  const [demoAttendanceLinks, setDemoAttendanceLinks] = useState<
+    Record<string, number>
+  >({});
 
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
@@ -414,7 +444,12 @@ export function RestaurantOperationsApp({
   }
 
   const isManager = user.role !== "server";
-  const visibleTabs = isManager ? [...tabs, teamTab, attendanceTab] : tabs;
+  // Feature 019: attendanceTab is now always included -- Team stays
+  // manager-only. Feature 020 Phase 2: payrollTab is manager-only AND
+  // real-mode-only (demo mode has no data source for it yet).
+  const visibleTabs = isManager
+    ? [...tabs, teamTab, attendanceTab, ...(demoMode ? [] : [payrollTab])]
+    : [...tabs, attendanceTab];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -665,6 +700,85 @@ export function RestaurantOperationsApp({
       }
       return changed ? updated : current;
     });
+  }
+
+  async function loadAttendanceLinkOptions(): Promise<
+    { ok: true; data: AttendanceLinkOptions } | { ok: false; error: string }
+  > {
+    if (demoMode) {
+      return {
+        ok: true,
+        data: {
+          users: demoNeonUsers.filter((candidate) => candidate.isActive),
+          links: Object.entries(demoAttendanceLinks).map(
+            ([profileId, neonUserId]) => ({ profileId, neonUserId }),
+          ),
+        },
+      };
+    }
+    const result = await getAttendanceLinkOptionsAction({ restaurantSlug });
+    if (!result.ok && result.sessionInvalid) {
+      forceSignOut();
+    }
+    return result;
+  }
+
+  async function linkAttendanceIdentity(input: {
+    targetProfileId: string;
+    neonUserId: number;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      const claimant = Object.entries(demoAttendanceLinks).find(
+        ([profileId, neonUserId]) =>
+          profileId !== input.targetProfileId &&
+          neonUserId === input.neonUserId,
+      );
+      if (claimant) {
+        return {
+          ok: false,
+          error:
+            "That attendance record is already linked to a different person.",
+        };
+      }
+      setDemoAttendanceLinks((current) => ({
+        ...current,
+        [input.targetProfileId]: input.neonUserId,
+      }));
+      return { ok: true };
+    }
+
+    const result = await setAttendanceIdentityLinkAction({
+      restaurantSlug,
+      ...input,
+    });
+    if (!result.ok) {
+      handleActionFailure(result.error, result.sessionInvalid);
+      return { ok: false, error: result.error };
+    }
+    return { ok: true };
+  }
+
+  async function unlinkAttendanceIdentity(input: {
+    targetProfileId: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      setDemoAttendanceLinks((current) => {
+        const next = { ...current };
+        delete next[input.targetProfileId];
+        return next;
+      });
+      return { ok: true };
+    }
+
+    const result = await removeAttendanceIdentityLinkAction({
+      restaurantSlug,
+      targetProfileId: input.targetProfileId,
+    });
+    if (!result.ok) {
+      handleActionFailure(result.error, result.sessionInvalid);
+      return { ok: false, error: result.error };
+    }
+    return { ok: true };
   }
 
   /**
@@ -1117,12 +1231,23 @@ export function RestaurantOperationsApp({
             onResetPasscode={resetMemberPasscode}
             onDeactivate={deactivateTeamMember}
             onReactivate={reactivateTeamMember}
+            onLoadAttendanceOptions={loadAttendanceLinkOptions}
+            onLinkAttendance={linkAttendanceIdentity}
+            onUnlinkAttendance={unlinkAttendanceIdentity}
           />
         ) : null}
-        {tab === "attendance" && isManager ? (
+        {tab === "attendance" ? (
           <AttendanceReport
             restaurantSlug={restaurantSlug}
             demoMode={demoMode}
+            timeZone={timeZone}
+            user={user}
+            demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
+          />
+        ) : null}
+        {tab === "payroll" && isManager && !demoMode ? (
+          <PayrollWorkspace
+            restaurantSlug={restaurantSlug}
             timeZone={timeZone}
           />
         ) : null}
@@ -1131,7 +1256,15 @@ export function RestaurantOperationsApp({
       <nav
         className={cn(
           "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
-          isManager ? "grid-cols-5" : "grid-cols-3",
+          // Tailwind needs the literal class names present in source (not
+          // built from a template string) to pick them up -- visibleTabs
+          // is 4 (server), 5 (manager in demo mode, no payrollTab), or 6
+          // (manager in real mode, with payrollTab).
+          isManager
+            ? demoMode
+              ? "grid-cols-5"
+              : "grid-cols-6"
+            : "grid-cols-4",
         )}
         aria-label="Mobile navigation"
       >

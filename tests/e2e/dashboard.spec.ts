@@ -224,6 +224,57 @@ test("server never sees the Team tab", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("an unlinked server can open Attendance without seeing anyone else's data", async ({
+  page,
+}) => {
+  await signIn(page, "1357");
+  await page.getByRole("button", { name: "Attendance", exact: true }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Attendance Report" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Your account isn't linked to the attendance system yet."),
+  ).toBeVisible();
+  await expect(page.getByText("People", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Anil (Host)")).toHaveCount(0);
+});
+
+test("a manager can link attendance and the server then sees only that record", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Link Mia Chen's attendance record" })
+    .click();
+  await page
+    .getByLabel("Attendance-system record")
+    .selectOption({ label: "Anil (Server)" });
+  await page.getByRole("button", { name: "Save link" }).click();
+  await expect(page.getByText("Their attendance is now linked.")).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await signInOnCurrentPage(page, "1357");
+  await page.getByRole("button", { name: "Attendance", exact: true }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Anil (Server)" }),
+  ).toBeVisible();
+  await expect(page.getByText("People", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Anil (Host)" })).toHaveCount(
+    0,
+  );
+  // Several tiles/rows can legitimately show the same "8.5h" figure (the
+  // day/week/month/selected-period dashboard tiles and the row total all
+  // derive from the same single demo attendance row) -- assert the actual
+  // table cell specifically, not just that the text exists anywhere.
+  await expect(
+    page.getByRole("cell", { name: "8.5h", exact: true }),
+  ).toBeVisible();
+});
+
 test("theme toggle switches and persists the theme across reload", async ({
   page,
 }) => {

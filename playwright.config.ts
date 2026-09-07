@@ -16,6 +16,10 @@ export default defineConfig({
         command: "npm run dev -- --hostname 127.0.0.1",
         url: "http://127.0.0.1:3000",
         reuseExistingServer: !process.env.CI,
+        // The checked-in scenarios use the deterministic demo passcodes and
+        // in-memory mutations. Keep them isolated from any developer's real
+        // Supabase values in .env.local.
+        env: { ...process.env, NEXT_PUBLIC_DEMO_MODE: "true" },
       },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },

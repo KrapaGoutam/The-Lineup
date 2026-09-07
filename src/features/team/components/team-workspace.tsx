@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, UserCheck, UserX } from "lucide-react";
+import { KeyRound, Link2, UserCheck, UserX } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,10 @@ import {
 } from "@/features/team/domain/designations";
 import type { TeamMember } from "@/lib/demo-data";
 
+import {
+  AttendanceLinkDialog,
+  type AttendanceLinkResult,
+} from "./attendance-link-dialog";
 import {
   MemberStatusDialog,
   type MemberStatusResult,
@@ -32,6 +36,9 @@ export function TeamWorkspace({
   onResetPasscode,
   onDeactivate,
   onReactivate,
+  onLoadAttendanceOptions,
+  onLinkAttendance,
+  onUnlinkAttendance,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -49,8 +56,19 @@ export function TeamWorkspace({
     targetProfileId: string;
     reason: string;
   }) => Promise<MemberStatusResult>;
+  onLoadAttendanceOptions: AttendanceLinkDialogProps["onLoadOptions"];
+  onLinkAttendance: (input: {
+    targetProfileId: string;
+    neonUserId: number;
+  }) => Promise<AttendanceLinkResult>;
+  onUnlinkAttendance: (input: {
+    targetProfileId: string;
+  }) => Promise<AttendanceLinkResult>;
 }) {
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
+  const [attendanceTarget, setAttendanceTarget] = useState<TeamMember | null>(
+    null,
+  );
   const [statusTarget, setStatusTarget] = useState<{
     member: TeamMember;
     mode: "deactivate" | "reactivate";
@@ -112,6 +130,12 @@ export function TeamWorkspace({
               targetProfileId: member.id,
               targetCurrentDesignation: member.designation,
             });
+            // Feature 019 deliberately follows the attendance table's
+            // manager-tier RLS, which includes Assistant Manager and allows
+            // linking any roster member. This is separate from designation
+            // writes: an assistant manager cannot promote people, but can
+            // operate attendance just like the rest of the floor tooling.
+            const canManageAttendance = user.role !== "server";
             return (
               <div
                 key={member.id}
@@ -164,6 +188,17 @@ export function TeamWorkspace({
                   >
                     <KeyRound aria-hidden="true" />
                     Reset passcode
+                  </Button>
+                ) : null}
+                {canManageAttendance ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Link ${member.name}'s attendance record`}
+                    onClick={() => setAttendanceTarget(member)}
+                  >
+                    <Link2 aria-hidden="true" />
+                    Link attendance
                   </Button>
                 ) : null}
                 {canChangeStatus ? (
@@ -223,6 +258,19 @@ export function TeamWorkspace({
           }
         />
       ) : null}
+
+      {attendanceTarget ? (
+        <AttendanceLinkDialog
+          member={attendanceTarget}
+          onClose={() => setAttendanceTarget(null)}
+          onLoadOptions={onLoadAttendanceOptions}
+          onLink={onLinkAttendance}
+          onUnlink={onUnlinkAttendance}
+          teamNameById={new Map(team.map((member) => [member.id, member.name]))}
+        />
+      ) : null}
     </div>
   );
 }
+
+type AttendanceLinkDialogProps = Parameters<typeof AttendanceLinkDialog>[0];
