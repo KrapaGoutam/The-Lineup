@@ -9,6 +9,7 @@ import {
   type NeonUser,
 } from "@/features/attendance/data/attendance-data";
 import { aggregateHours } from "@/features/attendance/domain/attendance-report";
+import { getOwnAttendanceLink } from "@/features/attendance/data/identity-links";
 import {
   computeGrossCents,
   monthDateRange,
@@ -16,19 +17,31 @@ import {
   resolveEffectiveRateCents,
 } from "@/features/payroll/domain/calculate-payroll";
 import {
+  confirmPayment,
   countPaymentsForPeriod,
+  deleteDraftPayment,
+  editDraftPayment,
   generatePayrollPeriod,
+  getPaymentById,
+  getPayrollBalance,
   getPayrollDefaultRateCents,
   getPayrollPeriod,
   getPayrollPeriodById,
   getPayrollRateOverrideCents,
+  listAdjustmentsForPeriod,
+  listPaymentsForPeriod,
   listPayrollPeriods,
   listPayrollRateOverrides,
   lockPayrollPeriod,
+  recordAdjustment,
+  recordPayment,
   regeneratePayrollPeriod,
   removePayrollRateOverride,
   setPayrollDefaultRateCents,
   setPayrollRateOverrideCents,
+  type PayrollAdjustment,
+  type PayrollBalance,
+  type PayrollPayment,
   type PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
 import { getCurrentUser } from "@/lib/current-user";
@@ -39,6 +52,7 @@ export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; sessionInvalid?: true };
 
+const NOT_SIGNED_IN_ERROR = "You need to sign in to see payroll.";
 const NOT_MANAGER_ERROR = "You don't have access to payroll.";
 
 const restaurantSlugSchema = z
@@ -50,26 +64,104 @@ const restaurantSlugSchema = z
 const neonUserIdSchema = z.number().int().positive();
 const periodMonthSchema = z.iso.date();
 const rateCentsSchema = z.number().int().min(0);
+const periodIdSchema = z.number().int().positive();
+const paymentIdSchema = z.number().int().positive();
+const amountCentsSchema = z.number().int().positive();
+const paymentDateSchema = z.iso.date();
+const commentSchema = z.string().trim().min(1).max(500).nullable().optional();
+const deltaCentsSchema = z
+  .number()
+  .int()
+  .refine((value) => value !== 0, {
+    message: "An adjustment must be a nonzero amount.",
+  });
+const reasonSchema = z.string().trim().min(3).max(500);
 
 function invalidRequest<T>(): ActionResult<T> {
   return { ok: false, error: "That payroll request is invalid." };
 }
 
+export type PayrollAccess =
+  | { scope: "all" }
+  | { scope: "self"; neonUserId: number }
+  | { scope: "unlinked" };
+
 /**
- * Feature 020 Phase 2. Payroll is privileged-only for now -- this phase
- * builds generation/snapshot machinery and a manager-facing screen to
- * exercise it, not the self-service employee view (that view only becomes
- * meaningful once Phase 3 adds payments/balance; see the spec's "Views"
- * section). A regular member gets the same generic refusal every other
- * manager-only action in this app already gives, not a payroll-specific
- * information leak about whether they're linked or not.
+ * Feature 020 Phase 3. The sole authority for payroll scope, resolved
+ * fresh server-side on every action -- identical shape and identical
+ * source of truth to attendance's `resolveAttendanceAccess`
+ * (attendance-actions.ts), reusing the exact same
+ * `attendance_identity_links` row via `getOwnAttendanceLink` rather than
+ * a second linking mechanism. Write actions (rates, generate/regenerate/
+ * lock, recording a payment or an adjustment, confirming/editing/deleting
+ * a payment) all still require `scope === "all"` -- a regular member
+ * never generates their own payroll, sets their own rate, or writes
+ * anything on this feature, only reads their own. Read actions
+ * (listing periods, the ledger/balance for one period) accept "self" too,
+ * and lean on `payroll_periods`/`payroll_payments`/`payroll_adjustments`'
+ * own RLS self-select policies to do the actual row-scoping -- the same
+ * query runs for a privileged or a self-scoped caller; RLS decides what
+ * comes back, not a second app-layer filter that could disagree with it.
  */
+async function resolvePayrollAccess(
+  restaurantSlug: string,
+): Promise<{ user: SignedInUser; access: PayrollAccess } | null> {
+  const currentUser = await getCurrentUser(restaurantSlug);
+  if (!currentUser) return null;
+  if (currentUser.role !== "server") {
+    return { user: currentUser, access: { scope: "all" } };
+  }
+
+  const supabase = await createClient();
+  const link = await getOwnAttendanceLink(supabase, {
+    organizationId: currentUser.organizationId,
+    profileId: currentUser.profileId,
+  });
+  if (!link.ok || !link.data) {
+    return { user: currentUser, access: { scope: "unlinked" } };
+  }
+  return {
+    user: currentUser,
+    access: { scope: "self", neonUserId: link.data.neonUserId },
+  };
+}
+
+/** Privileged-only actions (every write in this file) still use this. */
 async function requirePayrollManager(
   restaurantSlug: string,
 ): Promise<SignedInUser | null> {
-  const currentUser = await getCurrentUser(restaurantSlug);
-  if (!currentUser || currentUser.role === "server") return null;
-  return currentUser;
+  const resolved = await resolvePayrollAccess(restaurantSlug);
+  if (!resolved || resolved.access.scope !== "all") return null;
+  return resolved.user;
+}
+
+export type PayrollAccessView =
+  | { scope: "all" }
+  | { scope: "self"; neonUserId: number; person: NeonUser | null }
+  | { scope: "unlinked" };
+
+/** Tells the client what to render -- never what to enforce, exactly like attendance's getAttendanceAccessAction. */
+export async function getPayrollAccessAction(input: {
+  restaurantSlug: string;
+}): Promise<ActionResult<PayrollAccessView>> {
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
+  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const { access } = resolved;
+  if (access.scope !== "self") return { ok: true, data: access };
+
+  const usersResult = await getActiveNeonUsers();
+  const person = usersResult.ok
+    ? (usersResult.data.find((user) => user.id === access.neonUserId) ?? null)
+    : null;
+  return {
+    ok: true,
+    data: { scope: "self", neonUserId: access.neonUserId, person },
+  };
 }
 
 export type PayrollRateOptions = {
@@ -207,14 +299,88 @@ export async function listPayrollPeriodsAction(input: {
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
+  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  if (resolved.access.scope === "unlinked") return { ok: true, data: [] };
 
+  // Identical query for "all" and "self" -- payroll_periods_select_self's
+  // own RLS is what actually restricts a self-scoped caller to their own
+  // linked periods; this action does not duplicate that filter.
   const supabase = await createClient();
   return listPayrollPeriods(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: resolved.user.organizationId,
     periodMonth: parsed.data.periodMonth,
   });
+}
+
+export type PayrollLedger = {
+  period: PayrollPeriod;
+  payments: PayrollPayment[];
+  adjustments: PayrollAdjustment[];
+  balance: PayrollBalance;
+};
+
+/**
+ * The full ledger for one period: the frozen snapshot, every payment
+ * (confirmed-only for a self-scoped caller, both statuses for privileged
+ * -- again purely a consequence of `payroll_payments`' own RLS, not an
+ * app-layer filter here), every adjustment, and the computed balance.
+ * `payment_date` is never part of how any of this is selected -- see
+ * `listPaymentsForPeriod`'s own comment in payroll-data.ts.
+ */
+export async function getPayrollLedgerAction(input: {
+  restaurantSlug: string;
+  periodId: number;
+}): Promise<ActionResult<PayrollLedger>> {
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema, periodId: periodIdSchema })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
+  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  if (resolved.access.scope === "unlinked") {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+
+  const supabase = await createClient();
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: parsed.data.periodId,
+  });
+  if (!periodResult.ok) return { ok: false, error: periodResult.error };
+  const period = periodResult.data;
+  if (!period || period.organizationId !== resolved.user.organizationId) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  // Defense in depth beyond RLS: a self-scoped caller only ever gets a
+  // period belonging to their own linked Neon id, checked explicitly here
+  // too, not solely relied on from the select policy.
+  if (
+    resolved.access.scope === "self" &&
+    period.neonUserId !== resolved.access.neonUserId
+  ) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+
+  const [paymentsResult, adjustmentsResult, balanceResult] = await Promise.all([
+    listPaymentsForPeriod(supabase, { periodId: period.id }),
+    listAdjustmentsForPeriod(supabase, { periodId: period.id }),
+    getPayrollBalance(supabase, { period }),
+  ]);
+  if (!paymentsResult.ok) return { ok: false, error: paymentsResult.error };
+  if (!adjustmentsResult.ok)
+    return { ok: false, error: adjustmentsResult.error };
+  if (!balanceResult.ok) return { ok: false, error: balanceResult.error };
+
+  return {
+    ok: true,
+    data: {
+      period,
+      payments: paymentsResult.data,
+      adjustments: adjustmentsResult.data,
+      balance: balanceResult.data,
+    },
+  };
 }
 
 /**
@@ -372,7 +538,7 @@ export async function regeneratePayrollPeriodAction(input: {
   if (paymentCount.data > 0) {
     return {
       ok: false,
-      error: `Cannot regenerate: ${paymentCount.data} payment${paymentCount.data === 1 ? "" : "s"} already recorded against this period. Use a manual adjustment instead once that's built.`,
+      error: `Cannot regenerate: ${paymentCount.data} payment${paymentCount.data === 1 ? "" : "s"} already recorded against this period. Record a manual adjustment instead.`,
     };
   }
 
@@ -424,6 +590,241 @@ export async function lockPayrollPeriodAction(input: {
   return lockPayrollPeriod(supabase, {
     periodId: period.id,
     organizationId: currentUser.organizationId,
+    actorProfileId: currentUser.profileId,
+  });
+}
+
+// -- Payments ---------------------------------------------------------------
+
+/**
+ * Records a payment AGAINST a target period, identified only by
+ * `periodId` -- `paymentDate` is stored purely as metadata (when the
+ * money changed hands) and never used to derive, validate, or restrict
+ * which period this reduces. A payment dated any month can target any
+ * period; nothing here checks the two against each other.
+ */
+export async function recordPaymentAction(input: {
+  restaurantSlug: string;
+  periodId: number;
+  amountCents: number;
+  paymentDate: string;
+  comment?: string | null;
+}): Promise<ActionResult<PayrollPayment>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      periodId: periodIdSchema,
+      amountCents: amountCentsSchema,
+      paymentDate: paymentDateSchema,
+      comment: commentSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: parsed.data.periodId,
+  });
+  if (!periodResult.ok) return { ok: false, error: periodResult.error };
+  const period = periodResult.data;
+  if (!period || period.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+
+  return recordPayment(supabase, {
+    organizationId: currentUser.organizationId,
+    periodId: period.id,
+    amountCents: parsed.data.amountCents,
+    paymentDate: parsed.data.paymentDate,
+    comment: parsed.data.comment ?? null,
+    actorProfileId: currentUser.profileId,
+  });
+}
+
+export async function editDraftPaymentAction(input: {
+  restaurantSlug: string;
+  paymentId: number;
+  amountCents: number;
+  paymentDate: string;
+  comment?: string | null;
+}): Promise<ActionResult<PayrollPayment>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      paymentId: paymentIdSchema,
+      amountCents: amountCentsSchema,
+      paymentDate: paymentDateSchema,
+      comment: commentSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const paymentResult = await getPaymentById(supabase, {
+    paymentId: parsed.data.paymentId,
+  });
+  if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
+  const payment = paymentResult.data;
+  if (!payment || payment.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payment could not be found." };
+  }
+  // The database trigger is the real backstop; this just gives a clear
+  // message instead of letting a confirmed-row edit surface as a raw
+  // Postgres error.
+  if (payment.status === "confirmed") {
+    return {
+      ok: false,
+      error:
+        "This payment is confirmed and can no longer be edited. Record a manual adjustment instead.",
+    };
+  }
+
+  return editDraftPayment(supabase, {
+    payment,
+    amountCents: parsed.data.amountCents,
+    paymentDate: parsed.data.paymentDate,
+    comment: parsed.data.comment ?? null,
+    actorProfileId: currentUser.profileId,
+  });
+}
+
+export async function deleteDraftPaymentAction(input: {
+  restaurantSlug: string;
+  paymentId: number;
+}): Promise<ActionResult<null>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      paymentId: paymentIdSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const paymentResult = await getPaymentById(supabase, {
+    paymentId: parsed.data.paymentId,
+  });
+  if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
+  const payment = paymentResult.data;
+  if (!payment || payment.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payment could not be found." };
+  }
+  if (payment.status === "confirmed") {
+    return {
+      ok: false,
+      error:
+        "This payment is confirmed and can no longer be deleted. Record a manual adjustment instead.",
+    };
+  }
+
+  return deleteDraftPayment(supabase, {
+    payment,
+    actorProfileId: currentUser.profileId,
+  });
+}
+
+export async function confirmPaymentAction(input: {
+  restaurantSlug: string;
+  paymentId: number;
+}): Promise<ActionResult<PayrollPayment>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      paymentId: paymentIdSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const paymentResult = await getPaymentById(supabase, {
+    paymentId: parsed.data.paymentId,
+  });
+  if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
+  const payment = paymentResult.data;
+  if (!payment || payment.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payment could not be found." };
+  }
+  if (payment.status === "confirmed") {
+    return { ok: false, error: "This payment is already confirmed." };
+  }
+
+  return confirmPayment(supabase, {
+    payment,
+    actorProfileId: currentUser.profileId,
+  });
+}
+
+// -- Adjustments --------------------------------------------------------------
+
+/**
+ * The escape hatch for a wrong CONFIRMED payment (frozen, per the two
+ * triggers on payroll_payments) and for a wrong generated snapshot once
+ * regeneration is blocked (per forbid_payroll_period_snapshot_edit) --
+ * never an edit to either. A signed delta plus a mandatory reason,
+ * targeting a period the same way a payment does: by `periodId`, nothing
+ * else.
+ */
+export async function recordAdjustmentAction(input: {
+  restaurantSlug: string;
+  periodId: number;
+  deltaCents: number;
+  reason: string;
+}): Promise<ActionResult<PayrollAdjustment>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      periodId: periodIdSchema,
+      deltaCents: deltaCentsSchema,
+      reason: reasonSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: parsed.data.periodId,
+  });
+  if (!periodResult.ok) return { ok: false, error: periodResult.error };
+  const period = periodResult.data;
+  if (!period || period.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+
+  return recordAdjustment(supabase, {
+    organizationId: currentUser.organizationId,
+    periodId: period.id,
+    deltaCents: parsed.data.deltaCents,
+    reason: parsed.data.reason,
     actorProfileId: currentUser.profileId,
   });
 }
