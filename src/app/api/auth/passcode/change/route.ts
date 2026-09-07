@@ -71,7 +71,10 @@ export async function POST(request: Request) {
 
   const currentUser = await getCurrentUser(slug);
   if (!currentUser) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Not signed in.", sessionInvalid: true },
+      { status: 401 },
+    );
   }
 
   const admin = createAdminClient();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound } from "lucide-react";
+import { KeyRound, UserCheck, UserX } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +11,15 @@ import type { Designation } from "@/features/auth/domain/passcode";
 import {
   assignableDesignations,
   canChangeDesignation,
+  canDeactivateMember,
   designationLabel,
 } from "@/features/team/domain/designations";
 import type { TeamMember } from "@/lib/demo-data";
 
+import {
+  MemberStatusDialog,
+  type MemberStatusResult,
+} from "./member-status-dialog";
 import {
   PasscodeResetDialog,
   type ResetPasscodeResult,
@@ -25,6 +30,8 @@ export function TeamWorkspace({
   team,
   onChangeDesignation,
   onResetPasscode,
+  onDeactivate,
+  onReactivate,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -34,8 +41,20 @@ export function TeamWorkspace({
     reason: string;
     newPasscode?: string;
   }) => Promise<ResetPasscodeResult>;
+  onDeactivate: (input: {
+    targetProfileId: string;
+    reason: string;
+  }) => Promise<MemberStatusResult>;
+  onReactivate: (input: {
+    targetProfileId: string;
+    reason: string;
+  }) => Promise<MemberStatusResult>;
 }) {
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
+  const [statusTarget, setStatusTarget] = useState<{
+    member: TeamMember;
+    mode: "deactivate" | "reactivate";
+  } | null>(null);
 
   return (
     <div className="space-y-4">
@@ -60,17 +79,37 @@ export function TeamWorkspace({
         <CardContent className="divide-border divide-y p-0 pt-4">
           {team.map((member) => {
             const own = member.id === user.profileId;
-            const options = assignableDesignations({
-              actorDesignation: user.designation,
-              targetCurrentDesignation: member.designation,
-            });
+            // Feature 017: a deactivated member gets no other action --
+            // only Reactivate, per the UX contract ("no other actions").
+            // Designation changes and passcode reset stay active-only:
+            // there's nothing to promote or reset for someone who can't
+            // sign in right now.
+            const isActive = member.active !== false;
+            const options = isActive
+              ? assignableDesignations({
+                  actorDesignation: user.designation,
+                  targetCurrentDesignation: member.designation,
+                })
+              : [];
             // Feature 016: reset authorization mirrors designation-change
             // authorization exactly (a credential reset is at least as
             // sensitive as a designation change) -- so it's gated on the
             // same predicate, not re-derived, and hidden entirely rather
             // than shown-then-disabled for a target the actor can't touch.
-            const canReset = canChangeDesignation({
+            const canReset =
+              isActive &&
+              canChangeDesignation({
+                actorDesignation: user.designation,
+                targetCurrentDesignation: member.designation,
+              });
+            // Feature 017: deactivate and reactivate share one
+            // authorization predicate (canDeactivateMember -- the same
+            // bar as reset, plus an unconditional self-target refusal),
+            // reused for whichever direction this row currently offers.
+            const canChangeStatus = canDeactivateMember({
+              actorProfileId: user.profileId,
               actorDesignation: user.designation,
+              targetProfileId: member.id,
               targetCurrentDesignation: member.designation,
             });
             return (
@@ -94,6 +133,11 @@ export function TeamWorkspace({
                   </p>
                   <p className="text-muted-foreground mt-0.5 text-xs">
                     {designationLabel(member.designation)}
+                    {!isActive ? (
+                      <Badge tone="warning" className="ml-2 align-middle">
+                        Inactive
+                      </Badge>
+                    ) : null}
                   </p>
                 </div>
                 {options.length ? (
@@ -122,6 +166,30 @@ export function TeamWorkspace({
                     Reset passcode
                   </Button>
                 ) : null}
+                {canChangeStatus ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={
+                      isActive
+                        ? `Deactivate ${member.name}`
+                        : `Reactivate ${member.name}`
+                    }
+                    onClick={() =>
+                      setStatusTarget({
+                        member,
+                        mode: isActive ? "deactivate" : "reactivate",
+                      })
+                    }
+                  >
+                    {isActive ? (
+                      <UserX aria-hidden="true" />
+                    ) : (
+                      <UserCheck aria-hidden="true" />
+                    )}
+                    {isActive ? "Deactivate" : "Reactivate"}
+                  </Button>
+                ) : null}
               </div>
             );
           })}
@@ -142,6 +210,17 @@ export function TeamWorkspace({
           member={resetTarget}
           onClose={() => setResetTarget(null)}
           onSubmit={onResetPasscode}
+        />
+      ) : null}
+
+      {statusTarget ? (
+        <MemberStatusDialog
+          member={statusTarget.member}
+          mode={statusTarget.mode}
+          onClose={() => setStatusTarget(null)}
+          onSubmit={
+            statusTarget.mode === "deactivate" ? onDeactivate : onReactivate
+          }
         />
       ) : null}
     </div>

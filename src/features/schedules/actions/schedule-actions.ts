@@ -9,12 +9,22 @@ import type {
 } from "@/features/schedules/domain/shift-planning";
 import { nextPublishedVersion } from "@/features/schedules/domain/schedule-versioning";
 import type { DemoShift } from "@/lib/demo-data";
+import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeToInstant } from "@/lib/timezone";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      // Feature 017: set when this action's own auth.getUser() check
+      // fails -- the caller's session is dead (deactivated mid-session,
+      // most commonly), not just a rejected write. The client reacts to
+      // this by signing itself out and returning to the passcode screen,
+      // instead of showing `error` as a normal action-failure banner.
+      sessionInvalid?: true;
+    };
 
 /**
  * One draft `schedule_periods` row per (location, calendar year), created
@@ -86,6 +96,9 @@ export async function addShiftAction(
   }
 
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const period = await getOrCreateDraftPeriod(
     supabase,
     input.organizationId,
@@ -178,6 +191,9 @@ export async function publishScheduleAction(input: {
   timeZone: string;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const year = new Date().getFullYear().toString();
   // Deliberately not timezone-corrected to the exact location-local
   // year -- this only matters within a few hours of New Year's, and the
@@ -237,6 +253,8 @@ export async function saveScheduleConfigAction(input: {
   shiftDefaults: ShiftDefaults;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
 
   const { error: hoursError } = await supabase.from("operating_hours").upsert(
     input.operatingHours.map((day, dayOfWeek) => ({
