@@ -14,7 +14,16 @@ export type NeonUser = {
 export type NeonAttendanceRow = {
   id: number;
   userId: number;
+  // A plain calendar date, "YYYY-MM-DD" -- see ATTENDANCE_QUERY_SQL's
+  // `date::text` cast for why this is forced to a string in the query
+  // itself rather than left as a driver-parsed Date object.
   date: string;
+  // Full ISO instant strings (or null) -- clock_in/clock_out are
+  // genuine timezone-aware instants, unlike `date` above, so converting
+  // them client-side (via zonedWallTimeFromInstant, the same helper
+  // every other real-mode display in this app already uses) is correct
+  // and safe. Formatting to the restaurant's local wall-clock time
+  // happens at render time, where the timeZone is in scope, not here.
   clockIn: string | null;
   clockOut: string | null;
   hoursWorked: number | null;
@@ -43,8 +52,19 @@ export const USERS_QUERY_SQL =
   "select id, full_name, role, phone, created_at, is_active " +
   "from users where is_active = true order by full_name asc";
 
+// `date::text` -- live-verified against the real data: the driver parses
+// a plain `date` column into a JS Date object using an assumed timezone
+// at parse time (confirmed distinct from clock_in/clock_out, which are
+// genuine timestamptz instants and don't have this problem), which risks
+// the calendar day itself shifting depending on where the code runs (a
+// dev machine's local zone versus a UTC-running Vercel function could
+// disagree). Casting to text in the query forces Postgres to hand back
+// the exact "YYYY-MM-DD" it stores, with zero client-side reinterpretation
+// possible. The WHERE clause still compares against the real `date`
+// column (unaffected by the SELECT list's cast), which is what actually
+// needs correct date semantics for the range filter.
 export const ATTENDANCE_QUERY_SQL =
-  "select id, user_id, date, clock_in, clock_out, hours_worked, auto_clocked_out " +
+  "select id, user_id, date::text as date, clock_in, clock_out, hours_worked, auto_clocked_out " +
   "from attendance where user_id = ANY($1) and date >= $2 and date <= $3 " +
   "order by date asc, clock_in asc nulls last";
 
@@ -80,7 +100,14 @@ export async function getActiveNeonUsers(): Promise<
       full_name: string;
       role: string;
       phone: string | null;
-      created_at: string;
+      // The driver parses this timestamptz column into a real JS Date --
+      // unlike attendance.date (see ATTENDANCE_QUERY_SQL's comment),
+      // created_at is a genuine instant, so converting it client-side is
+      // safe. Not currently rendered anywhere, but kept honestly typed
+      // (a real string, not a Date silently mislabeled as one) rather
+      // than left to accidentally cross a JSX boundary the way the raw
+      // attendance rows initially did -- caught live, not assumed fixed.
+      created_at: Date;
       is_active: boolean;
     }>;
     return {
@@ -90,7 +117,7 @@ export async function getActiveNeonUsers(): Promise<
         fullName: row.full_name,
         role: row.role,
         phone: row.phone,
-        createdAt: row.created_at,
+        createdAt: row.created_at.toISOString(),
         isActive: row.is_active,
       })),
     };
@@ -115,9 +142,9 @@ export async function getAttendanceRows(input: {
     ])) as Array<{
       id: number;
       user_id: number;
-      date: string;
-      clock_in: string | null;
-      clock_out: string | null;
+      date: string; // forced to text by the query -- see ATTENDANCE_QUERY_SQL
+      clock_in: Date | null;
+      clock_out: Date | null;
       hours_worked: string | number | null;
       auto_clocked_out: boolean;
     }>;
@@ -127,8 +154,8 @@ export async function getAttendanceRows(input: {
         id: row.id,
         userId: row.user_id,
         date: row.date,
-        clockIn: row.clock_in,
-        clockOut: row.clock_out,
+        clockIn: row.clock_in ? row.clock_in.toISOString() : null,
+        clockOut: row.clock_out ? row.clock_out.toISOString() : null,
         // Postgres numeric/decimal columns come back as strings over the
         // wire (avoiding float precision loss) -- converted here, once,
         // rather than leaving every caller to remember to do it.

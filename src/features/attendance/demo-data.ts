@@ -63,13 +63,19 @@ export const demoNeonUsers: NeonUser[] = [
   },
 ];
 
+// clockIn/clockOut are full ISO instant strings, matching what the real
+// Neon connection actually returns (Date.toISOString() of a genuine
+// timestamptz) -- not plain "HH:MM:SS" text. Written here with an
+// explicit "-05:00" offset (America/Chicago is on CDT in August/September),
+// so AttendanceReport's zonedWallTimeFromInstant conversion round-trips
+// back to the exact wall-clock time intended below.
 export const demoNeonAttendance: NeonAttendanceRow[] = [
   {
     id: 101,
     userId: 1,
     date: "2026-09-01",
-    clockIn: "08:00:00",
-    clockOut: "16:30:00",
+    clockIn: "2026-09-01T08:00:00-05:00",
+    clockOut: "2026-09-01T16:30:00-05:00",
     hoursWorked: 8.5,
     autoClockedOut: false,
   },
@@ -77,7 +83,7 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 102,
     userId: 1,
     date: "2026-09-03",
-    clockIn: "09:00:00",
+    clockIn: "2026-09-03T09:00:00-05:00",
     clockOut: null,
     hoursWorked: null,
     autoClockedOut: true,
@@ -86,8 +92,8 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 103,
     userId: 2,
     date: "2026-09-02",
-    clockIn: "10:00:00",
-    clockOut: "18:00:00",
+    clockIn: "2026-09-02T10:00:00-05:00",
+    clockOut: "2026-09-02T18:00:00-05:00",
     hoursWorked: 8,
     autoClockedOut: false,
   },
@@ -95,8 +101,8 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 104,
     userId: 3,
     date: "2026-09-01",
-    clockIn: "09:00:00",
-    clockOut: "17:00:00",
+    clockIn: "2026-09-01T09:00:00-05:00",
+    clockOut: "2026-09-01T17:00:00-05:00",
     // hours_worked null even though clock_in/out are both present -- a
     // real, if unusual, Neon state (whatever computed it upstream didn't
     // run for this row) worth demoing distinctly from the auto-clocked-
@@ -108,8 +114,8 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 105,
     userId: 3,
     date: "2026-08-28",
-    clockIn: "09:00:00",
-    clockOut: "17:30:00",
+    clockIn: "2026-08-28T09:00:00-05:00",
+    clockOut: "2026-08-28T17:30:00-05:00",
     hoursWorked: 8.5,
     autoClockedOut: false,
   },
@@ -117,8 +123,8 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 106,
     userId: 4,
     date: "2026-09-05",
-    clockIn: "11:00:00",
-    clockOut: "19:00:00",
+    clockIn: "2026-09-05T11:00:00-05:00",
+    clockOut: "2026-09-05T19:00:00-05:00",
     hoursWorked: 8,
     autoClockedOut: false,
   },
@@ -126,7 +132,7 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 108,
     userId: 4,
     date: "2026-09-06",
-    clockIn: "11:00:00",
+    clockIn: "2026-09-06T11:00:00-05:00",
     // Live-verified against the real system: auto_clocked_out=true rows
     // usually still carry a real clock_out time (the system fills one in
     // when it force-closes a shift) -- a null clock_out turned out to
@@ -134,7 +140,7 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     // genuinely open, never closed at all). Both real shapes are
     // demoed: this row (auto-closed, time present) and row 102 above
     // (auto-closed, no time -- the rarer but still real combination).
-    clockOut: "19:15:00",
+    clockOut: "2026-09-06T19:15:00-05:00",
     hoursWorked: 8.25,
     autoClockedOut: true,
   },
@@ -145,8 +151,8 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     id: 107,
     userId: 5,
     date: "2026-08-20",
-    clockIn: "12:00:00",
-    clockOut: "20:00:00",
+    clockIn: "2026-08-20T12:00:00-05:00",
+    clockOut: "2026-08-20T20:00:00-05:00",
     hoursWorked: 8,
     autoClockedOut: false,
   },

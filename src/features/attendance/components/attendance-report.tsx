@@ -312,6 +312,7 @@ export function AttendanceReport({
               key={person.id}
               label={displayLabels.get(person.id) ?? person.fullName}
               rows={rows.filter((row) => row.userId === person.id)}
+              timeZone={timeZone}
             />
           ))}
 
@@ -382,12 +383,23 @@ function UnavailablePanel({
   );
 }
 
+// clockIn/clockOut are full ISO instant strings -- converted to the
+// restaurant's local wall-clock time here, at render time, the same way
+// every other real-mode timestamp in this app is displayed
+// (zonedWallTimeFromInstant), rather than showing a raw UTC time that
+// wouldn't match what actually happened on the floor.
+function formatClockTime(iso: string, timeZone: string): string {
+  return zonedWallTimeFromInstant(new Date(iso), timeZone).time;
+}
+
 function PersonSection({
   label,
   rows,
+  timeZone,
 }: {
   label: string;
   rows: NeonAttendanceRow[];
+  timeZone: string;
 }) {
   const total = aggregateHours(rows);
   return (
@@ -415,9 +427,15 @@ function PersonSection({
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td className="py-1.5 pr-3">{row.date}</td>
-                    <td className="py-1.5 pr-3">{row.clockIn ?? "—"}</td>
                     <td className="py-1.5 pr-3">
-                      {row.clockOut ?? "—"}
+                      {row.clockIn
+                        ? formatClockTime(row.clockIn, timeZone)
+                        : "—"}
+                    </td>
+                    <td className="py-1.5 pr-3">
+                      {row.clockOut
+                        ? formatClockTime(row.clockOut, timeZone)
+                        : "—"}
                       {row.autoClockedOut ? (
                         <Badge tone="warning" className="ml-1.5">
                           Auto-closed
