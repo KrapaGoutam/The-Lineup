@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import {
+  Banknote,
   CalendarDays,
   CalendarSearch,
   Clock3,
@@ -28,6 +29,7 @@ import {
   designationToRole,
   type Designation,
 } from "@/features/auth/domain/passcode";
+import { PayrollWorkspace } from "@/features/payroll/components/payroll-workspace";
 import {
   addShiftAction,
   publishScheduleAction,
@@ -85,7 +87,13 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-type AppTab = "schedule" | "allocation" | "tips" | "team" | "attendance";
+type AppTab =
+  | "schedule"
+  | "allocation"
+  | "tips"
+  | "team"
+  | "attendance"
+  | "payroll";
 
 const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
   { id: "schedule", label: "Schedule", icon: CalendarDays },
@@ -103,6 +111,15 @@ const attendanceTab = {
   id: "attendance" as const,
   label: "Attendance",
   icon: CalendarSearch,
+};
+// Feature 020 Phase 2: manager/owner-only, real mode only -- gated exactly
+// like Team was before Feature 019, plus !demoMode, since this phase has
+// no demo-mode data source built for it yet (deliberately deferred, see
+// docs/features/020-payroll.md's build notes).
+const payrollTab = {
+  id: "payroll" as const,
+  label: "Payroll",
+  icon: Banknote,
 };
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -428,9 +445,10 @@ export function RestaurantOperationsApp({
 
   const isManager = user.role !== "server";
   // Feature 019: attendanceTab is now always included -- Team stays
-  // manager-only.
+  // manager-only. Feature 020 Phase 2: payrollTab is manager-only AND
+  // real-mode-only (demo mode has no data source for it yet).
   const visibleTabs = isManager
-    ? [...tabs, teamTab, attendanceTab]
+    ? [...tabs, teamTab, attendanceTab, ...(demoMode ? [] : [payrollTab])]
     : [...tabs, attendanceTab];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
@@ -1227,12 +1245,23 @@ export function RestaurantOperationsApp({
             demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
           />
         ) : null}
+        {tab === "payroll" && isManager && !demoMode ? (
+          <PayrollWorkspace restaurantSlug={restaurantSlug} />
+        ) : null}
       </main>
 
       <nav
         className={cn(
           "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
-          isManager ? "grid-cols-5" : "grid-cols-4",
+          // Tailwind needs the literal class names present in source (not
+          // built from a template string) to pick them up -- visibleTabs
+          // is 4 (server), 5 (manager in demo mode, no payrollTab), or 6
+          // (manager in real mode, with payrollTab).
+          isManager
+            ? demoMode
+              ? "grid-cols-5"
+              : "grid-cols-6"
+            : "grid-cols-4",
         )}
         aria-label="Mobile navigation"
       >
