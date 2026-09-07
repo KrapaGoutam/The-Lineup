@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import {
   CalendarDays,
   Clock3,
+  KeyRound,
   LogOut,
   Settings2,
   Table2,
@@ -31,6 +32,7 @@ import {
   type ShiftDefaults,
 } from "@/features/schedules/domain/shift-planning";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
+import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import {
   addTipIntervalAction,
@@ -63,6 +65,10 @@ import {
   type SignedInUser,
 } from "./login-screen";
 import { OrgLockoutBanner } from "./org-lockout-banner";
+import {
+  PasscodeChangeDialog,
+  type ChangePasscodeResult,
+} from "./passcode-change-dialog";
 import { ThemeToggle } from "./theme-toggle";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -98,6 +104,20 @@ const DEMO_SHIFT_DEFAULTS: ShiftDefaults = {
   full_day: { start: "11:00", end: "23:00" },
 };
 const DEMO_TIME_ZONE = "America/Chicago";
+
+// Feature 016, demo mode only: a lightweight stand-in for the server-side
+// generateRandomPasscode() (src/lib/passcode-security.ts), which can't run
+// in the browser (it needs node:crypto and APP_PIN_PEPPER). Demo passcodes
+// aren't real credentials, so Math.random is fine here -- this is purely
+// about picking an unused 4-digit key into the in-memory demoAccounts map,
+// not a security boundary.
+function generateDemoPasscode(taken: ReadonlySet<string>): string {
+  let candidate: string;
+  do {
+    candidate = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+  } while (taken.has(candidate));
+  return candidate;
+}
 
 function HoursDialog({
   hours,
@@ -320,6 +340,7 @@ export function RestaurantOperationsApp({
     () => initialScheduleContext?.shifts ?? [],
   );
   const [showHours, setShowHours] = useState(false);
+  const [showChangePasscode, setShowChangePasscode] = useState(false);
   const clock = useRestaurantClock(timeZone, operatingHours);
 
   const [tipPoolId, setTipPoolId] = useState<number | null>(
@@ -597,6 +618,126 @@ export function RestaurantOperationsApp({
     });
   }
 
+  /**
+   * Feature 016, self-service change: any signed-in role, available from
+   * the header. Real mode hits POST /api/auth/passcode/change, which
+   * verifies currentPasscode itself (signInWithPassword) before touching
+   * anything -- this function never re-derives that check client-side.
+   * Demo mode approximates the same "prove you know the current one"
+   * requirement by matching the typed value against demoAccounts' own key.
+   */
+  async function changeMyPasscode(input: {
+    currentPasscode: string;
+    newPasscode: string;
+  }): Promise<ChangePasscodeResult> {
+    if (demoMode) {
+      const currentEntry = demoAccounts[input.currentPasscode];
+      if (!currentEntry || currentEntry.profileId !== currentUser.profileId) {
+        return { ok: false, error: "Current passcode not recognized." };
+      }
+      if (demoAccounts[input.newPasscode]) {
+        return {
+          ok: false,
+          error: "That passcode is already in use — choose a different one.",
+        };
+      }
+      setDemoAccounts((current) => {
+        const updated = { ...current };
+        delete updated[input.currentPasscode];
+        updated[input.newPasscode] = currentEntry;
+        return updated;
+      });
+      return { ok: true };
+    }
+
+    const response = await fetch("/api/auth/passcode/change", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        restaurantSlug,
+        currentPasscode: input.currentPasscode,
+        newPasscode: input.newPasscode,
+      }),
+    });
+    const payload = (await response.json()) as { ok?: true; error?: string };
+    if (!response.ok || !payload.ok) {
+      return {
+        ok: false,
+        error: payload.error ?? "Unable to change your passcode right now.",
+      };
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Feature 016, manager/owner reset: authorization is enforced by
+   * TeamWorkspace only rendering the reset button for a target
+   * `canChangeDesignation` allows (real mode's route re-checks this
+   * server-side too, since the client can't be trusted as the only gate).
+   * Also doubles as "issue a first passcode" for a demo roster member who
+   * doesn't have a `demoAccounts` login entry yet -- built straight from
+   * the roster row rather than requiring one to already exist.
+   */
+  async function resetMemberPasscode(input: {
+    targetProfileId: string;
+    reason: string;
+    newPasscode?: string;
+  }): Promise<ResetPasscodeResult> {
+    if (demoMode) {
+      const target = team.find((member) => member.id === input.targetProfileId);
+      if (!target) {
+        return { ok: false, error: "That person is not on the roster." };
+      }
+      if (input.newPasscode && demoAccounts[input.newPasscode]) {
+        return {
+          ok: false,
+          error: "That passcode is already in use — choose a different one.",
+        };
+      }
+      const passcode =
+        input.newPasscode ??
+        generateDemoPasscode(new Set(Object.keys(demoAccounts)));
+      setDemoAccounts((current) => {
+        const updated = { ...current };
+        for (const [existingPasscode, account] of Object.entries(current)) {
+          if (account.profileId === target.id) delete updated[existingPasscode];
+        }
+        updated[passcode] = {
+          profileId: target.id,
+          name: target.name,
+          role: target.role,
+          designation: target.designation,
+          organizationId: DEMO_ORGANIZATION_ID,
+        };
+        return updated;
+      });
+      return { ok: true, passcode };
+    }
+
+    const response = await fetch("/api/auth/passcode/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        restaurantSlug,
+        targetProfileId: input.targetProfileId,
+        reason: input.reason,
+        newPasscode: input.newPasscode,
+      }),
+    });
+    const payload = (await response.json()) as {
+      ok?: true;
+      passcode?: string;
+      error?: string;
+    };
+    if (!response.ok || !payload.ok || !payload.passcode) {
+      return {
+        ok: false,
+        error: payload.error ?? "Unable to reset this passcode right now.",
+      };
+    }
+    return { ok: true, passcode: payload.passcode };
+  }
+
   async function signOut() {
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
@@ -684,6 +825,14 @@ export function RestaurantOperationsApp({
                 <Settings2 />
               </Button>
             ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowChangePasscode(true)}
+              aria-label="Change your passcode"
+            >
+              <KeyRound />
+            </Button>
             <ThemeToggle />
             <Button
               variant="ghost"
@@ -767,6 +916,7 @@ export function RestaurantOperationsApp({
             user={user}
             team={team}
             onChangeDesignation={changeDesignation}
+            onResetPasscode={resetMemberPasscode}
           />
         ) : null}
       </main>
@@ -803,6 +953,13 @@ export function RestaurantOperationsApp({
           timeZone={timeZone}
           onClose={() => setShowHours(false)}
           onSave={saveScheduleConfig}
+        />
+      ) : null}
+
+      {showChangePasscode ? (
+        <PasscodeChangeDialog
+          onClose={() => setShowChangePasscode(false)}
+          onSubmit={changeMyPasscode}
         />
       ) : null}
     </div>

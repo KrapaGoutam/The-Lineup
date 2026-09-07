@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  designationForRoles,
-  isValidPasscode,
-  normalizeDatabaseRole,
-} from "@/features/auth/domain/passcode";
+import { isValidPasscode } from "@/features/auth/domain/passcode";
 import {
   FINGERPRINT_WINDOW_MINUTES,
   ORGANIZATION_WINDOW_MINUTES,
@@ -13,18 +9,18 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
-import {
-  migrateLegacyAuthPassword,
-  verifyPasscode,
-} from "@/features/auth/data/passcode-verify";
-import {
-  createPasscodeLocator,
-  createRequestFingerprint,
-} from "@/lib/passcode-security";
+import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
+import { verifyPasscode } from "@/features/auth/data/passcode-verify";
+import { getCurrentUser } from "@/lib/current-user";
+import { createRequestFingerprint } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-type LoginBody = { restaurantSlug?: string; passcode?: string };
+type ChangeBody = {
+  restaurantSlug?: string;
+  currentPasscode?: string;
+  newPasscode?: string;
+};
 
 function clientFingerprint(request: Request) {
   const forwarded = request.headers
@@ -36,37 +32,49 @@ function clientFingerprint(request: Request) {
   );
 }
 
+/**
+ * Feature 016. Self-service passcode change: any signed-in role, after
+ * confirming the current passcode. The confirmation step re-uses the
+ * exact per-fingerprint/per-organization rate limiting Feature 006 built
+ * for login (a wrong "current passcode" guess is recorded and counted
+ * exactly like a failed login attempt) -- an already-open, unattended
+ * session on a shared host-stand device shouldn't be a free way to probe
+ * the real passcode.
+ */
 export async function POST(request: Request) {
-  let body: LoginBody;
+  let body: ChangeBody;
   try {
-    body = (await request.json()) as LoginBody;
+    body = (await request.json()) as ChangeBody;
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
   const slug = body.restaurantSlug?.trim().toLowerCase();
-  const passcode = body.passcode?.trim() ?? "";
-  if (!slug || !isValidPasscode(passcode)) {
+  const currentPasscode = body.currentPasscode?.trim() ?? "";
+  const newPasscode = body.newPasscode?.trim() ?? "";
+  if (
+    !slug ||
+    !isValidPasscode(currentPasscode) ||
+    !isValidPasscode(newPasscode)
+  ) {
     return NextResponse.json(
-      { error: "Enter a valid 6–8 digit passcode." },
+      { error: "Enter your current passcode and a new 4-digit passcode." },
+      { status: 400 },
+    );
+  }
+  if (currentPasscode === newPasscode) {
+    return NextResponse.json(
+      { error: "Choose a passcode different from your current one." },
       { status: 400 },
     );
   }
 
-  const admin = createAdminClient();
-  const { data: organization } = await admin
-    .from("organizations")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
-
-  if (!organization) {
-    return NextResponse.json(
-      { error: "Passcode not recognized." },
-      { status: 401 },
-    );
+  const currentUser = await getCurrentUser(slug);
+  if (!currentUser) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  const admin = createAdminClient();
   const fingerprint = clientFingerprint(request);
 
   const fingerprintWindowStart = new Date(
@@ -75,7 +83,7 @@ export async function POST(request: Request) {
   const { count: fingerprintFailures } = await admin
     .from("passcode_login_attempts")
     .select("id", { count: "exact", head: true })
-    .eq("organization_id", organization.id)
+    .eq("organization_id", currentUser.organizationId)
     .eq("fingerprint", fingerprint)
     .eq("succeeded", false)
     .gte("attempted_at", fingerprintWindowStart);
@@ -87,9 +95,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Organization-wide check: degrades instead of denying. A fingerprint
-  // that has succeeded here recently is exempt, and a manager already
-  // signed in can clear the lock — see docs/features/006-four-digit-passcodes.md.
   const orgWindowStart = new Date(
     Date.now() - ORGANIZATION_WINDOW_MINUTES * 60_000,
   );
@@ -102,14 +107,14 @@ export async function POST(request: Request) {
       admin
         .from("passcode_login_attempts")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", organization.id)
+        .eq("organization_id", currentUser.organizationId)
         .eq("fingerprint", fingerprint)
         .eq("succeeded", true)
         .gte("attempted_at", recentSuccessCutoff),
       admin
         .from("passcode_lockout_resets")
         .select("cleared_at")
-        .eq("organization_id", organization.id)
+        .eq("organization_id", currentUser.organizationId)
         .order("cleared_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -122,7 +127,7 @@ export async function POST(request: Request) {
   const { count: organizationFailures } = await admin
     .from("passcode_login_attempts")
     .select("id", { count: "exact", head: true })
-    .eq("organization_id", organization.id)
+    .eq("organization_id", currentUser.organizationId)
     .eq("succeeded", false)
     .gte("attempted_at", organizationCountStart.toISOString());
 
@@ -142,82 +147,63 @@ export async function POST(request: Request) {
     );
   }
 
-  const locator = createPasscodeLocator(organization.id, passcode);
   const { data: credential } = await admin
     .from("passcode_credentials")
-    .select("profile_id, synthetic_email")
-    .eq("organization_id", organization.id)
-    .eq("locator", locator)
-    .eq("active", true)
+    .select("synthetic_email")
+    .eq("organization_id", currentUser.organizationId)
+    .eq("profile_id", currentUser.profileId)
     .maybeSingle();
-
-  await admin.from("passcode_login_attempts").insert({
-    organization_id: organization.id,
-    fingerprint,
-    succeeded: Boolean(credential),
-  });
-
   if (!credential) {
     return NextResponse.json(
-      { error: "Passcode not recognized." },
-      { status: 401 },
+      { error: "Could not find your passcode credential." },
+      { status: 404 },
     );
   }
 
   const supabase = await createClient();
+  // No migration attempt here (unlike /api/auth/passcode's login route):
+  // rotatePasscodeCredential below is about to write a brand new derived
+  // password for the NEW passcode regardless of how this one verified, so
+  // migrating the current password first would just be overwritten a
+  // moment later.
   const verification = await verifyPasscode(supabase, {
     syntheticEmail: credential.synthetic_email,
-    organizationId: organization.id,
-    passcode,
+    organizationId: currentUser.organizationId,
+    passcode: currentPasscode,
   });
+
+  await admin.from("passcode_login_attempts").insert({
+    organization_id: currentUser.organizationId,
+    fingerprint,
+    succeeded: verification.ok,
+  });
+
   if (!verification.ok) {
     return NextResponse.json(
-      { error: "Passcode not recognized." },
+      { error: "Current passcode not recognized." },
       { status: 401 },
     );
   }
-  // The only caller that opportunistically migrates a legacy account:
-  // the passcode isn't changing here, so this sign-in is the only chance
-  // to upgrade it before the next one. Awaited, but never allowed to
-  // turn this successful sign-in into a failure (see its own doc comment).
-  if (verification.verifiedVia === "legacy") {
-    await migrateLegacyAuthPassword(admin, {
-      profileId: credential.profile_id,
-      organizationId: organization.id,
-      passcode,
-    });
-  }
 
-  const [{ data: profile }, { data: membership }] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("display_name")
-      .eq("id", credential.profile_id)
-      .single(),
-    admin
-      .from("memberships")
-      .select("roles")
-      .eq("organization_id", organization.id)
-      .eq("profile_id", credential.profile_id)
-      .eq("active", true)
-      .single(),
-  ]);
-
-  if (!profile || !membership) {
-    await supabase.auth.signOut();
+  const result = await rotatePasscodeCredential(admin, {
+    organizationId: currentUser.organizationId,
+    profileId: currentUser.profileId,
+    newPasscode,
+  });
+  if (!result.ok) {
     return NextResponse.json(
-      { error: "This account is not active." },
-      { status: 403 },
+      { error: result.error, severity: result.severity },
+      { status: 500 },
     );
   }
 
-  return NextResponse.json({
-    user: {
-      profileId: credential.profile_id,
-      name: profile.display_name,
-      role: normalizeDatabaseRole(membership.roles),
-      designation: designationForRoles(membership.roles),
-      organizationId: organization.id,
-    },
+  await admin.from("audit_events").insert({
+    organization_id: currentUser.organizationId,
+    actor_profile_id: currentUser.profileId,
+    action: "passcode_changed",
+    entity_type: "passcode_credential",
+    entity_id: currentUser.profileId,
   });
+
+  return NextResponse.json({ ok: true });
 }
