@@ -98,6 +98,9 @@ Install CodeRabbit only if desired; `.coderabbit.yaml` is already checked in. Hu
    | `APP_PIN_PEPPER`                       | yes (Sensitive) | **no**   |
    | `NEXT_PUBLIC_RESTAURANT_SLUG`          | yes             | optional |
    | `NEXT_PUBLIC_DEMO_MODE`                | `false`         | `true`   |
+   | `NEON_DATABASE_URL`                    | yes (Sensitive) | **no**   |
+
+   `NEON_DATABASE_URL` (Feature 018) follows the identical rule as the Supabase secrets above, for the identical reason: never in Preview, so a PR's preview deployment stays a fully self-contained demo build with zero external dependencies, not just zero Supabase dependency. It's also **runtime-only** — not needed in CI (`.github/workflows/ci.yml` already runs `npm run build` today with zero Supabase secrets set, and passes, because every data-layer module in this app reads its connection details from `process.env` lazily at request time, never at module load; `src/features/attendance/data/attendance-data.ts` follows the same rule).
 
    Both entry routes (`/` and `/r/[restaurantSlug]`) already compute demo mode as `NEXT_PUBLIC_DEMO_MODE === "true" || !NEXT_PUBLIC_SUPABASE_URL || !NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — simply never adding the Supabase variables to Preview already forces it into demo mode, with `NEXT_PUBLIC_DEMO_MODE=true` set explicitly there too for clarity. This means a PR's preview deployment is always a fully-functional demo-mode app with zero chance of touching the production database, at zero extra infrastructure cost. `SUPABASE_PROJECT_ID` and `SUPABASE_ACCESS_TOKEN` do not belong in Vercel at all — they're GitHub Actions secrets only (step 4).
 

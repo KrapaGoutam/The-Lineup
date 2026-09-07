@@ -1,0 +1,88 @@
+import type { NeonUser } from "../data/attendance-data";
+
+export type AttendancePeriodSelection =
+  | { type: "this-month" }
+  | { type: "previous-month" }
+  | { type: "custom"; start: string; end: string };
+
+/**
+ * "This month"/"Previous month" resolve against the restaurant's own wall
+ * clock date (`todayLocalDate`, computed by the caller via the same
+ * `zonedWallTimeFromInstant` helper `getScheduleContext` already uses for
+ * "today" -- never the server's or browser's local time) -- a manager
+ * checking this near midnight shouldn't see a month boundary that
+ * doesn't match the restaurant's actual calendar day. `Date.UTC`'s own
+ * month-rollover handles "previous month from January" correctly (month
+ * index -1 normalizes to December of the prior year) without manual
+ * modulo arithmetic.
+ */
+export function resolvePeriodRange(
+  selection: AttendancePeriodSelection,
+  todayLocalDate: string,
+): { start: string; end: string } {
+  if (selection.type === "custom") {
+    return { start: selection.start, end: selection.end };
+  }
+  const [year, month] = todayLocalDate.split("-").map(Number);
+  const monthIndex =
+    selection.type === "previous-month" ? month - 2 : month - 1;
+  const start = new Date(Date.UTC(year, monthIndex, 1));
+  // Day 0 of the following month is the last day of this one -- avoids a
+  // separate "days in month" lookup, including for February.
+  const end = new Date(Date.UTC(year, monthIndex + 1, 0));
+  const toDateString = (date: Date) => date.toISOString().slice(0, 10);
+  return { start: toDateString(start), end: toDateString(end) };
+}
+
+/**
+ * "Full Name (role)" is the default display label -- falls back to
+ * appending a short id suffix only when both name AND role collide too
+ * (two people who share a name and happen to have the identically-typo'd
+ * free-text role). Neon's `role` is displayed verbatim (whitespace
+ * trimmed only, never corrected or mapped onto this app's own
+ * designations) -- see docs/features/018-neon-attendance-report.md.
+ */
+export function buildDisplayLabels(
+  users: Array<Pick<NeonUser, "id" | "fullName" | "role">>,
+): Map<number, string> {
+  const baseLabelCounts = new Map<string, number>();
+  const withBaseLabel = users.map((user) => {
+    const trimmedRole = user.role.trim();
+    const base = trimmedRole
+      ? `${user.fullName} (${trimmedRole})`
+      : user.fullName;
+    baseLabelCounts.set(base, (baseLabelCounts.get(base) ?? 0) + 1);
+    return { user, base };
+  });
+
+  const labels = new Map<number, string>();
+  for (const { user, base } of withBaseLabel) {
+    const collides = (baseLabelCounts.get(base) ?? 0) > 1;
+    labels.set(user.id, collides ? `${base} #${user.id}` : base);
+  }
+  return labels;
+}
+
+export type HoursAggregate = {
+  totalHours: number;
+  // A null hours_worked row is never silently folded into "0" without a
+  // trace -- the total says how many rows it had to exclude, so a
+  // number that looks lower than expected has an explanation attached
+  // to it, not just a bare figure.
+  excludedRowCount: number;
+};
+
+export function aggregateHours(
+  rows: Array<{ hoursWorked: number | null }>,
+): HoursAggregate {
+  let totalHours = 0;
+  let excludedRowCount = 0;
+  for (const row of rows) {
+    if (row.hoursWorked === null) {
+      excludedRowCount += 1;
+      continue;
+    }
+    totalHours += row.hoursWorked;
+  }
+  return { totalHours, excludedRowCount };
+}

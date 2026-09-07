@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import {
   CalendarDays,
+  CalendarSearch,
   Clock3,
   KeyRound,
   LogOut,
@@ -15,6 +16,7 @@ import {
 
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
+import { AttendanceReport } from "@/features/attendance/components/attendance-report";
 import {
   designationToRole,
   type Designation,
@@ -76,7 +78,7 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-type AppTab = "schedule" | "allocation" | "tips" | "team";
+type AppTab = "schedule" | "allocation" | "tips" | "team" | "attendance";
 
 const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
   { id: "schedule", label: "Schedule", icon: CalendarDays },
@@ -85,6 +87,13 @@ const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
 ];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
+// Feature 018: manager/owner-only, gated exactly like Team -- added to
+// visibleTabs only when isManager, same as teamTab below.
+const attendanceTab = {
+  id: "attendance" as const,
+  label: "Attendance",
+  icon: CalendarSearch,
+};
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -405,7 +414,7 @@ export function RestaurantOperationsApp({
   }
 
   const isManager = user.role !== "server";
-  const visibleTabs = isManager ? [...tabs, teamTab] : tabs;
+  const visibleTabs = isManager ? [...tabs, teamTab, attendanceTab] : tabs;
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -1110,12 +1119,19 @@ export function RestaurantOperationsApp({
             onReactivate={reactivateTeamMember}
           />
         ) : null}
+        {tab === "attendance" && isManager ? (
+          <AttendanceReport
+            restaurantSlug={restaurantSlug}
+            demoMode={demoMode}
+            timeZone={timeZone}
+          />
+        ) : null}
       </main>
 
       <nav
         className={cn(
           "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
-          isManager ? "grid-cols-4" : "grid-cols-3",
+          isManager ? "grid-cols-5" : "grid-cols-3",
         )}
         aria-label="Mobile navigation"
       >
