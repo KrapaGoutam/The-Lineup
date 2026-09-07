@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assignableDesignations,
   canChangeDesignation,
+  canDeactivateMember,
   designationLabel,
 } from "./designations";
 
@@ -128,6 +129,61 @@ describe("assignableDesignations", () => {
         targetCurrentDesignation: "staff",
       }),
     ).toEqual([]);
+  });
+});
+
+describe("canDeactivateMember", () => {
+  it("refuses self-targeting unconditionally, for every role including owner", () => {
+    for (const designation of [
+      "owner",
+      "manager",
+      "assistant_manager",
+      "staff",
+    ] as const) {
+      expect(
+        canDeactivateMember({
+          actorProfileId: "same-person",
+          actorDesignation: designation,
+          targetProfileId: "same-person",
+          targetCurrentDesignation: designation,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it("otherwise mirrors canChangeDesignation exactly for a different target", () => {
+    expect(
+      canDeactivateMember({
+        actorProfileId: "owner-1",
+        actorDesignation: "owner",
+        targetProfileId: "manager-1",
+        targetCurrentDesignation: "manager",
+      }),
+    ).toBe(true);
+    expect(
+      canDeactivateMember({
+        actorProfileId: "manager-1",
+        actorDesignation: "manager",
+        targetProfileId: "owner-1",
+        targetCurrentDesignation: "owner",
+      }),
+    ).toBe(false);
+    expect(
+      canDeactivateMember({
+        actorProfileId: "manager-1",
+        actorDesignation: "manager",
+        targetProfileId: "staff-1",
+        targetCurrentDesignation: "staff",
+      }),
+    ).toBe(true);
+    expect(
+      canDeactivateMember({
+        actorProfileId: "am-1",
+        actorDesignation: "assistant_manager",
+        targetProfileId: "staff-1",
+        targetCurrentDesignation: "staff",
+      }),
+    ).toBe(false);
   });
 });
 
