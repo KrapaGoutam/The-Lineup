@@ -97,7 +97,7 @@ The visible allocation board is the operational order. The next round does not s
 
 ## Out of scope for MVP
 
-- Payroll, clock-in/out, POS settlement, reservations, and waitlist marketplace integrations
+- Payroll, clock-in/out, POS settlement, reservations, and waitlist marketplace integrations — **except** read-only display of already-existing attendance data from a separate external system (Feature 018), approved as a narrow, explicit carve-out: no write path into it, no clock-in/out capability built here, and no computation on the hours (payroll, overtime, compliance) performed by this app
 - AI-generated schedules without manager approval
 - Native iOS/Android apps
 - Offline conflict resolution across multiple host devices

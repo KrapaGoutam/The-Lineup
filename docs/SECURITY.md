@@ -135,6 +135,18 @@ The very first owner has no one to sign in as to promote them — self-serve reg
 
 **Closing the "already-signed-in-elsewhere" application gap**: `requireLiveSession` (`src/lib/supabase/require-live-session.ts`) — the same `supabase.auth.getUser()` check `finalizeTipsAction` already used before this feature existed, now shared — runs first in every real-mode Server Action across schedule, tips, allocation, and team, and in every passcode/team Route Handler. A dead session (banned, most commonly by deactivation) is reported as a distinct, recognizable result (`sessionInvalid: true`) rather than an ordinary error string; the client's single reaction point (`forceSignOut` in `restaurant-operations-app.tsx`) signs out cleanly and returns to the passcode screen instead of showing a raw error banner. **Named, accepted residual gap**: a genuinely idle tab making no server-reaching request at all keeps showing whatever was already loaded into client-side state until its next interaction — bounded to stale _display_, since no actual read or write can succeed regardless (see `memberships.active` above). The approved spec considered and declined a proactive Realtime-based kick for this in v1.
 
+### Neon attendance report (Feature 018) — a read from outside this app's tenancy model entirely
+
+Unlike every other feature in this document, `src/features/attendance/` never touches Supabase RLS at all — by construction, not by exception. It reads a separate Neon Postgres database over a read-only connection string (`NEON_DATABASE_URL`), never writes anything, and nothing it reads is ever persisted into any Supabase table. There is no row-level policy that could apply here, because there is no row here that this app's own database ever sees.
+
+**Authorization is therefore entirely application-layer, with no RLS backstop** — a real difference from almost everything else in this schema, named explicitly rather than left implicit: `requireManager` (`src/features/attendance/actions/attendance-actions.ts`) checks the caller's role before either Server Action ever opens a Neon connection. The Attendance tab is also hidden client-side for a server, matching Team — but since Neon has no RLS of its own to fall back on, the application-layer check inside the action is the _only_ thing standing between a signed-in server and Neon data if the UI gate were ever bypassed, not a second layer behind a database-enforced one.
+
+**The read-only connection string is enforced by Neon's own role grants, confirmed live, not just assumed from its name**: an `INSERT` attempt against the real connection during this feature's build returned `permission denied for table users` directly from Postgres — the role genuinely cannot write, independent of anything this app's code does or doesn't do.
+
+**`pin_hash` exclusion is pinned to the literal query text**, not a column list that could quietly drift out of sync with what's actually sent (`USERS_QUERY_SQL`, asserted in `attendance-data.test.ts`) — confirmed live that the column genuinely exists on the real table (so its absence from the query is a deliberate omission, not a coincidence of an already-missing column).
+
+**No tenant scoping is possible on the Neon side**: its `users` table has no organization column at all. This integration assumes a single restaurant/organization uses this deployment — the only reality that exists today. A second organization sharing this codebase would see the identical Neon data the first one does; there is no key to filter by. Named here and in `docs/DATA_MODEL.md`, not discovered later.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.

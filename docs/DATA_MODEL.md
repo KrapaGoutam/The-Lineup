@@ -135,6 +135,8 @@ Migrations explicitly grant only the verbs required by the application roles. Gr
 
 `passcode_credentials` and `passcode_login_attempts` have no browser-role policies or grants. The service role is used only inside route handlers. Composite `(id, organization_id)` foreign keys prevent child rows from referencing a record in another tenant.
 
+**Neon attendance data (Feature 018) is outside this data model entirely.** `src/features/attendance/` reads a separate Neon Postgres database (`users`, `attendance`) over a read-only connection — nothing it reads is ever written into any table above, so none of this section's grants/RLS discussion applies to it; see `docs/SECURITY.md`'s Feature 018 subsection for the full account. One real limitation worth recording here: Neon's `users` table has no organization/tenant column, so this integration cannot be scoped per-organization the way every table above is — it assumes a single restaurant uses this deployment, the only reality that exists today.
+
 ## Generated types
 
 After applying migrations to the linked project:

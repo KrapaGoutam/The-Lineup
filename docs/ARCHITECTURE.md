@@ -26,6 +26,7 @@ src/
     schedules/           Morning/Evening/Full Day drafts and views
     allocation/          flexible live rotation board and undo/redo
     tips/                interval splitting and exact cent totals
+    attendance/          read-only report from a separate Neon database (Feature 018) -- no Supabase RLS surface, see below
     floor/               retained pure section-assignment engine
     rotation/            retained pure recommendation engine
   lib/
@@ -48,6 +49,7 @@ Features may import from `components`, `lib`, and `types`. A feature does not re
 - Queries select only required columns and filter organization/location early.
 - Client subscriptions invalidate or patch the small live floor state; they do not duplicate the entire database.
 - **Implemented (Feature 015, Phases B/C/D)**: `getScheduleContext()`, `getAllocationContext()`, and `getTipsContext()` are the real Server Component reads in the app, called once from `loadPageData()` (shared by both entry routes) and passed down as initial props; the client component seeds its state from them when present and falls back to the original demo constants when not (`demoMode` or no organization resolved yet). `getAllocationContext()` is the first of the three to also be kept live afterward: a client-side Realtime subscription calls `router.refresh()` to re-run the same Server Component read whenever another device changes the board, and the resulting fresh prop is resynced into local state during render (not inside a `useEffect`, which would commit one stale frame first).
+- **Deliberate exception (Feature 018)**: the attendance report's reads are never part of `loadPageData()`/the initial Server Component render, unlike everything above — they're client-triggered Server Action calls, fired only when the (manager-only) Attendance tab is actually opened, and again on every person/period filter change. This is intentional, not an oversight: attendance reads a separate external database (Neon) that this app doesn't control the availability of, and folding it into the shared initial page load would mean a slow or unreachable Neon could degrade or break page load for every signed-in user, not just the one manager-only surface that needs it. See `docs/features/018-neon-attendance-report.md`'s Implementation map.
 
 ### Mutations
 
