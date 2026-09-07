@@ -40,6 +40,21 @@ export function normalizePeriodMonth(localDate: string): string {
 }
 
 /**
+ * Feature 020 Phase 4. The `period_month` value for the calendar month
+ * immediately before the one containing `localDate` -- what the
+ * dashboard's "previous month generated" tile filters periods against.
+ * `Date.UTC`'s own month-rollover handles January correctly (month index
+ * -1 normalizes to December of the prior year), the same trick
+ * `resolvePeriodRange`'s "previous-month" branch already uses in the
+ * attendance domain.
+ */
+export function previousPeriodMonth(localDate: string): string {
+  const [year, month] = localDate.split("-").map(Number);
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/**
  * The full [start, end] calendar-day range for a `period_month` value --
  * what actually gets passed to Neon's attendance query. `Date.UTC`'s own
  * month-rollover handles December correctly (month index 12 normalizes to
