@@ -410,6 +410,43 @@ export function RestaurantOperationsApp({
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
 
+  // Feature 017: `team` now includes deactivated members too (so the Team
+  // tab can offer "Reactivate" -- see getOrganizationRoster's doc
+  // comment), but nowhere else should ever offer a deactivated person as
+  // a new assignment target. Schedule/allocation/tips all get this
+  // filtered view; only TeamWorkspace gets the full `team`.
+  const activeTeam = team.filter((member) => member.active !== false);
+
+  /**
+   * Feature 017: signs the client out cleanly and returns to the
+   * passcode screen -- the same as clicking "Sign out" -- rather than
+   * leaving a stale, no-longer-authorized session's UI on screen. Also
+   * clears the (already-dead, since this only ever runs after the
+   * server reported the session invalid) local Supabase cookie, same as
+   * a normal sign-out -- fire-and-forget, since nothing meaningful
+   * depends on it finishing before the UI switches to the login screen.
+   */
+  function forceSignOut() {
+    if (!demoMode) void fetch("/api/auth/signout", { method: "POST" });
+    setUser(null);
+    setTab("schedule");
+  }
+
+  /**
+   * The single reaction point for every real-mode action whose result
+   * reports `sessionInvalid` (set by requireLiveSession, shared across
+   * every Server Action file) -- most commonly, this person was
+   * deactivated mid-session. An ordinary action failure (no
+   * sessionInvalid flag) still goes to the normal actionError banner.
+   */
+  function handleActionFailure(error: string, sessionInvalid?: boolean) {
+    if (sessionInvalid) {
+      forceSignOut();
+      return;
+    }
+    setActionError(error);
+  }
+
   async function addShifts(added: DemoShift[]) {
     if (added.length === 0) return;
     if (demoMode) {
@@ -434,7 +471,7 @@ export function RestaurantOperationsApp({
       })),
     });
     if (!result.ok) {
-      setActionError(result.error);
+      handleActionFailure(result.error, result.sessionInvalid);
       return;
     }
     setShifts((current) => [...current, ...result.data]);
@@ -449,7 +486,7 @@ export function RestaurantOperationsApp({
         timeZone,
       });
       if (!result.ok) {
-        setActionError(result.error);
+        handleActionFailure(result.error, result.sessionInvalid);
         return;
       }
     }
@@ -471,7 +508,7 @@ export function RestaurantOperationsApp({
         shiftDefaults: nextShiftDefaults,
       });
       if (!result.ok) {
-        setActionError(result.error);
+        handleActionFailure(result.error, result.sessionInvalid);
         return;
       }
     }
@@ -498,7 +535,10 @@ export function RestaurantOperationsApp({
       amountCents: interval.amountCents,
       participantIds: interval.participantIds,
     });
-    if (!result.ok) return { ok: false, error: result.error };
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
     setTipPoolId(result.data.tipPoolId);
     setTipIntervals((current) => [...current, result.data.interval]);
     return { ok: true };
@@ -514,7 +554,7 @@ export function RestaurantOperationsApp({
         tipPoolId,
       });
       if (!result.ok) {
-        setActionError(result.error);
+        handleActionFailure(result.error, result.sessionInvalid);
         return;
       }
     }
@@ -540,7 +580,7 @@ export function RestaurantOperationsApp({
         reason,
       });
       if (!result.ok) {
-        setActionError(result.error);
+        handleActionFailure(result.error, result.sessionInvalid);
         return;
       }
     }
@@ -580,7 +620,7 @@ export function RestaurantOperationsApp({
         nextDesignation: next,
       });
       if (!result.ok) {
-        setActionError(result.error);
+        handleActionFailure(result.error, result.sessionInvalid);
         return;
       }
       setTeam((current) =>
@@ -659,8 +699,13 @@ export function RestaurantOperationsApp({
         newPasscode: input.newPasscode,
       }),
     });
-    const payload = (await response.json()) as { ok?: true; error?: string };
+    const payload = (await response.json()) as {
+      ok?: true;
+      error?: string;
+      sessionInvalid?: true;
+    };
     if (!response.ok || !payload.ok) {
+      if (payload.sessionInvalid) forceSignOut();
       return {
         ok: false,
         error: payload.error ?? "Unable to change your passcode right now.",
@@ -728,14 +773,157 @@ export function RestaurantOperationsApp({
       ok?: true;
       passcode?: string;
       error?: string;
+      sessionInvalid?: true;
     };
     if (!response.ok || !payload.ok || !payload.passcode) {
+      if (payload.sessionInvalid) forceSignOut();
       return {
         ok: false,
         error: payload.error ?? "Unable to reset this passcode right now.",
       };
     }
     return { ok: true, passcode: payload.passcode };
+  }
+
+  /**
+   * Feature 017. Authorization (`canDeactivateMember`) is enforced the
+   * same way every other personnel action in this app is: TeamWorkspace
+   * only renders the Deactivate button for a target the actor is allowed
+   * to touch, and the real-mode route re-checks it server-side too. On
+   * success, `team` is updated locally the same way `changeDesignation`
+   * already does, rather than waiting on a reload -- so the row flips to
+   * "Reactivate" immediately.
+   */
+  async function deactivateTeamMember(input: {
+    targetProfileId: string;
+    reason: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      setTeam((current) =>
+        current.map((member) =>
+          member.id === input.targetProfileId
+            ? { ...member, active: false }
+            : member,
+        ),
+      );
+      // Also drops their demo login credential, mirroring the real
+      // Auth ban -- a deactivated demo member can't sign back in either.
+      setDemoAccounts((current) => {
+        const updated = { ...current };
+        for (const [passcode, account] of Object.entries(current)) {
+          if (account.profileId === input.targetProfileId) {
+            delete updated[passcode];
+          }
+        }
+        return updated;
+      });
+      return { ok: true };
+    }
+
+    const response = await fetch("/api/team/deactivate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        restaurantSlug,
+        targetProfileId: input.targetProfileId,
+        reason: input.reason,
+      }),
+    });
+    const payload = (await response.json()) as {
+      ok?: true;
+      error?: string;
+      sessionInvalid?: true;
+    };
+    if (!response.ok || !payload.ok) {
+      if (payload.sessionInvalid) forceSignOut();
+      return {
+        ok: false,
+        error: payload.error ?? "Unable to deactivate this person right now.",
+      };
+    }
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === input.targetProfileId
+          ? { ...member, active: false }
+          : member,
+      ),
+    );
+    return { ok: true };
+  }
+
+  /**
+   * The exact symmetric reverse of deactivateTeamMember. Real mode
+   * restores the exact passcode they had before (the credential row's
+   * `active` flips back, its locator was never touched) -- demo mode
+   * can't do that, since deactivateTeamMember already deleted their
+   * demoAccounts entry entirely (there's no inactive-but-remembered
+   * credential to restore in the in-memory model), so it silently issues
+   * a fresh random one instead. A named, demo-mode-only rough edge, not
+   * a real-mode behavior difference.
+   */
+  async function reactivateTeamMember(input: {
+    targetProfileId: string;
+    reason: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      const target = team.find((member) => member.id === input.targetProfileId);
+      setTeam((current) =>
+        current.map((member) =>
+          member.id === input.targetProfileId
+            ? { ...member, active: true }
+            : member,
+        ),
+      );
+      const alreadyHasCredential = Object.values(demoAccounts).some(
+        (account) => account.profileId === input.targetProfileId,
+      );
+      if (target && !alreadyHasCredential) {
+        const passcode = generateDemoPasscode(
+          new Set(Object.keys(demoAccounts)),
+        );
+        setDemoAccounts((current) => ({
+          ...current,
+          [passcode]: {
+            profileId: target.id,
+            name: target.name,
+            role: target.role,
+            designation: target.designation,
+            organizationId: DEMO_ORGANIZATION_ID,
+          },
+        }));
+      }
+      return { ok: true };
+    }
+
+    const response = await fetch("/api/team/reactivate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        restaurantSlug,
+        targetProfileId: input.targetProfileId,
+        reason: input.reason,
+      }),
+    });
+    const payload = (await response.json()) as {
+      ok?: true;
+      error?: string;
+      sessionInvalid?: true;
+    };
+    if (!response.ok || !payload.ok) {
+      if (payload.sessionInvalid) forceSignOut();
+      return {
+        ok: false,
+        error: payload.error ?? "Unable to reactivate this person right now.",
+      };
+    }
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === input.targetProfileId
+          ? { ...member, active: true }
+          : member,
+      ),
+    );
+    return { ok: true };
   }
 
   async function signOut() {
@@ -877,7 +1065,7 @@ export function RestaurantOperationsApp({
         {tab === "schedule" ? (
           <ScheduleWorkspace
             user={user}
-            team={team}
+            team={activeTeam}
             shiftDefaults={shiftDefaults}
             shifts={shifts}
             weekDates={weekDates}
@@ -890,19 +1078,20 @@ export function RestaurantOperationsApp({
         {tab === "allocation" ? (
           <AllocationWorkspace
             user={user}
-            team={team}
+            team={activeTeam}
             boardLocked={tipsStatus === "finalized"}
             onReopenTips={reopenTips}
             tipsAuditLog={tipsAuditLog}
             demoMode={demoMode}
             restaurantSlug={restaurantSlug}
             initialContext={initialAllocationContext}
+            onSessionInvalid={forceSignOut}
           />
         ) : null}
         {tab === "tips" ? (
           <TipWorkspace
             user={user}
-            team={team}
+            team={activeTeam}
             status={tipsStatus}
             intervals={tipIntervals}
             onAddInterval={addTipInterval}
@@ -917,6 +1106,8 @@ export function RestaurantOperationsApp({
             team={team}
             onChangeDesignation={changeDesignation}
             onResetPasscode={resetMemberPasscode}
+            onDeactivate={deactivateTeamMember}
+            onReactivate={reactivateTeamMember}
           />
         ) : null}
       </main>

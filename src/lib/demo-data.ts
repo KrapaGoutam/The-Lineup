@@ -17,6 +17,13 @@ export type TeamMember = {
   // the one place both are written together.
   designation: Designation;
   color: string;
+  // Feature 017. Optional, defaults to active -- every entry in this
+  // file's static `team` array is implicitly active without needing to
+  // say so. `undefined` and `true` mean the same thing; only an explicit
+  // `false` (set by deactivateTeamMember in restaurant-operations-app.tsx,
+  // or a real `memberships.active = false` row via getOrganizationRoster)
+  // means deactivated.
+  active?: boolean;
 };
 
 export type DemoShift = {

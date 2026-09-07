@@ -84,3 +84,26 @@ const DESIGNATION_LABELS: Record<Designation, string> = {
 export function designationLabel(designation: Designation): string {
   return DESIGNATION_LABELS[designation];
 }
+
+/**
+ * Feature 017. Authorization for deactivating (or reactivating) a member
+ * is the same predicate as a designation change or a passcode reset --
+ * canChangeDesignation, reused directly rather than re-derived a third
+ * time -- plus one rule neither of those needed: deactivating yourself
+ * is refused unconditionally, for every role including owner. An owner
+ * who wants to stop using the app can just stop signing in; there is no
+ * legitimate reason to self-deactivate, and a real lockout risk if it
+ * happens by mistake or via a compromised session covering its tracks.
+ */
+export function canDeactivateMember(input: {
+  actorProfileId: string;
+  actorDesignation: Designation;
+  targetProfileId: string;
+  targetCurrentDesignation: Designation;
+}): boolean {
+  if (input.actorProfileId === input.targetProfileId) return false;
+  return canChangeDesignation({
+    actorDesignation: input.actorDesignation,
+    targetCurrentDesignation: input.targetCurrentDesignation,
+  });
+}

@@ -3,12 +3,18 @@
 import { revalidatePath } from "next/cache";
 
 import type { BoardAction } from "@/features/allocation/domain/rotation-board";
+import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      // Feature 017: see requireLiveSession's doc comment.
+      sessionInvalid?: true;
+    };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -46,6 +52,9 @@ export async function executeBoardActionRemote(
   input: ExecuteBoardActionInput,
 ): Promise<ActionResult<{ serviceSessionId: number }>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const serviceDate = zonedWallTimeFromInstant(new Date(), input.timeZone).date;
   const { action } = input;
 
@@ -235,6 +244,9 @@ export async function undoBoardAction(input: {
   serviceSessionId: number;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const { error } = await supabase.rpc("board_undo", {
     p_organization_id: input.organizationId,
     p_service_session_id: input.serviceSessionId,
@@ -250,6 +262,9 @@ export async function redoBoardAction(input: {
   serviceSessionId: number;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const { error } = await supabase.rpc("board_redo", {
     p_organization_id: input.organizationId,
     p_service_session_id: input.serviceSessionId,

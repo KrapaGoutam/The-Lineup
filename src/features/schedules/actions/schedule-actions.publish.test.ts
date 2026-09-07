@@ -95,7 +95,16 @@ function makeFakeSupabase(periods: PeriodRow[]) {
     return builder;
   }
 
-  return { from };
+  return {
+    from,
+    // Feature 017: publishScheduleAction now calls requireLiveSession
+    // first, which calls this -- a live "signed in" stub, since this
+    // test file is about the publish/version logic, not session
+    // handling (that has its own coverage in require-live-session.test.ts).
+    auth: {
+      getUser: async () => ({ data: { user: { id: "fake-user" } } }),
+    },
+  };
 }
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));

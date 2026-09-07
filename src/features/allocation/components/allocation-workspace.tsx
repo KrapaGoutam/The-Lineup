@@ -170,6 +170,7 @@ export function AllocationWorkspace({
   demoMode,
   restaurantSlug,
   initialContext = null,
+  onSessionInvalid,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -179,6 +180,11 @@ export function AllocationWorkspace({
   demoMode: boolean;
   restaurantSlug: string;
   initialContext?: AllocationContext | null;
+  // Feature 017: called instead of setting the local error banner when a
+  // board action's result reports sessionInvalid (this person was
+  // deactivated mid-session, most commonly) -- the parent owns signing
+  // out, this component only detects and reports it.
+  onSessionInvalid: () => void;
 }) {
   const router = useRouter();
   const isManager = user.role !== "server";
@@ -318,6 +324,10 @@ export function AllocationWorkspace({
     if (!result.ok) {
       setHistory(previousHistory);
       setEventCount((count) => count - 1);
+      if (result.sessionInvalid) {
+        onSessionInvalid();
+        return;
+      }
       setActionError(result.error);
       return;
     }
@@ -335,7 +345,10 @@ export function AllocationWorkspace({
       organizationId: user.organizationId,
       serviceSessionId,
     });
-    if (!result.ok) setActionError(result.error);
+    if (!result.ok) {
+      if (result.sessionInvalid) onSessionInvalid();
+      else setActionError(result.error);
+    }
   }
 
   async function redo() {
@@ -349,7 +362,10 @@ export function AllocationWorkspace({
       organizationId: user.organizationId,
       serviceSessionId,
     });
-    if (!result.ok) setActionError(result.error);
+    if (!result.ok) {
+      if (result.sessionInvalid) onSessionInvalid();
+      else setActionError(result.error);
+    }
   }
 
   function submitReopen(event: FormEvent<HTMLFormElement>) {

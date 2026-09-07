@@ -3,11 +3,17 @@
 import { revalidatePath } from "next/cache";
 
 import type { Designation } from "@/features/auth/domain/passcode";
+import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      // Feature 017: see requireLiveSession's doc comment.
+      sessionInvalid?: true;
+    };
 
 /**
  * The inverse of designationForRoles (passcode.ts). `staff` always writes
@@ -38,6 +44,9 @@ export async function updateTeamDesignationAction(input: {
   nextDesignation: Designation;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const { error } = await supabase
     .from("memberships")
     .update({ roles: ROLES_FOR_DESIGNATION[input.nextDesignation] })

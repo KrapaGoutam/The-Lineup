@@ -3,12 +3,18 @@
 import { revalidatePath } from "next/cache";
 
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
+import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeToInstant } from "@/lib/timezone";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      // Feature 017: see requireLiveSession's doc comment.
+      sessionInvalid?: true;
+    };
 
 async function getOrCreateTipPool(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -54,6 +60,9 @@ export async function addTipIntervalAction(
   input: AddTipIntervalInput,
 ): Promise<ActionResult<{ interval: TipIntervalInput; tipPoolId: number }>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const pool = await getOrCreateTipPool(
     supabase,
     input.organizationId,
@@ -171,8 +180,18 @@ export async function finalizeTipsAction(input: {
   tipPoolId: number;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  // finalized_by needs the raw auth user id, so this reads it directly
+  // rather than going through requireLiveSession (which only reports
+  // live/dead, not the id) -- same underlying getUser() check, just with
+  // the id kept.
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return { ok: false, error: "Not signed in." };
+  if (!auth.user) {
+    return {
+      ok: false,
+      error: "Your session is no longer valid. Please sign in again.",
+      sessionInvalid: true,
+    };
+  }
 
   const { error } = await supabase
     .from("tip_pools")
@@ -203,6 +222,9 @@ export async function reopenTipsAction(input: {
   reason: string;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const { error } = await supabase
     .from("tip_pools")
     .update({ status: "draft", finalized_at: null, finalized_by: null })

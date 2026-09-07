@@ -26,6 +26,15 @@ const SERVER_COLORS = [
  * grid, allocation's quick-add, tips' participant list, the Team tab)
  * needs no change beyond where the array comes from -- the same "adapt
  * to the existing shape" strategy used throughout this feature.
+ *
+ * Feature 017: includes inactive (deactivated) members too, unlike
+ * before -- the Team tab needs to see them to offer "Reactivate," and
+ * this is the one roster query every real-mode consumer shares. Callers
+ * that must never offer a deactivated person as an assignment target
+ * (the schedule/allocation/tips pickers) filter on the returned `active`
+ * field themselves (`restaurant-operations-app.tsx`'s `activeTeam`) --
+ * this function stays the single source of the full roster, not two
+ * near-duplicate queries.
  */
 export async function getOrganizationRoster(
   organizationId: string,
@@ -33,9 +42,8 @@ export async function getOrganizationRoster(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("profile_id, roles, created_at, profiles(display_name)")
+    .select("profile_id, roles, active, created_at, profiles(display_name)")
     .eq("organization_id", organizationId)
-    .eq("active", true)
     .order("created_at", { ascending: true });
 
   if (error) console.error("getOrganizationRoster", error);
@@ -62,6 +70,7 @@ export async function getOrganizationRoster(
       role: designationToRole(designation),
       designation,
       color: SERVER_COLORS[index % SERVER_COLORS.length],
+      active: row.active,
     };
   });
 }
