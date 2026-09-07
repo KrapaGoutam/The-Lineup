@@ -13,6 +13,7 @@ import {
   deleteDraftPaymentAction,
   generatePayrollPeriodAction,
   getPayrollAccessAction,
+  getPayrollDashboardAction,
   getPayrollLedgerAction,
   getPayrollRateOptionsAction,
   listPayrollPeriodsAction,
@@ -24,6 +25,7 @@ import {
   setPayrollDefaultRateAction,
   setPayrollRateOverrideAction,
   type PayrollAccessView,
+  type PayrollDashboard,
   type PayrollLedger,
   type PayrollRateOptions,
 } from "@/features/payroll/actions/payroll-actions";
@@ -33,6 +35,7 @@ import type {
 } from "@/features/payroll/data/payroll-data";
 import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
 import { dollarsToCents } from "@/features/tips/domain/calculate-tip-splits";
+import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -85,9 +88,12 @@ function Header() {
  */
 export function PayrollWorkspace({
   restaurantSlug,
+  timeZone,
 }: {
   restaurantSlug: string;
+  timeZone: string;
 }) {
+  const todayLocalDate = zonedWallTimeFromInstant(new Date(), timeZone).date;
   const [access, setAccess] = useState<PayrollAccessView | null>(null);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [accessReloadKey, setAccessReloadKey] = useState(0);
@@ -154,19 +160,31 @@ export function PayrollWorkspace({
     return (
       <div className="space-y-4">
         <Header />
-        <SelfPayrollView restaurantSlug={restaurantSlug} />
+        <SelfPayrollView
+          restaurantSlug={restaurantSlug}
+          todayLocalDate={todayLocalDate}
+        />
       </div>
     );
   }
   return (
     <div className="space-y-4">
       <Header />
-      <PrivilegedPayrollView restaurantSlug={restaurantSlug} />
+      <PrivilegedPayrollView
+        restaurantSlug={restaurantSlug}
+        todayLocalDate={todayLocalDate}
+      />
     </div>
   );
 }
 
-function PrivilegedPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
+function PrivilegedPayrollView({
+  restaurantSlug,
+  todayLocalDate,
+}: {
+  restaurantSlug: string;
+  todayLocalDate: string;
+}) {
   const [rateOptions, setRateOptions] = useState<PayrollRateOptions | null>(
     null,
   );
@@ -178,6 +196,7 @@ function PrivilegedPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
   const [periodsReloadKey, setPeriodsReloadKey] = useState(0);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [dashboardReloadKey, setDashboardReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,10 +237,19 @@ function PrivilegedPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
   function reloadEverything() {
     setRateReloadKey((key) => key + 1);
     setPeriodsReloadKey((key) => key + 1);
+    setDashboardReloadKey((key) => key + 1);
   }
 
   return (
     <>
+      <PayrollDashboardTiles
+        restaurantSlug={restaurantSlug}
+        todayLocalDate={todayLocalDate}
+        scope="all"
+        users={rateOptions?.users ?? []}
+        reloadKey={dashboardReloadKey}
+      />
+
       {rateOptionsError ? (
         <ErrorPanel
           message={rateOptionsError}
@@ -278,7 +306,13 @@ function PrivilegedPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
   );
 }
 
-function SelfPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
+function SelfPayrollView({
+  restaurantSlug,
+  todayLocalDate,
+}: {
+  restaurantSlug: string;
+  todayLocalDate: string;
+}) {
   const [periods, setPeriods] = useState<PayrollPeriod[] | null>(null);
   const [periodsError, setPeriodsError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -331,6 +365,13 @@ function SelfPayrollView({ restaurantSlug }: { restaurantSlug: string }) {
 
   return (
     <div className="space-y-4">
+      <PayrollDashboardTiles
+        restaurantSlug={restaurantSlug}
+        todayLocalDate={todayLocalDate}
+        scope="self"
+        users={[]}
+        reloadKey={reloadKey}
+      />
       <Card>
         <CardContent className="pt-4">
           <Label htmlFor="self-period-select">Month</Label>
@@ -380,6 +421,152 @@ function ErrorPanel({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Feature 020 Phase 4. Read-only -- fetches `getPayrollDashboardAction`
+ * and renders it, nothing more; no form, no mutation anywhere in this
+ * component. `scope="all"` shows the org-wide two tiles plus a
+ * per-person table; `scope="self"` shows the same fetch's data (the
+ * server already scoped `perPerson` down to one entry via RLS, the exact
+ * same pattern the ledger panel already uses) collapsed to that one
+ * person's own numbers -- never a second, differently-scoped fetch.
+ */
+function PayrollDashboardTiles({
+  restaurantSlug,
+  todayLocalDate,
+  scope,
+  users,
+  reloadKey,
+}: {
+  restaurantSlug: string;
+  todayLocalDate: string;
+  scope: "all" | "self";
+  users: { id: number; fullName: string; role: string }[];
+  reloadKey: number;
+}) {
+  const [dashboard, setDashboard] = useState<PayrollDashboard | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [localReloadKey, setLocalReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setError(null);
+      const result = await getPayrollDashboardAction({
+        restaurantSlug,
+        todayLocalDate,
+      });
+      if (cancelled) return;
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setDashboard(result.data);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantSlug, todayLocalDate, reloadKey, localReloadKey]);
+
+  if (error) {
+    return (
+      <ErrorPanel
+        message={error}
+        onRetry={() => setLocalReloadKey((key) => key + 1)}
+      />
+    );
+  }
+  if (!dashboard) {
+    return (
+      <p className="text-muted-foreground text-sm" aria-live="polite">
+        Loading dashboard…
+      </p>
+    );
+  }
+
+  if (scope === "self") {
+    const own = dashboard.perPerson[0] ?? null;
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <BalanceTile
+          label="Your balance"
+          value={money(own?.balanceCents ?? 0)}
+          emphasize
+        />
+        <BalanceTile
+          label="Generated last month"
+          value={money(dashboard.previousMonthGeneratedCents)}
+        />
+        <BalanceTile
+          label="Total generated (all-time)"
+          value={money(own?.totalGeneratedCents ?? 0)}
+        />
+      </div>
+    );
+  }
+
+  const displayLabels = buildDisplayLabels(users);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <BalanceTile
+          label="Total balance still owed"
+          value={money(dashboard.totalBalanceOwedCents)}
+          emphasize
+        />
+        <BalanceTile
+          label="Generated last month"
+          value={money(dashboard.previousMonthGeneratedCents)}
+        />
+      </div>
+      {dashboard.perPerson.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold">Balance per person</h2>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-left text-sm">
+                <thead>
+                  <tr className="text-muted-foreground border-border border-b text-xs uppercase">
+                    <th className="py-1.5 pr-3 font-medium">Person</th>
+                    <th className="py-1.5 pr-3 font-medium">
+                      Total payroll (all-time)
+                    </th>
+                    <th className="py-1.5 font-medium">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-border divide-y">
+                  {dashboard.perPerson.map((person) => (
+                    <tr key={person.neonUserId}>
+                      <td className="py-1.5 pr-3">
+                        {displayLabels.get(person.neonUserId) ??
+                          `Neon #${person.neonUserId}`}
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono">
+                        {money(person.totalGeneratedCents)}
+                      </td>
+                      <td className="py-1.5 font-mono">
+                        {money(person.balanceCents)}
+                        {person.balanceCents <= 0 ? (
+                          <Badge tone="accent" className="ml-1.5">
+                            Paid ✓
+                          </Badge>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
   );
 }
 

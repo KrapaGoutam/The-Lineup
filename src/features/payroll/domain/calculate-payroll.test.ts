@@ -6,6 +6,7 @@ import {
   isFullyPaid,
   monthDateRange,
   normalizePeriodMonth,
+  previousPeriodMonth,
   resolveEffectiveRateCents,
 } from "./calculate-payroll";
 
@@ -85,6 +86,18 @@ describe("normalizePeriodMonth", () => {
     expect(normalizePeriodMonth("2026-08-17")).toBe("2026-08-01");
     expect(normalizePeriodMonth("2026-08-01")).toBe("2026-08-01");
     expect(normalizePeriodMonth("2026-08-31")).toBe("2026-08-01");
+  });
+});
+
+describe("previousPeriodMonth", () => {
+  it("returns the prior calendar month for any day within a month", () => {
+    expect(previousPeriodMonth("2026-08-17")).toBe("2026-07-01");
+    expect(previousPeriodMonth("2026-08-01")).toBe("2026-07-01");
+    expect(previousPeriodMonth("2026-08-31")).toBe("2026-07-01");
+  });
+
+  it("rolls January back to December of the prior year", () => {
+    expect(previousPeriodMonth("2026-01-15")).toBe("2025-12-01");
   });
 });
 

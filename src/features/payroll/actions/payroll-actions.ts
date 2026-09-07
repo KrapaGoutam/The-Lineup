@@ -14,6 +14,7 @@ import {
   computeGrossCents,
   monthDateRange,
   normalizePeriodMonth,
+  previousPeriodMonth,
   resolveEffectiveRateCents,
 } from "@/features/payroll/domain/calculate-payroll";
 import {
@@ -827,4 +828,121 @@ export async function recordAdjustmentAction(input: {
     reason: parsed.data.reason,
     actorProfileId: currentUser.profileId,
   });
+}
+
+// -- Dashboard ----------------------------------------------------------
+
+export type PayrollDashboardPerson = {
+  neonUserId: number;
+  /**
+   * Net across every one of this person's periods (gross - confirmed
+   * payments - adjustments, summed) -- can be negative if they've been
+   * overpaid. Unlike the org-wide `totalBalanceOwedCents` below, this is
+   * NOT clamped per period before summing, since "does this person owe
+   * money or were they overpaid" is a real, useful distinction to show
+   * for one person that a clamped aggregate would hide.
+   */
+  balanceCents: number;
+  /** Sum of gross_cents across every one of this person's periods, all-time. */
+  totalGeneratedCents: number;
+};
+
+export type PayrollDashboard = {
+  /**
+   * Sum, across every period in the organization, of that period's
+   * balance clamped to zero before summing -- an overpaid period for one
+   * person never offsets what's still owed to someone else (or even to
+   * that same person in a different month). "How much more do I need to
+   * pay out, in total" is the question this answers.
+   */
+  totalBalanceOwedCents: number;
+  /** Sum of gross_cents for periods whose period_month is literally last
+   * calendar month (relative to `todayLocalDate`) -- a fixed reference
+   * point, independent of any period/person filter elsewhere on the page. */
+  previousMonthGeneratedCents: number;
+  perPerson: PayrollDashboardPerson[];
+};
+
+const EMPTY_DASHBOARD: PayrollDashboard = {
+  totalBalanceOwedCents: 0,
+  previousMonthGeneratedCents: 0,
+  perPerson: [],
+};
+
+/**
+ * Feature 020 Phase 4. Read-only aggregation -- no write anywhere in this
+ * function. Every figure is derived from `listPayrollPeriods` (RLS-scoped
+ * to "every period in the org" for a privileged caller, "only my own
+ * linked periods" for a self-scoped one -- the identical query, same as
+ * every other Phase 3 read action) and `getPayrollBalance` per period,
+ * the exact same function `getPayrollLedgerAction` already uses. Nothing
+ * here re-derives balance a second way from a raw payments/adjustments
+ * aggregation that could disagree with Phase 3's proven-correct,
+ * period-keyed calculation -- every number here traces back to either
+ * `period.grossCents` (the frozen snapshot itself) or a `getPayrollBalance`
+ * result, both keyed on `payroll_period_id`.
+ */
+export async function getPayrollDashboardAction(input: {
+  restaurantSlug: string;
+  todayLocalDate: string;
+}): Promise<ActionResult<PayrollDashboard>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      todayLocalDate: periodMonthSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
+  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  if (resolved.access.scope === "unlinked") {
+    return { ok: true, data: EMPTY_DASHBOARD };
+  }
+
+  const supabase = await createClient();
+  const periodsResult = await listPayrollPeriods(supabase, {
+    organizationId: resolved.user.organizationId,
+  });
+  if (!periodsResult.ok) return { ok: false, error: periodsResult.error };
+
+  const balanceResults = await Promise.all(
+    periodsResult.data.map((period) => getPayrollBalance(supabase, { period })),
+  );
+  const failed = balanceResults.find((result) => !result.ok);
+  if (failed && !failed.ok) return { ok: false, error: failed.error };
+
+  const previousMonth = previousPeriodMonth(parsed.data.todayLocalDate);
+  let totalBalanceOwedCents = 0;
+  let previousMonthGeneratedCents = 0;
+  const perPersonByNeonUserId = new Map<number, PayrollDashboardPerson>();
+
+  periodsResult.data.forEach((period, index) => {
+    const balanceResult = balanceResults[index];
+    if (!balanceResult.ok) return; // unreachable -- already checked above
+    const { balanceCents } = balanceResult.data;
+
+    totalBalanceOwedCents += Math.max(0, balanceCents);
+    if (period.periodMonth === previousMonth) {
+      previousMonthGeneratedCents += period.grossCents;
+    }
+
+    const existing = perPersonByNeonUserId.get(period.neonUserId) ?? {
+      neonUserId: period.neonUserId,
+      balanceCents: 0,
+      totalGeneratedCents: 0,
+    };
+    existing.balanceCents += balanceCents;
+    existing.totalGeneratedCents += period.grossCents;
+    perPersonByNeonUserId.set(period.neonUserId, existing);
+  });
+
+  return {
+    ok: true,
+    data: {
+      totalBalanceOwedCents,
+      previousMonthGeneratedCents,
+      perPerson: Array.from(perPersonByNeonUserId.values()),
+    },
+  };
 }

@@ -1246,7 +1246,10 @@ export function RestaurantOperationsApp({
           />
         ) : null}
         {tab === "payroll" && isManager && !demoMode ? (
-          <PayrollWorkspace restaurantSlug={restaurantSlug} />
+          <PayrollWorkspace
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+          />
         ) : null}
       </main>
 
