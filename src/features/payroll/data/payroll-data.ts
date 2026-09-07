@@ -102,6 +102,30 @@ async function recordAuditEvent(
   return { ok: true, data: null };
 }
 
+/**
+ * Feature 020 Phase 5. The one non-payroll read this feature needs: the
+ * organization's display name, for the printed/exported statement header.
+ * `organizations_select_member` (initial_schema.sql) already lets any
+ * active member -- owner through server -- read their own organization's
+ * row, so this works identically for a privileged or a self-scoped
+ * caller with no extra grant or policy needed.
+ */
+export async function getOrganizationName(
+  supabase: TypedSupabaseClient,
+  input: { organizationId: string },
+): Promise<PayrollResult<string>> {
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", input.organizationId)
+    .single();
+  if (error) {
+    console.error("getOrganizationName failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+  return { ok: true, data: data.name };
+}
+
 export async function getPayrollDefaultRateCents(
   supabase: TypedSupabaseClient,
   input: { organizationId: string },

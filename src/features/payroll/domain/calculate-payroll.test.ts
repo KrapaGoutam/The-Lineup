@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildPayrollLedgerLines,
   computeBalanceCents,
   computeGrossCents,
   isFullyPaid,
@@ -216,5 +217,109 @@ describe("isFullyPaid", () => {
     expect(isFullyPaid(-100)).toBe(true);
     expect(isFullyPaid(1)).toBe(false);
     expect(isFullyPaid(100000)).toBe(false);
+  });
+});
+
+describe("buildPayrollLedgerLines", () => {
+  it("the spec's own worked sequence: $1000 generated, -$400 (Sep 1), -$500 (Sep 2)", () => {
+    const lines = buildPayrollLedgerLines({
+      grossCents: 100000,
+      periodMonth: "2026-08-01",
+      confirmedPayments: [
+        { paymentDate: "2026-09-01", amountCents: 40000, comment: null },
+        { paymentDate: "2026-09-02", amountCents: 50000, comment: null },
+      ],
+      adjustments: [],
+    });
+    expect(lines).toEqual([
+      {
+        date: "2026-08-01",
+        description: "Payroll generated",
+        amountCents: 100000,
+        runningBalanceCents: 100000,
+      },
+      {
+        date: "2026-09-01",
+        description: "Payment",
+        amountCents: -40000,
+        runningBalanceCents: 60000,
+      },
+      {
+        date: "2026-09-02",
+        description: "Payment",
+        amountCents: -50000,
+        runningBalanceCents: 10000,
+      },
+    ]);
+  });
+
+  it("a wrong confirmed payment corrected by an offsetting adjustment: running balance ends at $960, both entries present", () => {
+    const lines = buildPayrollLedgerLines({
+      grossCents: 100000,
+      periodMonth: "2026-08-01",
+      confirmedPayments: [
+        {
+          paymentDate: "2026-09-01",
+          amountCents: 40000,
+          comment: "Should have been $40",
+        },
+      ],
+      adjustments: [
+        {
+          createdAt: "2026-09-05T12:00:00.000Z",
+          deltaCents: -36000,
+          reason: "Confirmed $400 payment should have been $40",
+        },
+      ],
+    });
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatchObject({
+      description: "Payroll generated",
+      runningBalanceCents: 100000,
+    });
+    expect(lines[1]).toMatchObject({
+      description: "Payment — Should have been $40",
+      amountCents: -40000,
+      runningBalanceCents: 60000,
+    });
+    expect(lines[2]).toMatchObject({
+      description: "Adjustment — Confirmed $400 payment should have been $40",
+      amountCents: 36000, // the negative delta increases what's owed
+      runningBalanceCents: 96000,
+    });
+  });
+
+  it("sorts payments and adjustments chronologically regardless of insertion order", () => {
+    const lines = buildPayrollLedgerLines({
+      grossCents: 10000,
+      periodMonth: "2026-08-01",
+      confirmedPayments: [
+        { paymentDate: "2026-09-10", amountCents: 1000, comment: null },
+        { paymentDate: "2026-09-02", amountCents: 2000, comment: null },
+      ],
+      adjustments: [],
+    });
+    expect(lines.map((line) => line.date)).toEqual([
+      "2026-08-01",
+      "2026-09-02",
+      "2026-09-10",
+    ]);
+  });
+
+  it("with nothing but the generated line, the running balance equals gross", () => {
+    const lines = buildPayrollLedgerLines({
+      grossCents: 50000,
+      periodMonth: "2026-08-01",
+      confirmedPayments: [],
+      adjustments: [],
+    });
+    expect(lines).toEqual([
+      {
+        date: "2026-08-01",
+        description: "Payroll generated",
+        amountCents: 50000,
+        runningBalanceCents: 50000,
+      },
+    ]);
   });
 });
