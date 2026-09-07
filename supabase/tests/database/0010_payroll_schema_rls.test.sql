@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(50);
 
 -- Table/RLS/grant shape ------------------------------------------------
 
@@ -368,6 +368,49 @@ select is(
   'the draft payment is actually gone after the manager''s delete'
 );
 
+-- The regenerate boundary, backed by a trigger, not just the Server
+-- Action's own guard -- proven by issuing the exact update a regenerate
+-- performs directly, as the manager, bypassing the application layer
+-- entirely. A raw update to a period with zero payments succeeds; the
+-- same shape of update to a period WITH a payment (the org1/neon201
+-- period already has a confirmed one, from above) is rejected by the
+-- trigger regardless of who issues it or through what path.
+select lives_ok(
+  $$
+    insert into public.payroll_periods
+      (organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, generated_by)
+    values
+      ('00000000-0000-0000-0000-000000020101', 201, '2026-07-01', 40.0, 1200, 48000, '00000000-0000-0000-0000-000000020002')
+  $$,
+  'seed a second, zero-payment period to exercise the snapshot-lock boundary'
+);
+select lives_ok(
+  $$
+    update public.payroll_periods
+    set hours_snapshot = 60.0, gross_cents = 72000, regenerated_at = now(), regenerated_by = '00000000-0000-0000-0000-000000020002'
+    where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-07-01'
+  $$,
+  'a raw snapshot update succeeds on a period with zero payments recorded'
+);
+select throws_ok(
+  $$
+    update public.payroll_periods
+    set gross_cents = 999999
+    where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'
+  $$,
+  'P0001',
+  'Cannot change a payroll period''s snapshot once a payment has been recorded against it; record a manual adjustment instead.',
+  'the trigger rejects a raw snapshot update on a period that already has a payment, independent of the Server Action guard'
+);
+select lives_ok(
+  $$
+    update public.payroll_periods
+    set status = 'locked', locked_at = now(), locked_by = '00000000-0000-0000-0000-000000020002'
+    where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'
+  $$,
+  'locking a period that already has a payment still works -- the trigger only guards the snapshot columns, not status'
+);
+
 -- Rate changes never touch an already-generated period -------------------
 
 update public.payroll_rates
@@ -376,13 +419,13 @@ where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id 
 
 select is(
   (select gross_cents from public.payroll_periods
-   where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201),
+   where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'),
   120000,
   'changing a person''s rate does not alter an already-generated period''s frozen gross_cents'
 );
 select is(
   (select rate_cents_snapshot from public.payroll_periods
-   where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201),
+   where organization_id = '00000000-0000-0000-0000-000000020101' and neon_user_id = 201 and period_month = '2026-08-01'),
   1200,
   'the already-generated period keeps its original rate_cents_snapshot too'
 );
