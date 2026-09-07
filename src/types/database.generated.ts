@@ -756,6 +756,248 @@ export type Database = {
           },
         ];
       };
+      payroll_payments: {
+        Row: {
+          amount_cents: number;
+          comment: string | null;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          created_at: string;
+          created_by: string;
+          id: number;
+          organization_id: string;
+          payment_date: string;
+          payroll_period_id: number;
+          reverses_payment_id: number | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          amount_cents: number;
+          comment?: string | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          id?: never;
+          organization_id: string;
+          payment_date: string;
+          payroll_period_id: number;
+          reverses_payment_id?: number | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount_cents?: number;
+          comment?: string | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          id?: never;
+          organization_id?: string;
+          payment_date?: string;
+          payroll_period_id?: number;
+          reverses_payment_id?: number | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_payments_organization_id_confirmed_by_fkey";
+            columns: ["organization_id", "confirmed_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_organization_id_created_by_fkey";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_organization_id_reverses_payment_id_fkey";
+            columns: ["organization_id", "reverses_payment_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_payments";
+            referencedColumns: ["organization_id", "id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_payroll_period_id_fkey";
+            columns: ["payroll_period_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      payroll_periods: {
+        Row: {
+          generated_at: string;
+          generated_by: string;
+          gross_cents: number;
+          hours_snapshot: number;
+          id: number;
+          locked_at: string | null;
+          locked_by: string | null;
+          neon_user_id: number;
+          organization_id: string;
+          period_month: string;
+          rate_cents_snapshot: number;
+          regenerated_at: string | null;
+          regenerated_by: string | null;
+          status: string;
+        };
+        Insert: {
+          generated_at?: string;
+          generated_by: string;
+          gross_cents: number;
+          hours_snapshot: number;
+          id?: never;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          neon_user_id: number;
+          organization_id: string;
+          period_month: string;
+          rate_cents_snapshot: number;
+          regenerated_at?: string | null;
+          regenerated_by?: string | null;
+          status?: string;
+        };
+        Update: {
+          generated_at?: string;
+          generated_by?: string;
+          gross_cents?: number;
+          hours_snapshot?: number;
+          id?: never;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          neon_user_id?: number;
+          organization_id?: string;
+          period_month?: string;
+          rate_cents_snapshot?: number;
+          regenerated_at?: string | null;
+          regenerated_by?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_periods_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_organization_id_generated_by_fkey";
+            columns: ["organization_id", "generated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_organization_id_locked_by_fkey";
+            columns: ["organization_id", "locked_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_organization_id_regenerated_by_fkey";
+            columns: ["organization_id", "regenerated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
+      payroll_rates: {
+        Row: {
+          id: number;
+          neon_user_id: number;
+          organization_id: string;
+          rate_cents: number;
+          updated_at: string;
+          updated_by: string;
+        };
+        Insert: {
+          id?: never;
+          neon_user_id: number;
+          organization_id: string;
+          rate_cents: number;
+          updated_at?: string;
+          updated_by: string;
+        };
+        Update: {
+          id?: never;
+          neon_user_id?: number;
+          organization_id?: string;
+          rate_cents?: number;
+          updated_at?: string;
+          updated_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_rates_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_rates_organization_id_updated_by_fkey";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
+      payroll_settings: {
+        Row: {
+          default_rate_cents: number;
+          organization_id: string;
+          updated_at: string;
+          updated_by: string;
+        };
+        Insert: {
+          default_rate_cents: number;
+          organization_id: string;
+          updated_at?: string;
+          updated_by: string;
+        };
+        Update: {
+          default_rate_cents?: number;
+          organization_id?: string;
+          updated_at?: string;
+          updated_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_settings_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_settings_organization_id_updated_by_fkey";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
