@@ -137,6 +137,8 @@ Migrations explicitly grant only the verbs required by the application roles. Gr
 
 **Neon attendance data (Feature 018) is outside this data model entirely.** `src/features/attendance/` reads a separate Neon Postgres database (`users`, `attendance`) over a read-only connection — nothing it reads is ever written into any table above, so none of this section's grants/RLS discussion applies to it; see `docs/SECURITY.md`'s Feature 018 subsection for the full account. One real limitation worth recording here: Neon's `users` table has no organization/tenant column, so this integration cannot be scoped per-organization the way every table above is — it assumes a single restaurant uses this deployment, the only reality that exists today.
 
+**`attendance_identity_links` (Feature 019) is the tenant-scoped bridge between the two identity systems.** Each row maps exactly one Supabase membership to exactly one positive Neon `users.id` within an organization. Unique constraints on `(organization_id, profile_id)` and `(organization_id, neon_user_id)` prevent multiple identities in either direction. Composite foreign keys from `(organization_id, profile_id)` and `(organization_id, linked_by)` to `memberships` prevent cross-tenant targets and actors; reverse-order indexes support self-policy and foreign-key lookups. The table stores no Neon attendance rows or credentials. Manager-tier members may manage links, while regular members may select only their own link through RLS.
+
 ## Generated types
 
 After applying migrations to the linked project:

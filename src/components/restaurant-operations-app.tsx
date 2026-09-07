@@ -16,7 +16,14 @@ import {
 
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
+import {
+  getAttendanceLinkOptionsAction,
+  removeAttendanceIdentityLinkAction,
+  setAttendanceIdentityLinkAction,
+  type AttendanceLinkOptions,
+} from "@/features/attendance/actions/attendance-actions";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
+import { demoNeonUsers } from "@/features/attendance/demo-data";
 import {
   designationToRole,
   type Designation,
@@ -335,6 +342,9 @@ export function RestaurantOperationsApp({
   const [demoAccounts, setDemoAccounts] = useState<
     Record<string, SignedInUser>
   >(() => ({ ...staticDemoAccounts }));
+  const [demoAttendanceLinks, setDemoAttendanceLinks] = useState<
+    Record<string, number>
+  >({});
 
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
@@ -672,6 +682,85 @@ export function RestaurantOperationsApp({
       }
       return changed ? updated : current;
     });
+  }
+
+  async function loadAttendanceLinkOptions(): Promise<
+    { ok: true; data: AttendanceLinkOptions } | { ok: false; error: string }
+  > {
+    if (demoMode) {
+      return {
+        ok: true,
+        data: {
+          users: demoNeonUsers.filter((candidate) => candidate.isActive),
+          links: Object.entries(demoAttendanceLinks).map(
+            ([profileId, neonUserId]) => ({ profileId, neonUserId }),
+          ),
+        },
+      };
+    }
+    const result = await getAttendanceLinkOptionsAction({ restaurantSlug });
+    if (!result.ok && result.sessionInvalid) {
+      forceSignOut();
+    }
+    return result;
+  }
+
+  async function linkAttendanceIdentity(input: {
+    targetProfileId: string;
+    neonUserId: number;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      const claimant = Object.entries(demoAttendanceLinks).find(
+        ([profileId, neonUserId]) =>
+          profileId !== input.targetProfileId &&
+          neonUserId === input.neonUserId,
+      );
+      if (claimant) {
+        return {
+          ok: false,
+          error:
+            "That attendance record is already linked to a different person.",
+        };
+      }
+      setDemoAttendanceLinks((current) => ({
+        ...current,
+        [input.targetProfileId]: input.neonUserId,
+      }));
+      return { ok: true };
+    }
+
+    const result = await setAttendanceIdentityLinkAction({
+      restaurantSlug,
+      ...input,
+    });
+    if (!result.ok) {
+      handleActionFailure(result.error, result.sessionInvalid);
+      return { ok: false, error: result.error };
+    }
+    return { ok: true };
+  }
+
+  async function unlinkAttendanceIdentity(input: {
+    targetProfileId: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      setDemoAttendanceLinks((current) => {
+        const next = { ...current };
+        delete next[input.targetProfileId];
+        return next;
+      });
+      return { ok: true };
+    }
+
+    const result = await removeAttendanceIdentityLinkAction({
+      restaurantSlug,
+      targetProfileId: input.targetProfileId,
+    });
+    if (!result.ok) {
+      handleActionFailure(result.error, result.sessionInvalid);
+      return { ok: false, error: result.error };
+    }
+    return { ok: true };
   }
 
   /**
@@ -1124,6 +1213,9 @@ export function RestaurantOperationsApp({
             onResetPasscode={resetMemberPasscode}
             onDeactivate={deactivateTeamMember}
             onReactivate={reactivateTeamMember}
+            onLoadAttendanceOptions={loadAttendanceLinkOptions}
+            onLinkAttendance={linkAttendanceIdentity}
+            onUnlinkAttendance={unlinkAttendanceIdentity}
           />
         ) : null}
         {tab === "attendance" ? (
@@ -1132,6 +1224,7 @@ export function RestaurantOperationsApp({
             demoMode={demoMode}
             timeZone={timeZone}
             user={user}
+            demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
           />
         ) : null}
       </main>

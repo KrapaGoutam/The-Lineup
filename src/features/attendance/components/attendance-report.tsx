@@ -43,14 +43,24 @@ function formatHours(hours: number): string {
 
 /**
  * Feature 019, demo mode only: demo mode has no real
- * `attendance_identity_links` data to draw from, so a demo manager keeps
- * seeing "all" (unchanged from Feature 018) and a demo server sees the
- * unlinked state -- an honest default (nobody has been linked yet is the
- * true starting state for any real restaurant adopting this feature too)
- * rather than fabricating a fake demo link.
+ * `attendance_identity_links` table to draw from. A demo manager keeps
+ * seeing "all" (unchanged from Feature 018); a demo server is scoped by
+ * the in-memory link a manager deliberately set from Team, or sees the
+ * honest unlinked default until that happens.
  */
-function demoAccessFor(user: SignedInUser): AttendanceAccessView {
-  return user.role === "server" ? { scope: "unlinked" } : { scope: "all" };
+function demoAccessFor(
+  user: SignedInUser,
+  demoNeonUserId: number | null,
+): AttendanceAccessView {
+  if (user.role !== "server") return { scope: "all" };
+  if (demoNeonUserId === null) return { scope: "unlinked" };
+  return {
+    scope: "self",
+    neonUserId: demoNeonUserId,
+    person:
+      demoNeonUsers.find((candidate) => candidate.id === demoNeonUserId) ??
+      null,
+  };
 }
 
 /**
@@ -73,11 +83,13 @@ export function AttendanceReport({
   demoMode,
   timeZone,
   user,
+  demoNeonUserId = null,
 }: {
   restaurantSlug: string;
   demoMode: boolean;
   timeZone: string;
   user: SignedInUser;
+  demoNeonUserId?: number | null;
 }) {
   const todayLocalDate = zonedWallTimeFromInstant(new Date(), timeZone).date;
 
@@ -90,7 +102,7 @@ export function AttendanceReport({
     async function load() {
       setAccessError(null);
       if (demoMode) {
-        setAccess(demoAccessFor(user));
+        setAccess(demoAccessFor(user, demoNeonUserId));
         return;
       }
       const result = await getAttendanceAccessAction({ restaurantSlug });
@@ -105,7 +117,7 @@ export function AttendanceReport({
     return () => {
       cancelled = true;
     };
-  }, [demoMode, restaurantSlug, user, accessReloadKey]);
+  }, [demoMode, restaurantSlug, user, demoNeonUserId, accessReloadKey]);
 
   const [users, setUsers] = useState<NeonUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -176,12 +188,11 @@ export function AttendanceReport({
         : scope === "unlinked"
           ? []
           : null;
+  const reportUserIdsKey = reportUserIds?.join(",") ?? null;
 
   useEffect(() => {
-    if (!reportUserIds || reportUserIds.length === 0) {
-      setRows(scope === "unlinked" ? [] : null);
-      return;
-    }
+    if (!reportUserIds || reportUserIds.length === 0) return;
+    const requestedUserIds = reportUserIds;
     let cancelled = false;
     async function load() {
       setRowsLoading(true);
@@ -189,7 +200,7 @@ export function AttendanceReport({
       if (demoMode) {
         const filtered = demoNeonAttendance.filter(
           (row) =>
-            reportUserIds!.includes(row.userId) &&
+            requestedUserIds.includes(row.userId) &&
             row.date >= periodStart &&
             row.date <= periodEnd,
         );
@@ -201,7 +212,7 @@ export function AttendanceReport({
       }
       const result = await getAttendanceReportAction({
         restaurantSlug,
-        userIds: reportUserIds!,
+        userIds: requestedUserIds,
         period,
         todayLocalDate,
       });
@@ -225,7 +236,7 @@ export function AttendanceReport({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     scope,
-    reportUserIds?.join(","),
+    reportUserIdsKey,
     periodStart,
     periodEnd,
     demoMode,
@@ -236,15 +247,16 @@ export function AttendanceReport({
   // Day/week/month are independent of the person/period picker above --
   // fetched once scope is known, never refetched on filter interaction.
   useEffect(() => {
-    if (!access) return;
+    const dashboardAccess = access;
+    if (!dashboardAccess) return;
     let cancelled = false;
-    async function load() {
+    async function load(currentAccess: AttendanceAccessView) {
       setDashboardError(null);
       if (demoMode) {
         const ids =
-          access!.scope === "self"
-            ? [access.neonUserId]
-            : access!.scope === "all"
+          currentAccess.scope === "self"
+            ? [currentAccess.neonUserId]
+            : currentAccess.scope === "all"
               ? demoNeonUsers
                   .filter((candidate) => candidate.isActive)
                   .map((candidate) => candidate.id)
@@ -254,8 +266,11 @@ export function AttendanceReport({
           if (!cancelled) setDashboard({ day: zero, week: zero, month: zero });
           return;
         }
-        const inRange = (row: (typeof demoNeonAttendance)[number], start: string, end: string) =>
-          ids.includes(row.userId) && row.date >= start && row.date <= end;
+        const inRange = (
+          row: (typeof demoNeonAttendance)[number],
+          start: string,
+          end: string,
+        ) => ids.includes(row.userId) && row.date >= start && row.date <= end;
         const weekDates = getWeekDates(todayLocalDate);
         const { start: monthStart, end: monthEnd } = resolvePeriodRange(
           { type: "this-month" },
@@ -293,7 +308,7 @@ export function AttendanceReport({
       }
       setDashboard(result.data);
     }
-    load();
+    load(dashboardAccess);
     return () => {
       cancelled = true;
     };
@@ -370,7 +385,8 @@ export function AttendanceReport({
     );
   }
 
-  const grandTotal = rows ? aggregateHours(rows) : null;
+  const visibleRows = reportUserIds?.length ? rows : null;
+  const grandTotal = visibleRows ? aggregateHours(visibleRows) : null;
 
   if (access.scope === "self") {
     const label = access.person
@@ -622,7 +638,13 @@ function PeriodPicker({
   );
 }
 
-function DashboardTile({ label, hours }: { label: string; hours: number | null }) {
+function DashboardTile({
+  label,
+  hours,
+}: {
+  label: string;
+  hours: number | null;
+}) {
   return (
     <Card>
       <CardContent className="space-y-1 pt-4">

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import type { SignedInUser } from "@/components/login-screen";
 import {
@@ -32,6 +33,31 @@ export type ActionResult<T> =
 
 const NOT_SIGNED_IN_ERROR = "You need to sign in to see attendance.";
 const NOT_MANAGER_ERROR = "You don't have access to the attendance report.";
+const INVALID_REQUEST_ERROR = "That attendance request is invalid.";
+
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const profileIdSchema = z.uuid();
+const localDateSchema = z.iso.date();
+const attendancePeriodSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("this-month") }),
+  z.object({ type: z.literal("previous-month") }),
+  z
+    .object({
+      type: z.literal("custom"),
+      start: localDateSchema,
+      end: localDateSchema,
+    })
+    .refine(({ start, end }) => start <= end),
+]);
+
+function invalidRequest<T>(): ActionResult<T> {
+  return { ok: false, error: INVALID_REQUEST_ERROR };
+}
 
 export type AttendanceAccess =
   | { scope: "all" }
@@ -91,7 +117,12 @@ export type AttendanceAccessView =
 export async function getAttendanceAccessAction(input: {
   restaurantSlug: string;
 }): Promise<ActionResult<AttendanceAccessView>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
   const { access } = resolved;
   if (access.scope !== "self") return { ok: true, data: access };
@@ -109,7 +140,12 @@ export async function getAttendanceAccessAction(input: {
 export async function getAttendanceUsersAction(input: {
   restaurantSlug: string;
 }): Promise<ActionResult<NeonUser[]>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
@@ -125,7 +161,17 @@ export async function getAttendanceReportAction(input: {
   period: AttendancePeriodSelection;
   todayLocalDate: string;
 }): Promise<ActionResult<{ rows: NeonAttendanceRow[] }>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      userIds: z.array(z.number().int().positive()).max(1000),
+      period: attendancePeriodSchema,
+      todayLocalDate: localDateSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
   const { access } = resolved;
 
@@ -141,9 +187,12 @@ export async function getAttendanceReportAction(input: {
   // was valid, which is more than a caller with no legitimate reason to
   // probe other ids should learn).
   const userIds =
-    access.scope === "all" ? input.userIds : [access.neonUserId];
+    access.scope === "all" ? parsed.data.userIds : [access.neonUserId];
 
-  const { start, end } = resolvePeriodRange(input.period, input.todayLocalDate);
+  const { start, end } = resolvePeriodRange(
+    parsed.data.period,
+    parsed.data.todayLocalDate,
+  );
   const result = await getAttendanceRows({
     userIds,
     startDate: start,
@@ -174,14 +223,26 @@ export async function getAttendanceDashboardTotalsAction(input: {
   restaurantSlug: string;
   todayLocalDate: string;
 }): Promise<ActionResult<AttendanceDashboardTotals>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      todayLocalDate: localDateSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
   const { access } = resolved;
 
   if (access.scope === "unlinked") {
     return {
       ok: true,
-      data: { day: ZERO_AGGREGATE, week: ZERO_AGGREGATE, month: ZERO_AGGREGATE },
+      data: {
+        day: ZERO_AGGREGATE,
+        week: ZERO_AGGREGATE,
+        month: ZERO_AGGREGATE,
+      },
     };
   }
 
@@ -194,19 +255,19 @@ export async function getAttendanceDashboardTotalsAction(input: {
     userIds = usersResult.data.map((user) => user.id);
   }
 
-  const weekDates = getWeekDates(input.todayLocalDate);
+  const weekDates = getWeekDates(parsed.data.todayLocalDate);
   const weekStart = weekDates[0];
   const weekEnd = weekDates[6];
   const { start: monthStart, end: monthEnd } = resolvePeriodRange(
     { type: "this-month" },
-    input.todayLocalDate,
+    parsed.data.todayLocalDate,
   );
 
   const [dayResult, weekResult, monthResult] = await Promise.all([
     getAttendanceRows({
       userIds,
-      startDate: input.todayLocalDate,
-      endDate: input.todayLocalDate,
+      startDate: parsed.data.todayLocalDate,
+      endDate: parsed.data.todayLocalDate,
     }),
     getAttendanceRows({ userIds, startDate: weekStart, endDate: weekEnd }),
     getAttendanceRows({ userIds, startDate: monthStart, endDate: monthEnd }),
@@ -240,7 +301,12 @@ export type AttendanceLinkOptions = {
 export async function getAttendanceLinkOptionsAction(input: {
   restaurantSlug: string;
 }): Promise<ActionResult<AttendanceLinkOptions>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
@@ -271,7 +337,16 @@ export async function setAttendanceIdentityLinkAction(input: {
   targetProfileId: string;
   neonUserId: number;
 }): Promise<ActionResult<null>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      targetProfileId: profileIdSchema,
+      neonUserId: z.number().int().positive(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
@@ -282,12 +357,12 @@ export async function setAttendanceIdentityLinkAction(input: {
 
   const result = await upsertAttendanceIdentityLink(supabase, {
     organizationId: resolved.user.organizationId,
-    targetProfileId: input.targetProfileId,
-    neonUserId: input.neonUserId,
+    targetProfileId: parsed.data.targetProfileId,
+    neonUserId: parsed.data.neonUserId,
     actorProfileId: resolved.user.profileId,
   });
   if (!result.ok) return result;
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidatePath(`/r/${parsed.data.restaurantSlug}`);
   return result;
 }
 
@@ -295,7 +370,15 @@ export async function removeAttendanceIdentityLinkAction(input: {
   restaurantSlug: string;
   targetProfileId: string;
 }): Promise<ActionResult<null>> {
-  const resolved = await resolveAttendanceAccess(input.restaurantSlug);
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      targetProfileId: profileIdSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
@@ -306,10 +389,10 @@ export async function removeAttendanceIdentityLinkAction(input: {
 
   const result = await removeAttendanceIdentityLink(supabase, {
     organizationId: resolved.user.organizationId,
-    targetProfileId: input.targetProfileId,
+    targetProfileId: parsed.data.targetProfileId,
     actorProfileId: resolved.user.profileId,
   });
   if (!result.ok) return result;
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidatePath(`/r/${parsed.data.restaurantSlug}`);
   return result;
 }

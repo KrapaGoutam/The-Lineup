@@ -147,6 +147,14 @@ Unlike every other feature in this document, `src/features/attendance/` never to
 
 **No tenant scoping is possible on the Neon side**: its `users` table has no organization column at all. This integration assumes a single restaurant/organization uses this deployment — the only reality that exists today. A second organization sharing this codebase would see the identical Neon data the first one does; there is no key to filter by. Named here and in `docs/DATA_MODEL.md`, not discovered later.
 
+### Attendance identity scope (Feature 019) — server-enforced access with an RLS-protected mapping
+
+Feature 019 makes Attendance visible to every active member but does not trust the browser to choose scope. Every attendance Server Action validates its input, resolves the authenticated member, and chooses one of three server-side scopes: all active Neon users for owner/manager/assistant-manager; one linked Neon id for a regular member; or no query at all for an unlinked member. A regular caller's submitted `userIds` are replaced with the stored link, so tampering cannot widen the Neon query or disclose whether another id exists.
+
+`attendance_identity_links` is the Supabase-side authorization bridge. RLS allows a regular member to select only their own link and allows owner/general-manager/shift-manager roles to manage links across the organization. Separate insert/update/delete policies pair with explicit grants. Tenant-composite membership foreign keys prevent either the target or `linked_by` actor from belonging to another organization, and the two organization-scoped unique constraints prevent one Lineup profile claiming multiple Neon identities or two profiles claiming the same Neon identity.
+
+Link, relink, and unlink operations write an immutable `audit_events` row. If the audit insert fails after the link mutation, the data layer performs a compensating restore/delete and reports failure rather than claiming an unaudited success. This is not a single database transaction, so a rollback failure is logged as an operational incident; the normal success path never omits attribution.
+
 ## Keys and secrets
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is browser-safe only when RLS and grants are correct.

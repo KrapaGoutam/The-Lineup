@@ -94,8 +94,8 @@ async function recordAuditEvent(
     beforeState: Record<string, unknown> | null;
     afterState: Record<string, unknown> | null;
   },
-) {
-  await supabase.from("audit_events").insert({
+): Promise<IdentityLinkResult<null>> {
+  const { error } = await supabase.from("audit_events").insert({
     organization_id: input.organizationId,
     actor_profile_id: input.actorProfileId,
     action: input.action,
@@ -104,6 +104,14 @@ async function recordAuditEvent(
     before_state: input.beforeState,
     after_state: input.afterState,
   });
+  if (error) {
+    console.error("recordAttendanceIdentityLinkAuditEvent failed", error);
+    return {
+      ok: false,
+      error: "Unable to record the attendance-link audit event.",
+    };
+  }
+  return { ok: true, data: null };
 }
 
 /**
@@ -127,7 +135,8 @@ export async function upsertAttendanceIdentityLink(
     organizationId: input.organizationId,
     profileId: input.targetProfileId,
   });
-  const beforeState = existing.ok && existing.data
+  if (!existing.ok) return existing;
+  const beforeState = existing.data
     ? { neon_user_id: existing.data.neonUserId }
     : null;
 
@@ -155,7 +164,7 @@ export async function upsertAttendanceIdentityLink(
     return { ok: false, error: UNAVAILABLE_ERROR };
   }
 
-  await recordAuditEvent(supabase, {
+  const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
     actorProfileId: input.actorProfileId,
     action: "attendance_identity_linked",
@@ -163,6 +172,35 @@ export async function upsertAttendanceIdentityLink(
     beforeState,
     afterState: { neon_user_id: input.neonUserId },
   });
+  if (!audit.ok) {
+    // Supabase's Data API does not expose a client-side transaction API.
+    // Match the app's existing compensating-write pattern: restore the
+    // exact prior link (or remove the newly-created one) so this action
+    // never reports success for an unaudited personnel change.
+    const rollback = existing.data
+      ? await supabase.from("attendance_identity_links").upsert(
+          {
+            organization_id: input.organizationId,
+            profile_id: input.targetProfileId,
+            neon_user_id: existing.data.neonUserId,
+            linked_by: existing.data.linkedBy,
+            linked_at: existing.data.linkedAt,
+          },
+          { onConflict: "organization_id,profile_id" },
+        )
+      : await supabase
+          .from("attendance_identity_links")
+          .delete()
+          .eq("organization_id", input.organizationId)
+          .eq("profile_id", input.targetProfileId);
+    if (rollback.error) {
+      console.error(
+        "upsertAttendanceIdentityLink rollback failed",
+        rollback.error,
+      );
+    }
+    return audit;
+  }
   return { ok: true, data: null };
 }
 
@@ -191,7 +229,7 @@ export async function removeAttendanceIdentityLink(
     return { ok: false, error: UNAVAILABLE_ERROR };
   }
 
-  await recordAuditEvent(supabase, {
+  const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
     actorProfileId: input.actorProfileId,
     action: "attendance_identity_unlinked",
@@ -199,5 +237,23 @@ export async function removeAttendanceIdentityLink(
     beforeState: { neon_user_id: existing.data.neonUserId },
     afterState: null,
   });
+  if (!audit.ok) {
+    const { error: rollbackError } = await supabase
+      .from("attendance_identity_links")
+      .insert({
+        organization_id: input.organizationId,
+        profile_id: input.targetProfileId,
+        neon_user_id: existing.data.neonUserId,
+        linked_by: existing.data.linkedBy,
+        linked_at: existing.data.linkedAt,
+      });
+    if (rollbackError) {
+      console.error(
+        "removeAttendanceIdentityLink rollback failed",
+        rollbackError,
+      );
+    }
+    return audit;
+  }
   return { ok: true, data: null };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -46,34 +46,83 @@ export function AttendanceLinkDialog({
 }) {
   const [options, setOptions] = useState<AttendanceLinkOptions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [optionsReloadKey, setOptionsReloadKey] = useState(0);
   const [selectedId, setSelectedId] = useState<number | "">("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState<"linked" | "unlinked" | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    document.getElementById("attendance-link-close")?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = document.getElementById("attendance-link-dialog");
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), select:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const result = await onLoadOptions();
-      if (cancelled) return;
-      if (!result.ok) {
-        setLoadError(result.error);
-        return;
+      setLoadError(null);
+      setOptions(null);
+      try {
+        const result = await onLoadOptions();
+        if (cancelled) return;
+        if (!result.ok) {
+          setLoadError(result.error);
+          return;
+        }
+        setOptions(result.data);
+        const current = result.data.links.find(
+          (link) => link.profileId === member.id,
+        );
+        setSelectedId(current?.neonUserId ?? "");
+      } catch {
+        if (!cancelled) {
+          setLoadError("Unable to load attendance records right now.");
+        }
       }
-      setOptions(result.data);
-      const current = result.data.links.find(
-        (link) => link.profileId === member.id,
-      );
-      setSelectedId(current?.neonUserId ?? "");
     }
     load();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [member.id, optionsReloadKey]);
 
-  const currentLink = options?.links.find((link) => link.profileId === member.id);
+  const currentLink = options?.links.find(
+    (link) => link.profileId === member.id,
+  );
   const currentLabel = currentLink
     ? buildDisplayLabels(options!.users).get(currentLink.neonUserId)
     : null;
@@ -98,6 +147,8 @@ export function AttendanceLinkDialog({
         return;
       }
       setDone("linked");
+    } catch {
+      setError("Unable to save this attendance link right now.");
     } finally {
       setPending(false);
     }
@@ -113,6 +164,8 @@ export function AttendanceLinkDialog({
         return;
       }
       setDone("unlinked");
+    } catch {
+      setError("Unable to remove this attendance link right now.");
     } finally {
       setPending(false);
     }
@@ -127,6 +180,7 @@ export function AttendanceLinkDialog({
       }}
     >
       <Card
+        id="attendance-link-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="attendance-link-title"
@@ -146,12 +200,13 @@ export function AttendanceLinkDialog({
             </p>
           </div>
           <Button
+            id="attendance-link-close"
             variant="ghost"
             size="icon"
             onClick={onClose}
             aria-label="Close attendance link dialog"
           >
-            <X />
+            <X aria-hidden="true" />
           </Button>
         </CardHeader>
         <CardContent>
@@ -160,15 +215,30 @@ export function AttendanceLinkDialog({
               Done
             </Button>
           ) : loadError ? (
-            <p className="text-destructive text-sm" aria-live="polite">
-              {loadError}
-            </p>
+            <div className="flex flex-col items-start gap-3">
+              <p className="text-destructive text-sm" aria-live="polite">
+                {loadError}
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setOptionsReloadKey((key) => key + 1)}
+              >
+                Try again
+              </Button>
+            </div>
           ) : !options ? (
             <p className="text-muted-foreground text-sm" aria-live="polite">
               Loading attendance records…
             </p>
           ) : (
-            <div className="space-y-4">
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitLink();
+              }}
+            >
               {currentLabel ? (
                 <p className="text-muted-foreground text-xs">
                   Currently linked to{" "}
@@ -178,7 +248,7 @@ export function AttendanceLinkDialog({
                   .
                 </p>
               ) : null}
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="attendance-link-select">
                   Attendance-system record
                 </Label>
@@ -194,11 +264,17 @@ export function AttendanceLinkDialog({
                   <option value="">Select a person…</option>
                   {options.users.map((candidate) => {
                     const claimant = claimedBy.get(candidate.id);
-                    const claimedNote = claimant
-                      ? ` (linked to ${teamNameById.get(claimant) ?? "another person"})`
+                    const claimedByAnotherMember =
+                      claimant && claimant !== member.id ? claimant : null;
+                    const claimedNote = claimedByAnotherMember
+                      ? ` (linked to ${teamNameById.get(claimedByAnotherMember) ?? "another person"})`
                       : "";
                     return (
-                      <option key={candidate.id} value={candidate.id}>
+                      <option
+                        key={candidate.id}
+                        value={candidate.id}
+                        disabled={Boolean(claimedByAnotherMember)}
+                      >
                         {displayLabels?.get(candidate.id)}
                         {claimedNote}
                       </option>
@@ -230,15 +306,11 @@ export function AttendanceLinkDialog({
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  onClick={submitLink}
-                  disabled={pending || selectedId === ""}
-                >
+                <Button type="submit" disabled={pending || selectedId === ""}>
                   {pending ? "Saving…" : "Save link"}
                 </Button>
               </div>
-            </div>
+            </form>
           )}
         </CardContent>
       </Card>
