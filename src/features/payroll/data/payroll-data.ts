@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  computeBalanceCents,
+  isFullyPaid,
+} from "@/features/payroll/domain/calculate-payroll";
 import type { createClient } from "@/lib/supabase/server";
 
 // Matches the client `createClient()` actually returns (untyped against the
@@ -76,6 +80,7 @@ async function recordAuditEvent(
     organizationId: string;
     actorProfileId: string;
     action: string;
+    entityType: "payroll_period" | "payroll_payment" | "payroll_adjustment";
     entityId: string;
     beforeState: Record<string, unknown> | null;
     afterState: Record<string, unknown> | null;
@@ -85,7 +90,7 @@ async function recordAuditEvent(
     organization_id: input.organizationId,
     actor_profile_id: input.actorProfileId,
     action: input.action,
-    entity_type: "payroll_period",
+    entity_type: input.entityType,
     entity_id: input.entityId,
     before_state: input.beforeState,
     after_state: input.afterState,
@@ -338,6 +343,7 @@ export async function generatePayrollPeriod(
     organizationId: input.organizationId,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_generated",
+    entityType: "payroll_period",
     entityId: String(period.id),
     beforeState: null,
     afterState: {
@@ -395,6 +401,7 @@ export async function regeneratePayrollPeriod(
     organizationId: period.organizationId,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_regenerated",
+    entityType: "payroll_period",
     entityId: String(period.id),
     beforeState: { gross_cents: input.period.grossCents },
     afterState: { gross_cents: period.grossCents },
@@ -439,6 +446,7 @@ export async function lockPayrollPeriod(
     organizationId: input.organizationId,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_locked",
+    entityType: "payroll_period",
     entityId: String(input.periodId),
     beforeState: { status: "draft" },
     afterState: { status: "locked" },
@@ -454,4 +462,464 @@ export async function lockPayrollPeriod(
     return audit;
   }
   return { ok: true, data: null };
+}
+
+// -- Payments -----------------------------------------------------------
+
+export type PayrollPayment = {
+  id: number;
+  organizationId: string;
+  payrollPeriodId: number;
+  amountCents: number;
+  paymentDate: string;
+  comment: string | null;
+  status: "draft" | "confirmed";
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  reversesPaymentId: number | null;
+};
+
+const PAYMENT_COLUMNS =
+  "id, organization_id, payroll_period_id, amount_cents, payment_date, comment, status, created_at, created_by, updated_at, confirmed_at, confirmed_by, reverses_payment_id";
+
+function mapPaymentRow(row: {
+  id: number;
+  organization_id: string;
+  payroll_period_id: number;
+  amount_cents: number;
+  payment_date: string;
+  comment: string | null;
+  status: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  reverses_payment_id: number | null;
+}): PayrollPayment {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    payrollPeriodId: row.payroll_period_id,
+    amountCents: row.amount_cents,
+    paymentDate: row.payment_date,
+    comment: row.comment,
+    status: row.status as "draft" | "confirmed",
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    updatedAt: row.updated_at,
+    confirmedAt: row.confirmed_at,
+    confirmedBy: row.confirmed_by,
+    reversesPaymentId: row.reverses_payment_id,
+  };
+}
+
+export async function getPaymentById(
+  supabase: TypedSupabaseClient,
+  input: { paymentId: number },
+): Promise<PayrollResult<PayrollPayment | null>> {
+  const { data, error } = await supabase
+    .from("payroll_payments")
+    .select(PAYMENT_COLUMNS)
+    .eq("id", input.paymentId)
+    .maybeSingle();
+  if (error) {
+    console.error("getPaymentById failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+  return { ok: true, data: data ? mapPaymentRow(data) : null };
+}
+
+/**
+ * Every payment for a period, keyed ONLY by `payroll_period_id` -- the
+ * column that actually determines which period a payment reduces.
+ * `payment_date` never appears in this query's `where` clause and is
+ * never consulted anywhere in this file to decide which period a payment
+ * belongs to; it is stored purely as when the money changed hands, shown
+ * on the ledger, and otherwise inert. A payment dated any month can
+ * target any period -- that's not a special case this function handles,
+ * it's simply the only thing this query ever asks Postgres.
+ */
+export async function listPaymentsForPeriod(
+  supabase: TypedSupabaseClient,
+  input: { periodId: number },
+): Promise<PayrollResult<PayrollPayment[]>> {
+  const { data, error } = await supabase
+    .from("payroll_payments")
+    .select(PAYMENT_COLUMNS)
+    .eq("payroll_period_id", input.periodId)
+    .order("payment_date", { ascending: true });
+  if (error) {
+    console.error("listPaymentsForPeriod failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+  return { ok: true, data: data.map(mapPaymentRow) };
+}
+
+export async function recordPayment(
+  supabase: TypedSupabaseClient,
+  input: {
+    organizationId: string;
+    periodId: number;
+    amountCents: number;
+    paymentDate: string;
+    comment: string | null;
+    actorProfileId: string;
+  },
+): Promise<PayrollResult<PayrollPayment>> {
+  const { data, error } = await supabase
+    .from("payroll_payments")
+    .insert({
+      organization_id: input.organizationId,
+      payroll_period_id: input.periodId,
+      amount_cents: input.amountCents,
+      payment_date: input.paymentDate,
+      comment: input.comment,
+      created_by: input.actorProfileId,
+    })
+    .select(PAYMENT_COLUMNS)
+    .single();
+  if (error) {
+    console.error("recordPayment failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const payment = mapPaymentRow(data);
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: input.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_payment_recorded",
+    entityType: "payroll_payment",
+    entityId: String(payment.id),
+    beforeState: null,
+    afterState: {
+      amount_cents: payment.amountCents,
+      payment_date: payment.paymentDate,
+    },
+  });
+  if (!audit.ok) {
+    const { error: rollbackError } = await supabase
+      .from("payroll_payments")
+      .delete()
+      .eq("id", payment.id);
+    if (rollbackError) {
+      console.error("recordPayment rollback failed", rollbackError);
+    }
+    return audit;
+  }
+  return { ok: true, data: payment };
+}
+
+export async function editDraftPayment(
+  supabase: TypedSupabaseClient,
+  input: {
+    payment: PayrollPayment;
+    amountCents: number;
+    paymentDate: string;
+    comment: string | null;
+    actorProfileId: string;
+  },
+): Promise<PayrollResult<PayrollPayment>> {
+  const { data, error } = await supabase
+    .from("payroll_payments")
+    .update({
+      amount_cents: input.amountCents,
+      payment_date: input.paymentDate,
+      comment: input.comment,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.payment.id)
+    .select(PAYMENT_COLUMNS)
+    .single();
+  if (error) {
+    console.error("editDraftPayment failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const payment = mapPaymentRow(data);
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: payment.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_payment_edited",
+    entityType: "payroll_payment",
+    entityId: String(payment.id),
+    beforeState: {
+      amount_cents: input.payment.amountCents,
+      payment_date: input.payment.paymentDate,
+    },
+    afterState: {
+      amount_cents: payment.amountCents,
+      payment_date: payment.paymentDate,
+    },
+  });
+  if (!audit.ok) {
+    const { error: rollbackError } = await supabase
+      .from("payroll_payments")
+      .update({
+        amount_cents: input.payment.amountCents,
+        payment_date: input.payment.paymentDate,
+        comment: input.payment.comment,
+      })
+      .eq("id", payment.id);
+    if (rollbackError) {
+      console.error("editDraftPayment rollback failed", rollbackError);
+    }
+    return audit;
+  }
+  return { ok: true, data: payment };
+}
+
+export async function deleteDraftPayment(
+  supabase: TypedSupabaseClient,
+  input: { payment: PayrollPayment; actorProfileId: string },
+): Promise<PayrollResult<null>> {
+  const { error } = await supabase
+    .from("payroll_payments")
+    .delete()
+    .eq("id", input.payment.id);
+  if (error) {
+    console.error("deleteDraftPayment failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: input.payment.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_payment_deleted",
+    entityType: "payroll_payment",
+    entityId: String(input.payment.id),
+    beforeState: {
+      amount_cents: input.payment.amountCents,
+      payment_date: input.payment.paymentDate,
+    },
+    afterState: null,
+  });
+  if (!audit.ok) {
+    // The row is gone; recreating it with the same id isn't possible
+    // (identity column), so the compensating action here is re-inserting
+    // an equivalent draft row rather than restoring the exact original.
+    const { error: rollbackError } = await supabase
+      .from("payroll_payments")
+      .insert({
+        organization_id: input.payment.organizationId,
+        payroll_period_id: input.payment.payrollPeriodId,
+        amount_cents: input.payment.amountCents,
+        payment_date: input.payment.paymentDate,
+        comment: input.payment.comment,
+        created_by: input.payment.createdBy,
+      });
+    if (rollbackError) {
+      console.error("deleteDraftPayment rollback failed", rollbackError);
+    }
+    return audit;
+  }
+  return { ok: true, data: null };
+}
+
+export async function confirmPayment(
+  supabase: TypedSupabaseClient,
+  input: { payment: PayrollPayment; actorProfileId: string },
+): Promise<PayrollResult<PayrollPayment>> {
+  const { data, error } = await supabase
+    .from("payroll_payments")
+    .update({
+      status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: input.actorProfileId,
+    })
+    .eq("id", input.payment.id)
+    .select(PAYMENT_COLUMNS)
+    .single();
+  if (error) {
+    console.error("confirmPayment failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const payment = mapPaymentRow(data);
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: payment.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_payment_confirmed",
+    entityType: "payroll_payment",
+    entityId: String(payment.id),
+    beforeState: { status: "draft" },
+    afterState: { status: "confirmed" },
+  });
+  if (!audit.ok) {
+    // Un-confirming is exactly what the immutability trigger forbids once
+    // this write has landed -- there is no safe rollback here. Reported
+    // as a failure so the caller knows the audit gap exists; the payment
+    // itself is now correctly confirmed and stays that way.
+    return audit;
+  }
+  return { ok: true, data: payment };
+}
+
+// -- Adjustments ----------------------------------------------------------
+
+export type PayrollAdjustment = {
+  id: number;
+  organizationId: string;
+  payrollPeriodId: number;
+  deltaCents: number;
+  reason: string;
+  createdAt: string;
+  createdBy: string;
+};
+
+function mapAdjustmentRow(row: {
+  id: number;
+  organization_id: string;
+  payroll_period_id: number;
+  delta_cents: number;
+  reason: string;
+  created_at: string;
+  created_by: string;
+}): PayrollAdjustment {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    payrollPeriodId: row.payroll_period_id,
+    deltaCents: row.delta_cents,
+    reason: row.reason,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+  };
+}
+
+/** Same rule as listPaymentsForPeriod: keyed only by payroll_period_id. */
+export async function listAdjustmentsForPeriod(
+  supabase: TypedSupabaseClient,
+  input: { periodId: number },
+): Promise<PayrollResult<PayrollAdjustment[]>> {
+  const { data, error } = await supabase
+    .from("payroll_adjustments")
+    .select(
+      "id, organization_id, payroll_period_id, delta_cents, reason, created_at, created_by",
+    )
+    .eq("payroll_period_id", input.periodId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("listAdjustmentsForPeriod failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+  return { ok: true, data: data.map(mapAdjustmentRow) };
+}
+
+/**
+ * No update/rollback path on failure to audit, unlike every other write in
+ * this file -- payroll_adjustments has no delete grant at all (by design,
+ * see the migration), so there is nothing to compensate with. A failed
+ * audit insert here is reported as a failure (the caller sees an error),
+ * but the adjustment row itself, once inserted, is permanent -- exactly
+ * the append-only guarantee this table exists to provide.
+ */
+export async function recordAdjustment(
+  supabase: TypedSupabaseClient,
+  input: {
+    organizationId: string;
+    periodId: number;
+    deltaCents: number;
+    reason: string;
+    actorProfileId: string;
+  },
+): Promise<PayrollResult<PayrollAdjustment>> {
+  const { data, error } = await supabase
+    .from("payroll_adjustments")
+    .insert({
+      organization_id: input.organizationId,
+      payroll_period_id: input.periodId,
+      delta_cents: input.deltaCents,
+      reason: input.reason,
+      created_by: input.actorProfileId,
+    })
+    .select(
+      "id, organization_id, payroll_period_id, delta_cents, reason, created_at, created_by",
+    )
+    .single();
+  if (error) {
+    console.error("recordAdjustment failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const adjustment = mapAdjustmentRow(data);
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: input.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_adjustment_recorded",
+    entityType: "payroll_adjustment",
+    entityId: String(adjustment.id),
+    beforeState: null,
+    afterState: {
+      delta_cents: adjustment.deltaCents,
+      reason: adjustment.reason,
+    },
+  });
+  if (!audit.ok) return audit;
+  return { ok: true, data: adjustment };
+}
+
+// -- Balance --------------------------------------------------------------
+
+export type PayrollBalance = {
+  grossCents: number;
+  confirmedPaymentsCents: number;
+  draftPaymentsCents: number;
+  adjustmentsCents: number;
+  balanceCents: number;
+  fullyPaid: boolean;
+};
+
+/**
+ * The one place balance is computed from a period's ledger. Both
+ * `listPaymentsForPeriod` and `listAdjustmentsForPeriod` key exclusively
+ * on `payroll_period_id` -- `period.grossCents` (the frozen snapshot) and
+ * those two lists are the only three things this reads. A payment's own
+ * `payment_date` never enters into which rows get summed, and the
+ * confirmed/draft split happens here, not in the query layer, so both
+ * figures are always computed from the same fetched rows rather than two
+ * separately-filtered queries that could disagree.
+ */
+export async function getPayrollBalance(
+  supabase: TypedSupabaseClient,
+  input: { period: PayrollPeriod },
+): Promise<PayrollResult<PayrollBalance>> {
+  const [paymentsResult, adjustmentsResult] = await Promise.all([
+    listPaymentsForPeriod(supabase, { periodId: input.period.id }),
+    listAdjustmentsForPeriod(supabase, { periodId: input.period.id }),
+  ]);
+  if (!paymentsResult.ok) return paymentsResult;
+  if (!adjustmentsResult.ok) return adjustmentsResult;
+
+  const confirmedPaymentsCents = paymentsResult.data
+    .filter((payment) => payment.status === "confirmed")
+    .reduce((sum, payment) => sum + payment.amountCents, 0);
+  const draftPaymentsCents = paymentsResult.data
+    .filter((payment) => payment.status === "draft")
+    .reduce((sum, payment) => sum + payment.amountCents, 0);
+  const adjustmentsCents = adjustmentsResult.data.reduce(
+    (sum, adjustment) => sum + adjustment.deltaCents,
+    0,
+  );
+
+  const balanceCents = computeBalanceCents({
+    grossCents: input.period.grossCents,
+    confirmedPaymentsCents,
+    adjustmentsCents,
+  });
+
+  return {
+    ok: true,
+    data: {
+      grossCents: input.period.grossCents,
+      confirmedPaymentsCents,
+      draftPaymentsCents,
+      adjustmentsCents,
+      balanceCents,
+      fullyPaid: isFullyPaid(balanceCents),
+    },
+  };
 }

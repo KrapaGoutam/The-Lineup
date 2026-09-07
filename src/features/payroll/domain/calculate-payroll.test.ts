@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeBalanceCents,
   computeGrossCents,
+  isFullyPaid,
   monthDateRange,
   normalizePeriodMonth,
   resolveEffectiveRateCents,
@@ -110,5 +112,96 @@ describe("monthDateRange", () => {
       start: "2026-12-01",
       end: "2026-12-31",
     });
+  });
+});
+
+describe("computeBalanceCents", () => {
+  it("the spec's own worked sequence: $1000 generated, -$400, then -$500", () => {
+    const gross = 100000;
+    let confirmed = 0;
+    expect(
+      computeBalanceCents({
+        grossCents: gross,
+        confirmedPaymentsCents: confirmed,
+        adjustmentsCents: 0,
+      }),
+    ).toBe(100000);
+
+    confirmed += 40000;
+    expect(
+      computeBalanceCents({
+        grossCents: gross,
+        confirmedPaymentsCents: confirmed,
+        adjustmentsCents: 0,
+      }),
+    ).toBe(60000);
+
+    confirmed += 50000;
+    expect(
+      computeBalanceCents({
+        grossCents: gross,
+        confirmedPaymentsCents: confirmed,
+        adjustmentsCents: 0,
+      }),
+    ).toBe(10000);
+  });
+
+  it("a wrong confirmed payment corrected by an offsetting adjustment: $400 -> net $40 via a -$360 adjustment", () => {
+    // Generated $1000; a confirmed $400 payment was recorded but should
+    // have been $40. The confirmed payment is frozen (can't be edited or
+    // deleted) -- the fix is a -$360 adjustment, never touching the
+    // payment itself.
+    const balanceBeforeAdjustment = computeBalanceCents({
+      grossCents: 100000,
+      confirmedPaymentsCents: 40000,
+      adjustmentsCents: 0,
+    });
+    expect(balanceBeforeAdjustment).toBe(60000); // $600 owed, as if $400 were correct
+
+    const balanceAfterAdjustment = computeBalanceCents({
+      grossCents: 100000,
+      confirmedPaymentsCents: 40000,
+      adjustmentsCents: -36000, // the offsetting -$360 adjustment
+    });
+    // Net effect: $1000 - $400 - (-$360) = $960 -- i.e. as if only $40 had
+    // been paid ($1000 - $40 = $960). The $400 payment and the -$360
+    // adjustment both stay on the ledger; neither is edited or removed.
+    expect(balanceAfterAdjustment).toBe(96000);
+  });
+
+  it("adjustments can move balance in either direction", () => {
+    expect(
+      computeBalanceCents({
+        grossCents: 100000,
+        confirmedPaymentsCents: 0,
+        adjustmentsCents: 5000, // a positive adjustment reduces what's owed further
+      }),
+    ).toBe(95000);
+    expect(
+      computeBalanceCents({
+        grossCents: 100000,
+        confirmedPaymentsCents: 0,
+        adjustmentsCents: -5000, // a negative adjustment increases what's owed
+      }),
+    ).toBe(105000);
+  });
+
+  it("balance can go negative (overpaid) -- not clamped to zero", () => {
+    expect(
+      computeBalanceCents({
+        grossCents: 10000,
+        confirmedPaymentsCents: 15000,
+        adjustmentsCents: 0,
+      }),
+    ).toBe(-5000);
+  });
+});
+
+describe("isFullyPaid", () => {
+  it("is true at exactly zero and below, false above zero", () => {
+    expect(isFullyPaid(0)).toBe(true);
+    expect(isFullyPaid(-100)).toBe(true);
+    expect(isFullyPaid(1)).toBe(false);
+    expect(isFullyPaid(100000)).toBe(false);
   });
 });

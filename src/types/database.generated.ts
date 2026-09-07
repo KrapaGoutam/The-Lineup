@@ -756,6 +756,58 @@ export type Database = {
           },
         ];
       };
+      payroll_adjustments: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          delta_cents: number;
+          id: number;
+          organization_id: string;
+          payroll_period_id: number;
+          reason: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          delta_cents: number;
+          id?: never;
+          organization_id: string;
+          payroll_period_id: number;
+          reason: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          delta_cents?: number;
+          id?: never;
+          organization_id?: string;
+          payroll_period_id?: number;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_adjustments_organization_id_created_by_fkey";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "payroll_adjustments_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_adjustments_payroll_period_id_fkey";
+            columns: ["payroll_period_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payroll_payments: {
         Row: {
           amount_cents: number;

@@ -56,3 +56,39 @@ export function monthDateRange(periodMonth: string): {
   const toDateString = (date: Date) => date.toISOString().slice(0, 10);
   return { start: toDateString(start), end: toDateString(end) };
 }
+
+/**
+ * Feature 020 Phase 3. `balance = gross − sum(CONFIRMED payments) −
+ * sum(adjustments)`. A draft payment is recorded but does not move balance
+ * until it's confirmed (per your explicit call on the Phase 1 draft-counts
+ * question, reconsidered here now that adjustments exist as the formal
+ * correction path); callers must sum only confirmed-status rows before
+ * calling this -- it does not know about payment status itself, on
+ * purpose, so it can't be handed an unfiltered sum by mistake without a
+ * type-level nudge (the parameter name says exactly what it must already
+ * be). Adjustment deltas are signed and summed as-is (a correction can
+ * move balance either direction). Every input and the result are integer
+ * cents -- summing integers never introduces drift, so this needs no
+ * rounding of its own; the only rounding in the whole payroll pipeline is
+ * `computeGrossCents`'s single `Math.round`, upstream of this.
+ *
+ * Deliberately takes plain numbers, not a period id or a database
+ * connection -- this function never queries anything itself, so what
+ * "counts" toward the two sums (confirmed-only payments; every
+ * adjustment, keyed to the period regardless of either row's own date
+ * column) is decided once, in the query layer that calls it
+ * (`getPayrollBalance` in payroll-data.ts), not duplicated here.
+ */
+export function computeBalanceCents(input: {
+  grossCents: number;
+  confirmedPaymentsCents: number;
+  adjustmentsCents: number;
+}): number {
+  return (
+    input.grossCents - input.confirmedPaymentsCents - input.adjustmentsCents
+  );
+}
+
+export function isFullyPaid(balanceCents: number): boolean {
+  return balanceCents <= 0;
+}
