@@ -108,6 +108,23 @@ invoker`, so its own SELECT against `tip_pools` was equally subject
    `status = 'active'` — there is no way to view any other date's board,
    historical or otherwise.
 
+   **Step 5 found a third real gap in the same family as gaps 3 and 3b
+   above, before any historical browsing existed to expose it**: none of
+   the `board_*` RPCs check a session's own `service_date` against
+   today at all — only whether tips are finalized. Before this feature,
+   that was harmless (the client could never legitimately hold anything
+   but today's `service_session_id`, since the only read path,
+   `getAllocationContext`, only ever returned today's session). Step 5's
+   own date navigator is what first hands a legitimate historical
+   `service_session_id` to the client — so without a matching
+   server-side guard, a manipulated client could call
+   `executeBoardActionRemote` with a browsed-to historical session id
+   and mutate a concluded day directly, bypassing the UI's `readOnly`
+   flag entirely. Same fix shape as gap 3b: extended
+   `private.assert_board_not_locked` (already called by every `board_*`
+   RPC) to also raise when `session.service_date < today` in the
+   location's own time zone. See Step 5's own notes below.
+
 ## 🔒 Non-negotiable constraints
 
 - Schedule, Tips, Attendance, Payroll, Team stay exactly as role-gated as
@@ -232,51 +249,111 @@ definer`; a plain server's `board_assign` call — the real-world
         worked from a server account with no manager-only controls
         (Clear board, reorder) visible anywhere on the page.
   - [x] `npm run check`, `npm test` (195/195), `npm run build`.
-- [ ] **Step 5: Date & month navigation**
-  - [ ] `allocation-data.ts`: `getAllocationContext` takes an optional
-        `serviceDate` (defaults to today); the `service_sessions` lookup
-        drops the `status = 'active'` filter (already scoped uniquely
-        enough by `location_id + service_date + meal_period`, ordered
-        defensively) so a historical **closed** session is found the
-        same way today's active one is. Adds `serviceDate` and
-        `isHistorical` to `AllocationContext`.
-  - [ ] `allocation-actions.ts`: new client-triggered
+- [x] **Step 5: Date & month navigation**
+  - [x] `allocation-data.ts`: `getAllocationContext` takes an optional
+        `requestedServiceDate` (defaults to today); the `service_sessions`
+        lookup drops the `status = 'active'` filter (already scoped
+        uniquely enough by `location_id + service_date + meal_period`,
+        `order by id desc limit 1` defensively) so a historical
+        **closed** session is found the same way today's active one is.
+        Adds `serviceDate` and `isHistorical` to `AllocationContext`.
+        Verified directly against live Postgres (not just typecheck):
+        seeded a `status = 'closed'` session 3 days in the past and
+        confirmed the exact query shape returns it, then confirmed the
+        unchanged `status = 'active'` today's-session case still
+        resolves correctly too.
+  - [x] `allocation-actions.ts`: new client-triggered
         `getAllocationContextForDateAction({ restaurantSlug,
 serviceDate })` (mirrors Attendance's own client-triggered read
-        pattern) — rejects a future date with a clear error rather than
+        pattern) — re-resolves the signed-in user and their own
+        location server-side (never trusts a client-supplied
+        organizationId), computes "today" from the location's own time
+        zone, and rejects a future date with a clear error rather than
         silently returning an empty board.
-  - [ ] `src/features/allocation/components/allocation-date-filter.tsx`
+  - [x] `src/features/allocation/components/allocation-date-filter.tsx`
         (new, matches the spec's own Implementation Map name): a date
-        input + previous/next-day steppers + "Back to today", max-date
-        clamped to today.
-  - [ ] `allocation-workspace.tsx`: wires the filter in; any date other
-        than today forces the same read-only rendering `boardLocked`
-        already produces (`canWrite` becomes `... && !isHistorical`),
-        regardless of role — no admin action, no cell edit, no
-        clear-cell.
-  - [ ] **Demo mode scoping decision**: demo mode has no multi-day
+        input + previous/next-day steppers + "Back to today" (shown only
+        once away from today), max-date clamped to today.
+  - [x] `allocation-workspace.tsx`: wires the filter in. New `readOnly =
+boardLocked || isHistoricalView` flag replaces every prior
+        `!boardLocked` UI gate (admin buttons, `canWrite`, undo/redo,
+        `execute()`'s own defense-in-depth check) — a browsed-to
+        historical date now disables exactly what a finalized-tips day
+        already did, regardless of role. The `initialContext`-driven
+        resync effect (real mode) is now guarded to only apply while
+        viewing today, so a background `router.refresh()` (this
+        browser's own action, or someone else's Realtime-triggered
+        change) can never silently snap a browsed-to historical view
+        back to today's board underneath the viewer.
+  - [x] **Deviation from the original plan, found reading the existing
+        code rather than assumed**: `allocation-workspace.tsx` already
+        imports and calls `executeBoardActionRemote`/`undoBoardAction`/
+        `redoBoardAction` directly — none of the allocation actions are
+        threaded through `restaurant-operations-app.tsx` as props. The
+        new `getAllocationContextForDateAction` follows the exact same,
+        already-established convention: imported and called directly by
+        `allocation-workspace.tsx`. No changes needed in
+        `restaurant-operations-app.tsx` at all for this step.
+  - [x] **Real server-side security gap found and fixed, matching the
+        gap-3/3b bug family**: see the investigation note above — added
+        `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql`,
+        extending `private.assert_board_not_locked` to also raise when
+        the session's own `service_date` is before today in the
+        location's time zone, alongside the existing tip-finalized
+        check. `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql`
+        (5 assertions): a plain server's direct `board_assign`/
+        `board_clear_cell` calls against a historical, never-finalized
+        session are blocked with the new message; nothing is written;
+        a regression check confirms today's own session, still active
+        and not finalized, remains fully writable — the historical
+        check does not accidentally catch today itself.
+  - [x] **Demo mode scoping decision**: demo mode has no multi-day
         historical data model (the board is pure client-side, in-memory,
         undated) — matches the established precedent (Payroll is simply
         absent in demo mode) rather than fabricating fake historical
-        data. Selecting a non-today date in demo mode shows a clear
-        "Demo mode only shows today's board" state instead of an empty
-        board that looks like a real (if uneventful) historical day.
-  - [ ] `restaurant-operations-app.tsx`: thread the new action through
-        as a prop, same shape as the other allocation handlers.
-  - [ ] Live Playwright smoke test: selecting a prior date renders the
-        board read-only.
-  - [ ] Full gate.
-- [ ] **Step 6: E2E flow** (`tests/e2e/allocation-open-editing.spec.ts`)
-  - [ ] A server signs in, edits an already-assigned table in a
-        teammate's column, and the change is visible (attribution is
-        server-side/audit-log only, not asserted in the UI beyond the
-        existing cross-edit note already shown).
-  - [ ] Administrative actions (`Clear board`, move/reorder) remain
-        absent/inert for a server — regression guard, unchanged
-        behavior.
-  - [ ] Selecting a historical date renders the board read-only (no
-        input controls).
-  - [ ] Run across all three Playwright projects.
+        data. Selecting a non-today date in demo mode replaces the
+        summary/floor-team/dinner-rotation sections with a "Demo mode
+        only shows today" notice instead of an empty board that looks
+        like a real (if uneventful) historical day.
+  - [x] **Real bug found live-testing in Playwright, not assumed**: the
+        first version of `changeViewDate`'s "back to today" branch
+        unconditionally rebuilt `history` from `initialContext?.board`.
+        In demo mode `initialContext` is always `null` (the demo board
+        lives only in local `history` state, built once by
+        `buildInitialHistory()`), so clicking "Back to today" after
+        browsing away silently wiped the entire demo board to empty
+        instead of restoring it. Fixed by checking `demoMode` first and
+        returning immediately (just moving `viewDate`) before the
+        today-vs-historical branching that only makes sense in real
+        mode.
+  - [x] Live Playwright smoke test (demo mode): manager browses to the
+        previous day — "Demo mode only shows today" notice appears,
+        Table 12 (today's seeded cell) disappears, `Clear board`/
+        `Add row` disappear entirely, `Undo`/`Redo` render disabled.
+        "Back to today" restores the live board exactly, including the
+        admin buttons. Caught and fixed the demo-mode bug above this
+        way, live, before it could reach the committed e2e spec.
+  - [x] `npm run db:reset && npm run db:test`: 16/16 pgTAP files, 202
+        assertions. `npm run check`, `npm test` (195/195), `npm run
+build`.
+- [x] **Step 6: E2E flow** (`tests/e2e/allocation-open-editing.spec.ts`)
+  - [x] A server (passcode 1357 = Mia Chen) signs in, edits Leo Park's
+        already-assigned "Table 8" cell to "Table 8B" via the new
+        Edit/Save controls, and both the new value and the true actor
+        attribution ("Mia Chen edited Leo Park's column") are visible —
+        while `Clear board`/`Add row`/reorder stay absent for her in the
+        same test.
+  - [x] A server clears Noah Diaz's already-assigned "Table 4" cell via
+        the new Clear control; the cell empties and the clear is
+        attributed the same way.
+  - [x] A manager (passcode 2468) browses to the previous day: the demo
+        read-only notice appears, today's board and every admin control
+        disappear, Undo/Redo render disabled; "Back to today" restores
+        everything.
+  - [x] Ran across all three Playwright projects (desktop, host-tablet,
+        server-mobile) — 9/9 passed. Also re-ran the full existing
+        `tests/e2e/dashboard.spec.ts` (desktop) — 25/25 still pass, no
+        regression from the `readOnly` refactor.
 - [ ] **Step 7: Docs**
   - [ ] Check off acceptance criteria in
         `docs/features/028-table-allocation-unrestricted-editing.md`,
@@ -291,20 +368,26 @@ serviceDate })` (mirrors Attendance's own client-triggered read
 - `tasks/current-task.md` (this file)
 - `supabase/migrations/20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql` (new)
 - `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql` (new)
-- `supabase/migrations/<ts>_board_clear_cell.sql` (new)
+- `supabase/migrations/20260908190000_board_clear_cell.sql` (new)
 - `supabase/tests/database/0014_board_clear_cell.test.sql` (new)
+- `supabase/migrations/20260908200000_assert_board_not_locked_security_definer.sql` (new)
+- `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql` (new)
+- `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql` (new)
+- `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql` (new)
 - `src/features/allocation/domain/rotation-board.ts` (`clear-cell` action)
 - `src/features/allocation/domain/rotation-board.test.ts` (new tests)
 - `src/features/allocation/actions/allocation-actions.ts` (`clear-cell`, date-fetch action)
 - `src/features/allocation/data/allocation-data.ts` (`serviceDate`/`isHistorical`)
 - `src/features/allocation/components/allocation-date-filter.tsx` (new)
-- `src/features/allocation/components/allocation-workspace.tsx` (click-to-edit, date wiring)
-- `src/components/restaurant-operations-app.tsx` (prop wiring)
+- `src/features/allocation/components/allocation-workspace.tsx` (click-to-edit, date wiring, `readOnly`)
 - `tests/e2e/allocation-open-editing.spec.ts` (new)
 - `docs/features/028-table-allocation-unrestricted-editing.md` (checkboxes)
 - `docs/STATUS.md` (milestone update)
 
 ## Current State & Next Step
 
-Branch created, this file committed. Next: Step 2 (DELETE RLS gap fix +
-pgTAP test).
+Steps 1-6 done and committed through Step 5/6's work (this update still
+needs its own commit). Next: Step 7 (docs — check off acceptance criteria
+in `docs/features/028-table-allocation-unrestricted-editing.md`, update
+`docs/STATUS.md`), then Step 8 (final full gate, push, open PR against
+`feature/024-team-management-enhancements`).
