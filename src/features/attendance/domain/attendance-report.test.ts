@@ -45,6 +45,43 @@ describe("resolvePeriodRange", () => {
       ),
     ).toEqual({ start: "2026-03-05", end: "2026-04-12" });
   });
+
+  // Feature 025: the month/year navigator's own selection -- independent
+  // of todayLocalDate entirely, which is the whole point of being able to
+  // browse to an arbitrary past month, not just "this" or "previous".
+  it("resolves an explicit month/year selection, ignoring todayLocalDate", () => {
+    expect(
+      resolvePeriodRange({ type: "month", year: 2025, month: 3 }, "2026-09-15"),
+    ).toEqual({ start: "2025-03-01", end: "2025-03-31" });
+  });
+
+  it("handles a leap-year February via the month type", () => {
+    expect(
+      resolvePeriodRange({ type: "month", year: 2028, month: 2 }, "2026-09-15"),
+    ).toEqual({ start: "2028-02-01", end: "2028-02-29" });
+    expect(
+      resolvePeriodRange({ type: "month", year: 2026, month: 2 }, "2026-09-15"),
+    ).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+  });
+
+  it("resolves December via the month type without rolling into next year", () => {
+    expect(
+      resolvePeriodRange(
+        { type: "month", year: 2025, month: 12 },
+        "2026-09-15",
+      ),
+    ).toEqual({ start: "2025-12-01", end: "2025-12-31" });
+  });
+
+  // Same intent as the existing "rolls a January previous-month back"
+  // test above, but exercised via the direct month type instead --
+  // proves resolvePeriodRange's shared monthRange helper handles the
+  // month-type caller identically to previous-month's own rollback.
+  it("resolves January directly via the month type", () => {
+    expect(
+      resolvePeriodRange({ type: "month", year: 2026, month: 1 }, "2026-09-15"),
+    ).toEqual({ start: "2026-01-01", end: "2026-01-31" });
+  });
 });
 
 describe("buildDisplayLabels", () => {

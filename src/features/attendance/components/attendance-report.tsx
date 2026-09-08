@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Printer } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
   getAttendanceAccessAction,
@@ -17,10 +16,19 @@ import {
   type AttendanceAccessView,
   type AttendanceDashboardTotals,
 } from "@/features/attendance/actions/attendance-actions";
+import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
+import { AttendancePrintDialog } from "@/features/attendance/components/attendance-print-dialog";
 import type {
   NeonAttendanceRow,
   NeonUser,
 } from "@/features/attendance/data/attendance-data";
+import {
+  MONTH_NAMES,
+  calendarWeekday,
+  computeAttendanceSummary,
+  dayOfMonth,
+  daysInMonth,
+} from "@/features/attendance/domain/attendance-metrics";
 import {
   aggregateHours,
   buildDisplayLabels,
@@ -35,8 +43,6 @@ import {
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
-
-type PeriodOption = "this-month" | "previous-month" | "custom";
 
 function formatHours(hours: number): string {
   return `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`;
@@ -123,10 +129,25 @@ export function AttendanceReport({
   const [users, setUsers] = useState<NeonUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [usersReloadKey, setUsersReloadKey] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [periodOption, setPeriodOption] = useState<PeriodOption>("this-month");
-  const [customStart, setCustomStart] = useState(todayLocalDate);
-  const [customEnd, setCustomEnd] = useState(todayLocalDate);
+  // Feature 025: which one person the "all"-scope switcher is currently
+  // showing -- replaces the old always-on checkbox multi-select (see
+  // tasks/current-task.md's Reconciliation 2). Defaulted once the user
+  // list loads, below.
+  const [activePersonId, setActivePersonId] = useState<number | null>(null);
+  // Feature 025: the restaurant's own current real month/year
+  // (todayLocalDate-derived, the same "today" every other real-mode
+  // feature already uses) -- the navigator's own upper bound, and where
+  // browsing starts by default. Captured once at mount, same reasoning
+  // as Feature 028's date navigator: this stays "today" for the whole
+  // session even if the browser happens to be open across a midnight
+  // rollover, rather than the navigator's own ceiling silently moving
+  // out from under someone mid-session.
+  const [{ maxYear, maxMonth }] = useState(() => {
+    const [year, month] = todayLocalDate.split("-").map(Number);
+    return { maxYear: year, maxMonth: month };
+  });
+  const [selectedYear, setSelectedYear] = useState(maxYear);
+  const [selectedMonth, setSelectedMonth] = useState(maxMonth);
   const [rows, setRows] = useState<NeonAttendanceRow[] | null>(null);
   const [rowsError, setRowsError] = useState<string | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -135,6 +156,26 @@ export function AttendanceReport({
     null,
   );
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  // Feature 025: multi-select print support. `printJob` is set the
+  // moment there's something ready to print -- either directly (`self`
+  // scope, reusing whatever's already loaded, no extra fetch) or after
+  // the dialog's own fetch resolves (`all` scope, which may target
+  // people other than whoever is currently being browsed). The effect
+  // below fires only after that state has actually committed to the DOM
+  // (React runs effects after the render they were scheduled in), which
+  // is what makes `window.print()` reliably see the freshly rendered
+  // printable content instead of racing ahead of it.
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printJob, setPrintJob] = useState<{
+    sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+  } | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!printJob) return;
+    window.print();
+  }, [printJob]);
 
   const scope = access?.scope ?? null;
 
@@ -149,7 +190,6 @@ export function AttendanceReport({
       if (demoMode) {
         const active = demoNeonUsers.filter((candidate) => candidate.isActive);
         setUsers(active);
-        setSelectedIds(new Set(active.map((candidate) => candidate.id)));
         return;
       }
       const result = await getAttendanceUsersAction({ restaurantSlug });
@@ -159,7 +199,6 @@ export function AttendanceReport({
         return;
       }
       setUsers(result.data);
-      setSelectedIds(new Set(result.data.map((candidate) => candidate.id)));
     }
     load();
     return () => {
@@ -167,23 +206,96 @@ export function AttendanceReport({
     };
   }, [scope, demoMode, restaurantSlug, usersReloadKey]);
 
-  const period: AttendancePeriodSelection =
-    periodOption === "custom"
-      ? { type: "custom", start: customStart, end: customEnd }
-      : { type: periodOption };
+  // Sorted once here, at render time, so both the default-selection
+  // adjustment below and the "all"-scope render further down share
+  // exactly the same order and labels -- never two independently
+  // recomputed sorts that could disagree.
+  const activeUserDisplayLabels = users ? buildDisplayLabels(users) : null;
+  const sortedActiveUsers = users
+    ? [...users].sort((a, b) =>
+        (activeUserDisplayLabels?.get(a.id) ?? "").localeCompare(
+          activeUserDisplayLabels?.get(b.id) ?? "",
+        ),
+      )
+    : [];
+  // Defaults (or corrects, if a previously-active id ever stopped
+  // existing in a fresh list) the switcher to the first person
+  // alphabetically by display label -- adjusted during render, this
+  // file's own established pattern (see the initialContext/syncedContext
+  // handling elsewhere in this app), rather than a separate effect, so
+  // there's never a render where the list is ready but nobody is shown.
+  if (
+    scope === "all" &&
+    sortedActiveUsers.length > 0 &&
+    !sortedActiveUsers.some((candidate) => candidate.id === activePersonId)
+  ) {
+    setActivePersonId(sortedActiveUsers[0].id);
+  }
+
+  const period: AttendancePeriodSelection = {
+    type: "month",
+    year: selectedYear,
+    month: selectedMonth,
+  };
   const { start: periodStart, end: periodEnd } = resolvePeriodRange(
     period,
     todayLocalDate,
   );
 
-  // The ids to fetch rows for: "all" honors the picker's current
-  // selection; "self" is always exactly the caller's own linked id,
-  // regardless of anything client state could claim -- the server
+  // Feature 025, "all" scope only: fetches whichever people the print
+  // dialog resolved to (which may be more than just the currently
+  // browsed person) for the *currently browsed* month, then hands the
+  // result to the print-trigger effect above. Reuses
+  // getAttendanceReportAction rather than a new action -- it already
+  // accepts multiple userIds for exactly this scope.
+  async function printPeople(targetIds: number[]) {
+    setPrintDialogOpen(false);
+    setPrintError(null);
+    const labelFor = (id: number) =>
+      activeUserDisplayLabels?.get(id) ?? `#${id}`;
+    if (demoMode) {
+      const filtered = demoNeonAttendance.filter(
+        (row) =>
+          targetIds.includes(row.userId) &&
+          row.date >= periodStart &&
+          row.date <= periodEnd,
+      );
+      setPrintJob({
+        sections: targetIds.map((id) => ({
+          label: labelFor(id),
+          rows: filtered.filter((row) => row.userId === id),
+        })),
+      });
+      return;
+    }
+    const result = await getAttendanceReportAction({
+      restaurantSlug,
+      userIds: targetIds,
+      period,
+      todayLocalDate,
+    });
+    if (!result.ok) {
+      setPrintError(result.error);
+      return;
+    }
+    setPrintJob({
+      sections: targetIds.map((id) => ({
+        label: labelFor(id),
+        rows: result.data.rows.filter((row) => row.userId === id),
+      })),
+    });
+  }
+
+  // The ids to fetch rows for: "all" is always exactly the one active
+  // switcher selection; "self" is always exactly the caller's own linked
+  // id, regardless of anything client state could claim -- the server
   // re-derives and enforces this same substitution independently, this
   // is just what triggers the right fetch.
   const reportUserIds: number[] | null =
     scope === "all"
-      ? Array.from(selectedIds)
+      ? activePersonId !== null
+        ? [activePersonId]
+        : []
       : scope === "self" && access?.scope === "self"
         ? [access.neonUserId]
         : scope === "unlinked"
@@ -403,14 +515,26 @@ export function AttendanceReport({
           scope="self"
           selectedPeriodTotal={grandTotal}
         />
-        <PeriodPicker
-          periodOption={periodOption}
-          setPeriodOption={setPeriodOption}
-          customStart={customStart}
-          setCustomStart={setCustomStart}
-          customEnd={customEnd}
-          setCustomEnd={setCustomEnd}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <AttendanceMonthNav
+            year={selectedYear}
+            month={selectedMonth}
+            maxYear={maxYear}
+            maxMonth={maxMonth}
+            onChange={({ year, month }) => {
+              setSelectedYear(year);
+              setSelectedMonth(month);
+            }}
+          />
+          {rows ? (
+            <Button
+              variant="secondary"
+              onClick={() => setPrintJob({ sections: [{ label, rows }] })}
+            >
+              <Printer aria-hidden="true" /> Print
+            </Button>
+          ) : null}
+        </div>
         {rowsError ? (
           <UnavailablePanel
             message={rowsError}
@@ -421,42 +545,32 @@ export function AttendanceReport({
             Loading attendance…
           </p>
         ) : (
-          <PersonSection label={label} rows={rows} timeZone={timeZone} />
+          <PersonSection
+            label={label}
+            rows={rows}
+            timeZone={timeZone}
+            year={selectedYear}
+            month={selectedMonth}
+          />
         )}
+        {printJob ? (
+          <PrintableReport
+            sections={printJob.sections}
+            timeZone={timeZone}
+            year={selectedYear}
+            month={selectedMonth}
+          />
+        ) : null}
       </div>
     );
   }
 
-  // access.scope === "all" from here on -- users is guaranteed non-null.
-  const activeUsers = users!;
-  const displayLabels = buildDisplayLabels(activeUsers);
-  const allSelected =
-    activeUsers.length > 0 && selectedIds.size === activeUsers.length;
-
-  function toggleAll() {
-    setSelectedIds(
-      allSelected
-        ? new Set()
-        : new Set(activeUsers.map((candidate) => candidate.id)),
-    );
-  }
-
-  function togglePerson(id: number) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const sortedSelected = activeUsers
-    .filter((candidate) => selectedIds.has(candidate.id))
-    .sort((a, b) =>
-      (displayLabels.get(a.id) ?? "").localeCompare(
-        displayLabels.get(b.id) ?? "",
-      ),
-    );
+  // access.scope === "all" from here on -- sortedActiveUsers (computed
+  // above, alongside the default-selection adjustment) is the single
+  // source of truth for both the switcher's options and their order.
+  const activePerson =
+    sortedActiveUsers.find((candidate) => candidate.id === activePersonId) ??
+    null;
 
   return (
     <div className="space-y-4">
@@ -469,50 +583,83 @@ export function AttendanceReport({
       />
 
       <Card>
-        <CardContent className="grid gap-4 pt-4 sm:grid-cols-[1fr_auto]">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold">People</legend>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                className="accent-[var(--primary)]"
-              />
-              All
+        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+          <div className="border-border bg-secondary rounded-2xl border p-1.5">
+            <label htmlFor="attendance-active-person" className="sr-only">
+              Employee
             </label>
-            <div className="grid max-h-48 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
-              {activeUsers.map((candidate) => (
-                <label
-                  key={candidate.id}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(candidate.id)}
-                    onChange={() => togglePerson(candidate.id)}
-                    className="accent-[var(--primary)]"
-                  />
-                  {displayLabels.get(candidate.id)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+            <Select
+              id="attendance-active-person"
+              value={activePersonId ?? ""}
+              onChange={(event) =>
+                setActivePersonId(Number(event.target.value))
+              }
+              disabled={sortedActiveUsers.length === 0}
+              className="w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+            >
+              {sortedActiveUsers.length === 0 ? (
+                <option value="">No active employees</option>
+              ) : (
+                sortedActiveUsers.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {activeUserDisplayLabels?.get(candidate.id) ??
+                      candidate.fullName}
+                  </option>
+                ))
+              )}
+            </Select>
+          </div>
 
-          <PeriodPicker
-            periodOption={periodOption}
-            setPeriodOption={setPeriodOption}
-            customStart={customStart}
-            setCustomStart={setCustomStart}
-            customEnd={customEnd}
-            setCustomEnd={setCustomEnd}
+          <AttendanceMonthNav
+            year={selectedYear}
+            month={selectedMonth}
+            maxYear={maxYear}
+            maxMonth={maxMonth}
+            onChange={({ year, month }) => {
+              setSelectedYear(year);
+              setSelectedMonth(month);
+            }}
           />
+
+          <Button
+            variant="secondary"
+            onClick={() => setPrintDialogOpen(true)}
+            disabled={!activePerson}
+          >
+            <Printer aria-hidden="true" /> Print
+          </Button>
         </CardContent>
       </Card>
 
-      {selectedIds.size === 0 ? (
+      {printError ? (
+        <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
+          <span className="text-destructive">{printError}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setPrintError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {printDialogOpen && activePerson ? (
+        <AttendancePrintDialog
+          currentPersonId={activePerson.id}
+          people={sortedActiveUsers.map((candidate) => ({
+            id: candidate.id,
+            label:
+              activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
+          }))}
+          onClose={() => setPrintDialogOpen(false)}
+          onConfirm={printPeople}
+        />
+      ) : null}
+
+      {!activePerson ? (
         <p className="text-muted-foreground text-sm">
-          Select at least one person to see their attendance.
+          No active employees to show.
         </p>
       ) : rowsError ? (
         <UnavailablePanel
@@ -524,40 +671,25 @@ export function AttendanceReport({
           Loading attendance…
         </p>
       ) : (
-        <div className="space-y-4">
-          {sortedSelected.map((person) => (
-            <PersonSection
-              key={person.id}
-              label={displayLabels.get(person.id) ?? person.fullName}
-              rows={rows.filter((row) => row.userId === person.id)}
-              timeZone={timeZone}
-            />
-          ))}
-
-          {sortedSelected.length > 1 && grandTotal ? (
-            <Card>
-              <CardContent className="flex items-center justify-between pt-4">
-                <span className="text-sm font-semibold">
-                  Grand total ({sortedSelected.length}{" "}
-                  {sortedSelected.length === 1 ? "person" : "people"})
-                </span>
-                <span className="font-mono text-lg font-bold">
-                  {formatHours(grandTotal.totalHours)}
-                </span>
-              </CardContent>
-              {grandTotal.excludedRowCount > 0 ? (
-                <CardContent className="text-muted-foreground pt-0 text-xs">
-                  {grandTotal.excludedRowCount}{" "}
-                  {grandTotal.excludedRowCount === 1 ? "row has" : "rows have"}{" "}
-                  no recorded hours and{" "}
-                  {grandTotal.excludedRowCount === 1 ? "is" : "are"} excluded
-                  from this total.
-                </CardContent>
-              ) : null}
-            </Card>
-          ) : null}
-        </div>
+        <PersonSection
+          label={
+            activeUserDisplayLabels?.get(activePerson.id) ??
+            activePerson.fullName
+          }
+          rows={rows}
+          timeZone={timeZone}
+          year={selectedYear}
+          month={selectedMonth}
+        />
       )}
+      {printJob ? (
+        <PrintableReport
+          sections={printJob.sections}
+          timeZone={timeZone}
+          year={selectedYear}
+          month={selectedMonth}
+        />
+      ) : null}
     </div>
   );
 }
@@ -568,73 +700,11 @@ function Header() {
       <div className="mb-2 flex items-center gap-2">
         <Badge tone="accent">Module 5</Badge>
       </div>
-      <h1 className="text-3xl font-semibold tracking-[-0.04em]">
-        Attendance Report
-      </h1>
+      <h1 className="text-3xl font-semibold tracking-[-0.04em]">Attendance</h1>
       <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-        Live clock-in/clock-out data from the attendance system, read on demand
-        and never stored here. Display only — hours shown are exactly what was
-        recorded, with no calculation applied.
+        Read straight from the clock-in system. Hours are shown exactly as
+        recorded — nothing here is calculated.
       </p>
-    </div>
-  );
-}
-
-function PeriodPicker({
-  periodOption,
-  setPeriodOption,
-  customStart,
-  setCustomStart,
-  customEnd,
-  setCustomEnd,
-}: {
-  periodOption: PeriodOption;
-  setPeriodOption: (option: PeriodOption) => void;
-  customStart: string;
-  setCustomStart: (value: string) => void;
-  customEnd: string;
-  setCustomEnd: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="attendance-period">Period</Label>
-      <Select
-        id="attendance-period"
-        value={periodOption}
-        onChange={(event) =>
-          setPeriodOption(event.target.value as PeriodOption)
-        }
-      >
-        <option value="this-month">This month</option>
-        <option value="previous-month">Previous month</option>
-        <option value="custom">Custom range</option>
-      </Select>
-      {periodOption === "custom" ? (
-        <div className="flex items-center gap-2">
-          <div className="space-y-1">
-            <Label htmlFor="attendance-start" className="text-xs">
-              From
-            </Label>
-            <Input
-              id="attendance-start"
-              type="date"
-              value={customStart}
-              onChange={(event) => setCustomStart(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="attendance-end" className="text-xs">
-              To
-            </Label>
-            <Input
-              id="attendance-end"
-              type="date"
-              value={customEnd}
-              onChange={(event) => setCustomEnd(event.target.value)}
-            />
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -709,6 +779,122 @@ function DashboardTiles({
   );
 }
 
+// Feature 025. Hidden on screen, shown only when printing -- the same
+// visibility-isolation trick payroll-workspace.tsx's "Print statement"
+// already established: a bare `body *` selector hides everything else on
+// the page (including this app's own header/nav, which this component
+// has no other way to reach), scoped by one named id. One printable
+// "document" per targeted person, so "print selected"/"print all"
+// produce one multi-section report, not several separate print jobs.
+// Plain text status labels ("Auto-closed"/"Open shift"), never a colored
+// Badge -- color alone isn't a reliable signal once printed, especially
+// in black and white.
+const PRINT_AREA_ID = "attendance-print-area";
+
+function PrintableReport({
+  sections,
+  timeZone,
+  year,
+  month,
+}: {
+  sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+  timeZone: string;
+  year: number;
+  month: number;
+}) {
+  const monthLabel = MONTH_NAMES[month - 1];
+  return (
+    <>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #${PRINT_AREA_ID}, #${PRINT_AREA_ID} * { visibility: visible; }
+          #${PRINT_AREA_ID} { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
+        }
+      `}</style>
+      <div id={PRINT_AREA_ID} className="hidden print:block">
+        <h1 className="text-2xl font-bold">
+          Attendance — {monthLabel} {year}
+        </h1>
+        <div className="mt-4 space-y-6">
+          {sections.map((section) => {
+            const summary = computeAttendanceSummary(section.rows);
+            return (
+              <section key={section.label} className="break-inside-avoid">
+                <h2 className="text-lg font-semibold">{section.label}</h2>
+                <p className="mt-1 text-sm">
+                  Days worked: {summary.daysWorked} · Total hours:{" "}
+                  {formatHours(summary.totalHours)} · Avg per day:{" "}
+                  {formatHours(summary.avgPerDay)}
+                </p>
+                <table className="mt-2 w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border-b border-black py-1 pr-3">Date</th>
+                      <th className="border-b border-black py-1 pr-3">Day</th>
+                      <th className="border-b border-black py-1 pr-3">
+                        Clock in
+                      </th>
+                      <th className="border-b border-black py-1 pr-3">
+                        Clock out
+                      </th>
+                      <th className="border-b border-black py-1">Hours</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-1">
+                          No attendance recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      section.rows.map((row) => {
+                        const isOpenShift =
+                          !row.clockOut && !row.autoClockedOut;
+                        const status = row.autoClockedOut
+                          ? " (Auto-closed)"
+                          : isOpenShift
+                            ? " (Open shift)"
+                            : "";
+                        return (
+                          <tr key={row.id}>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {row.date}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {calendarWeekday(row.date)}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {row.clockIn
+                                ? formatClockTime(row.clockIn, timeZone)
+                                : "—"}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {(row.clockOut
+                                ? formatClockTime(row.clockOut, timeZone)
+                                : "—") + status}
+                            </td>
+                            <td className="border-b border-gray-300 py-1">
+                              {row.hoursWorked === null
+                                ? "—"
+                                : formatHours(row.hoursWorked)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function UnavailablePanel({
   message,
   onRetry,
@@ -739,29 +925,15 @@ function formatClockTime(iso: string, timeZone: string): string {
   return zonedWallTimeFromInstant(new Date(iso), timeZone).time;
 }
 
-// row.date is a local calendar date ("YYYY-MM-DD"), not an instant -- its
-// weekday is a property of that calendar date alone, so this parses it as
-// a UTC noon date the same way schedule-workspace.tsx's date-label helpers
-// do, rather than routing it back through the restaurant's time zone.
-function mobileDateParts(isoDate: string): { day: string; weekday: string } {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  return {
-    day: String(day).padStart(2, "0"),
-    weekday: new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-      timeZone: "UTC",
-    }).format(utcDate),
-  };
-}
-
 function StatTile({
   label,
   value,
+  hint,
   accent = false,
 }: {
   label: string;
   value: string;
+  hint?: string;
   accent?: boolean;
 }) {
   return (
@@ -777,6 +949,11 @@ function StatTile({
       >
         {value}
       </span>
+      {hint ? (
+        <span className="text-muted-foreground text-xs leading-snug">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -785,18 +962,18 @@ function PersonSection({
   label,
   rows,
   timeZone,
+  year,
+  month,
 }: {
   label: string;
   rows: NeonAttendanceRow[];
   timeZone: string;
+  /** The currently browsed month/year, for the "of N days in <Month>" hint. */
+  year: number;
+  month: number;
 }) {
-  const total = aggregateHours(rows);
-  // "Days worked" counts only rows that actually contributed to the total
-  // -- a row with no recorded hours (excludedRowCount) was never a worked
-  // day, so it's excluded from both the count and the average the same
-  // way it's already excluded from totalHours.
-  const daysWorked = rows.length - total.excludedRowCount;
-  const avgPerDay = daysWorked > 0 ? total.totalHours / daysWorked : 0;
+  const summary = computeAttendanceSummary(rows);
+  const monthLabel = MONTH_NAMES[month - 1];
   return (
     <Card>
       <CardHeader>
@@ -805,13 +982,26 @@ function PersonSection({
       <CardContent className="space-y-4 pt-0">
         {rows.length > 0 ? (
           <div className="grid grid-cols-3 gap-3">
-            <StatTile label="Days worked" value={String(daysWorked)} />
+            <StatTile
+              label="Days worked"
+              value={String(summary.daysWorked)}
+              hint={`of ${daysInMonth(year, month)} days in ${monthLabel}`}
+            />
             <StatTile
               label="Total hours"
-              value={formatHours(total.totalHours)}
+              value={formatHours(summary.totalHours)}
               accent
+              hint={
+                summary.excludedRowCount > 0
+                  ? `${summary.excludedRowCount} row${summary.excludedRowCount === 1 ? "" : "s"} excluded — no hours recorded`
+                  : undefined
+              }
             />
-            <StatTile label="Avg per day" value={formatHours(avgPerDay)} />
+            <StatTile
+              label="Avg per day"
+              value={formatHours(summary.avgPerDay)}
+              hint="across days actually worked"
+            />
           </div>
         ) : null}
         {rows.length === 0 ? (
@@ -825,10 +1015,11 @@ function PersonSection({
                 same rows, touch-sized and scannable at a glance instead of
                 scrolling a table sideways. */}
             <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[420px] text-left text-sm">
+              <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="text-muted-foreground border-border border-b text-xs uppercase">
                     <th className="py-1.5 pr-3 font-medium">Date</th>
+                    <th className="py-1.5 pr-3 font-medium">Day</th>
                     <th className="py-1.5 pr-3 font-medium">Clock in</th>
                     <th className="py-1.5 pr-3 font-medium">Clock out</th>
                     <th className="py-1.5 font-medium">Hours</th>
@@ -845,6 +1036,9 @@ function PersonSection({
                     return (
                       <tr key={row.id}>
                         <td className="py-1.5 pr-3">{row.date}</td>
+                        <td className="text-muted-foreground py-1.5 pr-3">
+                          {calendarWeekday(row.date)}
+                        </td>
                         <td className="py-1.5 pr-3">
                           {row.clockIn
                             ? formatClockTime(row.clockIn, timeZone)
@@ -878,7 +1072,8 @@ function PersonSection({
             <div className="divide-border border-border divide-y rounded-2xl border sm:hidden">
               {rows.map((row) => {
                 const isOpenShift = !row.clockOut && !row.autoClockedOut;
-                const { day, weekday } = mobileDateParts(row.date);
+                const day = dayOfMonth(row.date);
+                const weekday = calendarWeekday(row.date);
                 return (
                   <div
                     key={row.id}
@@ -931,17 +1126,17 @@ function PersonSection({
           </>
         )}
         <div className="border-border flex items-center justify-between border-t pt-2 text-sm">
-          <span className="font-medium">Total</span>
+          <span className="font-medium">{monthLabel} total</span>
           <span className="font-mono font-semibold">
-            {formatHours(total.totalHours)}
+            {formatHours(summary.totalHours)}
           </span>
         </div>
-        {total.excludedRowCount > 0 ? (
+        {summary.excludedRowCount > 0 ? (
           <p className="text-muted-foreground text-xs">
-            {total.excludedRowCount}{" "}
-            {total.excludedRowCount === 1 ? "row has" : "rows have"} no recorded
-            hours and {total.excludedRowCount === 1 ? "is" : "are"} excluded
-            from this total.
+            {summary.excludedRowCount}{" "}
+            {summary.excludedRowCount === 1 ? "row has" : "rows have"} no
+            recorded hours and {summary.excludedRowCount === 1 ? "is" : "are"}{" "}
+            excluded from this total.
           </p>
         ) : null}
       </CardContent>

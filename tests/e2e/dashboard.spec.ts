@@ -287,7 +287,7 @@ test("an unlinked server can open Attendance without seeing anyone else's data",
   await navigateToTab(page, "Attendance");
 
   await expect(
-    page.getByRole("heading", { name: "Attendance Report" }),
+    page.getByRole("heading", { name: "Attendance", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Your account isn't linked to the attendance system yet."),
