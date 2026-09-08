@@ -88,25 +88,33 @@ assistant_manager | staff` — it encodes the _authorization tier_
 ## 🛠️ Implementation Steps
 
 - [x] **Step 1: This task file** — populate and commit before any app code.
-- [ ] **Step 2: Migration + pgTAP policy test**
-  - [ ] `supabase/migrations/20260908170000_profiles_manager_rename.sql`:
+- [x] **Step 2: Migration + pgTAP policy test**
+  - [x] `supabase/migrations/20260908170000_profiles_manager_rename.sql`:
         `private.can_manage_member(target_profile_id uuid)` SECURITY
-        DEFINER function (mirrors `memberships_update_manager`'s
-        owner-unrestricted / manager-can't-touch-owner-or-manager
-        hierarchy via a join through `memberships`), revoked from
+        DEFINER function. Delegates the actor-side check to
+        `private.has_org_role` (found via the target's own active
+        membership row) rather than re-deriving it inline, so the
+        org-creator bypass `has_org_role` already has stays consistent
+        here too; refuses a deactivated target entirely. Revoked from
         public/anon, granted to authenticated; new additive
         `profiles_update_manager` UPDATE policy using it. No GRANT
         changes needed (`update` on `profiles` is already granted to
         `authenticated`).
-  - [ ] `supabase/tests/database/0012_profiles_manager_rename.test.sql`:
+  - [x] `supabase/tests/database/0012_profiles_manager_rename.test.sql`:
         owner renames anyone including another owner; manager renames
-        staff/assistant_manager; manager blocked from renaming owner/
-        manager; server blocked entirely; cross-organization rename
-        blocked; self-rename still works via the untouched
-        `profiles_update_self` policy.
-  - [ ] `npm run db:reset && npm run db:test` — run for real against the
-        local Supabase instance, paste output.
-  - [ ] `npm run check`, `npm test`, `npm run build`.
+        an assistant-manager-tier target; manager blocked from renaming
+        the owner; deactivated target blocked; cross-organization
+        rename blocked; self-rename still works via the untouched
+        `profiles_update_self` policy. 8/8 assertions.
+  - [x] `npm run db:reset && npm run db:test` — ran for real against the
+        local Supabase instance already running in this environment:
+        `Files=12, Tests=179 ... Result: PASS` (was already 171 tests
+        across 11 files; this feature adds the 12th file, 8 new tests).
+        `npm run db:types` regenerated with zero net diff (the new
+        function lives in the `private` schema, never exposed to
+        PostgREST, so the public type surface is unchanged).
+  - [x] `npm run check`, `npm test` (187/187), `npm run build` — all
+        clean.
 - [ ] **Step 3: Server actions + audit logging**
   - [ ] `src/features/team/data/audit-log.ts`: `writeAuditEvent()` —
         thin wrapper around an `audit_events` insert, takes any
