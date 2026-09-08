@@ -1,5 +1,23 @@
 import { aggregateHours } from "./attendance-report";
 
+// Shared by the month/year navigator (component) and PersonSection's own
+// "of N days in <Month>" stat-tile subtitle, so the two never drift to
+// different month names for the same numeric month.
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
 // row.date/a bare "YYYY-MM-DD" is a local calendar date, not an instant --
 // its weekday and day-of-month are properties of that calendar date alone,
 // independent of any time zone. Parsed as UTC noon (any UTC hour would do;

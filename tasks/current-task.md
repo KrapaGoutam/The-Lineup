@@ -179,35 +179,62 @@ totalHours, avgPerDay, excludedRowCount }`, wrapping the existing
 run build` (pass), `npm run db:test` (**unchanged**, 16/16 files, 202
         assertions — no schema touched, as expected).
   - [x] Commit.
-- [ ] **Step 3: Month/year navigator + calendar Day column**
-  - [ ] New `components/attendance-month-nav.tsx` (pure, presentational):
+- [x] **Step 3: Month/year navigator + calendar Day column**
+  - [x] New `components/attendance-month-nav.tsx` (pure, presentational):
         prev/next chevrons (disabled at the Jan-2024 floor and at the
         current real month, matching the acceptance criterion's
         "2024–present" bound and Feature 028's precedent of clamping a
         navigator at "today" rather than trusting the client to self-limit),
-        a month `<select>` (Jan–Dec) and a year `<select>` (2024..current
-        year), all changes routed through one `onChange({ year, month })`.
-  - [ ] `attendance-report.tsx`: replaces `PeriodPicker`'s UI (not its
-        underlying `resolvePeriodRange`, which keeps its other branches)
-        for both `self` and `all` scopes with `AttendanceMonthNav`,
-        defaulting to the restaurant's current real month/year
-        (`todayLocalDate`-derived, unchanged source of "today").
-  - [ ] Add a Day column to the desktop table (`Date | Day | Clock in |
+        a month `<select>` (Jan–Dec, future months in the current year
+        disabled) and a year `<select>` (2024..current year), all changes
+        routed through one `onChange({ year, month })`.
+  - [x] `attendance-report.tsx`: replaced `PeriodPicker`'s UI (deleted;
+        `resolvePeriodRange`'s other branches are untouched and still
+        exported) for both `self` and `all` scopes with
+        `AttendanceMonthNav`, defaulting to the restaurant's current real
+        month/year (`todayLocalDate`-derived, unchanged source of "today"
+        — captured once at mount, same reasoning as Feature 028's own
+        date navigator). Also renamed the header to "Attendance" and its
+        subtitle to match `design-system-reference.html` section 2e's
+        text exactly (was "Attendance Report" / a different sentence).
+  - [x] Added a Day column to the desktop table (`Date | Day | Clock in |
 Clock out | Hours`, matching the mockup's exact column order) and
-        switch the mobile ledger's date parts to the new shared
+        switched the mobile ledger's date parts to the new shared
         `calendarWeekday`/`dayOfMonth` instead of the local
         `mobileDateParts` (deleted).
-  - [ ] `PersonSection`: stat tiles wired to `computeAttendanceSummary`
+  - [x] `PersonSection`: stat tiles wired to `computeAttendanceSummary`
         instead of the inline math; subtitles added under each tile
         matching the mockup's own text shape ("of N days in September"
         via `daysInMonth`, an excluded-rows note under Total Hours reusing
         the existing singular/plural phrasing already used elsewhere in
-        this file, "across days actually worked" under Avg per Day).
-  - [ ] Live Playwright smoke test (demo mode): jump to a past month via
-        the year/month selects, confirm the ledger and stat cards update;
-        confirm the Day column values are correct for known demo dates.
-  - [ ] Full gate.
-  - [ ] Commit.
+        this file, "across days actually worked" under Avg per Day); the
+        table/mobile footer's "Total" label now reads "`<Month>` total"
+        (e.g. "September total"), matching the mockup exactly.
+  - [x] **Real regression found and fixed**: the existing
+        `tests/e2e/dashboard.spec.ts` test ("an unlinked server can open
+        Attendance...") asserted the old heading text "Attendance
+        Report" — updated to "Attendance" (`exact: true`) to match the
+        renamed header.
+  - [x] Live Playwright smoke test (demo mode, real browser via the MCP
+        Playwright tool, not just imagined): signed in as the demo
+        manager, opened Attendance, confirmed the month/year nav renders
+        with September selected and "Next month"/Oct–Dec correctly
+        disabled at the real-today ceiling, confirmed the desktop Day
+        column shows the correct weekday for every demo row (Wed/Tue/
+        Thu/Sat/Sun, each independently verified against a real `Date`
+        computation, not assumed), confirmed the three stat-tile hints
+        render with the right text and numbers. Clicked "Previous
+        month": every section correctly re-rendered for August (Fri/Thu
+        Day-column values, both independently verified; "of 31 days in
+        August"; "August total"), "Next month" became enabled, and
+        October/November/December became selectable again once no
+        longer the current year+month.
+  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged count
+        — Step 3 added no new unit tests of its own, reusing Step 2's),
+        `npm run build`, plus the two existing attendance e2e scenarios
+        in `dashboard.spec.ts` re-run directly and confirmed passing
+        after the heading-text fix.
+  - [x] Commit.
 - [ ] **Step 4: Single-person switcher for the `all` scope**
   - [ ] `attendance-report.tsx`: replaces the always-on checkbox
         multi-select, its N stacked `PersonSection`s, and the grand-total
@@ -306,5 +333,5 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Step 2 done and committed. Next: Step 3 (month/year navigator UI +
-calendar Day column on the desktop table).
+Steps 1-3 done and committed. Next: Step 4 (single-person switcher for
+the `all` scope, replacing the always-on checkbox multi-select).

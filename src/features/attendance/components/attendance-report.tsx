@@ -6,9 +6,6 @@ import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import {
   getAttendanceAccessAction,
   getAttendanceDashboardTotalsAction,
@@ -17,10 +14,18 @@ import {
   type AttendanceAccessView,
   type AttendanceDashboardTotals,
 } from "@/features/attendance/actions/attendance-actions";
+import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
 import type {
   NeonAttendanceRow,
   NeonUser,
 } from "@/features/attendance/data/attendance-data";
+import {
+  MONTH_NAMES,
+  calendarWeekday,
+  computeAttendanceSummary,
+  dayOfMonth,
+  daysInMonth,
+} from "@/features/attendance/domain/attendance-metrics";
 import {
   aggregateHours,
   buildDisplayLabels,
@@ -35,8 +40,6 @@ import {
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
-
-type PeriodOption = "this-month" | "previous-month" | "custom";
 
 function formatHours(hours: number): string {
   return `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`;
@@ -124,9 +127,20 @@ export function AttendanceReport({
   const [usersError, setUsersError] = useState<string | null>(null);
   const [usersReloadKey, setUsersReloadKey] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [periodOption, setPeriodOption] = useState<PeriodOption>("this-month");
-  const [customStart, setCustomStart] = useState(todayLocalDate);
-  const [customEnd, setCustomEnd] = useState(todayLocalDate);
+  // Feature 025: the restaurant's own current real month/year
+  // (todayLocalDate-derived, the same "today" every other real-mode
+  // feature already uses) -- the navigator's own upper bound, and where
+  // browsing starts by default. Captured once at mount, same reasoning
+  // as Feature 028's date navigator: this stays "today" for the whole
+  // session even if the browser happens to be open across a midnight
+  // rollover, rather than the navigator's own ceiling silently moving
+  // out from under someone mid-session.
+  const [{ maxYear, maxMonth }] = useState(() => {
+    const [year, month] = todayLocalDate.split("-").map(Number);
+    return { maxYear: year, maxMonth: month };
+  });
+  const [selectedYear, setSelectedYear] = useState(maxYear);
+  const [selectedMonth, setSelectedMonth] = useState(maxMonth);
   const [rows, setRows] = useState<NeonAttendanceRow[] | null>(null);
   const [rowsError, setRowsError] = useState<string | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
@@ -167,10 +181,11 @@ export function AttendanceReport({
     };
   }, [scope, demoMode, restaurantSlug, usersReloadKey]);
 
-  const period: AttendancePeriodSelection =
-    periodOption === "custom"
-      ? { type: "custom", start: customStart, end: customEnd }
-      : { type: periodOption };
+  const period: AttendancePeriodSelection = {
+    type: "month",
+    year: selectedYear,
+    month: selectedMonth,
+  };
   const { start: periodStart, end: periodEnd } = resolvePeriodRange(
     period,
     todayLocalDate,
@@ -403,13 +418,15 @@ export function AttendanceReport({
           scope="self"
           selectedPeriodTotal={grandTotal}
         />
-        <PeriodPicker
-          periodOption={periodOption}
-          setPeriodOption={setPeriodOption}
-          customStart={customStart}
-          setCustomStart={setCustomStart}
-          customEnd={customEnd}
-          setCustomEnd={setCustomEnd}
+        <AttendanceMonthNav
+          year={selectedYear}
+          month={selectedMonth}
+          maxYear={maxYear}
+          maxMonth={maxMonth}
+          onChange={({ year, month }) => {
+            setSelectedYear(year);
+            setSelectedMonth(month);
+          }}
         />
         {rowsError ? (
           <UnavailablePanel
@@ -421,7 +438,13 @@ export function AttendanceReport({
             Loading attendance…
           </p>
         ) : (
-          <PersonSection label={label} rows={rows} timeZone={timeZone} />
+          <PersonSection
+            label={label}
+            rows={rows}
+            timeZone={timeZone}
+            year={selectedYear}
+            month={selectedMonth}
+          />
         )}
       </div>
     );
@@ -499,13 +522,15 @@ export function AttendanceReport({
             </div>
           </fieldset>
 
-          <PeriodPicker
-            periodOption={periodOption}
-            setPeriodOption={setPeriodOption}
-            customStart={customStart}
-            setCustomStart={setCustomStart}
-            customEnd={customEnd}
-            setCustomEnd={setCustomEnd}
+          <AttendanceMonthNav
+            year={selectedYear}
+            month={selectedMonth}
+            maxYear={maxYear}
+            maxMonth={maxMonth}
+            onChange={({ year, month }) => {
+              setSelectedYear(year);
+              setSelectedMonth(month);
+            }}
           />
         </CardContent>
       </Card>
@@ -531,6 +556,8 @@ export function AttendanceReport({
               label={displayLabels.get(person.id) ?? person.fullName}
               rows={rows.filter((row) => row.userId === person.id)}
               timeZone={timeZone}
+              year={selectedYear}
+              month={selectedMonth}
             />
           ))}
 
@@ -568,73 +595,11 @@ function Header() {
       <div className="mb-2 flex items-center gap-2">
         <Badge tone="accent">Module 5</Badge>
       </div>
-      <h1 className="text-3xl font-semibold tracking-[-0.04em]">
-        Attendance Report
-      </h1>
+      <h1 className="text-3xl font-semibold tracking-[-0.04em]">Attendance</h1>
       <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-        Live clock-in/clock-out data from the attendance system, read on demand
-        and never stored here. Display only — hours shown are exactly what was
-        recorded, with no calculation applied.
+        Read straight from the clock-in system. Hours are shown exactly as
+        recorded — nothing here is calculated.
       </p>
-    </div>
-  );
-}
-
-function PeriodPicker({
-  periodOption,
-  setPeriodOption,
-  customStart,
-  setCustomStart,
-  customEnd,
-  setCustomEnd,
-}: {
-  periodOption: PeriodOption;
-  setPeriodOption: (option: PeriodOption) => void;
-  customStart: string;
-  setCustomStart: (value: string) => void;
-  customEnd: string;
-  setCustomEnd: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="attendance-period">Period</Label>
-      <Select
-        id="attendance-period"
-        value={periodOption}
-        onChange={(event) =>
-          setPeriodOption(event.target.value as PeriodOption)
-        }
-      >
-        <option value="this-month">This month</option>
-        <option value="previous-month">Previous month</option>
-        <option value="custom">Custom range</option>
-      </Select>
-      {periodOption === "custom" ? (
-        <div className="flex items-center gap-2">
-          <div className="space-y-1">
-            <Label htmlFor="attendance-start" className="text-xs">
-              From
-            </Label>
-            <Input
-              id="attendance-start"
-              type="date"
-              value={customStart}
-              onChange={(event) => setCustomStart(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="attendance-end" className="text-xs">
-              To
-            </Label>
-            <Input
-              id="attendance-end"
-              type="date"
-              value={customEnd}
-              onChange={(event) => setCustomEnd(event.target.value)}
-            />
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -739,29 +704,15 @@ function formatClockTime(iso: string, timeZone: string): string {
   return zonedWallTimeFromInstant(new Date(iso), timeZone).time;
 }
 
-// row.date is a local calendar date ("YYYY-MM-DD"), not an instant -- its
-// weekday is a property of that calendar date alone, so this parses it as
-// a UTC noon date the same way schedule-workspace.tsx's date-label helpers
-// do, rather than routing it back through the restaurant's time zone.
-function mobileDateParts(isoDate: string): { day: string; weekday: string } {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  return {
-    day: String(day).padStart(2, "0"),
-    weekday: new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-      timeZone: "UTC",
-    }).format(utcDate),
-  };
-}
-
 function StatTile({
   label,
   value,
+  hint,
   accent = false,
 }: {
   label: string;
   value: string;
+  hint?: string;
   accent?: boolean;
 }) {
   return (
@@ -777,6 +728,11 @@ function StatTile({
       >
         {value}
       </span>
+      {hint ? (
+        <span className="text-muted-foreground text-xs leading-snug">
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -785,18 +741,18 @@ function PersonSection({
   label,
   rows,
   timeZone,
+  year,
+  month,
 }: {
   label: string;
   rows: NeonAttendanceRow[];
   timeZone: string;
+  /** The currently browsed month/year, for the "of N days in <Month>" hint. */
+  year: number;
+  month: number;
 }) {
-  const total = aggregateHours(rows);
-  // "Days worked" counts only rows that actually contributed to the total
-  // -- a row with no recorded hours (excludedRowCount) was never a worked
-  // day, so it's excluded from both the count and the average the same
-  // way it's already excluded from totalHours.
-  const daysWorked = rows.length - total.excludedRowCount;
-  const avgPerDay = daysWorked > 0 ? total.totalHours / daysWorked : 0;
+  const summary = computeAttendanceSummary(rows);
+  const monthLabel = MONTH_NAMES[month - 1];
   return (
     <Card>
       <CardHeader>
@@ -805,13 +761,26 @@ function PersonSection({
       <CardContent className="space-y-4 pt-0">
         {rows.length > 0 ? (
           <div className="grid grid-cols-3 gap-3">
-            <StatTile label="Days worked" value={String(daysWorked)} />
+            <StatTile
+              label="Days worked"
+              value={String(summary.daysWorked)}
+              hint={`of ${daysInMonth(year, month)} days in ${monthLabel}`}
+            />
             <StatTile
               label="Total hours"
-              value={formatHours(total.totalHours)}
+              value={formatHours(summary.totalHours)}
               accent
+              hint={
+                summary.excludedRowCount > 0
+                  ? `${summary.excludedRowCount} row${summary.excludedRowCount === 1 ? "" : "s"} excluded — no hours recorded`
+                  : undefined
+              }
             />
-            <StatTile label="Avg per day" value={formatHours(avgPerDay)} />
+            <StatTile
+              label="Avg per day"
+              value={formatHours(summary.avgPerDay)}
+              hint="across days actually worked"
+            />
           </div>
         ) : null}
         {rows.length === 0 ? (
@@ -825,10 +794,11 @@ function PersonSection({
                 same rows, touch-sized and scannable at a glance instead of
                 scrolling a table sideways. */}
             <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[420px] text-left text-sm">
+              <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="text-muted-foreground border-border border-b text-xs uppercase">
                     <th className="py-1.5 pr-3 font-medium">Date</th>
+                    <th className="py-1.5 pr-3 font-medium">Day</th>
                     <th className="py-1.5 pr-3 font-medium">Clock in</th>
                     <th className="py-1.5 pr-3 font-medium">Clock out</th>
                     <th className="py-1.5 font-medium">Hours</th>
@@ -845,6 +815,9 @@ function PersonSection({
                     return (
                       <tr key={row.id}>
                         <td className="py-1.5 pr-3">{row.date}</td>
+                        <td className="text-muted-foreground py-1.5 pr-3">
+                          {calendarWeekday(row.date)}
+                        </td>
                         <td className="py-1.5 pr-3">
                           {row.clockIn
                             ? formatClockTime(row.clockIn, timeZone)
@@ -878,7 +851,8 @@ function PersonSection({
             <div className="divide-border border-border divide-y rounded-2xl border sm:hidden">
               {rows.map((row) => {
                 const isOpenShift = !row.clockOut && !row.autoClockedOut;
-                const { day, weekday } = mobileDateParts(row.date);
+                const day = dayOfMonth(row.date);
+                const weekday = calendarWeekday(row.date);
                 return (
                   <div
                     key={row.id}
@@ -931,17 +905,17 @@ function PersonSection({
           </>
         )}
         <div className="border-border flex items-center justify-between border-t pt-2 text-sm">
-          <span className="font-medium">Total</span>
+          <span className="font-medium">{monthLabel} total</span>
           <span className="font-mono font-semibold">
-            {formatHours(total.totalHours)}
+            {formatHours(summary.totalHours)}
           </span>
         </div>
-        {total.excludedRowCount > 0 ? (
+        {summary.excludedRowCount > 0 ? (
           <p className="text-muted-foreground text-xs">
-            {total.excludedRowCount}{" "}
-            {total.excludedRowCount === 1 ? "row has" : "rows have"} no recorded
-            hours and {total.excludedRowCount === 1 ? "is" : "are"} excluded
-            from this total.
+            {summary.excludedRowCount}{" "}
+            {summary.excludedRowCount === 1 ? "row has" : "rows have"} no
+            recorded hours and {summary.excludedRowCount === 1 ? "is" : "are"}{" "}
+            excluded from this total.
           </p>
         ) : null}
       </CardContent>
