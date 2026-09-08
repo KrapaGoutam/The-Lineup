@@ -148,23 +148,41 @@ assistant_manager | staff` — it encodes the _authorization tier_
         changes.
   - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
         clean.
-- [ ] **Step 4: UI**
-  - [ ] `src/features/team/components/rename-member-dialog.tsx`: same
+- [x] **Step 4: UI**
+  - [x] `src/features/team/components/rename-member-dialog.tsx`: same
         lightweight pattern as `PasscodeResetDialog`/`MemberStatusDialog`
-        (focus trap, Escape-to-close, inline validation error).
-  - [ ] `src/features/team/components/team-workspace.tsx`: add a
+        (no explicit focus trap there either -- matched, not invented).
+  - [x] `src/features/team/components/team-workspace.tsx`: added a
         "Rename" action (same authorization tier as passcode reset —
-        `canReset`, already computed per row); load attendance-link
+        `canReset`, already computed per row); loads attendance-link
         status once on mount via the existing `onLoadAttendanceOptions`
-        prop (no new action) and show a Linked/Not linked badge per
-        row, refreshed after any link/unlink/rename action.
-  - [ ] `src/components/restaurant-operations-app.tsx`: new
+        prop (no new action) and shows a Linked/Not linked badge per
+        row, refreshed after any link/unlink action.
+  - [x] **Real regression found and fixed via live testing**: the
+        roster row's flex-wrap layout, already dense, broke visibly on
+        a 390px viewport once the Rename button and link-status badge
+        were added -- the name truncated to nothing and action buttons
+        overlapped the badge. Restructured the row to stack vertically
+        (name+badges, then a wrapped action-button group) below `sm:`
+        and stay horizontal at `sm:` and up; confirmed clean on both a
+        390×780 and a 1440×900 screenshot after the fix, and re-diffed
+        the resulting desktop screenshot against the pre-change one to
+        confirm no regression there either.
+  - [x] `src/components/restaurant-operations-app.tsx`: new
         `renameTeamMember` handler (demo + real mode, mirrors
-        `changeDesignation`'s shape), new dialog state, prop threading
-        into `TeamWorkspace`.
-  - [ ] Live Playwright smoke test (manager desktop + mobile): rename
-        reflects immediately in the roster row.
-  - [ ] `npm run check`, `npm test`, `npm run build`.
+        `changeDesignation`'s shape, including its same pre-existing
+        limitation that the signed-in `user` object itself isn't
+        updated if an owner renames themselves), prop threading into
+        `TeamWorkspace` (`renameTarget` dialog state lives inside
+        `TeamWorkspace` itself, matching its sibling dialogs -- no new
+        state needed in the app shell).
+  - [x] Live Playwright smoke test (manager desktop + mobile): renamed
+        Mia Chen to "Mia Chen-Rodriguez", confirmed immediate roster
+        reflection; linked her attendance record and confirmed the
+        badge flipped from "Attendance not linked" to "Attendance
+        linked" without a reload.
+  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
+        clean.
 - [ ] **Step 5: E2E flow** (`tests/e2e/team-management.spec.ts`)
   - [ ] Manager renames a staff member, changes their designation,
         resets their passcode, links their attendance record, then signs
