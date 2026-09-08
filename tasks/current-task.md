@@ -273,34 +273,53 @@ Clock out | Hours`, matching the mockup's exact column order) and
         this step touched no domain logic), `npm run build`, both
         existing attendance e2e scenarios re-run directly and passing.
   - [x] Commit.
-- [ ] **Step 5: Multi-select print support**
-  - [ ] New `components/attendance-print-dialog.tsx`: rendered only for
+- [x] **Step 5: Multi-select print support**
+  - [x] New `components/attendance-print-dialog.tsx`: rendered only for
         `access.scope === "all"`. Three radio choices ("Print current
         employee" / "Print selected employees" / "Print all employees");
         choosing "selected" reveals a checkbox list sourced from the same
-        `users` array the switcher already has (this is where the old
-        multi-select UI actually ends up living, per Reconciliation 2).
-        Confirm resolves to a `number[]` of target Neon user ids and
-        closes.
-  - [ ] `attendance-report.tsx`: a header "Print" button. `self` scope:
-        prints directly (`window.print()`, no dialog — matches Payroll's
-        own no-choice-needed precedent). `all` scope: opens the dialog;
-        on confirm, fetches (reusing the existing
+        `sortedActiveUsers` list the switcher already has (this is where
+        the old multi-select UI actually ends up living, per
+        Reconciliation 2). Confirm resolves to a `number[]` of target Neon
+        user ids and closes.
+  - [x] `attendance-report.tsx`: a header "Print" button next to
+        `AttendanceMonthNav` in both scopes. `self` scope: prints
+        directly (`setPrintJob` from already-loaded data, then
+        `window.print()` — no dialog, matches Payroll's own
+        no-choice-needed precedent). `all` scope: opens the dialog; on
+        confirm (`printPeople`), fetches (reusing the existing
         `getAttendanceReportAction`, which already accepts multiple
         `userIds`) each target person's rows for the _currently browsed_
         month, renders them into one printable area (Payroll's exact
         `print:hidden`/`print:block` and scoped `@media print` visibility
-        trick, one named id), then calls `window.print()`. Printable
-        content uses plain text status labels ("Auto-closed"/"Open
-        shift"), not colored badges — colors are not a reliable print
-        signal.
-  - [ ] `unlinked` scope: no Print button — nothing to print.
-  - [ ] Live Playwright smoke test: stub `window.print` (matching this
-        app's live-testing discipline — an OS print dialog itself can't be
-        driven by Playwright) and confirm it's called exactly once per
-        choice, with the printable area containing the right person(s).
-  - [ ] Full gate.
-  - [ ] Commit.
+        trick, one named id `attendance-print-area`), then a `useEffect`
+        keyed on the new `printJob` state calls `window.print()` only
+        after that state has actually committed to the DOM — the same
+        reasoning payroll-workspace.tsx doesn't need (it prints
+        already-rendered content) but this feature does, since "print
+        all" may target people who were never rendered on screen at all.
+        Printable content uses plain text status labels
+        ("Auto-closed"/"Open shift"), never a colored `Badge`.
+  - [x] `unlinked` scope: no Print button — nothing to print (unchanged,
+        that branch never gained one).
+  - [x] Live Playwright smoke test (real browser, MCP tool, `window.print`
+        stubbed to count calls rather than actually invoke the OS
+        dialog — matching this app's established live-testing discipline
+        for anything a browser automation tool can't literally drive):
+        as manager, opened the print dialog (defaulted correctly to
+        "Print current employee (Anil (Host))"), chose "Print all
+        employees," confirmed `window.print` was called exactly once and
+        the printable area's actual text content contained all 5
+        employees' full sections (stats + rows), including Zoya Khan's
+        correct "No attendance recorded for this period." row, and that
+        the dialog closed. Linked Mia's attendance via Team, signed in as
+        her, confirmed her Print button prints directly with **no**
+        dialog and the printable content contains only her own linked
+        record ("Anil (Server)") — the privacy invariant holds under
+        actual print, not just in the primary view.
+  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged),
+        `npm run build` all pass.
+  - [x] Commit.
 - [ ] **Step 6: E2E** (`tests/e2e/attendance-reporting.spec.ts`, new file
       — the two pre-existing attendance scenarios stay in
       `dashboard.spec.ts`, untouched)
@@ -352,5 +371,5 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Steps 1-4 done and committed. Next: Step 5 (multi-select print support —
-`attendance-print-dialog.tsx` and the printable-area wiring).
+Steps 1-5 done and committed. Next: Step 6 (e2e —
+`tests/e2e/attendance-reporting.spec.ts`).

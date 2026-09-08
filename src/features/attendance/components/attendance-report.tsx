@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Printer } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   type AttendanceDashboardTotals,
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
+import { AttendancePrintDialog } from "@/features/attendance/components/attendance-print-dialog";
 import type {
   NeonAttendanceRow,
   NeonUser,
@@ -155,6 +157,26 @@ export function AttendanceReport({
   );
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
+  // Feature 025: multi-select print support. `printJob` is set the
+  // moment there's something ready to print -- either directly (`self`
+  // scope, reusing whatever's already loaded, no extra fetch) or after
+  // the dialog's own fetch resolves (`all` scope, which may target
+  // people other than whoever is currently being browsed). The effect
+  // below fires only after that state has actually committed to the DOM
+  // (React runs effects after the render they were scheduled in), which
+  // is what makes `window.print()` reliably see the freshly rendered
+  // printable content instead of racing ahead of it.
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [printJob, setPrintJob] = useState<{
+    sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+  } | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!printJob) return;
+    window.print();
+  }, [printJob]);
+
   const scope = access?.scope ?? null;
 
   // Person list only exists for the "all" scope's picker -- a "self" or
@@ -219,6 +241,50 @@ export function AttendanceReport({
     period,
     todayLocalDate,
   );
+
+  // Feature 025, "all" scope only: fetches whichever people the print
+  // dialog resolved to (which may be more than just the currently
+  // browsed person) for the *currently browsed* month, then hands the
+  // result to the print-trigger effect above. Reuses
+  // getAttendanceReportAction rather than a new action -- it already
+  // accepts multiple userIds for exactly this scope.
+  async function printPeople(targetIds: number[]) {
+    setPrintDialogOpen(false);
+    setPrintError(null);
+    const labelFor = (id: number) =>
+      activeUserDisplayLabels?.get(id) ?? `#${id}`;
+    if (demoMode) {
+      const filtered = demoNeonAttendance.filter(
+        (row) =>
+          targetIds.includes(row.userId) &&
+          row.date >= periodStart &&
+          row.date <= periodEnd,
+      );
+      setPrintJob({
+        sections: targetIds.map((id) => ({
+          label: labelFor(id),
+          rows: filtered.filter((row) => row.userId === id),
+        })),
+      });
+      return;
+    }
+    const result = await getAttendanceReportAction({
+      restaurantSlug,
+      userIds: targetIds,
+      period,
+      todayLocalDate,
+    });
+    if (!result.ok) {
+      setPrintError(result.error);
+      return;
+    }
+    setPrintJob({
+      sections: targetIds.map((id) => ({
+        label: labelFor(id),
+        rows: result.data.rows.filter((row) => row.userId === id),
+      })),
+    });
+  }
 
   // The ids to fetch rows for: "all" is always exactly the one active
   // switcher selection; "self" is always exactly the caller's own linked
@@ -449,16 +515,26 @@ export function AttendanceReport({
           scope="self"
           selectedPeriodTotal={grandTotal}
         />
-        <AttendanceMonthNav
-          year={selectedYear}
-          month={selectedMonth}
-          maxYear={maxYear}
-          maxMonth={maxMonth}
-          onChange={({ year, month }) => {
-            setSelectedYear(year);
-            setSelectedMonth(month);
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <AttendanceMonthNav
+            year={selectedYear}
+            month={selectedMonth}
+            maxYear={maxYear}
+            maxMonth={maxMonth}
+            onChange={({ year, month }) => {
+              setSelectedYear(year);
+              setSelectedMonth(month);
+            }}
+          />
+          {rows ? (
+            <Button
+              variant="secondary"
+              onClick={() => setPrintJob({ sections: [{ label, rows }] })}
+            >
+              <Printer aria-hidden="true" /> Print
+            </Button>
+          ) : null}
+        </div>
         {rowsError ? (
           <UnavailablePanel
             message={rowsError}
@@ -477,6 +553,14 @@ export function AttendanceReport({
             month={selectedMonth}
           />
         )}
+        {printJob ? (
+          <PrintableReport
+            sections={printJob.sections}
+            timeZone={timeZone}
+            year={selectedYear}
+            month={selectedMonth}
+          />
+        ) : null}
       </div>
     );
   }
@@ -536,8 +620,42 @@ export function AttendanceReport({
               setSelectedMonth(month);
             }}
           />
+
+          <Button
+            variant="secondary"
+            onClick={() => setPrintDialogOpen(true)}
+            disabled={!activePerson}
+          >
+            <Printer aria-hidden="true" /> Print
+          </Button>
         </CardContent>
       </Card>
+
+      {printError ? (
+        <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
+          <span className="text-destructive">{printError}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setPrintError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {printDialogOpen && activePerson ? (
+        <AttendancePrintDialog
+          currentPersonId={activePerson.id}
+          people={sortedActiveUsers.map((candidate) => ({
+            id: candidate.id,
+            label:
+              activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
+          }))}
+          onClose={() => setPrintDialogOpen(false)}
+          onConfirm={printPeople}
+        />
+      ) : null}
 
       {!activePerson ? (
         <p className="text-muted-foreground text-sm">
@@ -564,6 +682,14 @@ export function AttendanceReport({
           month={selectedMonth}
         />
       )}
+      {printJob ? (
+        <PrintableReport
+          sections={printJob.sections}
+          timeZone={timeZone}
+          year={selectedYear}
+          month={selectedMonth}
+        />
+      ) : null}
     </div>
   );
 }
@@ -650,6 +776,122 @@ function DashboardTiles({
         hours={selectedPeriodTotal?.totalHours ?? null}
       />
     </div>
+  );
+}
+
+// Feature 025. Hidden on screen, shown only when printing -- the same
+// visibility-isolation trick payroll-workspace.tsx's "Print statement"
+// already established: a bare `body *` selector hides everything else on
+// the page (including this app's own header/nav, which this component
+// has no other way to reach), scoped by one named id. One printable
+// "document" per targeted person, so "print selected"/"print all"
+// produce one multi-section report, not several separate print jobs.
+// Plain text status labels ("Auto-closed"/"Open shift"), never a colored
+// Badge -- color alone isn't a reliable signal once printed, especially
+// in black and white.
+const PRINT_AREA_ID = "attendance-print-area";
+
+function PrintableReport({
+  sections,
+  timeZone,
+  year,
+  month,
+}: {
+  sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+  timeZone: string;
+  year: number;
+  month: number;
+}) {
+  const monthLabel = MONTH_NAMES[month - 1];
+  return (
+    <>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #${PRINT_AREA_ID}, #${PRINT_AREA_ID} * { visibility: visible; }
+          #${PRINT_AREA_ID} { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
+        }
+      `}</style>
+      <div id={PRINT_AREA_ID} className="hidden print:block">
+        <h1 className="text-2xl font-bold">
+          Attendance — {monthLabel} {year}
+        </h1>
+        <div className="mt-4 space-y-6">
+          {sections.map((section) => {
+            const summary = computeAttendanceSummary(section.rows);
+            return (
+              <section key={section.label} className="break-inside-avoid">
+                <h2 className="text-lg font-semibold">{section.label}</h2>
+                <p className="mt-1 text-sm">
+                  Days worked: {summary.daysWorked} · Total hours:{" "}
+                  {formatHours(summary.totalHours)} · Avg per day:{" "}
+                  {formatHours(summary.avgPerDay)}
+                </p>
+                <table className="mt-2 w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="border-b border-black py-1 pr-3">Date</th>
+                      <th className="border-b border-black py-1 pr-3">Day</th>
+                      <th className="border-b border-black py-1 pr-3">
+                        Clock in
+                      </th>
+                      <th className="border-b border-black py-1 pr-3">
+                        Clock out
+                      </th>
+                      <th className="border-b border-black py-1">Hours</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-1">
+                          No attendance recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      section.rows.map((row) => {
+                        const isOpenShift =
+                          !row.clockOut && !row.autoClockedOut;
+                        const status = row.autoClockedOut
+                          ? " (Auto-closed)"
+                          : isOpenShift
+                            ? " (Open shift)"
+                            : "";
+                        return (
+                          <tr key={row.id}>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {row.date}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {calendarWeekday(row.date)}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {row.clockIn
+                                ? formatClockTime(row.clockIn, timeZone)
+                                : "—"}
+                            </td>
+                            <td className="border-b border-gray-300 py-1 pr-3">
+                              {(row.clockOut
+                                ? formatClockTime(row.clockOut, timeZone)
+                                : "—") + status}
+                            </td>
+                            <td className="border-b border-gray-300 py-1">
+                              {row.hoursWorked === null
+                                ? "—"
+                                : formatHours(row.hoursWorked)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 
