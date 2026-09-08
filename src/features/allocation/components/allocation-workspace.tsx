@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Eraser,
   Pause,
+  Pencil,
   Play,
   Plus,
   Redo2,
@@ -17,6 +18,7 @@ import {
   Undo2,
   UserPlus,
   UsersRound,
+  X,
 } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
@@ -110,11 +112,24 @@ function TableEntry({
   value,
   disabled,
   onSubmit,
+  onClear,
 }: {
   value: string | null;
   disabled: boolean;
   onSubmit: (value: string) => void;
+  onClear: () => void;
 }) {
+  // Feature 028: an occupied cell used to be a static, permanently
+  // read-only badge -- nobody, manager included, had any way to correct
+  // an already-assigned table. board_assign's own RPC has always been
+  // an upsert (see rotation-board.ts's own note), so this is purely a
+  // UI gap: `editing` just toggles which of the two forms below renders
+  // for an occupied cell: the same badge as before, or the identical
+  // input/submit an empty cell already uses, pre-filled with the
+  // current value. No new role logic -- gated by the exact same
+  // `disabled` every empty-cell entry already respects.
+  const [editing, setEditing] = useState(false);
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -127,16 +142,40 @@ function TableEntry({
     // cross-column write; that was always the actual safeguard, not the
     // reason text.
     onSubmit(input);
+    setEditing(false);
     event.currentTarget.reset();
   }
-  if (value) {
+
+  if (value && !editing) {
     return (
-      <div className="border-border bg-background/80 flex min-h-14 items-center justify-between rounded-xl border px-3">
-        <span className="font-mono text-sm font-bold">Table {value}</span>
-        <span
-          className="size-2 rounded-full bg-emerald-300"
-          aria-label="Recorded"
-        />
+      <div className="border-border bg-background/80 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
+        <span className="flex min-h-11 items-center gap-1.5 font-mono text-sm font-bold">
+          Table {value}
+          <span
+            className="size-2 flex-none rounded-full bg-emerald-300"
+            aria-label="Recorded"
+          />
+        </span>
+        {!disabled ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setEditing(true)}
+              aria-label={`Edit table ${value}`}
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClear}
+              aria-label={`Clear table ${value}`}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -147,15 +186,28 @@ function TableEntry({
         aria-label="Table number or combined tables"
         placeholder={disabled ? "Not available" : "Table #"}
         disabled={disabled}
+        defaultValue={value ?? ""}
+        autoFocus={editing}
         className="min-w-0 font-mono"
       />
+      {editing ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          onClick={() => setEditing(false)}
+          aria-label="Cancel edit"
+        >
+          <X aria-hidden="true" />
+        </Button>
+      ) : null}
       <Button
         size="icon"
         type="submit"
         disabled={disabled}
-        aria-label="Add table"
+        aria-label={editing ? "Save table" : "Add table"}
       >
-        <Plus aria-hidden="true" />
+        {editing ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
       </Button>
     </form>
   );
@@ -776,6 +828,23 @@ export function AllocationWorkspace({
                             // Attribution is recorded for every
                             // cross-column write, unconditionally — there
                             // is no reason field to gate it on anymore.
+                            if (crossColumn) {
+                              setCrossEditLog((log) => [
+                                ...log,
+                                {
+                                  at: new Date().toISOString(),
+                                  actorName: user.name,
+                                  columnName: column.name,
+                                },
+                              ]);
+                            }
+                          }}
+                          onClear={() => {
+                            execute({
+                              type: "clear-cell",
+                              roundId: round.id,
+                              columnId: column.id,
+                            });
                             if (crossColumn) {
                               setCrossEditLog((log) => [
                                 ...log,

@@ -212,18 +212,26 @@ definer`; a plain server's `board_assign` call — the real-world
         `board_clear_cell`) aren't type-checked against generated
         types either way.
   - [x] `npm run check`, `npm test` (195/195), `npm run build`.
-- [ ] **Step 4: Click-to-edit for occupied cells (the actual UI gap)**
-  - [ ] `TableEntry`: an occupied cell becomes clickable (not just a
-        static badge) — click reveals the same input, pre-filled with
-        the current value, editable by anyone `canWrite` already allows
-        (no new role logic — reuses the exact `canWrite`/`disabled`
-        computation already gating empty-cell entry). Adds a small Clear
-        control alongside it, wired to the new `clear-cell` action.
-  - [ ] Live Playwright smoke test: a server edits an already-assigned
-        cell in a teammate's column; roster/board reflects the new value
-        and the existing cross-edit log entry appears (unchanged
-        mechanism, `isCrossColumnEdit`).
-  - [ ] Full gate.
+- [x] **Step 4: Click-to-edit for occupied cells (the actual UI gap)**
+  - [x] `TableEntry`: an occupied cell now shows Edit (pencil) and Clear
+        (X) buttons alongside the read-only badge, whenever `canWrite`
+        already allows it (no new role logic — reuses the exact
+        `canWrite`/`disabled` computation empty-cell entry already had).
+        Edit reveals the same input/submit form an empty cell uses,
+        pre-filled with the current value; Clear dispatches the new
+        `clear-cell` action. Both buttons use the standard 44px `icon`
+        button size, not a smaller custom override, to hold the
+        accessibility touch-target minimum.
+  - [x] Live Playwright smoke test (demo mode, signed in as a plain
+        server): edited a teammate's already-assigned cell
+        (Table 8 → Table 99) — the change appeared immediately, Recorded
+        events incremented, Undo became enabled, and the existing
+        "Cross-column edits" panel showed "Mia Chen edited Leo Park's
+        column" (the true actor, not assumed). Cleared that same cell —
+        it emptied, Recorded events incremented again. Both actions
+        worked from a server account with no manager-only controls
+        (Clear board, reorder) visible anywhere on the page.
+  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
 - [ ] **Step 5: Date & month navigation**
   - [ ] `allocation-data.ts`: `getAllocationContext` takes an optional
         `serviceDate` (defaults to today); the `service_sessions` lookup
