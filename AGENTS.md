@@ -13,6 +13,7 @@ Build a reliable restaurant scheduling and table-rotation product one vertical f
 5. The relevant file in `docs/features/`
 6. `docs/DATA_MODEL.md` for database or authorization work
 7. `docs/DESIGN_SYSTEM.md` for user-facing work
+8. `AGENTS.md`
 
 ## Non-negotiable rules
 
