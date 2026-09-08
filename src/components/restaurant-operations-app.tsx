@@ -47,6 +47,7 @@ import {
   getWeekDates,
   type ShiftDefaults,
 } from "@/features/schedules/domain/shift-planning";
+import { SettingsPage } from "@/features/settings/components/settings-page";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
@@ -96,7 +97,8 @@ type AppTab =
   | "tips"
   | "team"
   | "attendance"
-  | "payroll";
+  | "payroll"
+  | "settings";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
 // active; secondary, plain icon+label) rather than one flat row. Schedule
@@ -1257,6 +1259,17 @@ export function RestaurantOperationsApp({
     setShowAvatarPanel(false);
     setShowMobileSheet(false);
   }
+
+  // Feature 023: distinct from openHours -- "More options" (and every
+  // Settings nav entry point) goes to the full Settings page, while the
+  // avatar panel's own "Edit" and "Store hours" quick-shortcuts keep
+  // opening HoursDialog directly, unchanged (quick mid-shift adjustments
+  // stay one click away, per the feature's own User Outcome).
+  function openSettingsPage() {
+    setTab("settings");
+    setShowAvatarPanel(false);
+    setShowMobileSheet(false);
+  }
   function openChangePasscode() {
     setShowChangePasscode(true);
     setShowAvatarPanel(false);
@@ -1423,16 +1436,14 @@ export function RestaurantOperationsApp({
                   ) : null}
                 </div>
                 <div className="border-border/60 space-y-2 border-t px-3.5 py-3">
-                  {isManager ? (
-                    <Button
-                      variant="secondary"
-                      className="w-full justify-center"
-                      onClick={openHours}
-                    >
-                      <SlidersHorizontal aria-hidden="true" />
-                      More options
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-center"
+                    onClick={openSettingsPage}
+                  >
+                    <SlidersHorizontal aria-hidden="true" />
+                    More options
+                  </Button>
                   <button
                     onClick={signOut}
                     className="text-destructive hover:bg-destructive/10 flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
@@ -1484,17 +1495,15 @@ export function RestaurantOperationsApp({
               </button>
             ))}
           </div>
-          {isManager ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="ml-auto"
-              onClick={() => setShowHours(true)}
-            >
-              <Settings2 aria-hidden="true" />
-              Settings
-            </Button>
-          ) : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setTab("settings")}
+          >
+            <Settings2 aria-hidden="true" />
+            Settings
+          </Button>
         </div>
 
         {/* Mobile header: brand + avatar row, then the countdown pill. */}
@@ -1562,18 +1571,16 @@ export function RestaurantOperationsApp({
                 </span>
                 <AppearanceSwitch />
               </div>
-              {isManager ? (
-                <button
-                  onClick={openHours}
-                  className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-                >
-                  <Settings2
-                    className="text-muted-foreground size-[18px]"
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1 text-sm font-medium">Settings</span>
-                </button>
-              ) : null}
+              <button
+                onClick={openSettingsPage}
+                className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+              >
+                <Settings2
+                  className="text-muted-foreground size-[18px]"
+                  aria-hidden="true"
+                />
+                <span className="flex-1 text-sm font-medium">Settings</span>
+              </button>
               <button
                 onClick={signOut}
                 className="text-destructive hover:bg-destructive/10 flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
@@ -1670,6 +1677,22 @@ export function RestaurantOperationsApp({
             timeZone={timeZone}
           />
         ) : null}
+        {tab === "settings" ? (
+          <SettingsPage
+            isManager={isManager}
+            demoMode={demoMode}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            operatingHours={operatingHours}
+            shiftDefaults={shiftDefaults}
+            todayIndex={todayIndex}
+            onEditHours={openHours}
+            onChangePasscode={openChangePasscode}
+            onGoToTab={(nextTab) => setTab(nextTab)}
+            onSignOut={signOut}
+            onBack={() => setTab("allocation")}
+          />
+        ) : null}
       </main>
 
       {/* Feature 021: fixed 3-button dock -- only the two continuous-
@@ -1750,28 +1773,26 @@ export function RestaurantOperationsApp({
                   />
                 </button>
               ))}
-              {isManager ? (
-                <button
-                  onClick={openHours}
-                  className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
-                >
-                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                    <Settings2 className="size-[19px]" aria-hidden="true" />
+              <button
+                onClick={openSettingsPage}
+                className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+              >
+                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                  <Settings2 className="size-[19px]" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block text-[15px] font-semibold">
+                    Settings
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-foreground block text-[15px] font-semibold">
-                      Settings
-                    </span>
-                    <span className="text-muted-foreground block text-xs">
-                      Shift hours, store hours
-                    </span>
+                  <span className="text-muted-foreground block text-xs">
+                    Preferences, passcode, and more
                   </span>
-                  <ChevronDown
-                    className="text-muted-foreground size-4 -rotate-90"
-                    aria-hidden="true"
-                  />
-                </button>
-              ) : null}
+                </span>
+                <ChevronDown
+                  className="text-muted-foreground size-4 -rotate-90"
+                  aria-hidden="true"
+                />
+              </button>
               <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
                 <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
                   <Settings2 className="size-[19px]" aria-hidden="true" />

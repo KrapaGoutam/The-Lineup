@@ -13,9 +13,9 @@ supabase/.temp
 # harder to compare frames at a glance.
 design-system-reference.html
 
-# The user's own project-tracking notes (not authored by this session,
-# predate it, and aren't part of the Feature 021 diff) -- same reasoning
-# as design-system-reference.html above.
-docs/STATUS.md
+# The user's own untouched planning notes -- not part of any feature's
+# diff, same reasoning as design-system-reference.html above. (STATUS.md
+# and tasks/current-task.md were here too as of Feature 021, but Feature
+# 023 onward actively maintains both as part of the documented workflow,
+# so they're formatted like every other checked-in doc now.)
 tasks/backlog.md
-tasks/current-task.md
