@@ -1278,6 +1278,7 @@ export function RestaurantOperationsApp({
             aria-label="Home"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="https://www.monkswebster.com/assets/img/logo-light.png"
                 alt="The Monk's Logo"
@@ -1508,6 +1509,7 @@ export function RestaurantOperationsApp({
               aria-label="Home"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="https://www.monkswebster.com/assets/img/logo-light.png"
                   alt="The Monk's Logo"

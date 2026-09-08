@@ -327,7 +327,11 @@ test("a manager can link attendance and the server then sees only that record", 
   // derive from the same single demo attendance row) -- assert the actual
   // table cell specifically, not just that the text exists anywhere.
   await expect(
-    page.getByRole("cell", { name: "8.5h", exact: true }).or(page.locator(".sm\\:hidden").getByText("8.5h", { exact: true }).first()),
+    page
+      .getByRole("cell", { name: "8.5h", exact: true })
+      .or(
+        page.locator(".sm\\:hidden").getByText("8.5h", { exact: true }).first(),
+      ),
   ).toBeVisible();
 });
 

@@ -237,6 +237,7 @@ export function LoginScreen({
       <div className="relative w-full max-w-md">
         <div className="mb-7 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://www.monkswebster.com/assets/img/logo-light.png"
               alt="The Monk's Logo"
