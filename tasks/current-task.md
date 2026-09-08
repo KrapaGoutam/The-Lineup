@@ -115,33 +115,39 @@ assistant_manager | staff` — it encodes the _authorization tier_
         PostgREST, so the public type surface is unchanged).
   - [x] `npm run check`, `npm test` (187/187), `npm run build` — all
         clean.
-- [ ] **Step 3: Server actions + audit logging**
-  - [ ] `src/features/team/data/audit-log.ts`: `writeAuditEvent()` —
-        thin wrapper around an `audit_events` insert, takes any
-        Supabase client (works for both the regular RLS-bound client
-        and the admin client the passcode-reset route already uses).
-        Logs and swallows its own failure (an audit-write failure must
-        never block the underlying action that already succeeded).
-  - [ ] `src/features/team/actions/member-actions.ts` (new, per the
+- [x] **Step 3: Server actions + audit logging**
+  - [x] `src/features/team/data/audit-log.ts`: `writeAuditEvent()` —
+        thin wrapper around an `audit_events` insert, structurally typed
+        so it accepts both the regular RLS-bound client and the admin
+        client. Logs and swallows its own failure.
+  - [x] `src/features/team/actions/member-actions.ts` (new, per the
         spec's Implementation Map): `renameTeamMemberAction` — validates
         with `isValidDisplayName`, updates `profiles.display_name`
         (authorized by the new RLS policy, not re-checked in
         application code), writes an audit_events row
         (`entity_type: "profile"`, before/after `display_name`),
         revalidates.
-  - [ ] `src/features/team/actions/team-actions.ts`: add an
+  - [x] `src/features/team/actions/team-actions.ts`: added a
         `writeAuditEvent` call to `updateTeamDesignationAction` (before/
-        after designation).
-  - [ ] `src/app/api/auth/passcode/reset/route.ts`: add a
-        `writeAuditEvent` call after a successful reset, using its
-        already-collected `reason`.
-  - [ ] Unit tests: `member-actions.test.ts` (rename validation: empty/
-        too-long/whitespace-only names rejected, valid names pass
-        through) plus confirming `designations.test.ts` (already
-        comprehensive — owner/manager/assistant_manager/staff hierarchy,
-        already satisfies the spec's "designation hierarchy boundary
-        checks") needs no changes.
-  - [ ] `npm run check`, `npm test`, `npm run build`.
+        after designation); `previousDesignation` now an input, looked
+        up client-side from the already-loaded `team` state rather than
+        an extra server round trip.
+  - [x] **Correction to the plan**: `src/app/api/auth/passcode/reset/route.ts`
+        already writes its own `audit_events` row (`action:
+"passcode_reset"`, with the reset dialog's collected `reason`) —
+        missed in the original exploration pass (an earlier grep for
+        `audit_log`/`auditLog` didn't match `audit_events`). Left
+        untouched: it already does the job correctly, and swapping it to
+        the new shared helper would be a same-behavior refactor of
+        working code with no test coverage change to show for it.
+  - [x] Unit tests: `member-actions.test.ts` (5 tests — empty/whitespace-
+        only/over-100-char names rejected without touching the database,
+        a 100-char name accepted at the boundary, a valid rename trims,
+        saves, and writes the audit row with correct before/after
+        state). `designations.test.ts` (already comprehensive) needs no
+        changes.
+  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
+        clean.
 - [ ] **Step 4: UI**
   - [ ] `src/features/team/components/rename-member-dialog.tsx`: same
         lightweight pattern as `PasscodeResetDialog`/`MemberStatusDialog`

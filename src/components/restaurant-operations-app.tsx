@@ -842,10 +842,12 @@ export function RestaurantOperationsApp({
    */
   async function changeDesignation(memberId: string, next: Designation) {
     if (!demoMode) {
+      const previous = team.find((member) => member.id === memberId);
       const result = await updateTeamDesignationAction({
         restaurantSlug,
         organizationId: currentUser.organizationId,
         targetProfileId: memberId,
+        previousDesignation: previous?.designation ?? next,
         nextDesignation: next,
       });
       if (!result.ok) {

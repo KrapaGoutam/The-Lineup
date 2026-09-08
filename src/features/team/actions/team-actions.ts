@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import type { Designation } from "@/features/auth/domain/passcode";
+import { writeAuditEvent } from "@/features/team/data/audit-log";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,11 +42,16 @@ export async function updateTeamDesignationAction(input: {
   restaurantSlug: string;
   organizationId: string;
   targetProfileId: string;
+  previousDesignation: Designation;
   nextDesignation: Designation;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { error } = await supabase
     .from("memberships")
@@ -58,6 +64,21 @@ export async function updateTeamDesignationAction(input: {
       ok: false,
       error: "Unable to update that designation. Please try again.",
     };
+  }
+
+  // Feature 024. Best-effort: the designation change above already
+  // succeeded, so a logging failure here must never surface as an error
+  // to the caller (writeAuditEvent already swallows its own failure).
+  if (user) {
+    await writeAuditEvent(supabase, {
+      organizationId: input.organizationId,
+      actorProfileId: user.id,
+      action: "team_member_designation_changed",
+      entityType: "membership",
+      entityId: input.targetProfileId,
+      beforeState: { designation: input.previousDesignation },
+      afterState: { designation: input.nextDesignation },
+    });
   }
 
   revalidatePath(`/r/${input.restaurantSlug}`);
