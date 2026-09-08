@@ -106,24 +106,30 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
   - [x] Unit tests: manager sees all 5 configuration cards + account
         section; staff sees only the account section + read-only store
         hours; demo-mode manager doesn't see Pay Rates.
-- [ ] **Step 5: Wire into the app shell** (`restaurant-operations-app.tsx`)
-  - [ ] Add `"settings"` to the `AppTab` union.
-  - [ ] Render `<SettingsPage ... />` in the `<main>` tab-switch block.
-  - [ ] Desktop row 2 "Settings" button: `setShowHours(true)` →
+- [x] **Step 5: Wire into the app shell** (`restaurant-operations-app.tsx`)
+  - [x] Add `"settings"` to the `AppTab` union.
+  - [x] Render `<SettingsPage ... />` in the `<main>` tab-switch block.
+  - [x] Desktop row 2 "Settings" button: `setShowHours(true)` →
         `setTab("settings")`; drop the `isManager` gate (button is now
         universal — the page itself gates content by role).
-  - [ ] Mobile mini avatar panel "Settings" button: same retarget, same
+  - [x] Mobile mini avatar panel "Settings" button: same retarget, same
         gate removal.
-  - [ ] Mobile "More" sheet's Settings item: same retarget, gate removal,
+  - [x] Mobile "More" sheet's Settings item: same retarget, gate removal,
         neutral subtitle (no longer "Shift hours, store hours" — that's
         manager-only content now).
-  - [ ] Desktop avatar panel "More options" button: retarget from
+  - [x] Desktop avatar panel "More options" button: retarget from
         `openHours` to a new `openSettingsPage` helper
         (`setTab("settings")` + close both panels). The avatar panel's
         "Edit" (shift hours) and "Store hours" quick-shortcuts keep
         calling `openHours` unchanged — the spec's own User Outcome says
         quick mid-shift adjustments stay one click from the avatar menu.
-  - [ ] Full validation gate (`npm run check`, `npm test`, `npm run build`).
+  - [x] Full validation gate (`npm run check`, `npm test`, `npm run build`)
+        AND a live Playwright smoke test: manager desktop (all cards,
+        demo mode correctly hides Pay rates), Team quick-link navigates,
+        Back returns to Allocation, avatar panel "More options" opens
+        Settings, staff desktop (only Store hours/Passcode/Appearance/
+        Sign out, no Edit hours button), mobile (More sheet → Settings,
+        Edit hours opens the existing HoursDialog).
 - [ ] **Step 6: E2E flow** (`tests/e2e/settings.spec.ts`)
   - [ ] Sign in as manager → open Settings from the nav → see Shift
         Hours/Store Hours/Pay Rates/Team/Schedule cards.
