@@ -42,11 +42,15 @@ Managers and staff access a consolidated, structured Settings page. Quick operat
 
 ## Acceptance Criteria
 
-- [ ] Given a user on any screen, clicking "Settings" in the navigation or "More options" in the avatar quick panel opens the dedicated Settings page.
-- [ ] Given a manager, they see configuration cards for Shift Hours, Store Hours (Sun–Sat), Pay Rates, Team, and Schedule.
-- [ ] Given a regular server/staff member, they see only their personal account settings (Passcode, Appearance, Sign out) and read-only store hours.
-- [ ] Given any changes to Shift Hours or Store Hours, updates persist and reflect in the live header countdown timer.
-- [ ] Given a mobile screen, the Settings page stacks vertically with accessible form controls and clear back navigation.
+- [x] Given a user on any screen, clicking "Settings" in the navigation or "More options" in the avatar quick panel opens the dedicated Settings page.
+- [x] Given a manager, they see configuration cards for Shift Hours, Store Hours (Sun–Sat), Pay Rates, Team, and Schedule. (Pay Rates is skipped in demo mode, matching the Payroll tab's own existing gate — there's no Neon-backed demo data source for it.)
+- [x] Given a regular server/staff member, they see only their personal account settings (Passcode, Appearance, Sign out) and read-only store hours.
+- [x] Given any changes to Shift Hours or Store Hours, updates persist and reflect in the live header countdown timer. (Verified: Settings reuses the existing `HoursDialog`/`saveScheduleConfig` save path unchanged — the same `operatingHours`/`shiftDefaults` state `useRestaurantClock` already reads.)
+- [x] Given a mobile screen, the Settings page stacks vertically with accessible form controls and clear back navigation.
+
+All five verified live (Playwright, desktop 1440×900 and mobile 390×780) and by `tests/e2e/settings.spec.ts` across all three Playwright projects (desktop, host-tablet, server-mobile).
+
+**Implementation note — Pay Rates is per-person + an org default, not a "Server/Host/Busser/Manager" role-rate table.** The actual Feature 020 data model (`PayrollRateOptions`) and the reference mockup's section `2d` both show per-person rows with a role label next to the name, not per-role rate configuration — Settings' Pay Rates section reuses that real system (`RateSettings`, exported from `payroll-workspace.tsx`) rather than inventing a second, disconnected one. See `tasks/current-task.md` for the full reconciliation log.
 
 ## UX Contract
 

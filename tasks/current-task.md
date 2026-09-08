@@ -70,7 +70,7 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
       then branch `feature/023-settings-consolidation` off it.
 - [x] **Step 1: This task file** — populate and commit before any app code.
 - [x] **Step 2: Pure presentational building blocks**
-  (`src/features/settings/components/`)
+      (`src/features/settings/components/`)
   - [x] `store-hours-grid.tsx` — `StoreHoursGrid({ hours, todayIndex })`:
         7-day (Sun–Sat) grid, today's cell highlighted with `--primary`,
         closed days shown as "Closed". Pure, no fetching, no actions.
@@ -146,10 +146,16 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
         operational view.
   - [x] All 3 tests pass on all 3 Playwright projects (desktop,
         host-tablet, server-mobile) -- 9/9.
-- [ ] **Step 7: Docs**
-  - [ ] Check off acceptance criteria in
+- [x] **Step 7: Docs**
+  - [x] Check off acceptance criteria in
         `docs/features/023-settings-consolidation.md`.
-  - [ ] Update `docs/STATUS.md` milestone/feature table.
+  - [x] Update `docs/STATUS.md` milestone/feature table (021/022 marked
+        shipped -- they were already complete but the doc hadn't caught
+        up -- and 023 added). Also un-ignored `docs/STATUS.md` and
+        `tasks/current-task.md` from `.prettierignore`: Feature 021 had
+        them ignored as "not authored by this session", but this session
+        now actively maintains both, so they're formatted like every
+        other checked-in doc.
 - [ ] **Step 8: Push branch, open PR, paste gate output + PR link here.**
 
 ## 🧪 Validation gate (run before every commit)
