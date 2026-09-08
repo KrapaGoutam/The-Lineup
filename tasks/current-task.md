@@ -183,14 +183,26 @@ assistant_manager | staff` — it encodes the _authorization tier_
         linked" without a reload.
   - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
         clean.
-- [ ] **Step 5: E2E flow** (`tests/e2e/team-management.spec.ts`)
-  - [ ] Manager renames a staff member, changes their designation,
-        resets their passcode, links their attendance record, then signs
-        out and back in as that member with the new passcode.
-  - [ ] Server cannot reach Team management at all (Settings' Team card
-        is absent for staff — already true from Feature 023, asserted
-        here as a regression guard).
-  - [ ] Run across all three Playwright projects.
+- [x] **Step 5: E2E flow** (`tests/e2e/team-management.spec.ts`)
+  - [x] Manager renames a staff member, promotes Staff -> Assistant
+        Manager, resets their passcode to a known chosen value (simpler
+        and just as conclusive as parsing an auto-generated one out of
+        the DOM), links their attendance record, then signs out and
+        back in as that member with the new passcode -- proves the
+        reset passcode actually works end to end, not just that the
+        dialog reported success.
+  - [x] Server cannot reach Team management at all (the "Team" nav
+        button is absent both directly and inside the mobile "More"
+        sheet).
+  - [x] Two real bugs in the test itself, found and fixed while running
+        it live rather than assumed correct: `getByLabel("Name")` and
+        `getByRole("button", { name: "Reset passcode" })` both hit
+        Playwright's default substring matching against _other_
+        elements whose labels happen to contain those words as a
+        substring ("Re**name**", "Close **reset passcode**") --
+        `exact: true` fixed both.
+  - [x] 6/6 passing across all three Playwright projects (desktop,
+        host-tablet, server-mobile).
 - [ ] **Step 6: Docs**
   - [ ] Check off acceptance criteria in
         `docs/features/024-team-management-enhancements.md`.
