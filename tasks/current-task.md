@@ -1,419 +1,306 @@
-# Current Task: Feature 028 — Table Allocation Unrestricted Editing & Date Navigation
+# Current Task: Feature 025 — Attendance Reporting & Filters
 
-**Active Spec:** `docs/features/028-table-allocation-unrestricted-editing.md`
-**Branch:** `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`)
-**Status:** Complete — PR open at https://github.com/KrapaGoutam/The-Lineup/pull/24
+**Active Spec:** `docs/features/025-attendance-reporting-and-filters.md`
+**Branch:** `feature/025-attendance-reporting-and-filters` (stacked on
+`feature/028-table-allocation-unrestricted-editing`)
+**Status:** In progress
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
 
-Reconciliation 1 (any active member may edit/clear/update any table cell on
-the live board, cross-column, unconditionally attributed) is a **clean
-extension of Feature 011** — confirmed below, not a weakening of any role
-guard elsewhere. Investigation before coding found most of the backend
-already built this way; the real remaining work is: (1) the UI never
-exposed an edit control for an _already-assigned_ cell at all, (2) date/
-month navigation to historical boards doesn't exist, and (3) one real,
-previously-untested RLS gap in the temporal lock. Schedule, Tip Split,
-Attendance, Payroll, and Team are untouched by this feature.
+Upgrade `src/features/attendance/` (Features 018/019's existing Neon-backed
+report) with real month/year navigation, a calendar Day column, per-person
+`Days Worked`/`Total Hours`/`Avg per Day` stat cards, and multi-select
+print support, matching `design-system-reference.html`'s sections `2e`
+(desktop) and `2f` (mobile) — the only actual mockup found in this repo;
+`docs/features/025-attendance-reporting-and-filters.md`'s own text
+references to "Section 2e/2f" point here. CSV bulk import is **out of
+scope for this build** (see Reconciliation 1).
 
-## 📖 Investigation findings (what's already built vs. what's real work)
+## 📖 Investigation findings
 
-**Already fully implemented (verified by reading the actual migrations,
-not assumed from the spec text):**
+**Reconciliation 1 — CSV import removed from scope (resolved with the
+user before writing this file):** The original spec said CSV import
+should "commit records to `attendance_records`." Two things make that
+impossible as written:
 
-1. **Cross-column, any-active-member writes to empty cells** — Feature 011. `mayWriteColumn()` (`rotation-board.ts`) always returns `true`;
-   `table_rotation_entries_insert_any_member` RLS allows any active
-   member.
-2. **Unconditional attribution** — `board_assign`'s RPC always writes
-   `assigned_by = (select auth.uid())`, both on INSERT and on the
-   `on conflict ... do update` path. Every `board_*` RPC also inserts an
-   `actor_profile_id`-stamped row into the existing `board_events` table.
-3. **`board_assign` is already an upsert** (`on conflict (rotation_round_id,
-rotation_member_id) do update set table_label = excluded.table_label,
-assigned_by = excluded.assigned_by`) — the backend already fully
-   supports editing an occupied cell. Nothing to add server-side for
-   "update an assigned table."
-4. **Every `board_*` RPC calls `private.assert_board_not_locked()`
-   before writing anything** — the RIGHT idea (one shared check, called
-   from every mutation path), but see gap 3 below: that function's own
-   implementation was broken until this feature fixed it.
-5. **Admin-only actions** (`Clear board`/`Clear row`/`Clear column`/
-   `Add row`, "reorder" = `move-column`) — already gated by
-   `private.assert_is_board_manager()` (owner/general_manager/
-   shift_manager/host) at the RPC level, in addition to the UI's
-   `isManager` gate. Confirmed **unchanged** by this feature.
-6. **Designation hierarchy tests** (`0007_allocation_board_rpcs.test.sql`,
-   28 assertions) already cover the manager-only split. No changes
-   needed there.
+1. Feature 018 confirmed **live**, not assumed, that this app's Neon
+   connection is read-only: a direct `INSERT` against the real Neon
+   database returned `permission denied for table users`, and Feature
+   018's own Data section states plainly, "this app has no write access
+   to Neon (the connection string is read-only) and adds no Neon-side
+   schema."
+2. `docs/PRD.md`'s explicit MVP carve-out for attendance says: "read-only
+   display of already-existing attendance data from a separate external
+   system (Feature 018) ... no write path into it, no clock-in/out
+   capability built here." A Supabase-side `attendance_records` table
+   also does not exist anywhere in this codebase — the spec's own Data &
+   Authorization section (`restaurant_id`, `work_date`, `profile_id`
+   columns) describes a table that was never built; the real, only
+   attendance data source is Neon's `users`/`attendance` tables, read via
+   `src/features/attendance/data/attendance-data.ts`.
 
-**Real gaps — the actual work of this feature:**
+Presented this to the user as a three-way choice (new Supabase-owned
+import table / defer CSV import / get real Neon write access). **User
+chose to defer**: the live prompt was updated to explicitly say "CSV
+bulk import for attendance records is strictly scoped OUT." This task
+file, and the rest of this build, reflects that updated scope. The
+spec file's own Scope/Acceptance-Criteria/Implementation-Map/Test-Plan
+text still shows the old CSV bullets — corrected in Step 7 (Docs), not
+here, matching this repo's established practice of correcting a spec
+in place once the real build reveals what's accurate.
 
-1. **`TableEntry` (`allocation-workspace.tsx`) has no edit control for an
-   occupied cell at all.** Once a cell has a value it renders a static
-   "Table X — Recorded" badge with no input, for anyone, manager
-   included. The backend already supports the write (#3 above); only the
-   UI needs a click-to-edit affordance. This is acceptance criterion 1's
-   actual gap.
-2. **No per-cell "clear" exists.** Only bulk `clear-row`/`clear-column`/
-   `clear-board` (manager-only) exist. The spec's scope explicitly says
-   "edit, **clear**, or update any table cell" — adds one new
-   `clear-cell` `BoardAction` + `board_clear_cell` RPC, gated by
-   `assert_board_not_locked` only (no manager check — matches
-   Reconciliation 1, unlike the four bulk actions in gap 5 above which
-   stay manager-only on purpose).
-3. **Real, more serious bug than initially scoped, found live-testing
-   against the local database as a plain server (not assumed from
-   reading SQL text alone).** The insert, update, and delete policies on
-   `table_rotation_entries` from migration `20260906144901` each try to
-   lock the row once tips are finalized by checking, in a subquery, that
-   no matching `tip_pools` row has `status = finalized`. That check is
-   just a SELECT, so it is itself subject to RLS on the `tip_pools`
-   table. The `tip_pools` SELECT policy only allows the owner, general
-   manager, or shift manager roles to read it.
+**Reconciliation 2 — what's already built vs. what's real work (read
+`attendance-report.tsx`/`attendance-report.ts`/`attendance-actions.ts`
+in full before assuming anything was missing):**
 
-   The consequence: for a plain server or host, that subquery's join to
-   `tip_pools` returns zero rows no matter the pool's real status, so
-   the "not finalized" check always passes. The finalized-lock is
-   silently inert for exactly the roles it matters most for, and this
-   was true for insert and update as well, not only delete.
+Already fully implemented (Features 018/019), unchanged by this
+feature:
 
-   Confirmed directly in a live psql session against the local Supabase
-   instance: signed in as a seeded server profile, a delete, an update,
-   and an insert against a finalized day's `table_rotation_entries` all
-   succeeded, bypassing every RPC.
+- Neon read layer (`attendance-data.ts`), the three-way `all`/`self`/
+  `unlinked` access model (`resolveAttendanceAccess`), name
+  disambiguation (`buildDisplayLabels`), the day/week/month **rolling**
+  dashboard tiles (`DashboardTiles` — Feature 019's own explicit
+  acceptance criterion, distinct from Feature 025's month-scoped stat
+  cards below and left untouched), `aggregateHours`'s null-hours
+  exclusion handling, the mobile card ledger's date-parsing pattern
+  (`mobileDateParts`, being promoted into a shared, tested domain
+  function below rather than rewritten), and the Auto-closed
+  (amber)/Open shift (red) badges — colors already match the mockup's
+  `--warnLine`/`--warn` and `--dangerLine`/`--danger` tokens exactly.
+- `Days worked`/`Total hours`/`Avg per day` **math** — already computed
+  inline in `PersonSection` (`daysWorked = rows.length -
+excludedRowCount`, `avgPerDay = total / daysWorked`). Not missing
+  logic, just not yet a named, independently unit-tested pure function
+  living where the spec's own Implementation Map says it should
+  (`domain/attendance-metrics.ts`) — extracted, not reinvented.
 
-   Fixed with one new security-definer helper function (same pattern
-   already used elsewhere in this schema for "a policy needs to see
-   into a table the caller can't directly read") that all three
-   policies now call instead of the broken inline subquery. The new
-   per-cell clear action (gap 2 above) depends on the delete policy
-   directly, which makes this fix load-bearing for this feature, not
-   just a pre-existing bug fixed in passing.
+Real gaps — the actual work of this feature:
 
-   **This was step 2's understanding. Step 3 found the fix above was
-   necessary but not sufficient**: `private.assert_board_not_locked`,
-   the function every `board_*` RPC calls as its own independent lock
-   check, turned out to have the identical bug — declared `security
-invoker`, so its own SELECT against `tip_pools` was equally subject
-   to `tip_pools_select_manager`, silently defeating the RPC-level
-   guard for a plain server or host too, for every `board_*` RPC at
-   once (`board_assign` included, the single most-used one). In
-   practice, the temporal lock has only ever worked for
-   owner/general_manager/shift_manager. See step 3's own notes below
-   for the second fix.
-
-4. **Date/month navigation doesn't exist at all.**
-   `getAllocationContext` hardcodes `service_date = today` and
-   `status = 'active'` — there is no way to view any other date's board,
-   historical or otherwise.
-
-   **Step 5 found a third real gap in the same family as gaps 3 and 3b
-   above, before any historical browsing existed to expose it**: none of
-   the `board_*` RPCs check a session's own `service_date` against
-   today at all — only whether tips are finalized. Before this feature,
-   that was harmless (the client could never legitimately hold anything
-   but today's `service_session_id`, since the only read path,
-   `getAllocationContext`, only ever returned today's session). Step 5's
-   own date navigator is what first hands a legitimate historical
-   `service_session_id` to the client — so without a matching
-   server-side guard, a manipulated client could call
-   `executeBoardActionRemote` with a browsed-to historical session id
-   and mutate a concluded day directly, bypassing the UI's `readOnly`
-   flag entirely. Same fix shape as gap 3b: extended
-   `private.assert_board_not_locked` (already called by every `board_*`
-   RPC) to also raise when `session.service_date < today` in the
-   location's own time zone. See Step 5's own notes below.
+1. **No real month/year navigation.** The existing `PeriodPicker` is a
+   `this-month` / `previous-month` / `custom-range` dropdown — it can
+   never jump to, say, March 2025 directly the way the mockup's
+   `< September > 2026` stepper bar does. New `{ type: "month"; year;
+month }` variant added to the existing `AttendancePeriodSelection`
+   union (`domain/attendance-report.ts`) rather than a parallel type,
+   since `resolvePeriodRange` already is the one place every period
+   resolves through, in both the component and the Server Action's own
+   zod validation.
+2. **No calendar Day column on the desktop table at all** — only Date/
+   Clock in/Clock out/Hours. The mobile ledger already computes a
+   weekday (`mobileDateParts`), just never shared with the desktop
+   table, which the mockup shows with an explicit "Day" column between
+   Date and Clock in.
+3. **No print capability anywhere in Attendance.** This app has exactly
+   one existing print precedent — `payroll-workspace.tsx`'s "Print
+   statement" button, its `print:hidden`/`print:block` Tailwind
+   isolation, and a scoped `@media print` block hiding everything
+   outside one named printable `id`. Reused directly rather than
+   inventing a second pattern; extended (not present in Payroll) with an
+   actual choice dialog, since Payroll only ever prints the one period
+   already on screen.
+4. **The "all"-scope browsing UI doesn't match the mockup's actual
+   shape.** Today it's an always-visible checkbox multi-select with one
+   stacked `PersonSection` per checked person plus a cross-person grand
+   total. The mockup (2e) and the spec's own UX Contract ("Person
+   selector + Month/Year bar on top, **3 stat tiles**, followed by
+   **the** daily log table" — singular, not plural) show exactly one
+   person's report at a time, switched via a compact pill
+   ("Deepak Rao ▾"). **Decision, not assumed**: the always-on
+   multi-select becomes a single-person switcher for normal browsing;
+   the checkbox multi-select survives, but moves _inside_ the new print
+   dialog, only when "Print selected employees" is chosen — this is
+   where "Multi-Select Print Support" actually lives per the spec's own
+   section title, not in the browsing view. The cross-person "grand
+   total" concept is dropped from the primary view (nothing in the
+   mockup shows one); `DashboardTiles`' pre-existing "Selected period"
+   tile already covers "this person's currently-browsed-month total"
+   once `reportUserIds` naturally narrows to one id.
 
 ## 🔒 Non-negotiable constraints
 
-- Schedule, Tips, Attendance, Payroll, Team stay exactly as role-gated as
-  they already are — nothing in this feature touches those modules.
-- `Clear board`/`Clear row`/`Clear column`/`Add row`/reorder
-  (`move-column`) stay manager/owner/host-only, at both the RPC level
-  (unchanged) and the UI level (unchanged) — only the NEW `clear-cell`
-  action is open to any active member, matching Reconciliation 1's
-  explicit "cell" scope, not the bulk actions' scope.
-- No reason field/mechanism anywhere on the allocation board (unchanged;
-  the codebase already made this call for Feature 011, twice — see
-  `TableEntry`'s own comment).
-- Occupied-table edits and the new clear-cell action are refused
-  identically whether tips are finalized for that date OR the viewed
-  date is historical (not today) — both are read-only locks, for
-  everyone, no role exception.
+- Hard Separation: nothing here reads, writes, or derives payroll or tip
+  split data. Confirmed by never importing from `src/features/payroll/`
+  or `src/features/tips/` anywhere in this feature's diff.
+- Zero Name Inference: identity resolution stays 100% keyed on
+  `attendance_identity_links` (Supabase, Feature 019) → Neon `user_id`.
+  "Name (Designation)" (`buildDisplayLabels`) is display text only, never
+  touched by this feature's matching logic.
+- Privacy: an unlinked server sees nothing (unchanged). A `self`-scoped
+  server never sees the person switcher, the "print selected/all"
+  options, or any other person's data — the print dialog is only ever
+  rendered for `access.scope === "all"`; a `self` viewer's Print button
+  prints directly, no dialog, no roster exposure.
+- No new Supabase migration, no new pgTAP file — this feature touches
+  zero Supabase schema (same as Features 018/019). `npm run db:test`
+  still run before every commit per the user's instruction, expected to
+  stay at its current count unless a step's own investigation finds
+  otherwise.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: This task file** — populate and commit before any app code.
-- [x] **Step 2: Fix the RLS finalized-lock gap (all three policies) + pgTAP test**
-  - [x] New migration
-        (`20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql`):
-        new `private.is_service_date_tip_finalized(organization_id,
-rotation_round_id)` `SECURITY DEFINER` function; replaces the
-        raw `not exists(...)` clause in `table_rotation_entries_insert_
-any_member`, `_update_any_member`, and `_delete_any_member`
-        (originally only planned to touch DELETE — investigation while
-        writing the test found the bug was real for all three, not just
-        DELETE; see the finding above).
-  - [x] `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql`
-        (8 assertions): confirms a server genuinely cannot SELECT
-        `tip_pools` directly (the precondition); insert/update/delete
-        all succeed while draft; all three are blocked once finalized,
-        as a server specifically (not owner/manager); the entry is
-        provably untouched after the blocked attempts.
-  - [x] `npm run db:reset && npm run db:test` — 13/13 pgTAP files,
-        187 assertions, run for real against the local Supabase
-        instance. `npm run db:types` regenerated with zero net diff
-        (the new function is `private`, never exposed to PostgREST).
-  - [x] `npm run check`, `npm test`, `npm run build`.
-- [x] **Step 3: `clear-cell` action — domain, RPC, wiring**
-  - [x] `rotation-board.ts`: new `{ type: "clear-cell"; roundId: string;
-columnId: string }` `BoardAction` variant + `applyBoardAction`
-        case (finds the round+column cell and nulls its `tableLabel`,
-        matching `clear-row`'s own convention). 4 new unit tests in
-        `rotation-board.test.ts`, including one proving the pure domain
-        layer already supports overwriting an occupied cell (the shape
-        the click-to-edit UI in Step 4 relies on) and one for
-        clear-cell-on-an-already-empty-cell as a safe no-op.
-  - [x] New migration `20260908190000_board_clear_cell.sql`:
-        `board_clear_cell(p_organization_id, p_service_session_id,
-p_round_id, p_member_id)` RPC — calls `assert_board_not_locked`
-        only (deliberately no `assert_is_board_manager`), deletes the
-        one `table_rotation_entries` row, logs a `board_events` row
-        with an `inverse_payload` for undo, matching the shape of
-        `board_clear_row`/etc. Adds the `clear_cell` value to the
-        `board_event_type` enum.
-  - [x] **Second real bug, found live-testing this exact RPC, more
-        serious than Step 2 alone fixed**:
-        `private.assert_board_not_locked` — the function every single
-        `board_*` RPC calls to enforce the finalized-tips lock — is
-        declared `security invoker`, not `security definer`, despite
-        its own comment claiming independent enforcement. Being
-        invoker, its own SELECT against `tip_pools` is itself subject
-        to `tip_pools_select_manager`, the exact same class of bug
-        fixed in Step 2, except this one silently defeats the lock for
-        _every_ `board_*` RPC at once (`board_assign` included — the
-        single most-used one), not just raw `table_rotation_entries`
-        writes. Confirmed live: as a plain server, calling
-        `assert_board_not_locked` directly against a finalized session
-        raised nothing; the identical call as postgres correctly
-        raised. In practice, the "temporal lock invariant" has only
-        ever been enforced for owner/general*manager/shift_manager —
-        the one role class Feature 028's own criterion says must
-        \_also* be locked out, "including managers," has worked, while
-        the roles that actually needed the RPC-level check most were
-        silently exempt. New migration
-        `20260908200000_assert_board_not_locked_security_definer.sql`
-        makes it `security definer`, matching every other cross-table
-        RLS-aware helper in this schema.
-  - [x] `supabase/tests/database/0014_board_clear_cell.test.sql` (6
-        assertions): `board_clear_cell` exists, is `SECURITY INVOKER`;
-        one active server clears a cell in a _different_ server's
-        column (not a manager, not the column owner — Reconciliation
-        1); the clear is attributed to the true actor; a finalized
-        board blocks it.
-  - [x] `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql`
-        (4 assertions): confirms the function is now `security
-definer`; a plain server's `board_assign` call — the real-world
-        regression proof, not just the new RPC — is now correctly
-        blocked on a finalized day, and leaves nothing written.
-  - [x] `allocation-actions.ts`: `clear-cell` case in
-        `executeBoardActionRemote`. No changes needed in
-        `allocation-workspace.tsx`'s `execute()` — it already dispatches
-        every `BoardAction` variant generically.
-  - [x] `npm run db:reset && npm run db:test`: 15/15 pgTAP files, 197
-        assertions. `npm run db:types`: zero net diff against the
-        committed, `--linked` (remote-tracked) convention — confirmed
-        harmless: this app's Supabase client isn't constructed with a
-        `Database` generic at all, so `.rpc()` calls (including the new
-        `board_clear_cell`) aren't type-checked against generated
-        types either way.
-  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
-- [x] **Step 4: Click-to-edit for occupied cells (the actual UI gap)**
-  - [x] `TableEntry`: an occupied cell now shows Edit (pencil) and Clear
-        (X) buttons alongside the read-only badge, whenever `canWrite`
-        already allows it (no new role logic — reuses the exact
-        `canWrite`/`disabled` computation empty-cell entry already had).
-        Edit reveals the same input/submit form an empty cell uses,
-        pre-filled with the current value; Clear dispatches the new
-        `clear-cell` action. Both buttons use the standard 44px `icon`
-        button size, not a smaller custom override, to hold the
-        accessibility touch-target minimum.
-  - [x] Live Playwright smoke test (demo mode, signed in as a plain
-        server): edited a teammate's already-assigned cell
-        (Table 8 → Table 99) — the change appeared immediately, Recorded
-        events incremented, Undo became enabled, and the existing
-        "Cross-column edits" panel showed "Mia Chen edited Leo Park's
-        column" (the true actor, not assumed). Cleared that same cell —
-        it emptied, Recorded events incremented again. Both actions
-        worked from a server account with no manager-only controls
-        (Clear board, reorder) visible anywhere on the page.
-  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
-- [x] **Step 5: Date & month navigation**
-  - [x] `allocation-data.ts`: `getAllocationContext` takes an optional
-        `requestedServiceDate` (defaults to today); the `service_sessions`
-        lookup drops the `status = 'active'` filter (already scoped
-        uniquely enough by `location_id + service_date + meal_period`,
-        `order by id desc limit 1` defensively) so a historical
-        **closed** session is found the same way today's active one is.
-        Adds `serviceDate` and `isHistorical` to `AllocationContext`.
-        Verified directly against live Postgres (not just typecheck):
-        seeded a `status = 'closed'` session 3 days in the past and
-        confirmed the exact query shape returns it, then confirmed the
-        unchanged `status = 'active'` today's-session case still
-        resolves correctly too.
-  - [x] `allocation-actions.ts`: new client-triggered
-        `getAllocationContextForDateAction({ restaurantSlug,
-serviceDate })` (mirrors Attendance's own client-triggered read
-        pattern) — re-resolves the signed-in user and their own
-        location server-side (never trusts a client-supplied
-        organizationId), computes "today" from the location's own time
-        zone, and rejects a future date with a clear error rather than
-        silently returning an empty board.
-  - [x] `src/features/allocation/components/allocation-date-filter.tsx`
-        (new, matches the spec's own Implementation Map name): a date
-        input + previous/next-day steppers + "Back to today" (shown only
-        once away from today), max-date clamped to today.
-  - [x] `allocation-workspace.tsx`: wires the filter in. New `readOnly =
-boardLocked || isHistoricalView` flag replaces every prior
-        `!boardLocked` UI gate (admin buttons, `canWrite`, undo/redo,
-        `execute()`'s own defense-in-depth check) — a browsed-to
-        historical date now disables exactly what a finalized-tips day
-        already did, regardless of role. The `initialContext`-driven
-        resync effect (real mode) is now guarded to only apply while
-        viewing today, so a background `router.refresh()` (this
-        browser's own action, or someone else's Realtime-triggered
-        change) can never silently snap a browsed-to historical view
-        back to today's board underneath the viewer.
-  - [x] **Deviation from the original plan, found reading the existing
-        code rather than assumed**: `allocation-workspace.tsx` already
-        imports and calls `executeBoardActionRemote`/`undoBoardAction`/
-        `redoBoardAction` directly — none of the allocation actions are
-        threaded through `restaurant-operations-app.tsx` as props. The
-        new `getAllocationContextForDateAction` follows the exact same,
-        already-established convention: imported and called directly by
-        `allocation-workspace.tsx`. No changes needed in
-        `restaurant-operations-app.tsx` at all for this step.
-  - [x] **Real server-side security gap found and fixed, matching the
-        gap-3/3b bug family**: see the investigation note above — added
-        `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql`,
-        extending `private.assert_board_not_locked` to also raise when
-        the session's own `service_date` is before today in the
-        location's time zone, alongside the existing tip-finalized
-        check. `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql`
-        (5 assertions): a plain server's direct `board_assign`/
-        `board_clear_cell` calls against a historical, never-finalized
-        session are blocked with the new message; nothing is written;
-        a regression check confirms today's own session, still active
-        and not finalized, remains fully writable — the historical
-        check does not accidentally catch today itself.
-  - [x] **Demo mode scoping decision**: demo mode has no multi-day
-        historical data model (the board is pure client-side, in-memory,
-        undated) — matches the established precedent (Payroll is simply
-        absent in demo mode) rather than fabricating fake historical
-        data. Selecting a non-today date in demo mode replaces the
-        summary/floor-team/dinner-rotation sections with a "Demo mode
-        only shows today" notice instead of an empty board that looks
-        like a real (if uneventful) historical day.
-  - [x] **Real bug found live-testing in Playwright, not assumed**: the
-        first version of `changeViewDate`'s "back to today" branch
-        unconditionally rebuilt `history` from `initialContext?.board`.
-        In demo mode `initialContext` is always `null` (the demo board
-        lives only in local `history` state, built once by
-        `buildInitialHistory()`), so clicking "Back to today" after
-        browsing away silently wiped the entire demo board to empty
-        instead of restoring it. Fixed by checking `demoMode` first and
-        returning immediately (just moving `viewDate`) before the
-        today-vs-historical branching that only makes sense in real
-        mode.
-  - [x] Live Playwright smoke test (demo mode): manager browses to the
-        previous day — "Demo mode only shows today" notice appears,
-        Table 12 (today's seeded cell) disappears, `Clear board`/
-        `Add row` disappear entirely, `Undo`/`Redo` render disabled.
-        "Back to today" restores the live board exactly, including the
-        admin buttons. Caught and fixed the demo-mode bug above this
-        way, live, before it could reach the committed e2e spec.
-  - [x] `npm run db:reset && npm run db:test`: 16/16 pgTAP files, 202
-        assertions. `npm run check`, `npm test` (195/195), `npm run
-build`.
-- [x] **Step 6: E2E flow** (`tests/e2e/allocation-open-editing.spec.ts`)
-  - [x] A server (passcode 1357 = Mia Chen) signs in, edits Leo Park's
-        already-assigned "Table 8" cell to "Table 8B" via the new
-        Edit/Save controls, and both the new value and the true actor
-        attribution ("Mia Chen edited Leo Park's column") are visible —
-        while `Clear board`/`Add row`/reorder stay absent for her in the
-        same test.
-  - [x] A server clears Noah Diaz's already-assigned "Table 4" cell via
-        the new Clear control; the cell empties and the clear is
-        attributed the same way.
-  - [x] A manager (passcode 2468) browses to the previous day: the demo
-        read-only notice appears, today's board and every admin control
-        disappear, Undo/Redo render disabled; "Back to today" restores
-        everything.
-  - [x] Ran across all three Playwright projects (desktop, host-tablet,
-        server-mobile) — 9/9 passed. Also re-ran the full existing
-        `tests/e2e/dashboard.spec.ts` (desktop) — 25/25 still pass, no
-        regression from the `readOnly` refactor.
-- [x] **Step 7: Docs**
-  - [x] Checked off every acceptance criterion in
-        `docs/features/028-table-allocation-unrestricted-editing.md`,
-        each annotated with already-implemented vs. newly-built vs. the
-        real bug fixed, and corrected the Implementation Map's two
-        stale file names (`allocation-board.tsx`/`rotation-actions.ts`
-        don't exist in this codebase — the real files are
-        `allocation-workspace.tsx`/`allocation-actions.ts`, already
-        named that way since Features 003/009/010/011).
-  - [x] Updated `docs/STATUS.md`: new `028` Feature Matrix row, Health
-        Gate counts, Current Status Overview.
-- [x] **Step 8: Push branch, open PR (base:
-      `feature/024-team-management-enhancements`), paste gate output +
-      PR link here.**
-  - [x] Final comprehensive gate, run for real:
-    - `npm run check` — prettier, eslint, typecheck: pass.
-    - `npm test` — 31/31 files, 195/195 tests: pass.
-    - `npm run build` — pass.
-    - `npm run db:reset && npm run db:test` — 16/16 pgTAP files, 202
-      assertions: pass. (One transient container-restart timeout during
-      `db:reset`'s own "Restarting containers" step, same class already
-      ruled out earlier in this feature — re-ran `db:test` immediately
-      after and it passed cleanly with the full expected count, both
-      times.)
-    - `npx playwright test` (desktop, host-tablet, server-mobile,
-      full suite) — **102/102 pass**, including the 9 new
-      `allocation-open-editing.spec.ts` tests across all three
-      projects.
-  - [x] Pushed `feature/028-table-allocation-unrestricted-editing` to
-        origin.
-  - [x] Opened PR:
-        **https://github.com/KrapaGoutam/The-Lineup/pull/24** (base:
-        `feature/024-team-management-enhancements`).
+- [x] **Step 1: This task file** — populate and commit before any app
+      code.
+- [ ] **Step 2: Domain layer — month/year period type + metrics module**
+  - [ ] `domain/attendance-report.ts`: add `{ type: "month"; year:
+number; month: number }` (month 1-12) to `AttendancePeriodSelection`;
+        extend `resolvePeriodRange` with a shared internal `monthRange`
+        helper, refactoring `this-month`/`previous-month` to delegate to
+        it too (one source of truth for "the calendar range of month
+        N/year Y", not three near-duplicate `Date.UTC` blocks).
+  - [ ] New `domain/attendance-metrics.ts` (matches the spec's own
+        Implementation Map path): `calendarWeekday(isoDate)` and
+        `dayOfMonth(isoDate)` (promoted out of the component's
+        `mobileDateParts`, same UTC-noon parsing, now shared by both the
+        desktop Day column and the mobile ledger), `daysInMonth(year,
+month)`, and `computeAttendanceSummary(rows)` → `{ daysWorked,
+totalHours, avgPerDay, excludedRowCount }`, wrapping the existing
+        `aggregateHours` rather than reimplementing null-handling.
+  - [ ] `domain/attendance-metrics.test.ts` (new): weekday across a
+        month boundary and a leap year (Feb 29 2028 vs. Feb 28 2026,
+        matching the existing leap-year test's dates for continuity);
+        `daysInMonth` for a 28/29/30/31-day month; `computeAttendanceSummary`
+        for a normal set, an all-null set, and a mixed set (exact
+        `daysWorked`/`avgPerDay`, not just `totalHours`).
+  - [ ] `domain/attendance-report.test.ts`: new `resolvePeriodRange`
+        cases for `{ type: "month" }`, including a leap-year February and
+        a case matching the existing "January previous-month rolls back"
+        test's intent but via the direct `month` type instead.
+  - [ ] `actions/attendance-actions.ts`: extend `attendancePeriodSchema`
+        (the discriminated union already validating `period` on both
+        `getAttendanceReportAction` and any caller) with the `"month"`
+        variant, bounded `year` (2024–2100) and `month` (1–12) — a
+        malformed value still fails closed to "that attendance request is
+        invalid," matching every other branch.
+  - [ ] Full gate: `npm run check`, `npm test`, `npm run build`,
+        `npm run db:test` (expected unchanged — no schema touched).
+  - [ ] Commit.
+- [ ] **Step 3: Month/year navigator + calendar Day column**
+  - [ ] New `components/attendance-month-nav.tsx` (pure, presentational):
+        prev/next chevrons (disabled at the Jan-2024 floor and at the
+        current real month, matching the acceptance criterion's
+        "2024–present" bound and Feature 028's precedent of clamping a
+        navigator at "today" rather than trusting the client to self-limit),
+        a month `<select>` (Jan–Dec) and a year `<select>` (2024..current
+        year), all changes routed through one `onChange({ year, month })`.
+  - [ ] `attendance-report.tsx`: replaces `PeriodPicker`'s UI (not its
+        underlying `resolvePeriodRange`, which keeps its other branches)
+        for both `self` and `all` scopes with `AttendanceMonthNav`,
+        defaulting to the restaurant's current real month/year
+        (`todayLocalDate`-derived, unchanged source of "today").
+  - [ ] Add a Day column to the desktop table (`Date | Day | Clock in |
+Clock out | Hours`, matching the mockup's exact column order) and
+        switch the mobile ledger's date parts to the new shared
+        `calendarWeekday`/`dayOfMonth` instead of the local
+        `mobileDateParts` (deleted).
+  - [ ] `PersonSection`: stat tiles wired to `computeAttendanceSummary`
+        instead of the inline math; subtitles added under each tile
+        matching the mockup's own text shape ("of N days in September"
+        via `daysInMonth`, an excluded-rows note under Total Hours reusing
+        the existing singular/plural phrasing already used elsewhere in
+        this file, "across days actually worked" under Avg per Day).
+  - [ ] Live Playwright smoke test (demo mode): jump to a past month via
+        the year/month selects, confirm the ledger and stat cards update;
+        confirm the Day column values are correct for known demo dates.
+  - [ ] Full gate.
+  - [ ] Commit.
+- [ ] **Step 4: Single-person switcher for the `all` scope**
+  - [ ] `attendance-report.tsx`: replaces the always-on checkbox
+        multi-select, its N stacked `PersonSection`s, and the grand-total
+        block with one active-person `<select>` (styled as the mockup's
+        pill) and exactly one `PersonSection`, defaulting to the first
+        person alphabetically by display label. `reportUserIds` narrows to
+        `[activePersonId]`; `DashboardTiles`' "Selected period" tile keeps
+        working unchanged, now naturally meaning "this one person, this
+        browsed month."
+  - [ ] Confirm (read, don't just assume) neither existing attendance
+        e2e scenario in `tests/e2e/dashboard.spec.ts` ("an unlinked
+        server..."/"a manager can link attendance...") depends on the
+        removed multi-select/grand-total shapes — both exercise `self`/
+        `unlinked` scope, which this step doesn't touch.
+  - [ ] Live Playwright smoke test: switching the person select changes
+        which report renders; a `self`-scoped server still sees no
+        switcher at all.
+  - [ ] Full gate.
+  - [ ] Commit.
+- [ ] **Step 5: Multi-select print support**
+  - [ ] New `components/attendance-print-dialog.tsx`: rendered only for
+        `access.scope === "all"`. Three radio choices ("Print current
+        employee" / "Print selected employees" / "Print all employees");
+        choosing "selected" reveals a checkbox list sourced from the same
+        `users` array the switcher already has (this is where the old
+        multi-select UI actually ends up living, per Reconciliation 2).
+        Confirm resolves to a `number[]` of target Neon user ids and
+        closes.
+  - [ ] `attendance-report.tsx`: a header "Print" button. `self` scope:
+        prints directly (`window.print()`, no dialog — matches Payroll's
+        own no-choice-needed precedent). `all` scope: opens the dialog;
+        on confirm, fetches (reusing the existing
+        `getAttendanceReportAction`, which already accepts multiple
+        `userIds`) each target person's rows for the _currently browsed_
+        month, renders them into one printable area (Payroll's exact
+        `print:hidden`/`print:block` and scoped `@media print` visibility
+        trick, one named id), then calls `window.print()`. Printable
+        content uses plain text status labels ("Auto-closed"/"Open
+        shift"), not colored badges — colors are not a reliable print
+        signal.
+  - [ ] `unlinked` scope: no Print button — nothing to print.
+  - [ ] Live Playwright smoke test: stub `window.print` (matching this
+        app's live-testing discipline — an OS print dialog itself can't be
+        driven by Playwright) and confirm it's called exactly once per
+        choice, with the printable area containing the right person(s).
+  - [ ] Full gate.
+  - [ ] Commit.
+- [ ] **Step 6: E2E** (`tests/e2e/attendance-reporting.spec.ts`, new file
+      — the two pre-existing attendance scenarios stay in
+      `dashboard.spec.ts`, untouched)
+  - [ ] Month switching updates the ledger and the three stat cards to
+        different, known demo values.
+  - [ ] The desktop table's Day column matches the real weekday for a
+        known demo date.
+  - [ ] Print dialog: current/selected/all all correctly invoke
+        `window.print()` (stubbed) with the right people included; a
+        `self`-scoped server's Print button never shows a dialog and never
+        exposes another person's data.
+  - [ ] Run across all three Playwright projects (desktop, host-tablet,
+        server-mobile) — `host-tablet`'s pre-existing WebKit sign-in gap
+        (already recorded, not this feature's regression — see memory)
+        checked against, not re-diagnosed as new if it recurs.
+  - [ ] Full gate.
+  - [ ] Commit.
+- [ ] **Step 7: Docs**
+  - [ ] `docs/features/025-attendance-reporting-and-filters.md`: correct
+        the Scope/Acceptance Criteria/Implementation Map/Test Plan CSV
+        bullets to explicitly say CSV import is out of scope for this
+        build, with the reconciliation reasoning (read-only Neon,
+        confirmed live in Feature 018; PRD's explicit carve-out) inline,
+        not silently deleted. Check off every remaining acceptance
+        criterion with a note on what was already built vs. newly built.
+  - [ ] Update `docs/STATUS.md` Feature Matrix + Health Gate line.
+  - [ ] Commit.
+- [ ] **Step 8: Final gate, push, open PR (base:
+      `feature/028-table-allocation-unrestricted-editing`), paste real
+      gate output + PR link here.**
 
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `supabase/migrations/20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql` (new)
-- `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql` (new)
-- `supabase/migrations/20260908190000_board_clear_cell.sql` (new)
-- `supabase/tests/database/0014_board_clear_cell.test.sql` (new)
-- `supabase/migrations/20260908200000_assert_board_not_locked_security_definer.sql` (new)
-- `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql` (new)
-- `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql` (new)
-- `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql` (new)
-- `src/features/allocation/domain/rotation-board.ts` (`clear-cell` action)
-- `src/features/allocation/domain/rotation-board.test.ts` (new tests)
-- `src/features/allocation/actions/allocation-actions.ts` (`clear-cell`, date-fetch action)
-- `src/features/allocation/data/allocation-data.ts` (`serviceDate`/`isHistorical`)
-- `src/features/allocation/components/allocation-date-filter.tsx` (new)
-- `src/features/allocation/components/allocation-workspace.tsx` (click-to-edit, date wiring, `readOnly`)
-- `tests/e2e/allocation-open-editing.spec.ts` (new)
-- `docs/features/028-table-allocation-unrestricted-editing.md` (checkboxes)
+- `src/features/attendance/domain/attendance-report.ts` (new `"month"`
+  period type)
+- `src/features/attendance/domain/attendance-report.test.ts`
+- `src/features/attendance/domain/attendance-metrics.ts` (new)
+- `src/features/attendance/domain/attendance-metrics.test.ts` (new)
+- `src/features/attendance/actions/attendance-actions.ts` (zod schema)
+- `src/features/attendance/components/attendance-month-nav.tsx` (new)
+- `src/features/attendance/components/attendance-print-dialog.tsx` (new)
+- `src/features/attendance/components/attendance-report.tsx` (month nav,
+  Day column, single-person switcher, print wiring)
+- `tests/e2e/attendance-reporting.spec.ts` (new)
+- `docs/features/025-attendance-reporting-and-filters.md` (CSV scope
+  correction, checkboxes)
 - `docs/STATUS.md` (milestone update)
 
 ## Current State & Next Step
 
-All 8 steps complete. Feature 028 is fully implemented, fully tested
-(full gate green, including three real security bugs found live-testing
-and fixed along the way — see Investigation findings above), and its PR
-is open: https://github.com/KrapaGoutam/The-Lineup/pull/24 (base:
-`feature/024-team-management-enhancements`). Nothing left to do on this
-branch; next step is human review/merge.
+Branch created, this file committed. Next: Step 2 (domain layer — month
+period type + `attendance-metrics.ts`).
