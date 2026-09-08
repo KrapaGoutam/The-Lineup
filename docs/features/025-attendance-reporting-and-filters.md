@@ -8,13 +8,13 @@
 ## Classification & Session Scope
 
 - **Category:** FEATURE UPGRADE
-- **Modifies vs Adds:** Modifies `src/features/attendance/` components (from Features 018 and 019) to add month/year navigation, calendar day computation, print stylesheets, multi-select export, CSV import, and single-user summary cards.
+- **Modifies vs Adds:** Modifies `src/features/attendance/` components (from Features 018 and 019) to add month/year navigation, calendar day computation, print stylesheets, multi-select export, and single-user summary cards.
 - **Contradiction Flags:** The mockup displays "Name (Designation)" (e.g. "Anil (Server)" and "Anil (Host)"). This is strictly for visual presentation and disambiguation. **All records and filters key strictly on the manual `attendance_identity_links` UUID pairings from Feature 019 — never on name strings.**
 - **Session Scope:** Own-session build.
 
 ## User Outcome
 
-Managers and servers get an enhanced view of raw clock-in attendance records. Users can navigate across months (e.g. "September / 2026") with a dedicated month/year picker, view calendar-computed weekdays (Mon, Tue, etc.) alongside dates, review single-user summary metrics (`Days Worked`, `Total Hours`, `Avg per Day`), print records for one, selected, or all employees with clean print formatting, and bulk-import attendance records via CSV.
+Managers and servers get an enhanced view of raw clock-in attendance records. Users can navigate across months (e.g. "September / 2026") with a dedicated month/year picker, view calendar-computed weekdays (Mon, Tue, etc.) alongside dates, review single-user summary metrics (`Days Worked`, `Total Hours`, `Avg per Day`), and print records for one, selected, or all employees with clean print formatting.
 
 ## Scope
 
@@ -27,11 +27,9 @@ Managers and servers get an enhanced view of raw clock-in attendance records. Us
   - Multi-select print support:
     - Print trigger offering "Print current employee", "Print selected employees", or "Print all employees".
     - Dedicated print CSS (`@media print`) rendering clean tabular reports without navigation bars or buttons.
-  - CSV bulk import for raw attendance logs:
-    - Upload CSV file with employee attendance identifier, date, clock-in, and clock-out.
-    - Validation on dates, times, and identity resolution against `attendance_identity_links`.
   - Mobile representation (Section 2f): touch-friendly employee dropdown, month pager, compact stat cards, and scrollable card ledger.
 - **Out:**
+  - Bulk CSV import for attendance logs (scoped out).
   - Modifying raw clock-in timestamps automatically (all edits are manual audit records).
   - Deriving or modifying payroll amounts inside the attendance tab.
 
@@ -44,7 +42,6 @@ Managers and servers get an enhanced view of raw clock-in attendance records. Us
   - `Total Hours`: sum of worked duration in hours (`0.1h` resolution).
   - `Avg per Day`: total hours divided by days worked (`0.1h` resolution).
 - [ ] Given a manager clicking "Print", they can choose between printing the active person, a checked subset, or all rostered employees, resulting in clean formatted print pages.
-- [ ] Given an attendance CSV file, a manager can upload it, preview parsed rows, resolve any unlinked employee IDs, and commit records to `attendance_records`.
 - [ ] Given an unlinked server, they cannot view other employees' records or summary cards.
 
 ## UX Contract
@@ -57,7 +54,7 @@ Managers and servers get an enhanced view of raw clock-in attendance records. Us
 
 - **Tables/columns:** Queries `attendance_records` filtered by `restaurant_id`, `work_date >= month_start AND work_date <= month_end`, and linked `profile_id`.
 - **Grants/RLS:**
-  - Managers/owners can view all records for their organization and import CSVs.
+  - Managers/owners can view all records for their organization.
   - Servers can only query records linked to their own authenticated profile ID via `attendance_identity_links`.
 - **Identity Rule:** Strict foreign key to `attendance_identity_links.external_identity_id`. Zero string-based name matching.
 
@@ -65,10 +62,9 @@ Managers and servers get an enhanced view of raw clock-in attendance records. Us
 
 - `src/features/attendance/components/attendance-report.tsx`: Main reporting interface, month/year selector, stat tiles.
 - `src/features/attendance/components/attendance-print-dialog.tsx`: Multi-select print modal & print CSS.
-- `src/features/attendance/components/attendance-csv-import.tsx`: CSV parser and validator.
 - `src/features/attendance/domain/attendance-metrics.ts`: Pure functions for `Days Worked`, `Total Hours`, and `Avg per Day`.
 
 ## Test Plan
 
 - Unit: Accurate calendar weekday calculation across month boundaries and leap years; metrics computation tests.
-- E2E: Month switching, CSV upload preview and commit, print dialog interactions.
+- E2E: Month switching, summary stat metrics, and print dialog interactions across viewports.
