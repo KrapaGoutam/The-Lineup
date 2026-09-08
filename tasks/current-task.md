@@ -34,11 +34,10 @@ rotation_member_id) do update set table_label = excluded.table_label,
 assigned_by = excluded.assigned_by`) — the backend already fully
    supports editing an occupied cell. Nothing to add server-side for
    "update an assigned table."
-4. **Temporal lock at the RPC level** — every `board_*` RPC calls
-   `private.assert_board_not_locked()`, which is itself `SECURITY
-DEFINER` and therefore correctly enforces the finalized-tips lock
-   regardless of the caller's own role. Every real code path in this app
-   goes through an RPC, so in practice the lock has always worked.
+4. **Every `board_*` RPC calls `private.assert_board_not_locked()`
+   before writing anything** — the RIGHT idea (one shared check, called
+   from every mutation path), but see gap 3 below: that function's own
+   implementation was broken until this feature fixed it.
 5. **Admin-only actions** (`Clear board`/`Clear row`/`Clear column`/
    `Add row`, "reorder" = `move-column`) — already gated by
    `private.assert_is_board_manager()` (owner/general_manager/
@@ -82,13 +81,7 @@ DEFINER` and therefore correctly enforces the finalized-tips lock
    Confirmed directly in a live psql session against the local Supabase
    instance: signed in as a seeded server profile, a delete, an update,
    and an insert against a finalized day's `table_rotation_entries` all
-   succeeded, bypassing every RPC. This was never caught before because
-   every real code path in the app goes through a `board_*` RPC, and
-   that RPC layer's own lock check runs as a security-definer function
-   that is not subject to this same restriction — so the RPC-level
-   guard has always worked correctly; only the raw RLS policies
-   underneath it, meant to enforce the same rule independently as
-   defense in depth, did not.
+   succeeded, bypassing every RPC.
 
    Fixed with one new security-definer helper function (same pattern
    already used elsewhere in this schema for "a policy needs to see
@@ -97,6 +90,18 @@ DEFINER` and therefore correctly enforces the finalized-tips lock
    per-cell clear action (gap 2 above) depends on the delete policy
    directly, which makes this fix load-bearing for this feature, not
    just a pre-existing bug fixed in passing.
+
+   **This was step 2's understanding. Step 3 found the fix above was
+   necessary but not sufficient**: `private.assert_board_not_locked`,
+   the function every `board_*` RPC calls as its own independent lock
+   check, turned out to have the identical bug — declared `security
+invoker`, so its own SELECT against `tip_pools` was equally subject
+   to `tip_pools_select_manager`, silently defeating the RPC-level
+   guard for a plain server or host too, for every `board_*` RPC at
+   once (`board_assign` included, the single most-used one). In
+   practice, the temporal lock has only ever worked for
+   owner/general_manager/shift_manager. See step 3's own notes below
+   for the second fix.
 
 4. **Date/month navigation doesn't exist at all.**
    `getAllocationContext` hardcodes `service_date = today` and
@@ -144,25 +149,69 @@ any_member`, `_update_any_member`, and `_delete_any_member`
         instance. `npm run db:types` regenerated with zero net diff
         (the new function is `private`, never exposed to PostgREST).
   - [x] `npm run check`, `npm test`, `npm run build`.
-- [ ] **Step 3: `clear-cell` action — domain, RPC, wiring**
-  - [ ] `rotation-board.ts`: new `{ type: "clear-cell"; roundId: string;
+- [x] **Step 3: `clear-cell` action — domain, RPC, wiring**
+  - [x] `rotation-board.ts`: new `{ type: "clear-cell"; roundId: string;
 columnId: string }` `BoardAction` variant + `applyBoardAction`
-        case (removes that one cell). Unit tests in
-        `rotation-board.test.ts`.
-  - [ ] New migration: `board_clear_cell(p_organization_id,
-p_service_session_id, p_round_id, p_member_id)` RPC — calls
-        `assert_board_not_locked` only (deliberately no
-        `assert_is_board_manager`), deletes the one
-        `table_rotation_entries` row (relying on the now-fixed DELETE
-        RLS policy), logs a `board_events` row with an
-        `inverse_payload` for undo, matching the shape of
-        `board_clear_row`/etc.
-  - [ ] pgTAP test: any active member (including a plain server) can
-        clear a cell nobody assigned them to; a finalized board refuses
-        it.
-  - [ ] `allocation-actions.ts`: `clear-cell` case in
-        `executeBoardActionRemote`.
-  - [ ] Full gate.
+        case (finds the round+column cell and nulls its `tableLabel`,
+        matching `clear-row`'s own convention). 4 new unit tests in
+        `rotation-board.test.ts`, including one proving the pure domain
+        layer already supports overwriting an occupied cell (the shape
+        the click-to-edit UI in Step 4 relies on) and one for
+        clear-cell-on-an-already-empty-cell as a safe no-op.
+  - [x] New migration `20260908190000_board_clear_cell.sql`:
+        `board_clear_cell(p_organization_id, p_service_session_id,
+p_round_id, p_member_id)` RPC — calls `assert_board_not_locked`
+        only (deliberately no `assert_is_board_manager`), deletes the
+        one `table_rotation_entries` row, logs a `board_events` row
+        with an `inverse_payload` for undo, matching the shape of
+        `board_clear_row`/etc. Adds the `clear_cell` value to the
+        `board_event_type` enum.
+  - [x] **Second real bug, found live-testing this exact RPC, more
+        serious than Step 2 alone fixed**:
+        `private.assert_board_not_locked` — the function every single
+        `board_*` RPC calls to enforce the finalized-tips lock — is
+        declared `security invoker`, not `security definer`, despite
+        its own comment claiming independent enforcement. Being
+        invoker, its own SELECT against `tip_pools` is itself subject
+        to `tip_pools_select_manager`, the exact same class of bug
+        fixed in Step 2, except this one silently defeats the lock for
+        _every_ `board_*` RPC at once (`board_assign` included — the
+        single most-used one), not just raw `table_rotation_entries`
+        writes. Confirmed live: as a plain server, calling
+        `assert_board_not_locked` directly against a finalized session
+        raised nothing; the identical call as postgres correctly
+        raised. In practice, the "temporal lock invariant" has only
+        ever been enforced for owner/general*manager/shift_manager —
+        the one role class Feature 028's own criterion says must
+        \_also* be locked out, "including managers," has worked, while
+        the roles that actually needed the RPC-level check most were
+        silently exempt. New migration
+        `20260908200000_assert_board_not_locked_security_definer.sql`
+        makes it `security definer`, matching every other cross-table
+        RLS-aware helper in this schema.
+  - [x] `supabase/tests/database/0014_board_clear_cell.test.sql` (6
+        assertions): `board_clear_cell` exists, is `SECURITY INVOKER`;
+        one active server clears a cell in a _different_ server's
+        column (not a manager, not the column owner — Reconciliation
+        1); the clear is attributed to the true actor; a finalized
+        board blocks it.
+  - [x] `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql`
+        (4 assertions): confirms the function is now `security
+definer`; a plain server's `board_assign` call — the real-world
+        regression proof, not just the new RPC — is now correctly
+        blocked on a finalized day, and leaves nothing written.
+  - [x] `allocation-actions.ts`: `clear-cell` case in
+        `executeBoardActionRemote`. No changes needed in
+        `allocation-workspace.tsx`'s `execute()` — it already dispatches
+        every `BoardAction` variant generically.
+  - [x] `npm run db:reset && npm run db:test`: 15/15 pgTAP files, 197
+        assertions. `npm run db:types`: zero net diff against the
+        committed, `--linked` (remote-tracked) convention — confirmed
+        harmless: this app's Supabase client isn't constructed with a
+        `Database` generic at all, so `.rpc()` calls (including the new
+        `board_clear_cell`) aren't type-checked against generated
+        types either way.
+  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
 - [ ] **Step 4: Click-to-edit for occupied cells (the actual UI gap)**
   - [ ] `TableEntry`: an occupied cell becomes clickable (not just a
         static badge) — click reveals the same input, pre-filled with

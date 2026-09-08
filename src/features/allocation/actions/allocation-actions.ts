@@ -86,6 +86,34 @@ export async function executeBoardActionRemote(
         return { ok: true, data: { serviceSessionId: data as number } };
       }
 
+      // Feature 028: the per-cell counterpart to clear-column, open to
+      // any active member (see board_clear_cell's own migration comment)
+      // -- unlike clear-row/clear-column/clear-board below, this one is
+      // never gated on isManager anywhere in the call chain.
+      case "clear-cell": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const memberId = await resolveMemberId(
+          supabase,
+          sessionId,
+          action.columnId,
+        );
+        if (memberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { error } = await supabase.rpc("board_clear_cell", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_round_id: Number(action.roundId),
+          p_member_id: memberId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
       case "add-column": {
         const { data, error } = await supabase.rpc("board_add_column", {
           p_organization_id: input.organizationId,
