@@ -79,16 +79,16 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
         calls the passed-in `onEdit` (opens the existing `HoursDialog` —
         no new dialog).
   - [x] Unit tests for both (rendering, today-highlight, closed state).
-- [ ] **Step 3: Pay Rates section** (isolated payroll reuse)
-  - [ ] Export `RateSettings` from
+- [x] **Step 3: Pay Rates section** (isolated payroll reuse)
+  - [x] Export `RateSettings` from
         `src/features/payroll/components/payroll-workspace.tsx` (adds one
         `export` keyword; zero behavior change to Payroll itself).
-  - [ ] `src/features/settings/components/pay-rates-section.tsx`: self-
+  - [x] `src/features/settings/components/pay-rates-section.tsx`: self-
         contained — fetches `getPayrollRateOptionsAction`, handles
         loading/error/retry, renders the reused `RateSettings`. This file
         is the only place Settings touches anything under
         `src/features/payroll/`.
-  - [ ] Unit test: loading → renders `RateSettings` with fetched options;
+  - [x] Unit test: loading → renders `RateSettings` with fetched options;
         error → shows retry.
 - [ ] **Step 4: `settings-page.tsx`** — composes everything by role:
   - Header: back button (→ `allocation`, same "Home" semantics as the

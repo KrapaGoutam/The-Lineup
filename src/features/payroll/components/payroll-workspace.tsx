@@ -594,7 +594,11 @@ function PayrollDashboardTiles({
   );
 }
 
-function RateSettings({
+// Feature 023: exported so Settings' Pay Rates section can reuse this
+// exact rate-configuration UI (org default + per-person overrides)
+// instead of building a second one -- Settings never touches anything
+// else in this file (no ledger/balance/payment code).
+export function RateSettings({
   restaurantSlug,
   options,
   onChanged,
