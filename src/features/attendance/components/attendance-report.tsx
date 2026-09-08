@@ -6,6 +6,7 @@ import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import {
   getAttendanceAccessAction,
   getAttendanceDashboardTotalsAction,
@@ -126,7 +127,11 @@ export function AttendanceReport({
   const [users, setUsers] = useState<NeonUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [usersReloadKey, setUsersReloadKey] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Feature 025: which one person the "all"-scope switcher is currently
+  // showing -- replaces the old always-on checkbox multi-select (see
+  // tasks/current-task.md's Reconciliation 2). Defaulted once the user
+  // list loads, below.
+  const [activePersonId, setActivePersonId] = useState<number | null>(null);
   // Feature 025: the restaurant's own current real month/year
   // (todayLocalDate-derived, the same "today" every other real-mode
   // feature already uses) -- the navigator's own upper bound, and where
@@ -163,7 +168,6 @@ export function AttendanceReport({
       if (demoMode) {
         const active = demoNeonUsers.filter((candidate) => candidate.isActive);
         setUsers(active);
-        setSelectedIds(new Set(active.map((candidate) => candidate.id)));
         return;
       }
       const result = await getAttendanceUsersAction({ restaurantSlug });
@@ -173,13 +177,38 @@ export function AttendanceReport({
         return;
       }
       setUsers(result.data);
-      setSelectedIds(new Set(result.data.map((candidate) => candidate.id)));
     }
     load();
     return () => {
       cancelled = true;
     };
   }, [scope, demoMode, restaurantSlug, usersReloadKey]);
+
+  // Sorted once here, at render time, so both the default-selection
+  // adjustment below and the "all"-scope render further down share
+  // exactly the same order and labels -- never two independently
+  // recomputed sorts that could disagree.
+  const activeUserDisplayLabels = users ? buildDisplayLabels(users) : null;
+  const sortedActiveUsers = users
+    ? [...users].sort((a, b) =>
+        (activeUserDisplayLabels?.get(a.id) ?? "").localeCompare(
+          activeUserDisplayLabels?.get(b.id) ?? "",
+        ),
+      )
+    : [];
+  // Defaults (or corrects, if a previously-active id ever stopped
+  // existing in a fresh list) the switcher to the first person
+  // alphabetically by display label -- adjusted during render, this
+  // file's own established pattern (see the initialContext/syncedContext
+  // handling elsewhere in this app), rather than a separate effect, so
+  // there's never a render where the list is ready but nobody is shown.
+  if (
+    scope === "all" &&
+    sortedActiveUsers.length > 0 &&
+    !sortedActiveUsers.some((candidate) => candidate.id === activePersonId)
+  ) {
+    setActivePersonId(sortedActiveUsers[0].id);
+  }
 
   const period: AttendancePeriodSelection = {
     type: "month",
@@ -191,14 +220,16 @@ export function AttendanceReport({
     todayLocalDate,
   );
 
-  // The ids to fetch rows for: "all" honors the picker's current
-  // selection; "self" is always exactly the caller's own linked id,
-  // regardless of anything client state could claim -- the server
+  // The ids to fetch rows for: "all" is always exactly the one active
+  // switcher selection; "self" is always exactly the caller's own linked
+  // id, regardless of anything client state could claim -- the server
   // re-derives and enforces this same substitution independently, this
   // is just what triggers the right fetch.
   const reportUserIds: number[] | null =
     scope === "all"
-      ? Array.from(selectedIds)
+      ? activePersonId !== null
+        ? [activePersonId]
+        : []
       : scope === "self" && access?.scope === "self"
         ? [access.neonUserId]
         : scope === "unlinked"
@@ -450,36 +481,12 @@ export function AttendanceReport({
     );
   }
 
-  // access.scope === "all" from here on -- users is guaranteed non-null.
-  const activeUsers = users!;
-  const displayLabels = buildDisplayLabels(activeUsers);
-  const allSelected =
-    activeUsers.length > 0 && selectedIds.size === activeUsers.length;
-
-  function toggleAll() {
-    setSelectedIds(
-      allSelected
-        ? new Set()
-        : new Set(activeUsers.map((candidate) => candidate.id)),
-    );
-  }
-
-  function togglePerson(id: number) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const sortedSelected = activeUsers
-    .filter((candidate) => selectedIds.has(candidate.id))
-    .sort((a, b) =>
-      (displayLabels.get(a.id) ?? "").localeCompare(
-        displayLabels.get(b.id) ?? "",
-      ),
-    );
+  // access.scope === "all" from here on -- sortedActiveUsers (computed
+  // above, alongside the default-selection adjustment) is the single
+  // source of truth for both the switcher's options and their order.
+  const activePerson =
+    sortedActiveUsers.find((candidate) => candidate.id === activePersonId) ??
+    null;
 
   return (
     <div className="space-y-4">
@@ -492,35 +499,32 @@ export function AttendanceReport({
       />
 
       <Card>
-        <CardContent className="grid gap-4 pt-4 sm:grid-cols-[1fr_auto]">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold">People</legend>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                className="accent-[var(--primary)]"
-              />
-              All
+        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+          <div className="border-border bg-secondary rounded-2xl border p-1.5">
+            <label htmlFor="attendance-active-person" className="sr-only">
+              Employee
             </label>
-            <div className="grid max-h-48 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
-              {activeUsers.map((candidate) => (
-                <label
-                  key={candidate.id}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(candidate.id)}
-                    onChange={() => togglePerson(candidate.id)}
-                    className="accent-[var(--primary)]"
-                  />
-                  {displayLabels.get(candidate.id)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+            <Select
+              id="attendance-active-person"
+              value={activePersonId ?? ""}
+              onChange={(event) =>
+                setActivePersonId(Number(event.target.value))
+              }
+              disabled={sortedActiveUsers.length === 0}
+              className="w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+            >
+              {sortedActiveUsers.length === 0 ? (
+                <option value="">No active employees</option>
+              ) : (
+                sortedActiveUsers.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {activeUserDisplayLabels?.get(candidate.id) ??
+                      candidate.fullName}
+                  </option>
+                ))
+              )}
+            </Select>
+          </div>
 
           <AttendanceMonthNav
             year={selectedYear}
@@ -535,9 +539,9 @@ export function AttendanceReport({
         </CardContent>
       </Card>
 
-      {selectedIds.size === 0 ? (
+      {!activePerson ? (
         <p className="text-muted-foreground text-sm">
-          Select at least one person to see their attendance.
+          No active employees to show.
         </p>
       ) : rowsError ? (
         <UnavailablePanel
@@ -549,41 +553,16 @@ export function AttendanceReport({
           Loading attendance…
         </p>
       ) : (
-        <div className="space-y-4">
-          {sortedSelected.map((person) => (
-            <PersonSection
-              key={person.id}
-              label={displayLabels.get(person.id) ?? person.fullName}
-              rows={rows.filter((row) => row.userId === person.id)}
-              timeZone={timeZone}
-              year={selectedYear}
-              month={selectedMonth}
-            />
-          ))}
-
-          {sortedSelected.length > 1 && grandTotal ? (
-            <Card>
-              <CardContent className="flex items-center justify-between pt-4">
-                <span className="text-sm font-semibold">
-                  Grand total ({sortedSelected.length}{" "}
-                  {sortedSelected.length === 1 ? "person" : "people"})
-                </span>
-                <span className="font-mono text-lg font-bold">
-                  {formatHours(grandTotal.totalHours)}
-                </span>
-              </CardContent>
-              {grandTotal.excludedRowCount > 0 ? (
-                <CardContent className="text-muted-foreground pt-0 text-xs">
-                  {grandTotal.excludedRowCount}{" "}
-                  {grandTotal.excludedRowCount === 1 ? "row has" : "rows have"}{" "}
-                  no recorded hours and{" "}
-                  {grandTotal.excludedRowCount === 1 ? "is" : "are"} excluded
-                  from this total.
-                </CardContent>
-              ) : null}
-            </Card>
-          ) : null}
-        </div>
+        <PersonSection
+          label={
+            activeUserDisplayLabels?.get(activePerson.id) ??
+            activePerson.fullName
+          }
+          rows={rows}
+          timeZone={timeZone}
+          year={selectedYear}
+          month={selectedMonth}
+        />
       )}
     </div>
   );

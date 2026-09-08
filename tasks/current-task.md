@@ -235,25 +235,44 @@ Clock out | Hours`, matching the mockup's exact column order) and
         in `dashboard.spec.ts` re-run directly and confirmed passing
         after the heading-text fix.
   - [x] Commit.
-- [ ] **Step 4: Single-person switcher for the `all` scope**
-  - [ ] `attendance-report.tsx`: replaces the always-on checkbox
+- [x] **Step 4: Single-person switcher for the `all` scope**
+  - [x] `attendance-report.tsx`: replaced the always-on checkbox
         multi-select, its N stacked `PersonSection`s, and the grand-total
-        block with one active-person `<select>` (styled as the mockup's
-        pill) and exactly one `PersonSection`, defaulting to the first
-        person alphabetically by display label. `reportUserIds` narrows to
-        `[activePersonId]`; `DashboardTiles`' "Selected period" tile keeps
-        working unchanged, now naturally meaning "this one person, this
-        browsed month."
-  - [ ] Confirm (read, don't just assume) neither existing attendance
-        e2e scenario in `tests/e2e/dashboard.spec.ts` ("an unlinked
+        block with one active-person `Select` (styled as a pill matching
+        `AttendanceMonthNav`'s own container) and exactly one
+        `PersonSection`, defaulting to the first person alphabetically by
+        display label. `activePersonId` state replaced the old
+        `selectedIds: Set<number>`; the default (and a correction if a
+        previously-active id ever stops existing in a fresh list) is
+        applied during render — this file's own established pattern
+        (`syncedContext` elsewhere in it), not a separate effect, so
+        there's never a render where the list is ready but nobody is
+        shown. `reportUserIds` narrows to `[activePersonId]`;
+        `DashboardTiles`' "Selected period" tile keeps working unchanged,
+        now naturally meaning "this one person, this browsed month" (live
+        confirmed: switching from Anil (Host) to Deepak Rao moved the
+        tile from 8h to 16.3h, matching `PersonSection`'s own total
+        exactly).
+  - [x] Confirmed (read, not assumed) neither existing attendance e2e
+        scenario in `tests/e2e/dashboard.spec.ts` ("an unlinked
         server..."/"a manager can link attendance...") depends on the
         removed multi-select/grand-total shapes — both exercise `self`/
-        `unlinked` scope, which this step doesn't touch.
-  - [ ] Live Playwright smoke test: switching the person select changes
-        which report renders; a `self`-scoped server still sees no
-        switcher at all.
-  - [ ] Full gate.
-  - [ ] Commit.
+        `unlinked` scope only, re-ran directly and both still pass
+        unmodified.
+  - [x] Live Playwright smoke test (real browser, MCP tool): as manager,
+        confirmed the switcher defaults to "Anil (Host)" (alphabetically
+        first by display label — "Host" < "Server"), switched to "Deepak
+        Rao (Server)" and confirmed the whole section (stat tiles, table
+        rows, "Selected period" dashboard tile) updated to his data.
+        Signed out, signed in as the demo server (Mia, unlinked by
+        default in a fresh session) and confirmed the Attendance tab
+        shows the unchanged unlinked state with no Employee switcher and
+        no month nav at all — `self`/`unlinked` scopes are untouched by
+        this step, confirmed live rather than only by reading the diff.
+  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged --
+        this step touched no domain logic), `npm run build`, both
+        existing attendance e2e scenarios re-run directly and passing.
+  - [x] Commit.
 - [ ] **Step 5: Multi-select print support**
   - [ ] New `components/attendance-print-dialog.tsx`: rendered only for
         `access.scope === "all"`. Three radio choices ("Print current
@@ -333,5 +352,5 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Steps 1-3 done and committed. Next: Step 4 (single-person switcher for
-the `all` scope, replacing the always-on checkbox multi-select).
+Steps 1-4 done and committed. Next: Step 5 (multi-select print support —
+`attendance-print-dialog.tsx` and the printable-area wiring).
