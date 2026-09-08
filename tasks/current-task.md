@@ -141,14 +141,14 @@ month }` variant added to the existing `AttendancePeriodSelection`
 
 - [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [ ] **Step 2: Domain layer — month/year period type + metrics module**
-  - [ ] `domain/attendance-report.ts`: add `{ type: "month"; year:
+- [x] **Step 2: Domain layer — month/year period type + metrics module**
+  - [x] `domain/attendance-report.ts`: added `{ type: "month"; year:
 number; month: number }` (month 1-12) to `AttendancePeriodSelection`;
-        extend `resolvePeriodRange` with a shared internal `monthRange`
-        helper, refactoring `this-month`/`previous-month` to delegate to
+        extended `resolvePeriodRange` with a shared internal `monthRange`
+        helper, refactored `this-month`/`previous-month` to delegate to
         it too (one source of truth for "the calendar range of month
         N/year Y", not three near-duplicate `Date.UTC` blocks).
-  - [ ] New `domain/attendance-metrics.ts` (matches the spec's own
+  - [x] New `domain/attendance-metrics.ts` (matches the spec's own
         Implementation Map path): `calendarWeekday(isoDate)` and
         `dayOfMonth(isoDate)` (promoted out of the component's
         `mobileDateParts`, same UTC-noon parsing, now shared by both the
@@ -156,25 +156,29 @@ number; month: number }` (month 1-12) to `AttendancePeriodSelection`;
 month)`, and `computeAttendanceSummary(rows)` → `{ daysWorked,
 totalHours, avgPerDay, excludedRowCount }`, wrapping the existing
         `aggregateHours` rather than reimplementing null-handling.
-  - [ ] `domain/attendance-metrics.test.ts` (new): weekday across a
-        month boundary and a leap year (Feb 29 2028 vs. Feb 28 2026,
-        matching the existing leap-year test's dates for continuity);
-        `daysInMonth` for a 28/29/30/31-day month; `computeAttendanceSummary`
-        for a normal set, an all-null set, and a mixed set (exact
-        `daysWorked`/`avgPerDay`, not just `totalHours`).
-  - [ ] `domain/attendance-report.test.ts`: new `resolvePeriodRange`
-        cases for `{ type: "month" }`, including a leap-year February and
-        a case matching the existing "January previous-month rolls back"
-        test's intent but via the direct `month` type instead.
-  - [ ] `actions/attendance-actions.ts`: extend `attendancePeriodSchema`
+  - [x] `domain/attendance-metrics.test.ts` (new, 15 tests): weekday
+        across a month and year boundary and a leap year, each weekday
+        assertion verified against a real `Date` computation before being
+        written into the test, not asserted from memory;
+        `daysInMonth` for 28/29/30/31-day months; `computeAttendanceSummary`
+        for a normal set, an all-null set, a mixed set, and an empty set
+        (exact `daysWorked`/`avgPerDay`, not just `totalHours`).
+  - [x] `domain/attendance-report.test.ts`: new `resolvePeriodRange`
+        cases for `{ type: "month" }` — an arbitrary past month
+        independent of `todayLocalDate`, a leap-year February, December
+        without rolling into next year, and January directly (mirroring
+        the existing previous-month rollback test's intent).
+  - [x] `actions/attendance-actions.ts`: extended `attendancePeriodSchema`
         (the discriminated union already validating `period` on both
         `getAttendanceReportAction` and any caller) with the `"month"`
         variant, bounded `year` (2024–2100) and `month` (1–12) — a
         malformed value still fails closed to "that attendance request is
         invalid," matching every other branch.
-  - [ ] Full gate: `npm run check`, `npm test`, `npm run build`,
-        `npm run db:test` (expected unchanged — no schema touched).
-  - [ ] Commit.
+  - [x] Full gate: `npm run check` (prettier/eslint/typecheck all pass),
+        `npm test` (32/32 files, **214/214** tests, up from 195), `npm
+run build` (pass), `npm run db:test` (**unchanged**, 16/16 files, 202
+        assertions — no schema touched, as expected).
+  - [x] Commit.
 - [ ] **Step 3: Month/year navigator + calendar Day column**
   - [ ] New `components/attendance-month-nav.tsx` (pure, presentational):
         prev/next chevrons (disabled at the Jan-2024 floor and at the
@@ -302,5 +306,5 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Branch created, this file committed. Next: Step 2 (domain layer — month
-period type + `attendance-metrics.ts`).
+Step 2 done and committed. Next: Step 3 (month/year navigator UI +
+calendar Day column on the desktop table).

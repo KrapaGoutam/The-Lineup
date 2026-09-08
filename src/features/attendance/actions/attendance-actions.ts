@@ -53,6 +53,17 @@ const attendancePeriodSchema = z.discriminatedUnion("type", [
       end: localDateSchema,
     })
     .refine(({ start, end }) => start <= end),
+  // Feature 025: the month/year navigator's own selection. Bounded to
+  // 2024-2100 (the acceptance criterion's own "2024-present" floor, with
+  // a generous ceiling rather than hardcoding "present" into a schema
+  // that would need editing every year) and a real calendar month --
+  // still fails closed to "that attendance request is invalid" for
+  // anything else, the same as every other branch here.
+  z.object({
+    type: z.literal("month"),
+    year: z.number().int().min(2024).max(2100),
+    month: z.number().int().min(1).max(12),
+  }),
 ]);
 
 function invalidRequest<T>(): ActionResult<T> {
