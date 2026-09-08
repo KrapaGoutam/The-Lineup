@@ -69,16 +69,16 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
       `restaurant-operations-app.tsx`), commit it to `feature/022`, push,
       then branch `feature/023-settings-consolidation` off it.
 - [x] **Step 1: This task file** — populate and commit before any app code.
-- [ ] **Step 2: Pure presentational building blocks**
+- [x] **Step 2: Pure presentational building blocks**
   (`src/features/settings/components/`)
-  - [ ] `store-hours-grid.tsx` — `StoreHoursGrid({ hours, todayIndex })`:
+  - [x] `store-hours-grid.tsx` — `StoreHoursGrid({ hours, todayIndex })`:
         7-day (Sun–Sat) grid, today's cell highlighted with `--primary`,
         closed days shown as "Closed". Pure, no fetching, no actions.
-  - [ ] `shift-hours-card.tsx` — `ShiftHoursCard({ shiftDefaults, onEdit })`:
+  - [x] `shift-hours-card.tsx` — `ShiftHoursCard({ shiftDefaults, onEdit })`:
         Morning/Evening/Full day defaults display + an "Edit" button that
         calls the passed-in `onEdit` (opens the existing `HoursDialog` —
         no new dialog).
-  - [ ] Unit tests for both (rendering, today-highlight, closed state).
+  - [x] Unit tests for both (rendering, today-highlight, closed state).
 - [ ] **Step 3: Pay Rates section** (isolated payroll reuse)
   - [ ] Export `RateSettings` from
         `src/features/payroll/components/payroll-workspace.tsx` (adds one
