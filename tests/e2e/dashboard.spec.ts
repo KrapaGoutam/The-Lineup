@@ -342,6 +342,7 @@ test("theme toggle switches and persists the theme across reload", async ({
   const otherTheme = initialTheme === "light" ? "dark" : "light";
   const toggleName =
     initialTheme === "light" ? "Switch to dark theme" : "Switch to light theme";
+  await openAccountMenu(page);
   const toggleButton = page
     .getByRole("button", { name: toggleName })
     .or(
