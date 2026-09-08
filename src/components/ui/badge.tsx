@@ -3,13 +3,19 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 type BadgeProps = React.ComponentProps<"span"> & {
-  tone?: "neutral" | "success" | "warning" | "accent";
+  tone?: "neutral" | "success" | "warning" | "danger" | "accent";
 };
 
+// Feature 021: warning/success/danger now key off the same --warn/--ok/
+// --destructive tokens the countdown pill's urgency states use, at the
+// same /15 background and /30 border opacity Button's `outline` variant
+// already established for --primary -- one soft-badge convention across
+// the app, not a token per component.
 const tones = {
   neutral: "border-border bg-muted text-muted-foreground",
-  success: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
-  warning: "border-amber-400/20 bg-amber-400/10 text-amber-200",
+  success: "border-ok/30 bg-ok/15 text-ok",
+  warning: "border-warn/30 bg-warn/15 text-warn",
+  danger: "border-destructive/30 bg-destructive/15 text-destructive",
   accent: "border-primary/20 bg-primary/10 text-primary",
 };
 

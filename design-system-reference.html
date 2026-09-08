@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServiceFlow Design System & UI Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg: #0b0b0d;
+      --fg: #f6f3ed;
+      --accent: #f2a65a;
+      --accentInk: #1c1007;
+      --accentSoft: rgba(242, 166, 90, 0.15);
+      --glow: rgba(242, 166, 90, 0.14);
+      --surface: #141416;
+      --surface2: #1a1a1c;
+      --line: rgba(255, 255, 255, 0.12);
+      --line2: rgba(255, 255, 255, 0.08);
+      --muted: #aaa7a1;
+      --faint: #666460;
+      --avatar: #2a2a2c;
+      --danger: #ef4444;
+      --dangerSoft: rgba(239, 68, 68, 0.15);
+      --dangerLine: rgba(239, 68, 68, 0.3);
+      --warn: #f59e0b;
+      --warnSoft: rgba(245, 158, 11, 0.15);
+      --warnLine: rgba(245, 158, 11, 0.3);
+      --ok: #10b981;
+      --okSoft: rgba(16, 185, 129, 0.15);
+      --okLine: rgba(16, 185, 129, 0.3);
+      --strong: #e5e5e5;
+      --strongInk: #0b0b0d;
+      --segL: transparent;
+      --segLFg: #aaa7a1;
+      --segD: #2a2a2c;
+      --segDFg: #f6f3ed;
+      --shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+
+    [data-theme="light"] {
+      --bg: #e9e7e2;
+      --fg: #1c1a17;
+      --accent: #d97706;
+      --accentInk: #ffffff;
+      --accentSoft: rgba(217, 119, 6, 0.15);
+      --glow: rgba(217, 119, 6, 0.08);
+      --surface: #f4f2ee;
+      --surface2: #ffffff;
+      --line: rgba(0, 0, 0, 0.12);
+      --line2: rgba(0, 0, 0, 0.08);
+      --muted: rgba(28, 26, 23, 0.6);
+      --faint: rgba(28, 26, 23, 0.4);
+      --avatar: rgba(0, 0, 0, 0.08);
+      --danger: #dc2626;
+      --dangerSoft: rgba(220, 38, 38, 0.1);
+      --dangerLine: rgba(220, 38, 38, 0.2);
+      --warn: #d97706;
+      --warnSoft: rgba(217, 119, 6, 0.1);
+      --warnLine: rgba(217, 119, 6, 0.2);
+      --ok: #059669;
+      --okSoft: rgba(5, 150, 105, 0.1);
+      --okLine: rgba(5, 150, 105, 0.2);
+      --strong: #1c1a17;
+      --strongInk: #e9e7e2;
+      --segL: #ffffff;
+      --segLFg: #1c1a17;
+      --segD: transparent;
+      --segDFg: rgba(28, 26, 23, 0.6);
+      --shadow: 0 10px 30px -10px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #111113;
+      color: #e5e5e5;
+      font-family: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    header.doc-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #1a1a1e;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 16px 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    header.doc-header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #f6f3ed;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header.doc-header .pill {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      padding: 3px 8px;
+      background: #f2a65a;
+      color: #1c1007;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    nav.toc {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    nav.toc a {
+      color: #aaa7a1;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      transition: all 0.15s ease;
+    }
+
+    nav.toc a:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f6f3ed;
+    }
+
+    .doc-section {
+      padding: 40px 44px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .badge-id {
+      font: 600 11px ui-monospace, Menlo, monospace;
+      padding: 3px 7px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #f6f3ed;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+
+    .section-title {
+      font: 600 14px Geist, system-ui, sans-serif;
+      color: #f6f3ed;
+    }
+
+    .section-desc {
+      margin: -16px 0 0;
+      max-width: 900px;
+      font: 400 13px/1.6 Geist, sans-serif;
+      color: #aaa7a1;
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .token-card {
+      background: #18181b;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .token-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      flex: none;
+    }
+
+    .theme-pair-container {
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .theme-frame-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .theme-frame-label {
+      font: 600 11px/1 ui-monospace, Menlo, monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #aaa7a1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .theme-frame-label span.indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<header class="doc-header">
+  <h1>
+    <span>ServiceFlow UI & Theme Design Reference</span>
+    <span class="pill">Geist Sans + Mono</span>
+  </h1>
+  <nav class="toc">
+    <a href="#tokens">Tokens</a>
+    <a href="#2a">2a Shell & Nav</a>
+    <a href="#2b">2b Phone Shell</a>
+    <a href="#2c">2c Settings Panel</a>
+    <a href="#2d">2d Settings Page</a>
+    <a href="#2e">2e Attendance (Desktop)</a>
+    <a href="#2f">2f Attendance (Mobile)</a>
+    <a href="#2g">2g Payroll Dashboard</a>
+    <a href="#2h">2h Urgency Pills</a>
+  </nav>
+</header>
+
+<section id="tokens" class="doc-section" style="background: #151518; border-bottom: 1px solid rgba(255,255,255,0.08);">
+  <div>
+    <h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #f6f3ed;">Design System Tokens Reference</h2>
+    <p style="margin: 0; font-size: 13px; color: #aaa7a1;">Direct CSS variable mappings for Tailwind CSS and <code>globals.css</code>.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div style="background: #0b0b0d; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 20px;">
+      <h3 style="margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #f2a65a; display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="moon" style="width: 16px; height: 16px;"></i> Dark Theme (Default)
+      </h3>
+      <div style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #aaa7a1; display: flex; flex-direction: column; gap: 6px;">
+        <div><code>--bg: #0b0b0d</code> (Canvas background)</div>
+        <div><code>--fg: #f6f3ed</code> (Primary foreground)</div>
+        <div><code>--accent: #f2a65a</code> / <code>--accentInk: #1c1007</code> (Warm Amber)</div>
+        <div><code>--surface: #141416</code> / <code>--surface2: #1a1a1c</code> (Card / Panel surfaces)</div>
+        <div><code>--line: rgba(255,255,255,0.12)</code> / <code>--line2: rgba(255,255,255,0.08)</code></div>
+        <div><code>--muted: #aaa7a1</code> / <code>--faint: #666460</code></div>
+        <div><code>--ok: #10b981</code> | <code>--warn: #f59e0b</code> | <code>--danger: #ef4444</code></div>
+      </div>
+    </div>
+
+    <div style="background: #f4f2ee; color: #1c1a17; border: 1px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 20px;">
+      <h3 style="margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #d97706; display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="sun" style="width: 16px; height: 16px;"></i> Light Theme ([data-theme="light"])
+      </h3>
+      <div style="font-family: 'Geist Mono', monospace; font-size: 12px; color: rgba(28,26,23,0.7); display: flex; flex-direction: column; gap: 6px;">
+        <div><code>--bg: #e9e7e2</code> (Warm stone canvas)</div>
+        <div><code>--fg: #1c1a17</code> (Deep espresso text)</div>
+        <div><code>--accent: #d97706</code> / <code>--accentInk: #ffffff</code> (Saturated amber)</div>
+        <div><code>--surface: #f4f2ee</code> / <code>--surface2: #ffffff</code></div>
+        <div><code>--line: rgba(0,0,0,0.12)</code> / <code>--line2: rgba(0,0,0,0.08)</code></div>
+        <div><code>--muted: rgba(28,26,23,0.6)</code> / <code>--faint: rgba(28,26,23,0.4)</code></div>
+        <div><code>--ok: #059669</code> | <code>--warn: #d97706</code> | <code>--danger: #dc2626</code></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2A: SHELL & TWO-ROW NAV (DESKTOP)
+     ========================================== -->
+<section id="2a" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2a" class="badge-id">2a</a>
+    <span class="section-title">Shell · Two-row weighted nav · Centered clock pill (Desktop)</span>
+  </div>
+  <p class="section-desc">Top header with logo, operational countdown pill ("Day ends in"), and manager profile pill. Second row hosts primary operational tabs (Table Allocation, Tip Split), divider, secondary tabs (Attendance, Payroll), and Settings button.</p>
+
+  <div class="theme-pair-container">
+    <!-- DARK -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label"><span class="indicator" style="background:#f2a65a"></span> Dark Theme</span>
+      <div data-theme="dark" style="width:1360px;box-sizing:border-box;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);background-image:radial-gradient(circle at 88% -10%,var(--glow),transparent 28rem);color:var(--fg)">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;padding:0 28px;min-height:76px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="background:var(--accent);color:var(--accentInk);display:grid;place-items:center;width:40px;height:40px;border-radius:13px;font:900 17px Geist,sans-serif;box-shadow:0 12px 40px -14px var(--accent)">S</span>
+            <span><span style="display:block;font:700 15px/1.2 Geist,sans-serif;letter-spacing:-.015em">ServiceFlow</span><span style="display:block;font:400 12px/1.4 Geist,sans-serif;color:var(--muted)">The Monk&apos;s</span></span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 28px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)">
+            <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+            <span style="display:flex;align-items:baseline;gap:10px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 30px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-.01em">04:24:16</span></span>
+          </div>
+          <div style="justify-self:end;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer">
+            <span style="width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 14px Geist,sans-serif">MS</span>
+            <span style="text-align:left"><span style="display:block;font:600 14px/1.25 Geist,sans-serif">Maya Singh</span><span style="display:block;font:400 12px/1.3 Geist,sans-serif;color:var(--muted)">Manager</span></span>
+            <i data-lucide="chevron-down" style="width:16px;height:16px;color:var(--muted)"></i>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:18px;padding:0 28px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line);background:var(--surface)">
+          <div style="display:flex;gap:6px">
+            <button style="display:inline-flex;align-items:center;gap:9px;height:56px;padding:0 20px;border:0;border-bottom:2px solid var(--accent);background:transparent;color:var(--fg);font:600 15px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="table-2" style="width:18px;height:18px"></i>Table Allocation</button>
+            <button style="display:inline-flex;align-items:center;gap:9px;height:56px;padding:0 20px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--fg);font:600 15px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="wallet-cards" style="width:18px;height:18px"></i>Tip Split</button>
+          </div>
+          <span style="width:1px;height:26px;background:var(--line)"></span>
+          <div style="display:flex;gap:2px">
+            <button style="display:inline-flex;align-items:center;gap:7px;height:56px;padding:0 14px;border:0;background:transparent;color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="calendar-search" style="width:16px;height:16px"></i>Attendance</button>
+            <button style="display:inline-flex;align-items:center;gap:7px;height:56px;padding:0 14px;border:0;background:transparent;color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="banknote" style="width:16px;height:16px"></i>Payroll</button>
+          </div>
+          <button style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer"><i data-lucide="settings-2" style="width:16px;height:16px"></i>Settings</button>
+        </div>
+        <div style="padding:44px 28px 52px;display:flex;flex-direction:column;gap:8px">
+          <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Live floor</span>
+          <h2 style="margin:0;font:600 34px/1.1 Geist,sans-serif;letter-spacing:-.035em">Table Allocation</h2>
+          <div style="margin-top:16px;height:120px;border-radius:16px;border:1px dashed var(--line);display:grid;place-items:center;font:400 12px ui-monospace,Menlo,monospace;color:var(--faint)">allocation board — active live view</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIGHT -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label"><span class="indicator" style="background:#d97706"></span> Light Theme</span>
+      <div data-theme="light" style="width:1360px;box-sizing:border-box;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);background-image:radial-gradient(circle at 88% -10%,var(--glow),transparent 28rem);color:var(--fg)">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;padding:0 28px;min-height:76px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="background:var(--accent);color:var(--accentInk);display:grid;place-items:center;width:40px;height:40px;border-radius:13px;font:900 17px Geist,sans-serif;box-shadow:0 12px 40px -14px var(--accent)">S</span>
+            <span><span style="display:block;font:700 15px/1.2 Geist,sans-serif;letter-spacing:-.015em">ServiceFlow</span><span style="display:block;font:400 12px/1.4 Geist,sans-serif;color:var(--muted)">The Monk&apos;s</span></span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 28px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)">
+            <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+            <span style="display:flex;align-items:baseline;gap:10px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 30px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-.01em">04:24:16</span></span>
+          </div>
+          <div style="justify-self:end;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer">
+            <span style="width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 14px Geist,sans-serif">MS</span>
+            <span style="text-align:left"><span style="display:block;font:600 14px/1.25 Geist,sans-serif">Maya Singh</span><span style="display:block;font:400 12px/1.3 Geist,sans-serif;color:var(--muted)">Manager</span></span>
+            <i data-lucide="chevron-down" style="width:16px;height:16px;color:var(--muted)"></i>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:18px;padding:0 28px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line);background:var(--surface)">
+          <div style="display:flex;gap:6px">
+            <button style="display:inline-flex;align-items:center;gap:9px;height:56px;padding:0 20px;border:0;border-bottom:2px solid var(--accent);background:transparent;color:var(--fg);font:600 15px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="table-2" style="width:18px;height:18px"></i>Table Allocation</button>
+            <button style="display:inline-flex;align-items:center;gap:9px;height:56px;padding:0 20px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--fg);font:600 15px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="wallet-cards" style="width:18px;height:18px"></i>Tip Split</button>
+          </div>
+          <span style="width:1px;height:26px;background:var(--line)"></span>
+          <div style="display:flex;gap:2px">
+            <button style="display:inline-flex;align-items:center;gap:7px;height:56px;padding:0 14px;border:0;background:transparent;color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="calendar-search" style="width:16px;height:16px"></i>Attendance</button>
+            <button style="display:inline-flex;align-items:center;gap:7px;height:56px;padding:0 14px;border:0;background:transparent;color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer;white-space:nowrap"><i data-lucide="banknote" style="width:16px;height:16px"></i>Payroll</button>
+          </div>
+          <button style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:500 13px Geist,sans-serif;cursor:pointer"><i data-lucide="settings-2" style="width:16px;height:16px"></i>Settings</button>
+        </div>
+        <div style="padding:44px 28px 52px;display:flex;flex-direction:column;gap:8px">
+          <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Live floor</span>
+          <h2 style="margin:0;font:600 34px/1.1 Geist,sans-serif;letter-spacing:-.035em">Table Allocation</h2>
+          <div style="margin-top:16px;height:120px;border-radius:16px;border:1px dashed var(--line);display:grid;place-items:center;font:400 12px ui-monospace,Menlo,monospace;color:var(--faint)">allocation board — active live view</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2B: PHONE SHELL & BOTTOM NAV
+     ========================================== -->
+<section id="2b" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2b" class="badge-id">2b</a>
+    <span class="section-title">Phone Shell · Allocation / Tip Split / More · Sheet Closed & Open</span>
+  </div>
+  <p class="section-desc">Mobile viewport with primary actions in bottom dock. "More" opens a bottom sheet with Attendance, Payroll, Settings, Appearance segmented switch (Light / Dark), and Sign out.</p>
+
+  <div class="theme-pair-container">
+    <!-- CLOSED (DARK) -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark · Sheet Closed</span>
+      <div data-theme="dark" style="width:390px;height:780px;box-sizing:border-box;border-radius:24px;overflow:hidden;border:1px solid var(--line);background:var(--bg);background-image:radial-gradient(circle at 88% -10%,var(--glow),transparent 22rem);color:var(--fg);display:flex;flex-direction:column">
+        <header style="flex:none;padding:14px 16px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="background:var(--accent);color:var(--accentInk);display:grid;place-items:center;width:38px;height:38px;border-radius:12px;font:900 16px Geist,sans-serif">S</span>
+            <span><span style="display:block;font:700 14px/1.2 Geist,sans-serif">ServiceFlow</span><span style="display:block;font:400 11.5px/1.3 Geist,sans-serif;color:var(--muted)">The Monk&apos;s</span></span>
+            <button style="margin-left:auto;display:flex;align-items:center;gap:8px;padding:5px 10px 5px 5px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer"><span style="width:34px;height:34px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 12.5px Geist,sans-serif">MS</span><i data-lucide="chevron-down" style="width:15px;height:15px;color:var(--muted)"></i></button>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--line)">
+            <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 30px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums">04:24:16</span></span>
+          </div>
+        </header>
+        <main style="flex:1;overflow:hidden;padding:24px 16px;display:flex;flex-direction:column;gap:8px">
+          <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Live floor</span>
+          <h2 style="margin:0;font:600 28px/1.1 Geist,sans-serif;letter-spacing:-.035em">Table Allocation</h2>
+          <div style="margin-top:14px;flex:1;border-radius:16px;border:1px dashed var(--line);display:grid;place-items:center;font:400 11.5px ui-monospace,Menlo,monospace;color:var(--faint)">allocation board</div>
+        </main>
+        <nav style="flex:none;border-top:1px solid var(--line);background:var(--bg);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px 12px 22px">
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:0;cursor:pointer;font:600 12px Geist,sans-serif;background:var(--accent);color:var(--accentInk)"><i data-lucide="table-2" style="width:22px;height:22px"></i>Allocation</button>
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:1px solid var(--line);cursor:pointer;font:600 12px Geist,sans-serif;background:var(--surface);color:var(--fg)"><i data-lucide="wallet-cards" style="width:22px;height:22px"></i>Tip Split</button>
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:1px solid var(--line);cursor:pointer;font:600 12px Geist,sans-serif;background:var(--surface);color:var(--muted)"><i data-lucide="menu" style="width:22px;height:22px"></i>More</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- OPEN (DARK) -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark · Sheet Open</span>
+      <div data-theme="dark" style="width:390px;height:780px;box-sizing:border-box;border-radius:24px;overflow:hidden;border:1px solid var(--line);background:var(--bg);color:var(--fg);display:flex;flex-direction:column;position:relative">
+        <div style="flex:1;padding:14px 16px;opacity:.35">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="background:var(--accent);color:var(--accentInk);display:grid;place-items:center;width:38px;height:38px;border-radius:12px;font:900 16px Geist,sans-serif">S</span>
+            <span><span style="display:block;font:700 14px/1.2 Geist,sans-serif">ServiceFlow</span><span style="display:block;font:400 11.5px/1.3 Geist,sans-serif;color:var(--muted)">The Monk&apos;s</span></span>
+          </div>
+          <div style="margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--line)">
+            <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 30px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums">04:24:16</span></span>
+          </div>
+        </div>
+        <div style="position:absolute;inset:0;background:rgba(11,11,13,.55)"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);border-radius:24px 24px 0 0;padding:12px 16px 26px;display:flex;flex-direction:column;gap:4px;box-shadow:0 -30px 60px -30px rgba(0,0,0,.6)">
+          <span style="width:40px;height:4px;border-radius:999px;background:var(--line);align-self:center;margin-bottom:12px"></span>
+          
+          <button style="display:flex;align-items:center;gap:14px;min-height:60px;padding:0 12px;border-radius:14px;border:0;background:transparent;cursor:pointer;text-align:left;width:100%">
+            <span style="width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="calendar-search" style="width:19px;height:19px"></i></span>
+            <span style="flex:1;min-width:0"><span style="display:block;font:600 15px/1.3 Geist,sans-serif;color:var(--fg)">Attendance</span><span style="display:block;font:400 12.5px/1.35 Geist,sans-serif;color:var(--muted)">Clock-ins, hours, reports</span></span>
+            <i data-lucide="chevron-right" style="width:17px;height:17px;color:var(--muted)"></i>
+          </button>
+          
+          <button style="display:flex;align-items:center;gap:14px;min-height:60px;padding:0 12px;border-radius:14px;border:0;background:transparent;cursor:pointer;text-align:left;width:100%">
+            <span style="width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="banknote" style="width:19px;height:19px"></i></span>
+            <span style="flex:1;min-width:0"><span style="display:block;font:600 15px/1.3 Geist,sans-serif;color:var(--fg)">Payroll</span><span style="display:block;font:400 12.5px/1.35 Geist,sans-serif;color:var(--muted)">Periods, balances, statements</span></span>
+            <i data-lucide="chevron-right" style="width:17px;height:17px;color:var(--muted)"></i>
+          </button>
+          
+          <button style="display:flex;align-items:center;gap:14px;min-height:60px;padding:0 12px;border-radius:14px;border:0;background:transparent;cursor:pointer;text-align:left;width:100%">
+            <span style="width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="settings-2" style="width:19px;height:19px"></i></span>
+            <span style="flex:1;min-width:0"><span style="display:block;font:600 15px/1.3 Geist,sans-serif;color:var(--fg)">Settings</span><span style="display:block;font:400 12.5px/1.35 Geist,sans-serif;color:var(--muted)">Shift hours, store hours, team</span></span>
+            <i data-lucide="chevron-right" style="width:17px;height:17px;color:var(--muted)"></i>
+          </button>
+
+          <div style="display:flex;align-items:center;gap:14px;min-height:60px;padding:0 12px;border-top:1px solid var(--line2);margin-top:6px">
+            <span style="width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="sun-moon" style="width:19px;height:19px"></i></span>
+            <span style="flex:1;font:600 15px Geist,sans-serif;color:var(--fg)">Appearance</span>
+            <span style="display:flex;gap:3px;padding:3px;border-radius:999px;background:var(--surface2);border:1px solid var(--line)">
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segL);color:var(--segLFg);font:600 13px Geist,sans-serif">Light</span>
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segD);color:var(--segDFg);font:600 13px Geist,sans-serif">Dark</span>
+            </span>
+          </div>
+          
+          <button style="display:flex;align-items:center;gap:14px;min-height:60px;padding:0 12px;border-radius:14px;border:0;background:transparent;cursor:pointer;text-align:left;width:100%;border-top:1px solid var(--line2)">
+            <span style="width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--dangerSoft);color:var(--danger)"><i data-lucide="log-out" style="width:19px;height:19px"></i></span>
+            <span style="flex:1;font:600 15px Geist,sans-serif;color:var(--danger)">Sign out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIGHT (CLOSED) -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Light · Sheet Closed</span>
+      <div data-theme="light" style="width:390px;height:780px;box-sizing:border-box;border-radius:24px;overflow:hidden;border:1px solid var(--line);background:var(--bg);background-image:radial-gradient(circle at 88% -10%,var(--glow),transparent 22rem);color:var(--fg);display:flex;flex-direction:column">
+        <header style="flex:none;padding:14px 16px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="background:var(--accent);color:var(--accentInk);display:grid;place-items:center;width:38px;height:38px;border-radius:12px;font:900 16px Geist,sans-serif">S</span>
+            <span><span style="display:block;font:700 14px/1.2 Geist,sans-serif">ServiceFlow</span><span style="display:block;font:400 11.5px/1.3 Geist,sans-serif;color:var(--muted)">The Monk&apos;s</span></span>
+            <button style="margin-left:auto;display:flex;align-items:center;gap:8px;padding:5px 10px 5px 5px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer"><span style="width:34px;height:34px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 12.5px Geist,sans-serif">MS</span><i data-lucide="chevron-down" style="width:15px;height:15px;color:var(--muted)"></i></button>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 16px;border-radius:16px;background:var(--surface);border:1px solid var(--line)">
+            <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+            <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 30px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums">04:24:16</span></span>
+          </div>
+        </header>
+        <main style="flex:1;overflow:hidden;padding:24px 16px;display:flex;flex-direction:column;gap:8px">
+          <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Live floor</span>
+          <h2 style="margin:0;font:600 28px/1.1 Geist,sans-serif;letter-spacing:-.035em">Table Allocation</h2>
+          <div style="margin-top:14px;flex:1;border-radius:16px;border:1px dashed var(--line);display:grid;place-items:center;font:400 11.5px ui-monospace,Menlo,monospace;color:var(--faint)">allocation board</div>
+        </main>
+        <nav style="flex:none;border-top:1px solid var(--line);background:var(--bg);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px 12px 22px">
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:0;cursor:pointer;font:600 12px Geist,sans-serif;background:var(--accent);color:var(--accentInk)"><i data-lucide="table-2" style="width:22px;height:22px"></i>Allocation</button>
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:1px solid var(--line);cursor:pointer;font:600 12px Geist,sans-serif;background:var(--surface);color:var(--fg)"><i data-lucide="wallet-cards" style="width:22px;height:22px"></i>Tip Split</button>
+          <button style="display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:14px;border:1px solid var(--line);cursor:pointer;font:600 12px Geist,sans-serif;background:var(--surface);color:var(--muted)"><i data-lucide="menu" style="width:22px;height:22px"></i>More</button>
+        </nav>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2C: SETTINGS QUICK PANEL
+     ========================================== -->
+<section id="2c" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2c" class="badge-id">2c</a>
+    <span class="section-title">Settings · Quick panel with "More options" → Full Page</span>
+  </div>
+  <p class="section-desc">Pops down from user avatar in the header. Shows quick appearance switch, mid-shift hours, today's store hours, and primary shortcuts. Clicking "More options" opens the full management settings page.</p>
+
+  <div class="theme-pair-container">
+    <!-- DARK -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:440px;box-sizing:border-box;padding:24px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface)">
+          <span style="width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 14px Geist,sans-serif">MS</span>
+          <span style="text-align:left"><span style="display:block;font:600 14px/1.25 Geist,sans-serif">Maya Singh</span><span style="display:block;font:400 12px/1.3 Geist,sans-serif;color:var(--muted)">Manager</span></span>
+          <i data-lucide="chevron-up" style="width:16px;height:16px;color:var(--muted)"></i>
+        </div>
+        <div style="width:392px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:0 40px 80px -30px rgba(0,0,0,.5);overflow:hidden">
+          <div style="padding:16px 18px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line2)">
+            <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Appearance</span>
+            <span style="display:flex;gap:3px;padding:3px;border-radius:999px;background:var(--surface2);border:1px solid var(--line)">
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segL);color:var(--segLFg);font:600 13px Geist,sans-serif">Light</span>
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segD);color:var(--segDFg);font:600 13px Geist,sans-serif">Dark</span>
+            </span>
+          </div>
+          <div style="padding:16px 18px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Shift hours</span>
+              <button style="height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);font:600 12px Geist,sans-serif;cursor:pointer">Edit</button>
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Morning</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">11:00 – 16:00</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Evening</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">16:00 – 23:00</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Full day</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">11:00 – 23:00</span></div>
+            </div>
+          </div>
+          <div style="padding:16px 18px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Store hours</span>
+              <button style="height:34px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--muted);font:600 12px Geist,sans-serif;cursor:pointer">All days</button>
+            </div>
+            <div style="margin-top:10px;display:flex;align-items:baseline;gap:10px">
+              <span style="font:600 15px Geist,sans-serif">Today, Monday</span>
+              <span style="font:500 15px 'Geist Mono',monospace;color:var(--accent)">11:00 – 23:00</span>
+            </div>
+            <p style="margin:6px 0 0;font:400 12.5px/1.5 Geist,sans-serif;color:var(--muted)">America/Chicago. Overnight closing times supported.</p>
+          </div>
+          <div style="padding:8px">
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--fg);cursor:pointer;text-align:left">
+              <i data-lucide="key-round" style="width:18px;height:18px;color:var(--muted)"></i>
+              <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Change passcode</span>
+              <span style="flex:none;white-space:nowrap;font:400 12.5px Geist,sans-serif;color:var(--faint)"></span>
+              <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--faint)"></i>
+            </button>
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--fg);cursor:pointer;text-align:left">
+              <i data-lucide="store" style="width:18px;height:18px;color:var(--muted)"></i>
+              <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Store hours</span>
+              <span style="flex:none;white-space:nowrap;font:400 12.5px Geist,sans-serif;color:var(--faint)">Mon–Sun</span>
+              <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--faint)"></i>
+            </button>
+          </div>
+          <div style="padding:10px 14px 12px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px">
+            <button style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);font:600 14.5px Geist,sans-serif;cursor:pointer"><i data-lucide="sliders-horizontal" style="width:17px;height:17px"></i>More options<i data-lucide="arrow-right" style="width:16px;height:16px;color:var(--muted)"></i></button>
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--danger);cursor:pointer;text-align:left"><i data-lucide="log-out" style="width:18px;height:18px"></i><span style="font:600 14.5px Geist,sans-serif">Sign out</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIGHT -->
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Light Theme</span>
+      <div data-theme="light" style="width:440px;box-sizing:border-box;padding:24px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface)">
+          <span style="width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--avatar);color:var(--fg);font:700 14px Geist,sans-serif">MS</span>
+          <span style="text-align:left"><span style="display:block;font:600 14px/1.25 Geist,sans-serif">Maya Singh</span><span style="display:block;font:400 12px/1.3 Geist,sans-serif;color:var(--muted)">Manager</span></span>
+          <i data-lucide="chevron-up" style="width:16px;height:16px;color:var(--muted)"></i>
+        </div>
+        <div style="width:392px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:0 40px 80px -30px rgba(0,0,0,.15);overflow:hidden">
+          <div style="padding:16px 18px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line2)">
+            <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Appearance</span>
+            <span style="display:flex;gap:3px;padding:3px;border-radius:999px;background:var(--surface2);border:1px solid var(--line)">
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segL);color:var(--segLFg);font:600 13px Geist,sans-serif">Light</span>
+              <span style="padding:8px 16px;border-radius:999px;background:var(--segD);color:var(--segDFg);font:600 13px Geist,sans-serif">Dark</span>
+            </span>
+          </div>
+          <div style="padding:16px 18px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Shift hours</span>
+              <button style="height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);font:600 12px Geist,sans-serif;cursor:pointer">Edit</button>
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Morning</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">11:00 – 16:00</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Evening</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">16:00 – 23:00</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font:400 14px Geist,sans-serif"><span>Full day</span><span style="font:500 14px 'Geist Mono',monospace;color:var(--muted)">11:00 – 23:00</span></div>
+            </div>
+          </div>
+          <div style="padding:16px 18px;border-bottom:1px solid var(--line2)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Store hours</span>
+              <button style="height:34px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--muted);font:600 12px Geist,sans-serif;cursor:pointer">All days</button>
+            </div>
+            <div style="margin-top:10px;display:flex;align-items:baseline;gap:10px">
+              <span style="font:600 15px Geist,sans-serif">Today, Monday</span>
+              <span style="font:500 15px 'Geist Mono',monospace;color:var(--accent)">11:00 – 23:00</span>
+            </div>
+            <p style="margin:6px 0 0;font:400 12.5px/1.5 Geist,sans-serif;color:var(--muted)">America/Chicago. Overnight closing times supported.</p>
+          </div>
+          <div style="padding:8px">
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--fg);cursor:pointer;text-align:left">
+              <i data-lucide="key-round" style="width:18px;height:18px;color:var(--muted)"></i>
+              <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Change passcode</span>
+              <span style="flex:none;white-space:nowrap;font:400 12.5px Geist,sans-serif;color:var(--faint)"></span>
+              <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--faint)"></i>
+            </button>
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--fg);cursor:pointer;text-align:left">
+              <i data-lucide="store" style="width:18px;height:18px;color:var(--muted)"></i>
+              <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Store hours</span>
+              <span style="flex:none;white-space:nowrap;font:400 12.5px Geist,sans-serif;color:var(--faint)">Mon–Sun</span>
+              <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--faint)"></i>
+            </button>
+          </div>
+          <div style="padding:10px 14px 12px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:8px">
+            <button style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);font:600 14.5px Geist,sans-serif;cursor:pointer"><i data-lucide="sliders-horizontal" style="width:17px;height:17px"></i>More options<i data-lucide="arrow-right" style="width:16px;height:16px;color:var(--muted)"></i></button>
+            <button style="display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 10px;border-radius:12px;border:0;background:transparent;color:var(--danger);cursor:pointer;text-align:left"><i data-lucide="log-out" style="width:18px;height:18px"></i><span style="font:600 14.5px Geist,sans-serif">Sign out</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2D: FULL SETTINGS PAGE
+     ========================================== -->
+<section id="2d" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2d" class="badge-id">2d</a>
+    <span class="section-title">Full Settings Page · Shift Hours, Store Hours, Cards, Pay Rates</span>
+  </div>
+  <p class="section-desc">Destination of "More options". Left vertical navigation, right card stack containing default shift hours, store hours grid (all 7 days), quick cards (Team, Schedule), and organization pay rate management.</p>
+
+  <div class="theme-pair-container">
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:1360px;box-sizing:border-box;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);color:var(--fg)">
+        <div style="display:flex;align-items:center;gap:16px;padding:22px 32px;border-bottom:1px solid var(--line)">
+          <button style="width:44px;height:44px;display:grid;place-items:center;border-radius:12px;border:1px solid var(--line);background:var(--surface);cursor:pointer"><i data-lucide="arrow-left" style="width:18px;height:18px;color:var(--muted)"></i></button>
+          <div><h2 style="margin:0;font:600 26px/1.15 Geist,sans-serif;letter-spacing:-.03em">Settings</h2><p style="margin:3px 0 0;font:400 13px Geist,sans-serif;color:var(--muted)">The Monk&apos;s · America/Chicago</p></div>
+        </div>
+        <div style="display:flex;gap:32px;padding:28px 32px 44px">
+          <nav style="width:230px;flex:none;display:flex;flex-direction:column;gap:2px">
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:var(--accentSoft);color:var(--accent);font:600 14.5px Geist,sans-serif"><i data-lucide="clock-3" style="width:17px;height:17px"></i>Shift hours</button>
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:transparent;color:var(--muted);font:500 14.5px Geist,sans-serif"><i data-lucide="store" style="width:17px;height:17px"></i>Store hours</button>
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:transparent;color:var(--muted);font:500 14.5px Geist,sans-serif"><i data-lucide="calendar-days" style="width:17px;height:17px"></i>Schedule</button>
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:transparent;color:var(--muted);font:500 14.5px Geist,sans-serif"><i data-lucide="users" style="width:17px;height:17px"></i>Team</button>
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:transparent;color:var(--muted);font:500 14.5px Geist,sans-serif"><i data-lucide="banknote" style="width:17px;height:17px"></i>Pay rates</button>
+            <button style="display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;border-radius:12px;border:0;cursor:pointer;text-align:left;background:transparent;color:var(--muted);font:500 14.5px Geist,sans-serif"><i data-lucide="key-round" style="width:17px;height:17px"></i>Passcode</button>
+          </nav>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:20px">
+            <!-- Shift hours -->
+            <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px">
+              <h3 style="margin:0;font:600 18px Geist,sans-serif">Shift hours</h3>
+              <p style="margin:5px 0 18px;font:400 13.5px/1.6 Geist,sans-serif;color:var(--muted)">Defaults applied to every new shift. Individual shifts can still override them.</p>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;gap:12px">
+                  <span style="font:500 14.5px Geist,sans-serif">Morning</span>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">11:00</div>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">16:00</div>
+                </div>
+                <div style="display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;gap:12px">
+                  <span style="font:500 14.5px Geist,sans-serif">Evening</span>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">16:00</div>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">23:00</div>
+                </div>
+                <div style="display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;gap:12px">
+                  <span style="font:500 14.5px Geist,sans-serif">Full day</span>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">11:00</div>
+                  <div style="min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">23:00</div>
+                </div>
+              </div>
+            </section>
+            <!-- Store hours -->
+            <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+                <div><h3 style="margin:0;font:600 18px Geist,sans-serif">Store hours</h3><p style="margin:5px 0 0;font:400 13.5px/1.6 Geist,sans-serif;color:var(--muted)">What the countdown in the header counts down to.</p></div>
+                <button style="height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);font:600 14px Geist,sans-serif;cursor:pointer">Edit hours</button>
+              </div>
+              <div style="margin-top:18px;display:grid;grid-template-columns:repeat(7,1fr);gap:10px">
+                <div style="border-radius:14px;border:1px solid var(--accent);background:var(--accentSoft);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)">Mon</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--fg)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--fg)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Tue</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Wed</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Thu</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Fri</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Sat</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+                <div style="border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font:600 12px/1 Geist,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Sun</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">11:00</span>
+                  <span style="font:500 14px/1.3 'Geist Mono',monospace;color:var(--muted)">23:00</span>
+                </div>
+              </div>
+            </section>
+            <!-- Settings cards -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:22px;display:flex;align-items:center;gap:16px">
+                <span style="width:48px;height:48px;flex:none;border-radius:14px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="users" style="width:21px;height:21px"></i></span>
+                <div style="flex:1;min-width:0"><p style="margin:0;font:600 16px Geist,sans-serif">Team</p><p style="margin:3px 0 0;font:400 13px/1.5 Geist,sans-serif;color:var(--muted)">Rename, set designation, reset a passcode, link attendance.</p></div>
+                <i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--muted)"></i>
+              </section>
+              <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:22px;display:flex;align-items:center;gap:16px">
+                <span style="width:48px;height:48px;flex:none;border-radius:14px;display:grid;place-items:center;background:var(--accentSoft);color:var(--accent)"><i data-lucide="calendar-days" style="width:21px;height:21px"></i></span>
+                <div style="flex:1;min-width:0"><p style="margin:0;font:600 16px Geist,sans-serif">Schedule</p><p style="margin:3px 0 0;font:400 13px/1.5 Geist,sans-serif;color:var(--muted)">Rarely touched mid-shift. Plan and publish the week here.</p></div>
+                <i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--muted)"></i>
+              </section>
+            </div>
+            <!-- Pay rates -->
+            <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px">
+              <h3 style="margin:0;font:600 18px Geist,sans-serif">Pay rates</h3>
+              <p style="margin:5px 0 18px;font:400 13.5px/1.6 Geist,sans-serif;color:var(--muted)">The organization default applies to anyone without their own rate.</p>
+              <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--line2)">
+                <span style="flex:1;font:600 14.5px Geist,sans-serif">Organization default</span>
+                <div style="min-height:48px;width:150px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">$10.00/hr</div>
+                <button style="height:48px;padding:0 18px;border-radius:12px;border:0;background:var(--accent);color:var(--accentInk);font:600 14px Geist,sans-serif;cursor:pointer">Save</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)">
+                <span style="width:32px;height:32px;flex:none;border-radius:999px;display:grid;place-items:center;background:#a7f3d0;color:#0b0b0d;font:700 12px Geist,sans-serif">PN</span>
+                <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Priya Nair</span>
+                <span style="font:400 13px Geist,sans-serif;color:var(--muted)">Manager</span>
+                <div style="min-height:48px;width:150px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace">$18.50/hr</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)">
+                <span style="width:32px;height:32px;flex:none;border-radius:999px;display:grid;place-items:center;background:#f2a65a;color:#0b0b0d;font:700 12px Geist,sans-serif">AN</span>
+                <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Anil</span>
+                <span style="font:400 13px Geist,sans-serif;color:var(--muted)">Server</span>
+                <div style="min-height:48px;width:150px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace;color:var(--muted)">default</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;">
+                <span style="width:32px;height:32px;flex:none;border-radius:999px;display:grid;place-items:center;background:#7dd3fc;color:#0b0b0d;font:700 12px Geist,sans-serif">DR</span>
+                <span style="flex:1;min-width:0;font:500 14.5px Geist,sans-serif">Deepak Rao</span>
+                <span style="font:400 13px Geist,sans-serif;color:var(--muted)">Server</span>
+                <div style="min-height:48px;width:150px;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:0 14px;display:flex;align-items:center;font:500 15px 'Geist Mono',monospace;color:var(--muted)">default</div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2E: ATTENDANCE REPORT (DESKTOP)
+     ========================================== -->
+<section id="2e" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2e" class="badge-id">2e</a>
+    <span class="section-title">Attendance Report · Desktop Layout & Status Badges</span>
+  </div>
+  <p class="section-desc">Clean attendance table featuring "Days worked", "Total hours", "Avg per day" stat tiles. Shows disambiguated person switcher, month pager, and records with Auto-closed (amber) and Open shift (red) indicators.</p>
+
+  <div class="theme-pair-container">
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:1360px;box-sizing:border-box;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:32px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;font:600 30px/1.1 Geist,sans-serif;letter-spacing:-.035em">Attendance</h2>
+            <p style="margin:7px 0 0;max-width:520px;font:400 13.5px/1.6 Geist,sans-serif;color:var(--muted)">Read straight from the clock-in system. Hours are shown exactly as recorded — nothing here is calculated.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:16px;background:var(--surface);border:1px solid var(--line)">
+            <button style="display:flex;align-items:center;gap:10px;height:48px;padding:0 14px 0 8px;border-radius:12px;border:0;background:var(--surface2);cursor:pointer">
+              <span style="width:32px;height:32px;border-radius:999px;display:grid;place-items:center;background:var(--strong);color:var(--strongInk);font:700 12px Geist,sans-serif">DR</span>
+              <span style="font:600 14.5px Geist,sans-serif;color:var(--fg)">Deepak Rao</span>
+              <i data-lucide="chevron-down" style="width:16px;height:16px;color:var(--muted)"></i>
+            </button>
+            <span style="width:1px;height:28px;background:var(--line)"></span>
+            <div style="display:flex;align-items:center;gap:2px">
+              <button style="width:40px;height:48px;display:grid;place-items:center;border-radius:12px;border:0;background:transparent;cursor:pointer"><i data-lucide="chevron-left" style="width:18px;height:18px;color:var(--muted)"></i></button>
+              <span style="min-width:118px;text-align:center;font:600 15px Geist,sans-serif">September</span>
+              <button style="width:40px;height:48px;display:grid;place-items:center;border-radius:12px;border:0;background:transparent;cursor:pointer"><i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--muted)"></i></button>
+            </div>
+            <span style="font:500 15px 'Geist Mono',monospace;color:var(--muted);padding:0 4px">2026</span>
+            <span style="width:1px;height:28px;background:var(--line)"></span>
+            <button style="display:flex;align-items:center;gap:9px;height:48px;padding:0 18px;border-radius:12px;border:0;background:var(--accent);color:var(--accentInk);font:600 14.5px Geist,sans-serif;cursor:pointer"><i data-lucide="printer" style="width:17px;height:17px"></i>Print</button>
+          </div>
+        </div>
+        
+        <!-- Stat tiles -->
+        <div style="margin-top:26px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Days worked</span>
+            <span style="font:600 42px/1 'Geist Mono',monospace;letter-spacing:-.02em;color:var(--fg)">8</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">of 30 days in September</span>
+          </section>
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Total hours</span>
+            <span style="font:600 42px/1 'Geist Mono',monospace;letter-spacing:-.02em;color:var(--accent)">64.5h</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">one row excluded — no hours recorded</span>
+          </section>
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Avg per day</span>
+            <span style="font:600 42px/1 'Geist Mono',monospace;letter-spacing:-.02em;color:var(--fg)">8.1h</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">across days actually worked</span>
+          </section>
+        </div>
+
+        <!-- Table -->
+        <section style="margin-top:20px;border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:104px 84px 1fr 1fr 120px 1.6fr;gap:16px;padding:16px 26px;border-bottom:1px solid var(--line);background:var(--bg)">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Date</span>
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day</span>
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Clock in</span>
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Clock out</span>
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Hours</span>
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Note</span>
+          </div>
+
+          <!-- Row 1 -->
+          <div style="display:grid;grid-template-columns:104px 84px 1fr 1fr 120px 1.6fr;gap:16px;align-items:center;padding:16px 26px;border-bottom:1px solid var(--line2)">
+            <span style="font:500 15px 'Geist Mono',monospace">Sep 02</span>
+            <span style="font:400 14.5px Geist,sans-serif;color:var(--muted)">Wed</span>
+            <span style="font:500 15px 'Geist Mono',monospace">11:00</span>
+            <span style="font:500 15px 'Geist Mono',monospace">19:00</span>
+            <span style="font:600 15px 'Geist Mono',monospace">8.0h</span>
+            <span style="font:400 14px Geist,sans-serif;color:var(--muted)"></span>
+          </div>
+
+          <!-- Row 2 -->
+          <div style="display:grid;grid-template-columns:104px 84px 1fr 1fr 120px 1.6fr;gap:16px;align-items:center;padding:16px 26px;border-bottom:1px solid var(--line2)">
+            <span style="font:500 15px 'Geist Mono',monospace">Sep 03</span>
+            <span style="font:400 14.5px Geist,sans-serif;color:var(--muted)">Thu</span>
+            <span style="font:500 15px 'Geist Mono',monospace">11:05</span>
+            <span style="font:500 15px 'Geist Mono',monospace">19:30</span>
+            <span style="font:600 15px 'Geist Mono',monospace">8.4h</span>
+            <span style="font:400 14px Geist,sans-serif;color:var(--muted)">Covered Zoya's close</span>
+          </div>
+
+          <!-- Row 4 (Auto closed) -->
+          <div style="display:grid;grid-template-columns:104px 84px 1fr 1fr 120px 1.6fr;gap:16px;align-items:center;padding:16px 26px;border-bottom:1px solid var(--line2)">
+            <span style="font:500 15px 'Geist Mono',monospace">Sep 06</span>
+            <span style="font:400 14.5px Geist,sans-serif;color:var(--muted)">Sun</span>
+            <span style="font:500 15px 'Geist Mono',monospace">11:00</span>
+            <span style="font:500 15px 'Geist Mono',monospace">19:15</span>
+            <span style="font:600 15px 'Geist Mono',monospace">8.3h</span>
+            <span style="display:flex;align-items:center;gap:8px;min-width:0">
+              <span style="flex:none;border-radius:999px;border:1px solid var(--warnLine);background:var(--warnSoft);color:var(--warn);padding:5px 11px;font:600 12px Geist,sans-serif">Auto-closed</span>
+              <span style="font:400 14px Geist,sans-serif;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Left after last table</span>
+            </span>
+          </div>
+
+          <!-- Row 7 (Open shift) -->
+          <div style="display:grid;grid-template-columns:104px 84px 1fr 1fr 120px 1.6fr;gap:16px;align-items:center;padding:16px 26px;border-bottom:1px solid var(--line2)">
+            <span style="font:500 15px 'Geist Mono',monospace">Sep 13</span>
+            <span style="font:400 14.5px Geist,sans-serif;color:var(--muted)">Sun</span>
+            <span style="font:500 15px 'Geist Mono',monospace">11:00</span>
+            <span style="font:500 15px 'Geist Mono',monospace">—</span>
+            <span style="font:600 15px 'Geist Mono',monospace">—</span>
+            <span style="display:flex;align-items:center;gap:8px;min-width:0">
+              <span style="flex:none;border-radius:999px;border:1px solid var(--dangerLine);background:var(--dangerSoft);color:var(--danger);padding:5px 11px;font:600 12px Geist,sans-serif">Open shift</span>
+              <span style="font:400 14px Geist,sans-serif;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Never clocked out</span>
+            </span>
+          </div>
+
+          <!-- Total footer -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 26px;background:var(--bg)">
+            <span style="font:600 15px Geist,sans-serif">September total</span>
+            <span style="font:700 22px 'Geist Mono',monospace">64.5h</span>
+          </div>
+        </section>
+        <p style="margin:12px 0 0;font:400 12.5px/1.6 Geist,sans-serif;color:var(--muted)">One row has no recorded hours and is excluded from this total.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2F: ATTENDANCE ON A PHONE
+     ========================================== -->
+<section id="2f" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2f" class="badge-id">2f</a>
+    <span class="section-title">Attendance on a Phone</span>
+  </div>
+  <p class="section-desc">Touch-friendly responsive mobile representation of the attendance ledger.</p>
+
+  <div class="theme-pair-container">
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:390px;height:780px;box-sizing:border-box;border-radius:24px;overflow:hidden;border:1px solid var(--line);background:var(--bg);color:var(--fg);padding:22px 16px;display:flex;flex-direction:column;gap:18px">
+        <h2 style="margin:0;font:600 28px/1.1 Geist,sans-serif;letter-spacing:-.035em">Attendance</h2>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button style="display:flex;align-items:center;gap:12px;min-height:56px;padding:0 12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer">
+            <span style="width:34px;height:34px;border-radius:999px;display:grid;place-items:center;background:var(--strong);color:var(--strongInk);font:700 12.5px Geist,sans-serif">DR</span>
+            <span style="flex:1;text-align:left;font:600 15px Geist,sans-serif;color:var(--fg)">Deepak Rao</span>
+            <i data-lucide="chevron-down" style="width:17px;height:17px;color:var(--muted)"></i>
+          </button>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:0 8px;border-radius:14px;border:1px solid var(--line);background:var(--surface)">
+              <button style="width:40px;height:40px;display:grid;place-items:center;border-radius:10px;border:0;background:transparent;cursor:pointer"><i data-lucide="chevron-left" style="width:18px;height:18px;color:var(--muted)"></i></button>
+              <span style="font:600 15px Geist,sans-serif">September 2026</span>
+              <button style="width:40px;height:40px;display:grid;place-items:center;border-radius:10px;border:0;background:transparent;cursor:pointer"><i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--muted)"></i></button>
+            </div>
+            <button style="width:56px;height:56px;flex:none;display:grid;place-items:center;border-radius:14px;border:0;background:var(--accent);color:var(--accentInk);cursor:pointer"><i data-lucide="printer" style="width:20px;height:20px"></i></button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10px/1.2 Geist,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Days</span>
+            <span style="font:600 24px/1 'Geist Mono',monospace;color:var(--fg)">8</span>
+          </div>
+          <div style="border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10px/1.2 Geist,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Hours</span>
+            <span style="font:600 24px/1 'Geist Mono',monospace;color:var(--accent)">64.5</span>
+          </div>
+          <div style="border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10px/1.2 Geist,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Avg</span>
+            <span style="font:600 24px/1 'Geist Mono',monospace;color:var(--fg)">8.1</span>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow:hidden;border:1px solid var(--line);background:var(--surface);border-radius:16px">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line2)">
+            <div style="width:46px;flex:none"><span style="display:block;font:600 15px/1.1 'Geist Mono',monospace">02</span><span style="display:block;font:400 11.5px/1.4 Geist,sans-serif;color:var(--muted)">Wed</span></div>
+            <div style="flex:1;min-width:0"><span style="display:block;font:500 14px 'Geist Mono',monospace;color:var(--fg)">11:00 – 19:00</span></div>
+            <span style="font:600 16px 'Geist Mono',monospace;color:var(--fg)">8.0h</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line2)">
+            <div style="width:46px;flex:none"><span style="display:block;font:600 15px/1.1 'Geist Mono',monospace">06</span><span style="display:block;font:400 11.5px/1.4 Geist,sans-serif;color:var(--muted)">Sun</span></div>
+            <div style="flex:1;min-width:0"><span style="display:block;font:500 14px 'Geist Mono',monospace;color:var(--fg)">11:00 – 19:15</span><span style="display:block;font:400 12px/1.4 Geist,sans-serif;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Auto-closed · left after last table</span></div>
+            <span style="font:600 16px 'Geist Mono',monospace;color:var(--warn)">8.3h</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line2)">
+            <div style="width:46px;flex:none"><span style="display:block;font:600 15px/1.1 'Geist Mono',monospace">13</span><span style="display:block;font:400 11.5px/1.4 Geist,sans-serif;color:var(--muted)">Sun</span></div>
+            <div style="flex:1;min-width:0"><span style="display:block;font:500 14px 'Geist Mono',monospace;color:var(--fg)">11:00 – open</span><span style="display:block;font:400 12px/1.4 Geist,sans-serif;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Never clocked out</span></div>
+            <span style="font:600 16px 'Geist Mono',monospace;color:var(--danger)">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2G: PAYROLL DASHBOARD
+     ========================================== -->
+<section id="2g" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2g" class="badge-id">2g</a>
+    <span class="section-title">Payroll · Balance on every month, no drill-in needed</span>
+  </div>
+  <p class="section-desc">Overall balance owed overview, monthly breakdown per person, period generation, and payment state badges (Draft: amber border/soft, Locked: subtle neutral, Paid: emerald).</p>
+
+  <div class="theme-pair-container">
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:1360px;box-sizing:border-box;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);background-image:radial-gradient(circle at 88% -10%,var(--glow),transparent 28rem);color:var(--fg);padding:32px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;font:600 30px/1.1 Geist,sans-serif;letter-spacing:-.035em">Payroll</h2>
+            <p style="margin:7px 0 0;max-width:520px;font:400 13.5px/1.6 Geist,sans-serif;color:var(--muted)">Generated from recorded hours. A month clears only when its payment is confirmed.</p>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button style="display:flex;align-items:center;gap:9px;height:52px;padding:0 18px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 14.5px Geist,sans-serif;cursor:pointer"><i data-lucide="banknote" style="width:17px;height:17px"></i>Pay rates</button>
+            <button style="display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;border-radius:14px;border:0;background:var(--accent);color:var(--accentInk);font:600 14.5px Geist,sans-serif;cursor:pointer"><i data-lucide="plus" style="width:17px;height:17px"></i>Generate period</button>
+          </div>
+        </div>
+
+        <!-- 4 Top Cards -->
+        <div style="margin-top:26px;display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:16px">
+          <section style="border:1px solid var(--accent);background:var(--accentSoft);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Overall balance owed</span>
+            <span style="font:600 44px/1 'Geist Mono',monospace;letter-spacing:-.02em;color:var(--accent)">$4,659.50</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">3 people · 4 open months</span>
+          </section>
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Owed this month</span>
+            <span style="font:600 32px/1 'Geist Mono',monospace;color:var(--fg)">$247.50</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">September · 2 drafts</span>
+          </section>
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Owed last month</span>
+            <span style="font:600 32px/1 'Geist Mono',monospace;color:var(--fg)">$1,600.00</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">August · 1 locked period</span>
+          </section>
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:24px 26px;display:flex;flex-direction:column;gap:10px">
+            <span style="font:600 11px/1 Geist,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:var(--muted)">Oldest open month</span>
+            <span style="font:600 32px/1 'Geist Mono',monospace;color:var(--warn)">July</span>
+            <span style="font:400 13px/1.4 Geist,sans-serif;color:var(--muted)">Priya Nair · $2,812.00</span>
+          </section>
+        </div>
+
+        <div style="margin-top:20px;display:grid;grid-template-columns:1fr 400px;gap:20px;align-items:start">
+          <!-- Periods table -->
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden">
+            <div style="padding:20px 24px;border-bottom:1px solid var(--line2);display:flex;align-items:center;justify-content:space-between">
+              <h3 style="margin:0;font:600 17px Geist,sans-serif">Generated periods</h3>
+              <span style="font:400 13px Geist,sans-serif;color:var(--muted)">Person → month, balance shown per month</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.1fr 84px 104px 116px 116px 118px;gap:14px;padding:12px 24px 12px 74px;border-bottom:1px solid var(--line2);background:var(--bg)">
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Month</span>
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Hours</span>
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Rate</span>
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Gross</span>
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Balance</span>
+              <span style="font:600 10.5px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Status</span>
+            </div>
+
+            <!-- Priya Nair -->
+            <div style="border-bottom:1px solid var(--line2)">
+              <div style="display:flex;align-items:center;gap:14px;padding:18px 24px">
+                <i data-lucide="chevron-down" style="width:18px;height:18px;color:var(--muted)"></i>
+                <span style="width:36px;height:36px;flex:none;border-radius:999px;display:grid;place-items:center;background:#a7f3d0;color:#0b0b0d;font:700 13px Geist,sans-serif">PN</span>
+                <div style="flex:1;min-width:0"><p style="margin:0;font:600 15.5px Geist,sans-serif">Priya Nair</p><p style="margin:2px 0 0;font:400 12.5px Geist,sans-serif;color:var(--muted)">Manager · $18.50/hr</p></div>
+                <span style="font:400 12.5px Geist,sans-serif;color:var(--muted)">2 open months</span>
+                <div style="text-align:right;min-width:120px">
+                  <p style="margin:0;font:600 19px 'Geist Mono',monospace;color:var(--accent)">$4,412.00</p>
+                  <p style="margin:2px 0 0;font:400 11.5px Geist,sans-serif;color:var(--muted)">person balance</p>
+                </div>
+              </div>
+              <!-- August 2026 -->
+              <div style="display:grid;grid-template-columns:1.1fr 84px 104px 116px 116px 118px;gap:14px;align-items:center;padding:13px 24px 13px 74px;border-top:1px solid var(--line2);background:var(--accentSoft)">
+                <span style="display:flex;align-items:center;gap:9px;font:500 14.5px Geist,sans-serif"><span style="width:6px;height:6px;border-radius:999px;background:var(--accent)"></span>August 2026</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">160.0h</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">$18.50/hr</span>
+                <span style="font:500 14.5px 'Geist Mono',monospace;color:var(--muted)">$2,960.00</span>
+                <span style="font:700 15.5px 'Geist Mono',monospace;color:var(--accent)">$1,600.00</span>
+                <span><span style="display:inline-flex;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--muted);padding:5px 12px;font:600 12px Geist,sans-serif">Locked</span></span>
+              </div>
+              <!-- July 2026 -->
+              <div style="display:grid;grid-template-columns:1.1fr 84px 104px 116px 116px 118px;gap:14px;align-items:center;padding:13px 24px 13px 74px;border-top:1px solid var(--line2);background:var(--accentSoft)">
+                <span style="display:flex;align-items:center;gap:9px;font:500 14.5px Geist,sans-serif"><span style="width:6px;height:6px;border-radius:999px;background:var(--accent)"></span>July 2026</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">152.0h</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">$18.50/hr</span>
+                <span style="font:500 14.5px 'Geist Mono',monospace;color:var(--muted)">$2,812.00</span>
+                <span style="font:700 15.5px 'Geist Mono',monospace;color:var(--accent)">$2,812.00</span>
+                <span><span style="display:inline-flex;border-radius:999px;border:1px solid var(--line);background:var(--surface2);color:var(--muted);padding:5px 12px;font:600 12px Geist,sans-serif">Locked</span></span>
+              </div>
+              <!-- June 2026 -->
+              <div style="display:grid;grid-template-columns:1.1fr 84px 104px 116px 116px 118px;gap:14px;align-items:center;padding:13px 24px 13px 74px;border-top:1px solid var(--line2);background:transparent">
+                <span style="display:flex;align-items:center;gap:9px;font:500 14.5px Geist,sans-serif"><span style="width:6px;height:6px;border-radius:999px;background:var(--ok)"></span>June 2026</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">148.0h</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">$18.50/hr</span>
+                <span style="font:500 14.5px 'Geist Mono',monospace;color:var(--muted)">$2,738.00</span>
+                <span style="font:500 15px 'Geist Mono',monospace;color:var(--muted)">$0.00</span>
+                <span><span style="display:inline-flex;border-radius:999px;border:1px solid var(--okLine);background:var(--okSoft);color:var(--ok);padding:5px 12px;font:600 12px Geist,sans-serif">Paid</span></span>
+              </div>
+            </div>
+
+            <!-- Deepak Rao -->
+            <div style="border-bottom:1px solid var(--line2)">
+              <div style="display:flex;align-items:center;gap:14px;padding:18px 24px">
+                <i data-lucide="chevron-down" style="width:18px;height:18px;color:var(--muted)"></i>
+                <span style="width:36px;height:36px;flex:none;border-radius:999px;display:grid;place-items:center;background:#7dd3fc;color:#0b0b0d;font:700 13px Geist,sans-serif">DR</span>
+                <div style="flex:1;min-width:0"><p style="margin:0;font:600 15.5px Geist,sans-serif">Deepak Rao</p><p style="margin:2px 0 0;font:400 12.5px Geist,sans-serif;color:var(--muted)">Server · $10.00/hr</p></div>
+                <span style="font:400 12.5px Geist,sans-serif;color:var(--muted)">1 open month</span>
+                <div style="text-align:right;min-width:120px">
+                  <p style="margin:0;font:600 19px 'Geist Mono',monospace;color:var(--accent)">$162.50</p>
+                  <p style="margin:2px 0 0;font:400 11.5px Geist,sans-serif;color:var(--muted)">person balance</p>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1.1fr 84px 104px 116px 116px 118px;gap:14px;align-items:center;padding:13px 24px 13px 74px;border-top:1px solid var(--line2);background:var(--accentSoft)">
+                <span style="display:flex;align-items:center;gap:9px;font:500 14.5px Geist,sans-serif"><span style="width:6px;height:6px;border-radius:999px;background:var(--accent)"></span>September 2026</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">16.3h</span>
+                <span style="font:400 14px 'Geist Mono',monospace;color:var(--muted)">$10.00/hr</span>
+                <span style="font:500 14.5px 'Geist Mono',monospace;color:var(--muted)">$162.50</span>
+                <span style="font:700 15.5px 'Geist Mono',monospace;color:var(--accent)">$162.50</span>
+                <span><span style="display:inline-flex;border-radius:999px;border:1px solid var(--accent);background:var(--accentSoft);color:var(--accent);padding:5px 12px;font:600 12px Geist,sans-serif">Draft</span></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Balance per person -->
+          <section style="border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden">
+            <div style="padding:20px 24px;border-bottom:1px solid var(--line2)"><h3 style="margin:0;font:600 17px Geist,sans-serif">Balance per person</h3></div>
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line2)">
+              <span style="width:8px;height:8px;flex:none;border-radius:999px;background:#a7f3d0"></span>
+              <div style="flex:1;min-width:0"><p style="margin:0;font:500 14.5px Geist,sans-serif">Priya Nair</p><p style="margin:2px 0 0;font:400 12px Geist,sans-serif;color:var(--muted)">August + July open</p></div>
+              <span style="font:600 16px 'Geist Mono',monospace;color:var(--accent)">$4,412.00</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line2)">
+              <span style="width:8px;height:8px;flex:none;border-radius:999px;background:#7dd3fc"></span>
+              <div style="flex:1;min-width:0"><p style="margin:0;font:500 14.5px Geist,sans-serif">Deepak Rao</p><p style="margin:2px 0 0;font:400 12px Geist,sans-serif;color:var(--muted)">September open</p></div>
+              <span style="font:600 16px 'Geist Mono',monospace;color:var(--accent)">$162.50</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line2)">
+              <span style="width:8px;height:8px;flex:none;border-radius:999px;background:#f2a65a"></span>
+              <div style="flex:1;min-width:0"><p style="margin:0;font:500 14.5px Geist,sans-serif">Anil (Server)</p><p style="margin:2px 0 0;font:400 12px Geist,sans-serif;color:var(--muted)">September open</p></div>
+              <span style="font:600 16px 'Geist Mono',monospace;color:var(--accent)">$85.00</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line2)">
+              <span style="width:8px;height:8px;flex:none;border-radius:999px;background:#c4b5fd"></span>
+              <div style="flex:1;min-width:0"><p style="margin:0;font:500 14.5px Geist,sans-serif">Anil (Host)</p><p style="margin:2px 0 0;font:400 12px Geist,sans-serif;color:var(--muted)">Nothing outstanding</p></div>
+              <span style="border-radius:999px;border:1px solid var(--okLine);background:var(--okSoft);color:var(--ok);padding:5px 11px;font:600 12px Geist,sans-serif">Clear</span>
+            </div>
+            <div style="padding:18px 24px;display:flex;align-items:center;justify-content:space-between;background:var(--accentSoft)">
+              <span style="font:600 14.5px Geist,sans-serif">Overall balance</span>
+              <span style="font:700 20px 'Geist Mono',monospace;color:var(--accent)">$4,659.50</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==========================================
+     SECTION 2H: COUNTDOWN URGENCY STATES
+     ========================================== -->
+<section id="2h" class="doc-section">
+  <div class="section-title-row">
+    <a href="#2h" class="badge-id">2h</a>
+    <span class="section-title">Countdown Urgency States · Over an hour, Under an hour, Closing</span>
+  </div>
+  <p class="section-desc">Accessible multi-sensory signaling. Text switches alongside color ("Day ends in" → "Closing") so users who cannot distinguish amber from red still immediately recognize the final countdown phase.</p>
+
+  <div class="theme-pair-container">
+    <div class="theme-frame-column">
+      <span class="theme-frame-label">Dark Theme</span>
+      <div data-theme="dark" style="width:720px;box-sizing:border-box;padding:28px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);display:flex;flex-direction:column;gap:18px">
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <!-- Over an hour -->
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:500 11px/1 Geist,sans-serif;color:var(--faint)">Over an hour</span>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 24px;border-radius:18px;background:var(--surface);border:1px solid var(--line)">
+              <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 5:35:44 PM</span>
+              <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 28px/1 'Geist Mono',monospace;color:var(--accent);font-variant-numeric:tabular-nums">04:24:16</span></span>
+            </div>
+          </div>
+          <!-- Under an hour -->
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:500 11px/1 Geist,sans-serif;color:var(--faint)">Under an hour</span>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 24px;border-radius:18px;background:var(--warnSoft);border:1px solid var(--warnLine)">
+              <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 10:12:03 PM</span>
+              <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Day ends in</span><span style="font:600 28px/1 'Geist Mono',monospace;color:var(--warn);font-variant-numeric:tabular-nums">00:47:57</span></span>
+            </div>
+          </div>
+          <!-- Under fifteen minutes -->
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:500 11px/1 Geist,sans-serif;color:var(--faint)">Under fifteen minutes</span>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 24px;border-radius:18px;background:var(--dangerSoft);border:1px solid var(--dangerLine)">
+              <span style="font:500 12px/1 Geist,sans-serif;color:var(--muted)">Mon, Sep 7, 10:52:40 PM</span>
+              <span style="display:flex;align-items:baseline;gap:9px"><span style="font:600 10px/1 Geist,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Closing</span><span style="font:600 28px/1 'Geist Mono',monospace;color:var(--danger);font-variant-numeric:tabular-nums">00:07:20</span></span>
+            </div>
+          </div>
+        </div>
+        <p style="margin:0;font:400 12.5px/1.7 Geist,sans-serif;color:var(--muted)">Colour is never the only signal — the label switches from &ldquo;Day ends in&rdquo; to &ldquo;Closing&rdquo;, so the state reads for anyone who can&apos;t separate amber from red. Numerals are tabular, so digits don&apos;t jitter as they tick.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Initialize Lucide icons on load
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  });
+</script>
+</body>
+</html>

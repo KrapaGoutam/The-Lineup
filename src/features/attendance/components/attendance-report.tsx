@@ -34,6 +34,7 @@ import {
 } from "@/features/attendance/demo-data";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
+import { cn } from "@/lib/utils";
 
 type PeriodOption = "this-month" | "previous-month" | "custom";
 
@@ -738,6 +739,48 @@ function formatClockTime(iso: string, timeZone: string): string {
   return zonedWallTimeFromInstant(new Date(iso), timeZone).time;
 }
 
+// row.date is a local calendar date ("YYYY-MM-DD"), not an instant -- its
+// weekday is a property of that calendar date alone, so this parses it as
+// a UTC noon date the same way schedule-workspace.tsx's date-label helpers
+// do, rather than routing it back through the restaurant's time zone.
+function mobileDateParts(isoDate: string): { day: string; weekday: string } {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  return {
+    day: String(day).padStart(2, "0"),
+    weekday: new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      timeZone: "UTC",
+    }).format(utcDate),
+  };
+}
+
+function StatTile({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="border-border bg-card flex flex-col gap-1.5 rounded-2xl border px-5 py-4">
+      <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "font-mono text-3xl leading-none font-semibold tracking-tight tabular-nums",
+          accent ? "text-primary" : "text-foreground",
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function PersonSection({
   label,
   rows,
@@ -748,56 +791,144 @@ function PersonSection({
   timeZone: string;
 }) {
   const total = aggregateHours(rows);
+  // "Days worked" counts only rows that actually contributed to the total
+  // -- a row with no recorded hours (excludedRowCount) was never a worked
+  // day, so it's excluded from both the count and the average the same
+  // way it's already excluded from totalHours.
+  const daysWorked = rows.length - total.excludedRowCount;
+  const avgPerDay = daysWorked > 0 ? total.totalHours / daysWorked : 0;
   return (
     <Card>
       <CardHeader>
         <h2 className="font-semibold">{label}</h2>
       </CardHeader>
-      <CardContent className="space-y-3 pt-0">
+      <CardContent className="space-y-4 pt-0">
+        {rows.length > 0 ? (
+          <div className="grid grid-cols-3 gap-3">
+            <StatTile label="Days worked" value={String(daysWorked)} />
+            <StatTile
+              label="Total hours"
+              value={formatHours(total.totalHours)}
+              accent
+            />
+            <StatTile label="Avg per day" value={formatHours(avgPerDay)} />
+          </div>
+        ) : null}
         {rows.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No attendance recorded for this period.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-left text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-border border-b text-xs uppercase">
-                  <th className="py-1.5 pr-3 font-medium">Date</th>
-                  <th className="py-1.5 pr-3 font-medium">Clock in</th>
-                  <th className="py-1.5 pr-3 font-medium">Clock out</th>
-                  <th className="py-1.5 font-medium">Hours</th>
-                </tr>
-              </thead>
-              <tbody className="divide-border divide-y">
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="py-1.5 pr-3">{row.date}</td>
-                    <td className="py-1.5 pr-3">
-                      {row.clockIn
-                        ? formatClockTime(row.clockIn, timeZone)
-                        : "—"}
-                    </td>
-                    <td className="py-1.5 pr-3">
-                      {row.clockOut
-                        ? formatClockTime(row.clockOut, timeZone)
-                        : "—"}
-                      {row.autoClockedOut ? (
-                        <Badge tone="warning" className="ml-1.5">
-                          Auto-closed
-                        </Badge>
+          <>
+            {/* Desktop/tablet: full table. Below sm, the condensed card
+                ledger (section 2f of the design reference) replaces it --
+                same rows, touch-sized and scannable at a glance instead of
+                scrolling a table sideways. */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[420px] text-left text-sm">
+                <thead>
+                  <tr className="text-muted-foreground border-border border-b text-xs uppercase">
+                    <th className="py-1.5 pr-3 font-medium">Date</th>
+                    <th className="py-1.5 pr-3 font-medium">Clock in</th>
+                    <th className="py-1.5 pr-3 font-medium">Clock out</th>
+                    <th className="py-1.5 font-medium">Hours</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-border divide-y">
+                  {rows.map((row) => {
+                    // A genuinely still-open shift -- never clocked out,
+                    // and not the (already-handled) auto-closed case -- is
+                    // its own distinct, more urgent state: the row's Hours
+                    // cell has nothing to show at all, not just an
+                    // auto-closed guess at when they left.
+                    const isOpenShift = !row.clockOut && !row.autoClockedOut;
+                    return (
+                      <tr key={row.id}>
+                        <td className="py-1.5 pr-3">{row.date}</td>
+                        <td className="py-1.5 pr-3">
+                          {row.clockIn
+                            ? formatClockTime(row.clockIn, timeZone)
+                            : "—"}
+                        </td>
+                        <td className="py-1.5 pr-3">
+                          <span className="flex items-center gap-1.5">
+                            {row.clockOut
+                              ? formatClockTime(row.clockOut, timeZone)
+                              : "—"}
+                            {row.autoClockedOut ? (
+                              <Badge tone="warning">Auto-closed</Badge>
+                            ) : null}
+                            {isOpenShift ? (
+                              <Badge tone="danger">Open shift</Badge>
+                            ) : null}
+                          </span>
+                        </td>
+                        <td className="py-1.5">
+                          {row.hoursWorked === null
+                            ? "—"
+                            : formatHours(row.hoursWorked)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-border border-border divide-y rounded-2xl border sm:hidden">
+              {rows.map((row) => {
+                const isOpenShift = !row.clockOut && !row.autoClockedOut;
+                const { day, weekday } = mobileDateParts(row.date);
+                return (
+                  <div
+                    key={row.id}
+                    className="flex items-center gap-3 px-3.5 py-3"
+                  >
+                    <div className="w-11 flex-none">
+                      <span className="font-mono text-base leading-tight font-semibold tabular-nums">
+                        {day}
+                      </span>
+                      <span className="text-muted-foreground block text-[11px]">
+                        {weekday}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono text-sm tabular-nums">
+                        {row.clockIn
+                          ? formatClockTime(row.clockIn, timeZone)
+                          : "—"}
+                        {" – "}
+                        {row.clockOut
+                          ? formatClockTime(row.clockOut, timeZone)
+                          : isOpenShift
+                            ? "open"
+                            : "—"}
+                      </span>
+                      {row.autoClockedOut || isOpenShift ? (
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {row.autoClockedOut ? "Auto-closed" : "Open shift"}
+                        </span>
                       ) : null}
-                    </td>
-                    <td className="py-1.5">
+                    </div>
+                    <span
+                      className={cn(
+                        "font-mono text-base font-semibold tabular-nums",
+                        isOpenShift
+                          ? "text-destructive"
+                          : row.autoClockedOut
+                            ? "text-warn"
+                            : "text-foreground",
+                      )}
+                    >
                       {row.hoursWorked === null
                         ? "—"
                         : formatHours(row.hoursWorked)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
         <div className="border-border flex items-center justify-between border-t pt-2 text-sm">
           <span className="font-medium">Total</span>

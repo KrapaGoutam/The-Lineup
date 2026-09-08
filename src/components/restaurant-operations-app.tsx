@@ -1,20 +1,25 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Banknote,
   CalendarDays,
   CalendarSearch,
-  Clock3,
+  ChevronDown,
+  ChevronUp,
   KeyRound,
   LogOut,
+  Menu,
   Settings2,
+  SlidersHorizontal,
+  Store,
   Table2,
   Users,
   WalletCards,
   X,
 } from "lucide-react";
 
+import { AppearanceSwitch } from "@/components/appearance-switch";
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
 import {
@@ -80,8 +85,6 @@ import {
   PasscodeChangeDialog,
   type ChangePasscodeResult,
 } from "./passcode-change-dialog";
-import { ThemeToggle } from "./theme-toggle";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
@@ -95,11 +98,25 @@ type AppTab =
   | "attendance"
   | "payroll";
 
-const tabs: Array<{ id: AppTab; label: string; icon: typeof CalendarDays }> = [
-  { id: "schedule", label: "Schedule", icon: CalendarDays },
-  { id: "allocation", label: "Table allocation", icon: Table2 },
-  { id: "tips", label: "Tip split", icon: WalletCards },
-];
+// Feature 021: weighted into two tiers on desktop (primary, underlined when
+// active; secondary, plain icon+label) rather than one flat row. Schedule
+// stays primary on desktop, where there's room for it, but moves into the
+// mobile "More" sheet alongside the secondary tabs -- the fixed 3-button
+// mobile dock only has room for the two truly continuous-during-service
+// actions (Allocation, Tip Split), matching design-system-reference.html's
+// own mobile priority.
+const scheduleTab = {
+  id: "schedule" as const,
+  label: "Schedule",
+  icon: CalendarDays,
+};
+const allocationTab = {
+  id: "allocation" as const,
+  label: "Table Allocation",
+  icon: Table2,
+};
+const tipsTab = { id: "tips" as const, label: "Tip Split", icon: WalletCards };
+const primaryTabs = [scheduleTab, allocationTab, tipsTab];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
 // Feature 019: visible to every signed-in role -- unlike Feature 018,
@@ -153,6 +170,139 @@ function generateDemoPasscode(taken: ReadonlySet<string>): string {
     candidate = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
   } while (taken.has(candidate));
   return candidate;
+}
+
+/**
+ * Feature 021. Closes an open popover/sheet on an outside pointerdown or
+ * Escape -- the minimum non-modal-popover contract (no backdrop, no focus
+ * trap; the rest of the page stays interactive, unlike the app's actual
+ * modal dialogs which do trap focus). Shared by the avatar quick-settings
+ * panel and the mobile "More" sheet rather than duplicated per surface.
+ *
+ * Takes an array of container refs, not just one: the avatar panel has two
+ * concurrent DOM occurrences (desktop row 1, mobile header) swapped by
+ * responsive CSS rather than conditional rendering, both driven by the same
+ * `isOpen` state. A click "outside" must mean outside *every* container --
+ * checking just one would see a real click inside the visible panel as
+ * outside the other (hidden, irrelevant) one and close the shared state.
+ */
+function useDismissOnOutsideOrEscape(
+  containerRefs:
+    | { current: HTMLElement | null }
+    | { current: HTMLElement | null }[],
+  isOpen: boolean,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const refs = Array.isArray(containerRefs) ? containerRefs : [containerRefs];
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      const insideAny = refs.some(
+        (ref) => ref.current && ref.current.contains(target),
+      );
+      if (!insideAny) onClose();
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, onClose]);
+}
+
+type ClockLike = {
+  dateTime: string;
+  countdown: string;
+  isClosed: boolean;
+  remainingSeconds: number;
+};
+
+type CountdownTier = "normal" | "warn" | "danger" | "closed";
+
+function countdownTier(clock: ClockLike): CountdownTier {
+  if (clock.isClosed) return "closed";
+  if (clock.remainingSeconds <= 900) return "danger";
+  if (clock.remainingSeconds <= 3600) return "warn";
+  return "normal";
+}
+
+const countdownPillTone: Record<CountdownTier, string> = {
+  normal: "bg-surface border-border",
+  warn: "bg-warn/15 border-warn/30",
+  danger: "bg-destructive/15 border-destructive/30",
+  closed: "bg-surface border-border",
+};
+
+const countdownDigitTone: Record<CountdownTier, string> = {
+  normal: "text-primary",
+  warn: "text-warn",
+  danger: "text-destructive",
+  closed: "text-muted-foreground",
+};
+
+/**
+ * Feature 021, acceptance criteria: urgency communicated by both color AND
+ * the label text ("Day ends in" -> "Closing" under 15 minutes) so the
+ * state reads without relying on distinguishing amber from red. Digits are
+ * `font-mono tabular-nums` so they never jitter width as they tick.
+ */
+function CountdownPill({
+  clock,
+  compact = false,
+}: {
+  clock: ClockLike;
+  compact?: boolean;
+}) {
+  const tier = countdownTier(clock);
+  const label = tier === "danger" ? "Closing" : "Day ends in";
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center gap-1 rounded-2xl border shadow-sm",
+        compact ? "px-4 py-2" : "px-7 py-2.5",
+        countdownPillTone[tier],
+      )}
+    >
+      <span
+        className="text-muted-foreground text-xs font-medium"
+        suppressHydrationWarning
+      >
+        {clock.dateTime}
+      </span>
+      {clock.isClosed ? (
+        <span
+          className={cn(
+            "font-mono text-sm font-semibold tabular-nums",
+            countdownDigitTone[tier],
+          )}
+          suppressHydrationWarning
+        >
+          {clock.countdown}
+        </span>
+      ) : (
+        <span className="flex items-baseline gap-2.5">
+          <span className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+            {label}
+          </span>
+          <span
+            className={cn(
+              "font-mono text-2xl leading-none font-semibold tracking-tight tabular-nums",
+              countdownDigitTone[tier],
+            )}
+            suppressHydrationWarning
+          >
+            {clock.countdown}
+          </span>
+        </span>
+      )}
+    </div>
+  );
 }
 
 function HoursDialog({
@@ -380,6 +530,31 @@ export function RestaurantOperationsApp({
   );
   const [showHours, setShowHours] = useState(false);
   const [showChangePasscode, setShowChangePasscode] = useState(false);
+  // Feature 021: the avatar quick-settings panel (desktop) and the mobile
+  // "More" sheet are two different surfaces for the same underlying
+  // secondary-tab/settings content, each with its own open state -- never
+  // both open at once in practice (one is lg:hidden, the other lg:flex),
+  // but kept as separate booleans rather than one shared "menu open" flag
+  // so closing one on outside-click can never accidentally read as closing
+  // the other on a viewport resize.
+  const [showAvatarPanel, setShowAvatarPanel] = useState(false);
+  const [showMobileSheet, setShowMobileSheet] = useState(false);
+  // Two DOM occurrences of the avatar trigger+panel exist at once (desktop
+  // row 1 and the mobile header), swapped by responsive CSS rather than
+  // conditional rendering -- each needs its own ref, or the second one to
+  // mount steals `.current` from the first and every outside-click check
+  // resolves against the wrong (often off-screen) subtree.
+  const avatarPanelDesktopRef = useRef<HTMLDivElement>(null);
+  const avatarPanelMobileRef = useRef<HTMLDivElement>(null);
+  const mobileSheetRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutsideOrEscape(
+    [avatarPanelDesktopRef, avatarPanelMobileRef],
+    showAvatarPanel,
+    () => setShowAvatarPanel(false),
+  );
+  useDismissOnOutsideOrEscape(mobileSheetRef, showMobileSheet, () =>
+    setShowMobileSheet(false),
+  );
   const clock = useRestaurantClock(timeZone, operatingHours);
 
   const [tipPoolId, setTipPoolId] = useState<number | null>(
@@ -446,10 +621,18 @@ export function RestaurantOperationsApp({
   const isManager = user.role !== "server";
   // Feature 019: attendanceTab is now always included -- Team stays
   // manager-only. Feature 020 Phase 2: payrollTab is manager-only AND
-  // real-mode-only (demo mode has no data source for it yet).
-  const visibleTabs = isManager
-    ? [...tabs, teamTab, attendanceTab, ...(demoMode ? [] : [payrollTab])]
-    : [...tabs, attendanceTab];
+  // real-mode-only (demo mode has no data source for it yet). Feature 021:
+  // split into desktop's two weighted tiers; secondaryTabs alone (without
+  // Schedule) is also exactly the manager-only/universal tab set the
+  // avatar panel and mobile sheet need.
+  const secondaryTabs = [
+    ...(isManager ? [teamTab] : []),
+    attendanceTab,
+    ...(isManager && !demoMode ? [payrollTab] : []),
+  ];
+  // The mobile "More" sheet's navigable rows: Schedule (bumped out of the
+  // 3-button dock for space) plus every secondary tab.
+  const moreTabs = [scheduleTab, ...secondaryTabs];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -1055,115 +1238,334 @@ export function RestaurantOperationsApp({
     setTab("schedule");
   }
 
+  const initials = user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
+  const todayWeekdayShort = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+  }).format(new Date());
+  const todayIndex = weekDays.indexOf(todayWeekdayShort);
+  const todayHours = todayIndex >= 0 ? operatingHours[todayIndex] : null;
+
+  function openHours() {
+    setShowHours(true);
+    setShowAvatarPanel(false);
+    setShowMobileSheet(false);
+  }
+  function openChangePasscode() {
+    setShowChangePasscode(true);
+    setShowAvatarPanel(false);
+    setShowMobileSheet(false);
+  }
+  function goToTab(id: AppTab) {
+    setTab(id);
+    setShowMobileSheet(false);
+  }
+
   return (
-    <div className="min-h-screen pb-24 lg:pb-0">
-      <header className="bg-background/90 border-border sticky top-0 z-40 border-b backdrop-blur-xl">
-        <div className="mx-auto flex min-h-16 max-w-[1540px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pb-28 lg:pb-0">
+      <header className="border-border bg-background sticky top-0 z-40 border-b">
+        {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
+        <div className="mx-auto hidden min-h-[76px] max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid">
           <button
             onClick={() => setTab("schedule")}
-            className="flex min-h-11 items-center gap-3"
+            className="flex min-h-11 items-center gap-3 justify-self-start"
             aria-label="ServiceFlow schedule home"
           >
-            <span className="bg-primary text-primary-foreground grid size-9 place-items-center rounded-xl font-black shadow-[0_12px_40px_-14px_var(--primary)]">
+            <span className="bg-primary text-primary-foreground grid size-10 place-items-center rounded-xl font-black shadow-[0_12px_40px_-14px_var(--primary)]">
               S
             </span>
-            <span className="hidden text-left sm:block">
+            <span className="text-left">
               <span className="block text-sm font-bold tracking-tight">
                 ServiceFlow
               </span>
-              <span className="text-muted-foreground block text-[11px]">
+              <span className="text-muted-foreground block text-xs">
                 The Monk&apos;s
               </span>
             </span>
           </button>
 
-          <nav
-            className="ml-4 hidden items-center gap-1 lg:flex"
-            aria-label="Primary navigation"
+          <CountdownPill clock={clock} />
+
+          <div
+            className="relative justify-self-end"
+            ref={avatarPanelDesktopRef}
           >
-            {visibleTabs.map(({ id, label, icon: Icon }) => (
-              <Button
+            <button
+              onClick={() => setShowAvatarPanel((open) => !open)}
+              aria-expanded={showAvatarPanel}
+              aria-haspopup="true"
+              aria-label="Account and quick settings"
+              className="border-border bg-surface flex items-center gap-2.5 rounded-full border py-1.5 pr-3.5 pl-1.5"
+            >
+              <span className="bg-avatar grid size-10 place-items-center rounded-full text-sm font-bold">
+                {initials}
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold">{user.name}</span>
+                <span className="text-muted-foreground block text-xs capitalize">
+                  {user.role.replace("_", " ")}
+                </span>
+              </span>
+              {showAvatarPanel ? (
+                <ChevronUp
+                  className="text-muted-foreground size-4"
+                  aria-hidden="true"
+                />
+              ) : (
+                <ChevronDown
+                  className="text-muted-foreground size-4"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+
+            {showAvatarPanel ? (
+              <div className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl">
+                <div className="border-border/60 flex items-center justify-between border-b px-[18px] py-3.5">
+                  <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                    Appearance
+                  </span>
+                  <AppearanceSwitch />
+                </div>
+                <div className="border-border/60 space-y-3 border-b px-[18px] py-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                      Shift hours
+                    </span>
+                    {isManager ? (
+                      <Button variant="secondary" size="sm" onClick={openHours}>
+                        Edit
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>Morning</span>
+                      <span className="text-muted-foreground font-mono">
+                        {shiftDefaults.morning.start} –{" "}
+                        {shiftDefaults.morning.end}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Evening</span>
+                      <span className="text-muted-foreground font-mono">
+                        {shiftDefaults.evening.start} –{" "}
+                        {shiftDefaults.evening.end}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Full day</span>
+                      <span className="text-muted-foreground font-mono">
+                        {shiftDefaults.full_day.start} –{" "}
+                        {shiftDefaults.full_day.end}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-border/60 space-y-1 border-b px-[18px] py-4">
+                  <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                    Store hours
+                  </span>
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-base font-semibold">
+                      Today, {todayWeekdayShort}
+                    </span>
+                    <span className="text-primary font-mono text-base">
+                      {todayHours
+                        ? todayHours.closed
+                          ? "Closed"
+                          : `${todayHours.opening} – ${todayHours.closing}`
+                        : "—"}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    {timeZone}. Overnight closing times supported.
+                  </p>
+                </div>
+                <div className="space-y-0.5 p-2">
+                  <button
+                    onClick={openChangePasscode}
+                    className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                  >
+                    <KeyRound
+                      className="text-muted-foreground size-[18px]"
+                      aria-hidden="true"
+                    />
+                    <span className="flex-1 text-sm font-medium">
+                      Change passcode
+                    </span>
+                  </button>
+                  {isManager ? (
+                    <button
+                      onClick={openHours}
+                      className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                    >
+                      <Store
+                        className="text-muted-foreground size-[18px]"
+                        aria-hidden="true"
+                      />
+                      <span className="flex-1 text-sm font-medium">
+                        Store hours
+                      </span>
+                      <span className="text-faint text-xs">Mon–Sun</span>
+                    </button>
+                  ) : null}
+                </div>
+                <div className="border-border/60 space-y-2 border-t px-3.5 py-3">
+                  {isManager ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-center"
+                      onClick={openHours}
+                    >
+                      <SlidersHorizontal aria-hidden="true" />
+                      More options
+                    </Button>
+                  ) : null}
+                  <button
+                    onClick={signOut}
+                    className="text-destructive hover:bg-destructive/10 flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                  >
+                    <LogOut className="size-[18px]" aria-hidden="true" />
+                    <span className="text-sm font-semibold">Sign out</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Desktop row 2: weighted nav -- primary (underlined), divider,
+            secondary (icon+label), Settings trigger far right. */}
+        <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
+          <div className="flex gap-1.5">
+            {primaryTabs.map(({ id, label, icon: Icon }) => (
+              <button
                 key={id}
-                variant={tab === id ? "secondary" : "ghost"}
-                size="sm"
                 onClick={() => setTab(id)}
                 aria-current={tab === id ? "page" : undefined}
-              >
-                <Icon aria-hidden="true" />
-                {label}
-              </Button>
-            ))}
-          </nav>
-
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden text-right md:block">
-              <p className="text-xs font-medium" suppressHydrationWarning>
-                {clock.dateTime}
-              </p>
-              <p
                 className={cn(
-                  "mt-0.5 font-mono text-[11px]",
-                  clock.isClosed ? "text-muted-foreground" : "text-primary",
+                  "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
+                  tab === id
+                    ? "border-primary text-foreground"
+                    : "text-foreground/80 hover:text-foreground border-transparent",
                 )}
-                suppressHydrationWarning
               >
-                <Clock3 className="mr-1 inline size-3" aria-hidden="true" />
-                {clock.isClosed
-                  ? clock.countdown
-                  : `Day ends in ${clock.countdown}`}
-              </p>
-            </div>
-            <div className="border-border hidden h-8 w-px sm:block" />
-            <div className="hidden text-right sm:block">
-              <p className="text-xs font-semibold">{user.name}</p>
-              <p className="text-muted-foreground text-[10px] capitalize">
-                {user.role.replace("_", " ")}
-              </p>
-            </div>
-            <Badge
-              tone={isManager ? "accent" : "neutral"}
-              className="hidden xl:inline-flex"
+                <Icon className="size-[18px]" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="bg-border h-6.5 w-px" />
+          <div className="flex gap-0.5">
+            {secondaryTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                aria-current={tab === id ? "page" : undefined}
+                className={cn(
+                  "flex h-14 items-center gap-1.5 px-3.5 text-[13px] font-medium whitespace-nowrap",
+                  tab === id ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+          {isManager ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setShowHours(true)}
             >
-              {isManager ? "Manager access" : "Server access"}
-            </Badge>
-            {isManager ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowHours(true)}
-                aria-label="Edit restaurant hours"
-              >
-                <Settings2 />
-              </Button>
-            ) : null}
+              <Settings2 aria-hidden="true" />
+              Settings
+            </Button>
+          ) : null}
+        </div>
+
+        {/* Mobile header: brand + avatar row, then the countdown pill. */}
+        <div
+          className="flex flex-col gap-3.5 px-4 py-3.5 lg:hidden"
+          ref={avatarPanelMobileRef}
+        >
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setTab("schedule")}
+              className="flex min-h-11 items-center gap-2.5"
+              aria-label="ServiceFlow schedule home"
+            >
+              <span className="bg-primary text-primary-foreground grid size-9 place-items-center rounded-xl font-black">
+                S
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-bold">ServiceFlow</span>
+                <span className="text-muted-foreground block text-[11px]">
+                  The Monk&apos;s
+                </span>
+              </span>
+            </button>
             <Button
               variant="ghost"
               size="icon"
+              className="ml-auto"
               onClick={() => setShowChangePasscode(true)}
               aria-label="Change your passcode"
             >
               <KeyRound />
             </Button>
-            <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={signOut}
-              aria-label="Sign out"
+            <button
+              onClick={() => setShowAvatarPanel((open) => !open)}
+              aria-expanded={showAvatarPanel}
+              aria-label="Account and quick settings"
+              className="border-border bg-surface flex min-h-11 items-center gap-2 rounded-full border py-1 pr-2.5 pl-1"
             >
-              <LogOut />
-            </Button>
+              <span className="bg-avatar grid size-[34px] place-items-center rounded-full text-xs font-bold">
+                {initials}
+              </span>
+              <ChevronDown
+                className="text-muted-foreground size-4"
+                aria-hidden="true"
+              />
+            </button>
           </div>
-        </div>
-        <div className="border-border border-t px-4 py-2 md:hidden">
-          <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-3 text-xs">
-            <span suppressHydrationWarning>{clock.dateTime}</span>
-            <span className="text-primary font-mono" suppressHydrationWarning>
-              {clock.isClosed
-                ? clock.countdown
-                : `Closes in ${clock.countdown}`}
-            </span>
-          </div>
+          <CountdownPill clock={clock} compact />
+          {showAvatarPanel ? (
+            <div className="border-border bg-card space-y-1 rounded-2xl border p-2 shadow-xl">
+              <div className="flex items-center justify-between px-2.5 py-2">
+                <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                  Appearance
+                </span>
+                <AppearanceSwitch />
+              </div>
+              {isManager ? (
+                <button
+                  onClick={openHours}
+                  className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                >
+                  <Settings2
+                    className="text-muted-foreground size-[18px]"
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 text-sm font-medium">Settings</span>
+                </button>
+              ) : null}
+              <button
+                onClick={signOut}
+                className="text-destructive hover:bg-destructive/10 flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+              >
+                <LogOut className="size-[18px]" aria-hidden="true" />
+                <span className="text-sm font-semibold">Sign out</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -1253,38 +1655,141 @@ export function RestaurantOperationsApp({
         ) : null}
       </main>
 
+      {/* Feature 021: fixed 3-button dock -- only the two continuous-
+          during-service actions plus "More", matching the reference's
+          mobile priority. Everything else (Schedule, Team, Attendance,
+          Payroll, Settings) lives in the slide-up sheet below. */}
       <nav
-        className={cn(
-          "bg-background/95 border-border fixed inset-x-0 bottom-0 z-40 grid border-t px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden",
-          // Tailwind needs the literal class names present in source (not
-          // built from a template string) to pick them up -- visibleTabs
-          // is 4 (server), 5 (manager in demo mode, no payrollTab), or 6
-          // (manager in real mode, with payrollTab).
-          isManager
-            ? demoMode
-              ? "grid-cols-5"
-              : "grid-cols-6"
-            : "grid-cols-4",
-        )}
+        className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
         aria-label="Mobile navigation"
       >
-        {visibleTabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            aria-current={tab === id ? "page" : undefined}
-            className={cn(
-              "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium",
-              tab === id
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground",
-            )}
-          >
-            <Icon className="size-5" aria-hidden="true" />
-            {label}
-          </button>
-        ))}
+        <button
+          onClick={() => goToTab("allocation")}
+          aria-current={tab === "allocation" ? "page" : undefined}
+          className={cn(
+            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+            tab === "allocation"
+              ? "bg-primary text-primary-foreground"
+              : "border-border bg-surface text-foreground border",
+          )}
+        >
+          <Table2 className="size-[22px]" aria-hidden="true" />
+          Allocation
+        </button>
+        <button
+          onClick={() => goToTab("tips")}
+          aria-current={tab === "tips" ? "page" : undefined}
+          className={cn(
+            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+            tab === "tips"
+              ? "bg-primary text-primary-foreground"
+              : "border-border bg-surface text-foreground border",
+          )}
+        >
+          <WalletCards className="size-[22px]" aria-hidden="true" />
+          Tip Split
+        </button>
+        <button
+          onClick={() => setShowMobileSheet(true)}
+          aria-expanded={showMobileSheet}
+          className="border-border bg-surface text-muted-foreground flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border text-xs font-semibold"
+        >
+          <Menu className="size-[22px]" aria-hidden="true" />
+          More
+        </button>
       </nav>
+
+      {showMobileSheet ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/55 lg:hidden"
+          role="presentation"
+        >
+          <div
+            ref={mobileSheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="More"
+            className="bg-card border-border absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl"
+          >
+            <span className="bg-border mx-auto mb-3 block h-1 w-10 rounded-full" />
+            <div className="space-y-0.5">
+              {moreTabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => goToTab(id)}
+                  className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+                >
+                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                    <Icon className="size-[19px]" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-foreground block text-[15px] font-semibold">
+                      {label}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className="text-muted-foreground size-4 -rotate-90"
+                    aria-hidden="true"
+                  />
+                </button>
+              ))}
+              {isManager ? (
+                <button
+                  onClick={openHours}
+                  className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+                >
+                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                    <Settings2 className="size-[19px]" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-foreground block text-[15px] font-semibold">
+                      Settings
+                    </span>
+                    <span className="text-muted-foreground block text-xs">
+                      Shift hours, store hours
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className="text-muted-foreground size-4 -rotate-90"
+                    aria-hidden="true"
+                  />
+                </button>
+              ) : null}
+              <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
+                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                  <Settings2 className="size-[19px]" aria-hidden="true" />
+                </span>
+                <span className="flex-1 text-[15px] font-semibold">
+                  Appearance
+                </span>
+                <AppearanceSwitch />
+              </div>
+              <button
+                onClick={openChangePasscode}
+                className="hover:bg-muted border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+              >
+                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                  <KeyRound className="size-[19px]" aria-hidden="true" />
+                </span>
+                <span className="text-foreground flex-1 text-[15px] font-semibold">
+                  Change passcode
+                </span>
+              </button>
+              <button
+                onClick={signOut}
+                className="hover:bg-destructive/10 border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+              >
+                <span className="bg-destructive/15 text-destructive grid size-10 flex-none place-items-center rounded-xl">
+                  <LogOut className="size-[19px]" aria-hidden="true" />
+                </span>
+                <span className="text-destructive flex-1 text-[15px] font-semibold">
+                  Sign out
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showHours && isManager ? (
         <HoursDialog

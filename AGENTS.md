@@ -6,11 +6,13 @@ Build a reliable restaurant scheduling and table-rotation product one vertical f
 
 ## Read before editing
 
-1. `docs/PRD.md`
-2. `docs/ARCHITECTURE.md`
-3. The relevant file in `docs/features/`
-4. `docs/DATA_MODEL.md` for database or authorization work
-5. `docs/DESIGN_SYSTEM.md` for user-facing work
+1. `tasks/current-task.md` for active in-flight task checklist and current step
+2. `docs/STATUS.md` for global project and milestone health
+3. `docs/PRD.md`
+4. `docs/ARCHITECTURE.md`
+5. The relevant file in `docs/features/`
+6. `docs/DATA_MODEL.md` for database or authorization work
+7. `docs/DESIGN_SYSTEM.md` for user-facing work
 
 ## Non-negotiable rules
 
@@ -26,12 +28,13 @@ Build a reliable restaurant scheduling and table-rotation product one vertical f
 - Motion must be purposeful and honor `prefers-reduced-motion`.
 - Do not add a dependency until the platform or existing code cannot reasonably solve the requirement.
 - Do not combine unrelated refactors with a feature.
+- Always maintain `tasks/current-task.md` during execution: check off `- [x]` after each step is verified, and document in-flight state before halting.
 
 ## Workflow
 
 For every feature:
 
-1. Create or approve `docs/features/<feature>.md` from `docs/ai/FEATURE_HANDOFF.md`.
+1. Create or approve `docs/features/<feature>.md` from `docs/ai/FEATURE_HANDOFF.md`, and initialize `tasks/current-task.md`.
 2. State the data, authorization, UI states, risks, and tests before implementation.
 3. Implement one vertical slice.
 4. Run `npm run check`, `npm run test`, and `npm run build`.
