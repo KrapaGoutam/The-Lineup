@@ -3,7 +3,7 @@
 **Active Spec:** `docs/features/025-attendance-reporting-and-filters.md`
 **Branch:** `feature/025-attendance-reporting-and-filters` (stacked on
 `feature/028-table-allocation-unrestricted-editing`)
-**Status:** In progress
+**Status:** Complete — PR open at https://github.com/KrapaGoutam/The-Lineup/pull/25
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -384,9 +384,25 @@ Clock out | Hours`, matching the mockup's exact column order) and
         attendance-reporting.spec.ts 12/12), Current Status Overview
         pointing at Feature 025.
   - [x] Commit.
-- [ ] **Step 8: Final gate, push, open PR (base:
+- [x] **Step 8: Final gate, push, open PR (base:
       `feature/028-table-allocation-unrestricted-editing`), paste real
       gate output + PR link here.**
+  - [x] Final comprehensive gate, run for real:
+    - `npm run check` — prettier, eslint, typecheck: pass.
+    - `npm test` — 32/32 files, 214/214 tests: pass.
+    - `npm run build` — pass.
+    - `npm run db:reset && npm run db:test` — clean reset (no transient
+      hiccup this time), 16/16 pgTAP files, 202 assertions: pass —
+      unchanged from before this feature, confirming zero Supabase
+      schema was touched.
+    - `npx playwright test` (desktop, host-tablet, server-mobile,
+      full suite) — **114/114 pass**, including all 12 new
+      `attendance-reporting.spec.ts` tests across all three projects.
+  - [x] Pushed `feature/025-attendance-reporting-and-filters` to
+        origin.
+  - [x] Opened PR:
+        **https://github.com/KrapaGoutam/The-Lineup/pull/25** (base:
+        `feature/028-table-allocation-unrestricted-editing`).
 
 ## 🗂️ File list
 
@@ -408,5 +424,9 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Steps 1-7 done and committed. Next: Step 8 (final gate, push, open PR
-against `feature/028-table-allocation-unrestricted-editing`).
+All 8 steps complete. Feature 025 is fully implemented, fully tested
+(full gate green, including a real CSV-import scope conflict resolved
+with the user before any code was written — see Reconciliation 1), and
+its PR is open: https://github.com/KrapaGoutam/The-Lineup/pull/25 (base:
+`feature/028-table-allocation-unrestricted-editing`). Nothing left to do
+on this branch; next step is human review/merge.

@@ -12,7 +12,7 @@
 - **Active Feature:** `Feature 025 — Attendance Reporting & Filters`
 - **Active Task Spec:** [docs/features/025-attendance-reporting-and-filters.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/025-attendance-reporting-and-filters.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/025-attendance-reporting-and-filters` (stacked on `feature/028-table-allocation-unrestricted-editing`); all quality gates green, acceptance criteria checked off. CSV bulk import was descoped after confirming, with the user, that it conflicts with Feature 018's live-verified read-only Neon connection and `docs/PRD.md`'s explicit no-write carve-out. Pending PR/merge.
+- **Current State:** Implemented on `feature/025-attendance-reporting-and-filters` (stacked on `feature/028-table-allocation-unrestricted-editing`); all quality gates green, acceptance criteria checked off. CSV bulk import was descoped after confirming, with the user, that it conflicts with Feature 018's live-verified read-only Neon connection and `docs/PRD.md`'s explicit no-write carve-out. PR open: [#25](https://github.com/KrapaGoutam/The-Lineup/pull/25), pending review/merge.
 
 ---
 
