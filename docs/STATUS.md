@@ -2,17 +2,17 @@
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
 **Last Updated:** September 8, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (31/31 files, 195/195 tests passing) | `npm run test:e2e` (settings.spec.ts 9/9, team-management.spec.ts 6/6, allocation-open-editing.spec.ts 9/9, all across desktop/host-tablet/server-mobile) | `npm run db:test` (16/16 pgTAP files, 202 assertions)  
+**Health Gate:** `npm run check` (Passing) | `npm test` (32/32 files, 214/214 tests passing) | `npm run test:e2e` (settings.spec.ts 9/9, team-management.spec.ts 6/6, allocation-open-editing.spec.ts 9/9, attendance-reporting.spec.ts 12/12, all across desktop/host-tablet/server-mobile) | `npm run db:test` (16/16 pgTAP files, 202 assertions)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
 
 ## 🚦 Current Status Overview
 
-- **Active Feature:** `Feature 028 — Table Allocation Unrestricted Editing & Date Navigation`
-- **Active Task Spec:** [docs/features/028-table-allocation-unrestricted-editing.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/028-table-allocation-unrestricted-editing.md)
+- **Active Feature:** `Feature 025 — Attendance Reporting & Filters`
+- **Active Task Spec:** [docs/features/025-attendance-reporting-and-filters.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/025-attendance-reporting-and-filters.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`); all quality gates green, acceptance criteria checked off, three real security/UI bugs found live-testing and fixed along the way (finalized-tips RLS gap, `assert_board_not_locked`'s `security invoker`/`definer` bug, and a missing RPC-level historical-date lock). PR open: [#24](https://github.com/KrapaGoutam/The-Lineup/pull/24), pending review/merge.
+- **Current State:** Implemented on `feature/025-attendance-reporting-and-filters` (stacked on `feature/028-table-allocation-unrestricted-editing`); all quality gates green, acceptance criteria checked off. CSV bulk import was descoped after confirming, with the user, that it conflicts with Feature 018's live-verified read-only Neon connection and `docs/PRD.md`'s explicit no-write carve-out. Pending PR/merge.
 
 ---
 
@@ -46,6 +46,7 @@
 | `023`   | Settings Consolidation                                  | ✅ Shipped | Vitest (settings-page, pay-rates-section, shift-hours-card, store-hours-grid) + e2e (settings.spec.ts, 3 projects)  |
 | `024`   | Team Management Enhancements                            | ✅ Shipped | pgTAP (profiles_manager_rename, 8 assertions) + Vitest (member-actions) + e2e (team-management.spec.ts, 3 projects) |
 | `028`   | Table Allocation Unrestricted Editing & Date Navigation | ✅ Shipped | pgTAP (0013-0016, 27 assertions) + Vitest (rotation-board) + e2e (allocation-open-editing.spec.ts, 3 projects)      |
+| `025`   | Attendance Reporting & Filters                          | ✅ Shipped | Vitest (attendance-metrics, attendance-report) + e2e (attendance-reporting.spec.ts, 3 projects)                     |
 
 ---
 

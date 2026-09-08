@@ -364,16 +364,26 @@ Clock out | Hours`, matching the mockup's exact column order) and
         unchanged) all pass. Re-ran the full `dashboard.spec.ts` suite
         (desktop): 25/25, no regression from any step in this feature.
   - [x] Commit.
-- [ ] **Step 7: Docs**
-  - [ ] `docs/features/025-attendance-reporting-and-filters.md`: correct
-        the Scope/Acceptance Criteria/Implementation Map/Test Plan CSV
-        bullets to explicitly say CSV import is out of scope for this
-        build, with the reconciliation reasoning (read-only Neon,
-        confirmed live in Feature 018; PRD's explicit carve-out) inline,
-        not silently deleted. Check off every remaining acceptance
-        criterion with a note on what was already built vs. newly built.
-  - [ ] Update `docs/STATUS.md` Feature Matrix + Health Gate line.
-  - [ ] Commit.
+- [x] **Step 7: Docs**
+  - [x] `docs/features/025-attendance-reporting-and-filters.md`: the
+        Scope/Implementation-Map/Test-Plan sections already reflected
+        the CSV-out-of-scope decision (the user's live prompt update
+        carried it in) — added a full reconciliation paragraph under
+        Acceptance Criteria naming the exact conflict (read-only Neon,
+        confirmed live in Feature 018; PRD's explicit no-write carve-out;
+        no Supabase `attendance_records` table anywhere in this
+        codebase) and the three-way choice presented. Rewrote the Data &
+        Authorization section, which still described a fictional
+        Supabase `attendance_records`/`restaurant_id`/`work_date` table,
+        to match the real Neon `users`/`attendance` schema plus
+        Supabase's `attendance_identity_links`. Checked off every
+        acceptance criterion with a note on what was already built vs.
+        newly built.
+  - [x] Updated `docs/STATUS.md`: new `025` Feature Matrix row, refreshed
+        Health Gate counts (214/214 unit tests across 32 files,
+        attendance-reporting.spec.ts 12/12), Current Status Overview
+        pointing at Feature 025.
+  - [x] Commit.
 - [ ] **Step 8: Final gate, push, open PR (base:
       `feature/028-table-allocation-unrestricted-editing`), paste real
       gate output + PR link here.**
@@ -398,6 +408,5 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Steps 1-6 done and committed. Next: Step 7 (docs — CSV-scope correction
-in the feature spec, check off remaining acceptance criteria,
-`docs/STATUS.md`).
+Steps 1-7 done and committed. Next: Step 8 (final gate, push, open PR
+against `feature/028-table-allocation-unrestricted-editing`).
