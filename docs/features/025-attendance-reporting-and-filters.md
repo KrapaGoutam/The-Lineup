@@ -72,4 +72,3 @@ Managers and servers get an enhanced view of raw clock-in attendance records. Us
 
 - Unit: Accurate calendar weekday calculation across month boundaries and leap years; metrics computation tests.
 - E2E: Month switching, CSV upload preview and commit, print dialog interactions.
-

@@ -62,4 +62,3 @@ When creating a tip split at shift change or closing, a manager can click "Pull 
 
 - Unit: Snapshot isolation test — verify that mutating mock attendance data after tip calculation has zero effect on persisted tip interval participants.
 - E2E: Manager clicks "Pull clocked-in team", verifies participants, finalizes split, alters an attendance entry, and asserts tip amounts remain unchanged.
-

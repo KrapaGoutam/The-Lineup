@@ -16,6 +16,7 @@
 
 **Recommendation: Dedicated Page (not a modal).**  
 **Rationale:**
+
 1. **Scope & Hierarchy:** Settings houses complex multi-record domains: a full 7-day Store Hours grid, Shift Hours, Organization Pay Rates, Team management, Schedule management, and Passcode security. Embedding these in a modal forces cramped nested dialogs (e.g. editing a team member or importing a schedule from inside a settings modal).
 2. **Mobile Usability:** On 375px/390px viewports, tall modals cause scroll chaining and virtual keyboard occlusion when editing numerical inputs (pay rates, passcodes, store hours). A dedicated page with vertical scrolling provides an uncompromised mobile experience.
 3. **Deep Linking & Back Navigation:** Managers frequently need to navigate directly to `/settings` (or return via browser back button). A dedicated page integrates cleanly with browser history.
@@ -69,4 +70,3 @@ Managers and staff access a consolidated, structured Settings page. Quick operat
 
 - Unit: Settings component rendering, permission gates for server vs manager.
 - E2E: Full navigation flow into Settings, updating store hours, verifying persistence.
-

@@ -61,4 +61,3 @@ Users see an updated brand identity ("The Monk's") with the official brand logo.
 
 - Unit: Component rendering tests for navigation tabs across roles.
 - E2E: Playwright desktop and mobile viewport tests verifying two-row desktop layout and mobile 3-item dock.
-

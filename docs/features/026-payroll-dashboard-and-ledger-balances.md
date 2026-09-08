@@ -76,4 +76,3 @@ Managers can see the restaurant's entire payroll liability at a glance without d
 
 - Unit: Pure functions for overall balance, owed this month, owed last month, oldest open month, and person balance totals.
 - E2E: Manager verifies dashboard calculations, marks payment to settle a period, and verifies balance updates to "Clear".
-

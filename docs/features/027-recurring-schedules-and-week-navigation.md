@@ -70,4 +70,3 @@ Managers can quickly build restaurant schedules by setting up recurring shifts (
 
 - Unit: Generating recurring shift dates across leap years, month boundaries, and daylight saving shifts; CSV parsing unit tests.
 - E2E: Manager creates recurring shift, navigates weeks, edits post-publish, and verifies display.
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { ArrowLeft, Delete, KeyRound, Sparkles, UserPlus } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -117,6 +117,9 @@ export function LoginScreen({
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setHydrated(true), []);
 
   async function submitPasscode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -233,11 +236,15 @@ export function LoginScreen({
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="relative w-full max-w-md">
         <div className="mb-7 text-center">
-          <div className="bg-primary text-primary-foreground mx-auto grid size-12 place-items-center rounded-2xl text-xl font-black shadow-[0_18px_60px_-20px_var(--primary)]">
-            S
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-black">
+            <img
+              src="https://www.monkswebster.com/assets/img/logo-light.png"
+              alt="The Monk's Logo"
+              className="h-10 object-contain"
+            />
           </div>
           <p className="text-primary mt-5 text-xs font-bold tracking-[0.2em] uppercase">
-            The Monk&apos;s · River Oaks
+            The Monk&apos;s
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
             {mode === "login"
@@ -302,7 +309,11 @@ export function LoginScreen({
                     {error}
                   </p>
                 ) : null}
-                <Button type="submit" className="w-full" disabled={pending}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={pending || !hydrated}
+                >
                   {pending ? "Opening workspace…" : "Open workspace"}
                 </Button>
                 <button
@@ -376,7 +387,11 @@ export function LoginScreen({
                     {error}
                   </p>
                 ) : null}
-                <Button type="submit" className="w-full" disabled={pending}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={pending || !hydrated}
+                >
                   <UserPlus className="size-4" aria-hidden="true" />{" "}
                   {pending ? "Creating account…" : "Create account"}
                 </Button>

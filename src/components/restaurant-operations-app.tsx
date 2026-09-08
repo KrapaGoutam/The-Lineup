@@ -116,7 +116,7 @@ const allocationTab = {
   icon: Table2,
 };
 const tipsTab = { id: "tips" as const, label: "Tip Split", icon: WalletCards };
-const primaryTabs = [scheduleTab, allocationTab, tipsTab];
+const primaryTabs = [allocationTab, tipsTab];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
 // Feature 019: visible to every signed-in role -- unlike Feature 018,
@@ -626,13 +626,13 @@ export function RestaurantOperationsApp({
   // Schedule) is also exactly the manager-only/universal tab set the
   // avatar panel and mobile sheet need.
   const secondaryTabs = [
+    scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
     ...(isManager && !demoMode ? [payrollTab] : []),
   ];
-  // The mobile "More" sheet's navigable rows: Schedule (bumped out of the
-  // 3-button dock for space) plus every secondary tab.
-  const moreTabs = [scheduleTab, ...secondaryTabs];
+  // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
+  const moreTabs = [...secondaryTabs];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -1233,6 +1233,7 @@ export function RestaurantOperationsApp({
   }
 
   async function signOut() {
+    console.log("Sign out clicked!");
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
     setTab("schedule");
@@ -1272,18 +1273,19 @@ export function RestaurantOperationsApp({
         {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
         <div className="mx-auto hidden min-h-[76px] max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid">
           <button
-            onClick={() => setTab("schedule")}
+            onClick={() => setTab("allocation")}
             className="flex min-h-11 items-center gap-3 justify-self-start"
-            aria-label="ServiceFlow schedule home"
+            aria-label="Home"
           >
-            <span className="bg-primary text-primary-foreground grid size-10 place-items-center rounded-xl font-black shadow-[0_12px_40px_-14px_var(--primary)]">
-              S
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-black">
+              <img
+                src="https://www.monkswebster.com/assets/img/logo-light.png"
+                alt="The Monk's Logo"
+                className="h-6 object-contain"
+              />
             </span>
             <span className="text-left">
               <span className="block text-sm font-bold tracking-tight">
-                ServiceFlow
-              </span>
-              <span className="text-muted-foreground block text-xs">
                 The Monk&apos;s
               </span>
             </span>
@@ -1325,7 +1327,10 @@ export function RestaurantOperationsApp({
             </button>
 
             {showAvatarPanel ? (
-              <div className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl">
+              <div
+                data-testid="account-menu"
+                className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl"
+              >
                 <div className="border-border/60 flex items-center justify-between border-b px-[18px] py-3.5">
                   <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
                     Appearance
@@ -1498,18 +1503,19 @@ export function RestaurantOperationsApp({
         >
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setTab("schedule")}
+              onClick={() => setTab("allocation")}
               className="flex min-h-11 items-center gap-2.5"
-              aria-label="ServiceFlow schedule home"
+              aria-label="Home"
             >
-              <span className="bg-primary text-primary-foreground grid size-9 place-items-center rounded-xl font-black">
-                S
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black">
+                <img
+                  src="https://www.monkswebster.com/assets/img/logo-light.png"
+                  alt="The Monk's Logo"
+                  className="h-5 object-contain"
+                />
               </span>
               <span className="text-left">
-                <span className="block text-sm font-bold">ServiceFlow</span>
-                <span className="text-muted-foreground block text-[11px]">
-                  The Monk&apos;s
-                </span>
+                <span className="block text-sm font-bold">The Monk&apos;s</span>
               </span>
             </button>
             <Button
@@ -1538,7 +1544,16 @@ export function RestaurantOperationsApp({
           </div>
           <CountdownPill clock={clock} compact />
           {showAvatarPanel ? (
-            <div className="border-border bg-card space-y-1 rounded-2xl border p-2 shadow-xl">
+            <div
+              data-testid="account-menu"
+              className="border-border bg-card absolute top-[calc(100%+0.5rem)] right-0 z-50 min-w-64 space-y-1 rounded-2xl border p-2 shadow-xl"
+            >
+              <div className="border-border/60 mb-1 flex flex-col border-b px-2.5 pb-2">
+                <span className="text-sm font-semibold">{user.name}</span>
+                <span className="text-muted-foreground text-xs capitalize">
+                  {user.role.replace("_", " ")}
+                </span>
+              </div>
               <div className="flex items-center justify-between px-2.5 py-2">
                 <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
                   Appearance

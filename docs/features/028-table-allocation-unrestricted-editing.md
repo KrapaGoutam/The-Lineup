@@ -60,4 +60,3 @@ During fast-paced live service, any team member (server, host, busser, manager, 
 
 - Unit: Domain tests verifying any member can trigger table updates while finalized dates reject writes.
 - E2E: Server signs in, navigates to allocation board, edits a previously assigned table in a teammate's column, and verifies attribution.
-

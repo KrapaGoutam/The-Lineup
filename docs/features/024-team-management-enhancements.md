@@ -60,4 +60,3 @@ Owners and managers manage their team directly from the Settings page. From a un
 
 - Unit: Designation hierarchy boundary checks; rename action validation.
 - E2E: Manager renames staff member, resets passcode, links attendance, and confirms the member can log in with the new passcode.
-
