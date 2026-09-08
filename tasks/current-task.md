@@ -3,7 +3,7 @@
 **Active Spec:** `docs/features/023-settings-consolidation.md`
 **Reference:** `design-system-reference.html` section `2d` ("Full Settings Page")
 **Branch:** `feature/023-settings-consolidation` (off `feature/022-app-shell-brand-and-nav-hierarchy`)
-**Status:** In progress
+**Status:** Complete — PR open, pending review/merge (https://github.com/KrapaGoutam/The-Lineup/pull/22)
 **Assigned Agent:** Claude Code (explicit implementer for this feature, per user request)
 
 ## 🎯 Objective
@@ -156,7 +156,13 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
         them ignored as "not authored by this session", but this session
         now actively maintains both, so they're formatted like every
         other checked-in doc.
-- [ ] **Step 8: Push branch, open PR, paste gate output + PR link here.**
+- [x] **Step 8: Push branch, open PR, paste gate output + PR link here.**
+  - Branch pushed: `feature/023-settings-consolidation` (base:
+    `feature/022-app-shell-brand-and-nav-hierarchy`).
+  - PR: https://github.com/KrapaGoutam/The-Lineup/pull/22
+  - Final gate: `npm run check` clean; `npm test` 187/187 (30/30 files);
+    `npm run build` clean; `npx playwright test tests/e2e/settings.spec.ts`
+    9/9 (desktop, host-tablet, server-mobile).
 
 ## 🧪 Validation gate (run before every commit)
 
@@ -189,5 +195,6 @@ E2E ask is satisfied at the point the full flow actually exists to test.
 
 ## Current State & Next Step
 
-Branch created, this file committed. Next: Step 2 (store-hours-grid.tsx,
-shift-hours-card.tsx + tests).
+All 8 steps complete. PR #22 open against `feature/022-app-shell-brand-and-nav-hierarchy`,
+all quality gates green. Next step is review/merge — nothing left to
+resume here.
