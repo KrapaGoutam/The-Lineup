@@ -203,10 +203,14 @@ assistant_manager | staff` — it encodes the _authorization tier_
         `exact: true` fixed both.
   - [x] 6/6 passing across all three Playwright projects (desktop,
         host-tablet, server-mobile).
-- [ ] **Step 6: Docs**
-  - [ ] Check off acceptance criteria in
-        `docs/features/024-team-management-enhancements.md`.
-  - [ ] Update `docs/STATUS.md` Feature Matrix.
+- [x] **Step 6: Docs**
+  - [x] Check off acceptance criteria in
+        `docs/features/024-team-management-enhancements.md`, each noting
+        which are unchanged pre-existing behavior (promotion rules,
+        passcode reset, attendance linking, staff-hidden) vs. actually
+        new this feature (rename, attendance-link-status badge).
+  - [x] Updated `docs/STATUS.md` Feature Matrix (024 added) and the
+        health-gate line (31/31 files, 192/192 tests; settings.spec.ts + team-management.spec.ts; 12/12 pgTAP files).
 - [ ] **Step 7: Push branch, open PR (base:
       `feature/023-settings-consolidation`), paste gate output + PR link
       here.**

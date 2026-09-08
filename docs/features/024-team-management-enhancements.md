@@ -31,12 +31,14 @@ Owners and managers manage their team directly from the Settings page. From a un
 
 ## Acceptance Criteria
 
-- [ ] Given an owner or manager in Settings > Team, they see the complete team roster with designation, role, attendance link status, and active state.
-- [ ] Given a manager editing a team member, they can update the member's full name, and the updated name reflects across the live app immediately upon saving.
-- [ ] Given an owner, they can promote an active member to Manager or Assistant Manager; a manager cannot promote someone to Manager or Owner.
-- [ ] Given a manager resetting a member's passcode, the member can immediately sign in using the new four-digit passcode.
-- [ ] Given a manager linking attendance, they select an attendance record from the dropdown, establishing a row in `attendance_identity_links`; the identity link is strictly by ID and never matches on name.
-- [ ] Given a regular server, the Team management controls in Settings are completely hidden.
+- [x] Given an owner or manager in Settings > Team, they see the complete team roster with designation (which subsumes role — see `tasks/current-task.md`'s reconciliation notes: `AppRole` is strictly coarser and always derivable from designation, so a separate role badge would be redundant), attendance link status (new: a Linked/Not linked badge per row, loaded once on mount), and active state.
+- [x] Given a manager editing a team member, they can update the member's name (`profiles.display_name` — there is no `full_name` column), and the updated name reflects across the live app immediately upon saving.
+- [x] Given an owner, they can promote an active member to Manager or Assistant Manager; a manager cannot promote someone to Manager or Owner. (Unchanged, pre-existing behavior from Feature 014 — `assignableDesignations`/`canChangeDesignation`.)
+- [x] Given a manager resetting a member's passcode, the member can immediately sign in using the new four-digit passcode. (Unchanged, pre-existing behavior from Feature 016 — verified end to end again in `tests/e2e/team-management.spec.ts`.)
+- [x] Given a manager linking attendance, they select an attendance record from the dropdown, establishing a row in `attendance_identity_links`; the identity link is strictly by ID and never matches on name. (Unchanged, pre-existing behavior from Feature 019.)
+- [x] Given a regular server, the Team management controls in Settings are completely hidden. (Unchanged — Feature 023's `isManager` gate on the Team nav entry point; reconfirmed by `tests/e2e/team-management.spec.ts`'s "a server cannot reach Team management at all".)
+
+All six verified by `tests/e2e/team-management.spec.ts` (6/6 across desktop/host-tablet/server-mobile) and live Playwright smoke testing. Designation management, passcode reset, attendance linking, and active/deactivate toggling were already fully implemented (Features 014/016/017/019) before this feature — the actual new work was Rename (`renameTeamMemberAction`, a new `profiles_update_manager` RLS policy, `RenameMemberDialog`), the attendance-link-status badges, and audit logging for rename and designation change (passcode reset already had its own). See `tasks/current-task.md` for the full reconciliation log.
 
 ## UX Contract
 
