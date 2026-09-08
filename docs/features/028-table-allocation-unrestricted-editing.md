@@ -31,11 +31,11 @@ During fast-paced live service, any team member (server, host, busser, manager, 
 
 ## Acceptance Criteria
 
-- [ ] Given any signed-in server, they can click into an already-assigned table cell in any column on the live board and update the table number.
-- [ ] Given an edit made by a server to another server's table, the update succeeds and the attribution log records the true actor's profile ID.
-- [ ] Given a finalized tip pool for the service date, all inputs on the allocation board are disabled for all users (including managers).
-- [ ] Given the date/month filter, selecting a prior date loads that date's historical table allocations in read-only state.
-- [ ] Given the Schedule, Team, Attendance, or Payroll modules, role permissions remain completely unchanged.
+- [x] Given any signed-in server, they can click into an already-assigned table cell in any column on the live board and update the table number. (New: `TableEntry`'s Edit/Clear controls in `allocation-workspace.tsx` — the backend upsert already supported this via `board_assign`'s own `on conflict ... do update`; the UI had never exposed it. Gated by the same `canWrite` every empty-cell input already used, now also incorporating `readOnly`/`isHistoricalView`.)
+- [x] Given an edit made by a server to another server's table, the update succeeds and the attribution log records the true actor's profile ID. (Pre-existing — `board_assign`'s `assigned_by = (select auth.uid())`, both on insert and on the upsert path, plus a `board_events` row stamped with the real `actor_profile_id`. Reconfirmed live via `tests/e2e/allocation-open-editing.spec.ts` and the cross-column edit log's actor name.)
+- [x] Given a finalized tip pool for the service date, all inputs on the allocation board are disabled for all users (including managers). (Was **silently broken** for every role except owner, general manager, and shift manager — two independent real bugs, both found live-testing and fixed this feature. First, the RLS policies' own finalized-check subquery on `table_rotation_entries` could not read `tip_pools` under a server's own role. Fixed by `private.is_service_date_tip_finalized`, migration `20260908180000`. Second, `private.assert_board_not_locked` — the RPC-level check every board RPC calls — was declared `security invoker`, not `security definer`, hitting the identical class of bug at the RPC layer for every mutation, including `board_assign`. Fixed by migration `20260908200000`. See the Step 2 and Step 3 investigation notes in `tasks/current-task.md` for the live-tested evidence.)
+- [x] Given the date/month filter, selecting a prior date loads that date's historical table allocations in read-only state. (New: `allocation-date-filter.tsx` + `getAllocationContextForDateAction`; `getAllocationContext`'s `service_sessions` lookup no longer filters on `status = 'active'`, so a concluded historical session resolves the same way today's does. Read-only is enforced at both the UI layer — `readOnly = boardLocked || isHistoricalView` — and, after a third real gap found the same way as the two above, at the RPC layer too: `private.assert_board_not_locked` now also blocks a session dated before today, migration `20260908210000`, closing the path a manipulated client could otherwise have used to write to a historical session id the date navigator legitimately hands out.)
+- [x] Given the Schedule, Team, Attendance, or Payroll modules, role permissions remain completely unchanged. (Nothing in this feature touches those modules' files, RLS policies, or RPCs — confirmed by `git diff` scope for every commit on this branch.)
 
 ## UX Contract
 
@@ -52,11 +52,14 @@ During fast-paced live service, any team member (server, host, busser, manager, 
 
 ## Implementation Map
 
-- `src/features/allocation/components/allocation-board.tsx`: Cell editing controls, removal of server-disable flags on occupied cells.
-- `src/features/allocation/components/allocation-date-filter.tsx`: Month/date picker for session history.
-- `src/features/allocation/actions/rotation-actions.ts`: Update table entry action.
+- `src/features/allocation/components/allocation-workspace.tsx` (actual file name; the spec's `allocation-board.tsx` doesn't exist in this codebase — Features 003/009/010/011 already named it `allocation-workspace.tsx`): `TableEntry`'s Edit/Clear controls, `readOnly` flag.
+- `src/features/allocation/components/allocation-date-filter.tsx`: Date picker + prev/next-day steppers + Back to today for session history.
+- `src/features/allocation/actions/allocation-actions.ts` (actual file name; the spec's `rotation-actions.ts` doesn't exist): `clear-cell` case in `executeBoardActionRemote`, new `getAllocationContextForDateAction`.
+- `src/features/allocation/data/allocation-data.ts`: `getAllocationContext`'s optional service date, `serviceDate`/`isHistorical`.
+- `supabase/migrations/`: `table_rotation_entries` RLS fix, `board_clear_cell` RPC, `assert_board_not_locked` fixed to `security definer` + extended with the historical-date check.
 
 ## Test Plan
 
-- Unit: Domain tests verifying any member can trigger table updates while finalized dates reject writes.
-- E2E: Server signs in, navigates to allocation board, edits a previously assigned table in a teammate's column, and verifies attribution.
+- Unit: `rotation-board.test.ts` — any member can overwrite an already-occupied cell (cross-column included) and clear a cell via the pure domain reducer; finalized/historical rejection is enforced server-side (RLS + RPC), not in the pure domain layer, and is covered by pgTAP instead (see below).
+- pgTAP (`supabase/tests/database/0013`-`0016`, 27 assertions total across the four new files): the finalized-tips RLS fix, `board_clear_cell`'s own lock and attribution, `assert_board_not_locked`'s `security definer` fix (regression-proofed via `board_assign` itself, not just the new RPC), and the historical-date RPC guard.
+- E2E (`tests/e2e/allocation-open-editing.spec.ts`, run across all three Playwright projects): a server edits and clears a teammate's already-assigned table with correct attribution while admin actions stay absent for her; a manager browsing to a previous day sees the board go read-only and Back to today restores it.

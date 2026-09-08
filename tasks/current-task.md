@@ -1,247 +1,419 @@
-# Current Task: Feature 024 — Team Management Enhancements
+# Current Task: Feature 028 — Table Allocation Unrestricted Editing & Date Navigation
 
-**Active Spec:** `docs/features/024-team-management-enhancements.md`
-**Branch:** `feature/024-team-management-enhancements` (stacked on `feature/023-settings-consolidation`)
-**Status:** Complete — PR open, pending review/merge (https://github.com/KrapaGoutam/The-Lineup/pull/23)
+**Active Spec:** `docs/features/028-table-allocation-unrestricted-editing.md`
+**Branch:** `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`)
+**Status:** Complete — PR open at https://github.com/KrapaGoutam/The-Lineup/pull/24
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
 
-Add the one genuinely missing Team capability — **renaming a member's
-display name** — with server-side validation, RLS authorization, and an
-audit trail; add audit logging to the two adjacent sensitive actions
-(designation change, passcode reset) that don't have it yet; and surface
-attendance-link status directly in the roster so acceptance criterion 1
-("...attendance link status...") is actually visible without opening a
-dialog. Designation management, passcode reset, attendance linking, and
-active/deactivate are **already fully implemented** (Features 014/016/
-017/019) and embedded reachable from Settings (Feature 023's Team quick-
-link card) — this feature does not rebuild any of that.
+Reconciliation 1 (any active member may edit/clear/update any table cell on
+the live board, cross-column, unconditionally attributed) is a **clean
+extension of Feature 011** — confirmed below, not a weakening of any role
+guard elsewhere. Investigation before coding found most of the backend
+already built this way; the real remaining work is: (1) the UI never
+exposed an edit control for an _already-assigned_ cell at all, (2) date/
+month navigation to historical boards doesn't exist, and (3) one real,
+previously-untested RLS gap in the temporal lock. Schedule, Tip Split,
+Attendance, Payroll, and Team are untouched by this feature.
 
-## 📖 Reconciliations (spec text vs. actual app — resolved before coding)
+## 📖 Investigation findings (what's already built vs. what's real work)
 
-1. **Entry point is already satisfied.** The spec allows "a full subview
-   reachable from Settings" as an alternative to embedding inline —
-   Feature 023 already added exactly that (Settings → Team card →
-   `setTab("team")`). No navigation change needed.
-2. **Designations are not "Server, Host, Busser."** The real, RLS-backed
-   `Designation` type (Feature 014) is `owner | manager |
-assistant_manager | staff` — it encodes the _authorization tier_
-   (mirrors `memberships_update_manager`'s RLS exactly), not a job title.
-   There is no job-title column in the schema and adding one is a bigger,
-   unscoped change. Rename/designation/reset all continue to operate on
-   the real 4-value designation system, matching `assignableDesignations`
-   already in `src/features/team/domain/designations.ts` — untouched.
-3. **`user_profiles.full_name` doesn't exist.** The real table is
-   `public.profiles.display_name` (constrained 1–100 chars, trimmed).
-   Rename targets that column, reusing `isValidDisplayName` from
-   `@/features/auth/domain/registration` (2–100 chars) for both the
-   dialog and the server action — the same validator registration
-   already uses, not a new one.
-4. **`audit_logs` doesn't exist; `audit_events` already does.** A
-   generic, tenant-scoped, RLS-protected audit table already exists
-   (`supabase/migrations/20260905065702_initial_schema.sql`, used today
-   by Tip Split's finalize/reopen trail). Rename, designation change, and
-   passcode reset write into this existing table — no new table.
-5. **Rename requires a genuine RLS change — the one real schema delta
-   this feature needs.** `profiles` currently has only
-   `profiles_update_self` (`id = auth.uid()`); nothing lets a manager
-   update a _different_ member's row. Adds one additive UPDATE policy
-   (`profiles_update_manager`) via a new `private.can_manage_member()`
-   SECURITY DEFINER helper mirroring `memberships_update_manager`'s exact
-   hierarchy (owner unrestricted; manager can act only on a target who
-   isn't owner/manager). Covered by a pgTAP policy test, run for real
-   against the local Supabase instance already running in this
-   environment (`npm run db:reset && npm run db:test`).
-6. **One new dialog, not one mega-dialog.** The spec's Implementation Map
-   names a single `edit-member-dialog.tsx` for rename + designation +
-   attendance linking combined. The existing, working, already-tested
-   UI uses three separate lightweight dialogs/inline-actions
-   (`PasscodeResetDialog`, `MemberStatusDialog`, `AttendanceLinkDialog`,
-   plus inline "Make X" designation buttons). Consolidating all of that
-   into one mega-dialog would be a risky, unscoped rewrite of working
-   code for a cosmetic requirement no acceptance criterion actually
-   tests. Adds `RenameMemberDialog` following the exact same pattern as
-   its siblings instead.
-7. **No reason prompt for rename or designation-change audit rows.**
-   Passcode reset already collects a `reason` (3–500 chars) that maps
-   directly onto `audit_events.reason`. Designation change and rename are
-   one-click actions today with no reason UI; `audit_events.reason` is
-   nullable, so their audit rows carry `reason: null` and put the actual
-   change in `before_state`/`after_state` (jsonb) instead — more
-   informative than forcing a free-text reason onto a currently
-   frictionless action, and not a UX change this feature asks for.
+**Already fully implemented (verified by reading the actual migrations,
+not assumed from the spec text):**
+
+1. **Cross-column, any-active-member writes to empty cells** — Feature 011. `mayWriteColumn()` (`rotation-board.ts`) always returns `true`;
+   `table_rotation_entries_insert_any_member` RLS allows any active
+   member.
+2. **Unconditional attribution** — `board_assign`'s RPC always writes
+   `assigned_by = (select auth.uid())`, both on INSERT and on the
+   `on conflict ... do update` path. Every `board_*` RPC also inserts an
+   `actor_profile_id`-stamped row into the existing `board_events` table.
+3. **`board_assign` is already an upsert** (`on conflict (rotation_round_id,
+rotation_member_id) do update set table_label = excluded.table_label,
+assigned_by = excluded.assigned_by`) — the backend already fully
+   supports editing an occupied cell. Nothing to add server-side for
+   "update an assigned table."
+4. **Every `board_*` RPC calls `private.assert_board_not_locked()`
+   before writing anything** — the RIGHT idea (one shared check, called
+   from every mutation path), but see gap 3 below: that function's own
+   implementation was broken until this feature fixed it.
+5. **Admin-only actions** (`Clear board`/`Clear row`/`Clear column`/
+   `Add row`, "reorder" = `move-column`) — already gated by
+   `private.assert_is_board_manager()` (owner/general_manager/
+   shift_manager/host) at the RPC level, in addition to the UI's
+   `isManager` gate. Confirmed **unchanged** by this feature.
+6. **Designation hierarchy tests** (`0007_allocation_board_rpcs.test.sql`,
+   28 assertions) already cover the manager-only split. No changes
+   needed there.
+
+**Real gaps — the actual work of this feature:**
+
+1. **`TableEntry` (`allocation-workspace.tsx`) has no edit control for an
+   occupied cell at all.** Once a cell has a value it renders a static
+   "Table X — Recorded" badge with no input, for anyone, manager
+   included. The backend already supports the write (#3 above); only the
+   UI needs a click-to-edit affordance. This is acceptance criterion 1's
+   actual gap.
+2. **No per-cell "clear" exists.** Only bulk `clear-row`/`clear-column`/
+   `clear-board` (manager-only) exist. The spec's scope explicitly says
+   "edit, **clear**, or update any table cell" — adds one new
+   `clear-cell` `BoardAction` + `board_clear_cell` RPC, gated by
+   `assert_board_not_locked` only (no manager check — matches
+   Reconciliation 1, unlike the four bulk actions in gap 5 above which
+   stay manager-only on purpose).
+3. **Real, more serious bug than initially scoped, found live-testing
+   against the local database as a plain server (not assumed from
+   reading SQL text alone).** The insert, update, and delete policies on
+   `table_rotation_entries` from migration `20260906144901` each try to
+   lock the row once tips are finalized by checking, in a subquery, that
+   no matching `tip_pools` row has `status = finalized`. That check is
+   just a SELECT, so it is itself subject to RLS on the `tip_pools`
+   table. The `tip_pools` SELECT policy only allows the owner, general
+   manager, or shift manager roles to read it.
+
+   The consequence: for a plain server or host, that subquery's join to
+   `tip_pools` returns zero rows no matter the pool's real status, so
+   the "not finalized" check always passes. The finalized-lock is
+   silently inert for exactly the roles it matters most for, and this
+   was true for insert and update as well, not only delete.
+
+   Confirmed directly in a live psql session against the local Supabase
+   instance: signed in as a seeded server profile, a delete, an update,
+   and an insert against a finalized day's `table_rotation_entries` all
+   succeeded, bypassing every RPC.
+
+   Fixed with one new security-definer helper function (same pattern
+   already used elsewhere in this schema for "a policy needs to see
+   into a table the caller can't directly read") that all three
+   policies now call instead of the broken inline subquery. The new
+   per-cell clear action (gap 2 above) depends on the delete policy
+   directly, which makes this fix load-bearing for this feature, not
+   just a pre-existing bug fixed in passing.
+
+   **This was step 2's understanding. Step 3 found the fix above was
+   necessary but not sufficient**: `private.assert_board_not_locked`,
+   the function every `board_*` RPC calls as its own independent lock
+   check, turned out to have the identical bug — declared `security
+invoker`, so its own SELECT against `tip_pools` was equally subject
+   to `tip_pools_select_manager`, silently defeating the RPC-level
+   guard for a plain server or host too, for every `board_*` RPC at
+   once (`board_assign` included, the single most-used one). In
+   practice, the temporal lock has only ever worked for
+   owner/general_manager/shift_manager. See step 3's own notes below
+   for the second fix.
+
+4. **Date/month navigation doesn't exist at all.**
+   `getAllocationContext` hardcodes `service_date = today` and
+   `status = 'active'` — there is no way to view any other date's board,
+   historical or otherwise.
+
+   **Step 5 found a third real gap in the same family as gaps 3 and 3b
+   above, before any historical browsing existed to expose it**: none of
+   the `board_*` RPCs check a session's own `service_date` against
+   today at all — only whether tips are finalized. Before this feature,
+   that was harmless (the client could never legitimately hold anything
+   but today's `service_session_id`, since the only read path,
+   `getAllocationContext`, only ever returned today's session). Step 5's
+   own date navigator is what first hands a legitimate historical
+   `service_session_id` to the client — so without a matching
+   server-side guard, a manipulated client could call
+   `executeBoardActionRemote` with a browsed-to historical session id
+   and mutate a concluded day directly, bypassing the UI's `readOnly`
+   flag entirely. Same fix shape as gap 3b: extended
+   `private.assert_board_not_locked` (already called by every `board_*`
+   RPC) to also raise when `session.service_date < today` in the
+   location's own time zone. See Step 5's own notes below.
 
 ## 🔒 Non-negotiable constraints
 
-- Identity linking stays 100% manual by UUID/`neonUserId` pairing —
-  nothing added here infers or matches on name strings (unchanged,
-  `AttendanceLinkDialog` already enforces this).
-- Team management stays manager/owner-only; the entry point (Settings'
-  Team card) is already gated by `isManager` (Feature 023).
-- No changes to tenant scoping (`organization_id`), the allocation/
-  payroll/tips RLS surface, or Feature 019 attendance scoping.
-- Self-service role promotion stays impossible — `assignableDesignations`
-  (unchanged) already only offers a target set the acting role is
-  RLS-permitted to write.
+- Schedule, Tips, Attendance, Payroll, Team stay exactly as role-gated as
+  they already are — nothing in this feature touches those modules.
+- `Clear board`/`Clear row`/`Clear column`/`Add row`/reorder
+  (`move-column`) stay manager/owner/host-only, at both the RPC level
+  (unchanged) and the UI level (unchanged) — only the NEW `clear-cell`
+  action is open to any active member, matching Reconciliation 1's
+  explicit "cell" scope, not the bulk actions' scope.
+- No reason field/mechanism anywhere on the allocation board (unchanged;
+  the codebase already made this call for Feature 011, twice — see
+  `TableEntry`'s own comment).
+- Occupied-table edits and the new clear-cell action are refused
+  identically whether tips are finalized for that date OR the viewed
+  date is historical (not today) — both are read-only locks, for
+  everyone, no role exception.
 
 ## 🛠️ Implementation Steps
 
 - [x] **Step 1: This task file** — populate and commit before any app code.
-- [x] **Step 2: Migration + pgTAP policy test**
-  - [x] `supabase/migrations/20260908170000_profiles_manager_rename.sql`:
-        `private.can_manage_member(target_profile_id uuid)` SECURITY
-        DEFINER function. Delegates the actor-side check to
-        `private.has_org_role` (found via the target's own active
-        membership row) rather than re-deriving it inline, so the
-        org-creator bypass `has_org_role` already has stays consistent
-        here too; refuses a deactivated target entirely. Revoked from
-        public/anon, granted to authenticated; new additive
-        `profiles_update_manager` UPDATE policy using it. No GRANT
-        changes needed (`update` on `profiles` is already granted to
-        `authenticated`).
-  - [x] `supabase/tests/database/0012_profiles_manager_rename.test.sql`:
-        owner renames anyone including another owner; manager renames
-        an assistant-manager-tier target; manager blocked from renaming
-        the owner; deactivated target blocked; cross-organization
-        rename blocked; self-rename still works via the untouched
-        `profiles_update_self` policy. 8/8 assertions.
-  - [x] `npm run db:reset && npm run db:test` — ran for real against the
-        local Supabase instance already running in this environment:
-        `Files=12, Tests=179 ... Result: PASS` (was already 171 tests
-        across 11 files; this feature adds the 12th file, 8 new tests).
-        `npm run db:types` regenerated with zero net diff (the new
-        function lives in the `private` schema, never exposed to
-        PostgREST, so the public type surface is unchanged).
-  - [x] `npm run check`, `npm test` (187/187), `npm run build` — all
-        clean.
-- [x] **Step 3: Server actions + audit logging**
-  - [x] `src/features/team/data/audit-log.ts`: `writeAuditEvent()` —
-        thin wrapper around an `audit_events` insert, structurally typed
-        so it accepts both the regular RLS-bound client and the admin
-        client. Logs and swallows its own failure.
-  - [x] `src/features/team/actions/member-actions.ts` (new, per the
-        spec's Implementation Map): `renameTeamMemberAction` — validates
-        with `isValidDisplayName`, updates `profiles.display_name`
-        (authorized by the new RLS policy, not re-checked in
-        application code), writes an audit_events row
-        (`entity_type: "profile"`, before/after `display_name`),
-        revalidates.
-  - [x] `src/features/team/actions/team-actions.ts`: added a
-        `writeAuditEvent` call to `updateTeamDesignationAction` (before/
-        after designation); `previousDesignation` now an input, looked
-        up client-side from the already-loaded `team` state rather than
-        an extra server round trip.
-  - [x] **Correction to the plan**: `src/app/api/auth/passcode/reset/route.ts`
-        already writes its own `audit_events` row (`action:
-"passcode_reset"`, with the reset dialog's collected `reason`) —
-        missed in the original exploration pass (an earlier grep for
-        `audit_log`/`auditLog` didn't match `audit_events`). Left
-        untouched: it already does the job correctly, and swapping it to
-        the new shared helper would be a same-behavior refactor of
-        working code with no test coverage change to show for it.
-  - [x] Unit tests: `member-actions.test.ts` (5 tests — empty/whitespace-
-        only/over-100-char names rejected without touching the database,
-        a 100-char name accepted at the boundary, a valid rename trims,
-        saves, and writes the audit row with correct before/after
-        state). `designations.test.ts` (already comprehensive) needs no
-        changes.
-  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
-        clean.
-- [x] **Step 4: UI**
-  - [x] `src/features/team/components/rename-member-dialog.tsx`: same
-        lightweight pattern as `PasscodeResetDialog`/`MemberStatusDialog`
-        (no explicit focus trap there either -- matched, not invented).
-  - [x] `src/features/team/components/team-workspace.tsx`: added a
-        "Rename" action (same authorization tier as passcode reset —
-        `canReset`, already computed per row); loads attendance-link
-        status once on mount via the existing `onLoadAttendanceOptions`
-        prop (no new action) and shows a Linked/Not linked badge per
-        row, refreshed after any link/unlink action.
-  - [x] **Real regression found and fixed via live testing**: the
-        roster row's flex-wrap layout, already dense, broke visibly on
-        a 390px viewport once the Rename button and link-status badge
-        were added -- the name truncated to nothing and action buttons
-        overlapped the badge. Restructured the row to stack vertically
-        (name+badges, then a wrapped action-button group) below `sm:`
-        and stay horizontal at `sm:` and up; confirmed clean on both a
-        390×780 and a 1440×900 screenshot after the fix, and re-diffed
-        the resulting desktop screenshot against the pre-change one to
-        confirm no regression there either.
-  - [x] `src/components/restaurant-operations-app.tsx`: new
-        `renameTeamMember` handler (demo + real mode, mirrors
-        `changeDesignation`'s shape, including its same pre-existing
-        limitation that the signed-in `user` object itself isn't
-        updated if an owner renames themselves), prop threading into
-        `TeamWorkspace` (`renameTarget` dialog state lives inside
-        `TeamWorkspace` itself, matching its sibling dialogs -- no new
-        state needed in the app shell).
-  - [x] Live Playwright smoke test (manager desktop + mobile): renamed
-        Mia Chen to "Mia Chen-Rodriguez", confirmed immediate roster
-        reflection; linked her attendance record and confirmed the
-        badge flipped from "Attendance not linked" to "Attendance
-        linked" without a reload.
-  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
-        clean.
-- [x] **Step 5: E2E flow** (`tests/e2e/team-management.spec.ts`)
-  - [x] Manager renames a staff member, promotes Staff -> Assistant
-        Manager, resets their passcode to a known chosen value (simpler
-        and just as conclusive as parsing an auto-generated one out of
-        the DOM), links their attendance record, then signs out and
-        back in as that member with the new passcode -- proves the
-        reset passcode actually works end to end, not just that the
-        dialog reported success.
-  - [x] Server cannot reach Team management at all (the "Team" nav
-        button is absent both directly and inside the mobile "More"
-        sheet).
-  - [x] Two real bugs in the test itself, found and fixed while running
-        it live rather than assumed correct: `getByLabel("Name")` and
-        `getByRole("button", { name: "Reset passcode" })` both hit
-        Playwright's default substring matching against _other_
-        elements whose labels happen to contain those words as a
-        substring ("Re**name**", "Close **reset passcode**") --
-        `exact: true` fixed both.
-  - [x] 6/6 passing across all three Playwright projects (desktop,
-        host-tablet, server-mobile).
-- [x] **Step 6: Docs**
-  - [x] Check off acceptance criteria in
-        `docs/features/024-team-management-enhancements.md`, each noting
-        which are unchanged pre-existing behavior (promotion rules,
-        passcode reset, attendance linking, staff-hidden) vs. actually
-        new this feature (rename, attendance-link-status badge).
-  - [x] Updated `docs/STATUS.md` Feature Matrix (024 added) and the
-        health-gate line (31/31 files, 192/192 tests; settings.spec.ts + team-management.spec.ts; 12/12 pgTAP files).
-- [x] **Step 7: Push branch, open PR (base:
-      `feature/023-settings-consolidation`), paste gate output + PR link
-      here.**
-  - Branch pushed: `feature/024-team-management-enhancements`.
-  - PR: https://github.com/KrapaGoutam/The-Lineup/pull/23
-  - Final gate, all run for real: `npm run check` clean; `npm test`
-    192/192 (31/31 files); `npm run build` clean; `npm run db:test`
-    12/12 pgTAP files, 179 assertions;
-    `npx playwright test tests/e2e/settings.spec.ts tests/e2e/team-management.spec.ts`
-    15/15 across desktop/host-tablet/server-mobile.
+- [x] **Step 2: Fix the RLS finalized-lock gap (all three policies) + pgTAP test**
+  - [x] New migration
+        (`20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql`):
+        new `private.is_service_date_tip_finalized(organization_id,
+rotation_round_id)` `SECURITY DEFINER` function; replaces the
+        raw `not exists(...)` clause in `table_rotation_entries_insert_
+any_member`, `_update_any_member`, and `_delete_any_member`
+        (originally only planned to touch DELETE — investigation while
+        writing the test found the bug was real for all three, not just
+        DELETE; see the finding above).
+  - [x] `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql`
+        (8 assertions): confirms a server genuinely cannot SELECT
+        `tip_pools` directly (the precondition); insert/update/delete
+        all succeed while draft; all three are blocked once finalized,
+        as a server specifically (not owner/manager); the entry is
+        provably untouched after the blocked attempts.
+  - [x] `npm run db:reset && npm run db:test` — 13/13 pgTAP files,
+        187 assertions, run for real against the local Supabase
+        instance. `npm run db:types` regenerated with zero net diff
+        (the new function is `private`, never exposed to PostgREST).
+  - [x] `npm run check`, `npm test`, `npm run build`.
+- [x] **Step 3: `clear-cell` action — domain, RPC, wiring**
+  - [x] `rotation-board.ts`: new `{ type: "clear-cell"; roundId: string;
+columnId: string }` `BoardAction` variant + `applyBoardAction`
+        case (finds the round+column cell and nulls its `tableLabel`,
+        matching `clear-row`'s own convention). 4 new unit tests in
+        `rotation-board.test.ts`, including one proving the pure domain
+        layer already supports overwriting an occupied cell (the shape
+        the click-to-edit UI in Step 4 relies on) and one for
+        clear-cell-on-an-already-empty-cell as a safe no-op.
+  - [x] New migration `20260908190000_board_clear_cell.sql`:
+        `board_clear_cell(p_organization_id, p_service_session_id,
+p_round_id, p_member_id)` RPC — calls `assert_board_not_locked`
+        only (deliberately no `assert_is_board_manager`), deletes the
+        one `table_rotation_entries` row, logs a `board_events` row
+        with an `inverse_payload` for undo, matching the shape of
+        `board_clear_row`/etc. Adds the `clear_cell` value to the
+        `board_event_type` enum.
+  - [x] **Second real bug, found live-testing this exact RPC, more
+        serious than Step 2 alone fixed**:
+        `private.assert_board_not_locked` — the function every single
+        `board_*` RPC calls to enforce the finalized-tips lock — is
+        declared `security invoker`, not `security definer`, despite
+        its own comment claiming independent enforcement. Being
+        invoker, its own SELECT against `tip_pools` is itself subject
+        to `tip_pools_select_manager`, the exact same class of bug
+        fixed in Step 2, except this one silently defeats the lock for
+        _every_ `board_*` RPC at once (`board_assign` included — the
+        single most-used one), not just raw `table_rotation_entries`
+        writes. Confirmed live: as a plain server, calling
+        `assert_board_not_locked` directly against a finalized session
+        raised nothing; the identical call as postgres correctly
+        raised. In practice, the "temporal lock invariant" has only
+        ever been enforced for owner/general*manager/shift_manager —
+        the one role class Feature 028's own criterion says must
+        \_also* be locked out, "including managers," has worked, while
+        the roles that actually needed the RPC-level check most were
+        silently exempt. New migration
+        `20260908200000_assert_board_not_locked_security_definer.sql`
+        makes it `security definer`, matching every other cross-table
+        RLS-aware helper in this schema.
+  - [x] `supabase/tests/database/0014_board_clear_cell.test.sql` (6
+        assertions): `board_clear_cell` exists, is `SECURITY INVOKER`;
+        one active server clears a cell in a _different_ server's
+        column (not a manager, not the column owner — Reconciliation
+        1); the clear is attributed to the true actor; a finalized
+        board blocks it.
+  - [x] `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql`
+        (4 assertions): confirms the function is now `security
+definer`; a plain server's `board_assign` call — the real-world
+        regression proof, not just the new RPC — is now correctly
+        blocked on a finalized day, and leaves nothing written.
+  - [x] `allocation-actions.ts`: `clear-cell` case in
+        `executeBoardActionRemote`. No changes needed in
+        `allocation-workspace.tsx`'s `execute()` — it already dispatches
+        every `BoardAction` variant generically.
+  - [x] `npm run db:reset && npm run db:test`: 15/15 pgTAP files, 197
+        assertions. `npm run db:types`: zero net diff against the
+        committed, `--linked` (remote-tracked) convention — confirmed
+        harmless: this app's Supabase client isn't constructed with a
+        `Database` generic at all, so `.rpc()` calls (including the new
+        `board_clear_cell`) aren't type-checked against generated
+        types either way.
+  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
+- [x] **Step 4: Click-to-edit for occupied cells (the actual UI gap)**
+  - [x] `TableEntry`: an occupied cell now shows Edit (pencil) and Clear
+        (X) buttons alongside the read-only badge, whenever `canWrite`
+        already allows it (no new role logic — reuses the exact
+        `canWrite`/`disabled` computation empty-cell entry already had).
+        Edit reveals the same input/submit form an empty cell uses,
+        pre-filled with the current value; Clear dispatches the new
+        `clear-cell` action. Both buttons use the standard 44px `icon`
+        button size, not a smaller custom override, to hold the
+        accessibility touch-target minimum.
+  - [x] Live Playwright smoke test (demo mode, signed in as a plain
+        server): edited a teammate's already-assigned cell
+        (Table 8 → Table 99) — the change appeared immediately, Recorded
+        events incremented, Undo became enabled, and the existing
+        "Cross-column edits" panel showed "Mia Chen edited Leo Park's
+        column" (the true actor, not assumed). Cleared that same cell —
+        it emptied, Recorded events incremented again. Both actions
+        worked from a server account with no manager-only controls
+        (Clear board, reorder) visible anywhere on the page.
+  - [x] `npm run check`, `npm test` (195/195), `npm run build`.
+- [x] **Step 5: Date & month navigation**
+  - [x] `allocation-data.ts`: `getAllocationContext` takes an optional
+        `requestedServiceDate` (defaults to today); the `service_sessions`
+        lookup drops the `status = 'active'` filter (already scoped
+        uniquely enough by `location_id + service_date + meal_period`,
+        `order by id desc limit 1` defensively) so a historical
+        **closed** session is found the same way today's active one is.
+        Adds `serviceDate` and `isHistorical` to `AllocationContext`.
+        Verified directly against live Postgres (not just typecheck):
+        seeded a `status = 'closed'` session 3 days in the past and
+        confirmed the exact query shape returns it, then confirmed the
+        unchanged `status = 'active'` today's-session case still
+        resolves correctly too.
+  - [x] `allocation-actions.ts`: new client-triggered
+        `getAllocationContextForDateAction({ restaurantSlug,
+serviceDate })` (mirrors Attendance's own client-triggered read
+        pattern) — re-resolves the signed-in user and their own
+        location server-side (never trusts a client-supplied
+        organizationId), computes "today" from the location's own time
+        zone, and rejects a future date with a clear error rather than
+        silently returning an empty board.
+  - [x] `src/features/allocation/components/allocation-date-filter.tsx`
+        (new, matches the spec's own Implementation Map name): a date
+        input + previous/next-day steppers + "Back to today" (shown only
+        once away from today), max-date clamped to today.
+  - [x] `allocation-workspace.tsx`: wires the filter in. New `readOnly =
+boardLocked || isHistoricalView` flag replaces every prior
+        `!boardLocked` UI gate (admin buttons, `canWrite`, undo/redo,
+        `execute()`'s own defense-in-depth check) — a browsed-to
+        historical date now disables exactly what a finalized-tips day
+        already did, regardless of role. The `initialContext`-driven
+        resync effect (real mode) is now guarded to only apply while
+        viewing today, so a background `router.refresh()` (this
+        browser's own action, or someone else's Realtime-triggered
+        change) can never silently snap a browsed-to historical view
+        back to today's board underneath the viewer.
+  - [x] **Deviation from the original plan, found reading the existing
+        code rather than assumed**: `allocation-workspace.tsx` already
+        imports and calls `executeBoardActionRemote`/`undoBoardAction`/
+        `redoBoardAction` directly — none of the allocation actions are
+        threaded through `restaurant-operations-app.tsx` as props. The
+        new `getAllocationContextForDateAction` follows the exact same,
+        already-established convention: imported and called directly by
+        `allocation-workspace.tsx`. No changes needed in
+        `restaurant-operations-app.tsx` at all for this step.
+  - [x] **Real server-side security gap found and fixed, matching the
+        gap-3/3b bug family**: see the investigation note above — added
+        `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql`,
+        extending `private.assert_board_not_locked` to also raise when
+        the session's own `service_date` is before today in the
+        location's time zone, alongside the existing tip-finalized
+        check. `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql`
+        (5 assertions): a plain server's direct `board_assign`/
+        `board_clear_cell` calls against a historical, never-finalized
+        session are blocked with the new message; nothing is written;
+        a regression check confirms today's own session, still active
+        and not finalized, remains fully writable — the historical
+        check does not accidentally catch today itself.
+  - [x] **Demo mode scoping decision**: demo mode has no multi-day
+        historical data model (the board is pure client-side, in-memory,
+        undated) — matches the established precedent (Payroll is simply
+        absent in demo mode) rather than fabricating fake historical
+        data. Selecting a non-today date in demo mode replaces the
+        summary/floor-team/dinner-rotation sections with a "Demo mode
+        only shows today" notice instead of an empty board that looks
+        like a real (if uneventful) historical day.
+  - [x] **Real bug found live-testing in Playwright, not assumed**: the
+        first version of `changeViewDate`'s "back to today" branch
+        unconditionally rebuilt `history` from `initialContext?.board`.
+        In demo mode `initialContext` is always `null` (the demo board
+        lives only in local `history` state, built once by
+        `buildInitialHistory()`), so clicking "Back to today" after
+        browsing away silently wiped the entire demo board to empty
+        instead of restoring it. Fixed by checking `demoMode` first and
+        returning immediately (just moving `viewDate`) before the
+        today-vs-historical branching that only makes sense in real
+        mode.
+  - [x] Live Playwright smoke test (demo mode): manager browses to the
+        previous day — "Demo mode only shows today" notice appears,
+        Table 12 (today's seeded cell) disappears, `Clear board`/
+        `Add row` disappear entirely, `Undo`/`Redo` render disabled.
+        "Back to today" restores the live board exactly, including the
+        admin buttons. Caught and fixed the demo-mode bug above this
+        way, live, before it could reach the committed e2e spec.
+  - [x] `npm run db:reset && npm run db:test`: 16/16 pgTAP files, 202
+        assertions. `npm run check`, `npm test` (195/195), `npm run
+build`.
+- [x] **Step 6: E2E flow** (`tests/e2e/allocation-open-editing.spec.ts`)
+  - [x] A server (passcode 1357 = Mia Chen) signs in, edits Leo Park's
+        already-assigned "Table 8" cell to "Table 8B" via the new
+        Edit/Save controls, and both the new value and the true actor
+        attribution ("Mia Chen edited Leo Park's column") are visible —
+        while `Clear board`/`Add row`/reorder stay absent for her in the
+        same test.
+  - [x] A server clears Noah Diaz's already-assigned "Table 4" cell via
+        the new Clear control; the cell empties and the clear is
+        attributed the same way.
+  - [x] A manager (passcode 2468) browses to the previous day: the demo
+        read-only notice appears, today's board and every admin control
+        disappear, Undo/Redo render disabled; "Back to today" restores
+        everything.
+  - [x] Ran across all three Playwright projects (desktop, host-tablet,
+        server-mobile) — 9/9 passed. Also re-ran the full existing
+        `tests/e2e/dashboard.spec.ts` (desktop) — 25/25 still pass, no
+        regression from the `readOnly` refactor.
+- [x] **Step 7: Docs**
+  - [x] Checked off every acceptance criterion in
+        `docs/features/028-table-allocation-unrestricted-editing.md`,
+        each annotated with already-implemented vs. newly-built vs. the
+        real bug fixed, and corrected the Implementation Map's two
+        stale file names (`allocation-board.tsx`/`rotation-actions.ts`
+        don't exist in this codebase — the real files are
+        `allocation-workspace.tsx`/`allocation-actions.ts`, already
+        named that way since Features 003/009/010/011).
+  - [x] Updated `docs/STATUS.md`: new `028` Feature Matrix row, Health
+        Gate counts, Current Status Overview.
+- [x] **Step 8: Push branch, open PR (base:
+      `feature/024-team-management-enhancements`), paste gate output +
+      PR link here.**
+  - [x] Final comprehensive gate, run for real:
+    - `npm run check` — prettier, eslint, typecheck: pass.
+    - `npm test` — 31/31 files, 195/195 tests: pass.
+    - `npm run build` — pass.
+    - `npm run db:reset && npm run db:test` — 16/16 pgTAP files, 202
+      assertions: pass. (One transient container-restart timeout during
+      `db:reset`'s own "Restarting containers" step, same class already
+      ruled out earlier in this feature — re-ran `db:test` immediately
+      after and it passed cleanly with the full expected count, both
+      times.)
+    - `npx playwright test` (desktop, host-tablet, server-mobile,
+      full suite) — **102/102 pass**, including the 9 new
+      `allocation-open-editing.spec.ts` tests across all three
+      projects.
+  - [x] Pushed `feature/028-table-allocation-unrestricted-editing` to
+        origin.
+  - [x] Opened PR:
+        **https://github.com/KrapaGoutam/The-Lineup/pull/24** (base:
+        `feature/024-team-management-enhancements`).
 
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `supabase/migrations/20260908170000_profiles_manager_rename.sql` (new)
-- `supabase/tests/database/0012_profiles_manager_rename.test.sql` (new)
-- `src/features/team/data/audit-log.ts` (new)
-- `src/features/team/actions/member-actions.ts` (new)
-- `src/features/team/actions/member-actions.test.ts` (new)
-- `src/features/team/actions/team-actions.ts` (audit logging added)
-- `src/app/api/auth/passcode/reset/route.ts` (audit logging added)
-- `src/features/team/components/rename-member-dialog.tsx` (new)
-- `src/features/team/components/team-workspace.tsx` (Rename action, link-status badges)
-- `src/components/restaurant-operations-app.tsx` (rename wiring)
-- `tests/e2e/team-management.spec.ts` (new)
-- `docs/features/024-team-management-enhancements.md` (checkboxes)
+- `supabase/migrations/20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql` (new)
+- `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql` (new)
+- `supabase/migrations/20260908190000_board_clear_cell.sql` (new)
+- `supabase/tests/database/0014_board_clear_cell.test.sql` (new)
+- `supabase/migrations/20260908200000_assert_board_not_locked_security_definer.sql` (new)
+- `supabase/tests/database/0015_assert_board_not_locked_security_definer.test.sql` (new)
+- `supabase/migrations/20260908210000_assert_board_not_locked_historical_date.sql` (new)
+- `supabase/tests/database/0016_assert_board_not_locked_historical_date.test.sql` (new)
+- `src/features/allocation/domain/rotation-board.ts` (`clear-cell` action)
+- `src/features/allocation/domain/rotation-board.test.ts` (new tests)
+- `src/features/allocation/actions/allocation-actions.ts` (`clear-cell`, date-fetch action)
+- `src/features/allocation/data/allocation-data.ts` (`serviceDate`/`isHistorical`)
+- `src/features/allocation/components/allocation-date-filter.tsx` (new)
+- `src/features/allocation/components/allocation-workspace.tsx` (click-to-edit, date wiring, `readOnly`)
+- `tests/e2e/allocation-open-editing.spec.ts` (new)
+- `docs/features/028-table-allocation-unrestricted-editing.md` (checkboxes)
 - `docs/STATUS.md` (milestone update)
 
 ## Current State & Next Step
 
-All 7 steps complete. PR #23 open against
-`feature/023-settings-consolidation`, all quality gates green
-(app-level, pgTAP, e2e). Next step is review/merge — nothing left to
-resume here.
+All 8 steps complete. Feature 028 is fully implemented, fully tested
+(full gate green, including three real security bugs found live-testing
+and fixed along the way — see Investigation findings above), and its PR
+is open: https://github.com/KrapaGoutam/The-Lineup/pull/24 (base:
+`feature/024-team-management-enhancements`). Nothing left to do on this
+branch; next step is human review/merge.

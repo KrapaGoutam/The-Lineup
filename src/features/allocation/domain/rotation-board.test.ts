@@ -344,6 +344,78 @@ describe("rotation board", () => {
     expect(mayWriteColumn()).toBe(true);
   });
 
+  // Feature 028: board_assign's own RPC has always been an upsert
+  // (on conflict ... do update) -- this proves the pure domain layer
+  // the UI's click-to-edit relies on has the identical behavior:
+  // assigning again on an already-occupied cell overwrites it in place,
+  // never duplicates it.
+  it("Feature 028: assigning to an already-occupied cell overwrites its value, cross-column included", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "leo",
+      tableLabel: "12",
+    });
+    // A different actor (mia's own column) re-editing leo's cell.
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "leo",
+      tableLabel: "18",
+    });
+    const round = history.present.rounds.find(({ id }) => id === roundId)!;
+    expect(round.cells).toHaveLength(2); // still one cell per column, not two
+    expect(
+      round.cells.find(({ columnId }) => columnId === "leo")?.tableLabel,
+    ).toBe("18");
+  });
+
+  it("Feature 028: clear-cell empties one occupied cell without touching the rest of the row", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "leo",
+      tableLabel: "14",
+    });
+    history = executeBoardAction(history, {
+      type: "clear-cell",
+      roundId,
+      columnId: "mia",
+    });
+    const round = history.present.rounds.find(({ id }) => id === roundId)!;
+    expect(
+      round.cells.find(({ columnId }) => columnId === "mia")?.tableLabel,
+    ).toBeNull();
+    expect(
+      round.cells.find(({ columnId }) => columnId === "leo")?.tableLabel,
+    ).toBe("14");
+  });
+
+  it("clear-cell on an already-empty cell is a safe no-op, not an error", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    const cleared = executeBoardAction(history, {
+      type: "clear-cell",
+      roundId,
+      columnId: "mia",
+    });
+    expect(
+      cleared.present.rounds
+        .find(({ id }) => id === roundId)
+        ?.cells.find(({ columnId }) => columnId === "mia")?.tableLabel,
+    ).toBeNull();
+  });
+
   it("identifies a cross-column write for attribution, but never blocks it on a reason", () => {
     expect(isCrossColumnEdit({ profileId: "mia", columnId: "mia" })).toBe(
       false,

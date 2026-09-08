@@ -1,11 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
+import {
+  getAllocationContext,
+  type AllocationContext,
+} from "@/features/allocation/data/allocation-data";
 import type { BoardAction } from "@/features/allocation/domain/rotation-board";
+import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
+
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const localDateSchema = z.iso.date();
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -84,6 +99,34 @@ export async function executeBoardActionRemote(
         if (error) return { ok: false, error: error.message };
         revalidatePath(`/r/${input.restaurantSlug}`);
         return { ok: true, data: { serviceSessionId: data as number } };
+      }
+
+      // Feature 028: the per-cell counterpart to clear-column, open to
+      // any active member (see board_clear_cell's own migration comment)
+      // -- unlike clear-row/clear-column/clear-board below, this one is
+      // never gated on isManager anywhere in the call chain.
+      case "clear-cell": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const memberId = await resolveMemberId(
+          supabase,
+          sessionId,
+          action.columnId,
+        );
+        if (memberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { error } = await supabase.rpc("board_clear_cell", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_round_id: Number(action.roundId),
+          p_member_id: memberId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
       case "add-column": {
@@ -272,4 +315,50 @@ export async function redoBoardAction(input: {
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/r/${input.restaurantSlug}`);
   return { ok: true, data: null };
+}
+
+/**
+ * Feature 028. Client-triggered read for the date/month navigator --
+ * mirrors Attendance's own client-triggered action pattern
+ * (getAttendanceReportAction et al.) rather than a route param, since the
+ * board is a Server Component's initial data plus client-side history, not
+ * a separately routed page. Re-resolves the signed-in user and their
+ * organization itself; never trusts a client-supplied organizationId.
+ */
+export async function getAllocationContextForDateAction(input: {
+  restaurantSlug: string;
+  serviceDate: string;
+}): Promise<ActionResult<AllocationContext>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      serviceDate: localDateSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "That date request is invalid." };
+  }
+
+  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
+  if (!currentUser) {
+    return { ok: false, error: "You need to sign in to see the board." };
+  }
+
+  const location = await getPrimaryLocation(currentUser.organizationId);
+  if (!location) {
+    return { ok: false, error: "No location is set up yet." };
+  }
+  const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
+  if (parsed.data.serviceDate > today) {
+    return { ok: false, error: "You can't browse to a date in the future." };
+  }
+
+  const context = await getAllocationContext(
+    currentUser.organizationId,
+    parsed.data.serviceDate,
+  );
+  if (!context) {
+    return { ok: false, error: "No location is set up yet." };
+  }
+  return { ok: true, data: context };
 }

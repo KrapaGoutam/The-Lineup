@@ -26,6 +26,7 @@ export type RotationBoard = {
 
 export type BoardAction =
   | { type: "assign"; roundId: string; columnId: string; tableLabel: string }
+  | { type: "clear-cell"; roundId: string; columnId: string }
   | { type: "add-column"; column: RotationColumn }
   | { type: "set-column-status"; columnId: string; status: ColumnStatus }
   | { type: "clear-row"; roundId: string }
@@ -113,6 +114,18 @@ export function applyBoardAction(
       );
       if (existing) existing.tableLabel = label;
       else round.cells.push({ columnId: action.columnId, tableLabel: label });
+      break;
+    }
+    // Feature 028: the per-cell counterpart to clear-row/clear-column,
+    // open to any active member (see mayWriteColumn) unlike those two,
+    // which stay manager-only. Matches clear-row's own convention of
+    // nulling tableLabel rather than removing the cell from the array.
+    case "clear-cell": {
+      const round = board.rounds.find(({ id }) => id === action.roundId);
+      const cell = round?.cells.find(
+        ({ columnId }) => columnId === action.columnId,
+      );
+      if (cell) cell.tableLabel = null;
       break;
     }
     case "add-column":
