@@ -2,7 +2,7 @@
 
 **Active Spec:** `docs/features/028-table-allocation-unrestricted-editing.md`
 **Branch:** `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`)
-**Status:** In progress
+**Status:** Complete — PR open at https://github.com/KrapaGoutam/The-Lineup/pull/24
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -365,9 +365,28 @@ build`.
         named that way since Features 003/009/010/011).
   - [x] Updated `docs/STATUS.md`: new `028` Feature Matrix row, Health
         Gate counts, Current Status Overview.
-- [ ] **Step 8: Push branch, open PR (base:
+- [x] **Step 8: Push branch, open PR (base:
       `feature/024-team-management-enhancements`), paste gate output +
       PR link here.**
+  - [x] Final comprehensive gate, run for real:
+    - `npm run check` — prettier, eslint, typecheck: pass.
+    - `npm test` — 31/31 files, 195/195 tests: pass.
+    - `npm run build` — pass.
+    - `npm run db:reset && npm run db:test` — 16/16 pgTAP files, 202
+      assertions: pass. (One transient container-restart timeout during
+      `db:reset`'s own "Restarting containers" step, same class already
+      ruled out earlier in this feature — re-ran `db:test` immediately
+      after and it passed cleanly with the full expected count, both
+      times.)
+    - `npx playwright test` (desktop, host-tablet, server-mobile,
+      full suite) — **102/102 pass**, including the 9 new
+      `allocation-open-editing.spec.ts` tests across all three
+      projects.
+  - [x] Pushed `feature/028-table-allocation-unrestricted-editing` to
+        origin.
+  - [x] Opened PR:
+        **https://github.com/KrapaGoutam/The-Lineup/pull/24** (base:
+        `feature/024-team-management-enhancements`).
 
 ## 🗂️ File list
 
@@ -392,8 +411,9 @@ build`.
 
 ## Current State & Next Step
 
-Steps 1-6 done and committed through Step 5/6's work (this update still
-needs its own commit). Next: Step 7 (docs — check off acceptance criteria
-in `docs/features/028-table-allocation-unrestricted-editing.md`, update
-`docs/STATUS.md`), then Step 8 (final full gate, push, open PR against
-`feature/024-team-management-enhancements`).
+All 8 steps complete. Feature 028 is fully implemented, fully tested
+(full gate green, including three real security bugs found live-testing
+and fixed along the way — see Investigation findings above), and its PR
+is open: https://github.com/KrapaGoutam/The-Lineup/pull/24 (base:
+`feature/024-team-management-enhancements`). Nothing left to do on this
+branch; next step is human review/merge.

@@ -12,7 +12,7 @@
 - **Active Feature:** `Feature 028 — Table Allocation Unrestricted Editing & Date Navigation`
 - **Active Task Spec:** [docs/features/028-table-allocation-unrestricted-editing.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/028-table-allocation-unrestricted-editing.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`); all quality gates green, acceptance criteria checked off, three real security/UI bugs found live-testing and fixed along the way (finalized-tips RLS gap, `assert_board_not_locked`'s `security invoker`/`definer` bug, and a missing RPC-level historical-date lock). Pending PR/merge.
+- **Current State:** Implemented on `feature/028-table-allocation-unrestricted-editing` (stacked on `feature/024-team-management-enhancements`); all quality gates green, acceptance criteria checked off, three real security/UI bugs found live-testing and fixed along the way (finalized-tips RLS gap, `assert_board_not_locked`'s `security invoker`/`definer` bug, and a missing RPC-level historical-date lock). PR open: [#24](https://github.com/KrapaGoutam/The-Lineup/pull/24), pending review/merge.
 
 ---
 
