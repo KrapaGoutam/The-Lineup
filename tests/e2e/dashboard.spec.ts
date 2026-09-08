@@ -329,9 +329,8 @@ test("a manager can link attendance and the server then sees only that record", 
   await expect(
     page
       .getByRole("cell", { name: "8.5h", exact: true })
-      .or(
-        page.locator(".sm\\:hidden").getByText("8.5h", { exact: true }).first(),
-      ),
+      .or(page.locator(".sm\\:hidden").getByText("8.5h", { exact: true }))
+      .first(),
   ).toBeVisible();
 });
 
