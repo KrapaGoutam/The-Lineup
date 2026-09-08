@@ -2,7 +2,7 @@
 
 **Active Spec:** `docs/features/024-team-management-enhancements.md`
 **Branch:** `feature/024-team-management-enhancements` (stacked on `feature/023-settings-consolidation`)
-**Status:** In progress
+**Status:** Complete — PR open, pending review/merge (https://github.com/KrapaGoutam/The-Lineup/pull/23)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -211,9 +211,16 @@ assistant_manager | staff` — it encodes the _authorization tier_
         new this feature (rename, attendance-link-status badge).
   - [x] Updated `docs/STATUS.md` Feature Matrix (024 added) and the
         health-gate line (31/31 files, 192/192 tests; settings.spec.ts + team-management.spec.ts; 12/12 pgTAP files).
-- [ ] **Step 7: Push branch, open PR (base:
+- [x] **Step 7: Push branch, open PR (base:
       `feature/023-settings-consolidation`), paste gate output + PR link
       here.**
+  - Branch pushed: `feature/024-team-management-enhancements`.
+  - PR: https://github.com/KrapaGoutam/The-Lineup/pull/23
+  - Final gate, all run for real: `npm run check` clean; `npm test`
+    192/192 (31/31 files); `npm run build` clean; `npm run db:test`
+    12/12 pgTAP files, 179 assertions;
+    `npx playwright test tests/e2e/settings.spec.ts tests/e2e/team-management.spec.ts`
+    15/15 across desktop/host-tablet/server-mobile.
 
 ## 🗂️ File list
 
@@ -234,5 +241,7 @@ assistant_manager | staff` — it encodes the _authorization tier_
 
 ## Current State & Next Step
 
-Branch created, this file committed. Next: Step 2 (migration + pgTAP
-test).
+All 7 steps complete. PR #23 open against
+`feature/023-settings-consolidation`, all quality gates green
+(app-level, pgTAP, e2e). Next step is review/merge — nothing left to
+resume here.
