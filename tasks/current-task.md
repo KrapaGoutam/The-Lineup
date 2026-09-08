@@ -354,11 +354,17 @@ build`.
         server-mobile) — 9/9 passed. Also re-ran the full existing
         `tests/e2e/dashboard.spec.ts` (desktop) — 25/25 still pass, no
         regression from the `readOnly` refactor.
-- [ ] **Step 7: Docs**
-  - [ ] Check off acceptance criteria in
+- [x] **Step 7: Docs**
+  - [x] Checked off every acceptance criterion in
         `docs/features/028-table-allocation-unrestricted-editing.md`,
-        each noting already-implemented vs. newly-built.
-  - [ ] Update `docs/STATUS.md` Feature Matrix.
+        each annotated with already-implemented vs. newly-built vs. the
+        real bug fixed, and corrected the Implementation Map's two
+        stale file names (`allocation-board.tsx`/`rotation-actions.ts`
+        don't exist in this codebase — the real files are
+        `allocation-workspace.tsx`/`allocation-actions.ts`, already
+        named that way since Features 003/009/010/011).
+  - [x] Updated `docs/STATUS.md`: new `028` Feature Matrix row, Health
+        Gate counts, Current Status Overview.
 - [ ] **Step 8: Push branch, open PR (base:
       `feature/024-team-management-enhancements`), paste gate output +
       PR link here.**
