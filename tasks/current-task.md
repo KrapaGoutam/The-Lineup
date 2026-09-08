@@ -320,23 +320,50 @@ Clock out | Hours`, matching the mockup's exact column order) and
   - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged),
         `npm run build` all pass.
   - [x] Commit.
-- [ ] **Step 6: E2E** (`tests/e2e/attendance-reporting.spec.ts`, new file
+- [x] **Step 6: E2E** (`tests/e2e/attendance-reporting.spec.ts`, new file
       — the two pre-existing attendance scenarios stay in
       `dashboard.spec.ts`, untouched)
-  - [ ] Month switching updates the ledger and the three stat cards to
-        different, known demo values.
-  - [ ] The desktop table's Day column matches the real weekday for a
-        known demo date.
-  - [ ] Print dialog: current/selected/all all correctly invoke
-        `window.print()` (stubbed) with the right people included; a
-        `self`-scoped server's Print button never shows a dialog and never
-        exposes another person's data.
-  - [ ] Run across all three Playwright projects (desktop, host-tablet,
-        server-mobile) — `host-tablet`'s pre-existing WebKit sign-in gap
-        (already recorded, not this feature's regression — see memory)
-        checked against, not re-diagnosed as new if it recurs.
-  - [ ] Full gate.
-  - [ ] Commit.
+  - [x] Month switching updates the ledger and the three stat cards to
+        different, known demo values (September's populated stat tiles
+        vs. August's explicit zero-attendance state for the same
+        person).
+  - [x] The Day column matches the real weekday for a known demo date —
+        both the desktop table and, separately, the mobile card ledger's
+        own day-digit/weekday spans (same `calendarWeekday`/`dayOfMonth`
+        functions behind both, checked in whichever shape actually
+        renders per viewport).
+  - [x] Print dialog: current/selected/all all correctly invoke
+        `window.print()` (stubbed) with the right people included in the
+        printable area's actual text content, including a refusal (no
+        print, an inline error) when "selected" is chosen with nothing
+        checked; a `self`-scoped server's Print button never shows a
+        dialog and the printed content never contains another person's
+        name.
+  - [x] Ran across all three Playwright projects (desktop, host-tablet,
+        server-mobile) — **12/12 pass**. `host-tablet`'s pre-existing
+        WebKit sign-in gap (already recorded — see memory) did not
+        recur; every scenario passed there too, including the slowest
+        (21.6s, still well under timeout).
+  - [x] **Two real test-authoring bugs found and fixed by actually
+        running the suite, not assumed correct from reading the code**:
+        (1) the month-switching test wrongly expected a "Days worked"
+        stat-tile hint to appear for August, when `PersonSection` only
+        renders the stat-tiles grid at all when `rows.length > 0` —
+        fixed to assert the September-only hint's absence instead. (2)
+        both table-shaped assertions initially assumed the desktop
+        `<table>` (hidden via `hidden sm:block`, not removed from the
+        DOM) wouldn't interfere on the `server-mobile` project — it did,
+        causing a strict-mode ambiguity on "Wed" matching both the
+        hidden `<td>` and the visible mobile ledger's `<span>`. Fixed
+        with viewport-aware branches, scoping the mobile assertions to
+        the ledger's own `.sm\:hidden` container — the exact precedent
+        `tests/e2e/dashboard.spec.ts` already set for this identical
+        desktop/mobile dual-render situation.
+  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged),
+        `npm run build`, `npm run db:test` (16/16, 202 assertions,
+        unchanged) all pass. Re-ran the full `dashboard.spec.ts` suite
+        (desktop): 25/25, no regression from any step in this feature.
+  - [x] Commit.
 - [ ] **Step 7: Docs**
   - [ ] `docs/features/025-attendance-reporting-and-filters.md`: correct
         the Scope/Acceptance Criteria/Implementation Map/Test Plan CSV
@@ -371,5 +398,6 @@ Clock out | Hours`, matching the mockup's exact column order) and
 
 ## Current State & Next Step
 
-Steps 1-5 done and committed. Next: Step 6 (e2e —
-`tests/e2e/attendance-reporting.spec.ts`).
+Steps 1-6 done and committed. Next: Step 7 (docs — CSV-scope correction
+in the feature spec, check off remaining acceptance criteria,
+`docs/STATUS.md`).
