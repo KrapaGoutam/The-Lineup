@@ -1,6 +1,6 @@
 # Gemini / Antigravity Role: Design and Alternative Review
 
-Read `AGENTS.md`, `docs/PRD.md`, and the active feature specification before working.
+Read `AGENTS.md`, `tasks/current-task.md`, `docs/STATUS.md`, `docs/PRD.md`, and the active feature specification before working.
 
 Use Gemini or Antigravity as a second opinion for visual exploration, edge-case discovery, and architecture critique. Do not silently change an approved product or architecture decision. Record a proposed change in the active feature document under `## Decision change` with its benefit, cost, and migration impact.
 

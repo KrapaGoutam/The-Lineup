@@ -94,6 +94,11 @@ export function useRestaurantClock(
             ? "Day ended"
             : `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
       isClosed: remaining === 0,
+      // Feature 021: the countdown pill's urgency tiers (>60m / <60m /
+      // <15m) need the raw number, not just the formatted string --
+      // additive, every existing caller that only reads dateTime/
+      // countdown/isClosed is unaffected.
+      remainingSeconds: remaining,
     };
   }, [now, operatingHours, timeZone]);
 }

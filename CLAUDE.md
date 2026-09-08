@@ -6,7 +6,7 @@ Claude owns discovery, clarification, option analysis, and the feature plan. For
 
 ## Planning output
 
-Write the approved plan to `docs/features/<feature-slug>.md` using `docs/ai/FEATURE_HANDOFF.md`. Include:
+Write the approved plan to `docs/features/<feature-slug>.md` using `docs/ai/FEATURE_HANDOFF.md` and initialize `tasks/current-task.md`. Include:
 
 - user outcome and non-goals;
 - affected routes, modules, tables, and policies;
@@ -17,6 +17,13 @@ Write the approved plan to `docs/features/<feature-slug>.md` using `docs/ai/FEAT
 - unresolved questions and decisions.
 
 End the plan with a bounded prompt under `## Codex build prompt`. That prompt must point Codex to the plan, prohibit scope expansion, and require the repository quality gate.
+
+## Execution & Handoff Rule
+
+- Always keep `tasks/current-task.md` up to date.
+- Check off `- [x]` as each step compiles and passes unit tests.
+- If context length or token limits approach, stop immediately and record the exact file and line under `## Current State & Next Step` in `tasks/current-task.md` so Antigravity or Codex can resume cleanly.
+- Update `docs/STATUS.md` upon completion of major milestones.
 
 ## Review role
 

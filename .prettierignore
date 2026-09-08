@@ -6,3 +6,16 @@ test-results
 package-lock.json
 supabase/.branches
 supabase/.temp
+# The user's own browser-tested design reference for Feature 021 (see
+# docs/features/021-design-system-and-shell-refresh.md) -- a raw HTML/CSS
+# scratch artifact meant for quick side-by-side visual scanning, not
+# checked-in source; reformatting it isn't ours to do and could make it
+# harder to compare frames at a glance.
+design-system-reference.html
+
+# The user's own project-tracking notes (not authored by this session,
+# predate it, and aren't part of the Feature 021 diff) -- same reasoning
+# as design-system-reference.html above.
+docs/STATUS.md
+tasks/backlog.md
+tasks/current-task.md
