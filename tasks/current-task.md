@@ -90,7 +90,7 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
         `src/features/payroll/`.
   - [x] Unit test: loading → renders `RateSettings` with fetched options;
         error → shows retry.
-- [ ] **Step 4: `settings-page.tsx`** — composes everything by role:
+- [x] **Step 4: `settings-page.tsx`** — composes everything by role:
   - Header: back button (→ `allocation`, same "Home" semantics as the
     brand logo elsewhere) + "Settings" + "The Monk's · {timeZone}".
   - Manager: Shift Hours card, Store Hours grid (editable), Team quick-
@@ -103,7 +103,7 @@ Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
     — this component owns no state of its own beyond what it's given,
     and calls zero server actions directly except through
     `PayRatesSection`.
-  - [ ] Unit tests: manager sees all 5 configuration cards + account
+  - [x] Unit tests: manager sees all 5 configuration cards + account
         section; staff sees only the account section + read-only store
         hours; demo-mode manager doesn't see Pay Rates.
 - [ ] **Step 5: Wire into the app shell** (`restaurant-operations-app.tsx`)
