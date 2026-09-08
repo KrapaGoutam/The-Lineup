@@ -48,8 +48,10 @@ import {
   type ShiftDefaults,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
+import { renameTeamMemberAction } from "@/features/team/actions/member-actions";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
+import type { RenameMemberResult } from "@/features/team/components/rename-member-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import {
   addTipIntervalAction,
@@ -842,10 +844,12 @@ export function RestaurantOperationsApp({
    */
   async function changeDesignation(memberId: string, next: Designation) {
     if (!demoMode) {
+      const previous = team.find((member) => member.id === memberId);
       const result = await updateTeamDesignationAction({
         restaurantSlug,
         organizationId: currentUser.organizationId,
         targetProfileId: memberId,
+        previousDesignation: previous?.designation ?? next,
         nextDesignation: next,
       });
       if (!result.ok) {
@@ -885,6 +889,55 @@ export function RestaurantOperationsApp({
       }
       return changed ? updated : current;
     });
+  }
+
+  /**
+   * Feature 024. Mirrors changeDesignation's exact shape: demo mode
+   * updates team/demoAccounts locally, real mode calls the action (which
+   * is authorized entirely by the new profiles_update_manager RLS
+   * policy, not re-checked here) then applies the same local update.
+   * Like changeDesignation, this does not update the signed-in `user`
+   * object even when an owner renames themselves -- a pre-existing,
+   * unchanged limitation (the header would show the old name until the
+   * next reload), not something this feature introduces or fixes.
+   */
+  async function renameTeamMember(input: {
+    targetProfileId: string;
+    previousDisplayName: string;
+    nextDisplayName: string;
+  }): Promise<RenameMemberResult> {
+    if (!demoMode) {
+      const result = await renameTeamMemberAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        targetProfileId: input.targetProfileId,
+        previousDisplayName: input.previousDisplayName,
+        nextDisplayName: input.nextDisplayName,
+      });
+      if (!result.ok) {
+        handleActionFailure(result.error, result.sessionInvalid);
+        return result;
+      }
+    }
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === input.targetProfileId
+          ? { ...member, name: input.nextDisplayName }
+          : member,
+      ),
+    );
+    setDemoAccounts((current) => {
+      let changed = false;
+      const updated = { ...current };
+      for (const [passcode, account] of Object.entries(current)) {
+        if (account.profileId === input.targetProfileId) {
+          updated[passcode] = { ...account, name: input.nextDisplayName };
+          changed = true;
+        }
+      }
+      return changed ? updated : current;
+    });
+    return { ok: true };
   }
 
   async function loadAttendanceLinkOptions(): Promise<
@@ -1654,6 +1707,7 @@ export function RestaurantOperationsApp({
             user={user}
             team={team}
             onChangeDesignation={changeDesignation}
+            onRenameMember={renameTeamMember}
             onResetPasscode={resetMemberPasscode}
             onDeactivate={deactivateTeamMember}
             onReactivate={reactivateTeamMember}

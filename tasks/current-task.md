@@ -1,200 +1,247 @@
-# Current Task: Feature 023 — Settings Consolidation
+# Current Task: Feature 024 — Team Management Enhancements
 
-**Active Spec:** `docs/features/023-settings-consolidation.md`
-**Reference:** `design-system-reference.html` section `2d` ("Full Settings Page")
-**Branch:** `feature/023-settings-consolidation` (off `feature/022-app-shell-brand-and-nav-hierarchy`)
-**Status:** Complete — PR open, pending review/merge (https://github.com/KrapaGoutam/The-Lineup/pull/22)
-**Assigned Agent:** Claude Code (explicit implementer for this feature, per user request)
+**Active Spec:** `docs/features/024-team-management-enhancements.md`
+**Branch:** `feature/024-team-management-enhancements` (stacked on `feature/023-settings-consolidation`)
+**Status:** Complete — PR open, pending review/merge (https://github.com/KrapaGoutam/The-Lineup/pull/23)
+**Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
 
-Replace the placeholder "Settings" button (which currently just opens the
-shift/store-hours edit dialog) with a real, dedicated Settings **page**
-(`tab === "settings"`, same architecture as every other section of this
-app — no new client-side router, matching how Schedule/Allocation/Team/
-etc. already work) that consolidates: Shift hours, Store hours (Sun–Sat),
-Team (link), Schedule (link), Pay rates, Passcode, Appearance, Sign out.
-
-## 🔒 Non-negotiable constraints (from AGENTS.md + this task's brief)
-
-- No new server actions that duplicate payroll calculation or attendance
-  ledger logic. The Pay Rates section reuses Feature 020's existing
-  rate-configuration actions (`getPayrollRateOptionsAction`,
-  `setPayrollDefaultRateAction`, `setPayrollRateOverrideAction`,
-  `removePayrollRateOverrideAction`) and its existing `RateSettings` UI
-  (exported, not reimplemented) — never payroll ledger/balance code.
-- No changes to tenant scoping (`organization_id`), Supabase RLS, or
-  Feature 019 attendance scoping.
-- Brand text is always "The Monk's" (never "ServiceFlow").
-- 44px minimum touch targets; `font-mono tabular-nums` on any time/rate
-  digits, matching the rest of the app.
-- Store/shift hours persistence already exists (`saveScheduleConfig` via
-  `HoursDialog`, which already updates the live header countdown through
-  the same `operatingHours`/`shiftDefaults` state `useRestaurantClock`
-  reads) — Settings reuses that save path unchanged, it does not add a
-  second one.
+Add the one genuinely missing Team capability — **renaming a member's
+display name** — with server-side validation, RLS authorization, and an
+audit trail; add audit logging to the two adjacent sensitive actions
+(designation change, passcode reset) that don't have it yet; and surface
+attendance-link status directly in the roster so acceptance criterion 1
+("...attendance link status...") is actually visible without opening a
+dialog. Designation management, passcode reset, attendance linking, and
+active/deactivate are **already fully implemented** (Features 014/016/
+017/019) and embedded reachable from Settings (Feature 023's Team quick-
+link card) — this feature does not rebuild any of that.
 
 ## 📖 Reconciliations (spec text vs. actual app — resolved before coding)
 
-1. **"Page" means `tab === "settings"`, not a new URL route.** This app
-   has no per-tab routing today (Schedule/Allocation/Team/etc. are all
-   client `tab` state, not `next/navigation` segments) — introducing real
-   `/settings` routing for just this one tab would be an inconsistent,
-   out-of-scope architecture change. "Dedicated page not a modal" is
-   satisfied by giving Settings the same full-`<main>`, non-modal
-   treatment every other tab already has.
-2. **Pay Rates is per-person + an org default, not "Server/Host/Busser/
-   Manager" role-rate table.** The spec's scope bullet says "standard
-   roles"; both the actual Feature 020 data model (`PayrollRateOptions`:
-   one org default + per-`neonUserId` overrides) and the reference
-   mockup's section `2d` show per-person rows with a role label next to
-   the name, not per-role rate configuration. Implementing the literal
-   "per-role" reading would mean inventing a second, disconnected rate
-   system. Settings' Pay Rates section reuses the real one.
-3. **Pay Rates section is `isManager && !demoMode`.** Not called out
-   explicitly in the acceptance criteria, but `getPayrollRateOptionsAction`
-   requires a real manager session (`requirePayrollManager`) and demo mode
-   has no Neon-backed data source for payroll — this is the exact same
-   gate the Payroll tab itself already uses (Feature 020 Phase 2).
-4. **"Read-only store hours" for staff = the 7-day grid only, no Shift
-   Hours card, no Edit button.** Per acceptance criterion 3, staff see
-   Passcode/Appearance/Sign out + read-only store hours — not the Shift
-   Hours defaults card at all (that's an operational/manager concern).
+1. **Entry point is already satisfied.** The spec allows "a full subview
+   reachable from Settings" as an alternative to embedding inline —
+   Feature 023 already added exactly that (Settings → Team card →
+   `setTab("team")`). No navigation change needed.
+2. **Designations are not "Server, Host, Busser."** The real, RLS-backed
+   `Designation` type (Feature 014) is `owner | manager |
+assistant_manager | staff` — it encodes the _authorization tier_
+   (mirrors `memberships_update_manager`'s RLS exactly), not a job title.
+   There is no job-title column in the schema and adding one is a bigger,
+   unscoped change. Rename/designation/reset all continue to operate on
+   the real 4-value designation system, matching `assignableDesignations`
+   already in `src/features/team/domain/designations.ts` — untouched.
+3. **`user_profiles.full_name` doesn't exist.** The real table is
+   `public.profiles.display_name` (constrained 1–100 chars, trimmed).
+   Rename targets that column, reusing `isValidDisplayName` from
+   `@/features/auth/domain/registration` (2–100 chars) for both the
+   dialog and the server action — the same validator registration
+   already uses, not a new one.
+4. **`audit_logs` doesn't exist; `audit_events` already does.** A
+   generic, tenant-scoped, RLS-protected audit table already exists
+   (`supabase/migrations/20260905065702_initial_schema.sql`, used today
+   by Tip Split's finalize/reopen trail). Rename, designation change, and
+   passcode reset write into this existing table — no new table.
+5. **Rename requires a genuine RLS change — the one real schema delta
+   this feature needs.** `profiles` currently has only
+   `profiles_update_self` (`id = auth.uid()`); nothing lets a manager
+   update a _different_ member's row. Adds one additive UPDATE policy
+   (`profiles_update_manager`) via a new `private.can_manage_member()`
+   SECURITY DEFINER helper mirroring `memberships_update_manager`'s exact
+   hierarchy (owner unrestricted; manager can act only on a target who
+   isn't owner/manager). Covered by a pgTAP policy test, run for real
+   against the local Supabase instance already running in this
+   environment (`npm run db:reset && npm run db:test`).
+6. **One new dialog, not one mega-dialog.** The spec's Implementation Map
+   names a single `edit-member-dialog.tsx` for rename + designation +
+   attendance linking combined. The existing, working, already-tested
+   UI uses three separate lightweight dialogs/inline-actions
+   (`PasscodeResetDialog`, `MemberStatusDialog`, `AttendanceLinkDialog`,
+   plus inline "Make X" designation buttons). Consolidating all of that
+   into one mega-dialog would be a risky, unscoped rewrite of working
+   code for a cosmetic requirement no acceptance criterion actually
+   tests. Adds `RenameMemberDialog` following the exact same pattern as
+   its siblings instead.
+7. **No reason prompt for rename or designation-change audit rows.**
+   Passcode reset already collects a `reason` (3–500 chars) that maps
+   directly onto `audit_events.reason`. Designation change and rename are
+   one-click actions today with no reason UI; `audit_events.reason` is
+   nullable, so their audit rows carry `reason: null` and put the actual
+   change in `before_state`/`after_state` (jsonb) instead — more
+   informative than forcing a free-text reason onto a currently
+   frictionless action, and not a UX change this feature asks for.
+
+## 🔒 Non-negotiable constraints
+
+- Identity linking stays 100% manual by UUID/`neonUserId` pairing —
+  nothing added here infers or matches on name strings (unchanged,
+  `AttendanceLinkDialog` already enforces this).
+- Team management stays manager/owner-only; the entry point (Settings'
+  Team card) is already gated by `isManager` (Feature 023).
+- No changes to tenant scoping (`organization_id`), the allocation/
+  payroll/tips RLS surface, or Feature 019 attendance scoping.
+- Self-service role promotion stays impossible — `assignableDesignations`
+  (unchanged) already only offers a target set the acting role is
+  RLS-permitted to write.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 0: Branch hygiene** — finish the interrupted brand edit found
-      uncommitted on `feature/022` (duplicate import + duplicated JSX in
-      `login-screen.tsx`, stray lint-disable removal in
-      `restaurant-operations-app.tsx`), commit it to `feature/022`, push,
-      then branch `feature/023-settings-consolidation` off it.
 - [x] **Step 1: This task file** — populate and commit before any app code.
-- [x] **Step 2: Pure presentational building blocks**
-      (`src/features/settings/components/`)
-  - [x] `store-hours-grid.tsx` — `StoreHoursGrid({ hours, todayIndex })`:
-        7-day (Sun–Sat) grid, today's cell highlighted with `--primary`,
-        closed days shown as "Closed". Pure, no fetching, no actions.
-  - [x] `shift-hours-card.tsx` — `ShiftHoursCard({ shiftDefaults, onEdit })`:
-        Morning/Evening/Full day defaults display + an "Edit" button that
-        calls the passed-in `onEdit` (opens the existing `HoursDialog` —
-        no new dialog).
-  - [x] Unit tests for both (rendering, today-highlight, closed state).
-- [x] **Step 3: Pay Rates section** (isolated payroll reuse)
-  - [x] Export `RateSettings` from
-        `src/features/payroll/components/payroll-workspace.tsx` (adds one
-        `export` keyword; zero behavior change to Payroll itself).
-  - [x] `src/features/settings/components/pay-rates-section.tsx`: self-
-        contained — fetches `getPayrollRateOptionsAction`, handles
-        loading/error/retry, renders the reused `RateSettings`. This file
-        is the only place Settings touches anything under
-        `src/features/payroll/`.
-  - [x] Unit test: loading → renders `RateSettings` with fetched options;
-        error → shows retry.
-- [x] **Step 4: `settings-page.tsx`** — composes everything by role:
-  - Header: back button (→ `allocation`, same "Home" semantics as the
-    brand logo elsewhere) + "Settings" + "The Monk's · {timeZone}".
-  - Manager: Shift Hours card, Store Hours grid (editable), Team quick-
-    link card, Schedule quick-link card, Pay Rates section (skipped in
-    demo mode), Passcode card, Appearance card, Sign out.
-  - Staff: Store Hours grid (read-only, no Edit button), Passcode card,
-    Appearance card, Sign out. Nothing else.
-  - All callbacks (`onEditHours`, `onChangePasscode`, `onGoToTab`,
-    `onSignOut`, `onBack`) are passed in from `restaurant-operations-app.tsx`
-    — this component owns no state of its own beyond what it's given,
-    and calls zero server actions directly except through
-    `PayRatesSection`.
-  - [x] Unit tests: manager sees all 5 configuration cards + account
-        section; staff sees only the account section + read-only store
-        hours; demo-mode manager doesn't see Pay Rates.
-- [x] **Step 5: Wire into the app shell** (`restaurant-operations-app.tsx`)
-  - [x] Add `"settings"` to the `AppTab` union.
-  - [x] Render `<SettingsPage ... />` in the `<main>` tab-switch block.
-  - [x] Desktop row 2 "Settings" button: `setShowHours(true)` →
-        `setTab("settings")`; drop the `isManager` gate (button is now
-        universal — the page itself gates content by role).
-  - [x] Mobile mini avatar panel "Settings" button: same retarget, same
-        gate removal.
-  - [x] Mobile "More" sheet's Settings item: same retarget, gate removal,
-        neutral subtitle (no longer "Shift hours, store hours" — that's
-        manager-only content now).
-  - [x] Desktop avatar panel "More options" button: retarget from
-        `openHours` to a new `openSettingsPage` helper
-        (`setTab("settings")` + close both panels). The avatar panel's
-        "Edit" (shift hours) and "Store hours" quick-shortcuts keep
-        calling `openHours` unchanged — the spec's own User Outcome says
-        quick mid-shift adjustments stay one click from the avatar menu.
-  - [x] Full validation gate (`npm run check`, `npm test`, `npm run build`)
-        AND a live Playwright smoke test: manager desktop (all cards,
-        demo mode correctly hides Pay rates), Team quick-link navigates,
-        Back returns to Allocation, avatar panel "More options" opens
-        Settings, staff desktop (only Store hours/Passcode/Appearance/
-        Sign out, no Edit hours button), mobile (More sheet → Settings,
-        Edit hours opens the existing HoursDialog).
-- [x] **Step 6: E2E flow** (`tests/e2e/settings.spec.ts`)
-  - [x] Sign in as manager → open Settings from the nav → see Shift
-        Hours/Store Hours/Team/Schedule cards (Pay rates is correctly
-        absent -- Playwright's webServer always runs in demo mode, same
-        as the Payroll tab itself).
-  - [x] Edit store hours from Settings, confirm the change persists back
-        into the page's own read model (the exact state the header
-        countdown pill reads from) -- simpler and equally conclusive
-        than asserting on the live countdown digits, which are
-        inherently time-of-test-run-dependent.
-  - [x] Sign in as server → open Settings → confirm Team/Schedule/Pay
-        Rates/Shift-Hours are absent, store hours is read-only.
-  - [x] Team quick-link card navigates to Team; Back returns to the
-        operational view.
-  - [x] All 3 tests pass on all 3 Playwright projects (desktop,
-        host-tablet, server-mobile) -- 9/9.
-- [x] **Step 7: Docs**
+- [x] **Step 2: Migration + pgTAP policy test**
+  - [x] `supabase/migrations/20260908170000_profiles_manager_rename.sql`:
+        `private.can_manage_member(target_profile_id uuid)` SECURITY
+        DEFINER function. Delegates the actor-side check to
+        `private.has_org_role` (found via the target's own active
+        membership row) rather than re-deriving it inline, so the
+        org-creator bypass `has_org_role` already has stays consistent
+        here too; refuses a deactivated target entirely. Revoked from
+        public/anon, granted to authenticated; new additive
+        `profiles_update_manager` UPDATE policy using it. No GRANT
+        changes needed (`update` on `profiles` is already granted to
+        `authenticated`).
+  - [x] `supabase/tests/database/0012_profiles_manager_rename.test.sql`:
+        owner renames anyone including another owner; manager renames
+        an assistant-manager-tier target; manager blocked from renaming
+        the owner; deactivated target blocked; cross-organization
+        rename blocked; self-rename still works via the untouched
+        `profiles_update_self` policy. 8/8 assertions.
+  - [x] `npm run db:reset && npm run db:test` — ran for real against the
+        local Supabase instance already running in this environment:
+        `Files=12, Tests=179 ... Result: PASS` (was already 171 tests
+        across 11 files; this feature adds the 12th file, 8 new tests).
+        `npm run db:types` regenerated with zero net diff (the new
+        function lives in the `private` schema, never exposed to
+        PostgREST, so the public type surface is unchanged).
+  - [x] `npm run check`, `npm test` (187/187), `npm run build` — all
+        clean.
+- [x] **Step 3: Server actions + audit logging**
+  - [x] `src/features/team/data/audit-log.ts`: `writeAuditEvent()` —
+        thin wrapper around an `audit_events` insert, structurally typed
+        so it accepts both the regular RLS-bound client and the admin
+        client. Logs and swallows its own failure.
+  - [x] `src/features/team/actions/member-actions.ts` (new, per the
+        spec's Implementation Map): `renameTeamMemberAction` — validates
+        with `isValidDisplayName`, updates `profiles.display_name`
+        (authorized by the new RLS policy, not re-checked in
+        application code), writes an audit_events row
+        (`entity_type: "profile"`, before/after `display_name`),
+        revalidates.
+  - [x] `src/features/team/actions/team-actions.ts`: added a
+        `writeAuditEvent` call to `updateTeamDesignationAction` (before/
+        after designation); `previousDesignation` now an input, looked
+        up client-side from the already-loaded `team` state rather than
+        an extra server round trip.
+  - [x] **Correction to the plan**: `src/app/api/auth/passcode/reset/route.ts`
+        already writes its own `audit_events` row (`action:
+"passcode_reset"`, with the reset dialog's collected `reason`) —
+        missed in the original exploration pass (an earlier grep for
+        `audit_log`/`auditLog` didn't match `audit_events`). Left
+        untouched: it already does the job correctly, and swapping it to
+        the new shared helper would be a same-behavior refactor of
+        working code with no test coverage change to show for it.
+  - [x] Unit tests: `member-actions.test.ts` (5 tests — empty/whitespace-
+        only/over-100-char names rejected without touching the database,
+        a 100-char name accepted at the boundary, a valid rename trims,
+        saves, and writes the audit row with correct before/after
+        state). `designations.test.ts` (already comprehensive) needs no
+        changes.
+  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
+        clean.
+- [x] **Step 4: UI**
+  - [x] `src/features/team/components/rename-member-dialog.tsx`: same
+        lightweight pattern as `PasscodeResetDialog`/`MemberStatusDialog`
+        (no explicit focus trap there either -- matched, not invented).
+  - [x] `src/features/team/components/team-workspace.tsx`: added a
+        "Rename" action (same authorization tier as passcode reset —
+        `canReset`, already computed per row); loads attendance-link
+        status once on mount via the existing `onLoadAttendanceOptions`
+        prop (no new action) and shows a Linked/Not linked badge per
+        row, refreshed after any link/unlink action.
+  - [x] **Real regression found and fixed via live testing**: the
+        roster row's flex-wrap layout, already dense, broke visibly on
+        a 390px viewport once the Rename button and link-status badge
+        were added -- the name truncated to nothing and action buttons
+        overlapped the badge. Restructured the row to stack vertically
+        (name+badges, then a wrapped action-button group) below `sm:`
+        and stay horizontal at `sm:` and up; confirmed clean on both a
+        390×780 and a 1440×900 screenshot after the fix, and re-diffed
+        the resulting desktop screenshot against the pre-change one to
+        confirm no regression there either.
+  - [x] `src/components/restaurant-operations-app.tsx`: new
+        `renameTeamMember` handler (demo + real mode, mirrors
+        `changeDesignation`'s shape, including its same pre-existing
+        limitation that the signed-in `user` object itself isn't
+        updated if an owner renames themselves), prop threading into
+        `TeamWorkspace` (`renameTarget` dialog state lives inside
+        `TeamWorkspace` itself, matching its sibling dialogs -- no new
+        state needed in the app shell).
+  - [x] Live Playwright smoke test (manager desktop + mobile): renamed
+        Mia Chen to "Mia Chen-Rodriguez", confirmed immediate roster
+        reflection; linked her attendance record and confirmed the
+        badge flipped from "Attendance not linked" to "Attendance
+        linked" without a reload.
+  - [x] `npm run check`, `npm test` (192/192), `npm run build` — all
+        clean.
+- [x] **Step 5: E2E flow** (`tests/e2e/team-management.spec.ts`)
+  - [x] Manager renames a staff member, promotes Staff -> Assistant
+        Manager, resets their passcode to a known chosen value (simpler
+        and just as conclusive as parsing an auto-generated one out of
+        the DOM), links their attendance record, then signs out and
+        back in as that member with the new passcode -- proves the
+        reset passcode actually works end to end, not just that the
+        dialog reported success.
+  - [x] Server cannot reach Team management at all (the "Team" nav
+        button is absent both directly and inside the mobile "More"
+        sheet).
+  - [x] Two real bugs in the test itself, found and fixed while running
+        it live rather than assumed correct: `getByLabel("Name")` and
+        `getByRole("button", { name: "Reset passcode" })` both hit
+        Playwright's default substring matching against _other_
+        elements whose labels happen to contain those words as a
+        substring ("Re**name**", "Close **reset passcode**") --
+        `exact: true` fixed both.
+  - [x] 6/6 passing across all three Playwright projects (desktop,
+        host-tablet, server-mobile).
+- [x] **Step 6: Docs**
   - [x] Check off acceptance criteria in
-        `docs/features/023-settings-consolidation.md`.
-  - [x] Update `docs/STATUS.md` milestone/feature table (021/022 marked
-        shipped -- they were already complete but the doc hadn't caught
-        up -- and 023 added). Also un-ignored `docs/STATUS.md` and
-        `tasks/current-task.md` from `.prettierignore`: Feature 021 had
-        them ignored as "not authored by this session", but this session
-        now actively maintains both, so they're formatted like every
-        other checked-in doc.
-- [x] **Step 8: Push branch, open PR, paste gate output + PR link here.**
-  - Branch pushed: `feature/023-settings-consolidation` (base:
-    `feature/022-app-shell-brand-and-nav-hierarchy`).
-  - PR: https://github.com/KrapaGoutam/The-Lineup/pull/22
-  - Final gate: `npm run check` clean; `npm test` 187/187 (30/30 files);
-    `npm run build` clean; `npx playwright test tests/e2e/settings.spec.ts`
-    9/9 (desktop, host-tablet, server-mobile).
-
-## 🧪 Validation gate (run before every commit)
-
-```
-npm run check   # prettier --check, eslint --max-warnings=0, tsc --noEmit
-npm test        # vitest run
-npm run build   # next build
-```
-
-`npm run test:e2e` runs once at the end (Step 6/8), not before every
-intermediate commit — it boots a real dev server and is slower; the spec's
-E2E ask is satisfied at the point the full flow actually exists to test.
+        `docs/features/024-team-management-enhancements.md`, each noting
+        which are unchanged pre-existing behavior (promotion rules,
+        passcode reset, attendance linking, staff-hidden) vs. actually
+        new this feature (rename, attendance-link-status badge).
+  - [x] Updated `docs/STATUS.md` Feature Matrix (024 added) and the
+        health-gate line (31/31 files, 192/192 tests; settings.spec.ts + team-management.spec.ts; 12/12 pgTAP files).
+- [x] **Step 7: Push branch, open PR (base:
+      `feature/023-settings-consolidation`), paste gate output + PR link
+      here.**
+  - Branch pushed: `feature/024-team-management-enhancements`.
+  - PR: https://github.com/KrapaGoutam/The-Lineup/pull/23
+  - Final gate, all run for real: `npm run check` clean; `npm test`
+    192/192 (31/31 files); `npm run build` clean; `npm run db:test`
+    12/12 pgTAP files, 179 assertions;
+    `npx playwright test tests/e2e/settings.spec.ts tests/e2e/team-management.spec.ts`
+    15/15 across desktop/host-tablet/server-mobile.
 
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `src/features/settings/components/store-hours-grid.tsx` (new)
-- `src/features/settings/components/store-hours-grid.test.tsx` (new)
-- `src/features/settings/components/shift-hours-card.tsx` (new)
-- `src/features/settings/components/shift-hours-card.test.tsx` (new)
-- `src/features/settings/components/pay-rates-section.tsx` (new)
-- `src/features/settings/components/pay-rates-section.test.tsx` (new)
-- `src/features/settings/components/settings-page.tsx` (new)
-- `src/features/settings/components/settings-page.test.tsx` (new)
-- `src/features/payroll/components/payroll-workspace.tsx` (export `RateSettings`)
-- `src/components/restaurant-operations-app.tsx` (nav wiring)
-- `tests/e2e/settings.spec.ts` (new)
-- `docs/features/023-settings-consolidation.md` (checkboxes)
+- `supabase/migrations/20260908170000_profiles_manager_rename.sql` (new)
+- `supabase/tests/database/0012_profiles_manager_rename.test.sql` (new)
+- `src/features/team/data/audit-log.ts` (new)
+- `src/features/team/actions/member-actions.ts` (new)
+- `src/features/team/actions/member-actions.test.ts` (new)
+- `src/features/team/actions/team-actions.ts` (audit logging added)
+- `src/app/api/auth/passcode/reset/route.ts` (audit logging added)
+- `src/features/team/components/rename-member-dialog.tsx` (new)
+- `src/features/team/components/team-workspace.tsx` (Rename action, link-status badges)
+- `src/components/restaurant-operations-app.tsx` (rename wiring)
+- `tests/e2e/team-management.spec.ts` (new)
+- `docs/features/024-team-management-enhancements.md` (checkboxes)
 - `docs/STATUS.md` (milestone update)
 
 ## Current State & Next Step
 
-All 8 steps complete. PR #22 open against `feature/022-app-shell-brand-and-nav-hierarchy`,
-all quality gates green. Next step is review/merge — nothing left to
+All 7 steps complete. PR #23 open against
+`feature/023-settings-consolidation`, all quality gates green
+(app-level, pgTAP, e2e). Next step is review/merge — nothing left to
 resume here.
