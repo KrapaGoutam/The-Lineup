@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, Delete, KeyRound, Sparkles, UserPlus } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -245,7 +245,7 @@ export function LoginScreen({
             />
           </div>
           <p className="text-primary mt-5 text-xs font-bold tracking-[0.2em] uppercase">
-            The Monk&apos;s
+            The Monk&apos;s · River Oaks
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
             {mode === "login"
