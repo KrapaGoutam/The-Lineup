@@ -34,12 +34,11 @@ rotation_member_id) do update set table_label = excluded.table_label,
 assigned_by = excluded.assigned_by`) — the backend already fully
    supports editing an occupied cell. Nothing to add server-side for
    "update an assigned table."
-4. **Temporal lock (tip finalized ⇒ locked) for INSERT/UPDATE** — both the
-   RLS policies' own `not exists (... pool.status = 'finalized')` clause
-   _and_ every `board_*` RPC's `assert_board_not_locked()` call enforce
-   this, independently, by design (see that function's own comment: "RLS
-   still enforces this independently... this is a clearer message on top
-   of that, not a replacement for it").
+4. **Temporal lock at the RPC level** — every `board_*` RPC calls
+   `private.assert_board_not_locked()`, which is itself `SECURITY
+DEFINER` and therefore correctly enforces the finalized-tips lock
+   regardless of the caller's own role. Every real code path in this app
+   goes through an RPC, so in practice the lock has always worked.
 5. **Admin-only actions** (`Clear board`/`Clear row`/`Clear column`/
    `Add row`, "reorder" = `move-column`) — already gated by
    `private.assert_is_board_manager()` (owner/general_manager/
@@ -64,19 +63,41 @@ assigned_by = excluded.assigned_by`) — the backend already fully
    `assert_board_not_locked` only (no manager check — matches
    Reconciliation 1, unlike the four bulk actions in gap 5 above which
    stay manager-only on purpose).
-3. **Real RLS gap found reading the migrations, not assumed**:
-   `table_rotation_entries_delete_any_member`'s `using` clause has no
-   `not exists (...finalized...)` condition — unlike its INSERT/UPDATE
-   siblings. `board_clear_row`/`clear_column`/`clear_board` are
-   `SECURITY INVOKER` and issue a plain SQL `delete`, so they're
-   protected today only by their own explicit
-   `assert_board_not_locked()` call, not by RLS itself. A raw DELETE via
-   PostgREST directly (bypassing every RPC) would currently succeed on a
-   finalized board — the exact "the mutation path itself refuses too, in
-   case a control somehow slips through disabled" principle this
-   codebase's own migration comments already state, currently violated
-   for DELETE alone. New `clear-cell` (gap 2) will rely on this same
-   DELETE policy directly, making this fix load-bearing, not cosmetic.
+3. **Real, more serious bug than initially scoped, found live-testing
+   against the local database as a plain server (not assumed from
+   reading SQL text alone).** The insert, update, and delete policies on
+   `table_rotation_entries` from migration `20260906144901` each try to
+   lock the row once tips are finalized by checking, in a subquery, that
+   no matching `tip_pools` row has `status = finalized`. That check is
+   just a SELECT, so it is itself subject to RLS on the `tip_pools`
+   table. The `tip_pools` SELECT policy only allows the owner, general
+   manager, or shift manager roles to read it.
+
+   The consequence: for a plain server or host, that subquery's join to
+   `tip_pools` returns zero rows no matter the pool's real status, so
+   the "not finalized" check always passes. The finalized-lock is
+   silently inert for exactly the roles it matters most for, and this
+   was true for insert and update as well, not only delete.
+
+   Confirmed directly in a live psql session against the local Supabase
+   instance: signed in as a seeded server profile, a delete, an update,
+   and an insert against a finalized day's `table_rotation_entries` all
+   succeeded, bypassing every RPC. This was never caught before because
+   every real code path in the app goes through a `board_*` RPC, and
+   that RPC layer's own lock check runs as a security-definer function
+   that is not subject to this same restriction — so the RPC-level
+   guard has always worked correctly; only the raw RLS policies
+   underneath it, meant to enforce the same rule independently as
+   defense in depth, did not.
+
+   Fixed with one new security-definer helper function (same pattern
+   already used elsewhere in this schema for "a policy needs to see
+   into a table the caller can't directly read") that all three
+   policies now call instead of the broken inline subquery. The new
+   per-cell clear action (gap 2 above) depends on the delete policy
+   directly, which makes this fix load-bearing for this feature, not
+   just a pre-existing bug fixed in passing.
+
 4. **Date/month navigation doesn't exist at all.**
    `getAllocationContext` hardcodes `service_date = today` and
    `status = 'active'` — there is no way to view any other date's board,
@@ -102,24 +123,34 @@ assigned_by = excluded.assigned_by`) — the backend already fully
 ## 🛠️ Implementation Steps
 
 - [x] **Step 1: This task file** — populate and commit before any app code.
-- [ ] **Step 2: Fix the DELETE RLS gap + pgTAP test**
-  - [ ] New migration: replace `table_rotation_entries_delete_any_member`
-        with a version whose `using` clause adds the same
-        `not exists (...finalized...)` condition INSERT/UPDATE already
-        have.
-  - [ ] pgTAP test: a raw `delete from table_rotation_entries` succeeds
-        for an active/non-finalized date and fails once finalized,
-        exercised directly (not through an RPC) to prove the RLS layer
-        itself is the thing being tested.
-  - [ ] `npm run db:reset && npm run db:test`, `npm run check`,
-        `npm test`, `npm run build`.
+- [x] **Step 2: Fix the RLS finalized-lock gap (all three policies) + pgTAP test**
+  - [x] New migration
+        (`20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql`):
+        new `private.is_service_date_tip_finalized(organization_id,
+rotation_round_id)` `SECURITY DEFINER` function; replaces the
+        raw `not exists(...)` clause in `table_rotation_entries_insert_
+any_member`, `_update_any_member`, and `_delete_any_member`
+        (originally only planned to touch DELETE — investigation while
+        writing the test found the bug was real for all three, not just
+        DELETE; see the finding above).
+  - [x] `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql`
+        (8 assertions): confirms a server genuinely cannot SELECT
+        `tip_pools` directly (the precondition); insert/update/delete
+        all succeed while draft; all three are blocked once finalized,
+        as a server specifically (not owner/manager); the entry is
+        provably untouched after the blocked attempts.
+  - [x] `npm run db:reset && npm run db:test` — 13/13 pgTAP files,
+        187 assertions, run for real against the local Supabase
+        instance. `npm run db:types` regenerated with zero net diff
+        (the new function is `private`, never exposed to PostgREST).
+  - [x] `npm run check`, `npm test`, `npm run build`.
 - [ ] **Step 3: `clear-cell` action — domain, RPC, wiring**
   - [ ] `rotation-board.ts`: new `{ type: "clear-cell"; roundId: string;
-    columnId: string }` `BoardAction` variant + `applyBoardAction`
+columnId: string }` `BoardAction` variant + `applyBoardAction`
         case (removes that one cell). Unit tests in
         `rotation-board.test.ts`.
   - [ ] New migration: `board_clear_cell(p_organization_id,
-    p_service_session_id, p_round_id, p_member_id)` RPC — calls
+p_service_session_id, p_round_id, p_member_id)` RPC — calls
         `assert_board_not_locked` only (deliberately no
         `assert_is_board_manager`), deletes the one
         `table_rotation_entries` row (relying on the now-fixed DELETE
@@ -154,7 +185,7 @@ assigned_by = excluded.assigned_by`) — the backend already fully
         `isHistorical` to `AllocationContext`.
   - [ ] `allocation-actions.ts`: new client-triggered
         `getAllocationContextForDateAction({ restaurantSlug,
-    serviceDate })` (mirrors Attendance's own client-triggered read
+serviceDate })` (mirrors Attendance's own client-triggered read
         pattern) — rejects a future date with a clear error rather than
         silently returning an empty board.
   - [ ] `src/features/allocation/components/allocation-date-filter.tsx`
@@ -201,8 +232,8 @@ assigned_by = excluded.assigned_by`) — the backend already fully
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `supabase/migrations/<ts>_table_rotation_entries_delete_finalized_lock.sql` (new)
-- `supabase/tests/database/0013_table_rotation_entries_delete_lock.test.sql` (new)
+- `supabase/migrations/20260908180000_table_rotation_entries_finalized_lock_rls_fix.sql` (new)
+- `supabase/tests/database/0013_table_rotation_entries_finalized_lock_rls_fix.test.sql` (new)
 - `supabase/migrations/<ts>_board_clear_cell.sql` (new)
 - `supabase/tests/database/0014_board_clear_cell.test.sql` (new)
 - `src/features/allocation/domain/rotation-board.ts` (`clear-cell` action)
