@@ -420,15 +420,20 @@ db:test` 210/210 assertions across 17 files (unchanged — Step 7
         build clean, 210/210 pgTAP assertions across 17 files
         (unchanged — this step is test-only, no product code).
   - [x] Commit.
-- [ ] **Step 9: Docs**
-  - [ ] `docs/features/027-recurring-schedules-and-week-navigation.md`:
-        correct the Implementation Map file names, note the
-        already-satisfied Settings entry point, note the `end_date`→
-        `to_date` naming reconciliation, check off every acceptance
-        criterion with a note on what was found already-true vs. newly
-        built.
-  - [ ] Update `docs/STATUS.md` Feature Matrix + Health Gate line.
-  - [ ] Commit.
+- [x] **Step 9: Docs**
+  - [x] `docs/features/027-recurring-schedules-and-week-navigation.md`:
+        corrected the Implementation Map file names
+        (`schedule-grid.tsx`/`shift-form-dialog.tsx` → the real
+        `schedule-workspace.tsx` + new `shift-edit-dialog.tsx`), noted
+        the already-satisfied Settings entry point (Feature 023's
+        `QuickLinkCard`), noted the `end_date`→`to_date` naming
+        reconciliation and the `series_id` reuse in Data & Authorization,
+        checked off every acceptance criterion with a note on what was
+        found already-true (RLS) vs. newly built. Status → `complete`.
+  - [x] Updated `docs/STATUS.md` Feature Matrix (new `027` row) + Health
+        Gate line (34/34 unit files, 250/250 tests; +recurring-schedules
+        e2e; 17/17 pgTAP files, 210 assertions) + Current Status Overview.
+  - [x] Commit.
 - [ ] **Step 10: Final gate, push, open PR (base:
       `feature/025-attendance-reporting-and-filters`), paste real gate
       output + PR link here.**
@@ -464,9 +469,6 @@ db:test` 210/210 assertions across 17 files (unchanged — Step 7
 
 ## Current State & Next Step
 
-Steps 1-8 done and committed. Next: Step 9 (docs — correct
-`docs/features/027-recurring-schedules-and-week-navigation.md`'s
-Implementation Map file names, note the already-satisfied Settings
-entry point, note the `end_date`→`to_date` naming reconciliation and
-the `series_id` reuse, check off every acceptance criterion; update
-`docs/STATUS.md`'s Feature Matrix + Health Gate line; commit).
+Steps 1-9 done and committed. Next: Step 10 (final gate, push, open PR
+base `feature/025-attendance-reporting-and-filters`, paste real gate
+output + PR link here, final wrap-up commit).
