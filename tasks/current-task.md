@@ -2,7 +2,7 @@
 
 **Active Spec:** `docs/features/031-universal-letterhead-and-batch-statements.md`
 **Branch:** `feature/031-universal-letterhead-and-batch-statements` (branched from `main`, after Feature 030 / PR #29 merged)
-**Status:** Complete — ready to push and open PR
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/30
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -144,12 +144,14 @@ filename.
   - [x] `npx vitest run` 44/44 files, 325/325 tests.
   - [x] `npm run build` clean.
   - [x] `npx playwright test` full suite 153/153 across 3 projects.
-  - [ ] `npm run db:test` -- not run this pass; no migration touched by
-        this branch (confirm before push if any doubt).
-- [ ] **Step 8: Push + PR**
-  - [ ] Commit with clear, atomic commit message(s).
-  - [ ] Push `feature/031-universal-letterhead-and-batch-statements`.
-  - [ ] Open PR against `main`.
+  - [x] `npm run db:test` -- skipped deliberately; confirmed via
+        `git diff --stat main -- supabase/` that this branch touches no
+        migration files.
+- [x] **Step 8: Push + PR**
+  - [x] Commit with clear, atomic commit message(s) (2 commits: code+
+        tests, then docs).
+  - [x] Push `feature/031-universal-letterhead-and-batch-statements`.
+  - [x] Open PR against `main`.
 
 ## 🗂️ File List
 
@@ -171,10 +173,8 @@ filename.
 
 ## Current State & Next Step
 
-All implementation, unit tests, live verification, full Playwright
-regression sweep, and documentation are complete and passing. Nothing
-has been committed to this branch yet -- everything above is currently
-uncommitted working-tree state on
-`feature/031-universal-letterhead-and-batch-statements`. Next step:
-commit (atomic commits or one consolidated commit), push, and open a PR
-against `main`, matching this session's established pattern.
+Feature 031 is fully complete: implemented, unit-tested, live-verified,
+regression-swept with the full Playwright suite, documented, committed
+(2 commits: `99cc702` code+tests, `5d9a32e` docs), pushed, and opened as
+[PR #30](https://github.com/KrapaGoutam/The-Lineup/pull/30) against
+`main`. Nothing further pending on this branch.
