@@ -12,7 +12,7 @@
 - **Active Feature:** `Feature 029 — Tips from Clocked-In Attendance Roster` (plus an ad hoc Attendance "All employees" tweak bundled on the same branch)
 - **Active Task Spec:** [docs/features/029-tips-from-clocked-in-attendance.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/029-tips-from-clocked-in-attendance.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/029-tips-from-clocked-in-attendance` (stacked on `feature/027-recurring-schedules-and-week-navigation`); all quality gates green, acceptance criteria checked off. The feature's entire "frozen snapshot" guarantee turned out to already be enforced at the RLS layer (tip tables' write policies already key on the parent pool's `draft` status) — confirmed live by fully unlinking a participant's attendance after finalizing and seeing zero effect on the split. Pending push + PR.
+- **Current State:** Implemented on `feature/029-tips-from-clocked-in-attendance` (stacked on `feature/027-recurring-schedules-and-week-navigation`); all quality gates green, acceptance criteria checked off. The feature's entire "frozen snapshot" guarantee turned out to already be enforced at the RLS layer (tip tables' write policies already key on the parent pool's `draft` status) — confirmed live by fully unlinking a participant's attendance after finalizing and seeing zero effect on the split. PR open: [#27](https://github.com/KrapaGoutam/The-Lineup/pull/27), pending review/merge.
 
 ---
 

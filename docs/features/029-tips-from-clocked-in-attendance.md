@@ -3,7 +3,7 @@
 **Name:** Tips from Clocked-In Attendance Roster  
 **Owner:** Krapa Goutam  
 **Status:** complete  
-**Issue/PR:**
+**Issue/PR:** https://github.com/KrapaGoutam/The-Lineup/pull/27
 
 ## Classification & Session Scope
 

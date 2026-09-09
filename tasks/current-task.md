@@ -9,7 +9,7 @@
 
 **Branch:** `feature/029-tips-from-clocked-in-attendance` (stacked on
 `feature/027-recurring-schedules-and-week-navigation`)
-**Status:** In progress
+**Status:** Complete — PR #27 open (https://github.com/KrapaGoutam/The-Lineup/pull/27)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -273,9 +273,10 @@ onPullClockedInTeam={...}>`.
         including the new "All employees" test and
         `tips-clocked-in-roster.spec.ts`. No regressions in any
         pre-existing suite from this branch's changes.
-  - [ ] Push `feature/029-tips-from-clocked-in-attendance`, open PR
-        (base `feature/027-recurring-schedules-and-week-navigation`),
-        paste the real PR link here.
+  - [x] Pushed `feature/029-tips-from-clocked-in-attendance`, opened
+        PR #27 (base
+        `feature/027-recurring-schedules-and-week-navigation`):
+        https://github.com/KrapaGoutam/The-Lineup/pull/27
 
 ## 🗂️ File list
 
@@ -302,7 +303,8 @@ onPullClockedInTeam={...}>`.
 
 ## Current State & Next Step
 
-Steps 1-8 done and committed. Next: Step 9 (final gate -- full app-level
-gate + `npm run db:test` + full e2e suite across all three projects --
-push, open PR base `feature/027-recurring-schedules-and-week-navigation`,
-paste real gate output + PR link here, final wrap-up commit).
+All 9 steps done and committed. Full gate green (265/265 unit, build
+clean, 210/210 pgTAP, 138/138 e2e across 3 projects). Pushed and PR
+opened: https://github.com/KrapaGoutam/The-Lineup/pull/27 (base
+`feature/027-recurring-schedules-and-week-navigation`). This branch is
+complete -- both the Attendance "All" tweak and Feature 029 shipped.
