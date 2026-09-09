@@ -196,10 +196,14 @@ test.describe("Feature 030: Payroll UI, Option 1k, Timesheet Print & Statements"
     const printArea = dialog.locator("#combined-statement-print-area");
     await expect(printArea.locator("img")).toHaveCount(0);
     await expect(printArea.locator("svg")).toHaveCount(1);
+    // Feature 031 letterhead redesign: the short "The Monk's" is the
+    // <h1>, and the full org name/address/site moved to a plain
+    // right-aligned contact block (no longer a heading role).
     await expect(
-      printArea.getByRole("heading", {
-        name: "The Monk's Indian Fusion - Webster",
-      }),
+      printArea.getByRole("heading", { name: "The Monk's", exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      printArea.getByText("The Monk's Indian Fusion - Webster"),
     ).toHaveCount(1);
 
     const printBtn = dialog.getByRole("button", { name: "Print", exact: true });

@@ -14,6 +14,7 @@ import {
 import { calendarWeekday } from "@/features/attendance/domain/attendance-metrics";
 import {
   combinedStatementFilename,
+  combinedStatementRosterFilename,
   triggerPrintWithFilename,
 } from "@/lib/print-utils";
 
@@ -52,60 +53,99 @@ function formatPaymentDate(isoDate: string): string {
 
 const PRINT_AREA_ID = "combined-statement-print-area";
 
+/** Either one specific employee, or every active employee for the
+ * chosen month -- Feature 031's "All Employees" batch statement. */
+export type CombinedStatementTarget =
+  | { scope: "single"; neonUserId: number }
+  | { scope: "all"; neonUserIds: number[] };
+
 export function CombinedStatementDialog({
   restaurantSlug,
-  neonUserId,
+  target,
   year,
   month,
   onClose,
 }: {
   restaurantSlug: string;
-  neonUserId: number;
+  target: CombinedStatementTarget;
   year: number;
   month: number;
   onClose: () => void;
 }) {
-  const [statement, setStatement] = useState<CombinedMonthlyStatement | null>(
-    null,
-  );
+  const [statements, setStatements] = useState<
+    CombinedMonthlyStatement[] | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [partialFailureCount, setPartialFailureCount] = useState(0);
+
+  const neonUserIds =
+    target.scope === "single" ? [target.neonUserId] : target.neonUserIds;
+  const neonUserIdsKey = neonUserIds.join(",");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError(null);
-      const result = await getCombinedMonthlyStatementAction({
-        restaurantSlug,
-        year,
-        month,
-        neonUserId,
-      });
+      setPartialFailureCount(0);
+      if (neonUserIds.length === 0) {
+        if (!cancelled) {
+          setError("No active employees to include.");
+          setLoading(false);
+        }
+        return;
+      }
+      const results = await Promise.all(
+        neonUserIds.map((neonUserId) =>
+          getCombinedMonthlyStatementAction({
+            restaurantSlug,
+            year,
+            month,
+            neonUserId,
+          }),
+        ),
+      );
       if (cancelled) return;
-      if (!result.ok) {
-        setError(result.error);
+      const succeeded = results.filter(
+        (r): r is { ok: true; data: CombinedMonthlyStatement } => r.ok,
+      );
+      if (succeeded.length === 0) {
+        const firstError = results.find((r) => !r.ok);
+        setError(
+          firstError && !firstError.ok
+            ? firstError.error
+            : "Could not generate any statements for that selection.",
+        );
         setLoading(false);
         return;
       }
-      setStatement(result.data);
+      setStatements(succeeded.map((r) => r.data));
+      setPartialFailureCount(results.length - succeeded.length);
       setLoading(false);
     }
     load();
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, year, month, neonUserId]);
+    // neonUserIds is derived fresh from `target` every render (a new
+    // array reference each time) -- keyed by its own stringified
+    // contents instead, so this effect only re-runs when the actual
+    // set of ids changes, not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurantSlug, year, month, neonUserIdsKey]);
 
-  function printStatement() {
-    if (!statement) return;
-    triggerPrintWithFilename(
-      combinedStatementFilename(
-        statement.employee.name,
-        statement.period.year,
-        statement.period.month,
-      ),
-    );
+  function printStatements() {
+    if (!statements || statements.length === 0) return;
+    const filename =
+      statements.length === 1
+        ? combinedStatementFilename(
+            statements[0].employee.name,
+            statements[0].period.year,
+            statements[0].period.month,
+          )
+        : combinedStatementRosterFilename(year, month);
+    triggerPrintWithFilename(filename);
   }
 
   return (
@@ -127,18 +167,25 @@ export function CombinedStatementDialog({
           <div className="flex items-center gap-2">
             <FileText className="text-primary size-5" aria-hidden="true" />
             <div>
-              <h2 className="text-base font-semibold">Monthly Statement</h2>
+              <h2 className="text-base font-semibold">
+                {target.scope === "all"
+                  ? "Monthly Statements — All Employees"
+                  : "Monthly Statement"}
+              </h2>
               <p className="text-muted-foreground text-xs">
                 Attendance timesheet and payroll breakdown
+                {statements && statements.length > 1
+                  ? ` — ${statements.length} employees`
+                  : ""}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {statement ? (
+            {statements && statements.length > 0 ? (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={printStatement}
+                onClick={printStatements}
                 className="gap-1.5"
               >
                 <Printer className="size-4" aria-hidden="true" />
@@ -177,268 +224,295 @@ export function CombinedStatementDialog({
                 Close
               </Button>
             </div>
-          ) : statement ? (
-            <div id={PRINT_AREA_ID} className="statement-page space-y-6">
-              <ReportLetterhead
-                documentType="Monthly Timesheet & Payroll Statement"
-                employeeName={statement.employee.name}
-                employeeRole={`${statement.employee.role} · ID #${statement.employee.neonUserId}`}
-                period={statement.period.monthLabel}
-                generatedAt={new Date(statement.generatedAt)}
-              />
+          ) : statements && statements.length > 0 ? (
+            <div id={PRINT_AREA_ID} className="space-y-8">
+              {partialFailureCount > 0 ? (
+                <p className="text-destructive text-xs print:hidden">
+                  {partialFailureCount}{" "}
+                  {partialFailureCount === 1 ? "statement" : "statements"} could
+                  not be generated and{" "}
+                  {partialFailureCount === 1 ? "is" : "are"} not included below.
+                </p>
+              ) : null}
+              {statements.map((statement) => (
+                <div
+                  key={statement.employee.neonUserId}
+                  className="print-page-break statement-page space-y-6"
+                >
+                  <ReportLetterhead
+                    reportTitle="Monthly Timesheet & Payroll Statement"
+                    employeeName={statement.employee.name}
+                    employeeRole={`${statement.employee.role} · ID #${statement.employee.neonUserId}`}
+                    periodName={statement.period.monthLabel}
+                  />
 
-              {/* Top Section: Daily Attendance Timesheet */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold tracking-wider text-black uppercase">
-                    Part 1: Recorded Attendance
-                  </h3>
-                  <span className="font-mono text-xs text-gray-600">
-                    {statement.attendance.daysWorked} days ·{" "}
-                    {formatHours(statement.attendance.totalHours)}
-                  </span>
-                </div>
+                  {/* Top Section: Daily Attendance Timesheet */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold tracking-wider text-black uppercase">
+                        Part 1: Recorded Attendance
+                      </h3>
+                      <span className="font-mono text-xs text-gray-600">
+                        {statement.attendance.daysWorked} days ·{" "}
+                        {formatHours(statement.attendance.totalHours)}
+                      </span>
+                    </div>
 
-                <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
-                  <div>
-                    <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                      Days Worked
-                    </span>
-                    <span className="font-mono text-sm font-bold text-black">
-                      {statement.attendance.daysWorked}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                      Total Hours
-                    </span>
-                    <span className="font-mono text-sm font-bold text-black">
-                      {formatHours(statement.attendance.totalHours)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                      Average / Day
-                    </span>
-                    <span className="font-mono text-sm font-bold text-black">
-                      {formatHours(statement.attendance.avgHoursPerDay)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="print-timesheet-table w-full border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="border-b-2 border-black bg-gray-100">
-                        <th className="px-2 py-2 font-bold text-black">Date</th>
-                        <th className="px-2 py-2 font-bold text-black">Day</th>
-                        <th className="px-2 py-2 font-bold text-black">
-                          Clock In
-                        </th>
-                        <th className="px-2 py-2 font-bold text-black">
-                          Clock Out
-                        </th>
-                        <th className="px-2 py-2 text-right font-bold text-black">
-                          Hours
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {statement.attendance.rows.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="py-4 text-center text-gray-500 italic"
-                          >
-                            No attendance shifts logged for this period.
-                          </td>
-                        </tr>
-                      ) : (
-                        statement.attendance.rows.map((row) => (
-                          <tr key={row.id} className="border-b border-gray-200">
-                            <td className="px-2 py-1.5 font-mono">
-                              {row.date}
-                            </td>
-                            <td className="px-2 py-1.5 text-gray-600">
-                              {calendarWeekday(row.date)}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono">
-                              {row.clockIn ? formatClockTime(row.clockIn) : "—"}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono">
-                              {row.clockOut
-                                ? formatClockTime(row.clockOut)
-                                : "—"}
-                            </td>
-                            <td className="px-2 py-1.5 text-right font-mono font-semibold">
-                              {row.hoursWorked === null
-                                ? "—"
-                                : formatHours(row.hoursWorked)}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-black font-bold">
-                        <td
-                          colSpan={4}
-                          className="px-2 py-2 text-right text-xs tracking-wider uppercase"
-                        >
-                          Total Hours Logged:
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono text-sm">
+                    <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
+                      <div>
+                        <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                          Days Worked
+                        </span>
+                        <span className="font-mono text-sm font-bold text-black">
+                          {statement.attendance.daysWorked}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                          Total Hours
+                        </span>
+                        <span className="font-mono text-sm font-bold text-black">
                           {formatHours(statement.attendance.totalHours)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              {/* Bottom Section: Payroll Compensation & Settlement */}
-              <div className="space-y-3 border-t border-gray-200 pt-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold tracking-wider text-black uppercase">
-                    Part 2: Payroll &amp; Compensation
-                  </h3>
-                  {statement.payroll ? (
-                    <Badge
-                      tone={
-                        statement.payroll.status === "paid"
-                          ? "success"
-                          : statement.payroll.status === "part-paid"
-                            ? "warning"
-                            : "neutral"
-                      }
-                    >
-                      {statement.payroll.status.toUpperCase()}
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral">NOT YET GENERATED</Badge>
-                  )}
-                </div>
-
-                {statement.payroll ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 sm:grid-cols-4">
+                        </span>
+                      </div>
                       <div>
                         <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                          Base Pay Rate
+                          Average / Day
                         </span>
                         <span className="font-mono text-sm font-bold text-black">
-                          {money(statement.payroll.rateCentsSnapshot)}/hr
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                          Gross Compensation
-                        </span>
-                        <span className="font-mono text-sm font-bold text-black">
-                          {money(statement.payroll.grossCents)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                          Confirmed Paid
-                        </span>
-                        <span className="font-mono text-sm font-bold text-emerald-700">
-                          {money(statement.payroll.confirmedPaymentsCents)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-semibold text-gray-500 uppercase">
-                          Balance Due
-                        </span>
-                        <span className="text-primary font-mono text-sm font-bold">
-                          {money(statement.payroll.balanceCents)}
+                          {formatHours(statement.attendance.avgHoursPerDay)}
                         </span>
                       </div>
                     </div>
 
-                    {/* Payment Records */}
-                    {statement.payroll.payments.length > 0 ? (
-                      <div>
-                        <h4 className="mb-1.5 text-xs font-semibold text-gray-700">
-                          Settlement Payments:
-                        </h4>
-                        <table className="print-timesheet-table w-full border-collapse text-left text-xs">
-                          <thead>
-                            <tr className="border-b border-gray-300 text-gray-600">
-                              <th className="px-2 py-1 font-medium">Date</th>
-                              <th className="px-2 py-1 font-medium">Status</th>
-                              <th className="px-2 py-1 font-medium">
-                                Memo / Note
-                              </th>
-                              <th className="px-2 py-1 text-right font-medium">
-                                Amount
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {statement.payroll.payments.map((payment) => (
-                              <tr
-                                key={payment.id}
-                                className="border-b border-gray-100"
+                    <div className="overflow-x-auto">
+                      <table className="print-timesheet-table w-full border-collapse text-left text-xs">
+                        <thead>
+                          <tr className="border-b-2 border-black bg-gray-100">
+                            <th className="px-2 py-2 font-bold text-black">
+                              Date
+                            </th>
+                            <th className="px-2 py-2 font-bold text-black">
+                              Day
+                            </th>
+                            <th className="px-2 py-2 font-bold text-black">
+                              Clock In
+                            </th>
+                            <th className="px-2 py-2 font-bold text-black">
+                              Clock Out
+                            </th>
+                            <th className="px-2 py-2 text-right font-bold text-black">
+                              Hours
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {statement.attendance.rows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={5}
+                                className="py-4 text-center text-gray-500 italic"
                               >
-                                <td className="px-2 py-1 font-mono">
-                                  {formatPaymentDate(payment.paymentDate)}
+                                No attendance shifts logged for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            statement.attendance.rows.map((row) => (
+                              <tr
+                                key={row.id}
+                                className="border-b border-gray-200"
+                              >
+                                <td className="px-2 py-1.5 font-mono">
+                                  {row.date}
                                 </td>
-                                <td className="px-2 py-1 font-medium capitalize">
-                                  {payment.status}
+                                <td className="px-2 py-1.5 text-gray-600">
+                                  {calendarWeekday(row.date)}
                                 </td>
-                                <td className="px-2 py-1">
-                                  {payment.comment ?? "Direct settlement"}
+                                <td className="px-2 py-1.5 font-mono">
+                                  {row.clockIn
+                                    ? formatClockTime(row.clockIn)
+                                    : "—"}
                                 </td>
-                                <td className="px-2 py-1 text-right font-mono font-semibold">
-                                  {money(payment.amountCents)}
+                                <td className="px-2 py-1.5 font-mono">
+                                  {row.clockOut
+                                    ? formatClockTime(row.clockOut)
+                                    : "—"}
+                                </td>
+                                <td className="px-2 py-1.5 text-right font-mono font-semibold">
+                                  {row.hoursWorked === null
+                                    ? "—"
+                                    : formatHours(row.hoursWorked)}
                                 </td>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-500 italic">
-                        No payments recorded yet for this payroll period.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-xs text-gray-500">
-                    A formal payroll period has not yet been generated for this
-                    calendar month. Once generated by management, the verified
-                    rate, gross compensation, and payment ledger will appear
-                    here.
+                            ))
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-black font-bold">
+                            <td
+                              colSpan={4}
+                              className="px-2 py-2 text-right text-xs tracking-wider uppercase"
+                            >
+                              Total Hours Logged:
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-sm">
+                              {formatHours(statement.attendance.totalHours)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Signatures & Certification Block */}
-              <div className="mt-8 border-t-2 border-black pt-6">
-                <div className="grid grid-cols-2 gap-12 text-xs">
-                  <div>
-                    <div className="mb-1.5 border-b border-black pb-1" />
-                    <p className="font-semibold text-black">
-                      Employee Signature &amp; Date
-                    </p>
-                    <p className="text-[10.5px] text-gray-500">
-                      I certify that the recorded hours and statement details
-                      above are accurate.
-                    </p>
+                  {/* Bottom Section: Payroll Compensation & Settlement */}
+                  <div className="space-y-3 border-t border-gray-200 pt-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold tracking-wider text-black uppercase">
+                        Part 2: Payroll &amp; Compensation
+                      </h3>
+                      {statement.payroll ? (
+                        <Badge
+                          tone={
+                            statement.payroll.status === "paid"
+                              ? "success"
+                              : statement.payroll.status === "part-paid"
+                                ? "warning"
+                                : "neutral"
+                          }
+                        >
+                          {statement.payroll.status.toUpperCase()}
+                        </Badge>
+                      ) : (
+                        <Badge tone="neutral">NOT YET GENERATED</Badge>
+                      )}
+                    </div>
+
+                    {statement.payroll ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 sm:grid-cols-4">
+                          <div>
+                            <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                              Base Pay Rate
+                            </span>
+                            <span className="font-mono text-sm font-bold text-black">
+                              {money(statement.payroll.rateCentsSnapshot)}/hr
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                              Gross Compensation
+                            </span>
+                            <span className="font-mono text-sm font-bold text-black">
+                              {money(statement.payroll.grossCents)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                              Confirmed Paid
+                            </span>
+                            <span className="font-mono text-sm font-bold text-emerald-700">
+                              {money(statement.payroll.confirmedPaymentsCents)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-semibold text-gray-500 uppercase">
+                              Balance Due
+                            </span>
+                            <span className="text-primary font-mono text-sm font-bold">
+                              {money(statement.payroll.balanceCents)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Payment Records */}
+                        {statement.payroll.payments.length > 0 ? (
+                          <div>
+                            <h4 className="mb-1.5 text-xs font-semibold text-gray-700">
+                              Settlement Payments:
+                            </h4>
+                            <table className="print-timesheet-table w-full border-collapse text-left text-xs">
+                              <thead>
+                                <tr className="border-b border-gray-300 text-gray-600">
+                                  <th className="px-2 py-1 font-medium">
+                                    Date
+                                  </th>
+                                  <th className="px-2 py-1 font-medium">
+                                    Status
+                                  </th>
+                                  <th className="px-2 py-1 font-medium">
+                                    Memo / Note
+                                  </th>
+                                  <th className="px-2 py-1 text-right font-medium">
+                                    Amount
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {statement.payroll.payments.map((payment) => (
+                                  <tr
+                                    key={payment.id}
+                                    className="border-b border-gray-100"
+                                  >
+                                    <td className="px-2 py-1 font-mono">
+                                      {formatPaymentDate(payment.paymentDate)}
+                                    </td>
+                                    <td className="px-2 py-1 font-medium capitalize">
+                                      {payment.status}
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      {payment.comment ?? "Direct settlement"}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-mono font-semibold">
+                                      {money(payment.amountCents)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">
+                            No payments recorded yet for this payroll period.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-xs text-gray-500">
+                        A formal payroll period has not yet been generated for
+                        this calendar month. Once generated by management, the
+                        verified rate, gross compensation, and payment ledger
+                        will appear here.
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="mb-1.5 border-b border-black pb-1" />
-                    <p className="font-semibold text-black">
-                      Manager Approval &amp; Date
-                    </p>
-                    <p className="text-[10.5px] text-gray-500">
-                      Approved for restaurant operational and payroll
-                      disbursement records.
-                    </p>
+
+                  {/* Signatures & Certification Block */}
+                  <div className="mt-8 border-t-2 border-black pt-6">
+                    <div className="grid grid-cols-2 gap-12 text-xs">
+                      <div>
+                        <div className="mb-1.5 border-b border-black pb-1" />
+                        <p className="font-semibold text-black">
+                          Employee Signature &amp; Date
+                        </p>
+                        <p className="text-[10.5px] text-gray-500">
+                          I certify that the recorded hours and statement
+                          details above are accurate.
+                        </p>
+                      </div>
+                      <div>
+                        <div className="mb-1.5 border-b border-black pb-1" />
+                        <p className="font-semibold text-black">
+                          Manager Approval &amp; Date
+                        </p>
+                        <p className="text-[10.5px] text-gray-500">
+                          Approved for restaurant operational and payroll
+                          disbursement records.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
           ) : null}
         </CardContent>

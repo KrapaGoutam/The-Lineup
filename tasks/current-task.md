@@ -1,445 +1,180 @@
-# Current Task: Feature 030 — Payroll UI, Option 1k Dashboard, Staff Access & Timesheet Print Overhaul
+# Current Task: Feature 031 — Universal Letterhead Redesign & All-Employees Statement Printing
 
-**Active Spec:** `docs/features/030-combined-timesheet-payroll-statement.md` (and updates to `026` & `025`)
-**Branch:** `feature/030-payroll-ui-timesheet-print-overhaul` (branched from `main`)
-**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/29
-**Assigned Agent:** Antigravity (build), Claude Code (session resumption, final
-verification gate, and PR)
+**Active Spec:** `docs/features/031-universal-letterhead-and-batch-statements.md`
+**Branch:** `feature/031-universal-letterhead-and-batch-statements` (branched from `main`, after Feature 030 / PR #29 merged)
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/30
+**Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
 
-Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff self-service read-only Payroll access, corporate Letterhead Timesheet Print Templates (with 1-employee-per-page pagination), and Combined Monthly Timesheet + Payroll Statements.
+Given directly by the user as a complete, bounded technical spec (no
+discovery/planning round needed): redesign the shared `<ReportLetterhead>`
+to match a reference document layout exactly, replace its logo with an
+embedded inline SVG (never an external raster `<img>`), and let managers
+generate + print the Combined Monthly Statement for every active
+employee in one batch, one page per employee, under a dedicated roster
+filename.
 
 ## 📖 Key Findings & Architecture
 
-1. **Dropdown Contrast Bug Fix**:
-   - In dark theme, native `<select>` and custom dropdown options could inherit light text on white/light native option popovers.
-   - Fixed by applying `bg-popover text-popover-foreground border-border [&>option]:bg-popover [&>option]:text-popover-foreground` across `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
-2. **Default Landing Page**:
-   - In `src/components/restaurant-operations-app.tsx`, change initial tab from `"schedule"` to `"allocation"`: `useState<AppTab>("allocation")`.
-   - Update E2E tests in `tests/e2e/dashboard.spec.ts` that assumed the initial view was Schedule to navigate explicitly, and verify allocation lands first.
-3. **Remove Redundant Pay Rates from Payroll Tab**:
-   - In `src/features/payroll/components/payroll-workspace.tsx`, remove `<RateSettings>` from the rendered layout in `PrivilegedPayrollView`.
-   - Pay rates are already consolidated in Settings > Pay Rates (`pay-rates-section.tsx`), which continues importing `RateSettings`. The top toolbar "Pay rates" button routes there seamlessly via `onGoToPayRates`.
-4. **Option 1k Dashboard Overhaul**:
-   - Top KPI Summary Cards: 3 cards (`Overall balance owed` highlighted with accent container and large font, `This month` owed with draft period count, `Last month` owed).
-   - 2-Column Dashboard Grid (`1fr 360px` desktop, stacked on mobile):
-     - Left Column ("Balances by person and month"): Person header with initials avatar, stable person color, employee name, meta (`${role} · ${rate}/hr · N open months`), and person open balance. Month sub-table with `Month`, `Hours`, `Gross`, `Paid`, `Month balance`, and Status badge (`Draft` / `Locked` / `Part-paid` / `Paid`), plus a "Ledger" button to open the period ledger.
-     - Right Column ("Balance per person"): List of employees with open balances (status dot, name, balance, list of open months), bottom highlight bar for Overall Balance, and explanatory note.
-   - Status badge logic extended in `payroll-balance-metrics.ts` to include `"part-paid"` when `balanceCents > 0 && balanceCents < grossCents`.
-5. **Staff Read-Only Payroll Access**:
-   - In `restaurant-operations-app.tsx`, remove the `isManager` gate from `payrollTab` so regular staff (servers, hosts, bussers) in real mode can see and click Payroll.
-   - In `payroll-workspace.tsx`, `SelfPayrollView` renders the "My Payroll" view showing only the user's own locked/paid periods and read-only ledger. Admin controls (`Generate period`, `Record payment`, rate editing) are strictly omitted.
-   - Enforced by existing Supabase RLS (`payroll_periods_select_self`, `payroll_payments_select_self`, `payroll_adjustments_select_self`).
-6. **Corporate Letterhead Timesheet & Combined Statement**:
-   - Letterhead includes "The Monk's" logo (`https://www.monkswebster.com/assets/img/logo-light.png`), restaurant details, employee designation, and month/year.
-   - Print pagination enforced: `@media print { .employee-timesheet { page-break-after: always; break-after: page; } .employee-timesheet:last-child { page-break-after: auto; break-after: auto; } }`.
-   - Combined Monthly Statement action button in both Attendance and Payroll views.
-   - Server action `getCombinedMonthlyStatementAction` securely fetches attendance records and payroll breakdown for that employee and calendar month, enforcing staff can only access their own statement while managers can access any.
+1. **No "Monk's" brand SVG asset exists anywhere in this repo** (checked
+   via `find`/`grep` -- only Next.js starter icons under `public/`), and
+   `monkswebster.com` is a real, unrelated external business's site --
+   not an asset this codebase owns. There was nothing to literally
+   "extract paths from," and scraping a real business's trademarked logo
+   would be inappropriate regardless of feasibility. Decision: author an
+   original, simple monochrome hooded-silhouette crest instead,
+   documented directly in the component's own header comment.
+2. **Letterhead layout inversion**: the new reference layout swaps what
+   Feature 030 had -- previously the full "The Monk's Indian Fusion -
+   Webster" was the `<h1>` on the left with a "Generated" timestamp on
+   the right; now the short "The Monk's" is the `<h1>` (with `reportTitle`
+   beneath it) on the left, and the full org name/address/site is a
+   plain right-aligned contact block (no longer a heading), with no
+   timestamp anywhere.
+3. **`employeeName` becomes optional**: omitting it hides the "Employee"
+   meta block entirely (not just blanks it) -- needed for a future/
+   present all-staff summary context where there's no single employee
+   to name.
+4. **Batch statement fetch reuses existing infra**: `CombinedStatementDialog`
+   already called `getCombinedMonthlyStatementAction` for exactly one
+   employee. Generalizing to "all employees" means calling that same
+   action N times via `Promise.all` (no new server action), keyed by a
+   new `CombinedStatementTarget` discriminated union
+   (`{ scope: "single"; neonUserId } | { scope: "all"; neonUserIds }`) --
+   the same "reuse existing, already-authorized infra" pattern
+   `PayrollPrintDialog` already established in Feature 030's bug-fix pass.
+5. **Partial-failure handling**: a batch of N fetches can have some
+   succeed and some fail (e.g. an employee with no attendance link). The
+   dialog renders every successful statement and shows a small
+   `print:hidden` note naming how many were skipped, rather than
+   blocking the whole batch on one bad id. Only 100% failure blocks with
+   an error state.
+6. **Entry point was previously fully hidden**: Attendance's "all"-scope
+   Monthly Statement button used to be `{!showingAll && activePerson ? (...) : null}`
+   -- entirely absent whenever "All employees" was selected. It's now
+   always rendered, branching label/target/disabled on `showingAll`.
 
 ## 🔒 Non-negotiable Constraints
 
-- Multi-tenant isolation enforced by `organization_id` and Supabase RLS.
-- Regular staff never see anyone else's payroll periods, balances, or rates.
-- Pure table-rotation engine remains untouched.
-- No tip calculation data is mixed with payroll data.
-- Quality gates (`npm run check`, `npm test`, `npm run build`) must pass before every commit.
-
-## 🛠️ Implementation Steps
-
-- [x] **Step 1: Task Initialization & First Commit**
-  - [x] Populate `tasks/current-task.md` with complete plan, file list, and step checklist.
-  - [x] Pre-commit quality gate (`npm run check && npm test && npm run build`).
-  - [x] Commit `tasks/current-task.md`.
-
-- [x] **Step 2: Increment 1 — Bug Fixes & Shell Alignment**
-  - [x] Dropdown contrast fix in `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
-  - [x] Default landing tab changed to `"allocation"` in `src/components/restaurant-operations-app.tsx`.
-  - [x] Remove `<RateSettings>` from Payroll tab in `src/features/payroll/components/payroll-workspace.tsx` while preserving its export.
-  - [x] Adjust existing E2E tests in `tests/e2e/dashboard.spec.ts` to accommodate allocation landing page.
-  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
-
-- [x] **Step 3: Increment 2 — Option 1k Payroll Dashboard Overhaul**
-  - [x] Extend `derivePeriodStatus` in `src/features/payroll/domain/payroll-balance-metrics.ts` to support `"part-paid"`, and add unit tests in `payroll-balance-metrics.test.ts`.
-  - [x] Update `src/features/payroll/components/payroll-kpi-cards.tsx` to render the 3-card Option 1k layout.
-  - [x] Rebuild `src/features/payroll/components/payroll-period-groups.tsx` and `src/features/payroll/components/payroll-balance-panel.tsx` with Option 1k design tokens, avatar colors, and expanded sub-tables.
-  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
-
-- [x] **Step 4: Increment 3 — Staff Read-Only Payroll Access**
-  - [x] Enable Payroll tab for regular staff in `src/components/restaurant-operations-app.tsx`.
-  - [x] Polish `SelfPayrollView` in `src/features/payroll/components/payroll-workspace.tsx` for "My Payroll" view without admin actions.
-  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
-
-- [x] **Step 5: Increment 4 — Timesheet Letterhead Print & Combined Statement**
-  - [x] Update `PrintableReport` in `src/features/attendance/components/attendance-report.tsx` with corporate letterhead logo and 1-employee-per-page pagination.
-  - [x] Implement `getCombinedMonthlyStatementAction` in `src/features/payroll/actions/statement-actions.ts` with unit tests in `statement-actions.test.ts`.
-  - [x] Implement `src/features/payroll/components/combined-statement-dialog.tsx`.
-  - [x] Wire "Monthly Statement" action buttons into both Attendance and Payroll views.
-  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
-
-- [x] **Step 6: Playwright E2E Tests for New Features**
-  - [x] Add Playwright tests verifying:
-    - [x] Initial landing on Table Allocation.
-    - [x] Attendance dropdown options have proper contrast.
-    - [x] Staff member and manager views.
-    - [x] Timesheet and Combined Statement print dialog triggers.
-  - [x] Run full E2E test suite across desktop, tablet, and mobile projects.
-
-- [x] **Step 7: Documentation Updates**
-  - [x] Update `docs/features/026-payroll-dashboard-and-ledger-balances.md`.
-  - [x] Update `docs/features/025-attendance-reporting-and-filters.md`.
-  - [x] Create `docs/features/030-combined-timesheet-payroll-statement.md`.
-  - [x] Update `docs/DESIGN_SYSTEM.md`.
-  - [x] Update `docs/STATUS.md`.
-  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
-
-- [x] **Step 8: Final Gate & PR**
-  - [x] Full quality gate verification (`npm run check`, `npm test`, `npm run build`, `npm run db:test`, Playwright E2E).
-  - [x] Push branch to remote and create PR.
-
-## 🗂️ File List
-
-- `tasks/current-task.md`
-- `src/components/ui/select.tsx`
-- `src/components/restaurant-operations-app.tsx`
-- `src/features/attendance/components/attendance-report.tsx`
-- `src/features/attendance/components/attendance-month-nav.tsx`
-- `src/features/payroll/domain/payroll-balance-metrics.ts`
-- `src/features/payroll/domain/payroll-balance-metrics.test.ts`
-- `src/features/payroll/components/payroll-kpi-cards.tsx`
-- `src/features/payroll/components/payroll-period-groups.tsx`
-- `src/features/payroll/components/payroll-balance-panel.tsx`
-- `src/features/payroll/components/payroll-workspace.tsx`
-- `src/features/payroll/actions/statement-actions.ts` (new)
-- `src/features/payroll/actions/statement-actions.test.ts` (new)
-- `src/features/payroll/components/combined-statement-dialog.tsx` (new)
-- `src/features/payroll/components/payroll-workspace.test.tsx` (new)
-- `tests/e2e/dashboard.spec.ts`
-- `tests/e2e/payroll-timesheet-overhaul.spec.ts` (new)
-- `docs/features/026-payroll-dashboard-and-ledger-balances.md`
-- `docs/features/025-attendance-reporting-and-filters.md`
-- `docs/features/030-combined-timesheet-payroll-statement.md` (new)
-- `docs/DESIGN_SYSTEM.md`
-- `docs/STATUS.md`
-
-## In-Flight State (Feature 030 build itself)
-
-- All Steps 1-8 completed. Full verification passing (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test` 211/211, Playwright E2E 12/12).
-- Resumed after a usage-limit cutoff: branch was already fully committed and
-  pushed, but no PR existed yet. Discarded two stray, unrelated
-  whitespace-only diffs (`hydration-marker.tsx`, `tests/e2e/debug.spec.ts`)
-  left over in the working tree, re-confirmed the full gate green
-  (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test`
-  211/211 — this feature touches no migrations), and opened
-  [PR #29](https://github.com/KrapaGoutam/The-Lineup/pull/29) against `main`.
-- Feature 030 is now fully complete: implemented, verified, documented, and
-  in an open PR.
-
----
-
-# Bug Fix Pass: Live Print & Payroll Issues (same branch, same PR #29)
-
-**Status:** In progress
-
-## 🎯 Objective
-
-Fix 4 live bugs found testing PR #29: (1) unreliable/non-copiable print
-output caused by an external raster logo image inside every print
-surface, (2) no dynamic PDF filename at all (no code ever touched
-`document.title`), (3) a real duplicate-content print-isolation bug in
-`CombinedStatementDialog`, and (4) no multi-select batch payroll print
-exists yet. Also standardize letterhead branding and print CSS across
-all three print surfaces.
-
-## 📖 Investigation findings (read the real code first, not the bug list alone)
-
-1. **No raster-canvas / html2canvas exists anywhere** (`grep` confirmed
-   zero matches repo-wide) -- "flattened, unselectable raster" isn't a
-   canvas-snapshot bug. The real cause: every print surface's
-   "letterhead" embeds an **external, network-dependent raster
-   `<img src="https://www.monkswebster.com/...">`** (with
-   `crossOrigin="anonymous"`, which fails hard offline or if the host is
-   unreachable/hotlink-blocked) instead of an inline vector. Fix: one
-   shared `<ReportLetterhead>` with an embedded inline SVG, replacing
-   the raster `<img>` in both places it appears inside a print area.
-2. **No dynamic filename code exists at all** -- grepped for
-   `document.title`/`triggerPrintWithFilename` across every print
-   trigger; every one of them is a bare `window.print()`. This isn't a
-   "fix a bug" task for this piece, it's "build it," in
-   `src/lib/print-utils.ts`.
-3. **Real root cause of the 2-page duplicate, found reading
-   `combined-statement-dialog.tsx` directly**: its print isolation
-   relies entirely on the `body * { visibility: hidden }` +
-   `position: absolute` global trick, applied to a print area that is
-   NOT wrapped in `hidden print:block` (it's the dialog's own always-
-   visible on-screen content). `visibility: hidden` elements still
-   occupy layout space (unlike `display: none`), and combining that with
-   `position: absolute` on the one visible island is a well-known class
-   of Chrome print-pagination bug (duplicate/blank pages) -- confirmed
-   as the mechanism, not guessed. The dialog's own scrollable/clamped
-   ancestors (`max-h-[92vh] overflow-hidden`, `overflow-y-auto`) are
-   never reset for print either, which independently risks clipping
-   real content. Fix: drop the visibility/position trick everywhere,
-   standardize on `hidden print:block` for the print root + `print:hidden`
-   on every on-screen chrome element (already the pattern
-   `attendance-report.tsx`'s `PrintableReport` half-used), and add
-   `print:` overrides to reset the dialog's overflow/height clamps.
-   `PeriodLedgerPanel`'s single-statement print has the identical
-   fragile pattern -- same fix applied there too.
-4. **No payroll batch/multi-select print exists at all** -- the only
-   existing payroll print is `PeriodLedgerPanel`'s single-period
-   "Print statement" button. `PayrollDashboard.periods` (already fetched
-   once by `PrivilegedPayrollView`, already carrying each period's own
-   `balanceCents`/`status`) is exactly the data a batch dialog needs --
-   no new server action required, just a new client component consuming
-   data that's already loaded and already correctly RLS-scoped.
-5. **App-shell logo occurrences are unrelated** -- the two
-   `restaurant-operations-app.tsx` raster logos are the header/mobile
-   "Home" button branding, never inside a print area (already hidden
-   from print entirely once the shell gets `print:hidden`). Left
-   untouched -- out of scope for print bugs.
-
-## 🔒 Non-negotiable constraints (same as the base feature)
-
-- Multi-tenant isolation enforced by `organization_id` and Supabase RLS
-  -- the new batch print dialog reads only already-fetched,
-  already-scoped `dashboard.periods`/`rateOptions.users`, no new fetch.
-- Regular staff never see anyone else's payroll periods or balances --
-  unaffected by this pass (no access-control code touched).
+- Multi-tenant isolation and statement authorization rules unchanged --
+  the "all" scope's id list comes from the caller's own already-
+  authorized `sortedActiveUsers`, each id still individually re-checked
+  by the existing `getCombinedMonthlyStatementAction`.
+- Tips and payroll remain strictly separate (untouched by this feature).
+- No new server action for the batch fetch -- `Promise.all` over the
+  existing one only.
 - Quality gates (`npm run check`, `npm test`, `npm run build`) pass
   before every commit.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: This task file update** -- commit before any code.
-- [x] **Step 2: Shared print infrastructure**
-  - [x] `src/lib/print-utils.ts` (new): `triggerPrintWithFilename`,
-        `formatMonthYearShort`, and the 5 filename-builder conventions.
-  - [x] `src/lib/print-utils.test.ts` (new): 13 unit tests -- every
-        filename convention, the title-set-before-print ordering, the
-        `afterprint` restore, the fallback-timeout restore, and a
-        regression test for a real double-restore bug caught while
-        writing the tests (the fallback timeout stomping a title change
-        made after `afterprint` already restored it -- fixed with a
-        `restored` guard in the implementation itself).
-  - [x] `src/components/print/report-letterhead.tsx` (new):
-        `ReportLetterhead` with an embedded inline SVG vector mark
-        (no external `<img>`, never network-dependent), "The Monk's
-        Indian Fusion - Webster" heading, and the document-type/
-        employee/period/generated-at metadata banner.
-  - [x] Shared `@media print` block in `src/app/globals.css`:
-        `.print-timesheet-table` hidden-line tokens, `.print-page-break`
-        (+ `:last-child` exclusion), `user-select: text`, app-shell
-        (`header`, `nav`, `button`, `.no-print`) hiding.
-  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests
-        (13 new), build clean.
-  - [x] Commit.
-- [x] **Step 3: Fix Attendance print** (bugs 1, 2, 3)
-  - [x] `attendance-report.tsx`'s `PrintableReport`: swapped the raster
-        `<img>` letterhead for `<ReportLetterhead>`; dropped the
-        component's own redundant `visibility:hidden` +
-        `position:absolute` trick and its per-component `<style>` tag
-        entirely, now purely `hidden print:block` + the shared
-        `.print-page-break` class.
-  - [x] `printJob` now carries its own `year`/`month` (captured at build
-        time); the print-triggering effect routes through
-        `triggerPrintWithFilename` with the roster/single-employee
-        filename convention (`sections.length === 1` picks single vs.
-        roster).
-  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
-        build clean.
-  - [x] Live-verified in demo mode (manager): single-employee print
-        (via the dialog's "Print current employee") set
-        `document.title` to exactly `"Anil (Host) Attendance Report Sep
-2026"`, called `window.print()` with that title, restored the
-        original title after, rendered zero `<img>`/one `<svg>` in the
-        print area, exact letterhead text ("The Monk's Indian Fusion -
-        Webster" / "Monthly Attendance Timesheet" / "Generated Sep 9,
-        2026" / employee / period), and exactly one
-        `.print-page-break` element. "All employees" print (direct,
-        no dialog) set the title to `"Staff attendance Report Sep
-2026"` and rendered exactly 5 `.print-page-break` elements (one
-        per active demo employee).
-  - [x] Commit.
-- [x] **Step 4: Fix Combined Statement dialog** (bugs 1, 2, 3 -- the
-      confirmed duplicate-page root cause)
-  - [x] `combined-statement-dialog.tsx`: swapped the raster `<img>` +
-        the separate "Employee & Period Details" block for one
-        `<ReportLetterhead>`; removed the `visibility:hidden` +
-        `position:absolute` trick and its `<style>` tag entirely; added
-        `print:hidden` to the toolbar (`CardHeader`); added `print:`
-        overrides on the overlay (`print:static print:inset-auto
-print:h-auto print:overflow-visible print:bg-transparent
-print:p-0`) and the `Card`/`CardContent` (`print:max-h-none
-print:overflow-visible`, etc.) resetting the dialog's own
-        `max-h-[92vh]`/`overflow` clamps so the full statement prints,
-        not just what's scrolled into view -- a real, independent
-        clipping risk from the isolation bug itself.
-  - [x] Both tables tagged `.print-timesheet-table` for the shared
-        hidden-line styling.
-  - [x] Routed "Print" through `triggerPrintWithFilename` with the
-        Combined Statement filename convention.
-  - [x] Fixed a pre-existing test in `payroll-workspace.test.tsx` that
-        asserted the old `statement.restaurant.name` text (no longer
-        rendered -- the letterhead is now a fixed heading) and asserted
-        `window.print()` synchronously right after the click (now
-        deferred behind `triggerPrintWithFilename`'s internal
-        `setTimeout`, needs `waitFor`).
-  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
-        build clean.
-  - [x] Live-verified in demo mode (manager, Attendance's "Monthly
-        Statement" button): dialog rendered the new letterhead exactly
-        ("The Monk's Indian Fusion - Webster" heading, one inline SVG,
-        zero `<img>`); clicking Print set `document.title` to exactly
-        `"Anil Monthly Report Sep 2026"`; DOM inspection confirmed
-        exactly one `#combined-statement-print-area` element, one
-        `<h1>`, zero raster images; confirmed the new `print:`-prefixed
-        Tailwind classes actually compiled onto the overlay/Card
-        elements in the rendered DOM (not just present in source).
-  - [x] Commit.
-- [x] **Step 5: Fix payroll single-statement print** (bugs 1, 2, 3)
-  - [x] `payroll-workspace.tsx`'s `PeriodLedgerPanel`: added
-        `<ReportLetterhead>` (previously had no letterhead at all, just
-        a bare `{organizationName}`/"Payroll Statement" heading);
-        removed the same fragile `visibility:hidden` +
-        `position:absolute` `<style>` trick (the print area was already
-        `hidden print:block`, and both `CardHeader`/`CardContent` are
-        now/already `print:hidden` -- no extra mechanism was ever
-        needed); tagged the ledger table `.print-timesheet-table`;
-        routed "Print statement" through `triggerPrintWithFilename`
-        with the single-payroll filename convention.
-  - [x] New unit test (`payroll-workspace.test.tsx`): opens a period's
-        ledger, confirms the shared letterhead heading and document
-        type render, clicks "Print statement", and asserts
-        `document.title` was set to exactly `"Mia Chen (Server)
-Payroll Report Aug 2026"` when `window.print()` fired.
-        Real-mode-only feature (Payroll stays `!demoMode`-gated, same
-        as it's been since Feature 020) -- this jsdom-level component
-        test is the closest available substitute for a live Playwright
-        check here, matching the same precedent Feature 020/026 already
-        set (Vitest-covered, no e2e, for exactly this reason).
-  - [x] Full gate: format/lint/typecheck clean, 309/309 unit tests
-        (1 new), build clean.
-  - [x] Commit.
-- [x] **Step 6: Payroll multi-select batch print** (bug 4)
-  - [x] New `src/features/payroll/components/payroll-print-dialog.tsx`:
-        month selector (a specific `periodMonth` or "All open months" --
-        every period with `balanceCents > 0` for the chosen
-        employee(s), regardless of which month), employee scope
-        (current/selected/all, checkboxes reusing this feature's own
-        `getPersonColor`/`getPersonInitials`), one letterhead page per
-        employee (their matching periods as a small table on that one
-        page), dynamic roster/single filename via
-        `triggerPrintWithFilename`. Reads only the already-fetched,
-        already-RLS-scoped `dashboard.periods`/`rateOptions.users` --
-        zero new server actions.
-  - [x] Wired a "Print Statements" button into `PayrollKpiCards`'
-        toolbar (no preselection), and a small per-person print icon
-        button into `PayrollPeriodGroups`' person header (pre-selects
-        that person as "current employee").
-  - [x] New `payroll-print-dialog.test.tsx`, 7 tests: default
-        month/scope, roster print (2 people, 2 `.print-page-break`
-        pages, `"Staff Payroll Report Sep 2026"`), pre-selected current-
-        employee single print (`"Mia Chen (Server) Payroll Report Sep
-2026"`), "all open months" correctly including only a
-        positive-balance period and excluding a zero-balance one for
-        the same person, the "choose at least one" refusal, the
-        "nobody matches that month" refusal, and one letterhead per
-        printed page.
-  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests
-        (7 new), build clean. Real-mode-only feature, same as Step 5 --
-        no live Playwright check for the same established reason.
-  - [x] Commit.
-- [x] **Step 7: E2E + remaining unit coverage**
-  - [x] Rewrote `tests/e2e/payroll-timesheet-overhaul.spec.ts`'s two
-        print tests, which were stale against every bug fix (asserted
-        the old raster `<img>`, the old `.employee-timesheet` class,
-        the old `"The Monk's Restaurant & Bar"` text, and — a real,
-        newly-introduced race condition — `printCallCount` synchronously
-        right after the click, which now loses the race against
-        `triggerPrintWithFilename`'s internal `setTimeout`). Added a
-        `waitForPrintTitles` poll helper (records every title
-        `window.print()` was called with, not just a count, since the
-        whole point is that `document.title` is a _specific_ value at
-        call time) and a new "All employees" roster print test.
-  - [x] Found the identical stale-assertion problem in the _existing_
-        `attendance-reporting.spec.ts` while running the full suite --
-        3 of its tests started failing for exactly the same
-        `printCallCount` race (a real regression from Steps 3-4's
-        filename work, not a pre-existing flake). Added a
-        `waitForPrintCallCount` poll helper there too and converted all
-        6 call sites.
-  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
-        build clean, full Playwright suite 153/153 passed across
-        desktop/host-tablet/server-mobile (including every
-        pre-existing spec, not just the two touched here).
-  - [x] Payroll batch print dialog has no e2e coverage on purpose --
-        Payroll stays `!demoMode`-gated (unchanged since Feature 020)
-        and this whole suite runs in demo mode; covered instead by
-        `payroll-print-dialog.test.tsx`'s 7 Vitest tests (Step 6).
-  - [x] Commit.
-- [x] **Step 8: Documentation**
-  - [x] Updated `docs/features/030-combined-timesheet-payroll-statement.md`:
-        fixed the PR link (#30 → #29), corrected the letterhead/logo and
-        pagination-class references throughout, added a new "Bug Fix
-        Pass" section with root causes, added 5 new acceptance criteria,
-        updated the Implementation Map and Test Plan with real file
-        names and test counts.
-  - [x] Updated `docs/features/025-attendance-reporting-and-filters.md`:
-        corrected its own "Evolution in Feature 030" section (shared
-        `ReportLetterhead`, `.print-page-break`) and added a "Bug Fix
-        Pass" subsection.
-  - [x] Updated `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
-        added items 6-7 (payroll batch print, single-statement
-        letterhead/filename/isolation fix) under a new "Bug Fix Pass"
-        subsection.
-  - [x] Updated `docs/DESIGN_SYSTEM.md`'s print section: corrected the
-        letterhead description (embedded SVG, not the raster logo),
-        added `.print-timesheet-table` hidden-line CSS documentation,
-        documented the `hidden print:block`/`print:hidden` isolation
-        architecture (replacing the old visibility/position
-        description), and documented `triggerPrintWithFilename`'s 5
-        naming conventions.
-  - [x] Updated `docs/STATUS.md`: corrected the Health Gate line (42/42
-        Vitest files, 316/316 tests, full e2e suite 153/153), rewrote
-        the Current State paragraph to describe the bug-fix pass, and
-        updated the Feature 030 Feature Matrix row.
-  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
-        build clean.
-  - [x] Commit.
-- [x] **Step 9: Final gate + push to PR #29**
-  - [x] Full gate, all real command output: `npm run check` clean,
-        `npm test` 42/42 files / 316/316 tests, `npm run build` clean,
-        `npm run db:test` 17/17 files / 211/211 assertions (unaffected
-        -- confirmed no migration was touched by this branch relative
-        to `main`), full Playwright suite 153/153 across desktop/host-
-        tablet/server-mobile.
-  - [x] Pushed to `feature/030-payroll-ui-timesheet-print-overhaul` --
-        PR #29 picks up the new commits automatically.
+- [x] **Step 1: `<ReportLetterhead>` redesign**
+  - [x] Rewrite `src/components/print/report-letterhead.tsx`: new props
+        (`reportTitle`, `periodName`, optional `employeeName`/
+        `employeeRole`; `generatedAt` removed), new header/meta layout,
+        original hand-authored inline SVG crest, `break-inside-avoid`.
+  - [x] New `src/components/print/report-letterhead.test.tsx` (4 tests):
+        full-props render, employee-without-role, `employeeName` omitted
+        hides the Employee block but keeps Pay Period, zero `<img>`/one
+        `<svg>`.
+- [x] **Step 2: Propagate the prop rename to every call site**
+  - [x] `payroll-print-dialog.tsx`, `payroll-workspace.tsx`:
+        `documentType`/`period` → `reportTitle`/`periodName`.
+  - [x] Fixed 6 resulting TypeScript errors (`npx tsc --noEmit`) one by
+        one, then reconfirmed zero errors.
+- [x] **Step 3: All-Employees Combined Statement**
+  - [x] New `CombinedStatementTarget` type; `combined-statement-dialog.tsx`
+        generalized from `neonUserId` prop to `target` prop, `statements`
+        array state, `Promise.all` fetch keyed by a stringified
+        `neonUserIdsKey` (avoids an infinite-refetch loop from a fresh
+        array reference every render), partial-failure tracking, one
+        `.print-page-break` per employee, scope-aware toolbar
+        heading/subtitle.
+  - [x] New `combinedStatementRosterFilename` in `src/lib/print-utils.ts`
+        (`"Staff Payroll Statements <Mon> <Year>"`, distinct from
+        `payrollRosterFilename`'s "Staff Payroll Report..."); `print-utils.test.ts`
+        updated with a matching test.
+  - [x] `attendance-report.tsx`: `statementTarget` state generalized to a
+        3-member discriminated union (`single`/`all`/`null`); the
+        "all"-scope Monthly Statement button always rendered now,
+        branching label ("Monthly Statements (All)" vs "Monthly
+        Statement")/`onClick`/`disabled` on `showingAll`.
+  - [x] `payroll-workspace.tsx`'s own `<CombinedStatementDialog>` call
+        site updated to `target={{ scope: "single", neonUserId: ... }}`.
+  - [x] Fixed a real test failure in `payroll-workspace.test.tsx`
+        (`screen.getByText("Mia Chen")` → `screen.getByText(/Mia Chen/)`)
+        caused by the redesigned letterhead concatenating name+role into
+        one text node.
+  - [x] New `combined-statement-dialog.test.tsx` (4 tests): "all" scope
+        parallel fetch + one page per employee + roster heading;
+        partial-failure rendering + note; 100%-failure blocking error
+        state; roster filename on print.
+  - [x] Full gate: format/lint/typecheck clean, 325/325 unit tests
+        (9 new, 1 fixed), build clean.
+- [x] **Step 4: Live verification (demo mode, manager passcode 2468)**
+  - [x] Single-employee Monthly Statement renders correctly under the
+        redesigned letterhead (no regression).
+  - [x] Selecting "All employees" relabels the button to "Monthly
+        Statements (All)".
+  - [x] Clicking it opens the dialog with exactly 5 `.print-page-break`
+        sections (one per active demo employee), each independently
+        correct (name, role, ID, period, Part 1/Part 2/signatures).
+  - [x] Clicking Print sets `document.title` to exactly
+        `"Staff Payroll Statements Sep 2026"`.
+- [x] **Step 5: e2e regression sweep**
+  - [x] Found and fixed a stale assertion in
+        `tests/e2e/payroll-timesheet-overhaul.spec.ts` that looked for
+        "The Monk's Indian Fusion - Webster" as a heading role -- that
+        text moved to a plain right-aligned `<p>` in the redesign; the
+        `<h1>` is now the short "The Monk's". Added an explicit
+        heading-role assertion for the new `<h1>` alongside the existing
+        plain-text check.
+  - [x] Full Playwright suite re-run: 153/153 passing across
+        desktop/host-tablet/server-mobile.
+- [x] **Step 6: Documentation**
+  - [x] New `docs/features/031-universal-letterhead-and-batch-statements.md`.
+  - [x] Updated `docs/DESIGN_SYSTEM.md`'s letterhead section for the new
+        layout/props.
+  - [x] Updated `docs/STATUS.md` (Health Gate line, Current Status
+        Overview, Feature Matrix row).
+  - [x] This task file.
+- [x] **Step 7: Final gate**
+  - [x] `npm run check` clean.
+  - [x] `npx vitest run` 44/44 files, 325/325 tests.
+  - [x] `npm run build` clean.
+  - [x] `npx playwright test` full suite 153/153 across 3 projects.
+  - [x] `npm run db:test` -- skipped deliberately; confirmed via
+        `git diff --stat main -- supabase/` that this branch touches no
+        migration files.
+- [x] **Step 8: Push + PR**
+  - [x] Commit with clear, atomic commit message(s) (2 commits: code+
+        tests, then docs).
+  - [x] Push `feature/031-universal-letterhead-and-batch-statements`.
+  - [x] Open PR against `main`.
 
-## 🗂️ File List (bug-fix pass additions)
+## 🗂️ File List
 
-- `src/lib/print-utils.ts` (new)
-- `src/lib/print-utils.test.ts` (new)
-- `src/components/print/report-letterhead.tsx` (new)
-- `src/app/globals.css`
-- `src/features/attendance/components/attendance-report.tsx`
+- `src/components/print/report-letterhead.tsx`
+- `src/components/print/report-letterhead.test.tsx` (new)
 - `src/features/payroll/components/combined-statement-dialog.tsx`
+- `src/features/payroll/components/combined-statement-dialog.test.tsx` (new)
+- `src/features/payroll/components/payroll-print-dialog.tsx`
 - `src/features/payroll/components/payroll-workspace.tsx`
-- `src/features/payroll/components/payroll-kpi-cards.tsx`
-- `src/features/payroll/components/payroll-period-groups.tsx`
-- `src/features/payroll/components/payroll-print-dialog.tsx` (new)
+- `src/features/payroll/components/payroll-workspace.test.tsx`
+- `src/features/attendance/components/attendance-report.tsx`
+- `src/lib/print-utils.ts`
+- `src/lib/print-utils.test.ts`
 - `tests/e2e/payroll-timesheet-overhaul.spec.ts`
-- `docs/features/025-attendance-reporting-and-filters.md`
-- `docs/features/026-payroll-dashboard-and-ledger-balances.md`
-- `docs/features/030-combined-timesheet-payroll-statement.md`
+- `docs/features/031-universal-letterhead-and-batch-statements.md` (new)
 - `docs/DESIGN_SYSTEM.md`
 - `docs/STATUS.md`
+- `tasks/current-task.md`
 
-## In-Flight State (bug fix pass)
+## Current State & Next Step
 
-All Steps 1-9 complete. The bug-fix pass is fully done: all 4 live
-bugs fixed and live/unit-verified, full gate green (`npm run check`,
-316/316 Vitest tests, clean build, 211/211 pgTAP, 153/153 Playwright),
-docs reconciled, pushed to PR #29. Nothing further pending on this
-branch.
+Feature 031 is fully complete: implemented, unit-tested, live-verified,
+regression-swept with the full Playwright suite, documented, committed
+(2 commits: `99cc702` code+tests, `5d9a32e` docs), pushed, and opened as
+[PR #30](https://github.com/KrapaGoutam/The-Lineup/pull/30) against
+`main`. Nothing further pending on this branch.
