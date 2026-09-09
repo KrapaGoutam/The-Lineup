@@ -115,3 +115,30 @@ export function aggregateHours(
   }
   return { totalHours, excludedRowCount };
 }
+
+export type AllStaffSummary = {
+  /** Every attendance row across every active employee, open or closed --
+   * unlike `daysWorked`/`AttendanceSummary`, this is deliberately a row
+   * count, not a distinct-day count: two shifts by two different people
+   * on the same date are two shifts, not one. */
+  totalShifts: number;
+  totalHours: number;
+};
+
+/**
+ * Feature 029 Phase 0. The combined "All employees" view's own two
+ * aggregate stat cards -- kept as a small named, tested function (rather
+ * than inlined at the call site) for the same reason
+ * `computeAttendanceSummary` already is: a number that looks wrong should
+ * have exactly one place to check, not a JSX expression to re-derive by
+ * eye. Reuses `aggregateHours` for the hours total rather than
+ * reimplementing its null-`hoursWorked` exclusion rule a second time.
+ */
+export function summarizeAllStaff(
+  rows: Array<{ hoursWorked: number | null }>,
+): AllStaffSummary {
+  return {
+    totalShifts: rows.length,
+    totalHours: aggregateHours(rows).totalHours,
+  };
+}

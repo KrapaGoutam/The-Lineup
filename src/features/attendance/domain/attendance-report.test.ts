@@ -4,6 +4,7 @@ import {
   aggregateHours,
   buildDisplayLabels,
   resolvePeriodRange,
+  summarizeAllStaff,
 } from "./attendance-report";
 
 describe("resolvePeriodRange", () => {
@@ -152,5 +153,29 @@ describe("aggregateHours", () => {
 
   it("returns zero for an empty row set", () => {
     expect(aggregateHours([])).toEqual({ totalHours: 0, excludedRowCount: 0 });
+  });
+});
+
+describe("summarizeAllStaff", () => {
+  it("counts every row as a shift, across every person, and sums hours", () => {
+    // Two different people can each have a row on the same date -- that's
+    // two shifts, not one, unlike a per-person "days worked" count.
+    expect(
+      summarizeAllStaff([
+        { hoursWorked: 8 },
+        { hoursWorked: 4.5 },
+        { hoursWorked: 6 },
+      ]),
+    ).toEqual({ totalShifts: 3, totalHours: 18.5 });
+  });
+
+  it("still counts a null-hours row as a shift, but not toward hours", () => {
+    expect(
+      summarizeAllStaff([{ hoursWorked: 8 }, { hoursWorked: null }]),
+    ).toEqual({ totalShifts: 2, totalHours: 8 });
+  });
+
+  it("returns zero shifts and zero hours for an empty roster", () => {
+    expect(summarizeAllStaff([])).toEqual({ totalShifts: 0, totalHours: 0 });
   });
 });
