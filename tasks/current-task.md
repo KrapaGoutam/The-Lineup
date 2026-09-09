@@ -58,11 +58,11 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
   - [x] Adjust existing E2E tests in `tests/e2e/dashboard.spec.ts` to accommodate allocation landing page.
   - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- [ ] **Step 3: Increment 2 — Option 1k Payroll Dashboard Overhaul**
-  - [ ] Extend `derivePeriodStatus` in `src/features/payroll/domain/payroll-balance-metrics.ts` to support `"part-paid"`, and add unit tests in `payroll-balance-metrics.test.ts`.
-  - [ ] Update `src/features/payroll/components/payroll-kpi-cards.tsx` to render the 3-card Option 1k layout.
-  - [ ] Rebuild `src/features/payroll/components/payroll-period-groups.tsx` and `src/features/payroll/components/payroll-balance-panel.tsx` with Option 1k design tokens, avatar colors, and expanded sub-tables.
-  - [ ] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+- [x] **Step 3: Increment 2 — Option 1k Payroll Dashboard Overhaul**
+  - [x] Extend `derivePeriodStatus` in `src/features/payroll/domain/payroll-balance-metrics.ts` to support `"part-paid"`, and add unit tests in `payroll-balance-metrics.test.ts`.
+  - [x] Update `src/features/payroll/components/payroll-kpi-cards.tsx` to render the 3-card Option 1k layout.
+  - [x] Rebuild `src/features/payroll/components/payroll-period-groups.tsx` and `src/features/payroll/components/payroll-balance-panel.tsx` with Option 1k design tokens, avatar colors, and expanded sub-tables.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
 - [ ] **Step 4: Increment 3 — Staff Read-Only Payroll Access**
   - [ ] Enable Payroll tab for regular staff in `src/components/restaurant-operations-app.tsx`.
@@ -122,5 +122,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Step 1 (plan and first commit) and Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates).
-- Next immediate action: Step 3 (Increment 2: Option 1k Payroll Dashboard Overhaul).
+- Completed Step 1 (plan and first commit), Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates), and Step 3 (Increment 2: Option 1k Payroll Dashboard overhaul, 3 KPI cards, 2-column layout, part-paid badge, avatar colors).
+- Next immediate action: Step 4 (Increment 3: Staff Read-Only Payroll Access).

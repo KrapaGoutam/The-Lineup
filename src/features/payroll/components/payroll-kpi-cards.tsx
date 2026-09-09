@@ -1,12 +1,10 @@
 "use client";
 
-import { Settings2 } from "lucide-react";
+import { Banknote, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
 import type { PayrollDashboard } from "@/features/payroll/actions/payroll-actions";
-import { monthLabel } from "@/features/payroll/components/payroll-workspace";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -17,85 +15,115 @@ function money(cents: number) {
   return currency.format(cents / 100);
 }
 
-function KpiCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-1 pt-4">
-        <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
-          {label}
-        </p>
-        <p className="font-mono text-2xl font-bold">{value}</p>
-        {hint ? (
-          <p className="text-muted-foreground truncate text-xs">{hint}</p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
 /**
- * Feature 026. The dashboard's 4 executive KPI cards (spec Section 2g) --
- * a pure render of `PayrollDashboard`'s already-computed fields, no
- * fetch or write of its own. "Owed this/last month" is deliberately a
- * different figure from `previousMonthGeneratedCents` (outstanding
- * balance, not gross generated) -- see `computeOwedForMonth`'s own doc
- * comment in `payroll-balance-metrics.ts`.
- *
- * The "Pay rates" button doesn't duplicate `RateSettings` (still
- * rendered inline on this same tab, unchanged) -- it's the literal
- * "routes seamlessly into Settings > Pay Rates" entry point the spec's
- * own UX Contract asks for at the top of the dashboard.
+ * Option 1k Payroll Dashboard KPI Cards & Header Toolbar.
+ * Displays 3 executive summary cards:
+ * 1. Highlight: Overall balance owed (across all people and open months).
+ * 2. This month owed with draft period count.
+ * 3. Last month owed with previous month snapshot.
  */
 export function PayrollKpiCards({
   dashboard,
-  users,
   onGoToPayRates,
+  onToggleGenerate,
+  showGenerateForm = false,
 }: {
   dashboard: PayrollDashboard;
-  users: Array<{ id: number; fullName: string; role: string }>;
+  users?: Array<{ id: number; fullName: string; role: string }>;
   onGoToPayRates: () => void;
+  onToggleGenerate?: () => void;
+  showGenerateForm?: boolean;
 }) {
-  const displayLabels = buildDisplayLabels(users);
-  const oldest = dashboard.oldestOpenPeriod;
-  const oldestValue = oldest ? monthLabel(oldest.periodMonth) : "—";
-  const oldestHint = oldest
-    ? `${displayLabels.get(oldest.neonUserId) ?? `Neon #${oldest.neonUserId}`} — ${money(oldest.balanceCents)}`
-    : "All periods settled";
+  const now = new Date();
+  const currentMonthName = now.toLocaleDateString("en-US", { month: "long" });
+  const lastMonthDate = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+  );
+  const lastMonthName = lastMonthDate.toLocaleDateString("en-US", {
+    month: "long",
+  });
+
+  const openPeopleCount = new Set(
+    dashboard.periods
+      .filter((p) => p.balanceCents > 0)
+      .map((p) => p.neonUserId),
+  ).size;
+  const draftCount = dashboard.periods.filter(
+    (p) => p.status === "draft",
+  ).length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Overview</h2>
-        <Button variant="secondary" size="sm" onClick={onGoToPayRates}>
-          <Settings2 aria-hidden="true" /> Pay rates
-        </Button>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Payroll
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Generated from recorded hours. Confirmed payments reduce balances.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onGoToPayRates}>
+            <Banknote className="mr-1.5 size-4" aria-hidden="true" />
+            Pay rates
+          </Button>
+          {onToggleGenerate ? (
+            <Button size="sm" onClick={onToggleGenerate}>
+              <Plus className="mr-1.5 size-4" aria-hidden="true" />
+              {showGenerateForm ? "Hide form" : "Generate period"}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
-          label="Overall balance owed"
-          value={money(dashboard.totalBalanceOwedCents)}
-        />
-        <KpiCard
-          label="Owed this month"
-          value={money(dashboard.owedThisMonthCents)}
-        />
-        <KpiCard
-          label="Owed last month"
-          value={money(dashboard.owedLastMonthCents)}
-        />
-        <KpiCard
-          label="Oldest open month"
-          value={oldestValue}
-          hint={oldestHint}
-        />
+
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.35fr_1fr_1fr]">
+        {/* Card 1: Highlight Card */}
+        <Card className="border-primary/30 bg-primary/10 relative overflow-hidden shadow-sm">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-muted-foreground text-[10.5px] font-bold tracking-[0.1em] uppercase">
+              Overall balance owed
+            </p>
+            <p className="text-primary font-mono text-3xl font-bold tracking-tight lg:text-4xl">
+              {money(dashboard.totalBalanceOwedCents)}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              across {openPeopleCount}{" "}
+              {openPeopleCount === 1 ? "person" : "people"} · all open months
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: This Month */}
+        <Card className="border-border bg-card shadow-sm">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-muted-foreground text-[10.5px] font-bold tracking-[0.1em] uppercase">
+              This month
+            </p>
+            <p className="font-mono text-2xl font-bold tracking-tight lg:text-3xl">
+              {money(dashboard.owedThisMonthCents)}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {currentMonthName} · {draftCount} draft{" "}
+              {draftCount === 1 ? "period" : "periods"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Last Month */}
+        <Card className="border-border bg-card shadow-sm">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-muted-foreground text-[10.5px] font-bold tracking-[0.1em] uppercase">
+              Last month
+            </p>
+            <p className="font-mono text-2xl font-bold tracking-tight lg:text-3xl">
+              {money(dashboard.owedLastMonthCents)}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {lastMonthName} payroll snapshot
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

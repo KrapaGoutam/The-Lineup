@@ -135,16 +135,41 @@ describe("derivePeriodStatus", () => {
     );
   });
 
-  it("stays 'locked' when locked but still owed", () => {
-    expect(derivePeriodStatus({ status: "locked", balanceCents: 5000 })).toBe(
-      "locked",
-    );
+  it("stays 'locked' when locked and entirely unpaid", () => {
+    expect(
+      derivePeriodStatus({
+        status: "locked",
+        grossCents: 5000,
+        balanceCents: 5000,
+      }),
+    ).toBe("locked");
   });
 
-  it("is never 'paid' while still draft, even if the balance happens to already be zero -- nothing about it is final yet", () => {
-    expect(derivePeriodStatus({ status: "draft", balanceCents: 0 })).toBe(
-      "draft",
-    );
+  it("is 'part-paid' when locked and partially paid (balance < gross)", () => {
+    expect(
+      derivePeriodStatus({
+        status: "locked",
+        grossCents: 10000,
+        balanceCents: 4000,
+      }),
+    ).toBe("part-paid");
+  });
+
+  it("is never 'paid' or 'part-paid' while still draft, even if balance is partial or zero", () => {
+    expect(
+      derivePeriodStatus({
+        status: "draft",
+        grossCents: 10000,
+        balanceCents: 5000,
+      }),
+    ).toBe("draft");
+    expect(
+      derivePeriodStatus({
+        status: "draft",
+        grossCents: 10000,
+        balanceCents: 0,
+      }),
+    ).toBe("draft");
   });
 });
 

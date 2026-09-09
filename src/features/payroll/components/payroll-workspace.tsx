@@ -185,7 +185,6 @@ export function PayrollWorkspace({
   }
   return (
     <div className="space-y-4">
-      <Header />
       <PrivilegedPayrollView
         restaurantSlug={restaurantSlug}
         todayLocalDate={todayLocalDate}
@@ -221,6 +220,7 @@ function PrivilegedPayrollView({
   const [dashboardReloadKey, setDashboardReloadKey] = useState(0);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,28 +282,35 @@ function PrivilegedPayrollView({
           dashboard={dashboard}
           users={rateOptions?.users ?? []}
           onGoToPayRates={onGoToPayRates}
+          showGenerateForm={showGenerateForm}
+          onToggleGenerate={() => setShowGenerateForm((prev) => !prev)}
         />
       )}
 
-      {rateOptionsError ? (
-        <ErrorPanel
-          message={rateOptionsError}
-          onRetry={() => setRateReloadKey((key) => key + 1)}
-        />
-      ) : !rateOptions ? (
-        <p className="text-muted-foreground text-sm" aria-live="polite">
-          Loading…
-        </p>
-      ) : (
-        <GenerateForm
-          restaurantSlug={restaurantSlug}
-          users={rateOptions.users}
-          onGenerated={reloadEverything}
-        />
-      )}
+      {showGenerateForm ? (
+        rateOptionsError ? (
+          <ErrorPanel
+            message={rateOptionsError}
+            onRetry={() => setRateReloadKey((key) => key + 1)}
+          />
+        ) : !rateOptions ? (
+          <p className="text-muted-foreground text-sm" aria-live="polite">
+            Loading team…
+          </p>
+        ) : (
+          <GenerateForm
+            restaurantSlug={restaurantSlug}
+            users={rateOptions.users}
+            onGenerated={() => {
+              setShowGenerateForm(false);
+              reloadEverything();
+            }}
+          />
+        )
+      ) : null}
 
       {dashboard ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[1.5fr_1fr]">
+        <div className="grid items-start gap-4.5 xl:grid-cols-[1fr_360px]">
           <PayrollPeriodGroups
             restaurantSlug={restaurantSlug}
             periods={dashboard.periods}
