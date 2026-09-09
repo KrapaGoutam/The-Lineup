@@ -67,6 +67,15 @@ function printCallCount(page: Page): Promise<number> {
   );
 }
 
+// Feature 030 bug fix: window.print() is now deferred behind
+// triggerPrintWithFilename's short setTimeout (so document.title
+// actually commits before the print dialog reads it) -- an immediate
+// post-click equality check on printCallCount races that timeout, so
+// every call site polls instead.
+async function waitForPrintCallCount(page: Page, expected: number) {
+  await expect.poll(() => printCallCount(page)).toBe(expected);
+}
+
 // The printable area is `hidden print:block` (display:none on screen,
 // shown only inside @media print) -- read directly rather than through
 // an actionability-gated Playwright assertion, since it's never meant to
@@ -165,7 +174,7 @@ test("print dialog: current/selected/all resolve to the right people", async ({
   ).toBeChecked();
   await printSubmitButton(page).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await printCallCount(page)).toBe(1);
+  await waitForPrintCallCount(page, 1);
   const currentText = await printAreaText(page);
   expect(currentText).toContain("Anil (Host)");
   expect(currentText).not.toContain("Deepak Rao");
@@ -176,12 +185,12 @@ test("print dialog: current/selected/all resolve to the right people", async ({
   await page.getByRole("radio", { name: "Print selected employees" }).click();
   await printSubmitButton(page).click();
   await expect(page.getByText("Choose at least one employee.")).toBeVisible();
-  expect(await printCallCount(page)).toBe(1); // unchanged -- refused, not printed
+  await waitForPrintCallCount(page, 1); // unchanged -- refused, not printed
 
   await page.getByRole("checkbox", { name: "Deepak Rao (Server)" }).check();
   await printSubmitButton(page).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await printCallCount(page)).toBe(2);
+  await waitForPrintCallCount(page, 2);
   const selectedText = await printAreaText(page);
   expect(selectedText).toContain("Deepak Rao");
   expect(selectedText).not.toContain("Anil (Host)");
@@ -191,7 +200,7 @@ test("print dialog: current/selected/all resolve to the right people", async ({
   await page.getByRole("button", { name: "Print", exact: true }).click();
   await page.getByRole("radio", { name: "Print all employees" }).click();
   await printSubmitButton(page).click();
-  expect(await printCallCount(page)).toBe(3);
+  await waitForPrintCallCount(page, 3);
   const allText = await printAreaText(page);
   for (const label of [
     "Anil (Host)",
@@ -233,7 +242,7 @@ test("a linked server's Print button skips the dialog and never exposes another 
 
   await page.getByRole("button", { name: "Print", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await printCallCount(page)).toBe(1);
+  await waitForPrintCallCount(page, 1);
   const text = await printAreaText(page);
   expect(text).toContain("Anil (Server)");
   expect(text).not.toContain("Deepak Rao");
@@ -291,7 +300,7 @@ test("Feature 029 Phase 0: 'All employees' shows the combined roster with aggreg
   // print once "All" is already the selection.
   await page.getByRole("button", { name: "Print", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await printCallCount(page)).toBe(1);
+  await waitForPrintCallCount(page, 1);
   const text = await printAreaText(page);
   for (const label of [
     "Anil (Host)",

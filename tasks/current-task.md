@@ -341,7 +341,7 @@ Payroll Report Aug 2026"` when `window.print()` fired.
         month/scope, roster print (2 people, 2 `.print-page-break`
         pages, `"Staff Payroll Report Sep 2026"`), pre-selected current-
         employee single print (`"Mia Chen (Server) Payroll Report Sep
-    2026"`), "all open months" correctly including only a
+2026"`), "all open months" correctly including only a
         positive-balance period and excluding a zero-balance one for
         the same person, the "choose at least one" refusal, the
         "nobody matches that month" refusal, and one letterhead per
@@ -350,14 +350,34 @@ Payroll Report Aug 2026"` when `window.print()` fired.
         (7 new), build clean. Real-mode-only feature, same as Step 5 --
         no live Playwright check for the same established reason.
   - [x] Commit.
-- [ ] **Step 7: E2E + remaining unit coverage**
-  - [ ] Extend/adjust Playwright coverage for: letterhead text present,
-        `document.title` set during print triggers, single-employee
-        combined statement structurally single-page (exactly one
-        `.print-page-break`-class root), payroll batch dialog opens and
-        submits.
-  - [ ] Full gate (`npm run check`, `npm test`, `npm run build`,
-        `npm run test:e2e`). Commit.
+- [x] **Step 7: E2E + remaining unit coverage**
+  - [x] Rewrote `tests/e2e/payroll-timesheet-overhaul.spec.ts`'s two
+        print tests, which were stale against every bug fix (asserted
+        the old raster `<img>`, the old `.employee-timesheet` class,
+        the old `"The Monk's Restaurant & Bar"` text, and — a real,
+        newly-introduced race condition — `printCallCount` synchronously
+        right after the click, which now loses the race against
+        `triggerPrintWithFilename`'s internal `setTimeout`). Added a
+        `waitForPrintTitles` poll helper (records every title
+        `window.print()` was called with, not just a count, since the
+        whole point is that `document.title` is a _specific_ value at
+        call time) and a new "All employees" roster print test.
+  - [x] Found the identical stale-assertion problem in the _existing_
+        `attendance-reporting.spec.ts` while running the full suite --
+        3 of its tests started failing for exactly the same
+        `printCallCount` race (a real regression from Steps 3-4's
+        filename work, not a pre-existing flake). Added a
+        `waitForPrintCallCount` poll helper there too and converted all
+        6 call sites.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
+        build clean, full Playwright suite 153/153 passed across
+        desktop/host-tablet/server-mobile (including every
+        pre-existing spec, not just the two touched here).
+  - [x] Payroll batch print dialog has no e2e coverage on purpose --
+        Payroll stays `!demoMode`-gated (unchanged since Feature 020)
+        and this whole suite runs in demo mode; covered instead by
+        `payroll-print-dialog.test.tsx`'s 7 Vitest tests (Step 6).
+  - [x] Commit.
 - [ ] **Step 8: Documentation**
   - [ ] Update `docs/features/025-attendance-reporting-and-filters.md`,
         `docs/features/026-payroll-dashboard-and-ledger-balances.md`,
@@ -392,7 +412,6 @@ Payroll Report Aug 2026"` when `window.print()` fired.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-6 done and committed. Next: Step 7 (E2E + remaining unit
-coverage -- extend/adjust Playwright specs for letterhead text,
-`document.title`, single-page structure, and the new payroll batch
-dialog).
+Steps 1-7 done and committed. Next: Step 8 (documentation -- update
+`docs/features/025`, `026`, `030`, `docs/DESIGN_SYSTEM.md`, and
+`docs/STATUS.md`).
