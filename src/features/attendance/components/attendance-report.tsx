@@ -33,6 +33,7 @@ import {
   aggregateHours,
   buildDisplayLabels,
   resolvePeriodRange,
+  summarizeAllStaff,
   type AttendancePeriodSelection,
   type HoursAggregate,
 } from "@/features/attendance/domain/attendance-report";
@@ -133,7 +134,12 @@ export function AttendanceReport({
   // showing -- replaces the old always-on checkbox multi-select (see
   // tasks/current-task.md's Reconciliation 2). Defaulted once the user
   // list loads, below.
-  const [activePersonId, setActivePersonId] = useState<number | null>(null);
+  // Feature 029 Phase 0: the switcher's selection can now also be the
+  // literal string "all" -- every active employee's records combined,
+  // rather than exactly one. Never the default; a manager opts into it.
+  const [activePersonId, setActivePersonId] = useState<number | "all" | null>(
+    null,
+  );
   // Feature 025: the restaurant's own current real month/year
   // (todayLocalDate-derived, the same "today" every other real-mode
   // feature already uses) -- the navigator's own upper bound, and where
@@ -227,6 +233,7 @@ export function AttendanceReport({
   if (
     scope === "all" &&
     sortedActiveUsers.length > 0 &&
+    activePersonId !== "all" &&
     !sortedActiveUsers.some((candidate) => candidate.id === activePersonId)
   ) {
     setActivePersonId(sortedActiveUsers[0].id);
@@ -286,16 +293,19 @@ export function AttendanceReport({
     });
   }
 
-  // The ids to fetch rows for: "all" is always exactly the one active
+  // The ids to fetch rows for: "all" scope is either every active
+  // employee (the switcher's own "all" filter) or exactly the one active
   // switcher selection; "self" is always exactly the caller's own linked
   // id, regardless of anything client state could claim -- the server
   // re-derives and enforces this same substitution independently, this
   // is just what triggers the right fetch.
   const reportUserIds: number[] | null =
     scope === "all"
-      ? activePersonId !== null
-        ? [activePersonId]
-        : []
+      ? activePersonId === "all"
+        ? sortedActiveUsers.map((candidate) => candidate.id)
+        : activePersonId !== null
+          ? [activePersonId]
+          : []
       : scope === "self" && access?.scope === "self"
         ? [access.neonUserId]
         : scope === "unlinked"
@@ -568,9 +578,31 @@ export function AttendanceReport({
   // access.scope === "all" from here on -- sortedActiveUsers (computed
   // above, alongside the default-selection adjustment) is the single
   // source of truth for both the switcher's options and their order.
+  // `activePersonId === "all"` never matches any numeric `candidate.id`,
+  // so `activePerson` is naturally null in that case too.
   const activePerson =
     sortedActiveUsers.find((candidate) => candidate.id === activePersonId) ??
     null;
+  const showingAll = activePersonId === "all";
+
+  // Feature 029 Phase 0: prints every active employee's already-loaded
+  // `rows` (fetched together, since `reportUserIds` already resolved to
+  // everyone once "All" is selected) as one combined multi-section
+  // document -- the exact same `PrintableReport` the dialog's own "Print
+  // all employees" choice already produces, just reached directly
+  // instead of through a dialog (mirroring how `self` scope's Print
+  // button also skips the dialog: there is only one possible choice once
+  // "All" is already the selection).
+  function printAll() {
+    if (!rows) return;
+    setPrintError(null);
+    setPrintJob({
+      sections: sortedActiveUsers.map((candidate) => ({
+        label: activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
+        rows: rows.filter((row) => row.userId === candidate.id),
+      })),
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -592,7 +624,11 @@ export function AttendanceReport({
               id="attendance-active-person"
               value={activePersonId ?? ""}
               onChange={(event) =>
-                setActivePersonId(Number(event.target.value))
+                setActivePersonId(
+                  event.target.value === "all"
+                    ? "all"
+                    : Number(event.target.value),
+                )
               }
               disabled={sortedActiveUsers.length === 0}
               className="w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
@@ -600,12 +636,15 @@ export function AttendanceReport({
               {sortedActiveUsers.length === 0 ? (
                 <option value="">No active employees</option>
               ) : (
-                sortedActiveUsers.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {activeUserDisplayLabels?.get(candidate.id) ??
-                      candidate.fullName}
-                  </option>
-                ))
+                <>
+                  <option value="all">All employees</option>
+                  {sortedActiveUsers.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {activeUserDisplayLabels?.get(candidate.id) ??
+                        candidate.fullName}
+                    </option>
+                  ))}
+                </>
               )}
             </Select>
           </div>
@@ -623,8 +662,8 @@ export function AttendanceReport({
 
           <Button
             variant="secondary"
-            onClick={() => setPrintDialogOpen(true)}
-            disabled={!activePerson}
+            onClick={() => (showingAll ? printAll() : setPrintDialogOpen(true))}
+            disabled={showingAll ? !rows : !activePerson}
           >
             <Printer aria-hidden="true" /> Print
           </Button>
@@ -657,7 +696,27 @@ export function AttendanceReport({
         />
       ) : null}
 
-      {!activePerson ? (
+      {showingAll ? (
+        rowsError ? (
+          <UnavailablePanel
+            message={rowsError}
+            onRetry={() => setRowsReloadKey((key) => key + 1)}
+          />
+        ) : rowsLoading || !rows ? (
+          <p className="text-muted-foreground text-sm" aria-live="polite">
+            Loading attendance…
+          </p>
+        ) : (
+          <AllStaffSection
+            rows={rows}
+            people={sortedActiveUsers}
+            displayLabels={activeUserDisplayLabels}
+            timeZone={timeZone}
+            year={selectedYear}
+            month={selectedMonth}
+          />
+        )
+      ) : !activePerson ? (
         <p className="text-muted-foreground text-sm">
           No active employees to show.
         </p>
@@ -954,6 +1013,61 @@ function StatTile({
           {hint}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Feature 029 Phase 0. The "All employees" combined view: two org-wide
+ * stat cards (reusing `StatTile`'s own look) followed by one
+ * `PersonSection` per active employee -- unchanged and unmodified,
+ * exactly the same component the single-person view already renders,
+ * just once per person instead of once total. Employees with zero rows
+ * this period are still listed (their own `PersonSection` already
+ * renders the established "No attendance recorded for this period."
+ * state) -- an honestly complete roster, not a filtered one.
+ */
+function AllStaffSection({
+  rows,
+  people,
+  displayLabels,
+  timeZone,
+  year,
+  month,
+}: {
+  rows: NeonAttendanceRow[];
+  people: NeonUser[];
+  displayLabels: Map<number, string> | null;
+  timeZone: string;
+  year: number;
+  month: number;
+}) {
+  const summary = summarizeAllStaff(rows);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <StatTile
+          label="Total shifts"
+          value={String(summary.totalShifts)}
+          hint="across all staff"
+        />
+        <StatTile
+          label="Total hours"
+          value={formatHours(summary.totalHours)}
+          accent
+          hint="across all staff"
+        />
+      </div>
+      {people.map((person) => (
+        <PersonSection
+          key={person.id}
+          label={displayLabels?.get(person.id) ?? person.fullName}
+          rows={rows.filter((row) => row.userId === person.id)}
+          timeZone={timeZone}
+          year={year}
+          month={month}
+        />
+      ))}
     </div>
   );
 }

@@ -118,28 +118,39 @@ already, structurally, immune to any later attendance edit.
 
 ## 🛠️ Implementation Steps
 
-- [ ] **Step 1: This task file** — populate and commit before any app
+- [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [ ] **Step 2: Phase 0 — Attendance "All" tweak**
-  - [ ] `attendance-report.tsx`: generalize `activePersonId: number |
-    null` to a `number | "all" | null` selection; add an `"All
+- [x] **Step 2: Phase 0 — Attendance "All" tweak**
+  - [x] `attendance-report.tsx`: generalized `activePersonId: number |
+    null` to a `number | "all" | null` selection; added an `"All
     employees"` `<option>` to the switcher (manager/owner-only
         branch, unreachable for a `self`-scoped server).
-  - [ ] `reportUserIds` resolves to every active user's id when `"all"`
+  - [x] `reportUserIds` resolves to every active user's id when `"all"`
         is selected, instead of exactly one.
-  - [ ] New small aggregate summary (`Total shifts` = row count, `Total
-    hours` = `aggregateHours(rows).totalHours`) shown above a
-        per-person list of existing `PersonSection`s (one per active
-        employee, reusing that component completely unchanged).
-  - [ ] Print button skips `AttendancePrintDialog` when the filter is
+  - [x] New `summarizeAllStaff` domain helper (`Total shifts` = row
+        count, `Total hours` = `aggregateHours(rows).totalHours`) shown
+        above a per-person list of existing `PersonSection`s (one per
+        active employee, reusing that component completely unchanged --
+        including its own zero-attendance state for someone with no
+        rows this period).
+  - [x] Print button skips `AttendancePrintDialog` when the filter is
         `"all"` and calls a new `printAll()` directly from the
         already-loaded combined `rows` (no extra fetch).
-  - [ ] Unit tests for any new pure logic.
-  - [ ] Full gate.
+  - [x] Unit tests: 3 new `summarizeAllStaff` tests (multi-person shift
+        counting, null-hours exclusion, empty roster).
+  - [x] Full gate: format/lint/typecheck clean, 253/253 unit tests,
+        build clean.
+  - [x] Live-verified (demo mode, manager): selecting "All employees"
+        showed "Total shifts: 6" / "Total hours: 32.8h" (matching the
+        "Selected period" dashboard tile, which also updated to 32.8h),
+        rendered all 5 active employees' own `PersonSection`s including
+        Zoya Khan's genuine zero-attendance state, and clicking Print
+        fired `window.print()` immediately (no dialog) with the printed
+        area containing every person's section.
   - [ ] Commit.
 - [ ] **Step 3: Feature 029 — data layer**
   - [ ] `attendance-data.ts`: new `getActiveClockedInRows({ serviceDate
-    })`, reusing the existing row-shape/lazy-client conventions.
+})`, reusing the existing row-shape/lazy-client conventions.
   - [ ] New `src/features/tips/data/fetch-clocked-in-roster.ts`:
         resolves active Neon rows → profile ids via
         `attendance_identity_links`, dedupes, returns `string[]`.
@@ -150,7 +161,7 @@ already, structurally, immune to any later attendance edit.
   - [ ] Commit.
 - [ ] **Step 4: Feature 029 — Server Action**
   - [ ] `tips-actions.ts`: new `getClockedInRosterAction({
-    restaurantSlug })`, zod-validated, manager/owner-only (defense
+restaurantSlug })`, zod-validated, manager/owner-only (defense
         in depth beyond the UI), re-derives `organizationId` via
         `getCurrentUser` and the service date via the restaurant's own
         primary location + timezone (never trusts a client-supplied
@@ -175,7 +186,7 @@ already, structurally, immune to any later attendance edit.
   - [ ] `restaurant-operations-app.tsx`: new `pullClockedInTeam()`
         handler (demo/real dual branch, matching every other such
         handler this session), passed to `<TipWorkspace
-    onPullClockedInTeam={...}>`.
+onPullClockedInTeam={...}>`.
   - [ ] `attendance/demo-data.ts`: two new **additive** open (unclosed)
         `demoNeonAttendance` rows dated `2026-09-10` (`DEMO_ANCHOR_DATE`)
         so demo mode has something real to pull once a manager links a
@@ -231,4 +242,6 @@ already, structurally, immune to any later attendance edit.
 
 ## Current State & Next Step
 
-Just populated. Next: Step 2 (Phase 0, the Attendance "All" tweak).
+Steps 1-2 done and committed. Next: Step 3 (Feature 029 data layer --
+`getActiveClockedInRows` in `attendance-data.ts`,
+`fetch-clocked-in-roster.ts`).
