@@ -295,18 +295,11 @@ function PrivilegedPayrollView({
           Loading…
         </p>
       ) : (
-        <>
-          <RateSettings
-            restaurantSlug={restaurantSlug}
-            options={rateOptions}
-            onChanged={() => setRateReloadKey((key) => key + 1)}
-          />
-          <GenerateForm
-            restaurantSlug={restaurantSlug}
-            users={rateOptions.users}
-            onGenerated={reloadEverything}
-          />
-        </>
+        <GenerateForm
+          restaurantSlug={restaurantSlug}
+          users={rateOptions.users}
+          onGenerated={reloadEverything}
+        />
       )}
 
       {dashboard ? (

@@ -631,7 +631,7 @@ export function AttendanceReport({
                 )
               }
               disabled={sortedActiveUsers.length === 0}
-              className="w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+              className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
             >
               {sortedActiveUsers.length === 0 ? (
                 <option value="">No active employees</option>

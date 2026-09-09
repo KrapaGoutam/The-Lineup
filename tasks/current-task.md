@@ -46,17 +46,17 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## 🛠️ Implementation Steps
 
-- [ ] **Step 1: Task Initialization & First Commit**
+- [x] **Step 1: Task Initialization & First Commit**
   - [x] Populate `tasks/current-task.md` with complete plan, file list, and step checklist.
-  - [ ] Pre-commit quality gate (`npm run check && npm test && npm run build`).
-  - [ ] Commit `tasks/current-task.md`.
+  - [x] Pre-commit quality gate (`npm run check && npm test && npm run build`).
+  - [x] Commit `tasks/current-task.md`.
 
-- [ ] **Step 2: Increment 1 — Bug Fixes & Shell Alignment**
-  - [ ] Dropdown contrast fix in `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
-  - [ ] Default landing tab changed to `"allocation"` in `src/components/restaurant-operations-app.tsx`.
-  - [ ] Remove `<RateSettings>` from Payroll tab in `src/features/payroll/components/payroll-workspace.tsx` while preserving its export.
-  - [ ] Adjust existing E2E tests in `tests/e2e/dashboard.spec.ts` to accommodate allocation landing page.
-  - [ ] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+- [x] **Step 2: Increment 1 — Bug Fixes & Shell Alignment**
+  - [x] Dropdown contrast fix in `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
+  - [x] Default landing tab changed to `"allocation"` in `src/components/restaurant-operations-app.tsx`.
+  - [x] Remove `<RateSettings>` from Payroll tab in `src/features/payroll/components/payroll-workspace.tsx` while preserving its export.
+  - [x] Adjust existing E2E tests in `tests/e2e/dashboard.spec.ts` to accommodate allocation landing page.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
 - [ ] **Step 3: Increment 2 — Option 1k Payroll Dashboard Overhaul**
   - [ ] Extend `derivePeriodStatus` in `src/features/payroll/domain/payroll-balance-metrics.ts` to support `"part-paid"`, and add unit tests in `payroll-balance-metrics.test.ts`.
@@ -122,5 +122,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Initialized `tasks/current-task.md` on branch `feature/030-payroll-ui-timesheet-print-overhaul`.
-- Next immediate action: Run quality gate for Step 1, commit `tasks/current-task.md`, and start Increment 1.
+- Completed Step 1 (plan and first commit) and Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates).
+- Next immediate action: Step 3 (Increment 2: Option 1k Payroll Dashboard Overhaul).

@@ -496,7 +496,7 @@ export function RestaurantOperationsApp({
   initialAllocationContext?: AllocationContext | null;
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
-  const [tab, setTab] = useState<AppTab>("schedule");
+  const [tab, setTab] = useState<AppTab>("allocation");
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Feature 015 (Phases B/D): real mode seeds every one of these from the

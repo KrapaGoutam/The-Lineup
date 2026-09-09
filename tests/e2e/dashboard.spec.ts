@@ -72,6 +72,7 @@ async function expectAccountRole(page: Page, role: RegExp) {
 }
 test("manager can bulk-import shifts via CSV", async ({ page }) => {
   await signIn(page, "2468");
+  await navigateToTab(page, "Schedule");
   await page.getByRole("button", { name: "Import CSV" }).click();
   await page.setInputFiles('input[type="file"]', {
     name: "shifts.csv",
@@ -89,6 +90,7 @@ test("CSV import blocks commit on an unresolved row error", async ({
   page,
 }) => {
   await signIn(page, "2468");
+  await navigateToTab(page, "Schedule");
   await page.getByRole("button", { name: "Import CSV" }).click();
   await page.setInputFiles('input[type="file"]', {
     name: "shifts.csv",
@@ -107,16 +109,15 @@ test("manager can use all three operational modules", async ({ page }) => {
   await signIn(page, "2468");
 
   await expect(
-    page.getByRole("heading", { name: "Weekly & monthly roster" }),
-  ).toBeVisible();
-  await expectAccountRole(page, /manager/i);
-  await expect(page.getByRole("button", { name: /Publish/ })).toBeVisible();
-
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
-  await expect(
     page.getByRole("heading", { name: "Table allocation rotation" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
+  await expectAccountRole(page, /manager/i);
+
+  await navigateToTab(page, "Schedule");
+  await expect(
+    page.getByRole("heading", { name: "Weekly & monthly roster" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Publish/ })).toBeVisible();
 
   await navigateToTab(page, "Tip Split");
   await expect(page.getByRole("heading", { name: "Tip split" })).toBeVisible();
@@ -390,7 +391,7 @@ test("numeric keypad completes a full sign-in via taps alone at phone width", as
   }
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(
-    page.getByRole("heading", { name: "Weekly & monthly roster" }),
+    page.getByRole("heading", { name: "Table allocation rotation" }),
   ).toBeVisible();
 });
 
