@@ -257,9 +257,25 @@ onPullClockedInTeam={...}>`.
         Gate line (36/36 unit files, 265/265 tests; +tips-clocked-in-
         roster e2e) + Current Status Overview.
   - [x] Commit.
-- [ ] **Step 9: Final gate, push, open PR (base:
+- [x] **Step 9: Final gate, push, open PR (base:
       `feature/027-recurring-schedules-and-week-navigation`), paste real
       gate output + PR link here.**
+  - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
+        `typecheck` (`next typegen && tsc --noEmit`) all clean.
+  - [x] `npm test`: **36/36 files, 265/265 tests** passed.
+  - [x] `npm run build`: `next build` compiled successfully, typechecked
+        clean, all 13 pages generated.
+  - [x] `npm run db:test`: **17/17 pgTAP files, 210/210 assertions**,
+        `Result: PASS` (unchanged from `feature/027` -- this branch adds
+        no migration).
+  - [x] Full e2e suite, all specs, all three Playwright projects:
+        **138/138 passed** (desktop, host-tablet, server-mobile) --
+        including the new "All employees" test and
+        `tips-clocked-in-roster.spec.ts`. No regressions in any
+        pre-existing suite from this branch's changes.
+  - [ ] Push `feature/029-tips-from-clocked-in-attendance`, open PR
+        (base `feature/027-recurring-schedules-and-week-navigation`),
+        paste the real PR link here.
 
 ## 🗂️ File list
 
