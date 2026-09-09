@@ -2,7 +2,7 @@
 
 **Name:** Tips from Clocked-In Attendance Roster  
 **Owner:** Krapa Goutam  
-**Status:** approved  
+**Status:** complete  
 **Issue/PR:**
 
 ## Classification & Session Scope
@@ -34,11 +34,11 @@ When creating a tip split at shift change or closing, a manager can click "Pull 
 
 ## Acceptance Criteria
 
-- [ ] Given a manager creating a tip split, clicking "Pull clocked-in team" loads the list of employees who currently have active clock-in records for today's date.
-- [ ] Given the populated list, the manager can check or uncheck any individual employee before running the calculation.
-- [ ] Given a saved or finalized tip split, editing or deleting an attendance clock-in record in the attendance module does NOT change the tip split participants or calculated dollar amounts.
-- [ ] Given a database inspection, `tip_pools`, `tip_intervals`, and `tip_allocations` have zero foreign keys to `attendance_records` or payroll tables.
-- [ ] Given a server viewing their own tip estimate, their share displays accurately based purely on the snapshotted split.
+- [x] Given a manager creating a tip split, clicking "Pull clocked-in team" loads the list of employees who currently have active clock-in records for today's date. (New `getActiveClockedInRows` in `attendance-data.ts` — `clock_in is not null and clock_out is null and auto_clocked_out = false` for the caller's own already-computed service date — resolved to profile ids via `attendance_identity_links` in the new `fetch-clocked-in-roster.ts`, exposed through `getClockedInRosterAction`. Live-verified: linking two people to the two Neon users with an open shift and clicking "Pull clocked-in team" checked exactly those two, replacing the prior default.)
+- [x] Given the populated list, the manager can check or uncheck any individual employee before running the calculation. (The participant checkboxes are now controlled state — check/uncheck works identically whether the current selection came from the original default or from a pull.)
+- [x] Given a saved or finalized tip split, editing or deleting an attendance clock-in record in the attendance module does NOT change the tip split participants or calculated dollar amounts. (**Already true before this feature touched anything** — confirmed reading the migration directly: `tip_allocations`/`tip_intervals`/`tip_interval_participants`'s own insert/update/delete RLS policies, and `recalculate_tip_pool()` itself, all key on the parent `tip_pools.status = 'draft'`; a finalized pool's rows are already unreachable to any write. Live-verified by fully unlinking a participant's attendance record after finalizing and confirming the split stayed exactly $50/$50/$100, both from the manager's view and from that person's own signed-in estimate.)
+- [x] Given a database inspection, `tip_pools`, `tip_intervals`, and `tip_allocations` have zero foreign keys to `attendance_records` or payroll tables. (**Already true** — `20260905125418_operational_modules.sql`'s own header comment already states this invariant explicitly; no `attendance_records` table exists anywhere in this codebase in the first place, see Investigation #6.)
+- [x] Given a server viewing their own tip estimate, their share displays accurately based purely on the snapshotted split. (Unchanged, pre-existing behavior — live-verified as part of the same frozen-snapshot check above: Mia Chen's own "My tip estimate" showed $50.00, identical to the manager's view.)
 
 ## UX Contract
 
@@ -54,9 +54,11 @@ When creating a tip split at shift change or closing, a manager can click "Pull 
 
 ## Implementation Map
 
-- `src/features/tips/components/tip-workspace.tsx`: Add "Pull clocked-in team" preset button.
+- `src/features/tips/components/tip-workspace.tsx`: Added "Pull clocked-in team" preset button; participant checkboxes became controlled state.
 - `src/features/tips/data/fetch-clocked-in-roster.ts`: Isolated query fetching current clock-ins via `attendance_identity_links`.
-- `src/features/tips/domain/calculate-tip-splits.ts`: Unchanged (pure calculation engine).
+- `src/features/tips/actions/tips-actions.ts`: New `getClockedInRosterAction` (not in the original map — the entry point a client component actually calls into).
+- `src/features/attendance/data/attendance-data.ts`: New `getActiveClockedInRows` (not in the original map — the actual Neon query; no `attendance_records` table exists, see Investigation #6).
+- `src/features/tips/domain/calculate-tip-splits.ts`: Unchanged (pure calculation engine) — a new regression test added instead, proving it stays unaffected by mutating its input after returning.
 
 ## Test Plan
 

@@ -245,12 +245,18 @@ onPullClockedInTeam={...}>`.
   - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests,
         build clean.
   - [x] Commit.
-- [ ] **Step 8: Docs**
-  - [ ] `docs/features/029-tips-from-clocked-in-attendance.md`: check off
-        every acceptance criterion, noting which were already true
-        (RLS/FK invariants) vs. newly built (the UI/data-layer pull).
-  - [ ] Update `docs/STATUS.md` Feature Matrix + Health Gate line.
-  - [ ] Commit.
+- [x] **Step 8: Docs**
+  - [x] `docs/features/029-tips-from-clocked-in-attendance.md`: checked
+        off every acceptance criterion, noting which were already true
+        (the RLS/FK invariants -- criteria 3 and 4) vs. newly built (the
+        UI/data-layer pull -- criteria 1, 2, 5). Corrected the
+        Implementation Map with the two files it omitted
+        (`getClockedInRosterAction`, `getActiveClockedInRows`). Status
+        -> `complete`.
+  - [x] Updated `docs/STATUS.md` Feature Matrix (new `029` row) + Health
+        Gate line (36/36 unit files, 265/265 tests; +tips-clocked-in-
+        roster e2e) + Current Status Overview.
+  - [x] Commit.
 - [ ] **Step 9: Final gate, push, open PR (base:
       `feature/027-recurring-schedules-and-week-navigation`), paste real
       gate output + PR link here.**
@@ -280,5 +286,7 @@ onPullClockedInTeam={...}>`.
 
 ## Current State & Next Step
 
-Steps 1-7 done and committed. Next: Step 8 (docs -- check off Feature
-029's acceptance criteria, update `docs/STATUS.md`).
+Steps 1-8 done and committed. Next: Step 9 (final gate -- full app-level
+gate + `npm run db:test` + full e2e suite across all three projects --
+push, open PR base `feature/027-recurring-schedules-and-week-navigation`,
+paste real gate output + PR link here, final wrap-up commit).
