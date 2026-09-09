@@ -2,8 +2,9 @@
 
 **Active Spec:** `docs/features/030-combined-timesheet-payroll-statement.md` (and updates to `026` & `025`)
 **Branch:** `feature/030-payroll-ui-timesheet-print-overhaul` (branched from `main`)
-**Status:** In Progress
-**Assigned Agent:** Antigravity
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/29
+**Assigned Agent:** Antigravity (build), Claude Code (session resumption, final
+verification gate, and PR)
 
 ## 🎯 Objective
 
@@ -124,5 +125,12 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 ## In-Flight State
 
 - All Steps 1-8 completed. Full verification passing (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test` 211/211, Playwright E2E 12/12).
-- Ready for final commit and push.
-
+- Resumed after a usage-limit cutoff: branch was already fully committed and
+  pushed, but no PR existed yet. Discarded two stray, unrelated
+  whitespace-only diffs (`hydration-marker.tsx`, `tests/e2e/debug.spec.ts`)
+  left over in the working tree, re-confirmed the full gate green
+  (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test`
+  211/211 — this feature touches no migrations), and opened
+  [PR #29](https://github.com/KrapaGoutam/The-Lineup/pull/29) against `main`.
+- Feature 030 is now fully complete: implemented, verified, documented, and
+  in an open PR. Nothing further pending.
