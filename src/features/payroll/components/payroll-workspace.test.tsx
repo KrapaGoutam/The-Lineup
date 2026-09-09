@@ -448,15 +448,18 @@ describe("CombinedStatementDialog", () => {
 
     // Letterhead details -- the shared ReportLetterhead's own fixed
     // heading, not the (now unused-here) statement.restaurant.name.
+    // Feature 033: the statement is now two flat `.print-page-break`
+    // pages (Attendance + Payroll, for duplex printing), each with its
+    // own full letterhead -- so these appear twice, not once.
     await waitFor(() =>
       expect(
-        screen.getByText("The Monk's Indian Fusion - Webster"),
-      ).toBeInTheDocument(),
+        screen.getAllByText("The Monk's Indian Fusion - Webster"),
+      ).toHaveLength(2),
     );
-    expect(screen.getByText("August 2026")).toBeInTheDocument();
+    expect(screen.getAllByText("August 2026")).toHaveLength(2);
     // The letterhead concatenates name + role into one text node now
     // ("Mia Chen (Server)"), so this checks a substring.
-    expect(screen.getByText(/Mia Chen/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Mia Chen/)).toHaveLength(2);
     expect(screen.getByText("Part 1: Recorded Attendance")).toBeInTheDocument();
     expect(
       screen.getByText("Part 2: Payroll & Compensation"),

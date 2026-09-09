@@ -192,7 +192,17 @@ a {
    trick, which keeps invisible elements occupying layout space and is a
    known cause of duplicate/blank-page print bugs. Every on-screen-only
    chrome element (buttons, nav, dialog overlays) is hidden via
-   `print:hidden` instead, for the same reason. */
+   `print:hidden` instead, for the same reason.
+
+   Feature 033: narrow page margins (the browser default is much wider,
+   which is most of why single-page reports were spilling onto a second
+   page) plus a per-surface compaction pass -- still inside this same
+   isolation strategy, not a replacement of it. */
+@page {
+  size: letter portrait;
+  margin: 8mm 8mm 6mm 8mm;
+}
+
 @media print {
   * {
     -webkit-user-select: text !important;
@@ -224,9 +234,9 @@ a {
   .print-timesheet-table th,
   .print-timesheet-table td {
     border-bottom: 1px solid #e5e7eb !important;
-    padding: 6px 10px !important;
+    padding: 3px 8px !important;
     color: #1f2937 !important;
-    font-size: 10.5pt !important;
+    font-size: 9.5pt !important;
     text-align: left !important;
   }
 

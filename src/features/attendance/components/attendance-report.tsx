@@ -476,7 +476,7 @@ export function AttendanceReport({
 
   if (accessError) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 print:hidden">
         <Header />
         <UnavailablePanel
           message={accessError}
@@ -488,7 +488,7 @@ export function AttendanceReport({
 
   if (!access) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 print:hidden">
         <Header />
         <p className="text-muted-foreground text-sm" aria-live="polite">
           Loading…
@@ -499,7 +499,7 @@ export function AttendanceReport({
 
   if (access.scope === "unlinked") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 print:hidden">
         <Header />
         <DashboardTiles
           totals={dashboard}
@@ -526,7 +526,7 @@ export function AttendanceReport({
   if (access.scope === "all" && (usersError || !users)) {
     if (usersError) {
       return (
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
           <Header />
           <UnavailablePanel
             message={usersError}
@@ -536,7 +536,7 @@ export function AttendanceReport({
       );
     }
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 print:hidden">
         <Header />
         <p className="text-muted-foreground text-sm" aria-live="polite">
           Loading team…
@@ -555,72 +555,80 @@ export function AttendanceReport({
       : "Your attendance";
     return (
       <div className="space-y-4">
-        <Header />
-        <DashboardTiles
-          totals={dashboard}
-          error={dashboardError}
-          scope="self"
-          selectedPeriodTotal={grandTotal}
-        />
-        <div className="flex flex-wrap items-center gap-3">
-          <AttendanceMonthNav
-            year={selectedYear}
-            month={selectedMonth}
-            maxYear={maxYear}
-            maxMonth={maxMonth}
-            onChange={({ year, month }) => {
-              setSelectedYear(year);
-              setSelectedMonth(month);
-            }}
+        {/* Feature 033: everything screen-only for this scope lives in
+            one `print:hidden` wrapper, kept as a *sibling* of the
+            statement dialog and `PrintableReport` below rather than an
+            ancestor of them -- an ancestor with `print:hidden` would
+            hide those print-only descendants too, since `display: none`
+            on a parent always wins over a child's own `print:block`. */}
+        <div className="space-y-4 print:hidden">
+          <Header />
+          <DashboardTiles
+            totals={dashboard}
+            error={dashboardError}
+            scope="self"
+            selectedPeriodTotal={grandTotal}
           />
-          {rows ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setPrintJob({
-                    sections: [{ label, rows }],
-                    year: selectedYear,
-                    month: selectedMonth,
-                  })
-                }
-              >
-                <Printer aria-hidden="true" /> Print
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setStatementTarget({
-                    scope: "single",
-                    neonUserId: access.neonUserId,
-                    year: selectedYear,
-                    month: selectedMonth,
-                  })
-                }
-              >
-                <FileText aria-hidden="true" /> Monthly Statement
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <AttendanceMonthNav
+              year={selectedYear}
+              month={selectedMonth}
+              maxYear={maxYear}
+              maxMonth={maxMonth}
+              onChange={({ year, month }) => {
+                setSelectedYear(year);
+                setSelectedMonth(month);
+              }}
+            />
+            {rows ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    setPrintJob({
+                      sections: [{ label, rows }],
+                      year: selectedYear,
+                      month: selectedMonth,
+                    })
+                  }
+                >
+                  <Printer aria-hidden="true" /> Print
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setStatementTarget({
+                      scope: "single",
+                      neonUserId: access.neonUserId,
+                      year: selectedYear,
+                      month: selectedMonth,
+                    })
+                  }
+                >
+                  <FileText aria-hidden="true" /> Monthly Statement
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {rowsError ? (
+            <UnavailablePanel
+              message={rowsError}
+              onRetry={() => setRowsReloadKey((key) => key + 1)}
+            />
+          ) : rowsLoading || !rows ? (
+            <p className="text-muted-foreground text-sm" aria-live="polite">
+              Loading attendance…
+            </p>
+          ) : (
+            <PersonSection
+              label={label}
+              rows={rows}
+              timeZone={timeZone}
+              year={selectedYear}
+              month={selectedMonth}
+            />
+          )}
         </div>
-        {rowsError ? (
-          <UnavailablePanel
-            message={rowsError}
-            onRetry={() => setRowsReloadKey((key) => key + 1)}
-          />
-        ) : rowsLoading || !rows ? (
-          <p className="text-muted-foreground text-sm" aria-live="polite">
-            Loading attendance…
-          </p>
-        ) : (
-          <PersonSection
-            label={label}
-            rows={rows}
-            timeZone={timeZone}
-            year={selectedYear}
-            month={selectedMonth}
-          />
-        )}
         {statementTarget ? (
           <CombinedStatementDialog
             restaurantSlug={restaurantSlug}
@@ -675,130 +683,160 @@ export function AttendanceReport({
 
   return (
     <div className="space-y-4">
-      <Header />
-      <DashboardTiles
-        totals={dashboard}
-        error={dashboardError}
-        scope="all"
-        selectedPeriodTotal={grandTotal}
-      />
+      {/* Feature 033: same `print:hidden` sibling-wrapper pattern as the
+          "self" scope above -- see that comment for why this can't be
+          on the outer div itself. */}
+      <div className="space-y-4 print:hidden">
+        <Header />
+        <DashboardTiles
+          totals={dashboard}
+          error={dashboardError}
+          scope="all"
+          selectedPeriodTotal={grandTotal}
+        />
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 pt-4">
-          <div className="border-border bg-secondary rounded-2xl border p-1.5">
-            <label htmlFor="attendance-active-person" className="sr-only">
-              Employee
-            </label>
-            <Select
-              id="attendance-active-person"
-              value={activePersonId ?? ""}
-              onChange={(event) =>
-                setActivePersonId(
-                  event.target.value === "all"
-                    ? "all"
-                    : Number(event.target.value),
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+            <div className="border-border bg-secondary rounded-2xl border p-1.5">
+              <label htmlFor="attendance-active-person" className="sr-only">
+                Employee
+              </label>
+              <Select
+                id="attendance-active-person"
+                value={activePersonId ?? ""}
+                onChange={(event) =>
+                  setActivePersonId(
+                    event.target.value === "all"
+                      ? "all"
+                      : Number(event.target.value),
+                  )
+                }
+                disabled={sortedActiveUsers.length === 0}
+                className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+              >
+                {sortedActiveUsers.length === 0 ? (
+                  <option value="">No active employees</option>
+                ) : (
+                  <>
+                    <option value="all">All employees</option>
+                    {sortedActiveUsers.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {activeUserDisplayLabels?.get(candidate.id) ??
+                          candidate.fullName}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </Select>
+            </div>
+
+            <AttendanceMonthNav
+              year={selectedYear}
+              month={selectedMonth}
+              maxYear={maxYear}
+              maxMonth={maxMonth}
+              onChange={({ year, month }) => {
+                setSelectedYear(year);
+                setSelectedMonth(month);
+              }}
+            />
+
+            <Button
+              variant="secondary"
+              onClick={() =>
+                showingAll ? printAll() : setPrintDialogOpen(true)
+              }
+              disabled={showingAll ? !rows : !activePerson}
+            >
+              <Printer aria-hidden="true" /> Print
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() =>
+                setStatementTarget(
+                  showingAll
+                    ? {
+                        scope: "all",
+                        neonUserIds: sortedActiveUsers.map(
+                          (candidate) => candidate.id,
+                        ),
+                        year: selectedYear,
+                        month: selectedMonth,
+                      }
+                    : {
+                        scope: "single",
+                        // `activePerson` is guaranteed non-null here --
+                        // this branch only runs when the button itself
+                        // isn't disabled.
+                        neonUserId: activePerson!.id,
+                        year: selectedYear,
+                        month: selectedMonth,
+                      },
                 )
               }
-              disabled={sortedActiveUsers.length === 0}
-              className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+              disabled={
+                showingAll ? sortedActiveUsers.length === 0 : !activePerson
+              }
             >
-              {sortedActiveUsers.length === 0 ? (
-                <option value="">No active employees</option>
-              ) : (
-                <>
-                  <option value="all">All employees</option>
-                  {sortedActiveUsers.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {activeUserDisplayLabels?.get(candidate.id) ??
-                        candidate.fullName}
-                    </option>
-                  ))}
-                </>
-              )}
-            </Select>
+              <FileText aria-hidden="true" />{" "}
+              {showingAll ? "Monthly Statements (All)" : "Monthly Statement"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {printError ? (
+          <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
+            <span className="text-destructive">{printError}</span>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground text-xs underline"
+              onClick={() => setPrintError(null)}
+            >
+              Dismiss
+            </button>
           </div>
+        ) : null}
 
-          <AttendanceMonthNav
-            year={selectedYear}
-            month={selectedMonth}
-            maxYear={maxYear}
-            maxMonth={maxMonth}
-            onChange={({ year, month }) => {
-              setSelectedYear(year);
-              setSelectedMonth(month);
-            }}
+        {printDialogOpen && activePerson ? (
+          <AttendancePrintDialog
+            currentPersonId={activePerson.id}
+            people={sortedActiveUsers.map((candidate) => ({
+              id: candidate.id,
+              label:
+                activeUserDisplayLabels?.get(candidate.id) ??
+                candidate.fullName,
+            }))}
+            onClose={() => setPrintDialogOpen(false)}
+            onConfirm={printPeople}
           />
+        ) : null}
 
-          <Button
-            variant="secondary"
-            onClick={() => (showingAll ? printAll() : setPrintDialogOpen(true))}
-            disabled={showingAll ? !rows : !activePerson}
-          >
-            <Printer aria-hidden="true" /> Print
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={() =>
-              setStatementTarget(
-                showingAll
-                  ? {
-                      scope: "all",
-                      neonUserIds: sortedActiveUsers.map(
-                        (candidate) => candidate.id,
-                      ),
-                      year: selectedYear,
-                      month: selectedMonth,
-                    }
-                  : {
-                      scope: "single",
-                      // `activePerson` is guaranteed non-null here --
-                      // this branch only runs when the button itself
-                      // isn't disabled.
-                      neonUserId: activePerson!.id,
-                      year: selectedYear,
-                      month: selectedMonth,
-                    },
-              )
-            }
-            disabled={
-              showingAll ? sortedActiveUsers.length === 0 : !activePerson
-            }
-          >
-            <FileText aria-hidden="true" />{" "}
-            {showingAll ? "Monthly Statements (All)" : "Monthly Statement"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {printError ? (
-        <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
-          <span className="text-destructive">{printError}</span>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground text-xs underline"
-            onClick={() => setPrintError(null)}
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {printDialogOpen && activePerson ? (
-        <AttendancePrintDialog
-          currentPersonId={activePerson.id}
-          people={sortedActiveUsers.map((candidate) => ({
-            id: candidate.id,
-            label:
-              activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
-          }))}
-          onClose={() => setPrintDialogOpen(false)}
-          onConfirm={printPeople}
-        />
-      ) : null}
-
-      {showingAll ? (
-        rowsError ? (
+        {showingAll ? (
+          rowsError ? (
+            <UnavailablePanel
+              message={rowsError}
+              onRetry={() => setRowsReloadKey((key) => key + 1)}
+            />
+          ) : rowsLoading || !rows ? (
+            <p className="text-muted-foreground text-sm" aria-live="polite">
+              Loading attendance…
+            </p>
+          ) : (
+            <AllStaffSection
+              rows={rows}
+              people={sortedActiveUsers}
+              displayLabels={activeUserDisplayLabels}
+              timeZone={timeZone}
+              year={selectedYear}
+              month={selectedMonth}
+            />
+          )
+        ) : !activePerson ? (
+          <p className="text-muted-foreground text-sm">
+            No active employees to show.
+          </p>
+        ) : rowsError ? (
           <UnavailablePanel
             message={rowsError}
             onRetry={() => setRowsReloadKey((key) => key + 1)}
@@ -808,40 +846,18 @@ export function AttendanceReport({
             Loading attendance…
           </p>
         ) : (
-          <AllStaffSection
+          <PersonSection
+            label={
+              activeUserDisplayLabels?.get(activePerson.id) ??
+              activePerson.fullName
+            }
             rows={rows}
-            people={sortedActiveUsers}
-            displayLabels={activeUserDisplayLabels}
             timeZone={timeZone}
             year={selectedYear}
             month={selectedMonth}
           />
-        )
-      ) : !activePerson ? (
-        <p className="text-muted-foreground text-sm">
-          No active employees to show.
-        </p>
-      ) : rowsError ? (
-        <UnavailablePanel
-          message={rowsError}
-          onRetry={() => setRowsReloadKey((key) => key + 1)}
-        />
-      ) : rowsLoading || !rows ? (
-        <p className="text-muted-foreground text-sm" aria-live="polite">
-          Loading attendance…
-        </p>
-      ) : (
-        <PersonSection
-          label={
-            activeUserDisplayLabels?.get(activePerson.id) ??
-            activePerson.fullName
-          }
-          rows={rows}
-          timeZone={timeZone}
-          year={selectedYear}
-          month={selectedMonth}
-        />
-      )}
+        )}
+      </div>
       {statementTarget ? (
         <CombinedStatementDialog
           restaurantSlug={restaurantSlug}
@@ -972,7 +988,7 @@ function PrintableReport({
         return (
           <div
             key={section.label}
-            className="print-page-break box-border flex min-h-[98vh] flex-col p-10"
+            className="print-page-break box-border flex flex-col p-6"
           >
             <ReportLetterhead
               reportTitle="Monthly Attendance Timesheet"
@@ -981,7 +997,7 @@ function PrintableReport({
             />
 
             {/* Attendance Summary KPIs */}
-            <div className="my-4 grid grid-cols-3 gap-4 rounded-lg border border-gray-300 bg-gray-50/50 p-3">
+            <div className="my-2 grid grid-cols-3 gap-4 rounded-lg border border-gray-300 bg-gray-50/50 p-3">
               <div>
                 <span className="block text-[11px] font-semibold text-gray-500 uppercase">
                   Days Worked
@@ -1084,8 +1100,14 @@ function PrintableReport({
               </table>
             </div>
 
-            {/* Verification & Sign-off Block */}
-            <div className="mt-8 border-t border-gray-300 pt-6">
+            {/* Verification & Sign-off Block. Feature 033: `mt-8 pt-6`
+                (a full extra inch of dead space before a table that can
+                already run long) was the last thing pushing a standard
+                pay period onto a 2nd page -- `break-inside-avoid` keeps
+                the block itself from splitting across a page boundary
+                once the rest of the page is tight enough for it to fit
+                the bottom of page 1. */}
+            <div className="mt-2 break-inside-avoid border-t border-gray-300 pt-3">
               <div className="grid grid-cols-2 gap-12 text-xs">
                 <div>
                   <div className="mb-1.5 border-b border-black pb-1" />
