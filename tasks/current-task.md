@@ -434,9 +434,25 @@ db:test` 210/210 assertions across 17 files (unchanged — Step 7
         Gate line (34/34 unit files, 250/250 tests; +recurring-schedules
         e2e; 17/17 pgTAP files, 210 assertions) + Current Status Overview.
   - [x] Commit.
-- [ ] **Step 10: Final gate, push, open PR (base:
+- [x] **Step 10: Final gate, push, open PR (base:
       `feature/025-attendance-reporting-and-filters`), paste real gate
       output + PR link here.**
+  - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
+        `typecheck` (`next typegen && tsc --noEmit`) all clean.
+  - [x] `npm test`: **34/34 files, 250/250 tests** passed.
+  - [x] `npm run build`: `next build` compiled successfully, typechecked
+        clean, all 13 pages generated.
+  - [x] `npm run db:test`: **17/17 pgTAP files, 210/210 assertions**,
+        `Result: PASS`.
+  - [x] Full e2e suite, all specs, all three Playwright projects:
+        **132/132 passed** (desktop, host-tablet, server-mobile) —
+        `allocation-open-editing`, `attendance-reporting`, `dashboard`,
+        `debug`, `recurring-schedules` (new, 6 tests × 3 projects = 18),
+        `settings`, `team-management`. No regressions in any
+        pre-existing suite from this feature's changes.
+  - [ ] Push `feature/027-recurring-schedules-and-week-navigation`, open
+        PR (base `feature/025-attendance-reporting-and-filters`), paste
+        the real PR link here.
 
 ## 🗂️ File list
 
