@@ -91,7 +91,17 @@ are named correctly and match real files.
    DST-awareness of its own; only a regression test confirming a
    DST-transition date is correctly included/excluded by the
    weekday-mask filter is new here.
-8. **Demo mode's `shifts` state is already the complete, unbounded set**
+8. **`shifts.series_id uuid` already exists and is completely unused —
+   found while writing Step 2's migration, not assumed from the spec.**
+   Added by `20260905125418_operational_modules.sql`, this is exactly
+   the column the spec's `recurrence_group_id` describes. Grepped the
+   whole codebase: it appears nowhere outside `database.generated.ts`.
+   Reused as-is (kept its existing name, not renamed — renaming an
+   existing column is strictly riskier than leaving it, for zero
+   behavioral gain) rather than adding a second, redundantly-named uuid
+   column for the identical purpose. Only `is_recurring boolean` is
+   genuinely new.
+9. **Demo mode's `shifts` state is already the complete, unbounded set**
    for the whole session (`initialScheduleContext` is `null` in demo
    mode, so `shifts` starts at `[]` and only ever grows via manual
    adds/CSV commits — no date-range query ever limits it the way real
@@ -124,23 +134,33 @@ are named correctly and match real files.
 
 - [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [ ] **Step 2: Migration — `recurrence_group_id`/`is_recurring`**
-  - [ ] New migration: `alter table public.shifts add column
-recurrence_group_id uuid, add column is_recurring boolean not null
-default false;` (nullable group id — a non-recurring shift has none).
-  - [ ] New pgTAP test: columns exist with the right type/default/
-        nullability; a manager can insert several shifts sharing one
-        `recurrence_group_id` in a single multi-row insert (proves the
-        "transaction-safe bulk insertion" requirement is already true —
-        a single multi-row `insert()` is atomic by construction, no new
-        RPC needed); a server cannot insert/update/delete a shift
+- [x] **Step 2: Migration — reuse `series_id`, add `is_recurring`**
+  - [x] New migration: `alter table public.shifts add column
+is_recurring boolean not null default false;` — `series_id uuid`
+        already exists (Investigation #8), reused as the recurrence
+        group id rather than adding a redundant new column.
+  - [x] New pgTAP test (`0017_shifts_recurrence.test.sql`, 8
+        assertions): `is_recurring` exists with the right type/default/
+        not-null; `series_id` confirmed still uuid and still nullable;
+        an owner can insert three shifts sharing one `series_id` in a
+        single multi-row insert (proves the "transaction-safe bulk
+        insertion" requirement is already true — one multi-row
+        `insert()` is atomic by Postgres's own construction, no new RPC
+        needed); a plain server is still rejected by RLS on insert
         (regression-confirms Investigation #4's manager-only write
-        policy still holds, now with the two new columns present).
-  - [ ] `src/lib/demo-data.ts`: `DemoShift` gains
-        `recurrenceGroupId?: string` and `isRecurring?: boolean`
-        (optional, backward compatible with every existing literal).
-  - [ ] `npm run db:reset && npm run db:test` + full gate.
-  - [ ] Commit.
+        policy is genuinely unchanged by this migration, not just
+        assumed).
+  - [x] `src/lib/demo-data.ts`: `DemoShift` gains `seriesId?: string`
+        and `isRecurring?: boolean` (optional, backward compatible with
+        every existing literal; named `seriesId` in TypeScript to match
+        the real DB/generated-types column name, not a renamed concept).
+  - [x] `npm run db:reset && npm run db:test` — clean reset (Docker
+        Desktop had stopped between sessions; started it, waited for the
+        db container's own health check, then reset cleanly), 17/17
+        pgTAP files, **210/210 assertions** (up from 202). Full gate:
+        `npm run check`, `npm test` (214/214, unchanged — no TS-level
+        tests in this step), `npm run build` all pass.
+  - [x] Commit.
 - [ ] **Step 3: Domain — recurring date generation**
   - [ ] New `domain/recurring-shifts.ts`: `WEEKDAY_TOKENS` (Sun-first,
         matching `Date.getUTCDay()`'s own 0=Sun convention — deliberately
@@ -186,11 +206,12 @@ dates: expandRecurringDates(...) })` instead of the plain
         matching no selected weekday, and a non-recurring row (no
         `days`) still behaving exactly as before.
   - [ ] `components/csv-import-panel.tsx`: `commit()` tags each
-        recurring row's resulting `DemoShift`s with one freshly generated
-        `recurrenceGroupId` (`crypto.randomUUID()`) and `isRecurring:
-true`; non-recurring rows unchanged (`isRecurring: false`, no group
-        id). Dates column in the preview table shows the resolved day
-        count for a recurring row, not just the raw from/to text.
+        recurring row's resulting `DemoShift`s with one freshly
+        generated `seriesId` (`crypto.randomUUID()`) and
+        `isRecurring: true`; non-recurring rows unchanged
+        (`isRecurring: false`, no series id). Dates column in the
+        preview table shows the resolved day count for a recurring row,
+        not just the raw from/to text.
   - [ ] Full gate.
   - [ ] Commit.
 - [ ] **Step 5: Week navigation**
@@ -235,13 +256,13 @@ weekStartDate })` — client-triggered, re-derives the caller's own
         `toDate` becomes required (client-side validation, a clear inline
         error otherwise) and submission calls
         `expandRecurringDates`/`createShiftInstances({ dates })`
-        instead of the plain range. One `recurrenceGroupId` generated
-        per submission, tagged onto every resulting `DemoShift`
+        instead of the plain range. One `seriesId` generated per
+        submission, tagged onto every resulting `DemoShift`
         (`isRecurring: true`).
   - [ ] `actions/schedule-actions.ts`: `addShiftAction` writes
-        `recurrence_group_id`/`is_recurring` from the submitted shifts
-        (both already optional on `DemoShift`, `null`/`false` when
-        absent — no behavior change for non-recurring submissions).
+        `series_id`/`is_recurring` from the submitted shifts (both
+        already optional on `DemoShift`, `null`/`false` when absent —
+        no behavior change for non-recurring submissions).
   - [ ] Live Playwright smoke test: create a Tue/Thu recurring shift
         across a real multi-week range, confirm every generated
         instance lands on the right weekday, in the right count, and
@@ -342,6 +363,6 @@ weekStartDate })` — client-triggered, re-derives the caller's own
 
 ## Current State & Next Step
 
-Branch created, this file committed. Next: Step 2 (migration —
-`recurrence_group_id`/`is_recurring` on `shifts`, plus `DemoShift` type
-update).
+Step 2 done and committed. Next: Step 3 (domain — `recurring-shifts.ts`
+weekday parsing + date expansion, `shift-planning.ts`'s `dates`
+override + `addDays`).
