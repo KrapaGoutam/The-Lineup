@@ -3,7 +3,7 @@
 **Active Spec:** `docs/features/033-print-layout-hardening-duplex.md`
 **Branch:** `feature/033-print-layout-hardening-duplex` (branched from
 `main`, after Feature 032 / PR #31 merged)
-**Status:** Complete — ready to push and open a PR
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/33
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -125,10 +125,11 @@ away from.
   - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
         Matrix row).
   - [x] This task file.
-- [ ] **Step 12: Commit + push + PR.**
-  - [ ] Commit with a clear conventional-commits message.
-  - [ ] Push `feature/033-print-layout-hardening-duplex`.
-  - [ ] Open a PR against `main`.
+- [x] **Step 12: Commit + push + PR.**
+  - [x] Commit with a clear conventional-commits message (`59662f5`).
+  - [x] Push `feature/033-print-layout-hardening-duplex`.
+  - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
+        against `main`.
 
 ## 🗂️ File List
 
@@ -145,6 +146,8 @@ away from.
 
 ## Current State & Next Step
 
-Feature 033 is implemented, unit-tested, e2e-regression-swept,
-live-verified via real PDF pagination (not just DOM assertions), and
-documented. Only Step 12 (commit, push, PR) remains.
+Feature 033 is fully complete: implemented, unit-tested,
+e2e-regression-swept, live-verified via real PDF pagination (not just
+DOM assertions), documented, committed (`59662f5`), pushed, and opened
+as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) against
+`main`. Nothing further pending on this branch.
