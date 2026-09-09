@@ -6,11 +6,16 @@ import { FileText, Printer, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ReportLetterhead } from "@/components/print/report-letterhead";
 import {
   getCombinedMonthlyStatementAction,
   type CombinedMonthlyStatement,
 } from "@/features/payroll/actions/statement-actions";
 import { calendarWeekday } from "@/features/attendance/domain/attendance-metrics";
+import {
+  combinedStatementFilename,
+  triggerPrintWithFilename,
+} from "@/lib/print-utils";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -92,47 +97,33 @@ export function CombinedStatementDialog({
     };
   }, [restaurantSlug, year, month, neonUserId]);
 
+  function printStatement() {
+    if (!statement) return;
+    triggerPrintWithFilename(
+      combinedStatementFilename(
+        statement.employee.name,
+        statement.period.year,
+        statement.period.month,
+      ),
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6 print:static print:inset-auto print:h-auto print:overflow-visible print:bg-transparent print:p-0 print:backdrop-blur-none"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #${PRINT_AREA_ID}, #${PRINT_AREA_ID} * { visibility: visible !important; }
-          #${PRINT_AREA_ID} {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            padding: 2rem !important;
-            margin: 0 !important;
-            background: white !important;
-            color: black !important;
-            display: block !important;
-          }
-          .statement-page {
-            box-sizing: border-box;
-          }
-          .letterhead-banner {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-      `}</style>
-
       <Card
         role="dialog"
         aria-modal="true"
         aria-label="Combined Statement"
-        className="border-border bg-card flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden shadow-2xl"
+        className="border-border bg-card flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden shadow-2xl print:max-h-none print:w-full print:max-w-none print:overflow-visible print:border-none print:shadow-none"
       >
         {/* Modal Toolbar (Screen Only) */}
-        <CardHeader className="border-border bg-card flex flex-none flex-row items-center justify-between border-b p-4 sm:px-6">
+        <CardHeader className="border-border bg-card flex flex-none flex-row items-center justify-between border-b p-4 sm:px-6 print:hidden">
           <div className="flex items-center gap-2">
             <FileText className="text-primary size-5" aria-hidden="true" />
             <div>
@@ -147,7 +138,7 @@ export function CombinedStatementDialog({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.print()}
+                onClick={printStatement}
                 className="gap-1.5"
               >
                 <Printer className="size-4" aria-hidden="true" />
@@ -165,8 +156,13 @@ export function CombinedStatementDialog({
           </div>
         </CardHeader>
 
-        {/* Modal Content Scrollable Area */}
-        <CardContent className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
+        {/* Modal Content Scrollable Area -- print: overrides reset the
+            screen-only scroll/height clamps so the WHOLE statement
+            prints, not just whatever's currently scrolled into view
+            (a real, independent bug from the duplicate-page one: this
+            div's max-h/overflow would otherwise clip a long statement
+            even once isolation itself is fixed). */}
+        <CardContent className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
           {loading ? (
             <div className="space-y-2 py-16 text-center">
               <p className="text-sm font-medium">Generating statement…</p>
@@ -183,67 +179,13 @@ export function CombinedStatementDialog({
             </div>
           ) : statement ? (
             <div id={PRINT_AREA_ID} className="statement-page space-y-6">
-              {/* Corporate Letterhead Banner */}
-              <div className="letterhead-banner border-b-2 border-black pb-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center rounded-md bg-zinc-950 p-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="https://www.monkswebster.com/assets/img/logo-light.png"
-                        alt="The Monk's Logo"
-                        className="h-8 w-auto object-contain"
-                        crossOrigin="anonymous"
-                      />
-                    </div>
-                    <div>
-                      <h1 className="text-xl font-bold tracking-tight text-black">
-                        {statement.restaurant.name}
-                      </h1>
-                      <p className="text-xs text-gray-600">
-                        Monthly Timesheet &amp; Payroll Statement
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right text-xs text-gray-600">
-                    <p className="font-semibold text-black">
-                      The Monk&apos;s Cellar
-                    </p>
-                    <p>Webster, New York</p>
-                    <p className="font-mono text-[11px] text-gray-500">
-                      monkswebster.com
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Employee & Period Details */}
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-4">
-                <div>
-                  <span className="text-[10.5px] font-bold tracking-wider text-gray-500 uppercase">
-                    Employee Details
-                  </span>
-                  <h2 className="mt-0.5 text-lg font-bold text-black">
-                    {statement.employee.name}
-                  </h2>
-                  <p className="text-xs text-gray-600">
-                    {statement.employee.role} · ID #
-                    {statement.employee.neonUserId}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10.5px] font-bold tracking-wider text-gray-500 uppercase">
-                    Statement Period
-                  </span>
-                  <p className="mt-0.5 text-base font-bold text-black">
-                    {statement.period.monthLabel}
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    Generated on{" "}
-                    {new Date(statement.generatedAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+              <ReportLetterhead
+                documentType="Monthly Timesheet & Payroll Statement"
+                employeeName={statement.employee.name}
+                employeeRole={`${statement.employee.role} · ID #${statement.employee.neonUserId}`}
+                period={statement.period.monthLabel}
+                generatedAt={new Date(statement.generatedAt)}
+              />
 
               {/* Top Section: Daily Attendance Timesheet */}
               <div className="space-y-3">
@@ -285,7 +227,7 @@ export function CombinedStatementDialog({
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left text-xs">
+                  <table className="print-timesheet-table w-full border-collapse text-left text-xs">
                     <thead>
                       <tr className="border-b-2 border-black bg-gray-100">
                         <th className="px-2 py-2 font-bold text-black">Date</th>
@@ -420,7 +362,7 @@ export function CombinedStatementDialog({
                         <h4 className="mb-1.5 text-xs font-semibold text-gray-700">
                           Settlement Payments:
                         </h4>
-                        <table className="w-full border-collapse text-left text-xs">
+                        <table className="print-timesheet-table w-full border-collapse text-left text-xs">
                           <thead>
                             <tr className="border-b border-gray-300 text-gray-600">
                               <th className="px-2 py-1 font-medium">Date</th>

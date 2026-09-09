@@ -251,28 +251,52 @@ all three print surfaces.
   - [x] Live-verified in demo mode (manager): single-employee print
         (via the dialog's "Print current employee") set
         `document.title` to exactly `"Anil (Host) Attendance Report Sep
-    2026"`, called `window.print()` with that title, restored the
+2026"`, called `window.print()` with that title, restored the
         original title after, rendered zero `<img>`/one `<svg>` in the
         print area, exact letterhead text ("The Monk's Indian Fusion -
         Webster" / "Monthly Attendance Timesheet" / "Generated Sep 9,
         2026" / employee / period), and exactly one
         `.print-page-break` element. "All employees" print (direct,
         no dialog) set the title to `"Staff attendance Report Sep
-    2026"` and rendered exactly 5 `.print-page-break` elements (one
+2026"` and rendered exactly 5 `.print-page-break` elements (one
         per active demo employee).
   - [x] Commit.
-- [ ] **Step 4: Fix Combined Statement dialog** (bugs 1, 2, 3 -- the
+- [x] **Step 4: Fix Combined Statement dialog** (bugs 1, 2, 3 -- the
       confirmed duplicate-page root cause)
-  - [ ] `combined-statement-dialog.tsx`: swap the raster `<img>` for
-        `<ReportLetterhead>`; remove the `visibility:hidden` +
-        `position:absolute` trick entirely; add `print:hidden` to the
-        overlay/toolbar chrome; add `print:` overrides resetting the
-        dialog's `max-h`/`overflow` clamps so the full statement prints,
-        not just what's scrolled into view.
-  - [ ] Route "Print" through `triggerPrintWithFilename` with the
+  - [x] `combined-statement-dialog.tsx`: swapped the raster `<img>` +
+        the separate "Employee & Period Details" block for one
+        `<ReportLetterhead>`; removed the `visibility:hidden` +
+        `position:absolute` trick and its `<style>` tag entirely; added
+        `print:hidden` to the toolbar (`CardHeader`); added `print:`
+        overrides on the overlay (`print:static print:inset-auto
+    print:h-auto print:overflow-visible print:bg-transparent
+    print:p-0`) and the `Card`/`CardContent` (`print:max-h-none
+    print:overflow-visible`, etc.) resetting the dialog's own
+        `max-h-[92vh]`/`overflow` clamps so the full statement prints,
+        not just what's scrolled into view -- a real, independent
+        clipping risk from the isolation bug itself.
+  - [x] Both tables tagged `.print-timesheet-table` for the shared
+        hidden-line styling.
+  - [x] Routed "Print" through `triggerPrintWithFilename` with the
         Combined Statement filename convention.
-  - [ ] Full gate. Live-verify exactly 1 page for a single employee.
-        Commit.
+  - [x] Fixed a pre-existing test in `payroll-workspace.test.tsx` that
+        asserted the old `statement.restaurant.name` text (no longer
+        rendered -- the letterhead is now a fixed heading) and asserted
+        `window.print()` synchronously right after the click (now
+        deferred behind `triggerPrintWithFilename`'s internal
+        `setTimeout`, needs `waitFor`).
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
+        build clean.
+  - [x] Live-verified in demo mode (manager, Attendance's "Monthly
+        Statement" button): dialog rendered the new letterhead exactly
+        ("The Monk's Indian Fusion - Webster" heading, one inline SVG,
+        zero `<img>`); clicking Print set `document.title` to exactly
+        `"Anil Monthly Report Sep 2026"`; DOM inspection confirmed
+        exactly one `#combined-statement-print-area` element, one
+        `<h1>`, zero raster images; confirmed the new `print:`-prefixed
+        Tailwind classes actually compiled onto the overlay/Card
+        elements in the rendered DOM (not just present in source).
+  - [x] Commit.
 - [ ] **Step 5: Fix payroll single-statement print** (bugs 1, 2, 3)
   - [ ] `payroll-workspace.tsx`'s `PeriodLedgerPanel`: add
         `<ReportLetterhead>` (previously had no letterhead at all, just
@@ -332,8 +356,7 @@ all three print surfaces.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-3 done and committed. Next: Step 4 (fix Combined Statement
-dialog -- the confirmed duplicate-page root cause: remove the
-`visibility:hidden`/`position:absolute` trick, add `print:hidden` to
-the overlay/toolbar chrome, reset the dialog's `max-h`/`overflow`
-clamps for print).
+Steps 1-4 done and committed. Next: Step 5 (fix the payroll
+single-statement print in `PeriodLedgerPanel` -- same fragile
+visibility/position trick, no letterhead at all currently, no dynamic
+filename).

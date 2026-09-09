@@ -989,7 +989,7 @@ function PrintableReport({
 
             {/* Timesheet Shift Records */}
             <div className="flex-1">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="print-timesheet-table w-full border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b-2 border-black bg-gray-100">
                     <th className="px-2 py-2 font-bold text-black">Date</th>

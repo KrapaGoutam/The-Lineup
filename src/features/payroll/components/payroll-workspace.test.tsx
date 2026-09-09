@@ -331,10 +331,11 @@ describe("CombinedStatementDialog", () => {
       />,
     );
 
-    // Letterhead details
+    // Letterhead details -- the shared ReportLetterhead's own fixed
+    // heading, not the (now unused-here) statement.restaurant.name.
     await waitFor(() =>
       expect(
-        screen.getByText("The Monk's Restaurant & Bar"),
+        screen.getByText("The Monk's Indian Fusion - Webster"),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText("August 2026")).toBeInTheDocument();
@@ -345,10 +346,13 @@ describe("CombinedStatementDialog", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Employee Signature & Date")).toBeInTheDocument();
 
-    // Print action
+    // Print action -- triggerPrintWithFilename defers window.print()
+    // behind a short setTimeout (real timers here), so this must poll
+    // rather than assert immediately after the click.
     const printButton = screen.getByRole("button", { name: "Print" });
     await userEvent.click(printButton);
-    expect(printSpy).toHaveBeenCalled();
+    await waitFor(() => expect(printSpy).toHaveBeenCalled());
+    expect(document.title).toBe("Mia Chen Monthly Report Aug 2026");
 
     printSpy.mockRestore();
   });
