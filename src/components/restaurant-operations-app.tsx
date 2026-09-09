@@ -37,15 +37,20 @@ import {
 import { PayrollWorkspace } from "@/features/payroll/components/payroll-workspace";
 import {
   addShiftAction,
+  deleteShiftAction,
   publishScheduleAction,
   saveScheduleConfigAction,
+  updateShiftAction,
 } from "@/features/schedules/actions/schedule-actions";
 import { ScheduleWorkspace } from "@/features/schedules/components/schedule-workspace";
+import type { ShiftEditResult } from "@/features/schedules/components/shift-edit-dialog";
 import type { ScheduleContext } from "@/features/schedules/data/schedule-data";
 import {
+  addDays,
   getMonthDates,
   getWeekDates,
   type ShiftDefaults,
+  type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
 import { renameTeamMemberAction } from "@/features/team/actions/member-actions";
@@ -706,6 +711,103 @@ export function RestaurantOperationsApp({
       return;
     }
     setShifts((current) => [...current, ...result.data]);
+  }
+
+  // Feature 027. Editing/deleting a shift, published or draft alike --
+  // there was no such action before this feature (see
+  // tasks/current-task.md's Investigation #2). Optimistic update of the
+  // parent's own `shifts` state mirrors addShifts's exact pattern: real
+  // mode applies the same patch only after the action confirms success,
+  // demo mode applies it directly. ScheduleWorkspace derives whichever
+  // week it's showing from this same `shifts` prop -- unchanged for the
+  // initial week, filtered fresh for a demo-mode browsed week, and
+  // re-fetched (via its own afterMutation -> weekReloadKey) for a
+  // real-mode browsed week.
+  function applyShiftEdit(
+    current: DemoShift[],
+    shiftId: string,
+    edit: {
+      employeeId: string;
+      shiftKind: ShiftKind;
+      startLocal: string;
+      endLocal: string;
+      note?: string;
+    },
+  ): DemoShift[] {
+    return current.map((shift) =>
+      shift.id === shiftId
+        ? {
+            ...shift,
+            employeeId: edit.employeeId,
+            shiftKind: edit.shiftKind,
+            startLocal: edit.startLocal,
+            endLocal: edit.endLocal,
+            endDate:
+              edit.endLocal <= edit.startLocal
+                ? addDays(shift.serviceDate, 1)
+                : shift.serviceDate,
+            usesDefaultTime: false,
+            note: edit.note,
+          }
+        : shift,
+    );
+  }
+
+  async function updateShift(input: {
+    shiftId: string;
+    employeeId: string;
+    shiftKind: ShiftKind;
+    startLocal: string;
+    endLocal: string;
+    note?: string;
+  }): Promise<ShiftEditResult> {
+    if (demoMode) {
+      setShifts((current) => applyShiftEdit(current, input.shiftId, input));
+      return { ok: true };
+    }
+    if (!locationId) return { ok: false, error: "No location is set up yet." };
+    const result = await updateShiftAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      shiftId: input.shiftId,
+      timeZone,
+      employeeId: input.employeeId,
+      shiftKind: input.shiftKind,
+      startLocal: input.startLocal,
+      endLocal: input.endLocal,
+      note: input.note,
+    });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    setShifts((current) => applyShiftEdit(current, input.shiftId, input));
+    return { ok: true };
+  }
+
+  async function deleteShift(input: {
+    shiftId: string;
+  }): Promise<ShiftEditResult> {
+    if (demoMode) {
+      setShifts((current) =>
+        current.filter((shift) => shift.id !== input.shiftId),
+      );
+      return { ok: true };
+    }
+    if (!locationId) return { ok: false, error: "No location is set up yet." };
+    const result = await deleteShiftAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      shiftId: input.shiftId,
+    });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    setShifts((current) =>
+      current.filter((shift) => shift.id !== input.shiftId),
+    );
+    return { ok: true };
   }
 
   async function publishSchedule() {
@@ -1673,8 +1775,12 @@ export function RestaurantOperationsApp({
             weekDates={weekDates}
             monthDates={monthDates}
             timeZone={timeZone}
+            restaurantSlug={restaurantSlug}
+            demoMode={demoMode}
             onAddShifts={addShifts}
             onPublish={publishSchedule}
+            onUpdateShift={updateShift}
+            onDeleteShift={deleteShift}
           />
         ) : null}
         {tab === "allocation" ? (

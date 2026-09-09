@@ -1,432 +1,491 @@
-# Current Task: Feature 025 — Attendance Reporting & Filters
+# Current Task: Feature 027 — Recurring Schedules & Week Navigation
 
-**Active Spec:** `docs/features/025-attendance-reporting-and-filters.md`
-**Branch:** `feature/025-attendance-reporting-and-filters` (stacked on
-`feature/028-table-allocation-unrestricted-editing`)
-**Status:** Complete — PR open at https://github.com/KrapaGoutam/The-Lineup/pull/25
+**Active Spec:** `docs/features/027-recurring-schedules-and-week-navigation.md`
+**Branch:** `feature/027-recurring-schedules-and-week-navigation` (stacked
+on `feature/025-attendance-reporting-and-filters`)
+**Status:** Complete — PR #26 open (https://github.com/KrapaGoutam/The-Lineup/pull/26)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
 
-Upgrade `src/features/attendance/` (Features 018/019's existing Neon-backed
-report) with real month/year navigation, a calendar Day column, per-person
-`Days Worked`/`Total Hours`/`Avg per Day` stat cards, and multi-select
-print support, matching `design-system-reference.html`'s sections `2e`
-(desktop) and `2f` (mobile) — the only actual mockup found in this repo;
-`docs/features/025-attendance-reporting-and-filters.md`'s own text
-references to "Section 2e/2f" point here. CSV bulk import is **out of
-scope for this build** (see Reconciliation 1).
+Upgrade `src/features/schedules/` (Features 002/008) with real week
+navigation (today's Prev/Next buttons are inert), day-of-week recurring
+shift generation, the ability to edit or delete a shift at all (there is
+currently no edit/delete action anywhere, published or not), and CSV
+`days` support for recurring bulk import.
 
-## 📖 Investigation findings
+## 📖 Investigation findings (read every relevant file in full first)
 
-**Reconciliation 1 — CSV import removed from scope (resolved with the
-user before writing this file):** The original spec said CSV import
-should "commit records to `attendance_records`." Two things make that
-impossible as written:
+**Already true, no work needed — "relocate schedule management into
+Settings":** Feature 023 already added a `QuickLinkCard` in
+`settings-page.tsx` (`id="settings-schedule"`, title "Schedule",
+`onClick={() => onGoToTab("schedule")}`) — the exact "Settings entry
+point" the spec asks for. Schedule itself stays its own primary nav tab
+(a deliberate Feature 021 decision, see that component's own comment) —
+`src/app/schedule` is not a real Next.js route in this SPA-shaped app, so
+"direct URL `/schedule`" isn't literally buildable and isn't attempted;
+the quick-link is the real entry point already built. Nothing to do
+here.
 
-1. Feature 018 confirmed **live**, not assumed, that this app's Neon
-   connection is read-only: a direct `INSERT` against the real Neon
-   database returned `permission denied for table users`, and Feature
-   018's own Data section states plainly, "this app has no write access
-   to Neon (the connection string is read-only) and adds no Neon-side
-   schema."
-2. `docs/PRD.md`'s explicit MVP carve-out for attendance says: "read-only
-   display of already-existing attendance data from a separate external
-   system (Feature 018) ... no write path into it, no clock-in/out
-   capability built here." A Supabase-side `attendance_records` table
-   also does not exist anywhere in this codebase — the spec's own Data &
-   Authorization section (`restaurant_id`, `work_date`, `profile_id`
-   columns) describes a table that was never built; the real, only
-   attendance data source is Neon's `users`/`attendance` tables, read via
-   `src/features/attendance/data/attendance-data.ts`.
+**Implementation Map file names, corrected against what's actually
+there** (same class of correction as Features 024/025/028): the spec
+names `schedule-grid.tsx` and `shift-form-dialog.tsx` — neither exists.
+The real component is `schedule-workspace.tsx` (both the grid and the
+inline "Add shift" card live there, `ShiftEditor`/`ScheduleWorkspace`).
+`recurring-shifts.ts`, `schedule-actions.ts`, and `parse-schedule-csv.ts`
+are named correctly and match real files.
 
-Presented this to the user as a three-way choice (new Supabase-owned
-import table / defer CSV import / get real Neon write access). **User
-chose to defer**: the live prompt was updated to explicitly say "CSV
-bulk import for attendance records is strictly scoped OUT." This task
-file, and the rest of this build, reflects that updated scope. The
-spec file's own Scope/Acceptance-Criteria/Implementation-Map/Test-Plan
-text still shows the old CSV bullets — corrected in Step 7 (Docs), not
-here, matching this repo's established practice of correcting a spec
-in place once the real build reveals what's accurate.
+**Real gaps — read the actual code, not assumed:**
 
-**Reconciliation 2 — what's already built vs. what's real work (read
-`attendance-report.tsx`/`attendance-report.ts`/`attendance-actions.ts`
-in full before assuming anything was missing):**
-
-Already fully implemented (Features 018/019), unchanged by this
-feature:
-
-- Neon read layer (`attendance-data.ts`), the three-way `all`/`self`/
-  `unlinked` access model (`resolveAttendanceAccess`), name
-  disambiguation (`buildDisplayLabels`), the day/week/month **rolling**
-  dashboard tiles (`DashboardTiles` — Feature 019's own explicit
-  acceptance criterion, distinct from Feature 025's month-scoped stat
-  cards below and left untouched), `aggregateHours`'s null-hours
-  exclusion handling, the mobile card ledger's date-parsing pattern
-  (`mobileDateParts`, being promoted into a shared, tested domain
-  function below rather than rewritten), and the Auto-closed
-  (amber)/Open shift (red) badges — colors already match the mockup's
-  `--warnLine`/`--warn` and `--dangerLine`/`--danger` tokens exactly.
-- `Days worked`/`Total hours`/`Avg per day` **math** — already computed
-  inline in `PersonSection` (`daysWorked = rows.length -
-excludedRowCount`, `avgPerDay = total / daysWorked`). Not missing
-  logic, just not yet a named, independently unit-tested pure function
-  living where the spec's own Implementation Map says it should
-  (`domain/attendance-metrics.ts`) — extracted, not reinvented.
-
-Real gaps — the actual work of this feature:
-
-1. **No real month/year navigation.** The existing `PeriodPicker` is a
-   `this-month` / `previous-month` / `custom-range` dropdown — it can
-   never jump to, say, March 2025 directly the way the mockup's
-   `< September > 2026` stepper bar does. New `{ type: "month"; year;
-month }` variant added to the existing `AttendancePeriodSelection`
-   union (`domain/attendance-report.ts`) rather than a parallel type,
-   since `resolvePeriodRange` already is the one place every period
-   resolves through, in both the component and the Server Action's own
-   zod validation.
-2. **No calendar Day column on the desktop table at all** — only Date/
-   Clock in/Clock out/Hours. The mobile ledger already computes a
-   weekday (`mobileDateParts`), just never shared with the desktop
-   table, which the mockup shows with an explicit "Day" column between
-   Date and Clock in.
-3. **No print capability anywhere in Attendance.** This app has exactly
-   one existing print precedent — `payroll-workspace.tsx`'s "Print
-   statement" button, its `print:hidden`/`print:block` Tailwind
-   isolation, and a scoped `@media print` block hiding everything
-   outside one named printable `id`. Reused directly rather than
-   inventing a second pattern; extended (not present in Payroll) with an
-   actual choice dialog, since Payroll only ever prints the one period
-   already on screen.
-4. **The "all"-scope browsing UI doesn't match the mockup's actual
-   shape.** Today it's an always-visible checkbox multi-select with one
-   stacked `PersonSection` per checked person plus a cross-person grand
-   total. The mockup (2e) and the spec's own UX Contract ("Person
-   selector + Month/Year bar on top, **3 stat tiles**, followed by
-   **the** daily log table" — singular, not plural) show exactly one
-   person's report at a time, switched via a compact pill
-   ("Deepak Rao ▾"). **Decision, not assumed**: the always-on
-   multi-select becomes a single-person switcher for normal browsing;
-   the checkbox multi-select survives, but moves _inside_ the new print
-   dialog, only when "Print selected employees" is chosen — this is
-   where "Multi-Select Print Support" actually lives per the spec's own
-   section title, not in the browsing view. The cross-person "grand
-   total" concept is dropped from the primary view (nothing in the
-   mockup shows one); `DashboardTiles`' pre-existing "Selected period"
-   tile already covers "this person's currently-browsed-month total"
-   once `reportUserIds` naturally narrows to one id.
+1. **Week navigation doesn't exist.** The Prev/Next week buttons are
+   already drawn in `schedule-workspace.tsx` (lines ~448-453) but have
+   no `onClick` at all. `weekDates`/`monthDates` are a frozen
+   `useState` in `restaurant-operations-app.tsx`
+   (`const [weekDates] = useState(...)`, no setter ever called) sourced
+   from `getScheduleContext`'s hardcoded "today" window. No "Today"
+   button exists either.
+2. **There is no shift edit or delete action at all**, in either
+   direction, published or draft. `schedule-actions.ts` has exactly
+   three exports: `addShiftAction`, `publishScheduleAction`,
+   `saveScheduleConfigAction`. `ShiftBlock` is a plain, non-interactive
+   `<div>`. The spec frames this as "post-publish editing" (implying
+   pre-publish editing already exists) — it doesn't; this is "any shift
+   editing," a bigger gap than the spec's own framing suggests.
+3. **Confirmed non-issue, not something to build**: the spec's own
+   contradiction flag says editing a published shift "must not move or
+   reassign tables on an actively running floor rotation." Read the
+   schema directly — `shifts` has zero foreign keys to
+   `rotation_members`/`table_rotation_entries`/`service_sessions`, and
+   vice versa. Scheduling and the live floor board (Features 003/011/028)
+   are structurally independent data models; editing a shift cannot
+   possibly touch the rotation board's tables. No guard code needed —
+   documented here so this isn't silently dropped, but confirmed by
+   reading the schema, not assumed.
+4. **RLS already permits the write side of #2 — confirmed by reading
+   the migration, not assumed.** `schedule_periods`, `shifts`, and
+   `shift_assignments` already each have a permissive `for all` policy
+   (`<table>_write_manager`, `20260905065702_initial_schema.sql`) for
+   owner/general_manager/shift_manager, with **no draft/published
+   distinction at the RLS layer at all** — the "published" restriction
+   only ever existed for the SELECT side (what a non-manager can see).
+   The entire gap is application-layer: no action, no UI. This feature
+   adds zero new RLS policies for editing/deleting a shift.
+5. **`createShiftInstances` only expands a plain consecutive date
+   range** (`expandDateRange`, every day from `fromDate` to `toDate`)
+   for one shift kind — no day-of-week mask. The spec's day-of-week
+   recurrence is genuinely new domain logic.
+6. **CSV `end_date` reconciliation**: the CSV already has a `to_date`
+   column that does exactly what a spec'd `end_date` column would (the
+   range's last day) — adding a second, redundantly-named column would
+   let a file disagree with itself. `days` is added as the one new
+   column; `to_date` is reused as the recurring range's end, not
+   duplicated.
+7. **DST is already handled, one layer down — confirmed by reading
+   `zonedWallTimeToInstant`'s own doc comment**, not reinvented. Once a
+   recurring shift's calendar dates are generated (pure date-only
+   math, no timezone involved), each instance's `service_date` +
+   `startLocal` + the location's timeZone already goes through
+   `zonedWallTimeToInstant` in `addShiftAction`, which has its own
+   extensively-documented ambiguous/nonexistent-wall-time handling
+   around a transition. The new date-generation math needs no
+   DST-awareness of its own; only a regression test confirming a
+   DST-transition date is correctly included/excluded by the
+   weekday-mask filter is new here.
+8. **`shifts.series_id uuid` already exists and is completely unused —
+   found while writing Step 2's migration, not assumed from the spec.**
+   Added by `20260905125418_operational_modules.sql`, this is exactly
+   the column the spec's `recurrence_group_id` describes. Grepped the
+   whole codebase: it appears nowhere outside `database.generated.ts`.
+   Reused as-is (kept its existing name, not renamed — renaming an
+   existing column is strictly riskier than leaving it, for zero
+   behavioral gain) rather than adding a second, redundantly-named uuid
+   column for the identical purpose. Only `is_recurring boolean` is
+   genuinely new.
+9. **Demo mode's `shifts` state is already the complete, unbounded set**
+   for the whole session (`initialScheduleContext` is `null` in demo
+   mode, so `shifts` starts at `[]` and only ever grows via manual
+   adds/CSV commits — no date-range query ever limits it the way real
+   mode's `getScheduleContext` does). Week navigation in demo mode is
+   therefore a pure client-side filter of already-loaded data, no fetch
+   — unlike real mode, which only ever loaded the initial week+month
+   union and needs a new client-triggered action for any other week
+   (the same `AttendanceReport`/`AllocationWorkspace` pattern this
+   session already built twice).
 
 ## 🔒 Non-negotiable constraints
 
-- Hard Separation: nothing here reads, writes, or derives payroll or tip
-  split data. Confirmed by never importing from `src/features/payroll/`
-  or `src/features/tips/` anywhere in this feature's diff.
-- Zero Name Inference: identity resolution stays 100% keyed on
-  `attendance_identity_links` (Supabase, Feature 019) → Neon `user_id`.
-  "Name (Designation)" (`buildDisplayLabels`) is display text only, never
-  touched by this feature's matching logic.
-- Privacy: an unlinked server sees nothing (unchanged). A `self`-scoped
-  server never sees the person switcher, the "print selected/all"
-  options, or any other person's data — the print dialog is only ever
-  rendered for `access.scope === "all"`; a `self` viewer's Print button
-  prints directly, no dialog, no roster exposure.
-- No new Supabase migration, no new pgTAP file — this feature touches
-  zero Supabase schema (same as Features 018/019). `npm run db:test`
-  still run before every commit per the user's instruction, expected to
-  stay at its current count unless a step's own investigation finds
-  otherwise.
+- Editing/deleting a shift never touches `rotation_members`,
+  `table_rotation_entries`, `service_sessions`, or any other floor/board
+  table — confirmed structurally impossible above, reconfirmed by never
+  importing from `src/features/allocation/` anywhere in this feature's
+  diff.
+- Every shift update/delete writes an `audit_events` row (reusing
+  `src/features/team/data/audit-log.ts`'s `writeAuditEvent`, the
+  existing generic mechanism — no new audit table).
+- Recurring generation stays capped by `expandDateRange`'s existing
+  62-day range limit (unchanged, inherited for free).
+- CSV `days` is additive and optional — a file with no `days` column
+  keeps behaving exactly as today (every consecutive day in the range).
+- No RLS changes for shifts/schedule_periods/shift_assignments writes
+  (already correct, see Investigation #4). The only migration is the two
+  new `shifts` columns.
 
 ## 🛠️ Implementation Steps
 
 - [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [x] **Step 2: Domain layer — month/year period type + metrics module**
-  - [x] `domain/attendance-report.ts`: added `{ type: "month"; year:
-number; month: number }` (month 1-12) to `AttendancePeriodSelection`;
-        extended `resolvePeriodRange` with a shared internal `monthRange`
-        helper, refactored `this-month`/`previous-month` to delegate to
-        it too (one source of truth for "the calendar range of month
-        N/year Y", not three near-duplicate `Date.UTC` blocks).
-  - [x] New `domain/attendance-metrics.ts` (matches the spec's own
-        Implementation Map path): `calendarWeekday(isoDate)` and
-        `dayOfMonth(isoDate)` (promoted out of the component's
-        `mobileDateParts`, same UTC-noon parsing, now shared by both the
-        desktop Day column and the mobile ledger), `daysInMonth(year,
-month)`, and `computeAttendanceSummary(rows)` → `{ daysWorked,
-totalHours, avgPerDay, excludedRowCount }`, wrapping the existing
-        `aggregateHours` rather than reimplementing null-handling.
-  - [x] `domain/attendance-metrics.test.ts` (new, 15 tests): weekday
-        across a month and year boundary and a leap year, each weekday
-        assertion verified against a real `Date` computation before being
-        written into the test, not asserted from memory;
-        `daysInMonth` for 28/29/30/31-day months; `computeAttendanceSummary`
-        for a normal set, an all-null set, a mixed set, and an empty set
-        (exact `daysWorked`/`avgPerDay`, not just `totalHours`).
-  - [x] `domain/attendance-report.test.ts`: new `resolvePeriodRange`
-        cases for `{ type: "month" }` — an arbitrary past month
-        independent of `todayLocalDate`, a leap-year February, December
-        without rolling into next year, and January directly (mirroring
-        the existing previous-month rollback test's intent).
-  - [x] `actions/attendance-actions.ts`: extended `attendancePeriodSchema`
-        (the discriminated union already validating `period` on both
-        `getAttendanceReportAction` and any caller) with the `"month"`
-        variant, bounded `year` (2024–2100) and `month` (1–12) — a
-        malformed value still fails closed to "that attendance request is
-        invalid," matching every other branch.
-  - [x] Full gate: `npm run check` (prettier/eslint/typecheck all pass),
-        `npm test` (32/32 files, **214/214** tests, up from 195), `npm
-run build` (pass), `npm run db:test` (**unchanged**, 16/16 files, 202
-        assertions — no schema touched, as expected).
+- [x] **Step 2: Migration — reuse `series_id`, add `is_recurring`**
+  - [x] New migration: `alter table public.shifts add column
+is_recurring boolean not null default false;` — `series_id uuid`
+        already exists (Investigation #8), reused as the recurrence
+        group id rather than adding a redundant new column.
+  - [x] New pgTAP test (`0017_shifts_recurrence.test.sql`, 8
+        assertions): `is_recurring` exists with the right type/default/
+        not-null; `series_id` confirmed still uuid and still nullable;
+        an owner can insert three shifts sharing one `series_id` in a
+        single multi-row insert (proves the "transaction-safe bulk
+        insertion" requirement is already true — one multi-row
+        `insert()` is atomic by Postgres's own construction, no new RPC
+        needed); a plain server is still rejected by RLS on insert
+        (regression-confirms Investigation #4's manager-only write
+        policy is genuinely unchanged by this migration, not just
+        assumed).
+  - [x] `src/lib/demo-data.ts`: `DemoShift` gains `seriesId?: string`
+        and `isRecurring?: boolean` (optional, backward compatible with
+        every existing literal; named `seriesId` in TypeScript to match
+        the real DB/generated-types column name, not a renamed concept).
+  - [x] `npm run db:reset && npm run db:test` — clean reset (Docker
+        Desktop had stopped between sessions; started it, waited for the
+        db container's own health check, then reset cleanly), 17/17
+        pgTAP files, **210/210 assertions** (up from 202). Full gate:
+        `npm run check`, `npm test` (214/214, unchanged — no TS-level
+        tests in this step), `npm run build` all pass.
   - [x] Commit.
-- [x] **Step 3: Month/year navigator + calendar Day column**
-  - [x] New `components/attendance-month-nav.tsx` (pure, presentational):
-        prev/next chevrons (disabled at the Jan-2024 floor and at the
-        current real month, matching the acceptance criterion's
-        "2024–present" bound and Feature 028's precedent of clamping a
-        navigator at "today" rather than trusting the client to self-limit),
-        a month `<select>` (Jan–Dec, future months in the current year
-        disabled) and a year `<select>` (2024..current year), all changes
-        routed through one `onChange({ year, month })`.
-  - [x] `attendance-report.tsx`: replaced `PeriodPicker`'s UI (deleted;
-        `resolvePeriodRange`'s other branches are untouched and still
-        exported) for both `self` and `all` scopes with
-        `AttendanceMonthNav`, defaulting to the restaurant's current real
-        month/year (`todayLocalDate`-derived, unchanged source of "today"
-        — captured once at mount, same reasoning as Feature 028's own
-        date navigator). Also renamed the header to "Attendance" and its
-        subtitle to match `design-system-reference.html` section 2e's
-        text exactly (was "Attendance Report" / a different sentence).
-  - [x] Added a Day column to the desktop table (`Date | Day | Clock in |
-Clock out | Hours`, matching the mockup's exact column order) and
-        switched the mobile ledger's date parts to the new shared
-        `calendarWeekday`/`dayOfMonth` instead of the local
-        `mobileDateParts` (deleted).
-  - [x] `PersonSection`: stat tiles wired to `computeAttendanceSummary`
-        instead of the inline math; subtitles added under each tile
-        matching the mockup's own text shape ("of N days in September"
-        via `daysInMonth`, an excluded-rows note under Total Hours reusing
-        the existing singular/plural phrasing already used elsewhere in
-        this file, "across days actually worked" under Avg per Day); the
-        table/mobile footer's "Total" label now reads "`<Month>` total"
-        (e.g. "September total"), matching the mockup exactly.
-  - [x] **Real regression found and fixed**: the existing
-        `tests/e2e/dashboard.spec.ts` test ("an unlinked server can open
-        Attendance...") asserted the old heading text "Attendance
-        Report" — updated to "Attendance" (`exact: true`) to match the
-        renamed header.
-  - [x] Live Playwright smoke test (demo mode, real browser via the MCP
-        Playwright tool, not just imagined): signed in as the demo
-        manager, opened Attendance, confirmed the month/year nav renders
-        with September selected and "Next month"/Oct–Dec correctly
-        disabled at the real-today ceiling, confirmed the desktop Day
-        column shows the correct weekday for every demo row (Wed/Tue/
-        Thu/Sat/Sun, each independently verified against a real `Date`
-        computation, not assumed), confirmed the three stat-tile hints
-        render with the right text and numbers. Clicked "Previous
-        month": every section correctly re-rendered for August (Fri/Thu
-        Day-column values, both independently verified; "of 31 days in
-        August"; "August total"), "Next month" became enabled, and
-        October/November/December became selectable again once no
-        longer the current year+month.
-  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged count
-        — Step 3 added no new unit tests of its own, reusing Step 2's),
-        `npm run build`, plus the two existing attendance e2e scenarios
-        in `dashboard.spec.ts` re-run directly and confirmed passing
-        after the heading-text fix.
+- [x] **Step 3: Domain — recurring date generation**
+  - [x] New `domain/recurring-shifts.ts`: `WEEKDAY_TOKENS` (Sun-first,
+        matching `Date.getUTCDay()`'s own 0=Sun convention — deliberately
+        NOT the grid's Mon-first display order, matching the spec's own
+        "Sunday through Saturday" checkbox wording), `parseWeekdayToken`,
+        `parseWeekdayList` (splits on `;`/`,`, case-insensitive, throws
+        with a row-usable message on an unknown token), and
+        `expandRecurringDates({ fromDate, toDate, daysOfWeek })` —
+        reuses `expandDateRange` from `shift-planning.ts` (not
+        reimplemented) and filters to the given weekdays.
+  - [x] `domain/shift-planning.ts`: `createShiftInstances` gained an
+        optional `dates?: string[]` override — when present, used
+        instead of internally calling `expandDateRange(fromDate,
+toDate)`, every other validation/time-resolution rule unchanged.
+        Backward compatible (every existing caller omits it). New
+        exported `addDays(date, delta)` (generalizes the existing
+        private `nextDate`, now implemented in terms of it), to be
+        reused by the week navigator in Step 5.
+  - [x] `domain/recurring-shifts.test.ts` (new, 17 tests): weekday
+        parsing (valid tokens, case-insensitivity, unknown-token error,
+        `;`/`,`/mixed all accepted, dedup+sort); date expansion across a
+        month boundary, a leap year (Feb 29 2028), a real DST
+        spring-forward (America/Chicago 2026-03-08) and fall-back
+        (2026-11-01), multiple selected weekdays in one call, an empty
+        result, and confirmation the existing 62-day cap still applies
+        (delegated, not bypassed) — every expected date/weekday pair
+        independently computed via a real `Date` in Node before being
+        written into the test, not asserted from memory.
+  - [x] `domain/shift-planning.test.ts`: new cases for the `dates`
+        override (including that custom-time validation still runs) and
+        for `addDays` (positive/negative/month/year boundaries).
+  - [x] Full gate: `npm run check`, `npm test` (**238/238**, up from
+        214, 33/33 files), `npm run build` all pass.
   - [x] Commit.
-- [x] **Step 4: Single-person switcher for the `all` scope**
-  - [x] `attendance-report.tsx`: replaced the always-on checkbox
-        multi-select, its N stacked `PersonSection`s, and the grand-total
-        block with one active-person `Select` (styled as a pill matching
-        `AttendanceMonthNav`'s own container) and exactly one
-        `PersonSection`, defaulting to the first person alphabetically by
-        display label. `activePersonId` state replaced the old
-        `selectedIds: Set<number>`; the default (and a correction if a
-        previously-active id ever stops existing in a fresh list) is
-        applied during render — this file's own established pattern
-        (`syncedContext` elsewhere in it), not a separate effect, so
-        there's never a render where the list is ready but nobody is
-        shown. `reportUserIds` narrows to `[activePersonId]`;
-        `DashboardTiles`' "Selected period" tile keeps working unchanged,
-        now naturally meaning "this one person, this browsed month" (live
-        confirmed: switching from Anil (Host) to Deepak Rao moved the
-        tile from 8h to 16.3h, matching `PersonSection`'s own total
-        exactly).
-  - [x] Confirmed (read, not assumed) neither existing attendance e2e
-        scenario in `tests/e2e/dashboard.spec.ts` ("an unlinked
-        server..."/"a manager can link attendance...") depends on the
-        removed multi-select/grand-total shapes — both exercise `self`/
-        `unlinked` scope only, re-ran directly and both still pass
-        unmodified.
-  - [x] Live Playwright smoke test (real browser, MCP tool): as manager,
-        confirmed the switcher defaults to "Anil (Host)" (alphabetically
-        first by display label — "Host" < "Server"), switched to "Deepak
-        Rao (Server)" and confirmed the whole section (stat tiles, table
-        rows, "Selected period" dashboard tile) updated to his data.
-        Signed out, signed in as the demo server (Mia, unlinked by
-        default in a fresh session) and confirmed the Attendance tab
-        shows the unchanged unlinked state with no Employee switcher and
-        no month nav at all — `self`/`unlinked` scopes are untouched by
-        this step, confirmed live rather than only by reading the diff.
-  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged --
-        this step touched no domain logic), `npm run build`, both
-        existing attendance e2e scenarios re-run directly and passing.
+- [x] **Step 4: CSV `days` column**
+  - [x] `domain/parse-schedule-csv.ts`: `CsvRowInput` gained
+        `days: string` (optional column — absent header means every
+        row's `days` reads `""`). When non-empty, `parseWeekdayList`
+        resolves it and `expandRecurringDates`'s result is passed as
+        `createShiftInstances`'s `dates` override instead of the plain
+        `fromDate`/`toDate` expansion; a missing `to_date` (nothing to
+        repeat across) or an empty resulting date list (the range
+        matches none of the selected weekdays) is a row error, not a
+        silent zero-shift or single-day success. `CSV_TEMPLATE` gained
+        the column with a `;`-separated example recurring row
+        (documented in-file why `;` is the safe unquoted default —
+        `,`-separated would need its own cell quoted to survive the
+        CSV's own comma delimiter). Header validation stays permissive
+        (an optional column, not required).
+  - [x] `domain/parse-schedule-csv.test.ts` (6 new tests, in a nested
+        `describe("recurring days")`): weekday-filtered generation,
+        `,`-separated (quoted) accepted too, missing end date rejected,
+        an unknown day token rejected, a range matching no selected day
+        rejected, and a `days`-less row confirmed unaffected.
+  - [x] `components/csv-import-panel.tsx`: `commit()` tags each
+        recurring row's resulting `DemoShift`s with one freshly
+        generated `seriesId` (`crypto.randomUUID()`) and
+        `isRecurring: true`; non-recurring rows unchanged
+        (`isRecurring: false`, no series id). Preview table's Dates
+        column now shows the raw `days` value plus the resolved shift
+        count for a recurring row, under the existing from/to text.
+  - [x] Full gate: `npm run check`, `npm test` (**244/244**, up from
+        238), `npm run build` all pass.
   - [x] Commit.
-- [x] **Step 5: Multi-select print support**
-  - [x] New `components/attendance-print-dialog.tsx`: rendered only for
-        `access.scope === "all"`. Three radio choices ("Print current
-        employee" / "Print selected employees" / "Print all employees");
-        choosing "selected" reveals a checkbox list sourced from the same
-        `sortedActiveUsers` list the switcher already has (this is where
-        the old multi-select UI actually ends up living, per
-        Reconciliation 2). Confirm resolves to a `number[]` of target Neon
-        user ids and closes.
-  - [x] `attendance-report.tsx`: a header "Print" button next to
-        `AttendanceMonthNav` in both scopes. `self` scope: prints
-        directly (`setPrintJob` from already-loaded data, then
-        `window.print()` — no dialog, matches Payroll's own
-        no-choice-needed precedent). `all` scope: opens the dialog; on
-        confirm (`printPeople`), fetches (reusing the existing
-        `getAttendanceReportAction`, which already accepts multiple
-        `userIds`) each target person's rows for the _currently browsed_
-        month, renders them into one printable area (Payroll's exact
-        `print:hidden`/`print:block` and scoped `@media print` visibility
-        trick, one named id `attendance-print-area`), then a `useEffect`
-        keyed on the new `printJob` state calls `window.print()` only
-        after that state has actually committed to the DOM — the same
-        reasoning payroll-workspace.tsx doesn't need (it prints
-        already-rendered content) but this feature does, since "print
-        all" may target people who were never rendered on screen at all.
-        Printable content uses plain text status labels
-        ("Auto-closed"/"Open shift"), never a colored `Badge`.
-  - [x] `unlinked` scope: no Print button — nothing to print (unchanged,
-        that branch never gained one).
-  - [x] Live Playwright smoke test (real browser, MCP tool, `window.print`
-        stubbed to count calls rather than actually invoke the OS
-        dialog — matching this app's established live-testing discipline
-        for anything a browser automation tool can't literally drive):
-        as manager, opened the print dialog (defaulted correctly to
-        "Print current employee (Anil (Host))"), chose "Print all
-        employees," confirmed `window.print` was called exactly once and
-        the printable area's actual text content contained all 5
-        employees' full sections (stats + rows), including Zoya Khan's
-        correct "No attendance recorded for this period." row, and that
-        the dialog closed. Linked Mia's attendance via Team, signed in as
-        her, confirmed her Print button prints directly with **no**
-        dialog and the printable content contains only her own linked
-        record ("Anil (Server)") — the privacy invariant holds under
-        actual print, not just in the primary view.
-  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged),
-        `npm run build` all pass.
+- [x] **Step 5: Week navigation**
+  - [x] `data/schedule-data.ts`: extracted the shared shift-row-mapping
+        logic (`mapShiftRows`) plus a new `getShiftsInRange` helper, so
+        the new week action and the existing Server Component load call
+        the identical mapping and query shape — one place, not two
+        copies that could drift (matches Feature 025's
+        `resolvePeriodRange` refactor precedent). Both now also select/
+        map `series_id`/`is_recurring` into `DemoShift.seriesId`/
+        `isRecurring`.
+  - [x] `actions/schedule-actions.ts`: new
+        `getScheduleContextForWeekAction({ restaurantSlug,
+weekStartDate })` — client-triggered, re-derives the caller's own
+        organization/location server-side (never trusts a client-supplied
+        id, matching every other Feature 025/028 navigator action this
+        session built), returns that week's `weekDates` + shifts.
+  - [x] `components/schedule-workspace.tsx`: new props (`restaurantSlug`,
+        `demoMode` — `organizationId` turned out unnecessary, the new
+        action re-derives it server-side, so it was never added as a
+        prop). New `viewWeekStart` state (defaults to the initial week's
+        Monday). Prev/Next wired to `addDays(±7)`; a "Today" button
+        (shown only when browsing elsewhere) resets to the initial week.
+        Demo mode: pure client-side filter of the full `shifts` prop by
+        the viewed week's dates, no fetch. Real mode, viewing the initial
+        week: unchanged (`weekDates`/`shifts` props, already reactive via
+        `revalidatePath`). Real mode, browsing elsewhere: a local fetch
+        via the new action (structured as an inner `async function
+load()` called immediately, matching `AttendanceReport`'s own
+        established shape — a raw top-level `setState` in the effect body
+        trips this repo's `react-hooks/set-state-in-effect` lint rule),
+        with loading/error states; a `weekReloadKey` re-triggers that
+        fetch after a same-week add/edit/delete so a mutation while
+        browsing a non-today week doesn't go stale.
+  - [x] `restaurant-operations-app.tsx`: threaded `restaurantSlug`/
+        `demoMode` through to `ScheduleWorkspace`.
+  - [x] **Real bug found live-testing, not assumed — and fixed**:
+        `monthDayLabel`/`monthLabel` built a UTC-anchored `Date` purely
+        to get a month name from `Intl.DateTimeFormat`, but without an
+        explicit `timeZone: "UTC"`, the formatter renders in the _host
+        machine's own_ local timezone. On this dev machine
+        (America/Chicago, west of UTC), that silently rolled the label
+        back a day into the wrong month — the very first live check of
+        the week header showed "Aug 7–13" for what was actually the week
+        of Sep 7–13. Pre-existing since long before this feature (these
+        functions were untouched by every earlier step), caught only now
+        because this is the first time this session actually loaded the
+        Schedule tab's week header in a real browser. Fixed by pinning
+        both formatters to `timeZone: "UTC"` (these are pure calendar
+        dates; there was never a real timezone conversion to do). Both
+        helpers, plus `weekRangeLabel`, exported and given a new
+        `schedule-workspace.test.ts` (6 tests) pinning the exact
+        regression date so a future dropped `timeZone: "UTC"` fails
+        regardless of what timezone CI or a dev machine runs in.
+  - [x] Live Playwright smoke test (real browser, MCP tool): confirmed
+        the initial week now correctly reads "Sep 7–13" (post-fix);
+        Previous week moved to "Aug 31–Sep 6" (a real cross-month-boundary
+        case, correctly mixed-month-labeled) and revealed the "Today"
+        button; Today returned to "Sep 7–13" and the button disappeared;
+        Next week (twice) reached "Sep 14–20"; "Add shift" while viewing
+        that browsed week defaulted `fromDate` to Sep 14 (not the
+        original today-week) and, after submitting, the new shift and
+        updated draft count appeared immediately on the still-browsed
+        Sep 14–20 week, with no navigation back to today required.
+  - [x] Full gate: `npm run check`, `npm test` (**250/250**, up from
+        244), `npm run build`, `npm run db:test` (17/17, 210 assertions,
+        unchanged) all pass. Re-ran `dashboard.spec.ts` (desktop): 25/25,
+        no regression.
   - [x] Commit.
-- [x] **Step 6: E2E** (`tests/e2e/attendance-reporting.spec.ts`, new file
-      — the two pre-existing attendance scenarios stay in
-      `dashboard.spec.ts`, untouched)
-  - [x] Month switching updates the ledger and the three stat cards to
-        different, known demo values (September's populated stat tiles
-        vs. August's explicit zero-attendance state for the same
-        person).
-  - [x] The Day column matches the real weekday for a known demo date —
-        both the desktop table and, separately, the mobile card ledger's
-        own day-digit/weekday spans (same `calendarWeekday`/`dayOfMonth`
-        functions behind both, checked in whichever shape actually
-        renders per viewport).
-  - [x] Print dialog: current/selected/all all correctly invoke
-        `window.print()` (stubbed) with the right people included in the
-        printable area's actual text content, including a refusal (no
-        print, an inline error) when "selected" is chosen with nothing
-        checked; a `self`-scoped server's Print button never shows a
-        dialog and the printed content never contains another person's
-        name.
-  - [x] Ran across all three Playwright projects (desktop, host-tablet,
-        server-mobile) — **12/12 pass**. `host-tablet`'s pre-existing
-        WebKit sign-in gap (already recorded — see memory) did not
-        recur; every scenario passed there too, including the slowest
-        (21.6s, still well under timeout).
-  - [x] **Two real test-authoring bugs found and fixed by actually
-        running the suite, not assumed correct from reading the code**:
-        (1) the month-switching test wrongly expected a "Days worked"
-        stat-tile hint to appear for August, when `PersonSection` only
-        renders the stat-tiles grid at all when `rows.length > 0` —
-        fixed to assert the September-only hint's absence instead. (2)
-        both table-shaped assertions initially assumed the desktop
-        `<table>` (hidden via `hidden sm:block`, not removed from the
-        DOM) wouldn't interfere on the `server-mobile` project — it did,
-        causing a strict-mode ambiguity on "Wed" matching both the
-        hidden `<td>` and the visible mobile ledger's `<span>`. Fixed
-        with viewport-aware branches, scoping the mobile assertions to
-        the ledger's own `.sm\:hidden` container — the exact precedent
-        `tests/e2e/dashboard.spec.ts` already set for this identical
-        desktop/mobile dual-render situation.
-  - [x] Full gate: `npm run check`, `npm test` (214/214, unchanged),
-        `npm run build`, `npm run db:test` (16/16, 202 assertions,
-        unchanged) all pass. Re-ran the full `dashboard.spec.ts` suite
-        (desktop): 25/25, no regression from any step in this feature.
+- [x] **Step 6: Recurring shift creation UI**
+  - [x] `components/schedule-workspace.tsx`'s `ShiftEditor`: added a
+        "Repeat on" row of 7 checkboxes (Sun..Sat, per
+        `WEEKDAY_TOKENS`, values 0-6). None checked: unchanged existing
+        behavior (single continuous range, `toDate` optional). Any
+        checked: `toDate` becomes required (client-side validation, a
+        clear inline error otherwise, matching the CSV parser's own
+        message) and submission calls `expandRecurringDates` then
+        `createShiftInstances({ dates })` instead of the plain range.
+        One `seriesId` (`crypto.randomUUID()`) generated per submission,
+        tagged onto every resulting `DemoShift` (`isRecurring: true`).
+  - [x] `actions/schedule-actions.ts`: `addShiftAction` writes
+        `series_id`/`is_recurring` from the submitted shifts (both
+        already optional on `DemoShift`, `null`/`false` when absent —
+        no behavior change for non-recurring submissions).
+  - [x] Live Playwright smoke test (real browser, MCP tool): created a
+        Leo Park Tue/Thu recurring shift, Sep 7 → Sep 27 (3 full weeks).
+        Confirmed "Draft shifts: 6" and "Publish 6" immediately (3 Tue +
+        3 Thu); the current week (Sep 7–13) correctly showed exactly 2
+        blocks on Leo's row, on Tue and Thu only, nothing on Mon/Wed/
+        Fri/Sat/Sun; navigating to the next week (Sep 14–20) showed the
+        same correct 2-block pattern on its own Tue/Thu (Sep 15/17) —
+        confirmed the recurrence actually spans real week-navigation
+        boundaries, not just the one week it was created from.
+  - [x] Full gate: `npm run check`, `npm test` (250/250, unchanged — this
+        step added no new unit tests of its own; the underlying
+        `expandRecurringDates`/`createShiftInstances({dates})` logic was
+        already covered in Step 3), `npm run build`, `npm run db:test`
+        (17/17, 210 assertions, unchanged) all pass.
   - [x] Commit.
-- [x] **Step 7: Docs**
-  - [x] `docs/features/025-attendance-reporting-and-filters.md`: the
-        Scope/Implementation-Map/Test-Plan sections already reflected
-        the CSV-out-of-scope decision (the user's live prompt update
-        carried it in) — added a full reconciliation paragraph under
-        Acceptance Criteria naming the exact conflict (read-only Neon,
-        confirmed live in Feature 018; PRD's explicit no-write carve-out;
-        no Supabase `attendance_records` table anywhere in this
-        codebase) and the three-way choice presented. Rewrote the Data &
-        Authorization section, which still described a fictional
-        Supabase `attendance_records`/`restaurant_id`/`work_date` table,
-        to match the real Neon `users`/`attendance` schema plus
-        Supabase's `attendance_identity_links`. Checked off every
-        acceptance criterion with a note on what was already built vs.
-        newly built.
-  - [x] Updated `docs/STATUS.md`: new `025` Feature Matrix row, refreshed
-        Health Gate counts (214/214 unit tests across 32 files,
-        attendance-reporting.spec.ts 12/12), Current Status Overview
-        pointing at Feature 025.
+- [x] **Step 7: Post-publish (and pre-publish) shift editing**
+  - [x] `actions/schedule-actions.ts`: new `updateShiftAction` (assignee,
+        shift kind label, start/end time, note — deliberately NOT the
+        service date itself, out of the spec's literal scope; moving a
+        shift to a different day is delete + recreate) and
+        `deleteShiftAction`. Both re-derive the actor via
+        `getCurrentUser`, both write an `audit_events` row via
+        `writeAuditEvent` (`entity_type: "shift"`,
+        `action: "update_shift"`/`"delete_shift"`, before/after state),
+        both work identically regardless of the shift's
+        `schedule_periods.status` (Investigation #4 — no new gate to add,
+        RLS already allows it). Return `ActionResult<null>` — the caller
+        already holds every field it just submitted and applies the
+        edit optimistically itself (the same pattern `addShiftAction`'s
+        own caller already uses), rather than round-tripping a refetch.
+        Overnight end-date recomputed via the same
+        `endLocal <= startLocal ? addDays(serviceDate, 1) : serviceDate`
+        rule `createShiftInstances` already uses.
+  - [x] New `components/shift-edit-dialog.tsx`: person/kind/start/end/note
+        fields pre-filled from the clicked shift, "Save," and a two-step
+        "Delete shift" → "Confirm delete" control (matching this app's
+        established destructive-action pattern, e.g. team's dialogs).
+        `Button` has no `"destructive"` variant in this codebase (checked
+        `button.tsx` directly) — used `variant="outline"` plus
+        `text-destructive`/`border-destructive` tokens instead.
+  - [x] `schedule-workspace.tsx`: `ShiftBlock` becomes a `<button>` for a
+        manager in the week grid (unchanged plain `<div>`, read-only, for
+        a server, and unchanged for the month view's own-shift block),
+        opening the new dialog.
+  - [x] `restaurant-operations-app.tsx`: new `updateShift`/`deleteShift`
+        handlers (demo + real dual branch, mirroring `addShifts`), each
+        patching both the parent's own `shifts` state and (via
+        `ScheduleWorkspace`'s `afterMutation`/`weekReloadKey`) the
+        currently-browsed week so an edit/delete is visible immediately
+        regardless of which week is on screen.
+  - [x] Live Playwright smoke test (manager passcode 2468, demo mode):
+        added a Mon Sep 7 Morning shift, published it (1 published/0
+        draft), clicked the still-clickable published block, changed
+        assignee Mia Chen → Leo Park and start time 11:00→09:30 in the
+        dialog, saved — shift immediately re-rendered under Leo Park's
+        row as "9:30 AM–4:00 PM" with no unpublish step and the summary
+        staying at 1 published/0 draft. Re-opened the dialog (confirmed
+        persisted values), clicked "Delete shift" → dialog switched to
+        "Confirm delete"/"Cancel" with Save disabled → confirmed →
+        shift disappeared, summary back to 0/0. Signed out, signed back
+        in as server passcode 1357 (Mia Chen): republished shift showed
+        in the accessibility tree as a plain non-interactive `generic`
+        block (not a `button`), confirming a server never gets the edit
+        affordance. Also confirmed week-nav live: Next week advanced the
+        header to "Sep 14–20" and surfaced a "Today" quick-jump button;
+        clicking it returned the header to "Sep 7–13" (the previously
+        fixed timezone-label bug did not regress).
+  - [x] **Decision, stated not assumed**: no dedicated fake-Supabase-builder
+        unit test for `updateShiftAction`/`deleteShiftAction`
+        (`publishScheduleAction`'s own test file exists specifically
+        because its version-numbering arithmetic is subtle and bug-prone
+        — these two actions are comparatively mechanical field writes);
+        covered instead by live testing above, the e2e suite (Step 8),
+        and pgTAP's RLS confirmation (Step 2).
+  - [x] Full gate: `npm run check` (format/lint/typecheck) clean, `npm
+test` 250/250 (34 files), `npm run build` clean, `npm run
+db:test` 210/210 assertions across 17 files (unchanged — Step 7
+        added no schema/RLS change, confirming Investigation #4).
   - [x] Commit.
-- [x] **Step 8: Final gate, push, open PR (base:
-      `feature/028-table-allocation-unrestricted-editing`), paste real
-      gate output + PR link here.**
-  - [x] Final comprehensive gate, run for real:
-    - `npm run check` — prettier, eslint, typecheck: pass.
-    - `npm test` — 32/32 files, 214/214 tests: pass.
-    - `npm run build` — pass.
-    - `npm run db:reset && npm run db:test` — clean reset (no transient
-      hiccup this time), 16/16 pgTAP files, 202 assertions: pass —
-      unchanged from before this feature, confirming zero Supabase
-      schema was touched.
-    - `npx playwright test` (desktop, host-tablet, server-mobile,
-      full suite) — **114/114 pass**, including all 12 new
-      `attendance-reporting.spec.ts` tests across all three projects.
-  - [x] Pushed `feature/025-attendance-reporting-and-filters` to
-        origin.
-  - [x] Opened PR:
-        **https://github.com/KrapaGoutam/The-Lineup/pull/25** (base:
-        `feature/028-table-allocation-unrestricted-editing`).
+- [x] **Step 8: E2E** (`tests/e2e/recurring-schedules.spec.ts`, new file,
+      6 tests)
+  - [x] Week navigation: Prev/Next/Today — steps forward two weeks
+        ("Sep 14–20" then "Sep 21–27"), back to the initial week (Today
+        button gone, nothing to jump back to), then one week into the
+        past ("Aug 31–Sep 6", the actual month-boundary label, Today
+        reappears), then confirms Today returns to "Sep 7–13".
+  - [x] Creating a recurring shift across multiple days generates the
+        right instances — Mon+Wed checked, `toDate` set, exactly 2
+        drafts created for a previously shift-free team member, present
+        on Monday and Wednesday's day cells and absent from all other
+        5 days in the row. A second test confirms the "end date
+        required" guard: checking a day with no `toDate` is refused
+        with the exact validation message and creates nothing (draft
+        count stays 0), not a silent single-day fallback.
+  - [x] Editing a shift after publishing persists and is visible
+        immediately; a server never sees the edit control — one test
+        publishes a shift, edits its assignee and start time from the
+        published block, and confirms the new block appears under the
+        new assignee's row with no separate unpublish step (published
+        count stays 1, draft count stays 0) while the old assignee's
+        cell empties. A second test covers delete's two-step confirm
+        gate (shift still present after the first click, gone with
+        counts updated after "Confirm delete"). A third signs out and
+        back in as the server whose shift was just published/edited and
+        confirms the block renders (text visible) but is not a `button`
+        — the edit affordance genuinely does not exist for a
+        non-manager, not just visually hidden.
+  - [x] Run across all three Playwright projects: 18/18 passed
+        (desktop, host-tablet, server-mobile).
+  - [x] Full gate: format/lint/typecheck clean, 250/250 unit tests,
+        build clean, 210/210 pgTAP assertions across 17 files
+        (unchanged — this step is test-only, no product code).
+  - [x] Commit.
+- [x] **Step 9: Docs**
+  - [x] `docs/features/027-recurring-schedules-and-week-navigation.md`:
+        corrected the Implementation Map file names
+        (`schedule-grid.tsx`/`shift-form-dialog.tsx` → the real
+        `schedule-workspace.tsx` + new `shift-edit-dialog.tsx`), noted
+        the already-satisfied Settings entry point (Feature 023's
+        `QuickLinkCard`), noted the `end_date`→`to_date` naming
+        reconciliation and the `series_id` reuse in Data & Authorization,
+        checked off every acceptance criterion with a note on what was
+        found already-true (RLS) vs. newly built. Status → `complete`.
+  - [x] Updated `docs/STATUS.md` Feature Matrix (new `027` row) + Health
+        Gate line (34/34 unit files, 250/250 tests; +recurring-schedules
+        e2e; 17/17 pgTAP files, 210 assertions) + Current Status Overview.
+  - [x] Commit.
+- [x] **Step 10: Final gate, push, open PR (base:
+      `feature/025-attendance-reporting-and-filters`), paste real gate
+      output + PR link here.**
+  - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
+        `typecheck` (`next typegen && tsc --noEmit`) all clean.
+  - [x] `npm test`: **34/34 files, 250/250 tests** passed.
+  - [x] `npm run build`: `next build` compiled successfully, typechecked
+        clean, all 13 pages generated.
+  - [x] `npm run db:test`: **17/17 pgTAP files, 210/210 assertions**,
+        `Result: PASS`.
+  - [x] Full e2e suite, all specs, all three Playwright projects:
+        **132/132 passed** (desktop, host-tablet, server-mobile) —
+        `allocation-open-editing`, `attendance-reporting`, `dashboard`,
+        `debug`, `recurring-schedules` (new, 6 tests × 3 projects = 18),
+        `settings`, `team-management`. No regressions in any
+        pre-existing suite from this feature's changes.
+  - [x] Pushed `feature/027-recurring-schedules-and-week-navigation`,
+        opened PR #26 (base `feature/025-attendance-reporting-and-filters`):
+        https://github.com/KrapaGoutam/The-Lineup/pull/26
 
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `src/features/attendance/domain/attendance-report.ts` (new `"month"`
-  period type)
-- `src/features/attendance/domain/attendance-report.test.ts`
-- `src/features/attendance/domain/attendance-metrics.ts` (new)
-- `src/features/attendance/domain/attendance-metrics.test.ts` (new)
-- `src/features/attendance/actions/attendance-actions.ts` (zod schema)
-- `src/features/attendance/components/attendance-month-nav.tsx` (new)
-- `src/features/attendance/components/attendance-print-dialog.tsx` (new)
-- `src/features/attendance/components/attendance-report.tsx` (month nav,
-  Day column, single-person switcher, print wiring)
-- `tests/e2e/attendance-reporting.spec.ts` (new)
-- `docs/features/025-attendance-reporting-and-filters.md` (CSV scope
-  correction, checkboxes)
-- `docs/STATUS.md` (milestone update)
+- `supabase/migrations/<ts>_shifts_recurrence.sql` (new)
+- `supabase/tests/database/00XX_shifts_recurrence.test.sql` (new)
+- `src/lib/demo-data.ts` (`DemoShift` fields)
+- `src/features/schedules/domain/recurring-shifts.ts` (new)
+- `src/features/schedules/domain/recurring-shifts.test.ts` (new)
+- `src/features/schedules/domain/shift-planning.ts` (`dates` override,
+  `addDays`)
+- `src/features/schedules/domain/shift-planning.test.ts`
+- `src/features/schedules/domain/parse-schedule-csv.ts` (`days` column)
+- `src/features/schedules/domain/parse-schedule-csv.test.ts`
+- `src/features/schedules/components/csv-import-panel.tsx` (recurrence
+  tagging)
+- `src/features/schedules/data/schedule-data.ts` (shared row mapping,
+  week-scoped read)
+- `src/features/schedules/actions/schedule-actions.ts`
+  (`getScheduleContextForWeekAction`, `updateShiftAction`,
+  `deleteShiftAction`, `addShiftAction` recurrence columns)
+- `src/features/schedules/components/schedule-workspace.tsx` (week nav,
+  recurring checkboxes, clickable `ShiftBlock`, timezone label bug fix)
+- `src/features/schedules/components/schedule-workspace.test.ts` (new)
+- `src/features/schedules/components/shift-edit-dialog.tsx` (new)
+- `src/components/restaurant-operations-app.tsx` (new props/handlers)
+- `tests/e2e/recurring-schedules.spec.ts` (new)
+- `docs/features/027-recurring-schedules-and-week-navigation.md`
+- `docs/STATUS.md`
 
 ## Current State & Next Step
 
-All 8 steps complete. Feature 025 is fully implemented, fully tested
-(full gate green, including a real CSV-import scope conflict resolved
-with the user before any code was written — see Reconciliation 1), and
-its PR is open: https://github.com/KrapaGoutam/The-Lineup/pull/25 (base:
-`feature/028-table-allocation-unrestricted-editing`). Nothing left to do
-on this branch; next step is human review/merge.
+All 10 steps done and committed. Full gate green (250/250 unit,
+build clean, 210/210 pgTAP, 132/132 e2e across 3 projects). Pushed and
+PR opened: https://github.com/KrapaGoutam/The-Lineup/pull/26 (base
+`feature/025-attendance-reporting-and-filters`). Feature 027 complete.

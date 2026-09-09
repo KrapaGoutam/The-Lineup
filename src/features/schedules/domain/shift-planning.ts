@@ -38,8 +38,18 @@ function formatIsoDate(date: Date) {
 }
 
 function nextDate(date: string) {
+  return addDays(date, 1);
+}
+
+/**
+ * Feature 027. Generalizes what was a private, +1-only `nextDate` into a
+ * plain signed day offset -- reused by the week navigator's Prev/Next
+ * (`addDays(weekStart, ±7)`) rather than that component reimplementing
+ * its own UTC date-math.
+ */
+export function addDays(date: string, delta: number): string {
   const value = parseIsoDate(date);
-  value.setUTCDate(value.getUTCDate() + 1);
+  value.setUTCDate(value.getUTCDate() + delta);
   return formatIsoDate(value);
 }
 
@@ -104,6 +114,13 @@ export function createShiftInstances(input: {
   customStart?: string;
   customEnd?: string;
   defaults: ShiftDefaults;
+  // Feature 027: the recurring-days feature (domain/recurring-shifts.ts's
+  // expandRecurringDates) passes its own weekday-filtered date list here
+  // instead of letting this function expand `fromDate`/`toDate` as a
+  // plain consecutive range -- every other validation/time-resolution
+  // rule below still applies identically to each of those dates. Every
+  // existing caller omits this and keeps today's exact behavior.
+  dates?: string[];
 }): ShiftInstance[] {
   const hasCustomStart = Boolean(input.customStart);
   const hasCustomEnd = Boolean(input.customEnd);
@@ -118,7 +135,10 @@ export function createShiftInstances(input: {
     throw new Error("Use 24-hour HH:mm times.");
   }
 
-  return expandDateRange(input.fromDate, input.toDate).map((serviceDate) => ({
+  const serviceDates =
+    input.dates ?? expandDateRange(input.fromDate, input.toDate);
+
+  return serviceDates.map((serviceDate) => ({
     serviceDate,
     endDate: time.end <= time.start ? nextDate(serviceDate) : serviceDate,
     shiftKind: input.shiftKind,
