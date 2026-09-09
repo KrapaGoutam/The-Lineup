@@ -22,6 +22,10 @@ import { Select } from "@/components/ui/select";
 import { getScheduleContextForWeekAction } from "@/features/schedules/actions/schedule-actions";
 import { CsvImportPanel } from "@/features/schedules/components/csv-import-panel";
 import {
+  expandRecurringDates,
+  WEEKDAY_TOKENS,
+} from "@/features/schedules/domain/recurring-shifts";
+import {
   addDays,
   createShiftInstances,
   findShiftConflicts,
@@ -161,10 +165,34 @@ function ShiftEditor({
       const customStart = String(form.get("customStart") || "") || undefined;
       const customEnd = String(form.get("customEnd") || "") || undefined;
       const note = String(form.get("note") || "").trim() || undefined;
+
+      // Feature 027: "Repeat on" -- none checked keeps the exact existing
+      // behavior (one continuous range); any checked requires an end
+      // date (nothing to repeat across a single day) and filters the
+      // range down to just those weekdays.
+      const daysOfWeek = form.getAll("days").map((value) => Number(value));
+      let dates: string[] | undefined;
+      let seriesId: string | undefined;
+      let isRecurring = false;
+      if (daysOfWeek.length > 0) {
+        if (!toDate) {
+          throw new Error(
+            "An end date is required when repeating on specific days.",
+          );
+        }
+        dates = expandRecurringDates({ fromDate, toDate, daysOfWeek });
+        if (dates.length === 0) {
+          throw new Error("No dates in the range match the selected days.");
+        }
+        seriesId = crypto.randomUUID();
+        isRecurring = true;
+      }
+
       const instances = createShiftInstances({
         shiftKind,
         fromDate,
         toDate,
+        dates,
         customStart,
         customEnd,
         defaults: shiftDefaults,
@@ -176,6 +204,8 @@ function ShiftEditor({
           ...instance,
           status: "draft" as const,
           note,
+          seriesId,
+          isRecurring,
         })),
       );
       event.currentTarget.reset();
@@ -287,6 +317,30 @@ function ShiftEditor({
               placeholder="Optional setup or station note"
             />
           </div>
+          <fieldset className="space-y-2 sm:col-span-2 xl:col-span-4">
+            <legend className="text-sm font-medium">
+              Repeat on{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional — requires an end date)
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-3">
+              {WEEKDAY_TOKENS.map((token, index) => (
+                <label
+                  key={token}
+                  className="flex items-center gap-1.5 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="days"
+                    value={index}
+                    className="accent-[var(--primary)]"
+                  />
+                  {token}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex items-center gap-3 sm:col-span-2 xl:col-span-4">
             <Button type="submit">
               <Plus aria-hidden="true" /> Add to draft

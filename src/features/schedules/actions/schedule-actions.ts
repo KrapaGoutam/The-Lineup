@@ -153,6 +153,12 @@ export async function addShiftAction(
           // a hidden feature.
           role_label: "Server",
           notes: shift.note ?? null,
+          // Feature 027: both optional -- a plain, non-recurring
+          // submission (the existing, unchanged common case) sends
+          // neither, matching series_id's own nullability and
+          // is_recurring's schema default.
+          series_id: shift.seriesId ?? null,
+          is_recurring: shift.isRecurring ?? false,
         };
       }),
     )

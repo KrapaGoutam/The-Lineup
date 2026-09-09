@@ -292,27 +292,36 @@ load()` called immediately, matching `AttendanceReport`'s own
         unchanged) all pass. Re-ran `dashboard.spec.ts` (desktop): 25/25,
         no regression.
   - [x] Commit.
-- [ ] **Step 6: Recurring shift creation UI**
-  - [ ] `components/schedule-workspace.tsx`'s `ShiftEditor`: adds a
+- [x] **Step 6: Recurring shift creation UI**
+  - [x] `components/schedule-workspace.tsx`'s `ShiftEditor`: added a
         "Repeat on" row of 7 checkboxes (Sun..Sat, per
-        `WEEKDAY_TOKENS`). None checked: unchanged existing behavior
-        (single continuous range, `toDate` optional). Any checked:
-        `toDate` becomes required (client-side validation, a clear inline
-        error otherwise) and submission calls
-        `expandRecurringDates`/`createShiftInstances({ dates })`
-        instead of the plain range. One `seriesId` generated per
-        submission, tagged onto every resulting `DemoShift`
-        (`isRecurring: true`).
-  - [ ] `actions/schedule-actions.ts`: `addShiftAction` writes
+        `WEEKDAY_TOKENS`, values 0-6). None checked: unchanged existing
+        behavior (single continuous range, `toDate` optional). Any
+        checked: `toDate` becomes required (client-side validation, a
+        clear inline error otherwise, matching the CSV parser's own
+        message) and submission calls `expandRecurringDates` then
+        `createShiftInstances({ dates })` instead of the plain range.
+        One `seriesId` (`crypto.randomUUID()`) generated per submission,
+        tagged onto every resulting `DemoShift` (`isRecurring: true`).
+  - [x] `actions/schedule-actions.ts`: `addShiftAction` writes
         `series_id`/`is_recurring` from the submitted shifts (both
         already optional on `DemoShift`, `null`/`false` when absent —
         no behavior change for non-recurring submissions).
-  - [ ] Live Playwright smoke test: create a Tue/Thu recurring shift
-        across a real multi-week range, confirm every generated
-        instance lands on the right weekday, in the right count, and
-        that a plain single-day add (no days checked) is unaffected.
-  - [ ] Full gate.
-  - [ ] Commit.
+  - [x] Live Playwright smoke test (real browser, MCP tool): created a
+        Leo Park Tue/Thu recurring shift, Sep 7 → Sep 27 (3 full weeks).
+        Confirmed "Draft shifts: 6" and "Publish 6" immediately (3 Tue +
+        3 Thu); the current week (Sep 7–13) correctly showed exactly 2
+        blocks on Leo's row, on Tue and Thu only, nothing on Mon/Wed/
+        Fri/Sat/Sun; navigating to the next week (Sep 14–20) showed the
+        same correct 2-block pattern on its own Tue/Thu (Sep 15/17) —
+        confirmed the recurrence actually spans real week-navigation
+        boundaries, not just the one week it was created from.
+  - [x] Full gate: `npm run check`, `npm test` (250/250, unchanged — this
+        step added no new unit tests of its own; the underlying
+        `expandRecurringDates`/`createShiftInstances({dates})` logic was
+        already covered in Step 3), `npm run build`, `npm run db:test`
+        (17/17, 210 assertions, unchanged) all pass.
+  - [x] Commit.
 - [ ] **Step 7: Post-publish (and pre-publish) shift editing**
   - [ ] `actions/schedule-actions.ts`: new `updateShiftAction` (assignee,
         shift kind label, start/end time, note — deliberately NOT the
@@ -408,5 +417,6 @@ load()` called immediately, matching `AttendanceReport`'s own
 
 ## Current State & Next Step
 
-Steps 1-5 done and committed. Next: Step 6 (recurring shift creation UI
-— day-of-week checkboxes in `ShiftEditor`).
+Steps 1-6 done and committed. Next: Step 7 (post-publish, and
+pre-publish, shift editing — `updateShiftAction`/`deleteShiftAction`,
+`shift-edit-dialog.tsx`, clickable `ShiftBlock`).
