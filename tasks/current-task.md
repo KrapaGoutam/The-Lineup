@@ -1,180 +1,134 @@
-# Current Task: Feature 031 — Universal Letterhead Redesign & All-Employees Statement Printing
+# Current Task: Feature 032 — Canonical Monk's Logo Integration into ReportLetterhead
 
-**Active Spec:** `docs/features/031-universal-letterhead-and-batch-statements.md`
-**Branch:** `feature/031-universal-letterhead-and-batch-statements` (branched from `main`, after Feature 030 / PR #29 merged)
-**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/30
+**Active Spec:** `docs/features/032-canonical-monks-logo.md`
+**Branch:** `feature/032-canonical-monks-logo` (branched from `main`, after Feature 031 / PR #30 merged)
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/31
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
 
-Given directly by the user as a complete, bounded technical spec (no
-discovery/planning round needed): redesign the shared `<ReportLetterhead>`
-to match a reference document layout exactly, replace its logo with an
-embedded inline SVG (never an external raster `<img>`), and let managers
-generate + print the Combined Monthly Statement for every active
-employee in one batch, one page per employee, under a dedicated roster
-filename.
+Swap `<ReportLetterhead>`'s crest from Feature 031's original
+hand-authored placeholder mark to the real canonical "The Monk's"
+logo, once the user supplied that actual brand asset directly into the
+repo. No other change to the letterhead, its props, or any print
+surface that consumes it.
 
 ## 📖 Key Findings & Architecture
 
-1. **No "Monk's" brand SVG asset exists anywhere in this repo** (checked
-   via `find`/`grep` -- only Next.js starter icons under `public/`), and
-   `monkswebster.com` is a real, unrelated external business's site --
-   not an asset this codebase owns. There was nothing to literally
-   "extract paths from," and scraping a real business's trademarked logo
-   would be inappropriate regardless of feasibility. Decision: author an
-   original, simple monochrome hooded-silhouette crest instead,
-   documented directly in the component's own header comment.
-2. **Letterhead layout inversion**: the new reference layout swaps what
-   Feature 030 had -- previously the full "The Monk's Indian Fusion -
-   Webster" was the `<h1>` on the left with a "Generated" timestamp on
-   the right; now the short "The Monk's" is the `<h1>` (with `reportTitle`
-   beneath it) on the left, and the full org name/address/site is a
-   plain right-aligned contact block (no longer a heading), with no
-   timestamp anywhere.
-3. **`employeeName` becomes optional**: omitting it hides the "Employee"
-   meta block entirely (not just blanks it) -- needed for a future/
-   present all-staff summary context where there's no single employee
-   to name.
-4. **Batch statement fetch reuses existing infra**: `CombinedStatementDialog`
-   already called `getCombinedMonthlyStatementAction` for exactly one
-   employee. Generalizing to "all employees" means calling that same
-   action N times via `Promise.all` (no new server action), keyed by a
-   new `CombinedStatementTarget` discriminated union
-   (`{ scope: "single"; neonUserId } | { scope: "all"; neonUserIds }`) --
-   the same "reuse existing, already-authorized infra" pattern
-   `PayrollPrintDialog` already established in Feature 030's bug-fix pass.
-5. **Partial-failure handling**: a batch of N fetches can have some
-   succeed and some fail (e.g. an employee with no attendance link). The
-   dialog renders every successful statement and shows a small
-   `print:hidden` note naming how many were skipped, rather than
-   blocking the whole batch on one bad id. Only 100% failure blocks with
-   an error state.
-6. **Entry point was previously fully hidden**: Attendance's "all"-scope
-   Monthly Statement button used to be `{!showingAll && activePerson ? (...) : null}`
-   -- entirely absent whenever "All employees" was selected. It's now
-   always rendered, branching label/target/disabled on `showingAll`.
+1. **The asset didn't exist yet when first requested.** The user's
+   initial prompt claimed the canonical logo was "already placed" at
+   `public/brand/the-monks-logo.svg`, but `public/brand/` didn't exist
+   anywhere in the repo. Verified this directly (`ls`, repo-wide
+   `find`) before doing anything else, rather than trusting the claim
+   or fabricating a stand-in -- asked the user to place it, then
+   re-checked once they confirmed.
+2. **Manual transcription risk was real, not hypothetical.** The
+   logo's raw markup is ~167 `<path>` elements of high-precision
+   bezier curve data (~85K tokens as plain text) with no way for this
+   session to visually render/diff an SVG it hand-typed from chat
+   text -- a single mistyped digit in a `d` attribute corrupts the
+   artwork silently, no error thrown, no way to self-catch it. Asked
+   the user how to proceed rather than guessing; they chose to place
+   the exact file into the repo themselves so it could be read
+   byte-exact.
+3. **Mechanical extraction, not hand-conversion.** Once the real file
+   existed on disk, wrote inner markup to a TS constant via a one-time
+   Node script (`fs.readFileSync` + regex match on `<svg>...</svg>` +
+   `JSON.stringify` for safe escaping) instead of converting ~167
+   `<path>` tags to JSX by hand -- zero transcription risk, the file
+   content passes through unmodified.
+4. **`dangerouslySetInnerHTML` is the right tool here, not a shortcut
+   to avoid.** The markup is a static, pre-existing, machine-extracted
+   asset (never user input), and JSX has no simpler way to render a
+   large pre-existing block of raw SVG. Documented this reasoning
+   directly in the component's own comment so it doesn't read as an
+   unexplained deviation from this codebase's normal React patterns.
+5. **Live visual verification, not just automated assertions.** An
+   automated "one `<svg>` element exists" test would pass even for a
+   garbled or empty path. Started the dev server in demo mode, opened
+   the Combined Statement dialog, and took an actual screenshot to
+   confirm the crest renders as a legible, correctly scaled, properly
+   colored brand mark -- not just that markup was present in the DOM.
 
 ## 🔒 Non-negotiable Constraints
 
-- Multi-tenant isolation and statement authorization rules unchanged --
-  the "all" scope's id list comes from the caller's own already-
-  authorized `sortedActiveUsers`, each id still individually re-checked
-  by the existing `getCombinedMonthlyStatementAction`.
-- Tips and payroll remain strictly separate (untouched by this feature).
-- No new server action for the batch fetch -- `Promise.all` over the
-  existing one only.
+- No change to `ReportLetterheadProps`, the letterhead's layout/copy,
+  or any filename convention -- this is an asset swap only.
+- No change to any other print surface
+  (`combined-statement-dialog.tsx`, `payroll-print-dialog.tsx`,
+  `attendance-report.tsx`) beyond what Feature 031 already shipped.
+- The crest must still be an inline `<svg>`, never an `<img>` -- same
+  print-reliability invariant as Feature 030/031, still enforced by
+  the existing `report-letterhead.test.tsx` test.
 - Quality gates (`npm run check`, `npm test`, `npm run build`) pass
   before every commit.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: `<ReportLetterhead>` redesign**
-  - [x] Rewrite `src/components/print/report-letterhead.tsx`: new props
-        (`reportTitle`, `periodName`, optional `employeeName`/
-        `employeeRole`; `generatedAt` removed), new header/meta layout,
-        original hand-authored inline SVG crest, `break-inside-avoid`.
-  - [x] New `src/components/print/report-letterhead.test.tsx` (4 tests):
-        full-props render, employee-without-role, `employeeName` omitted
-        hides the Employee block but keeps Pay Period, zero `<img>`/one
-        `<svg>`.
-- [x] **Step 2: Propagate the prop rename to every call site**
-  - [x] `payroll-print-dialog.tsx`, `payroll-workspace.tsx`:
-        `documentType`/`period` → `reportTitle`/`periodName`.
-  - [x] Fixed 6 resulting TypeScript errors (`npx tsc --noEmit`) one by
-        one, then reconfirmed zero errors.
-- [x] **Step 3: All-Employees Combined Statement**
-  - [x] New `CombinedStatementTarget` type; `combined-statement-dialog.tsx`
-        generalized from `neonUserId` prop to `target` prop, `statements`
-        array state, `Promise.all` fetch keyed by a stringified
-        `neonUserIdsKey` (avoids an infinite-refetch loop from a fresh
-        array reference every render), partial-failure tracking, one
-        `.print-page-break` per employee, scope-aware toolbar
-        heading/subtitle.
-  - [x] New `combinedStatementRosterFilename` in `src/lib/print-utils.ts`
-        (`"Staff Payroll Statements <Mon> <Year>"`, distinct from
-        `payrollRosterFilename`'s "Staff Payroll Report..."); `print-utils.test.ts`
-        updated with a matching test.
-  - [x] `attendance-report.tsx`: `statementTarget` state generalized to a
-        3-member discriminated union (`single`/`all`/`null`); the
-        "all"-scope Monthly Statement button always rendered now,
-        branching label ("Monthly Statements (All)" vs "Monthly
-        Statement")/`onClick`/`disabled` on `showingAll`.
-  - [x] `payroll-workspace.tsx`'s own `<CombinedStatementDialog>` call
-        site updated to `target={{ scope: "single", neonUserId: ... }}`.
-  - [x] Fixed a real test failure in `payroll-workspace.test.tsx`
-        (`screen.getByText("Mia Chen")` → `screen.getByText(/Mia Chen/)`)
-        caused by the redesigned letterhead concatenating name+role into
-        one text node.
-  - [x] New `combined-statement-dialog.test.tsx` (4 tests): "all" scope
-        parallel fetch + one page per employee + roster heading;
-        partial-failure rendering + note; 100%-failure blocking error
-        state; roster filename on print.
-  - [x] Full gate: format/lint/typecheck clean, 325/325 unit tests
-        (9 new, 1 fixed), build clean.
-- [x] **Step 4: Live verification (demo mode, manager passcode 2468)**
-  - [x] Single-employee Monthly Statement renders correctly under the
-        redesigned letterhead (no regression).
-  - [x] Selecting "All employees" relabels the button to "Monthly
-        Statements (All)".
-  - [x] Clicking it opens the dialog with exactly 5 `.print-page-break`
-        sections (one per active demo employee), each independently
-        correct (name, role, ID, period, Part 1/Part 2/signatures).
-  - [x] Clicking Print sets `document.title` to exactly
-        `"Staff Payroll Statements Sep 2026"`.
-- [x] **Step 5: e2e regression sweep**
-  - [x] Found and fixed a stale assertion in
-        `tests/e2e/payroll-timesheet-overhaul.spec.ts` that looked for
-        "The Monk's Indian Fusion - Webster" as a heading role -- that
-        text moved to a plain right-aligned `<p>` in the redesign; the
-        `<h1>` is now the short "The Monk's". Added an explicit
-        heading-role assertion for the new `<h1>` alongside the existing
-        plain-text check.
-  - [x] Full Playwright suite re-run: 153/153 passing across
-        desktop/host-tablet/server-mobile.
-- [x] **Step 6: Documentation**
-  - [x] New `docs/features/031-universal-letterhead-and-batch-statements.md`.
-  - [x] Updated `docs/DESIGN_SYSTEM.md`'s letterhead section for the new
-        layout/props.
-  - [x] Updated `docs/STATUS.md` (Health Gate line, Current Status
-        Overview, Feature Matrix row).
-  - [x] This task file.
-- [x] **Step 7: Final gate**
-  - [x] `npm run check` clean.
-  - [x] `npx vitest run` 44/44 files, 325/325 tests.
-  - [x] `npm run build` clean.
-  - [x] `npx playwright test` full suite 153/153 across 3 projects.
-  - [x] `npm run db:test` -- skipped deliberately; confirmed via
-        `git diff --stat main -- supabase/` that this branch touches no
-        migration files.
-- [x] **Step 8: Push + PR**
-  - [x] Commit with clear, atomic commit message(s) (2 commits: code+
-        tests, then docs).
-  - [x] Push `feature/031-universal-letterhead-and-batch-statements`.
-  - [x] Open PR against `main`.
+- [x] **Step 1: Verify the asset actually exists** before touching any
+      code -- confirmed `public/brand/the-monks-logo.svg` on disk
+      (167 `<path>` elements, `width="948" height="928"`, head/tail
+      spot-checked against what was originally supplied).
+- [x] **Step 2: Mechanical extraction** -- wrote a one-time Node
+      script to extract the file's inner `<path>` markup into
+      `src/components/print/the-monks-logo-markup.ts` as a
+      `JSON.stringify`-escaped string constant (`THE_MONKS_LOGO_MARKUP`),
+      byte-exact from the real file, no hand-retyping.
+- [x] **Step 3: Swap the crest** -- `report-letterhead.tsx`'s
+      `LetterheadMark` now renders `THE_MONKS_LOGO_MARKUP` via
+      `dangerouslySetInnerHTML` inside a component-owned
+      `<svg viewBox="0 0 948 928" width="37" height="36">` wrapper;
+      removed the old hand-authored `<path>` elements; updated the
+      component's header/doc comments to describe the canonical asset
+      instead of a placeholder.
+- [x] **Step 4: Unit test check** -- confirmed
+      `report-letterhead.test.tsx`'s existing 4 tests still pass
+      unmodified (none assert on specific path content, only
+      `<svg>`/`<img>` presence).
+- [x] **Step 5: Quality gate** -- `npm run check` (0 errors/warnings),
+      `npx vitest run` (44 files, 325/325 -- unchanged count), `npm
+run build` (clean).
+- [x] **Step 6: E2E regression check** -- re-ran
+      `payroll-timesheet-overhaul.spec.ts` +
+      `attendance-reporting.spec.ts` (30 tests across
+      desktop/host-tablet/server-mobile) -- 30/30 passing, confirming
+      the letterhead's `<svg>`-count/zero-`<img>` assertions still
+      hold with the new markup.
+- [x] **Step 7: Live visual verification** -- started the dev server
+      in demo mode, signed in (manager passcode 2468), opened
+      Attendance → Monthly Statement, and took a screenshot confirming
+      the real crest renders legibly and correctly (navy/gold/red,
+      "MONK'S" wordmark visible) -- not just an automated assertion.
+      Cleaned up the dev server process and screenshot artifact
+      afterward.
+- [x] **Step 8: Documentation** - [x] New `docs/features/032-canonical-monks-logo.md`. - [x] Updated `docs/DESIGN_SYSTEM.md`'s letterhead section to
+      note the canonical logo swap. - [x] Updated `docs/features/031-universal-letterhead-and-batch-statements.md`'s
+      two mentions of the placeholder mark decision to note it
+      was superseded by this feature (not rewritten, just
+      annotated -- the original decision record stays accurate
+      to when it was made). - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
+      Matrix row). - [x] This task file.
+- [x] **Step 9: Commit + push + PR** - [x] Commit with a clear message
+      (`40862c4`). - [x] Push `feature/032-canonical-monks-logo`. -
+      [x] Open [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31)
+      against `main`.
 
 ## 🗂️ File List
 
+- `public/brand/the-monks-logo.svg` (new -- placed by the user
+  directly, not authored by this session)
+- `src/components/print/the-monks-logo-markup.ts` (new,
+  machine-generated)
 - `src/components/print/report-letterhead.tsx`
-- `src/components/print/report-letterhead.test.tsx` (new)
-- `src/features/payroll/components/combined-statement-dialog.tsx`
-- `src/features/payroll/components/combined-statement-dialog.test.tsx` (new)
-- `src/features/payroll/components/payroll-print-dialog.tsx`
-- `src/features/payroll/components/payroll-workspace.tsx`
-- `src/features/payroll/components/payroll-workspace.test.tsx`
-- `src/features/attendance/components/attendance-report.tsx`
-- `src/lib/print-utils.ts`
-- `src/lib/print-utils.test.ts`
-- `tests/e2e/payroll-timesheet-overhaul.spec.ts`
-- `docs/features/031-universal-letterhead-and-batch-statements.md` (new)
+- `docs/features/032-canonical-monks-logo.md` (new)
 - `docs/DESIGN_SYSTEM.md`
+- `docs/features/031-universal-letterhead-and-batch-statements.md`
 - `docs/STATUS.md`
 - `tasks/current-task.md`
 
 ## Current State & Next Step
 
-Feature 031 is fully complete: implemented, unit-tested, live-verified,
-regression-swept with the full Playwright suite, documented, committed
-(2 commits: `99cc702` code+tests, `5d9a32e` docs), pushed, and opened as
-[PR #30](https://github.com/KrapaGoutam/The-Lineup/pull/30) against
+Feature 032 is fully complete: implemented, unit-tested, live-verified,
+regression-swept, documented, committed (`40862c4`), pushed, and opened
+as [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31) against
 `main`. Nothing further pending on this branch.

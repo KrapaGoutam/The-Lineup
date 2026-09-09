@@ -9,38 +9,38 @@
 // mark, guaranteed to render everywhere print does: locally, offline,
 // in every browser's print-preview sandbox.
 //
-// No "Monk's" brand SVG file exists anywhere in this repo (checked --
-// only the Next.js starter icons under public/), and monkswebster.com
-// is a real, unrelated external site, not an asset this codebase owns
-// -- so this mark is an original, simple monochrome hood/cowl
-// silhouette evoking the restaurant's name, not an "extraction" of
-// anyone's real logo.
+// Feature 032: the crest is now the canonical "The Monk's" vector logo
+// (originally a placeholder mark in Feature 031, since no real brand
+// asset existed in the repo at the time). The source file lives at
+// `public/brand/the-monks-logo.svg`; `the-monks-logo-markup.ts` is a
+// mechanically-extracted copy of its inner <path> markup (its own file
+// header explains why), rendered here via `dangerouslySetInnerHTML` on
+// a plain <svg> wrapper -- not an <img>, so it prints synchronously
+// with zero network/asset-loading dependency, identical in spirit to
+// the hand-authored mark it replaces.
+
+import { THE_MONKS_LOGO_MARKUP } from "./the-monks-logo-markup";
 
 /**
- * A plain monochrome vector mark -- deliberately simple geometry (a
- * hooded silhouette, two flat-filled paths) rather than a detailed
- * illustration, so it stays crisp at both the ~36px on-screen size and
- * whatever scale a physical printer renders it at, and reads correctly
- * in pure black ink with no color dependency.
+ * The canonical "The Monk's" crest, inlined from
+ * `public/brand/the-monks-logo.svg` (167 paths, original 948x928
+ * viewBox) so it renders with zero network dependency in every print
+ * context -- local, offline, or inside a browser's print-preview
+ * sandbox. `dangerouslySetInnerHTML` is used deliberately here (not a
+ * pattern to copy elsewhere in this codebase): the markup is a static,
+ * build-time-extracted asset, not user input, and JSX has no simpler
+ * way to render a large pre-existing block of raw SVG markup.
  */
 function LetterheadMark() {
   return (
     <svg
-      viewBox="0 0 48 48"
-      width="36"
+      viewBox="0 0 948 928"
+      width="37"
       height="36"
       role="img"
       aria-label="The Monk's Indian Fusion crest"
-    >
-      <path
-        d="M24 4C13.5 4 5 12.7 5 23.4V42a2 2 0 0 0 2 2h34a2 2 0 0 0 2-2V23.4C43 12.7 34.5 4 24 4Z"
-        fill="#111827"
-      />
-      <path
-        d="M24 11c-6.6 0-12 5.4-12 12v15h6V27a6 6 0 0 1 12 0v11h6V23c0-6.6-5.4-12-12-12Z"
-        fill="#ffffff"
-      />
-    </svg>
+      dangerouslySetInnerHTML={{ __html: THE_MONKS_LOGO_MARKUP }}
+    />
   );
 }
 
