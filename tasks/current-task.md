@@ -4,7 +4,8 @@
 **Branch:** `feature/033-print-layout-hardening-duplex` (merged as PR #33);
 Step 13's follow-up continues on `feature/033-payroll-print-isolation`,
 branched from `main` after PR #33 merged.
-**Status:** Complete — PR #33 merged; Step 13 follow-up ready as its own PR
+**Status:** Complete — PR #33 merged; Step 13 follow-up open as
+[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34)
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -180,5 +181,6 @@ as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) into
 quality-gated, and committed (`bad6ac9`, cherry-picked from the
 mistakenly-direct-to-main `81a864e`, which was reverted on `main` as
 `f9dd68e`) on its own branch
-(`feature/033-payroll-print-isolation`); pushing and opening its PR is
-the next step.
+(`feature/033-payroll-print-isolation`), pushed, and opened as
+[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34) against
+`main`. Nothing further pending.
