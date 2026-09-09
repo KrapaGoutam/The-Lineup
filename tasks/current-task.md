@@ -122,8 +122,8 @@ already, structurally, immune to any later attendance edit.
       code.
 - [x] **Step 2: Phase 0 — Attendance "All" tweak**
   - [x] `attendance-report.tsx`: generalized `activePersonId: number |
-    null` to a `number | "all" | null` selection; added an `"All
-    employees"` `<option>` to the switcher (manager/owner-only
+null` to a `number | "all" | null` selection; added an `"All
+employees"` `<option>` to the switcher (manager/owner-only
         branch, unreachable for a `self`-scoped server).
   - [x] `reportUserIds` resolves to every active user's id when `"all"`
         is selected, instead of exactly one.
@@ -148,17 +148,26 @@ already, structurally, immune to any later attendance edit.
         fired `window.print()` immediately (no dialog) with the printed
         area containing every person's section.
   - [ ] Commit.
-- [ ] **Step 3: Feature 029 — data layer**
-  - [ ] `attendance-data.ts`: new `getActiveClockedInRows({ serviceDate
-})`, reusing the existing row-shape/lazy-client conventions.
-  - [ ] New `src/features/tips/data/fetch-clocked-in-roster.ts`:
+- [x] **Step 3: Feature 029 — data layer**
+  - [x] `attendance-data.ts`: new `getActiveClockedInRows({ serviceDate
+    })` (`clock_in is not null and clock_out is null and
+    auto_clocked_out = false`, so the rare open-but-already-
+        auto-closed demo edge case is correctly excluded too), reusing
+        the existing lazy-client convention. Extracted a shared
+        `mapAttendanceRow`/`RawAttendanceRow` used by both this and the
+        pre-existing `getAttendanceRows`, rather than a second
+        hand-copied row mapping.
+  - [x] New `src/features/tips/data/fetch-clocked-in-roster.ts`:
         resolves active Neon rows → profile ids via
-        `attendance_identity_links`, dedupes, returns `string[]`.
-  - [ ] Unit test for the resolution/exclusion/dedup logic (mocked
-        dependencies, matching this codebase's established
-        `vi.hoisted`/`vi.mock` action-test pattern).
-  - [ ] Full gate.
-  - [ ] Commit.
+        `attendance_identity_links`, dedupes, silently excludes an
+        unlinked active Neon user, returns `string[]`.
+  - [x] Unit test: 6 cases (linked resolution, unlinked exclusion, dedup
+        on a double-open-row edge case, empty roster, and both
+        dependencies' own failure propagated) via this codebase's
+        established `vi.hoisted`/`vi.mock` pattern.
+  - [x] Full gate: format/lint/typecheck clean, 259/259 unit tests
+        (6 new), build clean.
+  - [x] Commit.
 - [ ] **Step 4: Feature 029 — Server Action**
   - [ ] `tips-actions.ts`: new `getClockedInRosterAction({
 restaurantSlug })`, zod-validated, manager/owner-only (defense
@@ -242,6 +251,5 @@ onPullClockedInTeam={...}>`.
 
 ## Current State & Next Step
 
-Steps 1-2 done and committed. Next: Step 3 (Feature 029 data layer --
-`getActiveClockedInRows` in `attendance-data.ts`,
-`fetch-clocked-in-roster.ts`).
+Steps 1-3 done and committed. Next: Step 4 (Feature 029 Server Action --
+`getClockedInRosterAction` in `tips-actions.ts`).

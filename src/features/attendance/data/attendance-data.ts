@@ -68,6 +68,46 @@ export const ATTENDANCE_QUERY_SQL =
   "from attendance where user_id = ANY($1) and date >= $2 and date <= $3 " +
   "order by date asc, clock_in asc nulls last";
 
+// Feature 029. "Currently clocked in" means a real, still-open shift:
+// a clock_in exists, and neither a clock_out nor an auto-close has
+// happened yet. Filtered by the caller's own already-computed
+// `serviceDate` (the restaurant's wall-clock "today", per
+// zonedWallTimeFromInstant) -- never the database server's own idea of
+// "today", the same discipline every other real-mode date filter in
+// this app already follows.
+export const ACTIVE_CLOCK_INS_QUERY_SQL =
+  "select id, user_id, date::text as date, clock_in, clock_out, hours_worked, auto_clocked_out " +
+  "from attendance where date = $1 and clock_in is not null " +
+  "and clock_out is null and auto_clocked_out = false " +
+  "order by clock_in asc";
+
+type RawAttendanceRow = {
+  id: number;
+  user_id: number;
+  date: string; // forced to text by the query -- see ATTENDANCE_QUERY_SQL
+  clock_in: Date | null;
+  clock_out: Date | null;
+  hours_worked: string | number | null;
+  auto_clocked_out: boolean;
+};
+
+// Shared by every function below that maps a raw Neon row -- the one
+// place the wire shape (snake_case, numeric-as-string hours,
+// driver-parsed Date objects) turns into this app's own NeonAttendanceRow.
+function mapAttendanceRow(row: RawAttendanceRow): NeonAttendanceRow {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    date: row.date,
+    clockIn: row.clock_in ? row.clock_in.toISOString() : null,
+    clockOut: row.clock_out ? row.clock_out.toISOString() : null,
+    // Postgres numeric/decimal columns come back as strings over the
+    // wire (avoiding float precision loss) -- converted here, once.
+    hoursWorked: row.hours_worked === null ? null : Number(row.hours_worked),
+    autoClockedOut: row.auto_clocked_out,
+  };
+}
+
 /**
  * Never a module-level singleton -- created fresh inside each call, so
  * `process.env.NEON_DATABASE_URL` is only ever read at request time, the
@@ -139,33 +179,32 @@ export async function getAttendanceRows(input: {
       input.userIds,
       input.startDate,
       input.endDate,
-    ])) as Array<{
-      id: number;
-      user_id: number;
-      date: string; // forced to text by the query -- see ATTENDANCE_QUERY_SQL
-      clock_in: Date | null;
-      clock_out: Date | null;
-      hours_worked: string | number | null;
-      auto_clocked_out: boolean;
-    }>;
-    return {
-      ok: true,
-      data: rows.map((row) => ({
-        id: row.id,
-        userId: row.user_id,
-        date: row.date,
-        clockIn: row.clock_in ? row.clock_in.toISOString() : null,
-        clockOut: row.clock_out ? row.clock_out.toISOString() : null,
-        // Postgres numeric/decimal columns come back as strings over the
-        // wire (avoiding float precision loss) -- converted here, once,
-        // rather than leaving every caller to remember to do it.
-        hoursWorked:
-          row.hours_worked === null ? null : Number(row.hours_worked),
-        autoClockedOut: row.auto_clocked_out,
-      })),
-    };
+    ])) as RawAttendanceRow[];
+    return { ok: true, data: rows.map(mapAttendanceRow) };
   } catch (error) {
     console.error("getAttendanceRows failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+}
+
+/**
+ * Feature 029. Read-only: who has a genuinely open shift right now, for
+ * one calendar date. This is the sole real-mode data source for Tip
+ * Split's "Pull clocked-in team" -- it returns Neon `user_id`s only,
+ * never a profile id (resolving that is `fetch-clocked-in-roster.ts`'s
+ * job, via `attendance_identity_links`, one layer up).
+ */
+export async function getActiveClockedInRows(input: {
+  serviceDate: string;
+}): Promise<AttendanceFetchResult<NeonAttendanceRow[]>> {
+  try {
+    const sql = getNeonSql();
+    const rows = (await sql.query(ACTIVE_CLOCK_INS_QUERY_SQL, [
+      input.serviceDate,
+    ])) as RawAttendanceRow[];
+    return { ok: true, data: rows.map(mapAttendanceRow) };
+  } catch (error) {
+    console.error("getActiveClockedInRows failed", error);
     return { ok: false, error: UNAVAILABLE_ERROR };
   }
 }
