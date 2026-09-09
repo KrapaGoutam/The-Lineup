@@ -382,19 +382,44 @@ load()` called immediately, matching `AttendanceReport`'s own
         covered instead by live testing above, the e2e suite (Step 8),
         and pgTAP's RLS confirmation (Step 2).
   - [x] Full gate: `npm run check` (format/lint/typecheck) clean, `npm
-        test` 250/250 (34 files), `npm run build` clean, `npm run
-        db:test` 210/210 assertions across 17 files (unchanged — Step 7
+test` 250/250 (34 files), `npm run build` clean, `npm run
+db:test` 210/210 assertions across 17 files (unchanged — Step 7
         added no schema/RLS change, confirming Investigation #4).
   - [x] Commit.
-- [ ] **Step 8: E2E** (`tests/e2e/recurring-schedules.spec.ts`, new file)
-  - [ ] Week navigation: Prev/Next/Today.
-  - [ ] Creating a recurring shift across multiple days generates the
-        right instances.
-  - [ ] Editing a shift after publishing persists and is visible
-        immediately; a server never sees the edit control.
-  - [ ] Run across all three Playwright projects.
-  - [ ] Full gate.
-  - [ ] Commit.
+- [x] **Step 8: E2E** (`tests/e2e/recurring-schedules.spec.ts`, new file,
+      6 tests)
+  - [x] Week navigation: Prev/Next/Today — steps forward two weeks
+        ("Sep 14–20" then "Sep 21–27"), back to the initial week (Today
+        button gone, nothing to jump back to), then one week into the
+        past ("Aug 31–Sep 6", the actual month-boundary label, Today
+        reappears), then confirms Today returns to "Sep 7–13".
+  - [x] Creating a recurring shift across multiple days generates the
+        right instances — Mon+Wed checked, `toDate` set, exactly 2
+        drafts created for a previously shift-free team member, present
+        on Monday and Wednesday's day cells and absent from all other
+        5 days in the row. A second test confirms the "end date
+        required" guard: checking a day with no `toDate` is refused
+        with the exact validation message and creates nothing (draft
+        count stays 0), not a silent single-day fallback.
+  - [x] Editing a shift after publishing persists and is visible
+        immediately; a server never sees the edit control — one test
+        publishes a shift, edits its assignee and start time from the
+        published block, and confirms the new block appears under the
+        new assignee's row with no separate unpublish step (published
+        count stays 1, draft count stays 0) while the old assignee's
+        cell empties. A second test covers delete's two-step confirm
+        gate (shift still present after the first click, gone with
+        counts updated after "Confirm delete"). A third signs out and
+        back in as the server whose shift was just published/edited and
+        confirms the block renders (text visible) but is not a `button`
+        — the edit affordance genuinely does not exist for a
+        non-manager, not just visually hidden.
+  - [x] Run across all three Playwright projects: 18/18 passed
+        (desktop, host-tablet, server-mobile).
+  - [x] Full gate: format/lint/typecheck clean, 250/250 unit tests,
+        build clean, 210/210 pgTAP assertions across 17 files
+        (unchanged — this step is test-only, no product code).
+  - [x] Commit.
 - [ ] **Step 9: Docs**
   - [ ] `docs/features/027-recurring-schedules-and-week-navigation.md`:
         correct the Implementation Map file names, note the
@@ -439,8 +464,9 @@ load()` called immediately, matching `AttendanceReport`'s own
 
 ## Current State & Next Step
 
-Steps 1-7 done and committed. Next: Step 8 (e2e —
-`tests/e2e/recurring-schedules.spec.ts`: week nav Prev/Next/Today,
-creating a recurring shift across multiple days, editing a shift after
-publishing with a server never seeing the edit control; run across all
-three Playwright projects; full gate; commit).
+Steps 1-8 done and committed. Next: Step 9 (docs — correct
+`docs/features/027-recurring-schedules-and-week-navigation.md`'s
+Implementation Map file names, note the already-satisfied Settings
+entry point, note the `end_date`→`to_date` naming reconciliation and
+the `series_id` reuse, check off every acceptance criterion; update
+`docs/STATUS.md`'s Feature Matrix + Health Gate line; commit).
