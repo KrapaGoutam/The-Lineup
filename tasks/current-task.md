@@ -225,40 +225,73 @@ toDate)`, every other validation/time-resolution rule unchanged.
   - [x] Full gate: `npm run check`, `npm test` (**244/244**, up from
         238), `npm run build` all pass.
   - [x] Commit.
-- [ ] **Step 5: Week navigation**
-  - [ ] `data/schedule-data.ts`: extract the shared shift-row-mapping
-        logic (the `shiftRows -> DemoShift[]` block) into its own
-        exported function so the new week action and the existing
-        Server Component load call the identical mapping — one place,
-        not two copies that could drift (matches this session's
-        established DRY precedent, e.g. Feature 025's `resolvePeriodRange`
-        refactor).
-  - [ ] `actions/schedule-actions.ts`: new
+- [x] **Step 5: Week navigation**
+  - [x] `data/schedule-data.ts`: extracted the shared shift-row-mapping
+        logic (`mapShiftRows`) plus a new `getShiftsInRange` helper, so
+        the new week action and the existing Server Component load call
+        the identical mapping and query shape — one place, not two
+        copies that could drift (matches Feature 025's
+        `resolvePeriodRange` refactor precedent). Both now also select/
+        map `series_id`/`is_recurring` into `DemoShift.seriesId`/
+        `isRecurring`.
+  - [x] `actions/schedule-actions.ts`: new
         `getScheduleContextForWeekAction({ restaurantSlug,
 weekStartDate })` — client-triggered, re-derives the caller's own
         organization/location server-side (never trusts a client-supplied
         id, matching every other Feature 025/028 navigator action this
         session built), returns that week's `weekDates` + shifts.
-  - [ ] `components/schedule-workspace.tsx`: new props
-        (`restaurantSlug`, `organizationId`, `demoMode`). New
-        `viewWeekStart` state (defaults to the initial week's Monday).
-        Prev/Next wired to `addDays(±7)`; "Today" resets to the initial
-        week. Demo mode: pure client-side filter of the full `shifts`
-        prop by the viewed week's dates, no fetch. Real mode, viewing the
-        initial week: unchanged (`weekDates`/`shifts` props, already
-        reactive via `revalidatePath`). Real mode, browsing elsewhere: a
-        local fetch via the new action, with loading/error states
-        matching this app's established pattern; a `weekReloadKey`
-        re-triggers that fetch after a same-week add/edit/delete so a
-        mutation while browsing a non-today week doesn't go stale.
-  - [ ] `restaurant-operations-app.tsx`: thread the three new props
-        through to `ScheduleWorkspace`.
-  - [ ] Live Playwright smoke test: Prev/Next move the header date range
-        and the grid; Today returns to the original week; a manager can
-        add a shift while viewing a browsed (non-today) week and see it
-        appear without navigating back.
-  - [ ] Full gate.
-  - [ ] Commit.
+  - [x] `components/schedule-workspace.tsx`: new props (`restaurantSlug`,
+        `demoMode` — `organizationId` turned out unnecessary, the new
+        action re-derives it server-side, so it was never added as a
+        prop). New `viewWeekStart` state (defaults to the initial week's
+        Monday). Prev/Next wired to `addDays(±7)`; a "Today" button
+        (shown only when browsing elsewhere) resets to the initial week.
+        Demo mode: pure client-side filter of the full `shifts` prop by
+        the viewed week's dates, no fetch. Real mode, viewing the initial
+        week: unchanged (`weekDates`/`shifts` props, already reactive via
+        `revalidatePath`). Real mode, browsing elsewhere: a local fetch
+        via the new action (structured as an inner `async function
+load()` called immediately, matching `AttendanceReport`'s own
+        established shape — a raw top-level `setState` in the effect body
+        trips this repo's `react-hooks/set-state-in-effect` lint rule),
+        with loading/error states; a `weekReloadKey` re-triggers that
+        fetch after a same-week add/edit/delete so a mutation while
+        browsing a non-today week doesn't go stale.
+  - [x] `restaurant-operations-app.tsx`: threaded `restaurantSlug`/
+        `demoMode` through to `ScheduleWorkspace`.
+  - [x] **Real bug found live-testing, not assumed — and fixed**:
+        `monthDayLabel`/`monthLabel` built a UTC-anchored `Date` purely
+        to get a month name from `Intl.DateTimeFormat`, but without an
+        explicit `timeZone: "UTC"`, the formatter renders in the _host
+        machine's own_ local timezone. On this dev machine
+        (America/Chicago, west of UTC), that silently rolled the label
+        back a day into the wrong month — the very first live check of
+        the week header showed "Aug 7–13" for what was actually the week
+        of Sep 7–13. Pre-existing since long before this feature (these
+        functions were untouched by every earlier step), caught only now
+        because this is the first time this session actually loaded the
+        Schedule tab's week header in a real browser. Fixed by pinning
+        both formatters to `timeZone: "UTC"` (these are pure calendar
+        dates; there was never a real timezone conversion to do). Both
+        helpers, plus `weekRangeLabel`, exported and given a new
+        `schedule-workspace.test.ts` (6 tests) pinning the exact
+        regression date so a future dropped `timeZone: "UTC"` fails
+        regardless of what timezone CI or a dev machine runs in.
+  - [x] Live Playwright smoke test (real browser, MCP tool): confirmed
+        the initial week now correctly reads "Sep 7–13" (post-fix);
+        Previous week moved to "Aug 31–Sep 6" (a real cross-month-boundary
+        case, correctly mixed-month-labeled) and revealed the "Today"
+        button; Today returned to "Sep 7–13" and the button disappeared;
+        Next week (twice) reached "Sep 14–20"; "Add shift" while viewing
+        that browsed week defaulted `fromDate` to Sep 14 (not the
+        original today-week) and, after submitting, the new shift and
+        updated draft count appeared immediately on the still-browsed
+        Sep 14–20 week, with no navigation back to today required.
+  - [x] Full gate: `npm run check`, `npm test` (**250/250**, up from
+        244), `npm run build`, `npm run db:test` (17/17, 210 assertions,
+        unchanged) all pass. Re-ran `dashboard.spec.ts` (desktop): 25/25,
+        no regression.
+  - [x] Commit.
 - [ ] **Step 6: Recurring shift creation UI**
   - [ ] `components/schedule-workspace.tsx`'s `ShiftEditor`: adds a
         "Repeat on" row of 7 checkboxes (Sun..Sat, per
@@ -365,7 +398,8 @@ weekStartDate })` — client-triggered, re-derives the caller's own
   (`getScheduleContextForWeekAction`, `updateShiftAction`,
   `deleteShiftAction`, `addShiftAction` recurrence columns)
 - `src/features/schedules/components/schedule-workspace.tsx` (week nav,
-  recurring checkboxes, clickable `ShiftBlock`)
+  recurring checkboxes, clickable `ShiftBlock`, timezone label bug fix)
+- `src/features/schedules/components/schedule-workspace.test.ts` (new)
 - `src/features/schedules/components/shift-edit-dialog.tsx` (new)
 - `src/components/restaurant-operations-app.tsx` (new props/handlers)
 - `tests/e2e/recurring-schedules.spec.ts` (new)
@@ -374,4 +408,5 @@ weekStartDate })` — client-triggered, re-derives the caller's own
 
 ## Current State & Next Step
 
-Steps 1-4 done and committed. Next: Step 5 (week navigation).
+Steps 1-5 done and committed. Next: Step 6 (recurring shift creation UI
+— day-of-week checkboxes in `ShiftEditor`).

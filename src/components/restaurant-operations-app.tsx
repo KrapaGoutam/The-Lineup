@@ -1673,6 +1673,8 @@ export function RestaurantOperationsApp({
             weekDates={weekDates}
             monthDates={monthDates}
             timeZone={timeZone}
+            restaurantSlug={restaurantSlug}
+            demoMode={demoMode}
             onAddShifts={addShifts}
             onPublish={publishSchedule}
           />

@@ -1,17 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import type { DayHours } from "@/hooks/use-restaurant-clock";
+import {
+  getWeekScheduleData,
+  type WeekScheduleData,
+} from "@/features/schedules/data/schedule-data";
 import type {
   ShiftDefaults,
   ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { nextPublishedVersion } from "@/features/schedules/domain/schedule-versioning";
+import { getCurrentUser } from "@/lib/current-user";
 import type { DemoShift } from "@/lib/demo-data";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeToInstant } from "@/lib/timezone";
+
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const localDateSchema = z.iso.date();
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -286,4 +300,42 @@ export async function saveScheduleConfigAction(input: {
 
   revalidatePath(`/r/${input.restaurantSlug}`);
   return { ok: true, data: null };
+}
+
+/**
+ * Feature 027. Client-triggered read for the week navigator, mirroring
+ * the `AttendanceReport`/`AllocationWorkspace` navigator pattern already
+ * built twice this session -- the Server Component's own initial read
+ * (`getScheduleContext`, via `loadPageData`) always means "today" and is
+ * unchanged; this is what Prev/Next/Today calls instead for any other
+ * week. Re-resolves the signed-in user and their organization itself;
+ * never trusts a client-supplied organizationId.
+ */
+export async function getScheduleContextForWeekAction(input: {
+  restaurantSlug: string;
+  weekStartDate: string;
+}): Promise<ActionResult<WeekScheduleData>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      weekStartDate: localDateSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "That week request is invalid." };
+  }
+
+  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
+  if (!currentUser) {
+    return { ok: false, error: "You need to sign in to see the schedule." };
+  }
+
+  const result = await getWeekScheduleData(
+    currentUser.organizationId,
+    parsed.data.weekStartDate,
+  );
+  if (!result) {
+    return { ok: false, error: "No location is set up yet." };
+  }
+  return { ok: true, data: result };
 }
