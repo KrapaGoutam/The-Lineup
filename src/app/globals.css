@@ -179,3 +179,80 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Bug-fix pass on Feature 030: one shared print stylesheet for every
+   report surface (Attendance timesheet, Payroll statement, Combined
+   monthly statement), replacing the per-component `<style>` blocks that
+   each hand-rolled their own (and, in the Combined Statement dialog's
+   case, fragile) print isolation.
+
+   Isolation strategy: the print-only root of each surface is marked
+   `hidden print:block` (Tailwind) so it simply doesn't exist in layout
+   outside print -- never a `visibility:hidden` + `position:absolute`
+   trick, which keeps invisible elements occupying layout space and is a
+   known cause of duplicate/blank-page print bugs. Every on-screen-only
+   chrome element (buttons, nav, dialog overlays) is hidden via
+   `print:hidden` instead, for the same reason. */
+@media print {
+  * {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+  }
+
+  body {
+    background: white !important;
+    color: #111827 !important;
+  }
+
+  /* App shell and every interactive control -- no print surface ever
+     contains a real <button>, so this is safe to apply unconditionally
+     rather than tagging each one individually. `header`/`nav` are the
+     app shell's own real elements (restaurant-operations-app.tsx's
+     sticky top header and bottom mobile nav). */
+  header,
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-timesheet-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .print-timesheet-table th,
+  .print-timesheet-table td {
+    border-bottom: 1px solid #e5e7eb !important;
+    padding: 6px 10px !important;
+    color: #1f2937 !important;
+    font-size: 10.5pt !important;
+    text-align: left !important;
+  }
+
+  .print-timesheet-table th {
+    font-size: 8pt !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #6b7280 !important;
+  }
+
+  /* One printed page per employee -- applied to every "roster" print
+     job's per-employee wrapper (Attendance's PrintableReport, the
+     Payroll batch dialog). `:last-child` never forces a trailing blank
+     page after the final employee. */
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page-break:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .letterhead-banner {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -211,21 +211,29 @@ all three print surfaces.
 
 ## 🛠️ Implementation Steps
 
-- [ ] **Step 1: This task file update** -- commit before any code.
-- [ ] **Step 2: Shared print infrastructure**
-  - [ ] `src/lib/print-utils.ts` (new): `triggerPrintWithFilename`,
+- [x] **Step 1: This task file update** -- commit before any code.
+- [x] **Step 2: Shared print infrastructure**
+  - [x] `src/lib/print-utils.ts` (new): `triggerPrintWithFilename`,
         `formatMonthYearShort`, and the 5 filename-builder conventions.
-  - [ ] `src/lib/print-utils.test.ts` (new): unit tests for every
-        filename convention + the title-restore behavior.
-  - [ ] `src/components/print/report-letterhead.tsx` (new):
-        `ReportLetterhead` with an embedded inline SVG vector mark,
-        "The Monk's Indian Fusion - Webster" heading, and the
-        document-type/employee/period/generated-at metadata banner.
-  - [ ] Shared `@media print` block in `src/app/globals.css`:
+  - [x] `src/lib/print-utils.test.ts` (new): 13 unit tests -- every
+        filename convention, the title-set-before-print ordering, the
+        `afterprint` restore, the fallback-timeout restore, and a
+        regression test for a real double-restore bug caught while
+        writing the tests (the fallback timeout stomping a title change
+        made after `afterprint` already restored it -- fixed with a
+        `restored` guard in the implementation itself).
+  - [x] `src/components/print/report-letterhead.tsx` (new):
+        `ReportLetterhead` with an embedded inline SVG vector mark
+        (no external `<img>`, never network-dependent), "The Monk's
+        Indian Fusion - Webster" heading, and the document-type/
+        employee/period/generated-at metadata banner.
+  - [x] Shared `@media print` block in `src/app/globals.css`:
         `.print-timesheet-table` hidden-line tokens, `.print-page-break`
         (+ `:last-child` exclusion), `user-select: text`, app-shell
-        (`button`, `nav`, `.no-print`) hiding.
-  - [ ] Full gate. Commit.
+        (`header`, `nav`, `button`, `.no-print`) hiding.
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests
+        (13 new), build clean.
+  - [x] Commit.
 - [ ] **Step 3: Fix Attendance print** (bugs 1, 2, 3)
   - [ ] `attendance-report.tsx`'s `PrintableReport`: swap the raster
         `<img>` letterhead for `<ReportLetterhead>`; drop the
@@ -306,5 +314,6 @@ all three print surfaces.
 
 ## In-Flight State (bug fix pass)
 
-Just planned. Next: Step 2 (shared print infrastructure --
-`print-utils.ts`, `report-letterhead.tsx`, shared print CSS).
+Steps 1-2 done and committed. Next: Step 3 (fix Attendance print --
+swap the raster letterhead `<img>` for `<ReportLetterhead>` in
+`PrintableReport`, route through `triggerPrintWithFilename`).
