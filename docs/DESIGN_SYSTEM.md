@@ -110,7 +110,7 @@ The label swap (not just the color) is deliberate — urgency has to read withou
   - `Part-paid`: Tone `warn` (amber badge) — `balanceCents > 0 && balanceCents < grossCents`.
   - `Paid`: Tone `ok` (emerald badge) — settled in full.
 
-### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass)
+### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass, redesigned in Feature 031)
 
 The version below is what actually ships, after a bug-fix pass on
 Feature 030 found and corrected the original implementation's raster
@@ -119,19 +119,31 @@ page bug (root cause: `visibility:hidden` + `position:absolute`,
 which still occupies layout space and is a known Chrome print-
 pagination duplication class -- see
 `docs/features/030-combined-timesheet-payroll-statement.md`'s own "Bug
-Fix Pass" section for the full record).
+Fix Pass" section for the full record), then again redesigned in
+Feature 031 to match a reference layout exactly and to support
+batch-printing every employee's statement in one document (see
+`docs/features/031-universal-letterhead-and-batch-statements.md`).
 
 - **Letterhead Branding** (`src/components/print/report-letterhead.tsx`,
-  one shared component for every print surface -- Attendance timesheet,
-  Payroll statement, Combined statement):
-  - "The Monk's Indian Fusion - Webster" heading with an **embedded
-    inline SVG crest** directly in the JSX -- never an external `<img>`.
-    An external image is network-dependent and fails outright offline
-    or against an unreachable/hotlink-blocked host; an inline SVG
-    always renders, and stays fully vector/crisp at any print DPI.
-  - Metadata banner: document type, employee name & role, reporting
-    period, and generation timestamp, with a `border-b border-gray-300
-pb-3 mb-4` divider.
+  one shared `<ReportLetterhead>` component for every print surface --
+  Attendance timesheet, Payroll statement, Combined statement):
+  - Header row: an **embedded inline SVG crest** (never an external
+    `<img>` -- network-dependent images fail outright offline or
+    against an unreachable/hotlink-blocked host; an inline SVG always
+    renders and stays fully vector/crisp at any print DPI) next to the
+    short `<h1>` "The Monk's" and the document's `reportTitle` (e.g.
+    "Monthly Employee Timesheet"), left-aligned. The full "The Monk's
+    Indian Fusion - Webster" / "Webster, New York" / "monkswebster.com"
+    contact block is right-aligned plain text (not a heading role).
+  - Meta row: an "Employee" label above `employeeName` (`employeeRole`)
+    on the left -- entirely omitted (not just blank) when `employeeName`
+    is not passed, for an all-staff summary table with no single
+    employee to name -- and a "Pay Period" label above `periodName` on
+    the right.
+  - `break-inside-avoid` on the outer wrapper keeps the whole banner on
+    one side of a page break rather than splitting mid-block.
+  - No "Generated" timestamp anywhere in the redesigned layout (dropped
+    in Feature 031 to match the reference document exactly).
 - **Hidden-Line Print Tables** (`.print-timesheet-table` in
   `src/app/globals.css`):
   ```css
