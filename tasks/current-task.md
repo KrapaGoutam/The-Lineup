@@ -3,7 +3,7 @@
 **Active Spec:** `docs/features/026-payroll-dashboard-and-ledger-balances.md`
 **Branch:** `feature/026-payroll-dashboard-and-ledger-balances` (stacked
 on `feature/029-tips-from-clocked-in-attendance`)
-**Status:** In progress
+**Status:** Complete — PR #28 open (https://github.com/KrapaGoutam/The-Lineup/pull/28)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -310,9 +310,10 @@ status` itself prints, and again after a full `supabase stop` +
         `restaurant-operations-app.tsx` is the only shared-file touch
         outside `src/features/payroll/`, and every existing spec still
         passes).
-  - [ ] Push `feature/026-payroll-dashboard-and-ledger-balances`, open
-        PR (base `feature/029-tips-from-clocked-in-attendance`), paste
-        the real PR link here.
+  - [x] Pushed `feature/026-payroll-dashboard-and-ledger-balances`,
+        opened PR #28 (base
+        `feature/029-tips-from-clocked-in-attendance`):
+        https://github.com/KrapaGoutam/The-Lineup/pull/28
 
 ## 🗂️ File list
 
@@ -335,4 +336,8 @@ status` itself prints, and again after a full `supabase stop` +
 
 ## Current State & Next Step
 
-Steps 1-7 done and committed. Next: Step 8 (final gate, push, open PR).
+All 8 steps done and committed. Full gate green (286/286 unit, build
+clean, 211/211 pgTAP, 138/138 e2e across 3 projects). Pushed and PR
+opened: https://github.com/KrapaGoutam/The-Lineup/pull/28 (base
+`feature/029-tips-from-clocked-in-attendance`). Feature 026 complete --
+this closes out Wave 3.

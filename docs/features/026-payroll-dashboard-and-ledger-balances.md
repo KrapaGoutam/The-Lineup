@@ -3,7 +3,7 @@
 **Name:** Payroll Dashboard & Ledger Balances  
 **Owner:** Krapa Goutam  
 **Status:** complete  
-**Issue/PR:**
+**Issue/PR:** https://github.com/KrapaGoutam/The-Lineup/pull/28
 
 ## Classification & Session Scope
 
