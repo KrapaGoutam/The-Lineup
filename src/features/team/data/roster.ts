@@ -42,7 +42,9 @@ export async function getOrganizationRoster(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("profile_id, roles, active, created_at, profiles(display_name)")
+    .select(
+      "profile_id, roles, active, purged_at, created_at, profiles(display_name)",
+    )
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: true });
 
@@ -71,6 +73,7 @@ export async function getOrganizationRoster(
       designation,
       color: SERVER_COLORS[index % SERVER_COLORS.length],
       active: row.active,
+      purgedAt: row.purged_at ?? undefined,
     };
   });
 }

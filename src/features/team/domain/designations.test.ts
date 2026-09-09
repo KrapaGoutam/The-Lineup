@@ -4,6 +4,7 @@ import {
   assignableDesignations,
   canChangeDesignation,
   canDeactivateMember,
+  canPurgeMember,
   designationLabel,
 } from "./designations";
 
@@ -182,6 +183,79 @@ describe("canDeactivateMember", () => {
         actorDesignation: "assistant_manager",
         targetProfileId: "staff-1",
         targetCurrentDesignation: "staff",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("canPurgeMember", () => {
+  const base = {
+    actorProfileId: "owner-1",
+    actorDesignation: "owner" as const,
+    targetProfileId: "staff-1",
+    targetCurrentDesignation: "staff" as const,
+  };
+
+  it("refuses an active target -- purge requires deactivation first", () => {
+    expect(
+      canPurgeMember({ ...base, targetIsActive: true, targetIsPurged: false }),
+    ).toBe(false);
+  });
+
+  it("refuses an already-purged target", () => {
+    expect(
+      canPurgeMember({ ...base, targetIsActive: false, targetIsPurged: true }),
+    ).toBe(false);
+  });
+
+  it("allows an owner to purge an inactive, unpurged target", () => {
+    expect(
+      canPurgeMember({ ...base, targetIsActive: false, targetIsPurged: false }),
+    ).toBe(true);
+  });
+
+  it("otherwise mirrors canDeactivateMember's role hierarchy exactly", () => {
+    expect(
+      canPurgeMember({
+        actorProfileId: "manager-1",
+        actorDesignation: "manager",
+        targetProfileId: "owner-1",
+        targetCurrentDesignation: "owner",
+        targetIsActive: false,
+        targetIsPurged: false,
+      }),
+    ).toBe(false);
+    expect(
+      canPurgeMember({
+        actorProfileId: "manager-1",
+        actorDesignation: "manager",
+        targetProfileId: "staff-1",
+        targetCurrentDesignation: "staff",
+        targetIsActive: false,
+        targetIsPurged: false,
+      }),
+    ).toBe(true);
+    expect(
+      canPurgeMember({
+        actorProfileId: "am-1",
+        actorDesignation: "assistant_manager",
+        targetProfileId: "staff-1",
+        targetCurrentDesignation: "staff",
+        targetIsActive: false,
+        targetIsPurged: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses self-targeting unconditionally, same as canDeactivateMember", () => {
+    expect(
+      canPurgeMember({
+        actorProfileId: "same-person",
+        actorDesignation: "owner",
+        targetProfileId: "same-person",
+        targetCurrentDesignation: "owner",
+        targetIsActive: false,
+        targetIsPurged: false,
       }),
     ).toBe(false);
   });

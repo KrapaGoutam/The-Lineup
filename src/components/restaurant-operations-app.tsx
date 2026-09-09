@@ -1427,6 +1427,73 @@ export function RestaurantOperationsApp({
     return { ok: true };
   }
 
+  /**
+   * Feature 035. Demo mode simulates the same visible effect the real
+   * RPC produces -- display_name scrubbed to "Deleted User", a
+   * purgedAt timestamp set -- but obviously can't run the actual
+   * atomic Postgres function; there's no database here to purge. The
+   * confirmName check happens before this is ever called (the dialog
+   * itself validates it against member.name), so this function's own
+   * job is only the write, same division as deactivate/reactivate.
+   */
+  async function purgeTeamMember(input: {
+    targetProfileId: string;
+    confirmName: string;
+    reason: string;
+  }): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (demoMode) {
+      setTeam((current) =>
+        current.map((member) =>
+          member.id === input.targetProfileId
+            ? {
+                ...member,
+                name: "Deleted User",
+                shortName: "Deleted User",
+                purgedAt: new Date().toISOString(),
+              }
+            : member,
+        ),
+      );
+      return { ok: true };
+    }
+
+    const response = await fetch("/api/team/purge", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        restaurantSlug,
+        targetProfileId: input.targetProfileId,
+        confirmName: input.confirmName,
+        reason: input.reason,
+      }),
+    });
+    const payload = (await response.json()) as {
+      ok?: true;
+      error?: string;
+      sessionInvalid?: true;
+    };
+    if (!response.ok || !payload.ok) {
+      if (payload.sessionInvalid) forceSignOut();
+      return {
+        ok: false,
+        error: payload.error ?? "Unable to purge this person right now.",
+      };
+    }
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === input.targetProfileId
+          ? {
+              ...member,
+              name: "Deleted User",
+              shortName: "Deleted User",
+              purgedAt: new Date().toISOString(),
+            }
+          : member,
+      ),
+    );
+    return { ok: true };
+  }
+
   async function signOut() {
     console.log("Sign out clicked!");
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
@@ -1856,6 +1923,7 @@ export function RestaurantOperationsApp({
             onResetPasscode={resetMemberPasscode}
             onDeactivate={deactivateTeamMember}
             onReactivate={reactivateTeamMember}
+            onPurge={purgeTeamMember}
             onLoadAttendanceOptions={loadAttendanceLinkOptions}
             onLinkAttendance={linkAttendanceIdentity}
             onUnlinkAttendance={unlinkAttendanceIdentity}

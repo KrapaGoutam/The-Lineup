@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { KeyRound, Link2, Pencil, UserCheck, UserX } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  KeyRound,
+  Link2,
+  Pencil,
+  Trash2,
+  UserCheck,
+  UserX,
+} from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +19,7 @@ import {
   assignableDesignations,
   canChangeDesignation,
   canDeactivateMember,
+  canPurgeMember,
   designationLabel,
 } from "@/features/team/domain/designations";
 import type { TeamMember } from "@/lib/demo-data";
@@ -29,9 +37,18 @@ import {
   type ResetPasscodeResult,
 } from "./passcode-reset-dialog";
 import {
+  PurgeMemberDialog,
+  type PurgeMemberResult,
+} from "./purge-member-dialog";
+import {
   RenameMemberDialog,
   type RenameMemberResult,
 } from "./rename-member-dialog";
+
+// Feature 034. Default strictly to Active -- an inactive roster member
+// should never clutter the view a manager opens by default, only ever
+// appear after an explicit switch to the Inactive tab.
+type StatusTab = "active" | "inactive";
 
 export function TeamWorkspace({
   user,
@@ -41,6 +58,7 @@ export function TeamWorkspace({
   onResetPasscode,
   onDeactivate,
   onReactivate,
+  onPurge,
   onLoadAttendanceOptions,
   onLinkAttendance,
   onUnlinkAttendance,
@@ -66,6 +84,11 @@ export function TeamWorkspace({
     targetProfileId: string;
     reason: string;
   }) => Promise<MemberStatusResult>;
+  onPurge: (input: {
+    targetProfileId: string;
+    confirmName: string;
+    reason: string;
+  }) => Promise<PurgeMemberResult>;
   onLoadAttendanceOptions: AttendanceLinkDialogProps["onLoadOptions"];
   onLinkAttendance: (input: {
     targetProfileId: string;
@@ -75,6 +98,7 @@ export function TeamWorkspace({
     targetProfileId: string;
   }) => Promise<AttendanceLinkResult>;
 }) {
+  const [statusTab, setStatusTab] = useState<StatusTab>("active");
   const [renameTarget, setRenameTarget] = useState<TeamMember | null>(null);
   const [resetTarget, setResetTarget] = useState<TeamMember | null>(null);
   const [attendanceTarget, setAttendanceTarget] = useState<TeamMember | null>(
@@ -84,6 +108,7 @@ export function TeamWorkspace({
     member: TeamMember;
     mode: "deactivate" | "reactivate";
   } | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<TeamMember | null>(null);
 
   // Feature 024, acceptance criterion 1: attendance link status must be
   // visible in the roster itself, not only after opening the Link
@@ -109,6 +134,28 @@ export function TeamWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkStatusReloadKey]);
 
+  // Feature 034. The default (and only ever implicitly shown) list is
+  // Active -- an inactive member never appears here without an
+  // explicit switch to the Inactive tab. Counts are computed off the
+  // full, unfiltered `team` (the only consumer that receives it --
+  // every scheduling/allocation/tips picker gets a pre-filtered
+  // activeTeam from restaurant-operations-app.tsx instead), so the tab
+  // labels stay correct even while viewing the other tab.
+  const activeCount = useMemo(
+    () => team.filter((member) => member.active !== false).length,
+    [team],
+  );
+  const inactiveCount = team.length - activeCount;
+  const visibleTeam = useMemo(
+    () =>
+      team.filter((member) =>
+        statusTab === "active"
+          ? member.active !== false
+          : member.active === false,
+      ),
+    [team, statusTab],
+  );
+
   return (
     <div className="space-y-4">
       <div>
@@ -125,12 +172,48 @@ export function TeamWorkspace({
         </p>
       </div>
 
+      <div
+        className="border-border inline-flex gap-1 rounded-xl border p-1"
+        role="tablist"
+        aria-label="Team status"
+      >
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={statusTab === "active"}
+          variant={statusTab === "active" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setStatusTab("active")}
+        >
+          Active ({activeCount})
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={statusTab === "inactive"}
+          variant={statusTab === "inactive" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => setStatusTab("inactive")}
+        >
+          Inactive ({inactiveCount})
+        </Button>
+      </div>
+
       <Card>
         <CardHeader>
-          <h2 className="font-semibold">Active members</h2>
+          <h2 className="font-semibold">
+            {statusTab === "active" ? "Active members" : "Inactive members"}
+          </h2>
         </CardHeader>
         <CardContent className="divide-border divide-y p-0 pt-4">
-          {team.map((member) => {
+          {visibleTeam.length === 0 ? (
+            <p className="text-muted-foreground px-5 py-6 text-sm">
+              {statusTab === "active"
+                ? "No active members."
+                : "No inactive members."}
+            </p>
+          ) : null}
+          {visibleTeam.map((member) => {
             const own = member.id === user.profileId;
             // Feature 017: a deactivated member gets no other action --
             // only Reactivate, per the UX contract ("no other actions").
@@ -171,6 +254,22 @@ export function TeamWorkspace({
             // writes: an assistant manager cannot promote people, but can
             // operate attendance just like the rest of the floor tooling.
             const canManageAttendance = user.role !== "server";
+            // Feature 035: purged is a distinct, permanent third state --
+            // presence of purgedAt, not `active`, gates this. Offered on
+            // the Inactive tab only (statusTab already guarantees every
+            // row here is inactive; canPurgeMember's own targetIsPurged
+            // check additionally refuses a row that's already purged).
+            const isPurged = Boolean(member.purgedAt);
+            const canPurge =
+              statusTab === "inactive" &&
+              canPurgeMember({
+                actorProfileId: user.profileId,
+                actorDesignation: user.designation,
+                targetProfileId: member.id,
+                targetCurrentDesignation: member.designation,
+                targetIsActive: isActive,
+                targetIsPurged: isPurged,
+              });
             return (
               <div
                 key={member.id}
@@ -209,6 +308,7 @@ export function TeamWorkspace({
                       {!isActive ? (
                         <Badge tone="warning">Inactive</Badge>
                       ) : null}
+                      {isPurged ? <Badge tone="danger">Purged</Badge> : null}
                     </p>
                   </div>
                 </div>
@@ -281,6 +381,18 @@ export function TeamWorkspace({
                       {isActive ? "Deactivate" : "Reactivate"}
                     </Button>
                   ) : null}
+                  {canPurge ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive/40 text-destructive hover:bg-destructive/10"
+                      aria-label={`Permanently delete ${member.name}`}
+                      onClick={() => setPurgeTarget(member)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                      Permanently delete
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -321,6 +433,14 @@ export function TeamWorkspace({
           onSubmit={
             statusTarget.mode === "deactivate" ? onDeactivate : onReactivate
           }
+        />
+      ) : null}
+
+      {purgeTarget ? (
+        <PurgeMemberDialog
+          member={purgeTarget}
+          onClose={() => setPurgeTarget(null)}
+          onSubmit={onPurge}
         />
       ) : null}
 

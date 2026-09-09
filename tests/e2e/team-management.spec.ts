@@ -113,6 +113,92 @@ test("manager renames, changes designation, resets passcode, and links attendanc
   ).toBeVisible();
 });
 
+test("Feature 034/035: Active/Inactive tabs default to Active, and an inactive member can be permanently purged with a typed-name confirmation", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToTeam(page);
+
+  // Default tab is Active; Leo (a demo staff member never touched by
+  // other tests in this file) starts there, and the Inactive tab starts
+  // empty.
+  await expect(
+    page.getByRole("tab", { name: /Active \(\d+\)/ }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("button", { name: "Deactivate Leo Park" }),
+  ).toBeVisible();
+
+  await page.getByRole("tab", { name: /Inactive \(\d+\)/ }).click();
+  await expect(page.getByText("No inactive members.")).toBeVisible();
+
+  // Deactivate Leo from the Active tab. The dialog is scoped explicitly
+  // for its own submit button -- its title/submit text ("Deactivate Leo
+  // Park") otherwise collides with the still-present (only visually
+  // covered by the modal, not unmounted) row button of the same name.
+  await page.getByRole("tab", { name: /Active \(\d+\)/ }).click();
+  await page.getByRole("button", { name: "Deactivate Leo Park" }).click();
+  const deactivateDialog = page.getByRole("dialog");
+  await deactivateDialog.getByLabel("Reason").fill("e2e deactivation test");
+  await deactivateDialog
+    .getByRole("button", { name: "Deactivate Leo Park" })
+    .click();
+  await deactivateDialog.getByRole("button", { name: "Done" }).click();
+
+  // Leo disappears from Active, and now appears in Inactive with his
+  // real name -- not "Unknown" -- plus the Permanently delete action.
+  await expect(
+    page.getByRole("button", { name: "Deactivate Leo Park" }),
+  ).toHaveCount(0);
+  await page.getByRole("tab", { name: /Inactive \(\d+\)/ }).click();
+  await expect(
+    page.getByText("Leo Park", { exact: false }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Permanently delete Leo Park" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Permanently delete Leo Park" })
+    .click();
+  const purgeDialog = page.getByRole("dialog");
+
+  // Wrong confirmation name blocks the submit button entirely.
+  await purgeDialog.getByLabel(/Type .* to confirm/).fill("Not Leo");
+  await expect(
+    purgeDialog.getByRole("button", {
+      name: "Permanently delete",
+      exact: true,
+    }),
+  ).toBeDisabled();
+
+  // The correct name enables it, and the purge succeeds.
+  await purgeDialog.getByLabel(/Type .* to confirm/).fill("Leo Park");
+  await expect(
+    purgeDialog.getByRole("button", {
+      name: "Permanently delete",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await purgeDialog
+    .getByRole("button", { name: "Permanently delete", exact: true })
+    .click();
+  await expect(
+    purgeDialog.getByText(
+      "Their personal information has been permanently erased.",
+    ),
+  ).toBeVisible();
+  await purgeDialog.getByRole("button", { name: "Done" }).click();
+
+  // The row now shows "Deleted User" and a Purged badge, and the
+  // Permanently delete action is gone -- it's already been done.
+  await expect(page.getByText("Deleted User")).toBeVisible();
+  await expect(page.getByText("Purged", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Permanently delete/ }),
+  ).toHaveCount(0);
+});
+
 test("a server cannot reach Team management at all", async ({ page }) => {
   await signIn(page, "1357");
   await expect(
