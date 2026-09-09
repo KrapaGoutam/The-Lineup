@@ -312,7 +312,7 @@ print:overflow-visible`, etc.) resetting the dialog's own
         ledger, confirms the shared letterhead heading and document
         type render, clicks "Print statement", and asserts
         `document.title` was set to exactly `"Mia Chen (Server)
-    Payroll Report Aug 2026"` when `window.print()` fired.
+Payroll Report Aug 2026"` when `window.print()` fired.
         Real-mode-only feature (Payroll stays `!demoMode`-gated, same
         as it's been since Feature 020) -- this jsdom-level component
         test is the closest available substitute for a live Playwright
@@ -321,16 +321,35 @@ print:overflow-visible`, etc.) resetting the dialog's own
   - [x] Full gate: format/lint/typecheck clean, 309/309 unit tests
         (1 new), build clean.
   - [x] Commit.
-- [ ] **Step 6: Payroll multi-select batch print** (bug 4)
-  - [ ] New `src/features/payroll/components/payroll-print-dialog.tsx`:
-        month selector (a specific `periodMonth` or "All open months"),
-        employee scope (current/selected/all, checkboxes reusing
+- [x] **Step 6: Payroll multi-select batch print** (bug 4)
+  - [x] New `src/features/payroll/components/payroll-print-dialog.tsx`:
+        month selector (a specific `periodMonth` or "All open months" --
+        every period with `balanceCents > 0` for the chosen
+        employee(s), regardless of which month), employee scope
+        (current/selected/all, checkboxes reusing this feature's own
         `getPersonColor`/`getPersonInitials`), one letterhead page per
-        employee, dynamic roster/single filename.
-  - [ ] Wire a "Print Statements" button into `PayrollKpiCards`'
-        toolbar, and a small per-person print entry point into
-        `PayrollPeriodGroups`' person header (pre-selects that person).
-  - [ ] Full gate. Live-verify. Commit.
+        employee (their matching periods as a small table on that one
+        page), dynamic roster/single filename via
+        `triggerPrintWithFilename`. Reads only the already-fetched,
+        already-RLS-scoped `dashboard.periods`/`rateOptions.users` --
+        zero new server actions.
+  - [x] Wired a "Print Statements" button into `PayrollKpiCards`'
+        toolbar (no preselection), and a small per-person print icon
+        button into `PayrollPeriodGroups`' person header (pre-selects
+        that person as "current employee").
+  - [x] New `payroll-print-dialog.test.tsx`, 7 tests: default
+        month/scope, roster print (2 people, 2 `.print-page-break`
+        pages, `"Staff Payroll Report Sep 2026"`), pre-selected current-
+        employee single print (`"Mia Chen (Server) Payroll Report Sep
+    2026"`), "all open months" correctly including only a
+        positive-balance period and excluding a zero-balance one for
+        the same person, the "choose at least one" refusal, the
+        "nobody matches that month" refusal, and one letterhead per
+        printed page.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests
+        (7 new), build clean. Real-mode-only feature, same as Step 5 --
+        no live Playwright check for the same established reason.
+  - [x] Commit.
 - [ ] **Step 7: E2E + remaining unit coverage**
   - [ ] Extend/adjust Playwright coverage for: letterhead text present,
         `document.title` set during print triggers, single-employee
@@ -373,6 +392,7 @@ print:overflow-visible`, etc.) resetting the dialog's own
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-5 done and committed. Next: Step 6 (payroll multi-select batch
-print -- new `payroll-print-dialog.tsx`, wired into `PayrollKpiCards`'
-toolbar and a per-person entry point in `PayrollPeriodGroups`).
+Steps 1-6 done and committed. Next: Step 7 (E2E + remaining unit
+coverage -- extend/adjust Playwright specs for letterhead text,
+`document.title`, single-page structure, and the new payroll batch
+dialog).

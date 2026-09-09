@@ -37,6 +37,7 @@ import { CombinedStatementDialog } from "@/features/payroll/components/combined-
 import { PayrollBalancePanel } from "@/features/payroll/components/payroll-balance-panel";
 import { PayrollKpiCards } from "@/features/payroll/components/payroll-kpi-cards";
 import { PayrollPeriodGroups } from "@/features/payroll/components/payroll-period-groups";
+import { PayrollPrintDialog } from "@/features/payroll/components/payroll-print-dialog";
 import { buildPayrollLedgerLines } from "@/features/payroll/domain/calculate-payroll";
 import { dollarsToCents } from "@/features/tips/domain/calculate-tip-splits";
 import {
@@ -226,6 +227,13 @@ function PrivilegedPayrollView({
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [showGenerateForm, setShowGenerateForm] = useState(false);
+  // Feature 030 bug fix: `undefined` means the dialog is closed; a
+  // present-but-possibly-undefined `neonUserId` distinguishes the
+  // toolbar's "no preselection" entry point from a person row's "print
+  // just this person" one.
+  const [printDialogState, setPrintDialogState] = useState<{
+    neonUserId?: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +297,7 @@ function PrivilegedPayrollView({
           onGoToPayRates={onGoToPayRates}
           showGenerateForm={showGenerateForm}
           onToggleGenerate={() => setShowGenerateForm((prev) => !prev)}
+          onOpenPrintDialog={() => setPrintDialogState({})}
         />
       )}
 
@@ -323,12 +332,22 @@ function PrivilegedPayrollView({
             onChanged={reloadEverything}
             selectedPeriodId={selectedPeriodId}
             onSelectPeriod={setSelectedPeriodId}
+            onPrintPerson={(neonUserId) => setPrintDialogState({ neonUserId })}
           />
           <PayrollBalancePanel
             periods={dashboard.periods}
             users={rateOptions?.users ?? []}
           />
         </div>
+      ) : null}
+
+      {printDialogState && dashboard ? (
+        <PayrollPrintDialog
+          periods={dashboard.periods}
+          users={rateOptions?.users ?? []}
+          defaultNeonUserId={printDialogState.neonUserId}
+          onClose={() => setPrintDialogState(null)}
+        />
       ) : null}
 
       {selectedPeriodId !== null ? (

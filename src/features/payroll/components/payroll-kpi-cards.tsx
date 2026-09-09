@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Plus } from "lucide-react";
+import { Banknote, Plus, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,12 +27,16 @@ export function PayrollKpiCards({
   onGoToPayRates,
   onToggleGenerate,
   showGenerateForm = false,
+  onOpenPrintDialog,
 }: {
   dashboard: PayrollDashboard;
   users?: Array<{ id: number; fullName: string; role: string }>;
   onGoToPayRates: () => void;
   onToggleGenerate?: () => void;
   showGenerateForm?: boolean;
+  /** Feature 030 bug fix: opens the multi-select batch print dialog,
+   * with no person pre-selected (the global entry point). */
+  onOpenPrintDialog?: () => void;
 }) {
   const now = new Date();
   const currentMonthName = now.toLocaleDateString("en-US", { month: "long" });
@@ -68,6 +72,12 @@ export function PayrollKpiCards({
             <Banknote className="mr-1.5 size-4" aria-hidden="true" />
             Pay rates
           </Button>
+          {onOpenPrintDialog ? (
+            <Button variant="outline" size="sm" onClick={onOpenPrintDialog}>
+              <Printer className="mr-1.5 size-4" aria-hidden="true" />
+              Print Statements
+            </Button>
+          ) : null}
           {onToggleGenerate ? (
             <Button size="sm" onClick={onToggleGenerate}>
               <Plus className="mr-1.5 size-4" aria-hidden="true" />

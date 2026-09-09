@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -95,6 +95,7 @@ export function PayrollPeriodGroups({
   onChanged,
   selectedPeriodId,
   onSelectPeriod,
+  onPrintPerson,
 }: {
   restaurantSlug: string;
   periods: PayrollPeriodWithBalance[];
@@ -102,6 +103,10 @@ export function PayrollPeriodGroups({
   onChanged: () => void;
   selectedPeriodId: number | null;
   onSelectPeriod: (periodId: number | null) => void;
+  /** Feature 030 bug fix: opens the batch print dialog pre-selected to
+   * this one person -- the row-level entry point, distinct from the
+   * toolbar's own no-preselection one. */
+  onPrintPerson?: (neonUserId: number) => void;
 }) {
   const displayLabels = buildDisplayLabels(users);
   const [monthFilter, setMonthFilter] = useState<string>("all");
@@ -240,6 +245,17 @@ export function PayrollPeriodGroups({
                       person balance
                     </p>
                   </div>
+                  {onPrintPerson ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onPrintPerson(group.neonUserId)}
+                      aria-label={`Print ${label}'s payroll statement`}
+                    >
+                      <Printer className="size-4" aria-hidden="true" />
+                    </Button>
+                  ) : null}
                 </div>
 
                 {/* Sub-Table of open months */}
