@@ -107,3 +107,34 @@ export function canDeactivateMember(input: {
     targetCurrentDesignation: input.targetCurrentDesignation,
   });
 }
+
+/**
+ * Feature 035. The same role-hierarchy bar as canDeactivateMember
+ * (self-refusal + canChangeDesignation), reused rather than re-derived,
+ * plus the one condition neither deactivation nor any other personnel
+ * action needed: purge requires the target to currently be INACTIVE --
+ * the opposite of "a deactivated member gets no other action" -- and
+ * not already purged. This is the client-side mirror of
+ * `private.can_purge_member` (20260909220000_member_status_and_purge.sql);
+ * it exists so TeamWorkspace can decide whether to render the
+ * "Permanently Delete" action at all, and so the purge route can return
+ * a friendly error before ever calling the database RPC -- the RPC's
+ * own check is still the authoritative one, this is not a replacement
+ * for it.
+ */
+export function canPurgeMember(input: {
+  actorProfileId: string;
+  actorDesignation: Designation;
+  targetProfileId: string;
+  targetCurrentDesignation: Designation;
+  targetIsActive: boolean;
+  targetIsPurged: boolean;
+}): boolean {
+  if (input.targetIsActive || input.targetIsPurged) return false;
+  return canDeactivateMember({
+    actorProfileId: input.actorProfileId,
+    actorDesignation: input.actorDesignation,
+    targetProfileId: input.targetProfileId,
+    targetCurrentDesignation: input.targetCurrentDesignation,
+  });
+}

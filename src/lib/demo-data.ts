@@ -24,6 +24,13 @@ export type TeamMember = {
   // or a real `memberships.active = false` row via getOrganizationRoster)
   // means deactivated.
   active?: boolean;
+  // Feature 035. Set once (never unset -- there is no "un-purge"), the
+  // ISO timestamp `memberships.purged_at` was written. A purged member
+  // is always also `active: false` (purge requires deactivation first),
+  // but the reverse isn't true -- most inactive members are simply
+  // deactivated, not purged. Presence of this field, not `active`, is
+  // what should gate whether "Permanently Delete" is offered again.
+  purgedAt?: string;
 };
 
 export type DemoShift = {

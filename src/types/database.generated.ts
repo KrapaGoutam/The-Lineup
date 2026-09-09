@@ -7,11 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5";
-  };
   graphql_public: {
     Tables: {
       [_ in never]: never;
@@ -521,6 +516,8 @@ export type Database = {
           id: number;
           organization_id: string;
           profile_id: string;
+          purged_at: string | null;
+          purged_by: string | null;
           roles: Database["public"]["Enums"]["app_role"][];
         };
         Insert: {
@@ -529,6 +526,8 @@ export type Database = {
           id?: never;
           organization_id: string;
           profile_id: string;
+          purged_at?: string | null;
+          purged_by?: string | null;
           roles: Database["public"]["Enums"]["app_role"][];
         };
         Update: {
@@ -537,6 +536,8 @@ export type Database = {
           id?: never;
           organization_id?: string;
           profile_id?: string;
+          purged_at?: string | null;
+          purged_by?: string | null;
           roles?: Database["public"]["Enums"]["app_role"][];
         };
         Relationships: [
@@ -550,6 +551,13 @@ export type Database = {
           {
             foreignKeyName: "memberships_profile_id_fkey";
             columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memberships_purged_by_fkey";
+            columns: ["purged_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
@@ -1849,6 +1857,7 @@ export type Database = {
           end_date: string;
           ends_at: string;
           id: number;
+          is_recurring: boolean;
           kind: Database["public"]["Enums"]["shift_kind"];
           location_id: string;
           notes: string | null;
@@ -1867,6 +1876,7 @@ export type Database = {
           end_date: string;
           ends_at: string;
           id?: never;
+          is_recurring?: boolean;
           kind?: Database["public"]["Enums"]["shift_kind"];
           location_id: string;
           notes?: string | null;
@@ -1885,6 +1895,7 @@ export type Database = {
           end_date?: string;
           ends_at?: string;
           id?: never;
+          is_recurring?: boolean;
           kind?: Database["public"]["Enums"]["shift_kind"];
           location_id?: string;
           notes?: string | null;
@@ -2316,6 +2327,15 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      board_clear_cell: {
+        Args: {
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
       board_clear_column: {
         Args: {
           p_member_id: number;
@@ -2358,6 +2378,14 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      purge_inactive_member: {
+        Args: {
+          p_organization_id: string;
+          p_reason?: string;
+          p_target_profile_id: string;
+        };
+        Returns: undefined;
+      };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
         Returns: undefined;
@@ -2383,7 +2411,8 @@ export type Database = {
         | "undo"
         | "redo"
         | "move_column"
-        | "add_row";
+        | "add_row"
+        | "clear_cell";
       request_status: "pending" | "approved" | "declined" | "cancelled";
       rotation_status: "active" | "paused" | "closing" | "unavailable";
       schedule_status: "draft" | "published" | "archived";
@@ -2539,6 +2568,7 @@ export const Constants = {
         "redo",
         "move_column",
         "add_row",
+        "clear_cell",
       ],
       request_status: ["pending", "approved", "declined", "cancelled"],
       rotation_status: ["active", "paused", "closing", "unavailable"],
