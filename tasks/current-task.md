@@ -69,12 +69,12 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
   - [x] Polish `SelfPayrollView` in `src/features/payroll/components/payroll-workspace.tsx` for "My Payroll" view without admin actions.
   - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- [ ] **Step 5: Increment 4 — Timesheet Letterhead Print & Combined Statement**
-  - [ ] Update `PrintableReport` in `src/features/attendance/components/attendance-report.tsx` with corporate letterhead logo and 1-employee-per-page pagination.
-  - [ ] Implement `getCombinedMonthlyStatementAction` in `src/features/payroll/actions/statement-actions.ts` with unit tests in `statement-actions.test.ts`.
-  - [ ] Implement `src/features/payroll/components/combined-statement-dialog.tsx`.
-  - [ ] Wire "Monthly Statement" action buttons into both Attendance and Payroll views.
-  - [ ] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+- [x] **Step 5: Increment 4 — Timesheet Letterhead Print & Combined Statement**
+  - [x] Update `PrintableReport` in `src/features/attendance/components/attendance-report.tsx` with corporate letterhead logo and 1-employee-per-page pagination.
+  - [x] Implement `getCombinedMonthlyStatementAction` in `src/features/payroll/actions/statement-actions.ts` with unit tests in `statement-actions.test.ts`.
+  - [x] Implement `src/features/payroll/components/combined-statement-dialog.tsx`.
+  - [x] Wire "Monthly Statement" action buttons into both Attendance and Payroll views.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
 - [ ] **Step 6: Playwright E2E Tests for New Features**
   - [ ] Add Playwright tests verifying:
@@ -122,5 +122,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Step 1 (plan and first commit), Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates), Step 3 (Increment 2: Option 1k Payroll Dashboard overhaul), and Step 4 (Increment 3: Staff Read-Only Payroll Access).
-- Next immediate action: Step 5 (Increment 4: Timesheet Letterhead Print & Combined Statement).
+- Completed Steps 1-5 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement).
+- Next immediate action: Step 6 (Playwright E2E tests for new features).

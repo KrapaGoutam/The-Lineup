@@ -32,6 +32,7 @@ import type {
   PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
 import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
+import { CombinedStatementDialog } from "@/features/payroll/components/combined-statement-dialog";
 import { PayrollBalancePanel } from "@/features/payroll/components/payroll-balance-panel";
 import { PayrollKpiCards } from "@/features/payroll/components/payroll-kpi-cards";
 import { PayrollPeriodGroups } from "@/features/payroll/components/payroll-period-groups";
@@ -990,6 +991,7 @@ function PeriodLedgerPanel({
   const [ledger, setLedger] = useState<PayrollLedger | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [showCombinedStatement, setShowCombinedStatement] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1085,6 +1087,14 @@ function PeriodLedgerPanel({
           {monthLabel(period.periodMonth)} ledger
         </h2>
         <div className="flex gap-1.5 print:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCombinedStatement(true)}
+          >
+            Combined statement
+          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -1269,6 +1279,15 @@ function PeriodLedgerPanel({
           statement · confirmed payments and adjustments only
         </p>
       </div>
+      {showCombinedStatement ? (
+        <CombinedStatementDialog
+          restaurantSlug={restaurantSlug}
+          neonUserId={period.neonUserId}
+          year={Number(period.periodMonth.slice(0, 4))}
+          month={Number(period.periodMonth.slice(5, 7))}
+          onClose={() => setShowCombinedStatement(false)}
+        />
+      ) : null}
     </Card>
   );
 }
