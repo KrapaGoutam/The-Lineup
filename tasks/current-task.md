@@ -407,10 +407,15 @@ Payroll Report Aug 2026"` when `window.print()` fired.
   - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
         build clean.
   - [x] Commit.
-- [ ] **Step 9: Final gate + push to PR #29**
-  - [ ] Full gate incl. `npm run db:test` (only if any migration ends up
-        touched -- not expected).
-  - [ ] Push to `feature/030-payroll-ui-timesheet-print-overhaul`.
+- [x] **Step 9: Final gate + push to PR #29**
+  - [x] Full gate, all real command output: `npm run check` clean,
+        `npm test` 42/42 files / 316/316 tests, `npm run build` clean,
+        `npm run db:test` 17/17 files / 211/211 assertions (unaffected
+        -- confirmed no migration was touched by this branch relative
+        to `main`), full Playwright suite 153/153 across desktop/host-
+        tablet/server-mobile.
+  - [x] Pushed to `feature/030-payroll-ui-timesheet-print-overhaul` --
+        PR #29 picks up the new commits automatically.
 
 ## 🗂️ File List (bug-fix pass additions)
 
@@ -433,6 +438,8 @@ Payroll Report Aug 2026"` when `window.print()` fired.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-8 done and committed. Next: Step 9 (final gate + push to
-PR #29 -- no migrations touched in this pass, so `npm run db:test` is
-expected unchanged; push and let PR #29 pick up the new commits).
+All Steps 1-9 complete. The bug-fix pass is fully done: all 4 live
+bugs fixed and live/unit-verified, full gate green (`npm run check`,
+316/316 Vitest tests, clean build, 211/211 pgTAP, 153/153 Playwright),
+docs reconciled, pushed to PR #29. Nothing further pending on this
+branch.
