@@ -32,12 +32,17 @@ import type {
   PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
 import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
+import { ReportLetterhead } from "@/components/print/report-letterhead";
 import { CombinedStatementDialog } from "@/features/payroll/components/combined-statement-dialog";
 import { PayrollBalancePanel } from "@/features/payroll/components/payroll-balance-panel";
 import { PayrollKpiCards } from "@/features/payroll/components/payroll-kpi-cards";
 import { PayrollPeriodGroups } from "@/features/payroll/components/payroll-period-groups";
 import { buildPayrollLedgerLines } from "@/features/payroll/domain/calculate-payroll";
 import { dollarsToCents } from "@/features/tips/domain/calculate-tip-splits";
+import {
+  payrollSingleFilename,
+  triggerPrintWithFilename,
+} from "@/lib/print-utils";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -1057,6 +1062,15 @@ function PeriodLedgerPanel({
   });
   const printAreaId = `payroll-print-statement-${period.id}`;
 
+  function printStatement() {
+    triggerPrintWithFilename(
+      payrollSingleFilename(personLabel, {
+        year: Number(period.periodMonth.slice(0, 4)),
+        month: Number(period.periodMonth.slice(5, 7)),
+      }),
+    );
+  }
+
   function downloadStatementCsv() {
     const rows: (string | number)[][] = [
       [organizationName],
@@ -1082,11 +1096,11 @@ function PeriodLedgerPanel({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 print:hidden">
         <h2 className="font-semibold">
           {monthLabel(period.periodMonth)} ledger
         </h2>
-        <div className="flex gap-1.5 print:hidden">
+        <div className="flex gap-1.5">
           <Button
             type="button"
             variant="outline"
@@ -1099,7 +1113,7 @@ function PeriodLedgerPanel({
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => window.print()}
+            onClick={printStatement}
           >
             Print statement
           </Button>
@@ -1225,27 +1239,20 @@ function PeriodLedgerPanel({
         )}
       </CardContent>
 
-      {/* Printed/exported statement -- hidden on screen, shown only when
-          printing. The isolation rule below hides everything else on the
-          page (including the app's own header/nav, which this component
-          has no other way to reach) so "Print statement" produces just
-          this document, not a screenshot of the whole tab. Built from the
+      {/* Printed/exported statement -- hidden on screen (`hidden
+          print:block`), shown only when printing. `CardHeader`/
+          `CardContent` above are both `print:hidden`, so "Print
+          statement" produces just this document, not a screenshot of
+          the whole tab or its own on-screen controls. Built from the
           exact same `ledgerLines` the CSV download uses, so the two
           formats can never show different numbers for the same period. */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #${printAreaId}, #${printAreaId} * { visibility: visible; }
-          #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
-        }
-      `}</style>
       <div id={printAreaId} className="hidden print:block">
-        <h1 className="text-2xl font-bold">{organizationName}</h1>
-        <h2 className="mt-1 text-lg font-semibold">Payroll Statement</h2>
-        <p className="mt-1 text-sm">
-          {personLabel} — {monthLabel(period.periodMonth)}
-        </p>
-        <table className="mt-6 w-full text-left text-sm">
+        <ReportLetterhead
+          documentType="Payroll Compensation Statement"
+          employeeName={personLabel}
+          period={monthLabel(period.periodMonth)}
+        />
+        <table className="print-timesheet-table mt-6 w-full text-left text-sm">
           <thead>
             <tr className="border-b border-black">
               <th className="py-1 pr-4 font-medium">Date</th>

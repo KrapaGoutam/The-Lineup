@@ -250,6 +250,121 @@ describe("PayrollWorkspace", () => {
       screen.queryByText("Set fallback rate applied to anyone without one"),
     ).not.toBeInTheDocument();
   });
+
+  it("PeriodLedgerPanel's single-statement print renders the shared letterhead and a dynamic filename", async () => {
+    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetRateOptions.mockResolvedValue({
+      ok: true,
+      data: {
+        users: [
+          {
+            id: 101,
+            fullName: "Mia Chen",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+        ],
+        defaultRateCents: 1500,
+        overrides: [],
+      },
+    });
+    mockedGetDashboard.mockResolvedValue({
+      ok: true,
+      data: {
+        totalBalanceOwedCents: 30000,
+        previousMonthGeneratedCents: 60000,
+        owedThisMonthCents: 0,
+        owedLastMonthCents: 30000,
+        oldestOpenPeriod: null,
+        perPerson: [
+          { neonUserId: 101, balanceCents: 30000, totalGeneratedCents: 60000 },
+        ],
+        periods: [
+          {
+            id: 1,
+            neonUserId: 101,
+            periodMonth: "2026-08-01",
+            hoursSnapshot: 40,
+            rateCentsSnapshot: 1500,
+            grossCents: 60000,
+            status: "locked",
+            balanceCents: 30000,
+          },
+        ],
+      },
+    });
+    mockedGetLedger.mockResolvedValue({
+      ok: true,
+      data: {
+        period: {
+          id: 1,
+          organizationId: "org-1",
+          neonUserId: 101,
+          periodMonth: "2026-08-01",
+          hoursSnapshot: 40,
+          rateCentsSnapshot: 1500,
+          grossCents: 60000,
+          status: "locked",
+          generatedAt: "2026-08-01T00:00:00Z",
+          generatedBy: "admin-1",
+          regeneratedAt: null,
+          regeneratedBy: null,
+          lockedAt: "2026-08-02T00:00:00Z",
+          lockedBy: "admin-1",
+        },
+        payments: [],
+        adjustments: [],
+        balance: {
+          grossCents: 60000,
+          confirmedPaymentsCents: 30000,
+          draftPaymentsCents: 0,
+          adjustmentsCents: 0,
+          balanceCents: 30000,
+          fullyPaid: false,
+        },
+        organizationName: "The Monk's Restaurant & Bar",
+      },
+    });
+
+    const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
+
+    render(
+      <PayrollWorkspace
+        restaurantSlug="the-monks"
+        timeZone="America/Chicago"
+        onGoToPayRates={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Overall balance owed")).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open ledger for August 2026" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("August 2026 ledger")).toBeInTheDocument(),
+    );
+    // The shared letterhead's own fixed heading, once per statement --
+    // never the old bare organizationName-as-heading text.
+    expect(
+      screen.getByText("The Monk's Indian Fusion - Webster"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Payroll Compensation Statement"),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Print statement" }),
+    );
+    await waitFor(() => expect(printSpy).toHaveBeenCalled());
+    expect(document.title).toBe("Mia Chen (Server) Payroll Report Aug 2026");
+
+    printSpy.mockRestore();
+  });
 });
 
 describe("CombinedStatementDialog", () => {

@@ -269,9 +269,9 @@ all three print surfaces.
         `position:absolute` trick and its `<style>` tag entirely; added
         `print:hidden` to the toolbar (`CardHeader`); added `print:`
         overrides on the overlay (`print:static print:inset-auto
-    print:h-auto print:overflow-visible print:bg-transparent
-    print:p-0`) and the `Card`/`CardContent` (`print:max-h-none
-    print:overflow-visible`, etc.) resetting the dialog's own
+print:h-auto print:overflow-visible print:bg-transparent
+print:p-0`) and the `Card`/`CardContent` (`print:max-h-none
+print:overflow-visible`, etc.) resetting the dialog's own
         `max-h-[92vh]`/`overflow` clamps so the full statement prints,
         not just what's scrolled into view -- a real, independent
         clipping risk from the isolation bug itself.
@@ -297,13 +297,30 @@ all three print surfaces.
         Tailwind classes actually compiled onto the overlay/Card
         elements in the rendered DOM (not just present in source).
   - [x] Commit.
-- [ ] **Step 5: Fix payroll single-statement print** (bugs 1, 2, 3)
-  - [ ] `payroll-workspace.tsx`'s `PeriodLedgerPanel`: add
+- [x] **Step 5: Fix payroll single-statement print** (bugs 1, 2, 3)
+  - [x] `payroll-workspace.tsx`'s `PeriodLedgerPanel`: added
         `<ReportLetterhead>` (previously had no letterhead at all, just
-        bare text); remove the same fragile visibility/position trick;
-        route "Print statement" through `triggerPrintWithFilename` with
-        the single-payroll filename convention.
-  - [ ] Full gate. Commit.
+        a bare `{organizationName}`/"Payroll Statement" heading);
+        removed the same fragile `visibility:hidden` +
+        `position:absolute` `<style>` trick (the print area was already
+        `hidden print:block`, and both `CardHeader`/`CardContent` are
+        now/already `print:hidden` -- no extra mechanism was ever
+        needed); tagged the ledger table `.print-timesheet-table`;
+        routed "Print statement" through `triggerPrintWithFilename`
+        with the single-payroll filename convention.
+  - [x] New unit test (`payroll-workspace.test.tsx`): opens a period's
+        ledger, confirms the shared letterhead heading and document
+        type render, clicks "Print statement", and asserts
+        `document.title` was set to exactly `"Mia Chen (Server)
+    Payroll Report Aug 2026"` when `window.print()` fired.
+        Real-mode-only feature (Payroll stays `!demoMode`-gated, same
+        as it's been since Feature 020) -- this jsdom-level component
+        test is the closest available substitute for a live Playwright
+        check here, matching the same precedent Feature 020/026 already
+        set (Vitest-covered, no e2e, for exactly this reason).
+  - [x] Full gate: format/lint/typecheck clean, 309/309 unit tests
+        (1 new), build clean.
+  - [x] Commit.
 - [ ] **Step 6: Payroll multi-select batch print** (bug 4)
   - [ ] New `src/features/payroll/components/payroll-print-dialog.tsx`:
         month selector (a specific `periodMonth` or "All open months"),
@@ -356,7 +373,6 @@ all three print surfaces.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-4 done and committed. Next: Step 5 (fix the payroll
-single-statement print in `PeriodLedgerPanel` -- same fragile
-visibility/position trick, no letterhead at all currently, no dynamic
-filename).
+Steps 1-5 done and committed. Next: Step 6 (payroll multi-select batch
+print -- new `payroll-print-dialog.tsx`, wired into `PayrollKpiCards`'
+toolbar and a per-person entry point in `PayrollPeriodGroups`).
