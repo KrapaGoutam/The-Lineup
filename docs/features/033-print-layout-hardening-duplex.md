@@ -258,3 +258,65 @@ found three of the four premises wrong in some way:
   `.print-page-break:last-child` in `globals.css` depends on that
   flatness to correctly suppress a trailing blank page only after the
   batch's true last page.
+
+## Payroll Print Isolation (follow-up)
+
+A later request asked specifically to "isolate the Payroll module from
+the UI dashboard when printing PDFs and guarantee a clean single-page
+layout," scoped to exactly four files
+(`payroll-print-dialog.tsx`, `globals.css`, this doc, and
+`tasks/current-task.md`), with an accompanying diff to apply.
+
+**The supplied diff did not match the real file and was not applied
+verbatim.** It referenced `<Dialog>`/`<DialogContent>` (this component
+actually uses `<Card>`/`<CardHeader>`/`<CardContent>`, a different,
+custom modal pattern already used everywhere else in this codebase),
+a `handleExport`/CSV-export button that has never existed on this
+surface, a `triggerPrint()` call (printing here is actually driven by
+`submit()` → `setPrintJob(...)` → a `useEffect` that calls the shared
+`triggerPrintWithFilename()`, not a directly-invoked function), a
+`PayrollTable` component (the table is inline markup, not a separate
+component), and `data`/`payPeriodLabel`/`employee` props that don't
+exist on `PayrollPrintDialog` (it takes `periods`/`users`/
+`defaultNeonUserId` and can print several employees in one job, not
+one `employee` object). Applying the diff's `old_string`/context lines
+as given would not have matched anything in the real file. It also
+proposed a `.print-report-container` class, which does not exist in
+`globals.css` -- and this stylesheet's own header comment (see the top
+of the `@media print` block) already documents that the
+`visibility:hidden` + `position:absolute` isolation family that name
+implies was deliberately replaced by `hidden print:block` in Feature
+030's bug-fix pass, specifically because it's "a known cause of
+duplicate/blank-page print bugs." Reintroducing it under a new name
+would have undone that fix for this one surface.
+
+**What was actually found, auditing the real file first:** the
+screen/print split this request asked for already existed and was
+already correct, predating this follow-up -- the picker `Card` already
+carries `print:hidden`, and the print output already lives in a
+separate `hidden print:block` sibling `<div>`. `PayrollPrintDialog`
+was never part of the "Dashboard Leak" bug Feature 033 fixed (that bug
+was isolated to `attendance-report.tsx`, per the audit above); nothing
+here was leaking the dashboard. The per-employee page padding was
+already compacted in Feature 033 itself (`p-10` → `p-6`), and the
+shared `.print-timesheet-table` cell padding/font-size tightening from
+that same pass already applies here too.
+
+**What this follow-up actually added**, real and scoped to Payroll
+only: a `.payroll-print-page` class on the per-employee wrapper `<div>`
+(additive -- kept alongside the existing `print-page-break`), with new
+`@media print` rules scoped to that class only:
+`break-inside: avoid` on the page and its table (keeps a
+borderline-length page -- an employee with many open periods under
+"All open months" -- from splitting mid-row, rather than pretending
+CSS can force arbitrarily long content onto one page), and
+`thead { display: table-header-group }` so column headers repeat if a
+genuinely long table still has to spill onto a second page. These
+rules live in the shared `globals.css` (the only place `@media print`
+rules can live in this codebase) but are scoped by class name to this
+one surface -- the shared `.print-timesheet-table`/`.print-page-break`
+rules Attendance and the Combined Statement depend on were not
+touched.
+
+No CSV-export feature was added; it isn't part of this codebase and
+wasn't asked for outside the mismatched diff.

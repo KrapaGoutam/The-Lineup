@@ -1,9 +1,10 @@
 # Current Task: Feature 033 — Print Layout Hardening, Isolation, and Duplex Pagination
 
 **Active Spec:** `docs/features/033-print-layout-hardening-duplex.md`
-**Branch:** `feature/033-print-layout-hardening-duplex` (branched from
-`main`, after Feature 032 / PR #31 merged)
-**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/33
+**Branch:** `feature/033-print-layout-hardening-duplex` (merged as PR #33);
+Step 13's follow-up continues on `feature/033-payroll-print-isolation`,
+branched from `main` after PR #33 merged.
+**Status:** Complete — PR #33 merged; Step 13 follow-up ready as its own PR
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -130,6 +131,31 @@ away from.
   - [x] Push `feature/033-print-layout-hardening-duplex`.
   - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
         against `main`.
+- [x] **Step 13 (follow-up): Payroll print isolation & single-page
+      guarantee, scoped to exactly `payroll-print-dialog.tsx` +
+      `globals.css`.** A supplied diff referenced a fictional version
+      of the file (`<Dialog>`, `handleExport`, `triggerPrint`,
+      `PayrollTable`, a `.print-report-container` class) that doesn't
+      match the real component or this codebase's already-documented
+      isolation strategy, so it was not applied verbatim. Audited the
+      real file first: the screen/print split it asked for already
+      existed and was already correct (this dialog was never part of
+      the Dashboard Leak bug). Added a `.payroll-print-page` class
+      (new, additive) with `break-inside: avoid` +
+      `table-header-group` print rules scoped to that class only --
+      real, Payroll-scoped hardening, without touching the shared
+      `.print-timesheet-table`/`.print-page-break` rules Attendance
+      and the Combined Statement depend on, and without touching any
+      other file/module. Full writeup in
+      `docs/features/033-print-layout-hardening-duplex.md`'s "Payroll
+      Print Isolation (follow-up)" section. Quality gate re-run clean.
+      **Process correction:** this was first committed and pushed
+      directly to `main` by mistake (not checking the current branch
+      before starting -- PR #33 had been merged between turns). Caught
+      immediately, reverted on `main`, and redone properly on its own
+      branch (`feature/033-payroll-print-isolation`) via
+      `git cherry-pick` of the original commit, per the user's explicit
+      choice when asked how to remediate it.
 
 ## 🗂️ File List
 
@@ -148,6 +174,11 @@ away from.
 
 Feature 033 is fully complete: implemented, unit-tested,
 e2e-regression-swept, live-verified via real PDF pagination (not just
-DOM assertions), documented, committed (`59662f5`), pushed, and opened
-as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) against
-`main`. Nothing further pending on this branch.
+DOM assertions), documented, committed (`59662f5`), pushed, and merged
+as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) into
+`main`. Step 13's Payroll print isolation follow-up is implemented,
+quality-gated, and committed (`bad6ac9`, cherry-picked from the
+mistakenly-direct-to-main `81a864e`, which was reverted on `main` as
+`f9dd68e`) on its own branch
+(`feature/033-payroll-print-isolation`); pushing and opening its PR is
+the next step.
