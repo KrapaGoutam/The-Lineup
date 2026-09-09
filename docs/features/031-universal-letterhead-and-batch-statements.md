@@ -70,7 +70,10 @@
     external business's site -- there was nothing to literally
     "extract paths from," and scraping a real business's trademarked
     logo would be inappropriate regardless. Documented directly in the
-    component's own header comment.
+    component's own header comment. **Superseded in Feature 032**: the
+    user later supplied the actual canonical "The Monk's" logo asset
+    directly, and this placeholder was swapped out for it -- see
+    `docs/features/032-canonical-monks-logo.md`.
 - **All-Employees Combined Statement** (`combined-statement-dialog.tsx`):
   - New exported `CombinedStatementTarget` type:
     `{ scope: "single"; neonUserId: number } | { scope: "all"; neonUserIds: number[] }`.
@@ -255,7 +258,9 @@ employees" attendance filter).
   infeasible from this codebase and inappropriate for a real business's
   trademarked mark regardless of feasibility), an original, simple
   monochrome vector crest was hand-authored instead, with the reasoning
-  documented directly in the component's own header comment.
+  documented directly in the component's own header comment. (Feature
+  032 later replaced this placeholder with the real canonical logo,
+  once the user supplied that asset directly.)
 - **Decision:** batch statement fetching reuses the existing
   `getCombinedMonthlyStatementAction` N times via `Promise.all` rather
   than adding a new batch-shaped server action, keeping authorization

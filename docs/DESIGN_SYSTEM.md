@@ -110,7 +110,7 @@ The label swap (not just the color) is deliberate — urgency has to read withou
   - `Part-paid`: Tone `warn` (amber badge) — `balanceCents > 0 && balanceCents < grossCents`.
   - `Paid`: Tone `ok` (emerald badge) — settled in full.
 
-### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass, redesigned in Feature 031)
+### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass, redesigned in Feature 031, canonical logo in Feature 032)
 
 The version below is what actually ships, after a bug-fix pass on
 Feature 030 found and corrected the original implementation's raster
@@ -135,6 +135,11 @@ batch-printing every employee's statement in one document (see
     "Monthly Employee Timesheet"), left-aligned. The full "The Monk's
     Indian Fusion - Webster" / "Webster, New York" / "monkswebster.com"
     contact block is right-aligned plain text (not a heading role).
+    The crest is the canonical "The Monk's" logo as of Feature 032
+    (`public/brand/the-monks-logo.svg`, 167 paths) -- Feature 031
+    shipped with an original hand-authored placeholder mark since no
+    real brand asset existed in the repo at the time; see
+    `docs/features/032-canonical-monks-logo.md`.
   - Meta row: an "Employee" label above `employeeName` (`employeeRole`)
     on the left -- entirely omitted (not just blank) when `employeeName`
     is not passed, for an all-staff summary table with no single
