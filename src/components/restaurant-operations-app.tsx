@@ -1874,6 +1874,7 @@ export function RestaurantOperationsApp({
           <PayrollWorkspace
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}
+            onGoToPayRates={() => setTab("settings")}
           />
         ) : null}
         {tab === "settings" ? (
