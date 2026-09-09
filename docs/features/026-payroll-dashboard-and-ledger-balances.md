@@ -78,3 +78,40 @@ Managers can see the restaurant's entire payroll liability at a glance without d
 
 - Unit: Pure functions for overall balance, owed this month, owed last month, oldest open month, and person balance totals — `payroll-balance-metrics.test.ts` (16 tests) + `payroll-actions.test.ts` (5 tests, new — none existed for this action file before).
 - E2E: **Descoped, with reasoning recorded, not silently dropped.** Feature 020 (which this upgrades) is real-mode-only with no demo-mode data source and shipped with Vitest-only coverage, no e2e spec, for the same reason this feature inherits: building one would require new real-network-dependent CI infrastructure (a second webServer/project pointed at real mode), a materially separate architectural decision out of scope to make unilaterally here. Live real-mode verification was genuinely attempted (self-registration bootstrap against local Supabase via this repo's own `scripts/bootstrap-owner.mjs`) and blocked by a pre-existing local Supabase CLI/GoTrue version incompatibility unrelated to this feature's own code (reproduced via raw `curl`, ruling out a client-library bug; see `tasks/current-task.md`'s Step 6 for the full record). The pgTAP suite (211/211 assertions, including two real regressions this branch's own migration caused and caught) and the unit/build gate stand in its place.
+
+## Evolution in Feature 030 (Option 1k Overhaul)
+
+In **Feature 030** (`docs/features/030-combined-timesheet-payroll-statement.md`), the Payroll Dashboard was refined with the **Option 1k** specification:
+
+1. **3 Executive KPI Cards**: Replaced the 4-card layout with 3 cards (`Overall balance owed` highlighted in an accent container with large font, `This month`, and `Last month`). The header includes a dedicated toolbar with "Pay rates" (linking to Settings > Pay Rates) and "Generate period" toggling the period generation form.
+2. **2-Column Layout (`xl:grid-cols-[1fr_360px]`)**:
+   - Left Column ("Balances by person and month"): Person accordion summary with initials avatar, stable person color, role/rate metadata, open month count, and total open balance. Expanded sub-table shows individual monthly periods with status badges and an inline "Ledger" button to open the period transaction ledger.
+   - Right Column ("Balance per person"): Compact sidebar listing employees with open balances and months, overall balance summary callout, and visibility notes.
+3. **`part-paid` Status Badge**: `derivePeriodStatus()` was extended to support `"part-paid"` when `balanceCents > 0 && balanceCents < grossCents`, styled with an amber/warn badge.
+4. **Pay Rates Form Deduplication**: Removed the redundant `<RateSettings>` form from the bottom of the Payroll tab; pay rate configuration is consolidated in Settings > Pay Rates (`pay-rates-section.tsx`), accessible via the toolbar button.
+5. **Staff Self-Service Access**: Regular employees (non-managers) can view their own locked/paid periods and read-only ledger under "My Payroll" without seeing organization totals or admin action buttons.
+
+### Bug Fix Pass on Feature 030 (found testing PR #29)
+
+Two of the four live bugs fixed in Feature 030's bug-fix pass landed here:
+
+6. **Payroll Multi-Select Batch Print** (new capability, not a fix to
+   something broken): a "Print Statements" dialog (`payroll-print-
+dialog.tsx`) in the KPI toolbar lets a manager choose a specific
+   month or every open month, and current/selected/all employees,
+   producing one corporate-letterhead page per employee. A per-person
+   print icon in the grouped-periods list opens the same dialog
+   pre-selected to that one person. Reads only the dashboard's
+   already-fetched, already-RLS-scoped period data -- no new server
+   action. Covered by `payroll-print-dialog.test.tsx` (7 Vitest tests);
+   no e2e coverage, for the same reason Feature 020 itself has none --
+   Payroll stays `!demoMode`-gated and the e2e suite runs in demo mode.
+7. **Single-statement print letterhead, filename, and isolation fix**:
+   `PeriodLedgerPanel`'s own "Print statement" previously had no
+   letterhead at all (a bare organization-name heading) and relied on
+   the same fragile `visibility:hidden` + `position:absolute` isolation
+   trick the Combined Statement dialog's duplicate-page bug was
+   root-caused to (unnecessary here, since the print area was already
+   `hidden print:block`). Now uses the shared `<ReportLetterhead>` and
+   routes through `triggerPrintWithFilename` with the `"<Name> Payroll
+Report <Mon> <Year>"` convention.

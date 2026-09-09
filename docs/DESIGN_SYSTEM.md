@@ -80,7 +80,7 @@ Use Geist Sans for product text and Geist Mono for times, table labels, counts, 
 
 **Desktop, row 1**: brand (left) — centered `CountdownPill` — avatar pill (right), which opens a floating quick-settings panel (Appearance switch, shift-hours summary, today's store hours, Change passcode, Store hours link, More options → the existing `HoursDialog`, Sign out). Non-modal: dismisses on outside pointerdown or Escape, no focus trap or backdrop (unlike this app's actual modal dialogs).
 
-**Desktop, row 2**: primary tabs (Schedule, Table Allocation, Tip Split — bottom-accent border when active) — vertical divider — secondary tabs (Team if manager, Attendance, Payroll if manager and not demo mode) — Settings button on the far right.
+**Desktop, row 2**: primary tabs (Schedule, Table Allocation, Tip Split — bottom-accent border when active) — vertical divider — secondary tabs (Team if manager, Attendance, Payroll if not demo mode; regular staff access their own self-payroll view) — Settings button on the far right. The application defaults directly to **Table Allocation** (`"allocation"`) upon authentication so floor and seating operations are immediately active.
 
 **Countdown pill urgency tiers** (`countdownTier()` in `restaurant-operations-app.tsx`, driven by `useRestaurantClock`'s `remainingSeconds`):
 
@@ -92,7 +92,121 @@ Use Geist Sans for product text and Geist Mono for times, table labels, counts, 
 
 The label swap (not just the color) is deliberate — urgency has to read without distinguishing amber from red. Digits are always `font-mono tabular-nums`.
 
-**Mobile**: a separate stacked header (brand, change-passcode icon, avatar chip that opens its own smaller panel — Appearance, Settings, Sign out — sharing `showAvatarPanel` state with the desktop panel), then a compact `CountdownPill`. Below the page content, a fixed 3-button bottom dock (`Allocation`, `Tip Split`, `More`) — all `min-h-11`+ touch targets. `More` opens a slide-up sheet (`role="dialog"`, dismissed the same outside-pointerdown-or-Escape way) listing Schedule, the secondary tabs, Settings, an `AppearanceSwitch`, Change passcode, and Sign out.
+**Mobile**: a separate stacked header (brand, change-passcode icon, avatar chip that opens its own smaller panel — Appearance, Settings, Sign out — sharing `showAvatarPanel` state with the desktop panel), then a compact `CountdownPill`. Below the page content, a fixed 3-button bottom dock (`Allocation`, `Tip Split`, `More`) — all `min-h-11`+ touch targets. `More` opens a slide-up sheet (`role="dialog"`, dismissed the same outside-pointerdown-or-Escape way) listing Schedule, the secondary tabs (including Payroll for regular staff in real mode), Settings, an `AppearanceSwitch`, Change passcode, and Sign out.
+
+### Option 1k Payroll Layout (Feature 030)
+
+- **3 Executive KPI Cards**:
+  - `Overall balance owed`: Displayed in a primary accent container (`bg-primary/10 border-primary/30 text-primary`) with large numbers (`text-3xl font-bold font-mono`).
+  - `This month`: Liability for active calendar month with count of draft/open periods.
+  - `Last month`: Prior month outstanding liability.
+- **Top Toolbar**: Immediate actions ("Pay rates" navigating to Settings > Pay Rates, and "Generate period" toggling the creation drawer).
+- **2-Column Operational Grid (`1fr 360px` on desktop, stacked on mobile)**:
+  - Left column ("Balances by person and month"): Accordion grouped by person. Each header features an employee initial avatar with deterministic hue assignment (`bg-primary/20 text-primary`, `bg-sky-500/20 text-sky-400`, etc.), role & rate subtitle, open month count, and personal balance. Expanded sub-table shows individual monthly periods, hours, gross pay, payments recorded, balance owed, status badge, and an inline "Ledger" button.
+  - Right column ("Balance per person"): Compact sidebar listing all staff with open balances, open months, an overall liability highlight box, and month visibility callout.
+- **Period Status Badges**:
+  - `Draft`: Tone `accent` (amber/primary subtle border) — draft period.
+  - `Locked`: Tone `neutral` (muted slate border) — approved/locked period.
+  - `Part-paid`: Tone `warn` (amber badge) — `balanceCents > 0 && balanceCents < grossCents`.
+  - `Paid`: Tone `ok` (emerald badge) — settled in full.
+
+### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass)
+
+The version below is what actually ships, after a bug-fix pass on
+Feature 030 found and corrected the original implementation's raster
+logo, missing dynamic filename, and a real print-isolation duplicate-
+page bug (root cause: `visibility:hidden` + `position:absolute`,
+which still occupies layout space and is a known Chrome print-
+pagination duplication class -- see
+`docs/features/030-combined-timesheet-payroll-statement.md`'s own "Bug
+Fix Pass" section for the full record).
+
+- **Letterhead Branding** (`src/components/print/report-letterhead.tsx`,
+  one shared component for every print surface -- Attendance timesheet,
+  Payroll statement, Combined statement):
+  - "The Monk's Indian Fusion - Webster" heading with an **embedded
+    inline SVG crest** directly in the JSX -- never an external `<img>`.
+    An external image is network-dependent and fails outright offline
+    or against an unreachable/hotlink-blocked host; an inline SVG
+    always renders, and stays fully vector/crisp at any print DPI.
+  - Metadata banner: document type, employee name & role, reporting
+    period, and generation timestamp, with a `border-b border-gray-300
+pb-3 mb-4` divider.
+- **Hidden-Line Print Tables** (`.print-timesheet-table` in
+  `src/app/globals.css`):
+  ```css
+  .print-timesheet-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .print-timesheet-table th,
+  .print-timesheet-table td {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px 10px;
+    color: #1f2937;
+    font-size: 10.5pt;
+    text-align: left;
+  }
+  .print-timesheet-table th {
+    font-size: 8pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+  }
+  ```
+  Applied to every printed table across all three surfaces. Combined
+  with a blanket `user-select: text` under `@media print`, this
+  guarantees fully selectable/copiable, high-contrast (black-on-white)
+  text in the printed/PDF output -- never a flattened image.
+- **Print Isolation** (`@media print` block in `globals.css`): the
+  print root of each surface is `hidden print:block` (Tailwind) --
+  simply absent from layout outside print, never a
+  `visibility:hidden`/`position:absolute` trick. Every on-screen-only
+  chrome element (app `header`/`nav`, every `button`, dialog overlays
+  via `.no-print`/`print:hidden`) is hidden the same way. A dialog's
+  own screen-only size/scroll clamps (`max-h-[92vh]`, `overflow-hidden`)
+  are explicitly reset with `print:max-h-none print:overflow-visible`
+  etc. so the full content prints, not just what's scrolled into view.
+- **Print Pagination**: one page per employee via the shared
+  `.print-page-break` class (`globals.css`):
+  ```css
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page-break:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  ```
+- **Verification Signature Blocks**: official sign-off blocks at the
+  base of every printed timesheet and statement: "Employee Signature"
+  and "Authorized Manager Signature" with signature rules and date
+  lines.
+- **Dynamic PDF Filename** (`src/lib/print-utils.ts`):
+  `triggerPrintWithFilename(suggestedTitle)` sets `document.title` to
+  the report's specific filename before calling `window.print()`
+  (browsers offer the current tab title as the default Save-as-PDF
+  filename), then restores the original title on the `afterprint`
+  event (with a fallback timeout for browsers that suppress it). A
+  short internal `setTimeout` before `window.print()` guarantees the
+  title write has actually committed before the print dialog reads it.
+  Five naming conventions, deliberately using different capitalization
+  from each other where specified (not a typo to unify):
+  - Attendance roster: `"Staff attendance Report <Mon> <Year>"`
+  - Attendance single: `"<Name> Attendance Report <Mon> <Year>"`
+  - Payroll roster: `"Staff Payroll Report <Mon> <Year>"` (or `"...All
+Open Months"`)
+  - Payroll single: `"<Name> Payroll Report <Mon> <Year>"` (or `"...All
+Open Months"`)
+  - Combined statement: `"<Name> Monthly Report <Mon> <Year>"`
+
+### Dark Mode Form Controls
+
+- Native `<select>` and `<option>` elements apply explicit popover tokens:
+  `bg-popover text-popover-foreground border-border [&>option]:bg-popover [&>option]:text-popover-foreground`
+  This ensures native select dropdown popovers render legible light text on dark backgrounds across all browsers and operating systems in dark mode.
 
 ## Motion
 

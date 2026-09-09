@@ -80,7 +80,7 @@ export function AttendanceMonthNav({
             month: Math.min(nextMonth, monthCeilingForYear),
           });
         }}
-        className="w-auto min-w-[9.5rem] border-0 bg-transparent font-semibold"
+        className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[9.5rem] border-0 bg-transparent font-semibold"
       >
         {MONTH_NAMES.map((name, index) => {
           const value = index + 1;
@@ -100,7 +100,7 @@ export function AttendanceMonthNav({
           const monthCeiling = nextYear === maxYear ? maxMonth : 12;
           onChange({ year: nextYear, month: Math.min(month, monthCeiling) });
         }}
-        className="w-auto min-w-[6rem] border-0 bg-transparent font-mono font-semibold"
+        className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[6rem] border-0 bg-transparent font-mono font-semibold"
       >
         {years.map((y) => (
           <option key={y} value={y}>

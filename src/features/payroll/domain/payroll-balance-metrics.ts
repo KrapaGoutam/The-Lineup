@@ -91,20 +91,32 @@ export function findOldestOpenPeriod(
   return oldest;
 }
 
+export type PeriodDisplayStatus = "draft" | "locked" | "part-paid" | "paid";
+
 /**
  * "Paid" is never a stored `status` value (the column is DB-checked to
  * exactly `'draft'`/`'locked'`) -- it's a computed display state
  * layered on top of `'locked'` once the balance reaches zero (or
- * below, an overpayment). A still-draft period is never displayed as
- * "Paid" even if its balance happens to already be zero -- it hasn't
- * been locked in yet, so nothing about it is final.
+ * below, an overpayment). A partially paid period (`balanceCents < grossCents`)
+ * is displayed as "Part-paid". A still-draft period is never displayed as
+ * "Paid" or "Part-paid" even if its balance happens to already be zero --
+ * it hasn't been locked in yet, so nothing about it is final.
  */
 export function derivePeriodStatus(period: {
   status: "draft" | "locked";
+  grossCents?: number;
   balanceCents: number;
-}): "draft" | "locked" | "paid" {
-  if (period.status === "locked" && period.balanceCents <= 0) return "paid";
-  return period.status;
+}): PeriodDisplayStatus {
+  if (period.status === "draft") return "draft";
+  if (period.balanceCents <= 0) return "paid";
+  if (
+    period.grossCents !== undefined &&
+    period.balanceCents > 0 &&
+    period.balanceCents < period.grossCents
+  ) {
+    return "part-paid";
+  }
+  return "locked";
 }
 
 export type PersonPeriodGroup = {

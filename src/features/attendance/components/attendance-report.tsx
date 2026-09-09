@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Printer } from "lucide-react";
+import { FileText, Printer } from "lucide-react";
 
 import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ import {
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
 import { AttendancePrintDialog } from "@/features/attendance/components/attendance-print-dialog";
+import { CombinedStatementDialog } from "@/features/payroll/components/combined-statement-dialog";
+import { ReportLetterhead } from "@/components/print/report-letterhead";
 import type {
   NeonAttendanceRow,
   NeonUser,
@@ -42,6 +44,11 @@ import {
   demoNeonUsers,
 } from "@/features/attendance/demo-data";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import {
+  attendanceRosterFilename,
+  attendanceSingleFilename,
+  triggerPrintWithFilename,
+} from "@/lib/print-utils";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
@@ -175,12 +182,35 @@ export function AttendanceReport({
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printJob, setPrintJob] = useState<{
     sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+    // Feature 030 bug fix: carried on the job itself (captured at the
+    // moment it's built) rather than read from `selectedYear`/
+    // `selectedMonth` when the effect fires -- avoids a stale filename
+    // if the browsed month somehow changes between the two.
+    year: number;
+    month: number;
   } | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [statementTarget, setStatementTarget] = useState<{
+    neonUserId: number;
+    year: number;
+    month: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!printJob) return;
-    window.print();
+    // A single section is one person's own report (the "self"-scope
+    // Print button, or "all"-scope's "Print current employee"); more
+    // than one is a roster print (the dialog's "selected"/"all" choice,
+    // or the "All employees" filter's direct Print).
+    const filename =
+      printJob.sections.length === 1
+        ? attendanceSingleFilename(
+            printJob.sections[0].label,
+            printJob.year,
+            printJob.month,
+          )
+        : attendanceRosterFilename(printJob.year, printJob.month);
+    triggerPrintWithFilename(filename);
   }, [printJob]);
 
   const scope = access?.scope ?? null;
@@ -272,6 +302,8 @@ export function AttendanceReport({
           label: labelFor(id),
           rows: filtered.filter((row) => row.userId === id),
         })),
+        year: selectedYear,
+        month: selectedMonth,
       });
       return;
     }
@@ -290,6 +322,8 @@ export function AttendanceReport({
         label: labelFor(id),
         rows: result.data.rows.filter((row) => row.userId === id),
       })),
+      year: selectedYear,
+      month: selectedMonth,
     });
   }
 
@@ -537,12 +571,32 @@ export function AttendanceReport({
             }}
           />
           {rows ? (
-            <Button
-              variant="secondary"
-              onClick={() => setPrintJob({ sections: [{ label, rows }] })}
-            >
-              <Printer aria-hidden="true" /> Print
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setPrintJob({
+                    sections: [{ label, rows }],
+                    year: selectedYear,
+                    month: selectedMonth,
+                  })
+                }
+              >
+                <Printer aria-hidden="true" /> Print
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setStatementTarget({
+                    neonUserId: access.neonUserId,
+                    year: selectedYear,
+                    month: selectedMonth,
+                  })
+                }
+              >
+                <FileText aria-hidden="true" /> Monthly Statement
+              </Button>
+            </div>
           ) : null}
         </div>
         {rowsError ? (
@@ -563,6 +617,15 @@ export function AttendanceReport({
             month={selectedMonth}
           />
         )}
+        {statementTarget ? (
+          <CombinedStatementDialog
+            restaurantSlug={restaurantSlug}
+            neonUserId={statementTarget.neonUserId}
+            year={statementTarget.year}
+            month={statementTarget.month}
+            onClose={() => setStatementTarget(null)}
+          />
+        ) : null}
         {printJob ? (
           <PrintableReport
             sections={printJob.sections}
@@ -601,6 +664,8 @@ export function AttendanceReport({
         label: activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
         rows: rows.filter((row) => row.userId === candidate.id),
       })),
+      year: selectedYear,
+      month: selectedMonth,
     });
   }
 
@@ -631,7 +696,7 @@ export function AttendanceReport({
                 )
               }
               disabled={sortedActiveUsers.length === 0}
-              className="w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
+              className="text-foreground [&>option]:bg-popover [&>option]:text-popover-foreground w-auto min-w-[11rem] border-0 bg-transparent font-semibold"
             >
               {sortedActiveUsers.length === 0 ? (
                 <option value="">No active employees</option>
@@ -667,6 +732,21 @@ export function AttendanceReport({
           >
             <Printer aria-hidden="true" /> Print
           </Button>
+
+          {!showingAll && activePerson ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                setStatementTarget({
+                  neonUserId: activePerson.id,
+                  year: selectedYear,
+                  month: selectedMonth,
+                })
+              }
+            >
+              <FileText aria-hidden="true" /> Monthly Statement
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -741,6 +821,15 @@ export function AttendanceReport({
           month={selectedMonth}
         />
       )}
+      {statementTarget ? (
+        <CombinedStatementDialog
+          restaurantSlug={restaurantSlug}
+          neonUserId={statementTarget.neonUserId}
+          year={statementTarget.year}
+          month={statementTarget.month}
+          onClose={() => setStatementTarget(null)}
+        />
+      ) : null}
       {printJob ? (
         <PrintableReport
           sections={printJob.sections}
@@ -838,16 +927,9 @@ function DashboardTiles({
   );
 }
 
-// Feature 025. Hidden on screen, shown only when printing -- the same
-// visibility-isolation trick payroll-workspace.tsx's "Print statement"
-// already established: a bare `body *` selector hides everything else on
-// the page (including this app's own header/nav, which this component
-// has no other way to reach), scoped by one named id. One printable
-// "document" per targeted person, so "print selected"/"print all"
-// produce one multi-section report, not several separate print jobs.
-// Plain text status labels ("Auto-closed"/"Open shift"), never a colored
-// Badge -- color alone isn't a reliable signal once printed, especially
-// in black and white.
+// Feature 025 & 030. Hidden on screen, shown only when printing -- corporate
+// letterhead print template with 1-employee-per-page pagination and
+// official verification signatures.
 const PRINT_AREA_ID = "attendance-print-area";
 
 function PrintableReport({
@@ -863,94 +945,152 @@ function PrintableReport({
 }) {
   const monthLabel = MONTH_NAMES[month - 1];
   return (
-    <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #${PRINT_AREA_ID}, #${PRINT_AREA_ID} * { visibility: visible; }
-          #${PRINT_AREA_ID} { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
-        }
-      `}</style>
-      <div id={PRINT_AREA_ID} className="hidden print:block">
-        <h1 className="text-2xl font-bold">
-          Attendance — {monthLabel} {year}
-        </h1>
-        <div className="mt-4 space-y-6">
-          {sections.map((section) => {
-            const summary = computeAttendanceSummary(section.rows);
-            return (
-              <section key={section.label} className="break-inside-avoid">
-                <h2 className="text-lg font-semibold">{section.label}</h2>
-                <p className="mt-1 text-sm">
-                  Days worked: {summary.daysWorked} · Total hours:{" "}
-                  {formatHours(summary.totalHours)} · Avg per day:{" "}
+    <div id={PRINT_AREA_ID} className="hidden print:block">
+      {sections.map((section) => {
+        const summary = computeAttendanceSummary(section.rows);
+        return (
+          <div
+            key={section.label}
+            className="print-page-break box-border flex min-h-[98vh] flex-col p-10"
+          >
+            <ReportLetterhead
+              documentType="Monthly Attendance Timesheet"
+              employeeName={section.label}
+              period={`${monthLabel} ${year}`}
+            />
+
+            {/* Attendance Summary KPIs */}
+            <div className="my-4 grid grid-cols-3 gap-4 rounded-lg border border-gray-300 bg-gray-50/50 p-3">
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Days Worked
+                </span>
+                <span className="font-mono text-base font-bold text-black">
+                  {summary.daysWorked}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Total Hours
+                </span>
+                <span className="font-mono text-base font-bold text-black">
+                  {formatHours(summary.totalHours)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Average / Day
+                </span>
+                <span className="font-mono text-base font-bold text-black">
                   {formatHours(summary.avgPerDay)}
-                </p>
-                <table className="mt-2 w-full border-collapse text-left text-sm">
-                  <thead>
+                </span>
+              </div>
+            </div>
+
+            {/* Timesheet Shift Records */}
+            <div className="flex-1">
+              <table className="print-timesheet-table w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b-2 border-black bg-gray-100">
+                    <th className="px-2 py-2 font-bold text-black">Date</th>
+                    <th className="px-2 py-2 font-bold text-black">Day</th>
+                    <th className="px-2 py-2 font-bold text-black">Clock In</th>
+                    <th className="px-2 py-2 font-bold text-black">
+                      Clock Out
+                    </th>
+                    <th className="px-2 py-2 text-right font-bold text-black">
+                      Hours
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.rows.length === 0 ? (
                     <tr>
-                      <th className="border-b border-black py-1 pr-3">Date</th>
-                      <th className="border-b border-black py-1 pr-3">Day</th>
-                      <th className="border-b border-black py-1 pr-3">
-                        Clock in
-                      </th>
-                      <th className="border-b border-black py-1 pr-3">
-                        Clock out
-                      </th>
-                      <th className="border-b border-black py-1">Hours</th>
+                      <td
+                        colSpan={5}
+                        className="py-4 text-center text-gray-500 italic"
+                      >
+                        No attendance records logged for this period.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {section.rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-1">
-                          No attendance recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      section.rows.map((row) => {
-                        const isOpenShift =
-                          !row.clockOut && !row.autoClockedOut;
-                        const status = row.autoClockedOut
-                          ? " (Auto-closed)"
-                          : isOpenShift
-                            ? " (Open shift)"
-                            : "";
-                        return (
-                          <tr key={row.id}>
-                            <td className="border-b border-gray-300 py-1 pr-3">
-                              {row.date}
-                            </td>
-                            <td className="border-b border-gray-300 py-1 pr-3">
-                              {calendarWeekday(row.date)}
-                            </td>
-                            <td className="border-b border-gray-300 py-1 pr-3">
-                              {row.clockIn
-                                ? formatClockTime(row.clockIn, timeZone)
-                                : "—"}
-                            </td>
-                            <td className="border-b border-gray-300 py-1 pr-3">
-                              {(row.clockOut
-                                ? formatClockTime(row.clockOut, timeZone)
-                                : "—") + status}
-                            </td>
-                            <td className="border-b border-gray-300 py-1">
-                              {row.hoursWorked === null
-                                ? "—"
-                                : formatHours(row.hoursWorked)}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </section>
-            );
-          })}
-        </div>
-      </div>
-    </>
+                  ) : (
+                    section.rows.map((row) => {
+                      const isOpenShift = !row.clockOut && !row.autoClockedOut;
+                      const status = row.autoClockedOut
+                        ? " (Auto-closed)"
+                        : isOpenShift
+                          ? " (Open shift)"
+                          : "";
+                      return (
+                        <tr key={row.id} className="border-b border-gray-200">
+                          <td className="px-2 py-1.5 font-mono">{row.date}</td>
+                          <td className="px-2 py-1.5 text-gray-600">
+                            {calendarWeekday(row.date)}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">
+                            {row.clockIn
+                              ? formatClockTime(row.clockIn, timeZone)
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">
+                            {(row.clockOut
+                              ? formatClockTime(row.clockOut, timeZone)
+                              : "—") + status}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold">
+                            {row.hoursWorked === null
+                              ? "—"
+                              : formatHours(row.hoursWorked)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-black font-bold">
+                    <td
+                      colSpan={4}
+                      className="px-2 py-2 text-right text-xs tracking-wider uppercase"
+                    >
+                      Total {monthLabel} Hours:
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono text-sm">
+                      {formatHours(summary.totalHours)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Verification & Sign-off Block */}
+            <div className="mt-8 border-t border-gray-300 pt-6">
+              <div className="grid grid-cols-2 gap-12 text-xs">
+                <div>
+                  <div className="mb-1.5 border-b border-black pb-1" />
+                  <p className="font-semibold text-black">
+                    Employee Signature &amp; Date
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    I certify that the above hours worked are accurate and
+                    complete.
+                  </p>
+                </div>
+                <div>
+                  <div className="mb-1.5 border-b border-black pb-1" />
+                  <p className="font-semibold text-black">
+                    Manager / Supervisor Signature &amp; Date
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Verified and approved for restaurant payroll processing.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

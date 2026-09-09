@@ -1,23 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
 import {
   lockPayrollPeriodAction,
   regeneratePayrollPeriodAction,
 } from "@/features/payroll/actions/payroll-actions";
-import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
 import { monthLabel } from "@/features/payroll/components/payroll-workspace";
 import {
   derivePeriodStatus,
   groupPeriodsByPerson,
   type PayrollPeriodWithBalance,
+  type PeriodDisplayStatus,
 } from "@/features/payroll/domain/payroll-balance-metrics";
+import { cn } from "@/lib/utils";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -28,29 +29,64 @@ function money(cents: number) {
   return currency.format(cents / 100);
 }
 
-const statusBadgeTone: Record<
-  ReturnType<typeof derivePeriodStatus>,
-  "neutral" | "accent" | "success"
-> = {
-  draft: "accent",
-  locked: "neutral",
-  paid: "success",
-};
+const PERSON_COLORS = [
+  "#f2a65a",
+  "#a7f3d0",
+  "#7dd3fc",
+  "#f472b6",
+  "#c084fc",
+  "#facc15",
+  "#34d399",
+  "#38bdf8",
+];
 
-const statusLabel: Record<ReturnType<typeof derivePeriodStatus>, string> = {
-  draft: "Draft",
-  locked: "Locked",
-  paid: "Paid",
-};
+export function getPersonColor(id: number): string {
+  return PERSON_COLORS[Math.abs(id) % PERSON_COLORS.length];
+}
+
+export function getPersonInitials(name: string): string {
+  const clean = name.replace(/\(.*\)/, "").trim();
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[parts.length - 1]) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return clean.slice(0, 2).toUpperCase() || "EM";
+}
+
+function StatusBadge({ status }: { status: PeriodDisplayStatus }) {
+  switch (status) {
+    case "draft":
+      return (
+        <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-amber-500">
+          Draft
+        </span>
+      );
+    case "part-paid":
+      return (
+        <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-blue-400">
+          Part-paid
+        </span>
+      );
+    case "paid":
+      return (
+        <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-400">
+          Paid ✓
+        </span>
+      );
+    case "locked":
+    default:
+      return (
+        <span className="inline-flex items-center rounded-full border border-zinc-500/30 bg-zinc-500/10 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-400">
+          Locked
+        </span>
+      );
+  }
+}
 
 /**
- * Feature 026. Periods grouped by person (spec Section 2g "Grouped
- * Periods Ledger"), each sub-row's status now a computed
- * `derivePeriodStatus` (adding "Paid" on top of the raw `draft`/
- * `locked` column) rather than the two-state badge the old flat
- * `PeriodsTable` showed. Reuses the exact same
- * `regeneratePayrollPeriodAction`/`lockPayrollPeriodAction` Server
- * Actions that component did -- no new write path.
+ * Option 1k Reference Left Column: Balances by person and month.
+ * Renders an expanded sub-table per person with initials avatar,
+ * role/rate meta, person balance, and open months breakdown with Ledger button.
  */
 export function PayrollPeriodGroups({
   restaurantSlug,
@@ -59,6 +95,7 @@ export function PayrollPeriodGroups({
   onChanged,
   selectedPeriodId,
   onSelectPeriod,
+  onPrintPerson,
 }: {
   restaurantSlug: string;
   periods: PayrollPeriodWithBalance[];
@@ -66,6 +103,10 @@ export function PayrollPeriodGroups({
   onChanged: () => void;
   selectedPeriodId: number | null;
   onSelectPeriod: (periodId: number | null) => void;
+  /** Feature 030 bug fix: opens the batch print dialog pre-selected to
+   * this one person -- the row-level entry point, distinct from the
+   * toolbar's own no-preselection one. */
+  onPrintPerson?: (neonUserId: number) => void;
 }) {
   const displayLabels = buildDisplayLabels(users);
   const [monthFilter, setMonthFilter] = useState<string>("all");
@@ -93,16 +134,28 @@ export function PayrollPeriodGroups({
 
   if (periods.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
-        No payroll periods generated yet.
-      </p>
+      <Card className="border-border bg-card">
+        <CardContent className="py-8 text-center">
+          <p className="text-muted-foreground text-sm">
+            No payroll periods generated yet. Click &quot;Generate period&quot;
+            above to create one.
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Generated periods</h2>
+    <Card className="border-border bg-card overflow-hidden shadow-sm">
+      <CardHeader className="border-border flex flex-row flex-wrap items-center justify-between gap-3 border-b p-4 sm:p-5">
+        <div>
+          <h2 className="text-base font-semibold">
+            Balances by person and month
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            Month balances stay expanded
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <label htmlFor="payroll-period-month-filter" className="sr-only">
             Filter by month
@@ -111,7 +164,7 @@ export function PayrollPeriodGroups({
             id="payroll-period-month-filter"
             value={monthFilter}
             onChange={(event) => setMonthFilter(event.target.value)}
-            className="w-40"
+            className="w-36 text-xs sm:w-44 sm:text-sm"
           >
             <option value="all">All months</option>
             {availableMonths.map((month) => (
@@ -122,90 +175,131 @@ export function PayrollPeriodGroups({
           </Select>
         </div>
       </CardHeader>
-      <CardContent className="divide-border divide-y pt-0">
+
+      <div className="divide-border divide-y">
         {groups.length === 0 ? (
-          <p className="text-muted-foreground py-4 text-sm">
-            No periods for that month.
+          <p className="text-muted-foreground p-6 text-center text-sm">
+            No periods found for that month.
           </p>
         ) : (
-          groups.map((group) => {
+          groups.map((group, index) => {
             const label =
               displayLabels.get(group.neonUserId) ??
               `Neon #${group.neonUserId}`;
+            const userObj = users.find((u) => u.id === group.neonUserId);
+            const roleName = userObj?.role
+              ? userObj.role.charAt(0).toUpperCase() + userObj.role.slice(1)
+              : "Staff";
             const latestRate =
               group.periods[group.periods.length - 1]?.rateCentsSnapshot ?? 0;
             const collapsed = collapsedPersonIds.has(group.neonUserId);
+            const avatarBg = getPersonColor(group.neonUserId);
+            const initials = getPersonInitials(label);
+
             return (
-              <div key={group.neonUserId} className="py-3 first:pt-0">
-                <button
-                  type="button"
-                  onClick={() => toggleCollapsed(group.neonUserId)}
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                  aria-expanded={!collapsed}
-                  aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}'s periods`}
+              <div key={group.neonUserId} className="group/person">
+                {/* Person Header */}
+                <div
+                  className={cn(
+                    "bg-secondary/30 hover:bg-secondary/50 flex items-center gap-3 p-4 transition-colors",
+                    index > 0 && "border-border border-t",
+                  )}
                 >
-                  <span className="flex items-center gap-2">
-                    {collapsed ? (
-                      <ChevronRight
-                        className="text-muted-foreground size-4"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <ChevronDown
-                        className="text-muted-foreground size-4"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="font-semibold">{label}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {money(latestRate)}/hr · {group.openPeriodCount} open
-                      month{group.openPeriodCount === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                  <span className="font-mono text-sm font-semibold">
-                    {money(group.totalBalanceCents)}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(group.neonUserId)}
+                    className="flex flex-1 items-center gap-3 text-left outline-none"
+                    aria-expanded={!collapsed}
+                    aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}'s periods`}
+                  >
+                    <div
+                      className="grid size-9 flex-none place-items-center rounded-full text-xs font-bold text-[#101012] shadow-sm"
+                      style={{ backgroundColor: avatarBg }}
+                    >
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold">
+                          {label}
+                        </span>
+                        {collapsed ? (
+                          <ChevronRight className="text-muted-foreground size-3.5" />
+                        ) : (
+                          <ChevronDown className="text-muted-foreground size-3.5" />
+                        )}
+                      </div>
+                      <p className="text-muted-foreground truncate text-xs">
+                        {roleName} · {money(latestRate)}/hr ·{" "}
+                        {group.openPeriodCount} open{" "}
+                        {group.openPeriodCount === 1 ? "month" : "months"}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="text-right">
+                    <p className="text-primary font-mono text-sm font-bold sm:text-base">
+                      {money(group.totalBalanceCents)}
+                    </p>
+                    <p className="text-muted-foreground text-[10.5px]">
+                      person balance
+                    </p>
+                  </div>
+                  {onPrintPerson ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onPrintPerson(group.neonUserId)}
+                      aria-label={`Print ${label}'s payroll statement`}
+                    >
+                      <Printer className="size-4" aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </div>
+
+                {/* Sub-Table of open months */}
                 {!collapsed ? (
-                  <div className="mt-2 overflow-x-auto pl-6">
-                    <table className="w-full min-w-[560px] text-left text-sm">
-                      <thead>
-                        <tr className="text-muted-foreground border-border border-b text-xs uppercase">
-                          <th className="py-1.5 pr-3 font-medium">Month</th>
-                          <th className="py-1.5 pr-3 font-medium">Hours</th>
-                          <th className="py-1.5 pr-3 font-medium">Rate</th>
-                          <th className="py-1.5 pr-3 font-medium">Gross</th>
-                          <th className="py-1.5 pr-3 font-medium">Balance</th>
-                          <th className="py-1.5 pr-3 font-medium">Status</th>
-                          <th className="py-1.5 font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-border divide-y">
-                        {group.periods.map((period) => (
-                          <PeriodGroupRow
-                            key={period.id}
-                            restaurantSlug={restaurantSlug}
-                            period={period}
-                            onChanged={onChanged}
-                            isSelected={selectedPeriodId === period.id}
-                            onToggleSelect={() =>
-                              onSelectPeriod(
-                                selectedPeriodId === period.id
-                                  ? null
-                                  : period.id,
-                              )
-                            }
-                          />
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="border-border bg-background/50 border-t">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[620px] text-left text-xs">
+                        <thead>
+                          <tr className="border-border text-muted-foreground bg-secondary/20 border-b text-[10px] font-bold tracking-[0.08em] uppercase">
+                            <th className="py-2.5 pr-3 pl-6">Month</th>
+                            <th className="py-2.5 pr-3">Hours</th>
+                            <th className="py-2.5 pr-3">Gross</th>
+                            <th className="py-2.5 pr-3">Paid</th>
+                            <th className="py-2.5 pr-3">Month balance</th>
+                            <th className="py-2.5 pr-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-border divide-y">
+                          {group.periods.map((period) => (
+                            <PeriodGroupRow
+                              key={period.id}
+                              restaurantSlug={restaurantSlug}
+                              period={period}
+                              onChanged={onChanged}
+                              isSelected={selectedPeriodId === period.id}
+                              onToggleSelect={() =>
+                                onSelectPeriod(
+                                  selectedPeriodId === period.id
+                                    ? null
+                                    : period.id,
+                                )
+                              }
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 ) : null}
               </div>
             );
           })
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -226,6 +320,7 @@ function PeriodGroupRow({
   const [error, setError] = useState("");
   const [pending, setPending] = useState<"regenerate" | "lock" | null>(null);
   const displayStatus = derivePeriodStatus(period);
+  const paidCents = Math.max(0, period.grossCents - period.balanceCents);
 
   async function regenerate() {
     setError("");
@@ -264,44 +359,51 @@ function PeriodGroupRow({
   }
 
   return (
-    <tr>
-      <td className="py-1.5 pr-3">{monthLabel(period.periodMonth)}</td>
-      <td className="py-1.5 pr-3">{period.hoursSnapshot.toFixed(1)}h</td>
-      <td className="py-1.5 pr-3">{money(period.rateCentsSnapshot)}/hr</td>
-      <td className="py-1.5 pr-3 font-mono">{money(period.grossCents)}</td>
-      <td className="py-1.5 pr-3 font-mono">{money(period.balanceCents)}</td>
-      <td className="py-1.5 pr-3">
-        <Badge tone={statusBadgeTone[displayStatus]}>
-          {statusLabel[displayStatus]}
-          {displayStatus === "paid" ? " ✓" : ""}
-        </Badge>
+    <tr
+      className={cn(
+        "hover:bg-secondary/20 transition-colors",
+        isSelected && "bg-primary/5",
+      )}
+    >
+      <td className="py-3 pr-3 pl-6">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold">
+            {monthLabel(period.periodMonth)}
+          </p>
+          <StatusBadge status={displayStatus} />
+        </div>
       </td>
-      <td className="py-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            variant={isSelected ? "secondary" : "ghost"}
-            size="sm"
-            onClick={onToggleSelect}
-            aria-label={`${isSelected ? "Hide" : "View"} payments for ${monthLabel(period.periodMonth)}`}
-          >
-            {isSelected ? "Hide payments" : "View payments"}
-          </Button>
-          {period.status !== "locked" ? (
+      <td className="text-foreground py-3 pr-3 font-mono text-xs">
+        {period.hoursSnapshot.toFixed(1)}h
+      </td>
+      <td className="text-foreground py-3 pr-3 font-mono text-xs font-medium">
+        {money(period.grossCents)}
+      </td>
+      <td className="text-foreground py-3 pr-3 font-mono text-xs font-medium">
+        {money(paidCents)}
+      </td>
+      <td className="text-primary py-3 pr-3 font-mono text-xs font-bold">
+        {money(period.balanceCents)}
+      </td>
+      <td className="py-3 pr-4 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          {period.status === "draft" ? (
             <>
               <Button
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 size="sm"
+                className="h-7 px-2 text-xs"
                 onClick={regenerate}
                 disabled={pending !== null}
               >
-                {pending === "regenerate" ? "Regenerating…" : "Regenerate"}
+                {pending === "regenerate" ? "Regen…" : "Regenerate"}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="h-7 px-2 text-xs"
                 onClick={lock}
                 disabled={pending !== null}
               >
@@ -309,9 +411,19 @@ function PeriodGroupRow({
               </Button>
             </>
           ) : null}
+          <Button
+            type="button"
+            variant={isSelected ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2.5 text-xs font-semibold"
+            onClick={onToggleSelect}
+            aria-label={`${isSelected ? "Close" : "Open"} ledger for ${monthLabel(period.periodMonth)}`}
+          >
+            {isSelected ? "Close" : "Ledger"}
+          </Button>
         </div>
         {error ? (
-          <p className="text-destructive mt-1 text-xs" aria-live="polite">
+          <p className="text-destructive mt-1 text-[11px]" aria-live="polite">
             {error}
           </p>
         ) : null}

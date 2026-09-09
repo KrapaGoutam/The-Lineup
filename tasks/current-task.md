@@ -1,343 +1,445 @@
-# Current Task: Feature 026 — Payroll Dashboard & Ledger Balances
+# Current Task: Feature 030 — Payroll UI, Option 1k Dashboard, Staff Access & Timesheet Print Overhaul
 
-**Active Spec:** `docs/features/026-payroll-dashboard-and-ledger-balances.md`
-**Branch:** `feature/026-payroll-dashboard-and-ledger-balances` (stacked
-on `feature/029-tips-from-clocked-in-attendance`)
-**Status:** Complete — PR #28 open (https://github.com/KrapaGoutam/The-Lineup/pull/28)
-**Assigned Agent:** Claude Code (explicit implementer, per user request)
+**Active Spec:** `docs/features/030-combined-timesheet-payroll-statement.md` (and updates to `026` & `025`)
+**Branch:** `feature/030-payroll-ui-timesheet-print-overhaul` (branched from `main`)
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/29
+**Assigned Agent:** Antigravity (build), Claude Code (session resumption, final
+verification gate, and PR)
 
 ## 🎯 Objective
 
-Upgrade Payroll (Feature 020) with an executive dashboard: 4 KPI cards,
-periods grouped by person with a `Paid`/`Locked`/`Draft` status per
-month, a balance-per-person panel with a month filter, and a real fix to
-a self-scoped viewer seeing draft periods they should never have been
-able to see.
+Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff self-service read-only Payroll access, corporate Letterhead Timesheet Print Templates (with 1-employee-per-page pagination), and Combined Monthly Timesheet + Payroll Statements.
 
-## 📖 Investigation findings (read every relevant file in full first)
+## 📖 Key Findings & Architecture
 
-1. **A real, previously-undiscovered RLS gap — found reading the
-   migration directly, not assumed.** `payroll_periods_select_self`
-   (`20260907180000_payroll_schema_rls.sql`) has **no status filter at
-   all** — a self-scoped viewer currently sees their own period
-   regardless of `status`, including `'draft'`. This directly
-   contradicts this spec's own stated policy
-   (`profile_id = auth.uid() AND status IN ('locked', 'paid')`) and its
-   Scope section ("draft periods are hidden" for regular employees).
-   There's even a pgTAP test at `0010_payroll_schema_rls.test.sql`
-   asserting the CURRENT (wrong, for this feature) behavior by name:
-   `'the linked server sees their own payroll period'` against a period
-   that is, at that point in the test, still `'draft'`. This is a real
-   migration + an update to that existing assertion, not new-feature
-   scope creep — Acceptance Criterion 5 requires it explicitly. `'paid'`
-   is never a stored status (`status` is DB-checked to exactly
-   `'draft'`/`'locked'`) — "Paid" is a computed display state
-   (`balanceCents <= 0`), so the RLS fix is `and status = 'locked'`,
-   which already covers both Locked and (locked-and-fully-paid) Paid.
-2. **Most of the "dashboard" already exists (Feature 020 Phase 4)** —
-   `getPayrollDashboardAction` already returns `totalBalanceOwedCents`
-   (= this spec's "Overall balance owed") and `previousMonthGeneratedCents`
-   - a flat `perPerson` balance list, already rendered as 2 tiles + a
-     table in `PayrollDashboardTiles`. Missing: `owedThisMonthCents` (not
-     "generated this month" — actual outstanding balance for the current
-     month's periods), `owedLastMonthCents` (same, previous month — the
-     existing tile is GENERATED, not OWED, a different figure), and
-     `oldestOpenPeriod`. All three are new pure aggregations added to a
-     new `payroll-balance-metrics.ts`, computed from data the dashboard
-     action is already fetching (every period + its balance) — no new
-     query.
-3. **Grouped-by-person + per-period Paid stamp needs each period's own
-   balance, which the dashboard action already computes per-period
-   internally but never returns** — only the person-summed
-   `perPerson[].balanceCents`. Fix: have `getPayrollDashboardAction`
-   also return the full `periods` array (each with its already-computed
-   `balanceCents` attached) — reusing the exact same fetch, not a
-   second N+1 balance query. `payroll-period-groups.tsx` groups this by
-   `neonUserId`, sorted chronologically; a period's displayed status is
-   `balanceCents <= 0 ? "paid" : period.status` (`draft` vs `locked`
-   otherwise) — a new pure `derivePeriodStatus` in the same domain file.
-4. **Settings > Pay Rates is already fully satisfied — Feature 023
-   already built it** (`pay-rates-section.tsx`, wired into
-   `settings-page.tsx`'s `#settings-pay-rates`, reusing
-   `PayrollWorkspace`'s own exported `RateSettings`). `RateSettings` is
-   ALSO already rendered inline directly on the Payroll tab itself
-   (Feature 020 Phase 2) — arguably better UX than a dead end,
-   kept as-is. What's missing is literally what the spec's own UX
-   Contract asks for at the top of the dashboard: a small "Pay rates"
-   button that navigates to Settings (mirroring Settings' own
-   `onGoToTab` quick-link pattern) — a new, tiny addition, not a
-   duplicate of the existing inline form.
-5. **Month/year filtering, reconciled against the actual data shape.**
-   The spec's UX Contract says "calendar month navigation" — but
-   `payroll_periods.period_month` isn't bound to a fixed "real current
-   month" ceiling the way Attendance's navigator is (a manager can
-   generate future or long-past periods deliberately); reusing
-   `AttendanceMonthNav`'s clamped-to-real-today semantics would be
-   actively wrong here. Built instead as a plain `<Select>` populated
-   from the distinct `period_month` values actually present (descending,
-   newest first) plus an explicit "All months" default — simpler, and
-   correct for data that isn't bound to the calendar the way attendance
-   is.
-6. **Real Neon has genuinely usable data for live verification — probed
-   directly, not assumed.** `NEON_DATABASE_URL` in `.env.local` points
-   to a real, shared dev Neon instance with real `is_active = true`
-   users (ids 13-21) carrying real September 2026 `hours_worked` rows.
-   Feature 020 itself is real-mode-only with no demo-mode data source
-   (`payrollTab` gate: `isManager && !demoMode`, its own doc comment:
-   "demo mode parity is still deliberately deferred") and shipped with
-   Vitest-only coverage, no e2e spec. **Decision, following that exact
-   precedent rather than reinventing it:** Feature 026 stays real-mode-
-   only too (no demo-mode parity added -- a materially separate scope
-   decision, not something to fold into this build unprompted), gets
-   thorough new Vitest coverage for every new pure function, and is
-   live-verified end-to-end via Playwright against the real local
-   Supabase + real Neon (self-registering a fresh org, linking a real
-   active Neon user, generating real periods from their real hours). No
-   new automated e2e spec is committed for Payroll, for the same reason
-   Feature 020 didn't: it would require new, real-network-dependent CI
-   infrastructure (a second webServer/project pointed at real mode) --
-   a genuinely separate architectural decision, out of scope to make
-   unilaterally here.
-7. **Zero coupling to Tips, already true and already checked by a live
-   pgTAP assertion** (`0010_payroll_schema_rls.test.sql`: "no payroll
-   table has a foreign key to any tip\_\* table") -- nothing to add.
+1. **Dropdown Contrast Bug Fix**:
+   - In dark theme, native `<select>` and custom dropdown options could inherit light text on white/light native option popovers.
+   - Fixed by applying `bg-popover text-popover-foreground border-border [&>option]:bg-popover [&>option]:text-popover-foreground` across `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
+2. **Default Landing Page**:
+   - In `src/components/restaurant-operations-app.tsx`, change initial tab from `"schedule"` to `"allocation"`: `useState<AppTab>("allocation")`.
+   - Update E2E tests in `tests/e2e/dashboard.spec.ts` that assumed the initial view was Schedule to navigate explicitly, and verify allocation lands first.
+3. **Remove Redundant Pay Rates from Payroll Tab**:
+   - In `src/features/payroll/components/payroll-workspace.tsx`, remove `<RateSettings>` from the rendered layout in `PrivilegedPayrollView`.
+   - Pay rates are already consolidated in Settings > Pay Rates (`pay-rates-section.tsx`), which continues importing `RateSettings`. The top toolbar "Pay rates" button routes there seamlessly via `onGoToPayRates`.
+4. **Option 1k Dashboard Overhaul**:
+   - Top KPI Summary Cards: 3 cards (`Overall balance owed` highlighted with accent container and large font, `This month` owed with draft period count, `Last month` owed).
+   - 2-Column Dashboard Grid (`1fr 360px` desktop, stacked on mobile):
+     - Left Column ("Balances by person and month"): Person header with initials avatar, stable person color, employee name, meta (`${role} · ${rate}/hr · N open months`), and person open balance. Month sub-table with `Month`, `Hours`, `Gross`, `Paid`, `Month balance`, and Status badge (`Draft` / `Locked` / `Part-paid` / `Paid`), plus a "Ledger" button to open the period ledger.
+     - Right Column ("Balance per person"): List of employees with open balances (status dot, name, balance, list of open months), bottom highlight bar for Overall Balance, and explanatory note.
+   - Status badge logic extended in `payroll-balance-metrics.ts` to include `"part-paid"` when `balanceCents > 0 && balanceCents < grossCents`.
+5. **Staff Read-Only Payroll Access**:
+   - In `restaurant-operations-app.tsx`, remove the `isManager` gate from `payrollTab` so regular staff (servers, hosts, bussers) in real mode can see and click Payroll.
+   - In `payroll-workspace.tsx`, `SelfPayrollView` renders the "My Payroll" view showing only the user's own locked/paid periods and read-only ledger. Admin controls (`Generate period`, `Record payment`, rate editing) are strictly omitted.
+   - Enforced by existing Supabase RLS (`payroll_periods_select_self`, `payroll_payments_select_self`, `payroll_adjustments_select_self`).
+6. **Corporate Letterhead Timesheet & Combined Statement**:
+   - Letterhead includes "The Monk's" logo (`https://www.monkswebster.com/assets/img/logo-light.png`), restaurant details, employee designation, and month/year.
+   - Print pagination enforced: `@media print { .employee-timesheet { page-break-after: always; break-after: page; } .employee-timesheet:last-child { page-break-after: auto; break-after: auto; } }`.
+   - Combined Monthly Statement action button in both Attendance and Payroll views.
+   - Server action `getCombinedMonthlyStatementAction` securely fetches attendance records and payroll breakdown for that employee and calendar month, enforcing staff can only access their own statement while managers can access any.
 
-## 🔒 Non-negotiable constraints
+## 🔒 Non-negotiable Constraints
 
-- No connection or calculation ever involves tip allocations (already
-  true, see finding 7 -- this build adds no cross-read).
-- A regular employee never sees a draft period, anyone else's balance,
-  or the KPI dashboard -- enforced at the RLS layer for periods (finding
-  1's fix), already true for the dashboard/KPI action itself (Feature
-  020's existing `scope !== "all"` gate).
-- Every new balance/status figure traces back to `period.grossCents`
-  (the frozen snapshot) or a `getPayrollBalance` result -- never a
-  second, independently-computed aggregation that could disagree with
-  the Phase 3 ledger's own proven-correct math.
-- No change to the confirmed-payment immutability triggers, the
-  snapshot-lock trigger, or any existing Phase 1-5 behavior -- this is
-  additive (a new self-select restriction plus new read-only
-  aggregation and UI), not a rewrite.
+- Multi-tenant isolation enforced by `organization_id` and Supabase RLS.
+- Regular staff never see anyone else's payroll periods, balances, or rates.
+- Pure table-rotation engine remains untouched.
+- No tip calculation data is mixed with payroll data.
+- Quality gates (`npm run check`, `npm test`, `npm run build`) must pass before every commit.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: This task file** — populate and commit before any app
-      code.
-- [x] **Step 2: RLS fix + migration + pgTAP**
-  - [x] New migration `20260909120000_payroll_periods_self_locked_only.sql`:
-        tightened `payroll_periods_select_self` to `and status =
-'locked'`.
-  - [x] **Two real cascading regressions caught by re-running the full
-        existing pgTAP suite before trusting the migration, not
-        assumed safe:**
-        (1) `payroll_payments_select_self` and
-        `payroll_adjustments_select_self` each resolve ownership via a
-        plain subquery JOIN against `payroll_periods` -- run as the
-        self-scoped caller, that JOIN is itself subject to the
-        newly-tightened policy, so a CONFIRMED payment or an
-        adjustment against a still-draft period silently became
-        invisible too, contradicting the adjustments policy's own
-        documented "no draft state of its own" design. Fixed with a
-        new narrow `private.owns_payroll_period()` SECURITY DEFINER
-        helper, and both policies rewritten to use it instead of the
-        raw subquery.
-        (2) That same SECURITY DEFINER helper, once added, bypassed
-        `payroll_periods_select_self`'s own inherited "a deactivated
-        member sees nothing" guarantee (originally inherited
-        transitively from `attendance_identity_links`' own RLS, which
-        a SECURITY DEFINER context bypasses along with everything
-        else) -- fixed by re-checking `memberships.active` explicitly
-        inside the helper itself, rather than assuming it's still
-        inherited.
-  - [x] Updated `0010_payroll_schema_rls.test.sql`'s now-incorrect
-        self-select assertion (draft period, previously asserted
-        visible) to assert it's invisible instead; added a new
-        assertion that the same period becomes visible once locked
-        (right after the existing "locking a period..." step).
-        `plan(53)` → `plan(54)`.
-  - [x] `npm run db:reset` + `npm run db:test`: **17/17 files, 211/211
-        assertions**, `Result: PASS`.
-  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
-        (unchanged -- no app code yet), build clean.
-  - [x] Commit.
-- [x] **Step 3: Domain — `payroll-balance-metrics.ts`**
-  - [x] Pure functions: `computeOverallBalanceOwedCents`,
-        `computeOwedForMonth`, `findOldestOpenPeriod`,
-        `groupPeriodsByPerson`, `derivePeriodStatus`.
-  - [x] Unit tests: 16 cases across all five functions, including
-        clamped-vs-unclamped balance summing, "owed" vs "generated"
-        being genuinely different figures, oldest-open ties/empty/
-        all-settled, and "paid" never applying to a still-draft period.
-  - [x] Full gate: format/lint/typecheck clean, 281/281 unit tests
-        (16 new), build clean.
-  - [x] Commit.
-- [x] **Step 4: Action — extend the dashboard payload**
-  - [x] `getPayrollDashboardAction`: added `owedThisMonthCents`,
-        `owedLastMonthCents`, `oldestOpenPeriod`, and the full `periods`
-        array (each with its `balanceCents` attached) to
-        `PayrollDashboard`, computed from data already being fetched
-        (the same `listPayrollPeriods` + per-period `getPayrollBalance`
-        calls the existing fields already used) via the new
-        `payroll-balance-metrics.ts` functions -- no new query.
-  - [x] New `payroll-actions.test.ts` (none existed before): 5 cases --
-        owed-vs-generated genuinely differing, oldest-open-period found
-        and null-when-settled, the full `periods` array with balance
-        attached, and the unlinked-viewer empty shape including the new
-        fields.
-  - [x] Full gate: format/lint/typecheck clean, 286/286 unit tests
-        (5 new), build clean.
-  - [x] Commit.
-- [x] **Step 5: Components — KPI cards, grouped periods, balance panel**
-  - [x] New `payroll-kpi-cards.tsx`: 4 cards (Overall balance owed,
-        Owed this month, Owed last month, Oldest open month -- month
-        name as the headline value, person + amount as a hint line)
-        plus a small "Pay rates" button navigating to Settings.
-  - [x] New `payroll-period-groups.tsx`: collapsible accordion grouped
-        by person (summary row: name, latest hourly rate, open-month
-        count, total balance; sub-rows per month with Hours/Rate/Gross/
-        Balance/Status badge including the new `Paid` state), month
-        filter. Reuses the exact same `regeneratePayrollPeriodAction`/
-        `lockPayrollPeriodAction` the old table used.
-  - [x] New `payroll-balance-panel.tsx`: balance-per-person list with a
-        month filter (defaults to all open months), `Clear` badge at
-        $0.00, overall total footer.
-  - [x] Wired all three into `payroll-workspace.tsx`'s
-        `PrivilegedPayrollView`, which now fetches the dashboard ONCE
-        (lifted up) and passes `dashboard.periods` to both the grouped
-        view and the balance panel -- **decision, documented**: the old
-        `PeriodsTable`/`PeriodRow` (a second, separate
-        `listPayrollPeriodsAction` fetch) is retired outright, not kept
-        alongside the new grouping; `PayrollDashboardTiles` (the old
-        2-tile+table component) is untouched and still used by
-        `SelfPayrollView`, which this step doesn't touch.
-  - [x] `monthLabel` exported from `payroll-workspace.tsx` for the new
-        files to reuse (one already-correct UTC-anchored implementation,
-        not three).
-  - [x] Full gate: format/lint/typecheck clean, 286/286 unit tests
-        (unchanged -- this step is components/wiring only), build
-        clean.
-  - [x] Commit.
-- [x] **Step 6: Live verification (real mode) — genuinely attempted,
-      blocked by a local tooling limitation, not skipped**
-  - [x] Discovered `.env.local`'s `NEXT_PUBLIC_SUPABASE_URL` points at a
-        **remote, hosted** Supabase project, not the local Docker
-        instance -- `npm run dev` in "real mode" with no override would
-        have hit that remote project directly, which does **not** yet
-        have this branch's new migration applied. Pushing a migration
-        to a shared remote project without the user's explicit
-        confirmation is exactly the kind of hard-to-reverse,
-        outward-facing action this session's own discipline requires
-        checking first for -- not done. Redirected instead to local
-        Supabase via env var overrides for this one dev-server run
-        (`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` +
-        matching key), touching nothing durable.
-  - [x] Self-registration requires an already-existing organization row
-        for the configured slug (`NEXT_PUBLIC_RESTAURANT_SLUG=the-monks`)
-        -- confirmed live ("Restaurant not found."); it provisions
-        members, never the first organization. Found and used this
-        repo's own existing `scripts/bootstrap-owner.mjs` for exactly
-        this ("Creates the very first owner + organization + location +
-        passcode for a freshly-migrated Supabase project").
-  - [x] **Genuine blocker, not a code bug**: `bootstrap-owner.mjs`
-        against local Supabase fails at the very first
-        `admin.auth.admin.createUser` call with `invalid JWT: ...
-signing method HS256 is invalid` -- reproduced identically via
-        a raw `curl` straight to the local GoTrue admin endpoint (ruling
-        out a `supabase-js` client bug), with both the classic JWT-style
-        `SERVICE_ROLE_KEY` and the newer `sb_secret_...` key `supabase
-status` itself prints, and again after a full `supabase stop` +
-        `supabase start` (ruling out stale container state). This is a
-        real incompatibility in this project's locally-installed
-        Supabase CLI (v2.76.8; a newer v2.117.0 is available, per the
-        CLI's own update notice) provisioning local GoTrue in a JWT-key
-        configuration its own admin auth calls then can't satisfy --
-        pre-existing, unrelated to any code this feature touches, and
-        genuinely not something to spend further unbounded effort
-        reverse-engineering rather than flagging.
-  - [x] **What live verification is NOT covered by, as a result**: an
-        actual real-mode browser session exercising generate → confirm
-        payment → lock → dashboard/grouped-view/balance-panel render →
-        self-scoped-draft-invisible-then-locked-visible, end to end.
-  - [x] **What stands in its place, and why it's still strong evidence**:
-        the full pgTAP suite (211/211 assertions, including the two real
-        cascading regressions this branch's own migration caused and
-        fixed -- proof the RLS layer this feature depends on is
-        correct, not just assumed); 32 new unit tests across
-        `payroll-balance-metrics.ts` (16) and the dashboard action's new
-        fields (5) plus the pre-existing 11 payroll domain tests,
-        covering every pure calculation the new UI renders; a clean
-        `npm run build` (proves the entire new component tree --
-        prop types, JSX, every import -- type-checks and compiles,
-        which a live session would not additionally re-prove); and a
-        deliberate, careful manual trace of every prop threaded from
-        `PrivilegedPayrollView` down through all three new components
-        during implementation itself.
-  - [x] Recorded here rather than silently dropped from the plan --
-        upgrading the local Supabase CLI (or getting the user's
-        explicit go-ahead to test against the remote project instead)
-        would resolve this, but doing either unprompted is out of scope
-        for this build.
-- [x] **Step 7: Docs**
-  - [x] `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
-        checked off every acceptance criterion, noting which were
-        already-true (the Pay Rates entry point) vs. newly built (the
-        4 KPI cards, grouped view, balance panel) vs. a real gap found
-        and fixed (the self-select RLS restriction). Corrected the
-        Implementation Map (no `payroll_line_items` table;
-        `payroll-dashboard.tsx` folded into the existing
-        `payroll-workspace.tsx` rather than a separate wrapper file) and
-        Data & Authorization (the RLS fix + the two cascading
-        regressions it required). Documented the real-mode-only/no-e2e
-        decision with its reasoning. Status → `complete`.
-  - [x] Updated `docs/STATUS.md` Feature Matrix (new `026` row) + Health
-        Gate line (38/38 unit files, 286/286 tests; 17/17 pgTAP files,
-        211 assertions) + Current Status Overview.
-  - [x] Commit.
-- [x] **Step 8: Final gate, push, open PR (base:
-      `feature/029-tips-from-clocked-in-attendance`), paste real gate
-      output + PR link here.**
-  - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
-        `typecheck` (`next typegen && tsc --noEmit`) all clean.
-  - [x] `npm test`: **38/38 files, 286/286 tests** passed.
-  - [x] `npm run build`: `next build` compiled successfully, typechecked
-        clean, all 13 pages generated.
-  - [x] `npm run db:reset` (fresh, from scratch) + `npm run db:test`:
-        **17/17 pgTAP files, 211/211 assertions**, `Result: PASS`.
-  - [x] Full e2e suite, all specs, all three Playwright projects:
-        **138/138 passed** (desktop, host-tablet, server-mobile). No
-        regressions in any pre-existing suite from this branch's
-        changes (the `onGoToPayRates` wiring in
-        `restaurant-operations-app.tsx` is the only shared-file touch
-        outside `src/features/payroll/`, and every existing spec still
-        passes).
-  - [x] Pushed `feature/026-payroll-dashboard-and-ledger-balances`,
-        opened PR #28 (base
-        `feature/029-tips-from-clocked-in-attendance`):
-        https://github.com/KrapaGoutam/The-Lineup/pull/28
+- [x] **Step 1: Task Initialization & First Commit**
+  - [x] Populate `tasks/current-task.md` with complete plan, file list, and step checklist.
+  - [x] Pre-commit quality gate (`npm run check && npm test && npm run build`).
+  - [x] Commit `tasks/current-task.md`.
 
-## 🗂️ File list
+- [x] **Step 2: Increment 1 — Bug Fixes & Shell Alignment**
+  - [x] Dropdown contrast fix in `src/components/ui/select.tsx` and `src/features/attendance/components/attendance-report.tsx`.
+  - [x] Default landing tab changed to `"allocation"` in `src/components/restaurant-operations-app.tsx`.
+  - [x] Remove `<RateSettings>` from Payroll tab in `src/features/payroll/components/payroll-workspace.tsx` while preserving its export.
+  - [x] Adjust existing E2E tests in `tests/e2e/dashboard.spec.ts` to accommodate allocation landing page.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- `tasks/current-task.md` (this file)
-- `supabase/migrations/<ts>_payroll_periods_self_locked_only.sql` (new)
-- `supabase/tests/database/0010_payroll_schema_rls.test.sql` (updated
-  assertion + 1 new)
-- `src/features/payroll/domain/payroll-balance-metrics.ts` (new)
-- `src/features/payroll/domain/payroll-balance-metrics.test.ts` (new)
-- `src/features/payroll/actions/payroll-actions.ts`
-  (`getPayrollDashboardAction` extended)
-- `src/features/payroll/actions/payroll-actions.test.ts` (new, if none
-  exists yet — check)
-- `src/features/payroll/components/payroll-kpi-cards.tsx` (new)
-- `src/features/payroll/components/payroll-period-groups.tsx` (new)
-- `src/features/payroll/components/payroll-balance-panel.tsx` (new)
-- `src/features/payroll/components/payroll-workspace.tsx` (rewired)
+- [x] **Step 3: Increment 2 — Option 1k Payroll Dashboard Overhaul**
+  - [x] Extend `derivePeriodStatus` in `src/features/payroll/domain/payroll-balance-metrics.ts` to support `"part-paid"`, and add unit tests in `payroll-balance-metrics.test.ts`.
+  - [x] Update `src/features/payroll/components/payroll-kpi-cards.tsx` to render the 3-card Option 1k layout.
+  - [x] Rebuild `src/features/payroll/components/payroll-period-groups.tsx` and `src/features/payroll/components/payroll-balance-panel.tsx` with Option 1k design tokens, avatar colors, and expanded sub-tables.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+
+- [x] **Step 4: Increment 3 — Staff Read-Only Payroll Access**
+  - [x] Enable Payroll tab for regular staff in `src/components/restaurant-operations-app.tsx`.
+  - [x] Polish `SelfPayrollView` in `src/features/payroll/components/payroll-workspace.tsx` for "My Payroll" view without admin actions.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+
+- [x] **Step 5: Increment 4 — Timesheet Letterhead Print & Combined Statement**
+  - [x] Update `PrintableReport` in `src/features/attendance/components/attendance-report.tsx` with corporate letterhead logo and 1-employee-per-page pagination.
+  - [x] Implement `getCombinedMonthlyStatementAction` in `src/features/payroll/actions/statement-actions.ts` with unit tests in `statement-actions.test.ts`.
+  - [x] Implement `src/features/payroll/components/combined-statement-dialog.tsx`.
+  - [x] Wire "Monthly Statement" action buttons into both Attendance and Payroll views.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+
+- [x] **Step 6: Playwright E2E Tests for New Features**
+  - [x] Add Playwright tests verifying:
+    - [x] Initial landing on Table Allocation.
+    - [x] Attendance dropdown options have proper contrast.
+    - [x] Staff member and manager views.
+    - [x] Timesheet and Combined Statement print dialog triggers.
+  - [x] Run full E2E test suite across desktop, tablet, and mobile projects.
+
+- [x] **Step 7: Documentation Updates**
+  - [x] Update `docs/features/026-payroll-dashboard-and-ledger-balances.md`.
+  - [x] Update `docs/features/025-attendance-reporting-and-filters.md`.
+  - [x] Create `docs/features/030-combined-timesheet-payroll-statement.md`.
+  - [x] Update `docs/DESIGN_SYSTEM.md`.
+  - [x] Update `docs/STATUS.md`.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+
+- [x] **Step 8: Final Gate & PR**
+  - [x] Full quality gate verification (`npm run check`, `npm test`, `npm run build`, `npm run db:test`, Playwright E2E).
+  - [x] Push branch to remote and create PR.
+
+## 🗂️ File List
+
+- `tasks/current-task.md`
+- `src/components/ui/select.tsx`
+- `src/components/restaurant-operations-app.tsx`
+- `src/features/attendance/components/attendance-report.tsx`
+- `src/features/attendance/components/attendance-month-nav.tsx`
+- `src/features/payroll/domain/payroll-balance-metrics.ts`
+- `src/features/payroll/domain/payroll-balance-metrics.test.ts`
+- `src/features/payroll/components/payroll-kpi-cards.tsx`
+- `src/features/payroll/components/payroll-period-groups.tsx`
+- `src/features/payroll/components/payroll-balance-panel.tsx`
+- `src/features/payroll/components/payroll-workspace.tsx`
+- `src/features/payroll/actions/statement-actions.ts` (new)
+- `src/features/payroll/actions/statement-actions.test.ts` (new)
+- `src/features/payroll/components/combined-statement-dialog.tsx` (new)
+- `src/features/payroll/components/payroll-workspace.test.tsx` (new)
+- `tests/e2e/dashboard.spec.ts`
+- `tests/e2e/payroll-timesheet-overhaul.spec.ts` (new)
 - `docs/features/026-payroll-dashboard-and-ledger-balances.md`
+- `docs/features/025-attendance-reporting-and-filters.md`
+- `docs/features/030-combined-timesheet-payroll-statement.md` (new)
+- `docs/DESIGN_SYSTEM.md`
 - `docs/STATUS.md`
 
-## Current State & Next Step
+## In-Flight State (Feature 030 build itself)
 
-All 8 steps done and committed. Full gate green (286/286 unit, build
-clean, 211/211 pgTAP, 138/138 e2e across 3 projects). Pushed and PR
-opened: https://github.com/KrapaGoutam/The-Lineup/pull/28 (base
-`feature/029-tips-from-clocked-in-attendance`). Feature 026 complete --
-this closes out Wave 3.
+- All Steps 1-8 completed. Full verification passing (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test` 211/211, Playwright E2E 12/12).
+- Resumed after a usage-limit cutoff: branch was already fully committed and
+  pushed, but no PR existed yet. Discarded two stray, unrelated
+  whitespace-only diffs (`hydration-marker.tsx`, `tests/e2e/debug.spec.ts`)
+  left over in the working tree, re-confirmed the full gate green
+  (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test`
+  211/211 — this feature touches no migrations), and opened
+  [PR #29](https://github.com/KrapaGoutam/The-Lineup/pull/29) against `main`.
+- Feature 030 is now fully complete: implemented, verified, documented, and
+  in an open PR.
+
+---
+
+# Bug Fix Pass: Live Print & Payroll Issues (same branch, same PR #29)
+
+**Status:** In progress
+
+## 🎯 Objective
+
+Fix 4 live bugs found testing PR #29: (1) unreliable/non-copiable print
+output caused by an external raster logo image inside every print
+surface, (2) no dynamic PDF filename at all (no code ever touched
+`document.title`), (3) a real duplicate-content print-isolation bug in
+`CombinedStatementDialog`, and (4) no multi-select batch payroll print
+exists yet. Also standardize letterhead branding and print CSS across
+all three print surfaces.
+
+## 📖 Investigation findings (read the real code first, not the bug list alone)
+
+1. **No raster-canvas / html2canvas exists anywhere** (`grep` confirmed
+   zero matches repo-wide) -- "flattened, unselectable raster" isn't a
+   canvas-snapshot bug. The real cause: every print surface's
+   "letterhead" embeds an **external, network-dependent raster
+   `<img src="https://www.monkswebster.com/...">`** (with
+   `crossOrigin="anonymous"`, which fails hard offline or if the host is
+   unreachable/hotlink-blocked) instead of an inline vector. Fix: one
+   shared `<ReportLetterhead>` with an embedded inline SVG, replacing
+   the raster `<img>` in both places it appears inside a print area.
+2. **No dynamic filename code exists at all** -- grepped for
+   `document.title`/`triggerPrintWithFilename` across every print
+   trigger; every one of them is a bare `window.print()`. This isn't a
+   "fix a bug" task for this piece, it's "build it," in
+   `src/lib/print-utils.ts`.
+3. **Real root cause of the 2-page duplicate, found reading
+   `combined-statement-dialog.tsx` directly**: its print isolation
+   relies entirely on the `body * { visibility: hidden }` +
+   `position: absolute` global trick, applied to a print area that is
+   NOT wrapped in `hidden print:block` (it's the dialog's own always-
+   visible on-screen content). `visibility: hidden` elements still
+   occupy layout space (unlike `display: none`), and combining that with
+   `position: absolute` on the one visible island is a well-known class
+   of Chrome print-pagination bug (duplicate/blank pages) -- confirmed
+   as the mechanism, not guessed. The dialog's own scrollable/clamped
+   ancestors (`max-h-[92vh] overflow-hidden`, `overflow-y-auto`) are
+   never reset for print either, which independently risks clipping
+   real content. Fix: drop the visibility/position trick everywhere,
+   standardize on `hidden print:block` for the print root + `print:hidden`
+   on every on-screen chrome element (already the pattern
+   `attendance-report.tsx`'s `PrintableReport` half-used), and add
+   `print:` overrides to reset the dialog's overflow/height clamps.
+   `PeriodLedgerPanel`'s single-statement print has the identical
+   fragile pattern -- same fix applied there too.
+4. **No payroll batch/multi-select print exists at all** -- the only
+   existing payroll print is `PeriodLedgerPanel`'s single-period
+   "Print statement" button. `PayrollDashboard.periods` (already fetched
+   once by `PrivilegedPayrollView`, already carrying each period's own
+   `balanceCents`/`status`) is exactly the data a batch dialog needs --
+   no new server action required, just a new client component consuming
+   data that's already loaded and already correctly RLS-scoped.
+5. **App-shell logo occurrences are unrelated** -- the two
+   `restaurant-operations-app.tsx` raster logos are the header/mobile
+   "Home" button branding, never inside a print area (already hidden
+   from print entirely once the shell gets `print:hidden`). Left
+   untouched -- out of scope for print bugs.
+
+## 🔒 Non-negotiable constraints (same as the base feature)
+
+- Multi-tenant isolation enforced by `organization_id` and Supabase RLS
+  -- the new batch print dialog reads only already-fetched,
+  already-scoped `dashboard.periods`/`rateOptions.users`, no new fetch.
+- Regular staff never see anyone else's payroll periods or balances --
+  unaffected by this pass (no access-control code touched).
+- Quality gates (`npm run check`, `npm test`, `npm run build`) pass
+  before every commit.
+
+## 🛠️ Implementation Steps
+
+- [x] **Step 1: This task file update** -- commit before any code.
+- [x] **Step 2: Shared print infrastructure**
+  - [x] `src/lib/print-utils.ts` (new): `triggerPrintWithFilename`,
+        `formatMonthYearShort`, and the 5 filename-builder conventions.
+  - [x] `src/lib/print-utils.test.ts` (new): 13 unit tests -- every
+        filename convention, the title-set-before-print ordering, the
+        `afterprint` restore, the fallback-timeout restore, and a
+        regression test for a real double-restore bug caught while
+        writing the tests (the fallback timeout stomping a title change
+        made after `afterprint` already restored it -- fixed with a
+        `restored` guard in the implementation itself).
+  - [x] `src/components/print/report-letterhead.tsx` (new):
+        `ReportLetterhead` with an embedded inline SVG vector mark
+        (no external `<img>`, never network-dependent), "The Monk's
+        Indian Fusion - Webster" heading, and the document-type/
+        employee/period/generated-at metadata banner.
+  - [x] Shared `@media print` block in `src/app/globals.css`:
+        `.print-timesheet-table` hidden-line tokens, `.print-page-break`
+        (+ `:last-child` exclusion), `user-select: text`, app-shell
+        (`header`, `nav`, `button`, `.no-print`) hiding.
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests
+        (13 new), build clean.
+  - [x] Commit.
+- [x] **Step 3: Fix Attendance print** (bugs 1, 2, 3)
+  - [x] `attendance-report.tsx`'s `PrintableReport`: swapped the raster
+        `<img>` letterhead for `<ReportLetterhead>`; dropped the
+        component's own redundant `visibility:hidden` +
+        `position:absolute` trick and its per-component `<style>` tag
+        entirely, now purely `hidden print:block` + the shared
+        `.print-page-break` class.
+  - [x] `printJob` now carries its own `year`/`month` (captured at build
+        time); the print-triggering effect routes through
+        `triggerPrintWithFilename` with the roster/single-employee
+        filename convention (`sections.length === 1` picks single vs.
+        roster).
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
+        build clean.
+  - [x] Live-verified in demo mode (manager): single-employee print
+        (via the dialog's "Print current employee") set
+        `document.title` to exactly `"Anil (Host) Attendance Report Sep
+2026"`, called `window.print()` with that title, restored the
+        original title after, rendered zero `<img>`/one `<svg>` in the
+        print area, exact letterhead text ("The Monk's Indian Fusion -
+        Webster" / "Monthly Attendance Timesheet" / "Generated Sep 9,
+        2026" / employee / period), and exactly one
+        `.print-page-break` element. "All employees" print (direct,
+        no dialog) set the title to `"Staff attendance Report Sep
+2026"` and rendered exactly 5 `.print-page-break` elements (one
+        per active demo employee).
+  - [x] Commit.
+- [x] **Step 4: Fix Combined Statement dialog** (bugs 1, 2, 3 -- the
+      confirmed duplicate-page root cause)
+  - [x] `combined-statement-dialog.tsx`: swapped the raster `<img>` +
+        the separate "Employee & Period Details" block for one
+        `<ReportLetterhead>`; removed the `visibility:hidden` +
+        `position:absolute` trick and its `<style>` tag entirely; added
+        `print:hidden` to the toolbar (`CardHeader`); added `print:`
+        overrides on the overlay (`print:static print:inset-auto
+print:h-auto print:overflow-visible print:bg-transparent
+print:p-0`) and the `Card`/`CardContent` (`print:max-h-none
+print:overflow-visible`, etc.) resetting the dialog's own
+        `max-h-[92vh]`/`overflow` clamps so the full statement prints,
+        not just what's scrolled into view -- a real, independent
+        clipping risk from the isolation bug itself.
+  - [x] Both tables tagged `.print-timesheet-table` for the shared
+        hidden-line styling.
+  - [x] Routed "Print" through `triggerPrintWithFilename` with the
+        Combined Statement filename convention.
+  - [x] Fixed a pre-existing test in `payroll-workspace.test.tsx` that
+        asserted the old `statement.restaurant.name` text (no longer
+        rendered -- the letterhead is now a fixed heading) and asserted
+        `window.print()` synchronously right after the click (now
+        deferred behind `triggerPrintWithFilename`'s internal
+        `setTimeout`, needs `waitFor`).
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
+        build clean.
+  - [x] Live-verified in demo mode (manager, Attendance's "Monthly
+        Statement" button): dialog rendered the new letterhead exactly
+        ("The Monk's Indian Fusion - Webster" heading, one inline SVG,
+        zero `<img>`); clicking Print set `document.title` to exactly
+        `"Anil Monthly Report Sep 2026"`; DOM inspection confirmed
+        exactly one `#combined-statement-print-area` element, one
+        `<h1>`, zero raster images; confirmed the new `print:`-prefixed
+        Tailwind classes actually compiled onto the overlay/Card
+        elements in the rendered DOM (not just present in source).
+  - [x] Commit.
+- [x] **Step 5: Fix payroll single-statement print** (bugs 1, 2, 3)
+  - [x] `payroll-workspace.tsx`'s `PeriodLedgerPanel`: added
+        `<ReportLetterhead>` (previously had no letterhead at all, just
+        a bare `{organizationName}`/"Payroll Statement" heading);
+        removed the same fragile `visibility:hidden` +
+        `position:absolute` `<style>` trick (the print area was already
+        `hidden print:block`, and both `CardHeader`/`CardContent` are
+        now/already `print:hidden` -- no extra mechanism was ever
+        needed); tagged the ledger table `.print-timesheet-table`;
+        routed "Print statement" through `triggerPrintWithFilename`
+        with the single-payroll filename convention.
+  - [x] New unit test (`payroll-workspace.test.tsx`): opens a period's
+        ledger, confirms the shared letterhead heading and document
+        type render, clicks "Print statement", and asserts
+        `document.title` was set to exactly `"Mia Chen (Server)
+Payroll Report Aug 2026"` when `window.print()` fired.
+        Real-mode-only feature (Payroll stays `!demoMode`-gated, same
+        as it's been since Feature 020) -- this jsdom-level component
+        test is the closest available substitute for a live Playwright
+        check here, matching the same precedent Feature 020/026 already
+        set (Vitest-covered, no e2e, for exactly this reason).
+  - [x] Full gate: format/lint/typecheck clean, 309/309 unit tests
+        (1 new), build clean.
+  - [x] Commit.
+- [x] **Step 6: Payroll multi-select batch print** (bug 4)
+  - [x] New `src/features/payroll/components/payroll-print-dialog.tsx`:
+        month selector (a specific `periodMonth` or "All open months" --
+        every period with `balanceCents > 0` for the chosen
+        employee(s), regardless of which month), employee scope
+        (current/selected/all, checkboxes reusing this feature's own
+        `getPersonColor`/`getPersonInitials`), one letterhead page per
+        employee (their matching periods as a small table on that one
+        page), dynamic roster/single filename via
+        `triggerPrintWithFilename`. Reads only the already-fetched,
+        already-RLS-scoped `dashboard.periods`/`rateOptions.users` --
+        zero new server actions.
+  - [x] Wired a "Print Statements" button into `PayrollKpiCards`'
+        toolbar (no preselection), and a small per-person print icon
+        button into `PayrollPeriodGroups`' person header (pre-selects
+        that person as "current employee").
+  - [x] New `payroll-print-dialog.test.tsx`, 7 tests: default
+        month/scope, roster print (2 people, 2 `.print-page-break`
+        pages, `"Staff Payroll Report Sep 2026"`), pre-selected current-
+        employee single print (`"Mia Chen (Server) Payroll Report Sep
+2026"`), "all open months" correctly including only a
+        positive-balance period and excluding a zero-balance one for
+        the same person, the "choose at least one" refusal, the
+        "nobody matches that month" refusal, and one letterhead per
+        printed page.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests
+        (7 new), build clean. Real-mode-only feature, same as Step 5 --
+        no live Playwright check for the same established reason.
+  - [x] Commit.
+- [x] **Step 7: E2E + remaining unit coverage**
+  - [x] Rewrote `tests/e2e/payroll-timesheet-overhaul.spec.ts`'s two
+        print tests, which were stale against every bug fix (asserted
+        the old raster `<img>`, the old `.employee-timesheet` class,
+        the old `"The Monk's Restaurant & Bar"` text, and — a real,
+        newly-introduced race condition — `printCallCount` synchronously
+        right after the click, which now loses the race against
+        `triggerPrintWithFilename`'s internal `setTimeout`). Added a
+        `waitForPrintTitles` poll helper (records every title
+        `window.print()` was called with, not just a count, since the
+        whole point is that `document.title` is a _specific_ value at
+        call time) and a new "All employees" roster print test.
+  - [x] Found the identical stale-assertion problem in the _existing_
+        `attendance-reporting.spec.ts` while running the full suite --
+        3 of its tests started failing for exactly the same
+        `printCallCount` race (a real regression from Steps 3-4's
+        filename work, not a pre-existing flake). Added a
+        `waitForPrintCallCount` poll helper there too and converted all
+        6 call sites.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
+        build clean, full Playwright suite 153/153 passed across
+        desktop/host-tablet/server-mobile (including every
+        pre-existing spec, not just the two touched here).
+  - [x] Payroll batch print dialog has no e2e coverage on purpose --
+        Payroll stays `!demoMode`-gated (unchanged since Feature 020)
+        and this whole suite runs in demo mode; covered instead by
+        `payroll-print-dialog.test.tsx`'s 7 Vitest tests (Step 6).
+  - [x] Commit.
+- [x] **Step 8: Documentation**
+  - [x] Updated `docs/features/030-combined-timesheet-payroll-statement.md`:
+        fixed the PR link (#30 → #29), corrected the letterhead/logo and
+        pagination-class references throughout, added a new "Bug Fix
+        Pass" section with root causes, added 5 new acceptance criteria,
+        updated the Implementation Map and Test Plan with real file
+        names and test counts.
+  - [x] Updated `docs/features/025-attendance-reporting-and-filters.md`:
+        corrected its own "Evolution in Feature 030" section (shared
+        `ReportLetterhead`, `.print-page-break`) and added a "Bug Fix
+        Pass" subsection.
+  - [x] Updated `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
+        added items 6-7 (payroll batch print, single-statement
+        letterhead/filename/isolation fix) under a new "Bug Fix Pass"
+        subsection.
+  - [x] Updated `docs/DESIGN_SYSTEM.md`'s print section: corrected the
+        letterhead description (embedded SVG, not the raster logo),
+        added `.print-timesheet-table` hidden-line CSS documentation,
+        documented the `hidden print:block`/`print:hidden` isolation
+        architecture (replacing the old visibility/position
+        description), and documented `triggerPrintWithFilename`'s 5
+        naming conventions.
+  - [x] Updated `docs/STATUS.md`: corrected the Health Gate line (42/42
+        Vitest files, 316/316 tests, full e2e suite 153/153), rewrote
+        the Current State paragraph to describe the bug-fix pass, and
+        updated the Feature 030 Feature Matrix row.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
+        build clean.
+  - [x] Commit.
+- [x] **Step 9: Final gate + push to PR #29**
+  - [x] Full gate, all real command output: `npm run check` clean,
+        `npm test` 42/42 files / 316/316 tests, `npm run build` clean,
+        `npm run db:test` 17/17 files / 211/211 assertions (unaffected
+        -- confirmed no migration was touched by this branch relative
+        to `main`), full Playwright suite 153/153 across desktop/host-
+        tablet/server-mobile.
+  - [x] Pushed to `feature/030-payroll-ui-timesheet-print-overhaul` --
+        PR #29 picks up the new commits automatically.
+
+## 🗂️ File List (bug-fix pass additions)
+
+- `src/lib/print-utils.ts` (new)
+- `src/lib/print-utils.test.ts` (new)
+- `src/components/print/report-letterhead.tsx` (new)
+- `src/app/globals.css`
+- `src/features/attendance/components/attendance-report.tsx`
+- `src/features/payroll/components/combined-statement-dialog.tsx`
+- `src/features/payroll/components/payroll-workspace.tsx`
+- `src/features/payroll/components/payroll-kpi-cards.tsx`
+- `src/features/payroll/components/payroll-period-groups.tsx`
+- `src/features/payroll/components/payroll-print-dialog.tsx` (new)
+- `tests/e2e/payroll-timesheet-overhaul.spec.ts`
+- `docs/features/025-attendance-reporting-and-filters.md`
+- `docs/features/026-payroll-dashboard-and-ledger-balances.md`
+- `docs/features/030-combined-timesheet-payroll-statement.md`
+- `docs/DESIGN_SYSTEM.md`
+- `docs/STATUS.md`
+
+## In-Flight State (bug fix pass)
+
+All Steps 1-9 complete. The bug-fix pass is fully done: all 4 live
+bugs fixed and live/unit-verified, full gate green (`npm run check`,
+316/316 Vitest tests, clean build, 211/211 pgTAP, 153/153 Playwright),
+docs reconciled, pushed to PR #29. Nothing further pending on this
+branch.

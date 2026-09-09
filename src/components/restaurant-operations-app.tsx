@@ -496,7 +496,7 @@ export function RestaurantOperationsApp({
   initialAllocationContext?: AllocationContext | null;
 }) {
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
-  const [tab, setTab] = useState<AppTab>("schedule");
+  const [tab, setTab] = useState<AppTab>("allocation");
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Feature 015 (Phases B/D): real mode seeds every one of these from the
@@ -642,7 +642,7 @@ export function RestaurantOperationsApp({
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
-    ...(isManager && !demoMode ? [payrollTab] : []),
+    ...(!demoMode ? [payrollTab] : []),
   ];
   // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
   const moreTabs = [...secondaryTabs];
@@ -1870,7 +1870,7 @@ export function RestaurantOperationsApp({
             demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
           />
         ) : null}
-        {tab === "payroll" && isManager && !demoMode ? (
+        {tab === "payroll" && !demoMode ? (
           <PayrollWorkspace
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}
