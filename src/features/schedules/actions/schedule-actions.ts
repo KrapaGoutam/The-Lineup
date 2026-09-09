@@ -8,11 +8,13 @@ import {
   getWeekScheduleData,
   type WeekScheduleData,
 } from "@/features/schedules/data/schedule-data";
-import type {
-  ShiftDefaults,
-  ShiftKind,
+import {
+  addDays,
+  type ShiftDefaults,
+  type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { nextPublishedVersion } from "@/features/schedules/domain/schedule-versioning";
+import { writeAuditEvent } from "@/features/team/data/audit-log";
 import { getCurrentUser } from "@/lib/current-user";
 import type { DemoShift } from "@/lib/demo-data";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -344,4 +346,215 @@ export async function getScheduleContextForWeekAction(input: {
     return { ok: false, error: "No location is set up yet." };
   }
   return { ok: true, data: result };
+}
+
+/**
+ * Feature 027. Editing/deleting a shift -- there was no action for
+ * either at all before this feature (see tasks/current-task.md's
+ * Investigation #2), published or draft alike. RLS already permits this
+ * write regardless of the shift's schedule_periods.status (Investigation
+ * #4, confirmed by reading the migration directly, not assumed) -- these
+ * two actions add no new status gate of their own, matching that.
+ *
+ * Deliberately does NOT let the service date move: `serviceDate`/
+ * `endDate` stay whatever they already were on the row. The spec's own
+ * scope is "edit start/end times, assignees, or remove shifts" -- moving
+ * a shift to a different calendar day is out of that literal scope;
+ * delete + recreate is the path for that instead.
+ */
+export type UpdateShiftInput = {
+  restaurantSlug: string;
+  organizationId: string;
+  shiftId: string;
+  timeZone: string;
+  employeeId: string;
+  shiftKind: ShiftKind;
+  startLocal: string;
+  endLocal: string;
+  note?: string;
+};
+
+export async function updateShiftAction(
+  input: UpdateShiftInput,
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const currentUser = await getCurrentUser(input.restaurantSlug);
+  if (!currentUser) {
+    return { ok: false, error: "You need to sign in to edit a shift." };
+  }
+  if (currentUser.organizationId !== input.organizationId) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+
+  const shiftId = Number(input.shiftId);
+  if (!Number.isFinite(shiftId)) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+
+  // `shift_assignments`'s own tenant-composite FK constraint, same
+  // naming reason as SHIFTS_SELECT in schedule-data.ts.
+  const { data: before, error: beforeError } = await supabase
+    .from("shifts")
+    .select(
+      "id, service_date, end_date, kind, starts_at, ends_at, notes, shift_assignments!shift_assignments_shift_tenant_fk(profile_id)",
+    )
+    .eq("id", shiftId)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+  if (beforeError || !before) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+  const previousAssignment = before.shift_assignments as unknown as
+    | { profile_id: string }[]
+    | null;
+  const previousEmployeeId = previousAssignment?.[0]?.profile_id ?? null;
+
+  // Same overnight-detection rule createShiftInstances already uses --
+  // an edit that flips a shift into (or out of) crossing midnight still
+  // needs the right end_date, not just the right end_at instant.
+  const endDate =
+    input.endLocal <= input.startLocal
+      ? addDays(before.service_date, 1)
+      : before.service_date;
+  const startsAt = zonedWallTimeToInstant({
+    date: before.service_date,
+    time: input.startLocal,
+    timeZone: input.timeZone,
+  });
+  const endsAt = zonedWallTimeToInstant({
+    date: endDate,
+    time: input.endLocal,
+    timeZone: input.timeZone,
+  });
+
+  const { error: updateError } = await supabase
+    .from("shifts")
+    .update({
+      end_date: endDate,
+      kind: input.shiftKind,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+      // An explicit edit is always a deliberate override -- never
+      // silently re-flagged as "using the configured defaults" again.
+      uses_default_time: false,
+      notes: input.note ?? null,
+    })
+    .eq("id", shiftId)
+    .eq("organization_id", input.organizationId);
+  if (updateError) return { ok: false, error: updateError.message };
+
+  if (previousEmployeeId !== input.employeeId) {
+    // No "update the profile_id" semantics worth preserving here -- this
+    // app's current model is one assignment row per shift; swapping the
+    // assignee is delete-then-insert, not a column update.
+    const { error: unassignError } = await supabase
+      .from("shift_assignments")
+      .delete()
+      .eq("shift_id", shiftId);
+    if (unassignError) return { ok: false, error: unassignError.message };
+    const { error: assignError } = await supabase
+      .from("shift_assignments")
+      .insert({
+        organization_id: input.organizationId,
+        shift_id: shiftId,
+        profile_id: input.employeeId,
+      });
+    if (assignError) return { ok: false, error: assignError.message };
+  }
+
+  await writeAuditEvent(supabase, {
+    organizationId: input.organizationId,
+    actorProfileId: currentUser.profileId,
+    action: "update_shift",
+    entityType: "shift",
+    entityId: input.shiftId,
+    beforeState: {
+      kind: before.kind,
+      startsAt: before.starts_at,
+      endsAt: before.ends_at,
+      employeeId: previousEmployeeId,
+      notes: before.notes,
+    },
+    afterState: {
+      kind: input.shiftKind,
+      startLocal: input.startLocal,
+      endLocal: input.endLocal,
+      employeeId: input.employeeId,
+      note: input.note ?? null,
+    },
+  });
+
+  revalidatePath(`/r/${input.restaurantSlug}`);
+  return { ok: true, data: null };
+}
+
+export async function deleteShiftAction(input: {
+  restaurantSlug: string;
+  organizationId: string;
+  shiftId: string;
+}): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const currentUser = await getCurrentUser(input.restaurantSlug);
+  if (!currentUser) {
+    return { ok: false, error: "You need to sign in to delete a shift." };
+  }
+  if (currentUser.organizationId !== input.organizationId) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+
+  const shiftId = Number(input.shiftId);
+  if (!Number.isFinite(shiftId)) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+
+  const { data: before, error: beforeError } = await supabase
+    .from("shifts")
+    .select(
+      "id, service_date, end_date, kind, starts_at, ends_at, shift_assignments!shift_assignments_shift_tenant_fk(profile_id)",
+    )
+    .eq("id", shiftId)
+    .eq("organization_id", input.organizationId)
+    .maybeSingle();
+  if (beforeError || !before) {
+    return { ok: false, error: "That shift no longer exists." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("shifts")
+    .delete()
+    .eq("id", shiftId)
+    .eq("organization_id", input.organizationId);
+  if (deleteError) return { ok: false, error: deleteError.message };
+
+  // shift_assignments has `on delete cascade` from shifts (see
+  // 20260905065702_initial_schema.sql) -- the assignment row is already
+  // gone by the time this runs, nothing further to clean up there.
+  const assignment = before.shift_assignments as unknown as
+    | { profile_id: string }[]
+    | null;
+  await writeAuditEvent(supabase, {
+    organizationId: input.organizationId,
+    actorProfileId: currentUser.profileId,
+    action: "delete_shift",
+    entityType: "shift",
+    entityId: input.shiftId,
+    beforeState: {
+      serviceDate: before.service_date,
+      endDate: before.end_date,
+      kind: before.kind,
+      startsAt: before.starts_at,
+      endsAt: before.ends_at,
+      employeeId: assignment?.[0]?.profile_id ?? null,
+    },
+    afterState: null,
+  });
+
+  revalidatePath(`/r/${input.restaurantSlug}`);
+  return { ok: true, data: null };
 }

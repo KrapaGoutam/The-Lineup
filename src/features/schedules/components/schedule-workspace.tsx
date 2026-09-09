@@ -22,6 +22,10 @@ import { Select } from "@/components/ui/select";
 import { getScheduleContextForWeekAction } from "@/features/schedules/actions/schedule-actions";
 import { CsvImportPanel } from "@/features/schedules/components/csv-import-panel";
 import {
+  ShiftEditDialog,
+  type ShiftEditResult,
+} from "@/features/schedules/components/shift-edit-dialog";
+import {
   expandRecurringDates,
   WEEKDAY_TOKENS,
 } from "@/features/schedules/domain/recurring-shifts";
@@ -110,17 +114,19 @@ function leadingBlankCount(firstOfMonth: string) {
 function ShiftBlock({
   shift,
   compact = false,
+  onEdit,
 }: {
   shift: DemoShift;
   compact?: boolean;
+  // Feature 027: manager-only, week-grid-only (see this component's own
+  // call sites) -- the month view's compact block only ever shows the
+  // signed-in user's own shift and has no editing affordance, matching
+  // the spec's own scope (Week Navigation + shift editing, not a
+  // separate month-view editing surface).
+  onEdit?: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border px-2.5 py-2",
-        shiftStyles[shift.shiftKind],
-      )}
-    >
+  const content = (
+    <>
       <div className="flex items-center gap-1.5">
         <span className="text-xs font-semibold">
           {shiftLabels[shift.shiftKind]}
@@ -136,6 +142,33 @@ function ShiftBlock({
           {displayTime(shift.startLocal)}–{displayTime(shift.endLocal)}
         </p>
       ) : null}
+    </>
+  );
+
+  if (onEdit) {
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${shiftLabels[shift.shiftKind]} shift, ${displayTime(shift.startLocal)}–${displayTime(shift.endLocal)}`}
+        className={cn(
+          "min-h-11 w-full rounded-lg border px-2.5 py-2 text-left transition hover:brightness-110",
+          shiftStyles[shift.shiftKind],
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-2.5 py-2",
+        shiftStyles[shift.shiftKind],
+      )}
+    >
+      {content}
     </div>
   );
 }
@@ -375,6 +408,8 @@ export function ScheduleWorkspace({
   demoMode,
   onAddShifts,
   onPublish,
+  onUpdateShift,
+  onDeleteShift,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -387,11 +422,23 @@ export function ScheduleWorkspace({
   demoMode: boolean;
   onAddShifts: (shifts: DemoShift[]) => void;
   onPublish: () => void;
+  onUpdateShift: (input: {
+    shiftId: string;
+    employeeId: string;
+    shiftKind: ShiftKind;
+    startLocal: string;
+    endLocal: string;
+    note?: string;
+  }) => Promise<ShiftEditResult>;
+  onDeleteShift: (input: { shiftId: string }) => Promise<ShiftEditResult>;
 }) {
   const isManager = user.role !== "server";
   const [view, setView] = useState<"week" | "month">("week");
   const [showEditor, setShowEditor] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
+  // Feature 027: which shift the edit dialog is open for, manager-only,
+  // week-grid-only (ShiftBlock's own onEdit doc comment).
+  const [editingShift, setEditingShift] = useState<DemoShift | null>(null);
 
   // Feature 027: week navigation. `weekDates[0]` (the initial, "today"
   // week from the Server Component's own load / demo's fixed anchor) is
@@ -459,6 +506,31 @@ export function ScheduleWorkspace({
     if (!demoMode && !isInitialWeek) {
       setWeekReloadKey((key) => key + 1);
     }
+  }
+
+  // Feature 027: thin wrappers so a browsed (non-today) real-mode week
+  // refreshes the same way an add does, on top of whatever optimistic
+  // update the parent's own onUpdateShift/onDeleteShift already applied
+  // to `shifts`.
+  async function handleUpdateShift(
+    shiftId: string,
+    submission: {
+      employeeId: string;
+      shiftKind: ShiftKind;
+      startLocal: string;
+      endLocal: string;
+      note?: string;
+    },
+  ): Promise<ShiftEditResult> {
+    const result = await onUpdateShift({ shiftId, ...submission });
+    if (result.ok) afterMutation();
+    return result;
+  }
+
+  async function handleDeleteShift(shiftId: string): Promise<ShiftEditResult> {
+    const result = await onDeleteShift({ shiftId });
+    if (result.ok) afterMutation();
+    return result;
   }
 
   const visibleShifts = useMemo(
@@ -730,7 +802,15 @@ export function ScheduleWorkspace({
                           className="border-border min-h-24 space-y-1.5 border-r p-2 last:border-r-0"
                         >
                           {cellShifts.map((shift) => (
-                            <ShiftBlock key={shift.id} shift={shift} />
+                            <ShiftBlock
+                              key={shift.id}
+                              shift={shift}
+                              onEdit={
+                                isManager
+                                  ? () => setEditingShift(shift)
+                                  : undefined
+                              }
+                            />
                           ))}
                         </div>
                       );
@@ -820,6 +900,24 @@ export function ScheduleWorkspace({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {editingShift && isManager ? (
+        <ShiftEditDialog
+          shift={editingShift}
+          employeeName={
+            team.find((member) => member.id === editingShift.employeeId)
+              ?.name ?? "Unknown"
+          }
+          dateLabel={monthDayLabel(editingShift.serviceDate)}
+          team={team}
+          shiftDefaults={shiftDefaults}
+          onClose={() => setEditingShift(null)}
+          onSave={(submission) =>
+            handleUpdateShift(editingShift.id, submission)
+          }
+          onDelete={() => handleDeleteShift(editingShift.id)}
+        />
       ) : null}
     </div>
   );

@@ -322,8 +322,8 @@ load()` called immediately, matching `AttendanceReport`'s own
         already covered in Step 3), `npm run build`, `npm run db:test`
         (17/17, 210 assertions, unchanged) all pass.
   - [x] Commit.
-- [ ] **Step 7: Post-publish (and pre-publish) shift editing**
-  - [ ] `actions/schedule-actions.ts`: new `updateShiftAction` (assignee,
+- [x] **Step 7: Post-publish (and pre-publish) shift editing**
+  - [x] `actions/schedule-actions.ts`: new `updateShiftAction` (assignee,
         shift kind label, start/end time, note — deliberately NOT the
         service date itself, out of the spec's literal scope; moving a
         shift to a different day is delete + recreate) and
@@ -337,33 +337,55 @@ load()` called immediately, matching `AttendanceReport`'s own
         already holds every field it just submitted and applies the
         edit optimistically itself (the same pattern `addShiftAction`'s
         own caller already uses), rather than round-tripping a refetch.
-  - [ ] New `components/shift-edit-dialog.tsx`: person/kind/start/end/note
+        Overnight end-date recomputed via the same
+        `endLocal <= startLocal ? addDays(serviceDate, 1) : serviceDate`
+        rule `createShiftInstances` already uses.
+  - [x] New `components/shift-edit-dialog.tsx`: person/kind/start/end/note
         fields pre-filled from the clicked shift, "Save," and a two-step
         "Delete shift" → "Confirm delete" control (matching this app's
         established destructive-action pattern, e.g. team's dialogs).
-  - [ ] `schedule-workspace.tsx`: `ShiftBlock` becomes a button for a
-        manager (unchanged, read-only for a server), opening the new
-        dialog.
-  - [ ] `restaurant-operations-app.tsx`: new `updateShift`/`deleteShift`
+        `Button` has no `"destructive"` variant in this codebase (checked
+        `button.tsx` directly) — used `variant="outline"` plus
+        `text-destructive`/`border-destructive` tokens instead.
+  - [x] `schedule-workspace.tsx`: `ShiftBlock` becomes a `<button>` for a
+        manager in the week grid (unchanged plain `<div>`, read-only, for
+        a server, and unchanged for the month view's own-shift block),
+        opening the new dialog.
+  - [x] `restaurant-operations-app.tsx`: new `updateShift`/`deleteShift`
         handlers (demo + real dual branch, mirroring `addShifts`), each
-        patching both the parent's own `shifts` state and (when
-        applicable) `ScheduleWorkspace`'s locally-fetched browsed-week
-        state so an edit/delete is visible immediately regardless of
-        which week is on screen.
-  - [ ] Live Playwright smoke test: publish a week, edit an already-published
-        shift's time and assignee, confirm the change renders immediately
-        with no separate "unpublish" step; delete a shift and confirm it
-        disappears; confirm a server never sees the edit affordance at
-        all.
-  - [ ] **Decision, stated not assumed**: no dedicated fake-Supabase-builder
+        patching both the parent's own `shifts` state and (via
+        `ScheduleWorkspace`'s `afterMutation`/`weekReloadKey`) the
+        currently-browsed week so an edit/delete is visible immediately
+        regardless of which week is on screen.
+  - [x] Live Playwright smoke test (manager passcode 2468, demo mode):
+        added a Mon Sep 7 Morning shift, published it (1 published/0
+        draft), clicked the still-clickable published block, changed
+        assignee Mia Chen → Leo Park and start time 11:00→09:30 in the
+        dialog, saved — shift immediately re-rendered under Leo Park's
+        row as "9:30 AM–4:00 PM" with no unpublish step and the summary
+        staying at 1 published/0 draft. Re-opened the dialog (confirmed
+        persisted values), clicked "Delete shift" → dialog switched to
+        "Confirm delete"/"Cancel" with Save disabled → confirmed →
+        shift disappeared, summary back to 0/0. Signed out, signed back
+        in as server passcode 1357 (Mia Chen): republished shift showed
+        in the accessibility tree as a plain non-interactive `generic`
+        block (not a `button`), confirming a server never gets the edit
+        affordance. Also confirmed week-nav live: Next week advanced the
+        header to "Sep 14–20" and surfaced a "Today" quick-jump button;
+        clicking it returned the header to "Sep 7–13" (the previously
+        fixed timezone-label bug did not regress).
+  - [x] **Decision, stated not assumed**: no dedicated fake-Supabase-builder
         unit test for `updateShiftAction`/`deleteShiftAction`
         (`publishScheduleAction`'s own test file exists specifically
         because its version-numbering arithmetic is subtle and bug-prone
         — these two actions are comparatively mechanical field writes);
-        covered instead by live testing, the e2e suite (Step 8), and
-        pgTAP's RLS confirmation (Step 2).
-  - [ ] Full gate.
-  - [ ] Commit.
+        covered instead by live testing above, the e2e suite (Step 8),
+        and pgTAP's RLS confirmation (Step 2).
+  - [x] Full gate: `npm run check` (format/lint/typecheck) clean, `npm
+        test` 250/250 (34 files), `npm run build` clean, `npm run
+        db:test` 210/210 assertions across 17 files (unchanged — Step 7
+        added no schema/RLS change, confirming Investigation #4).
+  - [x] Commit.
 - [ ] **Step 8: E2E** (`tests/e2e/recurring-schedules.spec.ts`, new file)
   - [ ] Week navigation: Prev/Next/Today.
   - [ ] Creating a recurring shift across multiple days generates the
@@ -417,6 +439,8 @@ load()` called immediately, matching `AttendanceReport`'s own
 
 ## Current State & Next Step
 
-Steps 1-6 done and committed. Next: Step 7 (post-publish, and
-pre-publish, shift editing — `updateShiftAction`/`deleteShiftAction`,
-`shift-edit-dialog.tsx`, clickable `ShiftBlock`).
+Steps 1-7 done and committed. Next: Step 8 (e2e —
+`tests/e2e/recurring-schedules.spec.ts`: week nav Prev/Next/Today,
+creating a recurring shift across multiple days, editing a shift after
+publishing with a server never seeing the edit control; run across all
+three Playwright projects; full gate; commit).
