@@ -161,8 +161,8 @@ is_recurring boolean not null default false;` — `series_id uuid`
         `npm run check`, `npm test` (214/214, unchanged — no TS-level
         tests in this step), `npm run build` all pass.
   - [x] Commit.
-- [ ] **Step 3: Domain — recurring date generation**
-  - [ ] New `domain/recurring-shifts.ts`: `WEEKDAY_TOKENS` (Sun-first,
+- [x] **Step 3: Domain — recurring date generation**
+  - [x] New `domain/recurring-shifts.ts`: `WEEKDAY_TOKENS` (Sun-first,
         matching `Date.getUTCDay()`'s own 0=Sun convention — deliberately
         NOT the grid's Mon-first display order, matching the spec's own
         "Sunday through Saturday" checkbox wording), `parseWeekdayToken`,
@@ -171,25 +171,30 @@ is_recurring boolean not null default false;` — `series_id uuid`
         `expandRecurringDates({ fromDate, toDate, daysOfWeek })` —
         reuses `expandDateRange` from `shift-planning.ts` (not
         reimplemented) and filters to the given weekdays.
-  - [ ] `domain/shift-planning.ts`: `createShiftInstances` gains an
+  - [x] `domain/shift-planning.ts`: `createShiftInstances` gained an
         optional `dates?: string[]` override — when present, used
         instead of internally calling `expandDateRange(fromDate,
 toDate)`, every other validation/time-resolution rule unchanged.
         Backward compatible (every existing caller omits it). New
         exported `addDays(date, delta)` (generalizes the existing
-        private `nextDate`), reused by the week navigator in Step 5.
-  - [ ] `domain/recurring-shifts.test.ts` (new): weekday parsing
-        (valid tokens, case-insensitivity, unknown-token error,
-        `;` and `,` both accepted); date expansion across a month
-        boundary, a leap year (Feb 29 2028), and a real DST-transition
-        date (America/Chicago springs forward 2026-03-08, falls back
-        2026-11-01) — each expected date/weekday pair independently
-        verified against a real `Date` computation before being written
-        down, not asserted from memory.
-  - [ ] `domain/shift-planning.test.ts`: new case for `createShiftInstances`'s
-        `dates` override.
-  - [ ] Full gate.
-  - [ ] Commit.
+        private `nextDate`, now implemented in terms of it), to be
+        reused by the week navigator in Step 5.
+  - [x] `domain/recurring-shifts.test.ts` (new, 17 tests): weekday
+        parsing (valid tokens, case-insensitivity, unknown-token error,
+        `;`/`,`/mixed all accepted, dedup+sort); date expansion across a
+        month boundary, a leap year (Feb 29 2028), a real DST
+        spring-forward (America/Chicago 2026-03-08) and fall-back
+        (2026-11-01), multiple selected weekdays in one call, an empty
+        result, and confirmation the existing 62-day cap still applies
+        (delegated, not bypassed) — every expected date/weekday pair
+        independently computed via a real `Date` in Node before being
+        written into the test, not asserted from memory.
+  - [x] `domain/shift-planning.test.ts`: new cases for the `dates`
+        override (including that custom-time validation still runs) and
+        for `addDays` (positive/negative/month/year boundaries).
+  - [x] Full gate: `npm run check`, `npm test` (**238/238**, up from
+        214, 33/33 files), `npm run build` all pass.
+  - [x] Commit.
 - [ ] **Step 4: CSV `days` column**
   - [ ] `domain/parse-schedule-csv.ts`: `CsvRowInput` gains `days: string`
         (optional column — absent header means every row's `days` reads
@@ -363,6 +368,4 @@ weekStartDate })` — client-triggered, re-derives the caller's own
 
 ## Current State & Next Step
 
-Step 2 done and committed. Next: Step 3 (domain — `recurring-shifts.ts`
-weekday parsing + date expansion, `shift-planning.ts`'s `dates`
-override + `addDays`).
+Steps 1-3 done and committed. Next: Step 4 (CSV `days` column support).
