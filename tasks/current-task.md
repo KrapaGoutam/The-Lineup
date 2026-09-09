@@ -2,7 +2,7 @@
 
 **Active Spec:** `docs/features/032-canonical-monks-logo.md`
 **Branch:** `feature/032-canonical-monks-logo` (branched from `main`, after Feature 031 / PR #30 merged)
-**Status:** Complete — ready to push and open PR
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/31
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -108,7 +108,10 @@ run build` (clean).
       annotated -- the original decision record stays accurate
       to when it was made). - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
       Matrix row). - [x] This task file.
-- [ ] **Step 9: Commit + push + PR** - [ ] Commit with a clear message. - [ ] Push `feature/032-canonical-monks-logo`. - [ ] Open PR against `main`.
+- [x] **Step 9: Commit + push + PR** - [x] Commit with a clear message
+      (`40862c4`). - [x] Push `feature/032-canonical-monks-logo`. -
+      [x] Open [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31)
+      against `main`.
 
 ## 🗂️ File List
 
@@ -125,8 +128,7 @@ run build` (clean).
 
 ## Current State & Next Step
 
-Implementation, unit tests, full quality gate, e2e regression check,
-and live visual verification are all complete and passing. Nothing
-has been committed to this branch yet -- everything above is currently
-uncommitted working-tree state on `feature/032-canonical-monks-logo`.
-Next step: commit, push, and open a PR against `main`.
+Feature 032 is fully complete: implemented, unit-tested, live-verified,
+regression-swept, documented, committed (`40862c4`), pushed, and opened
+as [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31) against
+`main`. Nothing further pending on this branch.
