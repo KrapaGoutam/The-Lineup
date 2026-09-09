@@ -121,21 +121,45 @@ able to see.
 
 ## 🛠️ Implementation Steps
 
-- [ ] **Step 1: This task file** — populate and commit before any app
+- [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [ ] **Step 2: RLS fix + migration + pgTAP**
-  - [ ] New migration: tighten `payroll_periods_select_self` to
-        `and status = 'locked'`.
-  - [ ] Update `0010_payroll_schema_rls.test.sql`'s now-incorrect
-        self-select assertion (draft period, currently asserted
-        visible) to assert it's invisible instead, matching the exact
-        style already used for draft/confirmed payments in the same
-        file; add a new assertion that the SAME period becomes visible
-        to that self-scoped viewer once locked (right after the
-        existing "locking a period..." step). Bump `plan()`.
-  - [ ] `npm run db:reset` + `npm run db:test`.
-  - [ ] Full gate.
-  - [ ] Commit.
+- [x] **Step 2: RLS fix + migration + pgTAP**
+  - [x] New migration `20260909120000_payroll_periods_self_locked_only.sql`:
+        tightened `payroll_periods_select_self` to `and status =
+    'locked'`.
+  - [x] **Two real cascading regressions caught by re-running the full
+        existing pgTAP suite before trusting the migration, not
+        assumed safe:**
+        (1) `payroll_payments_select_self` and
+        `payroll_adjustments_select_self` each resolve ownership via a
+        plain subquery JOIN against `payroll_periods` -- run as the
+        self-scoped caller, that JOIN is itself subject to the
+        newly-tightened policy, so a CONFIRMED payment or an
+        adjustment against a still-draft period silently became
+        invisible too, contradicting the adjustments policy's own
+        documented "no draft state of its own" design. Fixed with a
+        new narrow `private.owns_payroll_period()` SECURITY DEFINER
+        helper, and both policies rewritten to use it instead of the
+        raw subquery.
+        (2) That same SECURITY DEFINER helper, once added, bypassed
+        `payroll_periods_select_self`'s own inherited "a deactivated
+        member sees nothing" guarantee (originally inherited
+        transitively from `attendance_identity_links`' own RLS, which
+        a SECURITY DEFINER context bypasses along with everything
+        else) -- fixed by re-checking `memberships.active` explicitly
+        inside the helper itself, rather than assuming it's still
+        inherited.
+  - [x] Updated `0010_payroll_schema_rls.test.sql`'s now-incorrect
+        self-select assertion (draft period, previously asserted
+        visible) to assert it's invisible instead; added a new
+        assertion that the same period becomes visible once locked
+        (right after the existing "locking a period..." step).
+        `plan(53)` → `plan(54)`.
+  - [x] `npm run db:reset` + `npm run db:test`: **17/17 files, 211/211
+        assertions**, `Result: PASS`.
+  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
+        (unchanged -- no app code yet), build clean.
+  - [x] Commit.
 - [ ] **Step 3: Domain — `payroll-balance-metrics.ts`**
   - [ ] Pure functions: `computeOverallBalanceOwedCents`,
         `computeOwedForMonth`, `findOldestOpenPeriod`,
@@ -220,4 +244,5 @@ able to see.
 
 ## Current State & Next Step
 
-Just populated. Next: Step 2 (RLS fix + migration + pgTAP).
+Steps 1-2 done and committed. Next: Step 3 (domain --
+`payroll-balance-metrics.ts`).
