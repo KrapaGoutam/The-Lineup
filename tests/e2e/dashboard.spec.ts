@@ -10,14 +10,43 @@ async function signIn(page: Page, passcode: string) {
 // bit of in-memory demo state (team roster, accounts, board, etc.), not
 // just end the session, which isn't what "sign out and back in" means.
 async function signInOnCurrentPage(page: Page, passcode: string) {
+  // Wait for React hydration so the native form submission isn't triggered
+  // MUST wait BEFORE filling the input, otherwise React hydration resets the value!
+  await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill(passcode);
   await page.getByRole("button", { name: "Open workspace" }).click();
+  // Wait for the dashboard to render (compilation can be slow in dev)
+  await expect(accountButton(page)).toBeVisible({ timeout: 60000 });
+}
+
+async function navigateToTab(page: Page, name: string | RegExp) {
+  const isDockTab =
+    name === "Tip Split" ||
+    (typeof name !== "string" && name.source.includes("Allocation"));
+
+  // Ensure dashboard is loaded before checking for More button
+  await expect(
+    page.getByRole("button", { name: "Account and quick settings" }).first(),
+  ).toBeVisible();
+
+  const hasMore = await page.getByRole("button", { name: "More" }).isVisible();
+  if (hasMore && !isDockTab) {
+    const moreBtn = page.getByRole("button", { name: "More" });
+    if ((await moreBtn.getAttribute("aria-expanded")) !== "true") {
+      await moreBtn.click();
+    }
+  }
+  await page
+    .getByRole("button", { name, exact: typeof name === "string" })
+    .click();
 }
 
 function accountButton(page: Page) {
-  return page.getByRole("button", {
-    name: "Account and quick settings",
-  });
+  return page
+    .getByRole("button", {
+      name: "Account and quick settings",
+    })
+    .first();
 }
 
 async function openAccountMenu(page: Page) {
@@ -29,14 +58,17 @@ async function openAccountMenu(page: Page) {
 
 async function signOut(page: Page) {
   await openAccountMenu(page);
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Sign out" }).first().click();
 
   // Confirms the account menu action truly returned to the login screen.
   await expect(page.getByLabel("Restaurant passcode")).toBeVisible();
 }
 
 async function expectAccountRole(page: Page, role: RegExp) {
-  await expect(accountButton(page)).toContainText(role);
+  await openAccountMenu(page);
+  await expect(
+    page.getByText(role).filter({ visible: true }).first(),
+  ).toBeVisible();
 }
 test("manager can bulk-import shifts via CSV", async ({ page }) => {
   await signIn(page, "2468");
@@ -80,15 +112,13 @@ test("manager can use all three operational modules", async ({ page }) => {
   await expectAccountRole(page, /manager/i);
   await expect(page.getByRole("button", { name: /Publish/ })).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(
     page.getByRole("heading", { name: "Table allocation rotation" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Tip Split", exact: true }).click();
+  await navigateToTab(page, "Tip Split");
   await expect(page.getByRole("heading", { name: "Tip split" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Finalize day" }),
@@ -103,9 +133,7 @@ test("server sees published schedule, can edit any column (Feature 011), and see
   await expectAccountRole(page, /server/i);
   await expect(page.getByRole("button", { name: "Add shift" })).toHaveCount(0);
 
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   // Manage-only actions (clear board, reorder) stay manager/owner-only.
   await expect(page.getByRole("button", { name: "Clear board" })).toHaveCount(
     0,
@@ -123,7 +151,7 @@ test("server sees published schedule, can edit any column (Feature 011), and see
     page.getByLabel("Reason for editing another server's column"),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Tip Split", exact: true }).click();
+  await navigateToTab(page, "Tip Split");
   await expect(
     page.getByRole("heading", { name: "My tip estimate" }),
   ).toBeVisible();
@@ -136,6 +164,7 @@ test("unregistered user can self-register and lands in the app", async ({
   page,
 }) => {
   await page.goto("/");
+  await page.waitForSelector('body[data-hydrated="true"]');
   await page
     .getByRole("button", { name: "Not registered? Create an account" })
     .click();
@@ -150,6 +179,7 @@ test("self-registers with no phone or email — only name and passcode are requi
   page,
 }) => {
   await page.goto("/");
+  await page.waitForSelector('body[data-hydrated="true"]');
   await page
     .getByRole("button", { name: "Not registered? Create an account" })
     .click();
@@ -163,6 +193,7 @@ test("registering with a passcode already in use shows an error", async ({
   page,
 }) => {
   await page.goto("/");
+  await page.waitForSelector('body[data-hydrated="true"]');
   await page
     .getByRole("button", { name: "Not registered? Create an account" })
     .click();
@@ -177,7 +208,7 @@ test("manager can promote a staff member to Assistant Manager, and back", async 
   page,
 }) => {
   await signIn(page, "2468");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
   await page
     .getByRole("button", { name: "Set Ava Brooks to Assistant Manager" })
@@ -195,7 +226,7 @@ test("a manager is never offered the ability to grant Manager or Owner", async (
   page,
 }) => {
   await signIn(page, "2468");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await expect(
     page.getByRole("button", { name: /Set .* to Manager$/ }),
   ).toHaveCount(0);
@@ -208,7 +239,7 @@ test("an owner can promote someone to Manager, after which a manager can no long
   page,
 }) => {
   await signIn(page, "9999");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await page.getByRole("button", { name: "Set Zara Reed to Manager" }).click();
   await expect(
     page.getByText("Manager", { exact: true }).first(),
@@ -216,7 +247,7 @@ test("an owner can promote someone to Manager, after which a manager can no long
 
   await signOut(page);
   await signInOnCurrentPage(page, "2468");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await expect(
     page.getByRole("button", { name: /^Set Zara Reed to/ }),
   ).toHaveCount(0);
@@ -226,7 +257,7 @@ test("promoting someone to Assistant Manager gives them full manager-level acces
   page,
 }) => {
   await signIn(page, "2468");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await page
     .getByRole("button", { name: "Set Mia Chen to Assistant Manager" })
     .click();
@@ -235,14 +266,15 @@ test("promoting someone to Assistant Manager gives them full manager-level acces
   await signInOnCurrentPage(page, "1357");
   await expectAccountRole(page, /manager/i);
   await expect(page.getByRole("button", { name: "Add shift" })).toBeVisible();
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
 });
 
 test("server never sees the Team tab", async ({ page }) => {
   await signIn(page, "1357");
+  if (await page.getByRole("button", { name: "More" }).isVisible()) {
+    await page.getByRole("button", { name: "More" }).click();
+  }
   await expect(
     page.getByRole("button", { name: "Team", exact: true }),
   ).toHaveCount(0);
@@ -252,10 +284,10 @@ test("an unlinked server can open Attendance without seeing anyone else's data",
   page,
 }) => {
   await signIn(page, "1357");
-  await page.getByRole("button", { name: "Attendance", exact: true }).click();
+  await navigateToTab(page, "Attendance");
 
   await expect(
-    page.getByRole("heading", { name: "Attendance Report" }),
+    page.getByRole("heading", { name: "Attendance", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Your account isn't linked to the attendance system yet."),
@@ -268,7 +300,7 @@ test("a manager can link attendance and the server then sees only that record", 
   page,
 }) => {
   await signIn(page, "2468");
-  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await navigateToTab(page, "Team");
   await page
     .getByRole("button", { name: "Link Mia Chen's attendance record" })
     .click();
@@ -281,7 +313,7 @@ test("a manager can link attendance and the server then sees only that record", 
 
   await signOut(page);
   await signInOnCurrentPage(page, "1357");
-  await page.getByRole("button", { name: "Attendance", exact: true }).click();
+  await navigateToTab(page, "Attendance");
 
   await expect(
     page.getByRole("heading", { name: "Anil (Server)" }),
@@ -295,7 +327,10 @@ test("a manager can link attendance and the server then sees only that record", 
   // derive from the same single demo attendance row) -- assert the actual
   // table cell specifically, not just that the text exists anywhere.
   await expect(
-    page.getByRole("cell", { name: "8.5h", exact: true }),
+    page
+      .getByRole("cell", { name: "8.5h", exact: true })
+      .or(page.locator(".sm\\:hidden").getByText("8.5h", { exact: true }))
+      .first(),
   ).toBeVisible();
 });
 
@@ -331,9 +366,17 @@ test("theme toggle is reachable from the login screen before signing in", async 
   await page.goto("/");
   const html = page.locator("html");
   const initialTheme = await html.getAttribute("data-theme");
+  const otherTheme = initialTheme === "light" ? "dark" : "light";
   const toggleName =
     initialTheme === "light" ? "Switch to dark theme" : "Switch to light theme";
-  await page.getByRole("button", { name: toggleName }).click();
+  const toggleButton = page
+    .getByRole("button", { name: toggleName })
+    .or(
+      page
+        .getByRole("group", { name: "Appearance" })
+        .getByRole("button", { name: otherTheme }),
+    );
+  await toggleButton.click();
   await expect(html).not.toHaveAttribute("data-theme", initialTheme ?? "");
 });
 
@@ -361,9 +404,7 @@ test("an unrostered employee can be added to the live allocation board", async (
   page,
 }) => {
   await signIn(page, "2468");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(page.getByText("Floor team changed?")).toBeVisible();
   await page.getByRole("button", { name: "Ivy" }).click();
   await expect(page.getByText("Ivy Tran")).toBeVisible();
@@ -373,9 +414,7 @@ test("manager can add a row on demand, and undo removes it; a server never sees 
   page,
 }) => {
   await signIn(page, "2468");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   const rowsBadge = page.getByText(/^\d+ rows$/);
   const before = Number((await rowsBadge.textContent())?.match(/\d+/)?.[0]);
 
@@ -390,17 +429,13 @@ test("a server never sees the manual add-row control on the allocation board", a
   page,
 }) => {
   await signIn(page, "1357");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(page.getByRole("button", { name: "Add row" })).toHaveCount(0);
 });
 
 test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
   await signIn(page, "2468");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(
     page.getByRole("button", { name: "Move Mia Chen up" }),
   ).toBeDisabled();
@@ -414,9 +449,7 @@ test("editing another server's column succeeds without a reason, and is still at
   page,
 }) => {
   await signIn(page, "2468");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await page
     .locator('input[aria-label="Table number or combined tables"]:enabled')
     .first()
@@ -431,9 +464,7 @@ test("no reason field renders anywhere on the allocation board", async ({
   page,
 }) => {
   await signIn(page, "2468");
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(
     page.getByLabel("Reason for editing another server's column"),
   ).toHaveCount(0);
@@ -444,11 +475,9 @@ test("board locks once tips are finalized, and a manager can reopen it", async (
   page,
 }) => {
   await signIn(page, "2468");
-  await page.getByRole("button", { name: "Tip Split", exact: true }).click();
+  await navigateToTab(page, "Tip Split");
   await page.getByRole("button", { name: "Finalize day" }).click();
-  await page
-    .getByRole("button", { name: "Table Allocation", exact: true })
-    .click();
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(page.getByText(/board is locked for everyone/)).toBeVisible();
 
   await page

@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
   Plus,
+  RotateCcw,
   Send,
   Upload,
 } from "lucide-react";
@@ -18,10 +19,21 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { getScheduleContextForWeekAction } from "@/features/schedules/actions/schedule-actions";
 import { CsvImportPanel } from "@/features/schedules/components/csv-import-panel";
 import {
+  ShiftEditDialog,
+  type ShiftEditResult,
+} from "@/features/schedules/components/shift-edit-dialog";
+import {
+  expandRecurringDates,
+  WEEKDAY_TOKENS,
+} from "@/features/schedules/domain/recurring-shifts";
+import {
+  addDays,
   createShiftInstances,
   findShiftConflicts,
+  getWeekDates,
   type ShiftDefaults,
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
@@ -49,15 +61,30 @@ function displayTime(value: string) {
   return `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
 }
 
-function monthDayLabel(isoDate: string) {
+// Feature 027, real bug found live-testing (not assumed): both label
+// helpers below build a UTC-anchored Date purely to hand to
+// Intl.DateTimeFormat for its month-name text -- but without an
+// explicit `timeZone: "UTC"`, DateTimeFormat renders in the *host's own*
+// local timezone by default. On a host west of UTC (this dev machine:
+// America/Chicago, UTC-5/-6), `Date.UTC(2000, 8, 1)` (Sep 1, 2000
+// 00:00 UTC) lands on Aug 31 local, so this component had been silently
+// mislabeling the month header ("Aug 7-13" for what was actually the
+// week of Sep 7-13) since long before this feature touched it -- caught
+// only now because this is the first time this session actually
+// live-loaded the Schedule tab's week header. Both isoDate/anyDateInMonth
+// are pure calendar dates already, so pinning the formatter to UTC is
+// the fix, not a workaround -- there was never a real timezone
+// conversion to do here.
+export function monthDayLabel(isoDate: string) {
   const [, month, day] = isoDate.split("-").map(Number);
-  const monthName = new Intl.DateTimeFormat("en-US", { month: "short" }).format(
-    new Date(Date.UTC(2000, month - 1, 1)),
-  );
+  const monthName = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(2000, month - 1, 1)));
   return `${monthName} ${day}`;
 }
 
-function weekRangeLabel(weekDates: string[]) {
+export function weekRangeLabel(weekDates: string[]) {
   const [startYear, startMonth] = weekDates[0].split("-").map(Number);
   const [endYear, endMonth] = weekDates.at(-1)!.split("-").map(Number);
   const sameMonth = startYear === endYear && startMonth === endMonth;
@@ -68,11 +95,12 @@ function weekRangeLabel(weekDates: string[]) {
   return `${start}–${end}`;
 }
 
-function monthLabel(anyDateInMonth: string) {
+export function monthLabel(anyDateInMonth: string) {
   const [year, month] = anyDateInMonth.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
@@ -86,17 +114,19 @@ function leadingBlankCount(firstOfMonth: string) {
 function ShiftBlock({
   shift,
   compact = false,
+  onEdit,
 }: {
   shift: DemoShift;
   compact?: boolean;
+  // Feature 027: manager-only, week-grid-only (see this component's own
+  // call sites) -- the month view's compact block only ever shows the
+  // signed-in user's own shift and has no editing affordance, matching
+  // the spec's own scope (Week Navigation + shift editing, not a
+  // separate month-view editing surface).
+  onEdit?: () => void;
 }) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border px-2.5 py-2",
-        shiftStyles[shift.shiftKind],
-      )}
-    >
+  const content = (
+    <>
       <div className="flex items-center gap-1.5">
         <span className="text-xs font-semibold">
           {shiftLabels[shift.shiftKind]}
@@ -112,6 +142,33 @@ function ShiftBlock({
           {displayTime(shift.startLocal)}–{displayTime(shift.endLocal)}
         </p>
       ) : null}
+    </>
+  );
+
+  if (onEdit) {
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${shiftLabels[shift.shiftKind]} shift, ${displayTime(shift.startLocal)}–${displayTime(shift.endLocal)}`}
+        className={cn(
+          "min-h-11 w-full rounded-lg border px-2.5 py-2 text-left transition hover:brightness-110",
+          shiftStyles[shift.shiftKind],
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-2.5 py-2",
+        shiftStyles[shift.shiftKind],
+      )}
+    >
+      {content}
     </div>
   );
 }
@@ -141,10 +198,34 @@ function ShiftEditor({
       const customStart = String(form.get("customStart") || "") || undefined;
       const customEnd = String(form.get("customEnd") || "") || undefined;
       const note = String(form.get("note") || "").trim() || undefined;
+
+      // Feature 027: "Repeat on" -- none checked keeps the exact existing
+      // behavior (one continuous range); any checked requires an end
+      // date (nothing to repeat across a single day) and filters the
+      // range down to just those weekdays.
+      const daysOfWeek = form.getAll("days").map((value) => Number(value));
+      let dates: string[] | undefined;
+      let seriesId: string | undefined;
+      let isRecurring = false;
+      if (daysOfWeek.length > 0) {
+        if (!toDate) {
+          throw new Error(
+            "An end date is required when repeating on specific days.",
+          );
+        }
+        dates = expandRecurringDates({ fromDate, toDate, daysOfWeek });
+        if (dates.length === 0) {
+          throw new Error("No dates in the range match the selected days.");
+        }
+        seriesId = crypto.randomUUID();
+        isRecurring = true;
+      }
+
       const instances = createShiftInstances({
         shiftKind,
         fromDate,
         toDate,
+        dates,
         customStart,
         customEnd,
         defaults: shiftDefaults,
@@ -156,6 +237,8 @@ function ShiftEditor({
           ...instance,
           status: "draft" as const,
           note,
+          seriesId,
+          isRecurring,
         })),
       );
       event.currentTarget.reset();
@@ -267,6 +350,30 @@ function ShiftEditor({
               placeholder="Optional setup or station note"
             />
           </div>
+          <fieldset className="space-y-2 sm:col-span-2 xl:col-span-4">
+            <legend className="text-sm font-medium">
+              Repeat on{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional — requires an end date)
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-3">
+              {WEEKDAY_TOKENS.map((token, index) => (
+                <label
+                  key={token}
+                  className="flex items-center gap-1.5 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="days"
+                    value={index}
+                    className="accent-[var(--primary)]"
+                  />
+                  {token}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex items-center gap-3 sm:col-span-2 xl:col-span-4">
             <Button type="submit">
               <Plus aria-hidden="true" /> Add to draft
@@ -297,8 +404,12 @@ export function ScheduleWorkspace({
   weekDates,
   monthDates,
   timeZone,
+  restaurantSlug,
+  demoMode,
   onAddShifts,
   onPublish,
+  onUpdateShift,
+  onDeleteShift,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -307,17 +418,148 @@ export function ScheduleWorkspace({
   weekDates: string[];
   monthDates: string[];
   timeZone: string;
+  restaurantSlug: string;
+  demoMode: boolean;
   onAddShifts: (shifts: DemoShift[]) => void;
   onPublish: () => void;
+  onUpdateShift: (input: {
+    shiftId: string;
+    employeeId: string;
+    shiftKind: ShiftKind;
+    startLocal: string;
+    endLocal: string;
+    note?: string;
+  }) => Promise<ShiftEditResult>;
+  onDeleteShift: (input: { shiftId: string }) => Promise<ShiftEditResult>;
 }) {
   const isManager = user.role !== "server";
   const [view, setView] = useState<"week" | "month">("week");
   const [showEditor, setShowEditor] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
+  // Feature 027: which shift the edit dialog is open for, manager-only,
+  // week-grid-only (ShiftBlock's own onEdit doc comment).
+  const [editingShift, setEditingShift] = useState<DemoShift | null>(null);
+
+  // Feature 027: week navigation. `weekDates[0]` (the initial, "today"
+  // week from the Server Component's own load / demo's fixed anchor) is
+  // the one week `shifts` (the prop) is always guaranteed to already
+  // cover in real mode -- browsing anywhere else needs its own fetch.
+  // Demo mode never needs a fetch at all: `shifts` there is already the
+  // complete, unbounded set for the whole session (see
+  // tasks/current-task.md's Investigation #9), so browsing is a pure
+  // client-side filter.
+  const initialWeekStart = weekDates[0];
+  const [viewWeekStart, setViewWeekStart] = useState(initialWeekStart);
+  const isInitialWeek = viewWeekStart === initialWeekStart;
+  const [fetchedWeek, setFetchedWeek] = useState<{
+    weekStart: string;
+    weekDates: string[];
+    shifts: DemoShift[];
+  } | null>(null);
+  const [weekLoading, setWeekLoading] = useState(false);
+  const [weekError, setWeekError] = useState<string | null>(null);
+  const [weekReloadKey, setWeekReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (demoMode || isInitialWeek) return;
+    let cancelled = false;
+    async function load() {
+      setWeekLoading(true);
+      setWeekError(null);
+      const result = await getScheduleContextForWeekAction({
+        restaurantSlug,
+        weekStartDate: viewWeekStart,
+      });
+      if (cancelled) return;
+      setWeekLoading(false);
+      if (!result.ok) {
+        setWeekError(result.error);
+        return;
+      }
+      setFetchedWeek({
+        weekStart: viewWeekStart,
+        weekDates: result.data.weekDates,
+        shifts: result.data.shifts,
+      });
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode, isInitialWeek, viewWeekStart, restaurantSlug, weekReloadKey]);
+
+  const activeWeekDates = isInitialWeek
+    ? weekDates
+    : demoMode
+      ? getWeekDates(viewWeekStart)
+      : (fetchedWeek?.weekDates ?? getWeekDates(viewWeekStart));
+
+  function stepWeek(deltaDays: 7 | -7) {
+    setViewWeekStart((current) => addDays(current, deltaDays));
+  }
+
+  // A shift added/imported while browsing a non-today real-mode week
+  // lands via revalidatePath on the *initial* week's own data, not this
+  // locally-fetched one -- re-triggering the fetch here is what keeps a
+  // browsed week from going stale after a mutation.
+  function afterMutation() {
+    if (!demoMode && !isInitialWeek) {
+      setWeekReloadKey((key) => key + 1);
+    }
+  }
+
+  // Feature 027: thin wrappers so a browsed (non-today) real-mode week
+  // refreshes the same way an add does, on top of whatever optimistic
+  // update the parent's own onUpdateShift/onDeleteShift already applied
+  // to `shifts`.
+  async function handleUpdateShift(
+    shiftId: string,
+    submission: {
+      employeeId: string;
+      shiftKind: ShiftKind;
+      startLocal: string;
+      endLocal: string;
+      note?: string;
+    },
+  ): Promise<ShiftEditResult> {
+    const result = await onUpdateShift({ shiftId, ...submission });
+    if (result.ok) afterMutation();
+    return result;
+  }
+
+  async function handleDeleteShift(shiftId: string): Promise<ShiftEditResult> {
+    const result = await onDeleteShift({ shiftId });
+    if (result.ok) afterMutation();
+    return result;
+  }
+
   const visibleShifts = useMemo(
     () => shifts.filter((shift) => isManager || shift.status === "published"),
     [isManager, shifts],
   );
+  // Computes which shifts are active for the currently-viewed week (see
+  // the three-way isInitialWeek/demoMode/fetchedWeek branching above)
+  // and the manager-only draft visibility filter in one memo, so the
+  // intermediate "active" array is never a fresh reference every render
+  // for downstream hooks to chase.
+  const visibleActiveShifts = useMemo(() => {
+    const active: DemoShift[] = isInitialWeek
+      ? shifts
+      : demoMode
+        ? shifts.filter((shift) => activeWeekDates.includes(shift.serviceDate))
+        : fetchedWeek?.weekStart === viewWeekStart
+          ? fetchedWeek.shifts
+          : [];
+    return active.filter((shift) => isManager || shift.status === "published");
+  }, [
+    isInitialWeek,
+    demoMode,
+    shifts,
+    activeWeekDates,
+    fetchedWeek,
+    viewWeekStart,
+    isManager,
+  ]);
   const conflictCount = findShiftConflicts(
     visibleShifts.map((shift) => ({ ...shift })),
   ).length;
@@ -385,8 +627,11 @@ export function ScheduleWorkspace({
         <ShiftEditor
           team={team}
           shiftDefaults={shiftDefaults}
-          defaultFromDate={weekDates[0]}
-          onAdd={onAddShifts}
+          defaultFromDate={activeWeekDates[0]}
+          onAdd={(added) => {
+            onAddShifts(added);
+            afterMutation();
+          }}
         />
       ) : null}
 
@@ -394,7 +639,10 @@ export function ScheduleWorkspace({
         <CsvImportPanel
           employees={team.map(({ id, name }) => ({ id, name }))}
           shiftDefaults={shiftDefaults}
-          onCommit={onAddShifts}
+          onCommit={(added) => {
+            onAddShifts(added);
+            afterMutation();
+          }}
           onClose={() => setShowCsvImport(false)}
         />
       ) : null}
@@ -439,84 +687,138 @@ export function ScheduleWorkspace({
         <Card className="overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <h2 className="font-semibold">{weekRangeLabel(weekDates)}</h2>
+              <h2 className="font-semibold">
+                {weekRangeLabel(activeWeekDates)}
+              </h2>
               <p className="text-muted-foreground mt-1 text-xs">
                 {timeZone} · default hours applied when custom times are blank
               </p>
             </div>
-            <div className="flex">
-              <Button variant="ghost" size="icon" aria-label="Previous week">
+            <div className="flex items-center gap-1">
+              {!isInitialWeek ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setViewWeekStart(initialWeekStart)}
+                >
+                  <RotateCcw aria-hidden="true" /> Today
+                </Button>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Previous week"
+                onClick={() => stepWeek(-7)}
+              >
                 <ChevronLeft />
               </Button>
-              <Button variant="ghost" size="icon" aria-label="Next week">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Next week"
+                onClick={() => stepWeek(7)}
+              >
                 <ChevronRight />
               </Button>
             </div>
           </CardHeader>
+          {weekError ? (
+            <CardContent className="pt-0">
+              <div className="border-destructive/30 bg-destructive/10 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-2 text-sm">
+                <span className="text-destructive">{weekError}</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setWeekReloadKey((key) => key + 1)}
+                >
+                  Try again
+                </Button>
+              </div>
+            </CardContent>
+          ) : null}
           <CardContent className="overflow-x-auto p-0 pt-5">
-            <div className="border-border min-w-[960px] border-t">
-              <div className="bg-muted grid grid-cols-[160px_repeat(7,minmax(110px,1fr))]">
-                <div className="border-border text-muted-foreground border-r p-3 text-xs font-semibold">
-                  Name
+            {weekLoading ? (
+              <p
+                className="text-muted-foreground px-5 pb-5 text-sm"
+                aria-live="polite"
+              >
+                Loading that week…
+              </p>
+            ) : (
+              <div className="border-border min-w-[960px] border-t">
+                <div className="bg-muted grid grid-cols-[160px_repeat(7,minmax(110px,1fr))]">
+                  <div className="border-border text-muted-foreground border-r p-3 text-xs font-semibold">
+                    Name
+                  </div>
+                  {activeWeekDates.map((date, index) => (
+                    <div
+                      key={date}
+                      className="border-border border-r p-3 last:border-r-0"
+                    >
+                      <p className="text-xs font-semibold">
+                        {weekdayLabels[index]}
+                      </p>
+                      <p className="text-muted-foreground mt-1 font-mono text-xs">
+                        {monthDayLabel(date)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-                {weekDates.map((date, index) => (
+                {team.map((member) => (
                   <div
-                    key={date}
-                    className="border-border border-r p-3 last:border-r-0"
+                    key={member.id}
+                    className={cn(
+                      "border-border grid grid-cols-[160px_repeat(7,minmax(110px,1fr))] border-t",
+                      !isManager &&
+                        member.id === user.profileId &&
+                        "bg-primary/[0.025]",
+                    )}
                   >
-                    <p className="text-xs font-semibold">
-                      {weekdayLabels[index]}
-                    </p>
-                    <p className="text-muted-foreground mt-1 font-mono text-xs">
-                      {monthDayLabel(date)}
-                    </p>
+                    <div className="border-border border-r p-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{ backgroundColor: member.color }}
+                        />
+                        <span className="text-sm font-medium">
+                          {member.name}
+                        </span>
+                      </div>
+                      {!isManager && member.id === user.profileId ? (
+                        <p className="text-primary mt-1 text-[10px] font-bold uppercase">
+                          You
+                        </p>
+                      ) : null}
+                    </div>
+                    {activeWeekDates.map((date) => {
+                      const cellShifts = visibleActiveShifts.filter(
+                        (shift) =>
+                          shift.employeeId === member.id &&
+                          shift.serviceDate === date,
+                      );
+                      return (
+                        <div
+                          key={date}
+                          className="border-border min-h-24 space-y-1.5 border-r p-2 last:border-r-0"
+                        >
+                          {cellShifts.map((shift) => (
+                            <ShiftBlock
+                              key={shift.id}
+                              shift={shift}
+                              onEdit={
+                                isManager
+                                  ? () => setEditingShift(shift)
+                                  : undefined
+                              }
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
-              {team.map((member) => (
-                <div
-                  key={member.id}
-                  className={cn(
-                    "border-border grid grid-cols-[160px_repeat(7,minmax(110px,1fr))] border-t",
-                    !isManager &&
-                      member.id === user.profileId &&
-                      "bg-primary/[0.025]",
-                  )}
-                >
-                  <div className="border-border border-r p-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="size-2.5 rounded-full"
-                        style={{ backgroundColor: member.color }}
-                      />
-                      <span className="text-sm font-medium">{member.name}</span>
-                    </div>
-                    {!isManager && member.id === user.profileId ? (
-                      <p className="text-primary mt-1 text-[10px] font-bold uppercase">
-                        You
-                      </p>
-                    ) : null}
-                  </div>
-                  {weekDates.map((date) => {
-                    const cellShifts = visibleShifts.filter(
-                      (shift) =>
-                        shift.employeeId === member.id &&
-                        shift.serviceDate === date,
-                    );
-                    return (
-                      <div
-                        key={date}
-                        className="border-border min-h-24 space-y-1.5 border-r p-2 last:border-r-0"
-                      >
-                        {cellShifts.map((shift) => (
-                          <ShiftBlock key={shift.id} shift={shift} />
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -598,6 +900,24 @@ export function ScheduleWorkspace({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {editingShift && isManager ? (
+        <ShiftEditDialog
+          shift={editingShift}
+          employeeName={
+            team.find((member) => member.id === editingShift.employeeId)
+              ?.name ?? "Unknown"
+          }
+          dateLabel={monthDayLabel(editingShift.serviceDate)}
+          team={team}
+          shiftDefaults={shiftDefaults}
+          onClose={() => setEditingShift(null)}
+          onSave={(submission) =>
+            handleUpdateShift(editingShift.id, submission)
+          }
+          onDelete={() => handleDeleteShift(editingShift.id)}
+        />
       ) : null}
     </div>
   );

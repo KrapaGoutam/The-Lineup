@@ -3,7 +3,33 @@ import type { NeonUser } from "../data/attendance-data";
 export type AttendancePeriodSelection =
   | { type: "this-month" }
   | { type: "previous-month" }
-  | { type: "custom"; start: string; end: string };
+  | { type: "custom"; start: string; end: string }
+  // Feature 025: the month/year navigator's own selection -- month is
+  // 1-12 (January = 1), matching every other calendar-month convention
+  // in this app (todayLocalDate's own "YYYY-MM-DD" split, for one).
+  // Deliberately a variant of the same union every existing caller
+  // (the component, the Server Action's zod schema) already resolves
+  // through `resolvePeriodRange`, not a parallel type -- one period
+  // concept, one resolver.
+  | { type: "month"; year: number; month: number };
+
+// Day 0 of the following month is the last day of this one -- avoids a
+// separate "days in month" lookup, including for February and leap
+// years. Shared by this-month/previous-month/month below so there is
+// exactly one place that ever does this arithmetic, not three
+// near-identical Date.UTC blocks that could quietly drift apart.
+function monthRange(
+  year: number,
+  month1To12: number,
+): {
+  start: string;
+  end: string;
+} {
+  const start = new Date(Date.UTC(year, month1To12 - 1, 1));
+  const end = new Date(Date.UTC(year, month1To12, 0));
+  const toDateString = (date: Date) => date.toISOString().slice(0, 10);
+  return { start: toDateString(start), end: toDateString(end) };
+}
 
 /**
  * "This month"/"Previous month" resolve against the restaurant's own wall
@@ -11,10 +37,10 @@ export type AttendancePeriodSelection =
  * `zonedWallTimeFromInstant` helper `getScheduleContext` already uses for
  * "today" -- never the server's or browser's local time) -- a manager
  * checking this near midnight shouldn't see a month boundary that
- * doesn't match the restaurant's actual calendar day. `Date.UTC`'s own
- * month-rollover handles "previous month from January" correctly (month
- * index -1 normalizes to December of the prior year) without manual
- * modulo arithmetic.
+ * doesn't match the restaurant's actual calendar day. `month` resolves a
+ * caller-chosen year/month directly (Feature 025's navigator), completely
+ * independent of `todayLocalDate` -- the whole point of being able to
+ * browse to an arbitrary past month.
  */
 export function resolvePeriodRange(
   selection: AttendancePeriodSelection,
@@ -23,15 +49,18 @@ export function resolvePeriodRange(
   if (selection.type === "custom") {
     return { start: selection.start, end: selection.end };
   }
+  if (selection.type === "month") {
+    return monthRange(selection.year, selection.month);
+  }
   const [year, month] = todayLocalDate.split("-").map(Number);
-  const monthIndex =
-    selection.type === "previous-month" ? month - 2 : month - 1;
-  const start = new Date(Date.UTC(year, monthIndex, 1));
-  // Day 0 of the following month is the last day of this one -- avoids a
-  // separate "days in month" lookup, including for February.
-  const end = new Date(Date.UTC(year, monthIndex + 1, 0));
-  const toDateString = (date: Date) => date.toISOString().slice(0, 10);
-  return { start: toDateString(start), end: toDateString(end) };
+  if (selection.type === "this-month") {
+    return monthRange(year, month);
+  }
+  // previous-month: roll back one month, wrapping January to December of
+  // the prior year -- monthRange itself only ever sees a valid 1-12.
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previousYear = month === 1 ? year - 1 : year;
+  return monthRange(previousYear, previousMonth);
 }
 
 /**
@@ -85,4 +114,31 @@ export function aggregateHours(
     totalHours += row.hoursWorked;
   }
   return { totalHours, excludedRowCount };
+}
+
+export type AllStaffSummary = {
+  /** Every attendance row across every active employee, open or closed --
+   * unlike `daysWorked`/`AttendanceSummary`, this is deliberately a row
+   * count, not a distinct-day count: two shifts by two different people
+   * on the same date are two shifts, not one. */
+  totalShifts: number;
+  totalHours: number;
+};
+
+/**
+ * Feature 029 Phase 0. The combined "All employees" view's own two
+ * aggregate stat cards -- kept as a small named, tested function (rather
+ * than inlined at the call site) for the same reason
+ * `computeAttendanceSummary` already is: a number that looks wrong should
+ * have exactly one place to check, not a JSX expression to re-derive by
+ * eye. Reuses `aggregateHours` for the hours total rather than
+ * reimplementing its null-`hoursWorked` exclusion rule a second time.
+ */
+export function summarizeAllStaff(
+  rows: Array<{ hoursWorked: number | null }>,
+): AllStaffSummary {
+  return {
+    totalShifts: rows.length,
+    totalHours: aggregateHours(rows).totalHours,
+  };
 }

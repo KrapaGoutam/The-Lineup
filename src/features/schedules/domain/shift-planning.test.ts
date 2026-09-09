@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addDays,
   createShiftInstances,
   expandDateRange,
   findShiftConflicts,
@@ -127,5 +128,58 @@ describe("shift planning", () => {
       }),
     ].map((shift) => ({ ...shift, employeeId: "mia" }));
     expect(findShiftConflicts(shifts)).toEqual([0, 1]);
+  });
+
+  // Feature 027: recurring-shifts.ts passes its own weekday-filtered date
+  // list here instead of a plain fromDate/toDate range -- every other
+  // validation/time-resolution rule still applies identically.
+  it("uses a caller-supplied dates list instead of expanding fromDate/toDate", () => {
+    const instances = createShiftInstances({
+      fromDate: "2026-09-07", // ignored -- dates below wins
+      shiftKind: "morning",
+      dates: ["2026-09-08", "2026-09-10"],
+      defaults,
+    });
+    expect(instances.map((instance) => instance.serviceDate)).toEqual([
+      "2026-09-08",
+      "2026-09-10",
+    ]);
+    expect(instances[0]).toMatchObject({
+      startLocal: "11:00",
+      endLocal: "16:00",
+      usesDefaultTime: true,
+    });
+  });
+
+  it("still validates custom times when a dates override is supplied", () => {
+    expect(() =>
+      createShiftInstances({
+        fromDate: "2026-09-07",
+        shiftKind: "morning",
+        dates: ["2026-09-08"],
+        customStart: "not-a-time",
+        customEnd: "16:00",
+        defaults,
+      }),
+    ).toThrow(/24-hour/);
+  });
+});
+
+describe("addDays", () => {
+  it("adds a positive offset", () => {
+    expect(addDays("2026-09-08", 7)).toBe("2026-09-15");
+  });
+
+  it("subtracts with a negative offset", () => {
+    expect(addDays("2026-09-08", -7)).toBe("2026-09-01");
+  });
+
+  it("crosses a month boundary in both directions", () => {
+    expect(addDays("2026-09-28", 7)).toBe("2026-10-05");
+    expect(addDays("2026-10-05", -7)).toBe("2026-09-28");
+  });
+
+  it("crosses a year boundary", () => {
+    expect(addDays("2026-12-30", 7)).toBe("2027-01-06");
   });
 });

@@ -156,4 +156,29 @@ export const demoNeonAttendance: NeonAttendanceRow[] = [
     hoursWorked: 8,
     autoClockedOut: false,
   },
+  // Feature 029. Two genuinely open (unclosed, not auto-closed) shifts on
+  // DEMO_ANCHOR_DATE ("2026-09-10", restaurant-operations-app.tsx) -- the
+  // fixture had zero rows on that date before this, so "Pull clocked-in
+  // team" had nothing real to demonstrate. Additive only: every existing
+  // row above is unchanged. Meaningful only once a manager has linked the
+  // corresponding people from Team (demoAttendanceLinks starts empty, by
+  // design -- see this feature's own task-file investigation notes).
+  {
+    id: 109,
+    userId: 1,
+    date: "2026-09-10",
+    clockIn: "2026-09-10T11:00:00-05:00",
+    clockOut: null,
+    hoursWorked: null,
+    autoClockedOut: false,
+  },
+  {
+    id: 110,
+    userId: 4,
+    date: "2026-09-10",
+    clockIn: "2026-09-10T11:15:00-05:00",
+    clockOut: null,
+    hoursWorked: null,
+    autoClockedOut: false,
+  },
 ];

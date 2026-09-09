@@ -17,10 +17,8 @@ import {
   getPayrollLedgerAction,
   getPayrollRateOptionsAction,
   listPayrollPeriodsAction,
-  lockPayrollPeriodAction,
   recordAdjustmentAction,
   recordPaymentAction,
-  regeneratePayrollPeriodAction,
   removePayrollRateOverrideAction,
   setPayrollDefaultRateAction,
   setPayrollRateOverrideAction,
@@ -34,6 +32,9 @@ import type {
   PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
 import { buildDisplayLabels } from "@/features/attendance/domain/attendance-report";
+import { PayrollBalancePanel } from "@/features/payroll/components/payroll-balance-panel";
+import { PayrollKpiCards } from "@/features/payroll/components/payroll-kpi-cards";
+import { PayrollPeriodGroups } from "@/features/payroll/components/payroll-period-groups";
 import { buildPayrollLedgerLines } from "@/features/payroll/domain/calculate-payroll";
 import { dollarsToCents } from "@/features/tips/domain/calculate-tip-splits";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -51,7 +52,7 @@ function centsToInputValue(cents: number | null): string {
   return cents === null ? "" : (cents / 100).toFixed(2);
 }
 
-function monthLabel(periodMonth: string): string {
+export function monthLabel(periodMonth: string): string {
   const [year, month] = periodMonth.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
     month: "long",
@@ -94,9 +95,14 @@ function Header() {
 export function PayrollWorkspace({
   restaurantSlug,
   timeZone,
+  onGoToPayRates,
 }: {
   restaurantSlug: string;
   timeZone: string;
+  /** Feature 026. Navigates to Settings > Pay Rates -- the dashboard's
+   * own "Pay rates" button, distinct from `RateSettings` staying
+   * rendered inline on this same tab too (unchanged). */
+  onGoToPayRates: () => void;
 }) {
   const todayLocalDate = zonedWallTimeFromInstant(new Date(), timeZone).date;
   const [access, setAccess] = useState<PayrollAccessView | null>(null);
@@ -183,6 +189,7 @@ export function PayrollWorkspace({
       <PrivilegedPayrollView
         restaurantSlug={restaurantSlug}
         todayLocalDate={todayLocalDate}
+        onGoToPayRates={onGoToPayRates}
       />
     </div>
   );
@@ -191,9 +198,11 @@ export function PayrollWorkspace({
 function PrivilegedPayrollView({
   restaurantSlug,
   todayLocalDate,
+  onGoToPayRates,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
+  onGoToPayRates: () => void;
 }) {
   const [rateOptions, setRateOptions] = useState<PayrollRateOptions | null>(
     null,
@@ -201,12 +210,17 @@ function PrivilegedPayrollView({
   const [rateOptionsError, setRateOptionsError] = useState<string | null>(null);
   const [rateReloadKey, setRateReloadKey] = useState(0);
 
-  const [periods, setPeriods] = useState<PayrollPeriod[] | null>(null);
-  const [periodsError, setPeriodsError] = useState<string | null>(null);
-  const [periodsReloadKey, setPeriodsReloadKey] = useState(0);
+  // Feature 026: one fetch for the KPI cards, the grouped periods view,
+  // AND the balance panel -- all three render from this same
+  // `dashboard.periods` (each already carrying its own `balanceCents`),
+  // rather than each independently re-fetching/re-deriving the same
+  // data (the old flat `PeriodsTable` used to run its own separate
+  // `listPayrollPeriodsAction` fetch alongside this one).
+  const [dashboard, setDashboard] = useState<PayrollDashboard | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [dashboardReloadKey, setDashboardReloadKey] = useState(0);
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
-  const [dashboardReloadKey, setDashboardReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,36 +243,47 @@ function PrivilegedPayrollView({
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      setPeriodsError(null);
-      const result = await listPayrollPeriodsAction({ restaurantSlug });
+      setDashboardError(null);
+      const result = await getPayrollDashboardAction({
+        restaurantSlug,
+        todayLocalDate,
+      });
       if (cancelled) return;
       if (!result.ok) {
-        setPeriodsError(result.error);
+        setDashboardError(result.error);
         return;
       }
-      setPeriods(result.data);
+      setDashboard(result.data);
     }
     load();
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, periodsReloadKey]);
+  }, [restaurantSlug, todayLocalDate, dashboardReloadKey]);
 
   function reloadEverything() {
     setRateReloadKey((key) => key + 1);
-    setPeriodsReloadKey((key) => key + 1);
     setDashboardReloadKey((key) => key + 1);
   }
 
   return (
     <>
-      <PayrollDashboardTiles
-        restaurantSlug={restaurantSlug}
-        todayLocalDate={todayLocalDate}
-        scope="all"
-        users={rateOptions?.users ?? []}
-        reloadKey={dashboardReloadKey}
-      />
+      {dashboardError ? (
+        <ErrorPanel
+          message={dashboardError}
+          onRetry={() => setDashboardReloadKey((key) => key + 1)}
+        />
+      ) : !dashboard ? (
+        <p className="text-muted-foreground text-sm" aria-live="polite">
+          Loading dashboard…
+        </p>
+      ) : (
+        <PayrollKpiCards
+          dashboard={dashboard}
+          users={rateOptions?.users ?? []}
+          onGoToPayRates={onGoToPayRates}
+        />
+      )}
 
       {rateOptionsError ? (
         <ErrorPanel
@@ -284,25 +309,22 @@ function PrivilegedPayrollView({
         </>
       )}
 
-      {periodsError ? (
-        <ErrorPanel
-          message={periodsError}
-          onRetry={() => setPeriodsReloadKey((key) => key + 1)}
-        />
-      ) : !periods ? (
-        <p className="text-muted-foreground text-sm" aria-live="polite">
-          Loading periods…
-        </p>
-      ) : (
-        <PeriodsTable
-          restaurantSlug={restaurantSlug}
-          periods={periods}
-          users={rateOptions?.users ?? []}
-          onChanged={reloadEverything}
-          selectedPeriodId={selectedPeriodId}
-          onSelectPeriod={setSelectedPeriodId}
-        />
-      )}
+      {dashboard ? (
+        <div className="grid items-start gap-4 xl:grid-cols-[1.5fr_1fr]">
+          <PayrollPeriodGroups
+            restaurantSlug={restaurantSlug}
+            periods={dashboard.periods}
+            users={rateOptions?.users ?? []}
+            onChanged={reloadEverything}
+            selectedPeriodId={selectedPeriodId}
+            onSelectPeriod={setSelectedPeriodId}
+          />
+          <PayrollBalancePanel
+            periods={dashboard.periods}
+            users={rateOptions?.users ?? []}
+          />
+        </div>
+      ) : null}
 
       {selectedPeriodId !== null ? (
         <PeriodLedgerPanel
@@ -311,7 +333,7 @@ function PrivilegedPayrollView({
           readOnly={false}
           onChanged={reloadEverything}
           personLabel={(() => {
-            const selectedPeriod = periods?.find(
+            const selectedPeriod = dashboard?.periods.find(
               (period) => period.id === selectedPeriodId,
             );
             const label = selectedPeriod
@@ -594,7 +616,11 @@ function PayrollDashboardTiles({
   );
 }
 
-function RateSettings({
+// Feature 023: exported so Settings' Pay Rates section can reuse this
+// exact rate-configuration UI (org default + per-person overrides)
+// instead of building a second one -- Settings never touches anything
+// else in this file (no ledger/balance/payment code).
+export function RateSettings({
   restaurantSlug,
   options,
   onChanged,
@@ -872,187 +898,6 @@ function GenerateForm({
         ) : null}
       </CardContent>
     </Card>
-  );
-}
-
-function PeriodsTable({
-  restaurantSlug,
-  periods,
-  users,
-  onChanged,
-  selectedPeriodId,
-  onSelectPeriod,
-}: {
-  restaurantSlug: string;
-  periods: PayrollPeriod[];
-  users: { id: number; fullName: string; role: string }[];
-  onChanged: () => void;
-  selectedPeriodId: number | null;
-  onSelectPeriod: (periodId: number | null) => void;
-}) {
-  const displayLabels = buildDisplayLabels(users);
-
-  if (periods.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No payroll periods generated yet.
-      </p>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <h2 className="font-semibold">Generated periods</h2>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-border border-b text-xs uppercase">
-                <th className="py-1.5 pr-3 font-medium">Person</th>
-                <th className="py-1.5 pr-3 font-medium">Month</th>
-                <th className="py-1.5 pr-3 font-medium">Hours</th>
-                <th className="py-1.5 pr-3 font-medium">Rate</th>
-                <th className="py-1.5 pr-3 font-medium">Gross</th>
-                <th className="py-1.5 pr-3 font-medium">Status</th>
-                <th className="py-1.5 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-border divide-y">
-              {periods.map((period) => (
-                <PeriodRow
-                  key={period.id}
-                  restaurantSlug={restaurantSlug}
-                  period={period}
-                  label={
-                    displayLabels.get(period.neonUserId) ??
-                    `Neon #${period.neonUserId}`
-                  }
-                  onChanged={onChanged}
-                  isSelected={selectedPeriodId === period.id}
-                  onToggleSelect={() =>
-                    onSelectPeriod(
-                      selectedPeriodId === period.id ? null : period.id,
-                    )
-                  }
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PeriodRow({
-  restaurantSlug,
-  period,
-  label,
-  onChanged,
-  isSelected,
-  onToggleSelect,
-}: {
-  restaurantSlug: string;
-  period: PayrollPeriod;
-  label: string;
-  onChanged: () => void;
-  isSelected: boolean;
-  onToggleSelect: () => void;
-}) {
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState<"regenerate" | "lock" | null>(null);
-
-  async function regenerate() {
-    setError("");
-    setPending("regenerate");
-    try {
-      const result = await regeneratePayrollPeriodAction({
-        restaurantSlug,
-        periodId: period.id,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      onChanged();
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function lock() {
-    setError("");
-    setPending("lock");
-    try {
-      const result = await lockPayrollPeriodAction({
-        restaurantSlug,
-        periodId: period.id,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      onChanged();
-    } finally {
-      setPending(null);
-    }
-  }
-
-  return (
-    <tr>
-      <td className="py-1.5 pr-3">{label}</td>
-      <td className="py-1.5 pr-3">{monthLabel(period.periodMonth)}</td>
-      <td className="py-1.5 pr-3">{period.hoursSnapshot.toFixed(1)}h</td>
-      <td className="py-1.5 pr-3">{money(period.rateCentsSnapshot)}/hr</td>
-      <td className="py-1.5 pr-3 font-mono">{money(period.grossCents)}</td>
-      <td className="py-1.5 pr-3">
-        <Badge tone={period.status === "locked" ? "neutral" : "accent"}>
-          {period.status === "locked" ? "Locked" : "Draft"}
-        </Badge>
-      </td>
-      <td className="py-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            variant={isSelected ? "secondary" : "ghost"}
-            size="sm"
-            onClick={onToggleSelect}
-            aria-label={`${isSelected ? "Hide" : "View"} payments for ${label}, ${monthLabel(period.periodMonth)}`}
-          >
-            {isSelected ? "Hide payments" : "View payments"}
-          </Button>
-          {period.status !== "locked" ? (
-            <>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={regenerate}
-                disabled={pending !== null}
-              >
-                {pending === "regenerate" ? "Regenerating…" : "Regenerate"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={lock}
-                disabled={pending !== null}
-              >
-                {pending === "lock" ? "Locking…" : "Lock"}
-              </Button>
-            </>
-          ) : null}
-        </div>
-        {error ? (
-          <p className="text-destructive mt-1 text-xs" aria-live="polite">
-            {error}
-          </p>
-        ) : null}
-      </td>
-    </tr>
   );
 }
 

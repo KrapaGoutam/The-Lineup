@@ -6,15 +6,17 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
+  timeout: 120000,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
-    trace: "on-first-retry",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    trace: "on",
+    screenshot: "on",
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: "npm run dev -- --hostname 127.0.0.1",
-        url: "http://127.0.0.1:3000",
+        command: "npm run dev",
+        url: "http://localhost:3000",
         reuseExistingServer: !process.env.CI,
         // The checked-in scenarios use the deterministic demo passcodes and
         // in-memory mutations. Keep them isolated from any developer's real

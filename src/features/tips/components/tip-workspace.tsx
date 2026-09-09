@@ -8,6 +8,7 @@ import {
   DollarSign,
   Plus,
   RotateCcw,
+  UserCheck,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -46,6 +47,7 @@ export function TipWorkspace({
   onAddInterval,
   onFinalize,
   onReopen,
+  onPullClockedInTeam,
   auditLog,
 }: {
   user: SignedInUser;
@@ -57,6 +59,13 @@ export function TipWorkspace({
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   onFinalize: () => void;
   onReopen: (reason: string) => void;
+  // Feature 029. A read-only suggestion, never a write of its own -- see
+  // this feature's own task-file investigation notes for why the
+  // frozen-snapshot guarantee this feeds toward needs nothing from this
+  // component to hold.
+  onPullClockedInTeam: () => Promise<
+    { ok: true; data: string[] } | { ok: false; error: string }
+  >;
   auditLog: TipsAuditEntry[];
 }) {
   const isManager = user.role !== "server";
@@ -67,6 +76,50 @@ export function TipWorkspace({
   const ownTotal =
     split.totals.find(({ participantId }) => participantId === user.profileId)
       ?.amountCents ?? 0;
+
+  // Feature 029. The participant checkboxes were an uncontrolled
+  // `defaultChecked` fieldset (a plain "first four members" demo guess,
+  // per this feature's own investigation notes) -- now controlled so
+  // "Pull clocked-in team" can programmatically check/uncheck them,
+  // while the manager can still hand-edit the result before submitting.
+  // Still seeded with the original first-four default, unchanged, for
+  // anyone who never clicks the button at all.
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<
+    Set<string>
+  >(() => new Set(team.slice(0, 4).map((member) => member.id)));
+  const [pulling, setPulling] = useState(false);
+  const [pullError, setPullError] = useState("");
+
+  function toggleParticipant(memberId: string) {
+    setSelectedParticipantIds((current) => {
+      const next = new Set(current);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  }
+
+  async function pullClockedInTeam() {
+    setPullError("");
+    setPulling(true);
+    try {
+      const result = await onPullClockedInTeam();
+      if (!result.ok) {
+        setPullError(result.error);
+        return;
+      }
+      // Only ever checks people who actually have a checkbox here --
+      // an active clock-in resolved for someone outside this roster
+      // (shouldn't happen, but defensive) is silently dropped rather
+      // than surfaced as a phantom selection.
+      const selectableIds = new Set(team.map((member) => member.id));
+      setSelectedParticipantIds(
+        new Set(result.data.filter((id) => selectableIds.has(id))),
+      );
+    } finally {
+      setPulling(false);
+    }
+  }
 
   async function addInterval(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,6 +151,15 @@ export function TipWorkspace({
         return;
       }
       formElement.reset();
+      // The participant checkboxes are controlled state now (Feature
+      // 029), not `defaultChecked` -- the native form reset above only
+      // touches the DOM, so the state driving what's actually rendered
+      // needs its own explicit reset back to the original default,
+      // rather than whatever was left checked for the interval just
+      // submitted.
+      setSelectedParticipantIds(
+        new Set(team.slice(0, 4).map((member) => member.id)),
+      );
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -365,13 +427,34 @@ export function TipWorkspace({
               </div>
             </div>
             <fieldset disabled={status === "finalized"}>
-              <legend className="text-sm font-medium">Who was working?</legend>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <legend className="text-sm font-medium">
+                  Who was working?
+                </legend>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={pullClockedInTeam}
+                  disabled={status === "finalized" || pulling}
+                  title="Populates active clock-ins from attendance as a starting point"
+                  className="w-full sm:w-auto"
+                >
+                  <UserCheck aria-hidden="true" />{" "}
+                  {pulling ? "Pulling…" : "Pull clocked-in team"}
+                </Button>
+              </div>
               <p className="text-muted-foreground mt-1 text-xs">
-                Everyone active at this restaurant is selectable — the original
-                active-floor suggestion is preselected below.
+                Everyone active at this restaurant is selectable — check or
+                uncheck anyone before calculating.
               </p>
+              {pullError ? (
+                <p className="text-destructive mt-1 text-xs" aria-live="polite">
+                  {pullError}
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {team.map((member, index) => (
+                {team.map((member) => (
                   <Label
                     key={member.id}
                     className="border-border bg-secondary has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 font-normal"
@@ -380,12 +463,8 @@ export function TipWorkspace({
                       type="checkbox"
                       name="participants"
                       value={member.id}
-                      // The first four members are the original demo
-                      // "active floor" suggestion. Anyone added later
-                      // (e.g. via self-serve registration) is selectable
-                      // but starts unchecked, same as any other person a
-                      // manager would need to add deliberately.
-                      defaultChecked={index < 4}
+                      checked={selectedParticipantIds.has(member.id)}
+                      onChange={() => toggleParticipant(member.id)}
                       className="accent-[var(--primary)]"
                     />
                     <span

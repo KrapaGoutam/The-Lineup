@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(53);
+select plan(54);
 
 -- Table/RLS/grant shape ------------------------------------------------
 
@@ -176,19 +176,14 @@ select is(
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020003', true);
 
--- Self-select: own period visible (any status), other person's is not ---
+-- Self-select: Feature 026 -- a DRAFT period is invisible to self, even
+-- their own; other person's is not visible regardless of status -------
 
 select is(
   (select count(*) from public.payroll_periods
    where organization_id = '00000000-0000-0000-0000-000000020101'),
-  1::bigint,
-  'the linked server sees their own payroll period'
-);
-select is(
-  (select gross_cents from public.payroll_periods
-   where organization_id = '00000000-0000-0000-0000-000000020101'),
-  120000,
-  'the linked server sees the correct gross_cents on their own period'
+  0::bigint,
+  'the linked server does not see their own DRAFT payroll period'
 );
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020004', true);
@@ -410,6 +405,23 @@ select lives_ok(
   $$,
   'locking a period that already has a payment still works -- the trigger only guards the snapshot columns, not status'
 );
+
+-- Feature 026: once locked, that same period -- invisible to self while
+-- draft, above -- becomes visible to the linked server.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020003', true);
+select is(
+  (select count(*) from public.payroll_periods
+   where organization_id = '00000000-0000-0000-0000-000000020101'),
+  1::bigint,
+  'once locked, the linked server sees their own payroll period'
+);
+select is(
+  (select gross_cents from public.payroll_periods
+   where organization_id = '00000000-0000-0000-0000-000000020101'),
+  120000,
+  'the linked server sees the correct gross_cents on their own locked period'
+);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020002', true);
 
 -- A confirmed payment's TARGET is frozen too, not just its amount -- found
 -- during a Phase 3 worked-sequence review: re-pointing payroll_period_id

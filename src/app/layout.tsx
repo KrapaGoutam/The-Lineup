@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { THEME_STORAGE_KEY } from "@/hooks/use-theme";
+import { ClientHydrationMarker } from "@/components/hydration-marker";
 
 import "./globals.css";
 
@@ -40,7 +41,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <ClientHydrationMarker />
+      </body>
     </html>
   );
 }

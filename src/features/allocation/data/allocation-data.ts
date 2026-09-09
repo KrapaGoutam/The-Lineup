@@ -31,6 +31,14 @@ export type AllocationContext = {
   eventCount: number;
   canUndo: boolean;
   canRedo: boolean;
+  // Feature 028: the wall-clock service date this context was read for
+  // (the requested date, or today when omitted), and whether that date is
+  // strictly before today in the location's own time zone. isHistorical
+  // is what allocation-workspace.tsx forces canWrite to false on --
+  // deliberately independent of session status, so even a session that
+  // was somehow left "active" on a past date still renders read-only.
+  serviceDate: string;
+  isHistorical: boolean;
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -53,27 +61,36 @@ const EMPTY_BOARD: RotationBoard = {
 
 export async function getAllocationContext(
   organizationId: string,
+  requestedServiceDate?: string,
 ): Promise<AllocationContext | null> {
   const supabase = await createClient();
   const location = await getPrimaryLocation(organizationId);
   if (!location) return null;
 
   const team = await getOrganizationRoster(organizationId);
-  const serviceDate = zonedWallTimeFromInstant(
-    new Date(),
-    location.time_zone,
-  ).date;
+  const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
+  const serviceDate = requestedServiceDate ?? today;
+  const isHistorical = serviceDate < today;
 
-  const { data: session, error: sessionError } = await supabase
+  // Feature 028: dropped the `.eq("status", "active")` filter that used to
+  // scope this to only today's session. location_id + service_date +
+  // meal_period is already a unique-enough combination in practice (the
+  // DB's own partial unique index only enforces uniqueness among *active*
+  // rows, so a historical date could in principle have been reopened and
+  // reclosed more than once) -- order + limit defensively so a past date
+  // with an unusual history still resolves to exactly one row rather than
+  // erroring on `.maybeSingle()`.
+  const { data: sessionRows, error: sessionError } = await supabase
     .from("service_sessions")
     .select("id")
     .eq("location_id", location.id)
     .eq("service_date", serviceDate)
     .eq("meal_period", "service")
-    .eq("status", "active")
-    .maybeSingle();
+    .order("id", { ascending: false })
+    .limit(1);
   if (sessionError)
     console.error("getAllocationContext: service_sessions", sessionError);
+  const session = sessionRows?.[0] ?? null;
 
   if (!session) {
     return {
@@ -86,6 +103,8 @@ export async function getAllocationContext(
       eventCount: 0,
       canUndo: false,
       canRedo: false,
+      serviceDate,
+      isHistorical,
     };
   }
 
@@ -222,5 +241,7 @@ export async function getAllocationContext(
     eventCount: (eventRows ?? []).length,
     canUndo,
     canRedo,
+    serviceDate,
+    isHistorical,
   };
 }

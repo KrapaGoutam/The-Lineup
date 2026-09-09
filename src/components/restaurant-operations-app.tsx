@@ -29,7 +29,10 @@ import {
   type AttendanceLinkOptions,
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
-import { demoNeonUsers } from "@/features/attendance/demo-data";
+import {
+  demoNeonAttendance,
+  demoNeonUsers,
+} from "@/features/attendance/demo-data";
 import {
   designationToRole,
   type Designation,
@@ -37,22 +40,31 @@ import {
 import { PayrollWorkspace } from "@/features/payroll/components/payroll-workspace";
 import {
   addShiftAction,
+  deleteShiftAction,
   publishScheduleAction,
   saveScheduleConfigAction,
+  updateShiftAction,
 } from "@/features/schedules/actions/schedule-actions";
 import { ScheduleWorkspace } from "@/features/schedules/components/schedule-workspace";
+import type { ShiftEditResult } from "@/features/schedules/components/shift-edit-dialog";
 import type { ScheduleContext } from "@/features/schedules/data/schedule-data";
 import {
+  addDays,
   getMonthDates,
   getWeekDates,
   type ShiftDefaults,
+  type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
+import { SettingsPage } from "@/features/settings/components/settings-page";
+import { renameTeamMemberAction } from "@/features/team/actions/member-actions";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
+import type { RenameMemberResult } from "@/features/team/components/rename-member-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import {
   addTipIntervalAction,
   finalizeTipsAction,
+  getClockedInRosterAction,
   reopenTipsAction,
 } from "@/features/tips/actions/tips-actions";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
@@ -96,7 +108,8 @@ type AppTab =
   | "tips"
   | "team"
   | "attendance"
-  | "payroll";
+  | "payroll"
+  | "settings";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
 // active; secondary, plain icon+label) rather than one flat row. Schedule
@@ -116,7 +129,7 @@ const allocationTab = {
   icon: Table2,
 };
 const tipsTab = { id: "tips" as const, label: "Tip Split", icon: WalletCards };
-const primaryTabs = [scheduleTab, allocationTab, tipsTab];
+const primaryTabs = [allocationTab, tipsTab];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
 // Feature 019: visible to every signed-in role -- unlike Feature 018,
@@ -626,13 +639,13 @@ export function RestaurantOperationsApp({
   // Schedule) is also exactly the manager-only/universal tab set the
   // avatar panel and mobile sheet need.
   const secondaryTabs = [
+    scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
     ...(isManager && !demoMode ? [payrollTab] : []),
   ];
-  // The mobile "More" sheet's navigable rows: Schedule (bumped out of the
-  // 3-button dock for space) plus every secondary tab.
-  const moreTabs = [scheduleTab, ...secondaryTabs];
+  // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
+  const moreTabs = [...secondaryTabs];
   // Narrowing doesn't cross into the nested function declarations below —
   // capture a non-null local so TypeScript can see it there too.
   const currentUser = user;
@@ -704,6 +717,103 @@ export function RestaurantOperationsApp({
     setShifts((current) => [...current, ...result.data]);
   }
 
+  // Feature 027. Editing/deleting a shift, published or draft alike --
+  // there was no such action before this feature (see
+  // tasks/current-task.md's Investigation #2). Optimistic update of the
+  // parent's own `shifts` state mirrors addShifts's exact pattern: real
+  // mode applies the same patch only after the action confirms success,
+  // demo mode applies it directly. ScheduleWorkspace derives whichever
+  // week it's showing from this same `shifts` prop -- unchanged for the
+  // initial week, filtered fresh for a demo-mode browsed week, and
+  // re-fetched (via its own afterMutation -> weekReloadKey) for a
+  // real-mode browsed week.
+  function applyShiftEdit(
+    current: DemoShift[],
+    shiftId: string,
+    edit: {
+      employeeId: string;
+      shiftKind: ShiftKind;
+      startLocal: string;
+      endLocal: string;
+      note?: string;
+    },
+  ): DemoShift[] {
+    return current.map((shift) =>
+      shift.id === shiftId
+        ? {
+            ...shift,
+            employeeId: edit.employeeId,
+            shiftKind: edit.shiftKind,
+            startLocal: edit.startLocal,
+            endLocal: edit.endLocal,
+            endDate:
+              edit.endLocal <= edit.startLocal
+                ? addDays(shift.serviceDate, 1)
+                : shift.serviceDate,
+            usesDefaultTime: false,
+            note: edit.note,
+          }
+        : shift,
+    );
+  }
+
+  async function updateShift(input: {
+    shiftId: string;
+    employeeId: string;
+    shiftKind: ShiftKind;
+    startLocal: string;
+    endLocal: string;
+    note?: string;
+  }): Promise<ShiftEditResult> {
+    if (demoMode) {
+      setShifts((current) => applyShiftEdit(current, input.shiftId, input));
+      return { ok: true };
+    }
+    if (!locationId) return { ok: false, error: "No location is set up yet." };
+    const result = await updateShiftAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      shiftId: input.shiftId,
+      timeZone,
+      employeeId: input.employeeId,
+      shiftKind: input.shiftKind,
+      startLocal: input.startLocal,
+      endLocal: input.endLocal,
+      note: input.note,
+    });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    setShifts((current) => applyShiftEdit(current, input.shiftId, input));
+    return { ok: true };
+  }
+
+  async function deleteShift(input: {
+    shiftId: string;
+  }): Promise<ShiftEditResult> {
+    if (demoMode) {
+      setShifts((current) =>
+        current.filter((shift) => shift.id !== input.shiftId),
+      );
+      return { ok: true };
+    }
+    if (!locationId) return { ok: false, error: "No location is set up yet." };
+    const result = await deleteShiftAction({
+      restaurantSlug,
+      organizationId: currentUser.organizationId,
+      shiftId: input.shiftId,
+    });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    setShifts((current) =>
+      current.filter((shift) => shift.id !== input.shiftId),
+    );
+    return { ok: true };
+  }
+
   async function publishSchedule() {
     if (!demoMode) {
       if (!locationId) return;
@@ -769,6 +879,40 @@ export function RestaurantOperationsApp({
     setTipPoolId(result.data.tipPoolId);
     setTipIntervals((current) => [...current, result.data.interval]);
     return { ok: true };
+  }
+
+  // Feature 029. Read-only convenience lookup, never a write -- demo
+  // mode resolves it from the same in-memory demoAttendanceLinks map
+  // Team's own link dialog already writes to (empty until a manager
+  // deliberately links someone), crossed against demoNeonAttendance's
+  // fixture rows for tipsServiceDate; real mode re-derives everything
+  // server-side via getClockedInRosterAction.
+  async function pullClockedInTeam(): Promise<
+    { ok: true; data: string[] } | { ok: false; error: string }
+  > {
+    if (demoMode) {
+      const activeNeonUserIds = new Set(
+        demoNeonAttendance
+          .filter(
+            (row) =>
+              row.date === tipsServiceDate &&
+              row.clockIn &&
+              !row.clockOut &&
+              !row.autoClockedOut,
+          )
+          .map((row) => row.userId),
+      );
+      const profileIds = Object.entries(demoAttendanceLinks)
+        .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
+        .map(([profileId]) => profileId);
+      return { ok: true, data: profileIds };
+    }
+    const result = await getClockedInRosterAction({ restaurantSlug });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    return { ok: true, data: result.data.profileIds };
   }
 
   async function finalizeTips() {
@@ -840,10 +984,12 @@ export function RestaurantOperationsApp({
    */
   async function changeDesignation(memberId: string, next: Designation) {
     if (!demoMode) {
+      const previous = team.find((member) => member.id === memberId);
       const result = await updateTeamDesignationAction({
         restaurantSlug,
         organizationId: currentUser.organizationId,
         targetProfileId: memberId,
+        previousDesignation: previous?.designation ?? next,
         nextDesignation: next,
       });
       if (!result.ok) {
@@ -883,6 +1029,55 @@ export function RestaurantOperationsApp({
       }
       return changed ? updated : current;
     });
+  }
+
+  /**
+   * Feature 024. Mirrors changeDesignation's exact shape: demo mode
+   * updates team/demoAccounts locally, real mode calls the action (which
+   * is authorized entirely by the new profiles_update_manager RLS
+   * policy, not re-checked here) then applies the same local update.
+   * Like changeDesignation, this does not update the signed-in `user`
+   * object even when an owner renames themselves -- a pre-existing,
+   * unchanged limitation (the header would show the old name until the
+   * next reload), not something this feature introduces or fixes.
+   */
+  async function renameTeamMember(input: {
+    targetProfileId: string;
+    previousDisplayName: string;
+    nextDisplayName: string;
+  }): Promise<RenameMemberResult> {
+    if (!demoMode) {
+      const result = await renameTeamMemberAction({
+        restaurantSlug,
+        organizationId: currentUser.organizationId,
+        targetProfileId: input.targetProfileId,
+        previousDisplayName: input.previousDisplayName,
+        nextDisplayName: input.nextDisplayName,
+      });
+      if (!result.ok) {
+        handleActionFailure(result.error, result.sessionInvalid);
+        return result;
+      }
+    }
+    setTeam((current) =>
+      current.map((member) =>
+        member.id === input.targetProfileId
+          ? { ...member, name: input.nextDisplayName }
+          : member,
+      ),
+    );
+    setDemoAccounts((current) => {
+      let changed = false;
+      const updated = { ...current };
+      for (const [passcode, account] of Object.entries(current)) {
+        if (account.profileId === input.targetProfileId) {
+          updated[passcode] = { ...account, name: input.nextDisplayName };
+          changed = true;
+        }
+      }
+      return changed ? updated : current;
+    });
+    return { ok: true };
   }
 
   async function loadAttendanceLinkOptions(): Promise<
@@ -1233,6 +1428,7 @@ export function RestaurantOperationsApp({
   }
 
   async function signOut() {
+    console.log("Sign out clicked!");
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
     setTab("schedule");
@@ -1256,6 +1452,17 @@ export function RestaurantOperationsApp({
     setShowAvatarPanel(false);
     setShowMobileSheet(false);
   }
+
+  // Feature 023: distinct from openHours -- "More options" (and every
+  // Settings nav entry point) goes to the full Settings page, while the
+  // avatar panel's own "Edit" and "Store hours" quick-shortcuts keep
+  // opening HoursDialog directly, unchanged (quick mid-shift adjustments
+  // stay one click away, per the feature's own User Outcome).
+  function openSettingsPage() {
+    setTab("settings");
+    setShowAvatarPanel(false);
+    setShowMobileSheet(false);
+  }
   function openChangePasscode() {
     setShowChangePasscode(true);
     setShowAvatarPanel(false);
@@ -1272,18 +1479,20 @@ export function RestaurantOperationsApp({
         {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
         <div className="mx-auto hidden min-h-[76px] max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid">
           <button
-            onClick={() => setTab("schedule")}
+            onClick={() => setTab("allocation")}
             className="flex min-h-11 items-center gap-3 justify-self-start"
-            aria-label="ServiceFlow schedule home"
+            aria-label="Home"
           >
-            <span className="bg-primary text-primary-foreground grid size-10 place-items-center rounded-xl font-black shadow-[0_12px_40px_-14px_var(--primary)]">
-              S
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://www.monkswebster.com/assets/img/logo-light.png"
+                alt="The Monk's Logo"
+                className="h-6 object-contain"
+              />
             </span>
             <span className="text-left">
               <span className="block text-sm font-bold tracking-tight">
-                ServiceFlow
-              </span>
-              <span className="text-muted-foreground block text-xs">
                 The Monk&apos;s
               </span>
             </span>
@@ -1325,7 +1534,10 @@ export function RestaurantOperationsApp({
             </button>
 
             {showAvatarPanel ? (
-              <div className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl">
+              <div
+                data-testid="account-menu"
+                className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl"
+              >
                 <div className="border-border/60 flex items-center justify-between border-b px-[18px] py-3.5">
                   <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
                     Appearance
@@ -1417,16 +1629,14 @@ export function RestaurantOperationsApp({
                   ) : null}
                 </div>
                 <div className="border-border/60 space-y-2 border-t px-3.5 py-3">
-                  {isManager ? (
-                    <Button
-                      variant="secondary"
-                      className="w-full justify-center"
-                      onClick={openHours}
-                    >
-                      <SlidersHorizontal aria-hidden="true" />
-                      More options
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-center"
+                    onClick={openSettingsPage}
+                  >
+                    <SlidersHorizontal aria-hidden="true" />
+                    More options
+                  </Button>
                   <button
                     onClick={signOut}
                     className="text-destructive hover:bg-destructive/10 flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
@@ -1478,17 +1688,15 @@ export function RestaurantOperationsApp({
               </button>
             ))}
           </div>
-          {isManager ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="ml-auto"
-              onClick={() => setShowHours(true)}
-            >
-              <Settings2 aria-hidden="true" />
-              Settings
-            </Button>
-          ) : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setTab("settings")}
+          >
+            <Settings2 aria-hidden="true" />
+            Settings
+          </Button>
         </div>
 
         {/* Mobile header: brand + avatar row, then the countdown pill. */}
@@ -1498,18 +1706,20 @@ export function RestaurantOperationsApp({
         >
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setTab("schedule")}
+              onClick={() => setTab("allocation")}
               className="flex min-h-11 items-center gap-2.5"
-              aria-label="ServiceFlow schedule home"
+              aria-label="Home"
             >
-              <span className="bg-primary text-primary-foreground grid size-9 place-items-center rounded-xl font-black">
-                S
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://www.monkswebster.com/assets/img/logo-light.png"
+                  alt="The Monk's Logo"
+                  className="h-5 object-contain"
+                />
               </span>
               <span className="text-left">
-                <span className="block text-sm font-bold">ServiceFlow</span>
-                <span className="text-muted-foreground block text-[11px]">
-                  The Monk&apos;s
-                </span>
+                <span className="block text-sm font-bold">The Monk&apos;s</span>
               </span>
             </button>
             <Button
@@ -1538,25 +1748,32 @@ export function RestaurantOperationsApp({
           </div>
           <CountdownPill clock={clock} compact />
           {showAvatarPanel ? (
-            <div className="border-border bg-card space-y-1 rounded-2xl border p-2 shadow-xl">
+            <div
+              data-testid="account-menu"
+              className="border-border bg-card absolute top-[calc(100%+0.5rem)] right-0 z-50 min-w-64 space-y-1 rounded-2xl border p-2 shadow-xl"
+            >
+              <div className="border-border/60 mb-1 flex flex-col border-b px-2.5 pb-2">
+                <span className="text-sm font-semibold">{user.name}</span>
+                <span className="text-muted-foreground text-xs capitalize">
+                  {user.role.replace("_", " ")}
+                </span>
+              </div>
               <div className="flex items-center justify-between px-2.5 py-2">
                 <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
                   Appearance
                 </span>
                 <AppearanceSwitch />
               </div>
-              {isManager ? (
-                <button
-                  onClick={openHours}
-                  className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-                >
-                  <Settings2
-                    className="text-muted-foreground size-[18px]"
-                    aria-hidden="true"
-                  />
-                  <span className="flex-1 text-sm font-medium">Settings</span>
-                </button>
-              ) : null}
+              <button
+                onClick={openSettingsPage}
+                className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+              >
+                <Settings2
+                  className="text-muted-foreground size-[18px]"
+                  aria-hidden="true"
+                />
+                <span className="flex-1 text-sm font-medium">Settings</span>
+              </button>
               <button
                 onClick={signOut}
                 className="text-destructive hover:bg-destructive/10 flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
@@ -1596,8 +1813,12 @@ export function RestaurantOperationsApp({
             weekDates={weekDates}
             monthDates={monthDates}
             timeZone={timeZone}
+            restaurantSlug={restaurantSlug}
+            demoMode={demoMode}
             onAddShifts={addShifts}
             onPublish={publishSchedule}
+            onUpdateShift={updateShift}
+            onDeleteShift={deleteShift}
           />
         ) : null}
         {tab === "allocation" ? (
@@ -1622,6 +1843,7 @@ export function RestaurantOperationsApp({
             onAddInterval={addTipInterval}
             onFinalize={finalizeTips}
             onReopen={reopenTips}
+            onPullClockedInTeam={pullClockedInTeam}
             auditLog={tipsAuditLog}
           />
         ) : null}
@@ -1630,6 +1852,7 @@ export function RestaurantOperationsApp({
             user={user}
             team={team}
             onChangeDesignation={changeDesignation}
+            onRenameMember={renameTeamMember}
             onResetPasscode={resetMemberPasscode}
             onDeactivate={deactivateTeamMember}
             onReactivate={reactivateTeamMember}
@@ -1651,6 +1874,23 @@ export function RestaurantOperationsApp({
           <PayrollWorkspace
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}
+            onGoToPayRates={() => setTab("settings")}
+          />
+        ) : null}
+        {tab === "settings" ? (
+          <SettingsPage
+            isManager={isManager}
+            demoMode={demoMode}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            operatingHours={operatingHours}
+            shiftDefaults={shiftDefaults}
+            todayIndex={todayIndex}
+            onEditHours={openHours}
+            onChangePasscode={openChangePasscode}
+            onGoToTab={(nextTab) => setTab(nextTab)}
+            onSignOut={signOut}
+            onBack={() => setTab("allocation")}
           />
         ) : null}
       </main>
@@ -1733,28 +1973,26 @@ export function RestaurantOperationsApp({
                   />
                 </button>
               ))}
-              {isManager ? (
-                <button
-                  onClick={openHours}
-                  className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
-                >
-                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                    <Settings2 className="size-[19px]" aria-hidden="true" />
+              <button
+                onClick={openSettingsPage}
+                className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+              >
+                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                  <Settings2 className="size-[19px]" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block text-[15px] font-semibold">
+                    Settings
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-foreground block text-[15px] font-semibold">
-                      Settings
-                    </span>
-                    <span className="text-muted-foreground block text-xs">
-                      Shift hours, store hours
-                    </span>
+                  <span className="text-muted-foreground block text-xs">
+                    Preferences, passcode, and more
                   </span>
-                  <ChevronDown
-                    className="text-muted-foreground size-4 -rotate-90"
-                    aria-hidden="true"
-                  />
-                </button>
-              ) : null}
+                </span>
+                <ChevronDown
+                  className="text-muted-foreground size-4 -rotate-90"
+                  aria-hidden="true"
+                />
+              </button>
               <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
                 <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
                   <Settings2 className="size-[19px]" aria-hidden="true" />
