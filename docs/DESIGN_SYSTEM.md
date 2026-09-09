@@ -110,30 +110,97 @@ The label swap (not just the color) is deliberate — urgency has to read withou
   - `Part-paid`: Tone `warn` (amber badge) — `balanceCents > 0 && balanceCents < grossCents`.
   - `Paid`: Tone `ok` (emerald badge) — settled in full.
 
-### Corporate Print Letterhead & Timesheet Templates (Feature 030)
+### Corporate Print Letterhead & Timesheet Templates (Feature 030, corrected by its own bug-fix pass)
 
-- **Letterhead Branding**:
-  - Dark contrast container (`bg-[#0b0b0d] p-3 rounded-lg border border-border`) housing "The Monk's" official white brand logo (`https://www.monkswebster.com/assets/img/logo-light.png`).
-  - Restaurant metadata block: Address (Webster, TX), Phone, Email, and Federal Tax ID.
-  - Document header with Employee Name, Designation, Report Period, and Timestamp.
-- **Print Pagination**:
-  - Multi-employee reports enforce 1 employee per physical page via CSS:
-    ```css
-    @media print {
-      .employee-timesheet {
-        page-break-after: always;
-        break-after: page;
-      }
-      .employee-timesheet:last-child {
-        page-break-after: auto;
-        break-after: auto;
-      }
-    }
-    ```
-- **Verification Signature Blocks**:
-  - Official sign-off blocks at the base of every printed timesheet and statement: "Employee Signature" and "Authorized Manager Signature" with signature rules and date lines.
-- **Print Media Isolation**:
-  - Non-printable controls (navigation headers, search/filter inputs, dialog overlay backdrops, action buttons) carry `no-print` or `print:hidden`.
+The version below is what actually ships, after a bug-fix pass on
+Feature 030 found and corrected the original implementation's raster
+logo, missing dynamic filename, and a real print-isolation duplicate-
+page bug (root cause: `visibility:hidden` + `position:absolute`,
+which still occupies layout space and is a known Chrome print-
+pagination duplication class -- see
+`docs/features/030-combined-timesheet-payroll-statement.md`'s own "Bug
+Fix Pass" section for the full record).
+
+- **Letterhead Branding** (`src/components/print/report-letterhead.tsx`,
+  one shared component for every print surface -- Attendance timesheet,
+  Payroll statement, Combined statement):
+  - "The Monk's Indian Fusion - Webster" heading with an **embedded
+    inline SVG crest** directly in the JSX -- never an external `<img>`.
+    An external image is network-dependent and fails outright offline
+    or against an unreachable/hotlink-blocked host; an inline SVG
+    always renders, and stays fully vector/crisp at any print DPI.
+  - Metadata banner: document type, employee name & role, reporting
+    period, and generation timestamp, with a `border-b border-gray-300
+pb-3 mb-4` divider.
+- **Hidden-Line Print Tables** (`.print-timesheet-table` in
+  `src/app/globals.css`):
+  ```css
+  .print-timesheet-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .print-timesheet-table th,
+  .print-timesheet-table td {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px 10px;
+    color: #1f2937;
+    font-size: 10.5pt;
+    text-align: left;
+  }
+  .print-timesheet-table th {
+    font-size: 8pt;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+  }
+  ```
+  Applied to every printed table across all three surfaces. Combined
+  with a blanket `user-select: text` under `@media print`, this
+  guarantees fully selectable/copiable, high-contrast (black-on-white)
+  text in the printed/PDF output -- never a flattened image.
+- **Print Isolation** (`@media print` block in `globals.css`): the
+  print root of each surface is `hidden print:block` (Tailwind) --
+  simply absent from layout outside print, never a
+  `visibility:hidden`/`position:absolute` trick. Every on-screen-only
+  chrome element (app `header`/`nav`, every `button`, dialog overlays
+  via `.no-print`/`print:hidden`) is hidden the same way. A dialog's
+  own screen-only size/scroll clamps (`max-h-[92vh]`, `overflow-hidden`)
+  are explicitly reset with `print:max-h-none print:overflow-visible`
+  etc. so the full content prints, not just what's scrolled into view.
+- **Print Pagination**: one page per employee via the shared
+  `.print-page-break` class (`globals.css`):
+  ```css
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page-break:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  ```
+- **Verification Signature Blocks**: official sign-off blocks at the
+  base of every printed timesheet and statement: "Employee Signature"
+  and "Authorized Manager Signature" with signature rules and date
+  lines.
+- **Dynamic PDF Filename** (`src/lib/print-utils.ts`):
+  `triggerPrintWithFilename(suggestedTitle)` sets `document.title` to
+  the report's specific filename before calling `window.print()`
+  (browsers offer the current tab title as the default Save-as-PDF
+  filename), then restores the original title on the `afterprint`
+  event (with a fallback timeout for browsers that suppress it). A
+  short internal `setTimeout` before `window.print()` guarantees the
+  title write has actually committed before the print dialog reads it.
+  Five naming conventions, deliberately using different capitalization
+  from each other where specified (not a typo to unify):
+  - Attendance roster: `"Staff attendance Report <Mon> <Year>"`
+  - Attendance single: `"<Name> Attendance Report <Mon> <Year>"`
+  - Payroll roster: `"Staff Payroll Report <Mon> <Year>"` (or `"...All
+Open Months"`)
+  - Payroll single: `"<Name> Payroll Report <Mon> <Year>"` (or `"...All
+Open Months"`)
+  - Combined statement: `"<Name> Monthly Report <Mon> <Year>"`
 
 ### Dark Mode Form Controls
 

@@ -90,3 +90,28 @@ In **Feature 030** (`docs/features/030-combined-timesheet-payroll-statement.md`)
 3. **`part-paid` Status Badge**: `derivePeriodStatus()` was extended to support `"part-paid"` when `balanceCents > 0 && balanceCents < grossCents`, styled with an amber/warn badge.
 4. **Pay Rates Form Deduplication**: Removed the redundant `<RateSettings>` form from the bottom of the Payroll tab; pay rate configuration is consolidated in Settings > Pay Rates (`pay-rates-section.tsx`), accessible via the toolbar button.
 5. **Staff Self-Service Access**: Regular employees (non-managers) can view their own locked/paid periods and read-only ledger under "My Payroll" without seeing organization totals or admin action buttons.
+
+### Bug Fix Pass on Feature 030 (found testing PR #29)
+
+Two of the four live bugs fixed in Feature 030's bug-fix pass landed here:
+
+6. **Payroll Multi-Select Batch Print** (new capability, not a fix to
+   something broken): a "Print Statements" dialog (`payroll-print-
+dialog.tsx`) in the KPI toolbar lets a manager choose a specific
+   month or every open month, and current/selected/all employees,
+   producing one corporate-letterhead page per employee. A per-person
+   print icon in the grouped-periods list opens the same dialog
+   pre-selected to that one person. Reads only the dashboard's
+   already-fetched, already-RLS-scoped period data -- no new server
+   action. Covered by `payroll-print-dialog.test.tsx` (7 Vitest tests);
+   no e2e coverage, for the same reason Feature 020 itself has none --
+   Payroll stays `!demoMode`-gated and the e2e suite runs in demo mode.
+7. **Single-statement print letterhead, filename, and isolation fix**:
+   `PeriodLedgerPanel`'s own "Print statement" previously had no
+   letterhead at all (a bare organization-name heading) and relied on
+   the same fragile `visibility:hidden` + `position:absolute` isolation
+   trick the Combined Statement dialog's duplicate-page bug was
+   root-caused to (unnecessary here, since the print area was already
+   `hidden print:block`). Now uses the shared `<ReportLetterhead>` and
+   routes through `triggerPrintWithFilename` with the `"<Name> Payroll
+Report <Mon> <Year>"` convention.

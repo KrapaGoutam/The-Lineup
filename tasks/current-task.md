@@ -378,14 +378,35 @@ Payroll Report Aug 2026"` when `window.print()` fired.
         and this whole suite runs in demo mode; covered instead by
         `payroll-print-dialog.test.tsx`'s 7 Vitest tests (Step 6).
   - [x] Commit.
-- [ ] **Step 8: Documentation**
-  - [ ] Update `docs/features/025-attendance-reporting-and-filters.md`,
-        `docs/features/026-payroll-dashboard-and-ledger-balances.md`,
-        `docs/features/030-combined-timesheet-payroll-statement.md`.
-  - [ ] Update `docs/DESIGN_SYSTEM.md` (print stylesheet tokens, dynamic
-        title/filename pattern, print isolation architecture).
-  - [ ] Update `docs/STATUS.md`.
-  - [ ] Full gate. Commit.
+- [x] **Step 8: Documentation**
+  - [x] Updated `docs/features/030-combined-timesheet-payroll-statement.md`:
+        fixed the PR link (#30 → #29), corrected the letterhead/logo and
+        pagination-class references throughout, added a new "Bug Fix
+        Pass" section with root causes, added 5 new acceptance criteria,
+        updated the Implementation Map and Test Plan with real file
+        names and test counts.
+  - [x] Updated `docs/features/025-attendance-reporting-and-filters.md`:
+        corrected its own "Evolution in Feature 030" section (shared
+        `ReportLetterhead`, `.print-page-break`) and added a "Bug Fix
+        Pass" subsection.
+  - [x] Updated `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
+        added items 6-7 (payroll batch print, single-statement
+        letterhead/filename/isolation fix) under a new "Bug Fix Pass"
+        subsection.
+  - [x] Updated `docs/DESIGN_SYSTEM.md`'s print section: corrected the
+        letterhead description (embedded SVG, not the raster logo),
+        added `.print-timesheet-table` hidden-line CSS documentation,
+        documented the `hidden print:block`/`print:hidden` isolation
+        architecture (replacing the old visibility/position
+        description), and documented `triggerPrintWithFilename`'s 5
+        naming conventions.
+  - [x] Updated `docs/STATUS.md`: corrected the Health Gate line (42/42
+        Vitest files, 316/316 tests, full e2e suite 153/153), rewrote
+        the Current State paragraph to describe the bug-fix pass, and
+        updated the Feature 030 Feature Matrix row.
+  - [x] Full gate: format/lint/typecheck clean, 316/316 unit tests,
+        build clean.
+  - [x] Commit.
 - [ ] **Step 9: Final gate + push to PR #29**
   - [ ] Full gate incl. `npm run db:test` (only if any migration ends up
         touched -- not expected).
@@ -412,6 +433,6 @@ Payroll Report Aug 2026"` when `window.print()` fired.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-7 done and committed. Next: Step 8 (documentation -- update
-`docs/features/025`, `026`, `030`, `docs/DESIGN_SYSTEM.md`, and
-`docs/STATUS.md`).
+Steps 1-8 done and committed. Next: Step 9 (final gate + push to
+PR #29 -- no migrations touched in this pass, so `npm run db:test` is
+expected unchanged; push and let PR #29 pick up the new commits).

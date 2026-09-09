@@ -95,27 +95,44 @@ users`) — this feature adds no write path and no Neon-side schema.
 In **Feature 030** (`docs/features/030-combined-timesheet-payroll-statement.md`), Attendance Reporting received print and integration enhancements:
 
 1. **Corporate Letterhead Print Templates**:
-   - Integrated "The Monk's" official logo (`https://www.monkswebster.com/assets/img/logo-light.png`) nested in a dark contrast container (`#0b0b0d`) alongside restaurant details (address, phone, email, and tax ID).
+   - Shared `<ReportLetterhead>` component: "The Monk's Indian Fusion - Webster" heading with an embedded, offline-safe inline SVG crest.
    - Document metadata header displaying Employee Name, Designation, Report Period, and Generation Timestamp.
    - Comprehensive shifts table with calendar weekdays, in/out timestamps, auto-closed warnings, and total hours summary.
    - Verification signature blocks: "Employee Signature" and "Authorized Manager Signature" with date lines for legal and administrative compliance.
 2. **1-Employee-Per-Page Print Pagination**:
-   - Enforced CSS print rules on multi-employee print runs:
-     ```css
-     @media print {
-       .employee-timesheet {
-         page-break-after: always;
-         break-after: page;
-       }
-       .employee-timesheet:last-child {
-         page-break-after: auto;
-         break-after: auto;
-       }
-     }
-     ```
+   - Enforced via the shared `.print-page-break` CSS class (`src/app/globals.css`), applied to `PrintableReport`'s per-employee wrapper.
    - Prevents awkward mid-shift page splits and ensures clean single-sheet filing per employee.
 3. **Combined Monthly Statement Action**:
    - Added a "Monthly Statement" action button beside "Print" in both single-employee and all-employee views.
    - Triggers the Combined Monthly Timesheet & Payroll Statement dialog, bridging attendance clock-ins with gross wages, adjustments, and disbursement status.
 4. **Dropdown Contrast Fix**:
    - Explicit popover theme tokens (`bg-popover text-popover-foreground [&>option]:bg-popover [&>option]:text-popover-foreground`) applied to employee, month, and year selectors to ensure dark-mode contrast.
+
+## Bug Fix Pass on Feature 030 (found testing PR #29)
+
+Two of the four live bugs fixed in Feature 030's bug-fix pass
+(`tasks/current-task.md`'s own "Bug Fix Pass" section) landed here:
+
+1. **Pure vector print output, no raster image.** The letterhead
+   originally used an external `<img src="https://www.monkswebster.com/
+assets/img/logo-light.png">` (`crossOrigin="anonymous"`) -- a real
+   reliability bug, since that fails outright offline or against an
+   unreachable/hotlink-blocked host. `PrintableReport` now uses the
+   shared `<ReportLetterhead>`'s embedded inline SVG instead; the
+   printed timesheet table is tagged `.print-timesheet-table` for the
+   shared hidden-line/`user-select: text` styling.
+2. **Dynamic PDF filename.** The print-triggering effect (fired once
+   `printJob` state commits) now routes through
+   `triggerPrintWithFilename` (`src/lib/print-utils.ts`) instead of a
+   bare `window.print()` -- `document.title` becomes `"<Name>
+Attendance Report <Mon> <Year>"` for a single employee or `"Staff
+attendance Report <Mon> <Year>"` for a roster print, live-verified
+   both via a real browser and in `tests/e2e/payroll-timesheet-
+overhaul.spec.ts`.
+
+Live-verifying this pass also surfaced (and fixed) a real regression it
+introduced in `tests/e2e/attendance-reporting.spec.ts`: 3 pre-existing
+tests asserted `printCallCount` synchronously right after a print
+click, which now loses the race against `triggerPrintWithFilename`'s
+internal `setTimeout` (needed so `document.title` actually commits
+before the print dialog reads it) -- fixed with a poll helper.
