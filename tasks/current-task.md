@@ -92,9 +92,9 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
   - [x] Update `docs/STATUS.md`.
   - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- [ ] **Step 8: Final Gate & PR**
-  - [ ] Full quality gate verification.
-  - [ ] Push branch to remote and create PR.
+- [x] **Step 8: Final Gate & PR**
+  - [x] Full quality gate verification (`npm run check`, `npm test`, `npm run build`, `npm run db:test`, Playwright E2E).
+  - [x] Push branch to remote and create PR.
 
 ## 🗂️ File List
 
@@ -123,5 +123,6 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Steps 1-7 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement, Step 6 Playwright & Vitest test suites, Step 7 Documentation Updates).
-- Next immediate action: Step 8 (Final Gate & PR).
+- All Steps 1-8 completed. Full verification passing (`npm run check`, `npm test` 295/295, `npm run build`, `npm run db:test` 211/211, Playwright E2E 12/12).
+- Ready for final commit and push.
+
