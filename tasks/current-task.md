@@ -171,14 +171,22 @@ able to see.
   - [x] Full gate: format/lint/typecheck clean, 281/281 unit tests
         (16 new), build clean.
   - [x] Commit.
-- [ ] **Step 4: Action — extend the dashboard payload**
-  - [ ] `getPayrollDashboardAction`: add `owedThisMonthCents`,
+- [x] **Step 4: Action — extend the dashboard payload**
+  - [x] `getPayrollDashboardAction`: added `owedThisMonthCents`,
         `owedLastMonthCents`, `oldestOpenPeriod`, and the full `periods`
         array (each with its `balanceCents` attached) to
-        `PayrollDashboard`, computed from data already being fetched.
-  - [ ] Unit tests (mocked) for the new fields.
-  - [ ] Full gate.
-  - [ ] Commit.
+        `PayrollDashboard`, computed from data already being fetched
+        (the same `listPayrollPeriods` + per-period `getPayrollBalance`
+        calls the existing fields already used) via the new
+        `payroll-balance-metrics.ts` functions -- no new query.
+  - [x] New `payroll-actions.test.ts` (none existed before): 5 cases --
+        owed-vs-generated genuinely differing, oldest-open-period found
+        and null-when-settled, the full `periods` array with balance
+        attached, and the unlinked-viewer empty shape including the new
+        fields.
+  - [x] Full gate: format/lint/typecheck clean, 286/286 unit tests
+        (5 new), build clean.
+  - [x] Commit.
 - [ ] **Step 5: Components — KPI cards, grouped periods, balance panel**
   - [ ] New `payroll-kpi-cards.tsx`: 4 cards (Overall balance owed,
         Owed this month, Owed last month, Oldest open month) plus a
@@ -247,5 +255,5 @@ able to see.
 
 ## Current State & Next Step
 
-Steps 1-3 done and committed. Next: Step 4 (action -- extend
-`getPayrollDashboardAction`'s payload).
+Steps 1-4 done and committed. Next: Step 5 (components -- KPI cards,
+grouped periods, balance panel).

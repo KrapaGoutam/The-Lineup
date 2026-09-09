@@ -18,6 +18,12 @@ import {
   resolveEffectiveRateCents,
 } from "@/features/payroll/domain/calculate-payroll";
 import {
+  computeOwedForMonth,
+  findOldestOpenPeriod,
+  type OldestOpenPeriod,
+  type PayrollPeriodWithBalance,
+} from "@/features/payroll/domain/payroll-balance-metrics";
+import {
   confirmPayment,
   countPaymentsForPeriod,
   deleteDraftPayment,
@@ -874,13 +880,37 @@ export type PayrollDashboard = {
    * calendar month (relative to `todayLocalDate`) -- a fixed reference
    * point, independent of any period/person filter elsewhere on the page. */
   previousMonthGeneratedCents: number;
+  /**
+   * Feature 026. Outstanding (not gross-generated) balance for the
+   * current/previous calendar month's periods -- a genuinely different
+   * figure from `previousMonthGeneratedCents` above (a fully-paid period
+   * contributes zero here, not its original gross amount). See
+   * `computeOwedForMonth`'s own doc comment.
+   */
+  owedThisMonthCents: number;
+  owedLastMonthCents: number;
+  /** The chronologically earliest period with a positive outstanding
+   * balance, or null once everything is settled. See
+   * `findOldestOpenPeriod`. */
+  oldestOpenPeriod: OldestOpenPeriod | null;
   perPerson: PayrollDashboardPerson[];
+  /** Feature 026. Every period in scope (RLS already limits this to the
+   * org for a privileged caller, or just the caller's own locked
+   * periods for a self-scoped one), each carrying its own already-
+   * computed `balanceCents` -- what the grouped-by-person view renders
+   * from, reusing this exact fetch rather than a second N+1 balance
+   * query. */
+  periods: PayrollPeriodWithBalance[];
 };
 
 const EMPTY_DASHBOARD: PayrollDashboard = {
   totalBalanceOwedCents: 0,
   previousMonthGeneratedCents: 0,
+  owedThisMonthCents: 0,
+  owedLastMonthCents: 0,
+  oldestOpenPeriod: null,
   perPerson: [],
+  periods: [],
 };
 
 /**
@@ -926,10 +956,12 @@ export async function getPayrollDashboardAction(input: {
   const failed = balanceResults.find((result) => !result.ok);
   if (failed && !failed.ok) return { ok: false, error: failed.error };
 
+  const currentMonth = normalizePeriodMonth(parsed.data.todayLocalDate);
   const previousMonth = previousPeriodMonth(parsed.data.todayLocalDate);
   let totalBalanceOwedCents = 0;
   let previousMonthGeneratedCents = 0;
   const perPersonByNeonUserId = new Map<number, PayrollDashboardPerson>();
+  const periodsWithBalance: PayrollPeriodWithBalance[] = [];
 
   periodsResult.data.forEach((period, index) => {
     const balanceResult = balanceResults[index];
@@ -949,6 +981,17 @@ export async function getPayrollDashboardAction(input: {
     existing.balanceCents += balanceCents;
     existing.totalGeneratedCents += period.grossCents;
     perPersonByNeonUserId.set(period.neonUserId, existing);
+
+    periodsWithBalance.push({
+      id: period.id,
+      neonUserId: period.neonUserId,
+      periodMonth: period.periodMonth,
+      hoursSnapshot: period.hoursSnapshot,
+      rateCentsSnapshot: period.rateCentsSnapshot,
+      grossCents: period.grossCents,
+      status: period.status,
+      balanceCents,
+    });
   });
 
   return {
@@ -956,7 +999,14 @@ export async function getPayrollDashboardAction(input: {
     data: {
       totalBalanceOwedCents,
       previousMonthGeneratedCents,
+      owedThisMonthCents: computeOwedForMonth(periodsWithBalance, currentMonth),
+      owedLastMonthCents: computeOwedForMonth(
+        periodsWithBalance,
+        previousMonth,
+      ),
+      oldestOpenPeriod: findOldestOpenPeriod(periodsWithBalance),
       perPerson: Array.from(perPersonByNeonUserId.values()),
+      periods: periodsWithBalance,
     },
   };
 }
