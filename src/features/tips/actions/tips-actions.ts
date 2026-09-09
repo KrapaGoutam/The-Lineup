@@ -1,11 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
+import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
+import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
-import { zonedWallTimeToInstant } from "@/lib/timezone";
+import {
+  zonedWallTimeFromInstant,
+  zonedWallTimeToInstant,
+} from "@/lib/timezone";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
@@ -241,4 +248,70 @@ export async function reopenTipsAction(input: {
 
   revalidatePath(`/r/${input.restaurantSlug}`);
   return { ok: true, data: null };
+}
+
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+/**
+ * Feature 029. Read-only: who currently has a genuinely open shift,
+ * resolved to this organization's own profile ids. Manager/owner-only,
+ * enforced here as defense in depth beyond the UI (which already only
+ * ever renders the "Pull clocked-in team" button for a manager) --
+ * re-derives `organizationId` via `getCurrentUser`, never trusts a
+ * client-supplied one, and computes the service date from the
+ * restaurant's own primary location + timezone, never a client-supplied
+ * date either (the same discipline `getTipsContext` itself already
+ * follows for `serviceDate`).
+ */
+export async function getClockedInRosterAction(input: {
+  restaurantSlug: string;
+}): Promise<ActionResult<{ profileIds: string[] }>> {
+  const parsed = z
+    .object({ restaurantSlug: restaurantSlugSchema })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "That request is invalid." };
+  }
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
+  if (!currentUser) {
+    return {
+      ok: false,
+      error: "You need to sign in to pull the clocked-in team.",
+    };
+  }
+  if (currentUser.role === "server") {
+    return {
+      ok: false,
+      error: "Only a manager or owner can pull the clocked-in team.",
+    };
+  }
+
+  const location = await getPrimaryLocation(currentUser.organizationId);
+  if (!location) {
+    return {
+      ok: false,
+      error: "This restaurant has no primary location configured.",
+    };
+  }
+  const serviceDate = zonedWallTimeFromInstant(
+    new Date(),
+    location.time_zone,
+  ).date;
+
+  const roster = await fetchClockedInRoster(supabase, {
+    organizationId: currentUser.organizationId,
+    serviceDate,
+  });
+  if (!roster.ok) return roster;
+  return { ok: true, data: { profileIds: roster.data } };
 }

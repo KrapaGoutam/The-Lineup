@@ -150,8 +150,8 @@ employees"` `<option>` to the switcher (manager/owner-only
   - [ ] Commit.
 - [x] **Step 3: Feature 029 — data layer**
   - [x] `attendance-data.ts`: new `getActiveClockedInRows({ serviceDate
-    })` (`clock_in is not null and clock_out is null and
-    auto_clocked_out = false`, so the rare open-but-already-
+})` (`clock_in is not null and clock_out is null and
+auto_clocked_out = false`, so the rare open-but-already-
         auto-closed demo edge case is correctly excluded too), reusing
         the existing lazy-client convention. Extracted a shared
         `mapAttendanceRow`/`RawAttendanceRow` used by both this and the
@@ -168,16 +168,20 @@ employees"` `<option>` to the switcher (manager/owner-only
   - [x] Full gate: format/lint/typecheck clean, 259/259 unit tests
         (6 new), build clean.
   - [x] Commit.
-- [ ] **Step 4: Feature 029 — Server Action**
-  - [ ] `tips-actions.ts`: new `getClockedInRosterAction({
-restaurantSlug })`, zod-validated, manager/owner-only (defense
+- [x] **Step 4: Feature 029 — Server Action**
+  - [x] `tips-actions.ts`: new `getClockedInRosterAction({
+    restaurantSlug })`, zod-validated, manager/owner-only (defense
         in depth beyond the UI), re-derives `organizationId` via
         `getCurrentUser` and the service date via the restaurant's own
         primary location + timezone (never trusts a client-supplied
         date).
-  - [ ] Unit test (mocked) for the role gate + org/date derivation.
-  - [ ] Full gate.
-  - [ ] Commit.
+  - [x] Unit test: 5 cases (malformed slug refused before any lookup,
+        server refused, manager succeeds with org/date re-derived
+        server-side, missing primary location, roster-lookup failure
+        propagated) via the established `vi.hoisted`/`vi.mock` pattern.
+  - [x] Full gate: format/lint/typecheck clean, 264/264 unit tests
+        (5 new), build clean.
+  - [x] Commit.
 - [ ] **Step 5: Feature 029 — UI + immutability regression test**
   - [ ] `tip-workspace.tsx`: "Pull clocked-in team" button (manager-only,
         disabled once finalized) above the participant checkboxes;
@@ -251,5 +255,6 @@ onPullClockedInTeam={...}>`.
 
 ## Current State & Next Step
 
-Steps 1-3 done and committed. Next: Step 4 (Feature 029 Server Action --
-`getClockedInRosterAction` in `tips-actions.ts`).
+Steps 1-4 done and committed. Next: Step 5 (Feature 029 UI --
+"Pull clocked-in team" button in `tip-workspace.tsx`, controlled
+checkboxes, `calculate-tip-splits.test.ts` immutability regression).
