@@ -1267,9 +1267,9 @@ function PeriodLedgerPanel({
           formats can never show different numbers for the same period. */}
       <div id={printAreaId} className="hidden print:block">
         <ReportLetterhead
-          documentType="Payroll Compensation Statement"
+          reportTitle="Payroll Compensation Statement"
           employeeName={personLabel}
-          period={monthLabel(period.periodMonth)}
+          periodName={monthLabel(period.periodMonth)}
         />
         <table className="print-timesheet-table mt-6 w-full text-left text-sm">
           <thead>
@@ -1308,7 +1308,7 @@ function PeriodLedgerPanel({
       {showCombinedStatement ? (
         <CombinedStatementDialog
           restaurantSlug={restaurantSlug}
-          neonUserId={period.neonUserId}
+          target={{ scope: "single", neonUserId: period.neonUserId }}
           year={Number(period.periodMonth.slice(0, 4))}
           month={Number(period.periodMonth.slice(5, 7))}
           onClose={() => setShowCombinedStatement(false)}

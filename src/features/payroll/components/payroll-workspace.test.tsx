@@ -439,7 +439,7 @@ describe("CombinedStatementDialog", () => {
     render(
       <CombinedStatementDialog
         restaurantSlug="the-monks"
-        neonUserId={101}
+        target={{ scope: "single", neonUserId: 101 }}
         year={2026}
         month={8}
         onClose={vi.fn()}
@@ -454,7 +454,9 @@ describe("CombinedStatementDialog", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.getByText("August 2026")).toBeInTheDocument();
-    expect(screen.getByText("Mia Chen")).toBeInTheDocument();
+    // The letterhead concatenates name + role into one text node now
+    // ("Mia Chen (Server)"), so this checks a substring.
+    expect(screen.getByText(/Mia Chen/)).toBeInTheDocument();
     expect(screen.getByText("Part 1: Recorded Attendance")).toBeInTheDocument();
     expect(
       screen.getByText("Part 2: Payroll & Compensation"),

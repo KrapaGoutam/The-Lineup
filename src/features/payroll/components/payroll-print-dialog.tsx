@@ -275,13 +275,13 @@ export function PayrollPrintDialog({
           {printJob.pages.map((page) => (
             <div key={page.neonUserId} className="print-page-break p-10">
               <ReportLetterhead
-                documentType={
+                reportTitle={
                   monthChoice === ALL_OPEN_MONTHS
                     ? "Payroll Compensation Statement — All Open Months"
                     : "Payroll Compensation Statement"
                 }
                 employeeName={labelFor(page.neonUserId)}
-                period={
+                periodName={
                   monthChoice === ALL_OPEN_MONTHS
                     ? "All open months"
                     : monthLabel(monthChoice)

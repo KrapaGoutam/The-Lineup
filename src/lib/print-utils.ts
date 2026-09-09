@@ -78,6 +78,18 @@ export function combinedStatementFilename(
   return `${employeeName} Monthly Report ${formatMonthYearShort(year, month)}`;
 }
 
+/** The "All Employees" batch variant of the combined statement -- one
+ * letterhead page per active employee for the chosen month. Deliberately
+ * "Statements" (plural) and "Staff Payroll" -- its own convention, not
+ * `payrollRosterFilename`'s "Staff Payroll Report" (that one is the
+ * payroll-only batch print, a different document). */
+export function combinedStatementRosterFilename(
+  year: number,
+  month: number,
+): string {
+  return `Staff Payroll Statements ${formatMonthYearShort(year, month)}`;
+}
+
 /**
  * Sets `document.title` to `suggestedTitle` (what Chrome/Edge's Save-as-
  * PDF flow offers as the default filename) before calling

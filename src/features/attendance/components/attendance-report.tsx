@@ -190,11 +190,14 @@ export function AttendanceReport({
     month: number;
   } | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
-  const [statementTarget, setStatementTarget] = useState<{
-    neonUserId: number;
-    year: number;
-    month: number;
-  } | null>(null);
+  // Feature 031: "all" is only ever reachable from the "all"-scope
+  // switcher's own "All employees" filter (never for a self-scoped
+  // server, who only ever has one possible statement -- their own).
+  const [statementTarget, setStatementTarget] = useState<
+    | { scope: "single"; neonUserId: number; year: number; month: number }
+    | { scope: "all"; neonUserIds: number[]; year: number; month: number }
+    | null
+  >(null);
 
   useEffect(() => {
     if (!printJob) return;
@@ -588,6 +591,7 @@ export function AttendanceReport({
                 variant="outline"
                 onClick={() =>
                   setStatementTarget({
+                    scope: "single",
                     neonUserId: access.neonUserId,
                     year: selectedYear,
                     month: selectedMonth,
@@ -620,7 +624,7 @@ export function AttendanceReport({
         {statementTarget ? (
           <CombinedStatementDialog
             restaurantSlug={restaurantSlug}
-            neonUserId={statementTarget.neonUserId}
+            target={statementTarget}
             year={statementTarget.year}
             month={statementTarget.month}
             onClose={() => setStatementTarget(null)}
@@ -733,20 +737,37 @@ export function AttendanceReport({
             <Printer aria-hidden="true" /> Print
           </Button>
 
-          {!showingAll && activePerson ? (
-            <Button
-              variant="outline"
-              onClick={() =>
-                setStatementTarget({
-                  neonUserId: activePerson.id,
-                  year: selectedYear,
-                  month: selectedMonth,
-                })
-              }
-            >
-              <FileText aria-hidden="true" /> Monthly Statement
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            onClick={() =>
+              setStatementTarget(
+                showingAll
+                  ? {
+                      scope: "all",
+                      neonUserIds: sortedActiveUsers.map(
+                        (candidate) => candidate.id,
+                      ),
+                      year: selectedYear,
+                      month: selectedMonth,
+                    }
+                  : {
+                      scope: "single",
+                      // `activePerson` is guaranteed non-null here --
+                      // this branch only runs when the button itself
+                      // isn't disabled.
+                      neonUserId: activePerson!.id,
+                      year: selectedYear,
+                      month: selectedMonth,
+                    },
+              )
+            }
+            disabled={
+              showingAll ? sortedActiveUsers.length === 0 : !activePerson
+            }
+          >
+            <FileText aria-hidden="true" />{" "}
+            {showingAll ? "Monthly Statements (All)" : "Monthly Statement"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -824,7 +845,7 @@ export function AttendanceReport({
       {statementTarget ? (
         <CombinedStatementDialog
           restaurantSlug={restaurantSlug}
-          neonUserId={statementTarget.neonUserId}
+          target={statementTarget}
           year={statementTarget.year}
           month={statementTarget.month}
           onClose={() => setStatementTarget(null)}
@@ -954,9 +975,9 @@ function PrintableReport({
             className="print-page-break box-border flex min-h-[98vh] flex-col p-10"
           >
             <ReportLetterhead
-              documentType="Monthly Attendance Timesheet"
+              reportTitle="Monthly Attendance Timesheet"
               employeeName={section.label}
-              period={`${monthLabel} ${year}`}
+              periodName={`${monthLabel} ${year}`}
             />
 
             {/* Attendance Summary KPIs */}

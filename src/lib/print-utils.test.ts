@@ -4,6 +4,7 @@ import {
   attendanceRosterFilename,
   attendanceSingleFilename,
   combinedStatementFilename,
+  combinedStatementRosterFilename,
   formatMonthYearShort,
   payrollRosterFilename,
   payrollSingleFilename,
@@ -58,6 +59,12 @@ describe("filename conventions", () => {
   it("combined statement: '<Name> Monthly Report <Mon> <Year>'", () => {
     expect(combinedStatementFilename("Conan", 2026, 7)).toBe(
       "Conan Monthly Report Jul 2026",
+    );
+  });
+
+  it("combined statement, all employees: 'Staff Payroll Statements <Mon> <Year>'", () => {
+    expect(combinedStatementRosterFilename(2026, 9)).toBe(
+      "Staff Payroll Statements Sep 2026",
     );
   });
 
