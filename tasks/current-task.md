@@ -130,6 +130,24 @@ away from.
   - [x] Push `feature/033-print-layout-hardening-duplex`.
   - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
         against `main`.
+- [x] **Step 13 (follow-up): Payroll print isolation & single-page
+      guarantee, scoped to exactly `payroll-print-dialog.tsx` +
+      `globals.css`.** A supplied diff referenced a fictional version
+      of the file (`<Dialog>`, `handleExport`, `triggerPrint`,
+      `PayrollTable`, a `.print-report-container` class) that doesn't
+      match the real component or this codebase's already-documented
+      isolation strategy, so it was not applied verbatim. Audited the
+      real file first: the screen/print split it asked for already
+      existed and was already correct (this dialog was never part of
+      the Dashboard Leak bug). Added a `.payroll-print-page` class
+      (new, additive) with `break-inside: avoid` +
+      `table-header-group` print rules scoped to that class only --
+      real, Payroll-scoped hardening, without touching the shared
+      `.print-timesheet-table`/`.print-page-break` rules Attendance
+      and the Combined Statement depend on, and without touching any
+      other file/module. Full writeup in
+      `docs/features/033-print-layout-hardening-duplex.md`'s "Payroll
+      Print Isolation (follow-up)" section. Quality gate re-run clean.
 
 ## 🗂️ File List
 
@@ -150,4 +168,6 @@ Feature 033 is fully complete: implemented, unit-tested,
 e2e-regression-swept, live-verified via real PDF pagination (not just
 DOM assertions), documented, committed (`59662f5`), pushed, and opened
 as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) against
-`main`. Nothing further pending on this branch.
+`main`. Step 13's Payroll print isolation follow-up is implemented and
+quality-gated on the same branch; not yet committed/pushed pending the
+quality-gate re-run recorded in this same turn.
