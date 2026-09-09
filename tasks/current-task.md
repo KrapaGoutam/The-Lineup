@@ -293,9 +293,26 @@ status` itself prints, and again after a full `supabase stop` +
         Gate line (38/38 unit files, 286/286 tests; 17/17 pgTAP files,
         211 assertions) + Current Status Overview.
   - [x] Commit.
-- [ ] **Step 8: Final gate, push, open PR (base:
+- [x] **Step 8: Final gate, push, open PR (base:
       `feature/029-tips-from-clocked-in-attendance`), paste real gate
       output + PR link here.**
+  - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
+        `typecheck` (`next typegen && tsc --noEmit`) all clean.
+  - [x] `npm test`: **38/38 files, 286/286 tests** passed.
+  - [x] `npm run build`: `next build` compiled successfully, typechecked
+        clean, all 13 pages generated.
+  - [x] `npm run db:reset` (fresh, from scratch) + `npm run db:test`:
+        **17/17 pgTAP files, 211/211 assertions**, `Result: PASS`.
+  - [x] Full e2e suite, all specs, all three Playwright projects:
+        **138/138 passed** (desktop, host-tablet, server-mobile). No
+        regressions in any pre-existing suite from this branch's
+        changes (the `onGoToPayRates` wiring in
+        `restaurant-operations-app.tsx` is the only shared-file touch
+        outside `src/features/payroll/`, and every existing spec still
+        passes).
+  - [ ] Push `feature/026-payroll-dashboard-and-ledger-balances`, open
+        PR (base `feature/029-tips-from-clocked-in-attendance`), paste
+        the real PR link here.
 
 ## 🗂️ File list
 
