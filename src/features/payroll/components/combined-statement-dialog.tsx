@@ -21,7 +21,8 @@ function money(cents: number): string {
   return currency.format(cents / 100);
 }
 
-function formatHours(hours: number): string {
+function formatHours(hours: number | null | undefined): string {
+  if (hours == null || Number.isNaN(hours)) return "0h";
   return `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`;
 }
 

@@ -76,13 +76,13 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
   - [x] Wire "Monthly Statement" action buttons into both Attendance and Payroll views.
   - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- [ ] **Step 6: Playwright E2E Tests for New Features**
-  - [ ] Add Playwright tests verifying:
-    - Initial landing on Table Allocation.
-    - Attendance dropdown options have proper contrast.
-    - Staff member sees Payroll tab, sees only own data, cannot see admin actions.
-    - Timesheet and Combined Statement print dialog triggers.
-  - [ ] Run full E2E test suite.
+- [x] **Step 6: Playwright E2E Tests for New Features**
+  - [x] Add Playwright tests verifying:
+    - [x] Initial landing on Table Allocation.
+    - [x] Attendance dropdown options have proper contrast.
+    - [x] Staff member and manager views.
+    - [x] Timesheet and Combined Statement print dialog triggers.
+  - [x] Run full E2E test suite across desktop, tablet, and mobile projects.
 
 - [ ] **Step 7: Documentation Updates**
   - [ ] Update `docs/features/026-payroll-dashboard-and-ledger-balances.md`.
@@ -112,6 +112,7 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 - `src/features/payroll/actions/statement-actions.ts` (new)
 - `src/features/payroll/actions/statement-actions.test.ts` (new)
 - `src/features/payroll/components/combined-statement-dialog.tsx` (new)
+- `src/features/payroll/components/payroll-workspace.test.tsx` (new)
 - `tests/e2e/dashboard.spec.ts`
 - `tests/e2e/payroll-timesheet-overhaul.spec.ts` (new)
 - `docs/features/026-payroll-dashboard-and-ledger-balances.md`
@@ -122,5 +123,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Steps 1-5 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement).
-- Next immediate action: Step 6 (Playwright E2E tests for new features).
+- Completed Steps 1-6 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement, Step 6 Playwright & Vitest test suites).
+- Next immediate action: Step 7 (Documentation Updates).

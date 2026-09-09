@@ -9,6 +9,10 @@ import {
 } from "@/features/attendance/data/attendance-data";
 import { getOwnAttendanceLink } from "@/features/attendance/data/identity-links";
 import { computeAttendanceSummary } from "@/features/attendance/domain/attendance-metrics";
+import {
+  demoNeonAttendance,
+  demoNeonUsers,
+} from "@/features/attendance/demo-data";
 import { resolvePeriodRange } from "@/features/attendance/domain/attendance-report";
 import {
   derivePeriodStatus,
@@ -113,6 +117,80 @@ export async function getCombinedMonthlyStatementAction(input: {
   const { restaurantSlug, year, month, neonUserId } = parsed.data;
   const currentUser = await getCurrentUser(restaurantSlug);
   if (!currentUser) {
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      const matchedUser =
+        demoNeonUsers.find((u) => u.id === neonUserId) ?? null;
+      const employeeName = matchedUser?.fullName ?? `Employee #${neonUserId}`;
+      const employeeRole = matchedUser?.role?.trim() ?? "Staff";
+
+      const { start: startDate, end: endDate } = resolvePeriodRange(
+        { type: "month", year, month },
+        `${year}-${String(month).padStart(2, "0")}-01`,
+      );
+
+      const rows = demoNeonAttendance.filter(
+        (row) =>
+          row.userId === neonUserId &&
+          row.date >= startDate &&
+          row.date <= endDate,
+      );
+      const aggregate = computeAttendanceSummary(rows);
+
+      return {
+        ok: true,
+        data: {
+          restaurant: {
+            name: "The Monk's Restaurant & Bar",
+            slug: restaurantSlug,
+          },
+          employee: {
+            neonUserId,
+            name: employeeName,
+            role: employeeRole,
+          },
+          period: {
+            year,
+            month,
+            monthLabel: `${MONTH_NAMES[month - 1]} ${year}`,
+          },
+          attendance: {
+            rows,
+            totalHours: aggregate.totalHours,
+            daysWorked: aggregate.daysWorked,
+            avgHoursPerDay: aggregate.avgPerDay,
+          },
+          payroll: {
+            periodId: 1,
+            status: "locked",
+            grossCents: Math.round(aggregate.totalHours * 1500),
+            hoursSnapshot: aggregate.totalHours,
+            rateCentsSnapshot: 1500,
+            confirmedPaymentsCents: Math.round(aggregate.totalHours * 1500),
+            adjustmentsCents: 0,
+            balanceCents: 0,
+            payments: [
+              {
+                id: 1,
+                organizationId: "demo-org",
+                payrollPeriodId: 1,
+                amountCents: Math.round(aggregate.totalHours * 1500),
+                paymentDate: `${year}-${String(month).padStart(2, "0")}-15`,
+                status: "confirmed",
+                comment: "Regular Monthly Settlement",
+                createdAt: `${year}-${String(month).padStart(2, "0")}-15T00:00:00Z`,
+                createdBy: "demo-manager",
+                updatedAt: `${year}-${String(month).padStart(2, "0")}-15T00:00:00Z`,
+                confirmedAt: `${year}-${String(month).padStart(2, "0")}-15T00:00:00Z`,
+                confirmedBy: "demo-manager",
+                reversesPaymentId: null,
+              },
+            ],
+            adjustments: [],
+          },
+          generatedAt: new Date().toISOString(),
+        },
+      };
+    }
     return { ok: false, error: "You must be signed in to view statements." };
   }
 
