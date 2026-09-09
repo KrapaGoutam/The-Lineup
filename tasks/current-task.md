@@ -195,30 +195,36 @@ toDate)`, every other validation/time-resolution rule unchanged.
   - [x] Full gate: `npm run check`, `npm test` (**238/238**, up from
         214, 33/33 files), `npm run build` all pass.
   - [x] Commit.
-- [ ] **Step 4: CSV `days` column**
-  - [ ] `domain/parse-schedule-csv.ts`: `CsvRowInput` gains `days: string`
-        (optional column — absent header means every row's `days` reads
-        `""`). When non-empty, `parseWeekdayList` resolves it and the
-        row's instances come from `createShiftInstances({ ...,
-dates: expandRecurringDates(...) })` instead of the plain
-        `fromDate`/`toDate` expansion; an empty resulting date list (the
-        range matches none of the selected weekdays) is a row error, not
-        a silent zero-shift success. `CSV_TEMPLATE` gains the column
-        (with an example recurring row) and header validation stays
-        permissive (an optional column, not required).
-  - [ ] `domain/parse-schedule-csv.test.ts`: recurring rows (`Mon;Wed;Fri`
-        and `Mon,Wed,Fri` both accepted), an unknown day token, a range
-        matching no selected weekday, and a non-recurring row (no
-        `days`) still behaving exactly as before.
-  - [ ] `components/csv-import-panel.tsx`: `commit()` tags each
+- [x] **Step 4: CSV `days` column**
+  - [x] `domain/parse-schedule-csv.ts`: `CsvRowInput` gained
+        `days: string` (optional column — absent header means every
+        row's `days` reads `""`). When non-empty, `parseWeekdayList`
+        resolves it and `expandRecurringDates`'s result is passed as
+        `createShiftInstances`'s `dates` override instead of the plain
+        `fromDate`/`toDate` expansion; a missing `to_date` (nothing to
+        repeat across) or an empty resulting date list (the range
+        matches none of the selected weekdays) is a row error, not a
+        silent zero-shift or single-day success. `CSV_TEMPLATE` gained
+        the column with a `;`-separated example recurring row
+        (documented in-file why `;` is the safe unquoted default —
+        `,`-separated would need its own cell quoted to survive the
+        CSV's own comma delimiter). Header validation stays permissive
+        (an optional column, not required).
+  - [x] `domain/parse-schedule-csv.test.ts` (6 new tests, in a nested
+        `describe("recurring days")`): weekday-filtered generation,
+        `,`-separated (quoted) accepted too, missing end date rejected,
+        an unknown day token rejected, a range matching no selected day
+        rejected, and a `days`-less row confirmed unaffected.
+  - [x] `components/csv-import-panel.tsx`: `commit()` tags each
         recurring row's resulting `DemoShift`s with one freshly
         generated `seriesId` (`crypto.randomUUID()`) and
         `isRecurring: true`; non-recurring rows unchanged
-        (`isRecurring: false`, no series id). Dates column in the
-        preview table shows the resolved day count for a recurring row,
-        not just the raw from/to text.
-  - [ ] Full gate.
-  - [ ] Commit.
+        (`isRecurring: false`, no series id). Preview table's Dates
+        column now shows the raw `days` value plus the resolved shift
+        count for a recurring row, under the existing from/to text.
+  - [x] Full gate: `npm run check`, `npm test` (**244/244**, up from
+        238), `npm run build` all pass.
+  - [x] Commit.
 - [ ] **Step 5: Week navigation**
   - [ ] `data/schedule-data.ts`: extract the shared shift-row-mapping
         logic (the `shiftRows -> DemoShift[]` block) into its own
@@ -368,4 +374,4 @@ weekStartDate })` — client-triggered, re-derives the caller's own
 
 ## Current State & Next Step
 
-Steps 1-3 done and committed. Next: Step 4 (CSV `days` column support).
+Steps 1-4 done and committed. Next: Step 5 (week navigation).

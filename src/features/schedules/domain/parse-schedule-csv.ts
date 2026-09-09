@@ -1,3 +1,4 @@
+import { parseWeekdayList, expandRecurringDates } from "./recurring-shifts";
 import {
   createShiftInstances,
   type ShiftDefaults,
@@ -15,6 +16,11 @@ export type CsvRowInput = {
   customStart: string;
   customEnd: string;
   note: string;
+  // Feature 027: e.g. "Mon;Wed;Fri" or "Mon,Wed,Fri" -- optional. Reuses
+  // the existing `to_date` column as the recurring range's end rather
+  // than adding a second, redundantly-named "end_date" column (see
+  // tasks/current-task.md's Investigation #6).
+  days: string;
 };
 
 export type ParsedRow = {
@@ -34,8 +40,13 @@ const REQUIRED_HEADERS = ["employee_name", "shift_kind", "from_date"] as const;
 const VALID_SHIFT_KINDS: ShiftKind[] = ["morning", "evening", "full_day"];
 export const MAX_IMPORT_ROWS = 500;
 
-export const CSV_TEMPLATE = `employee_name,shift_kind,from_date,to_date,custom_start,custom_end,note
-Mia Chen,morning,2026-09-14,,,,`;
+// `days` uses `;` in this template deliberately -- a bare `,`-separated
+// value would need its own cell quoted to survive this CSV's own comma
+// delimiter (`parseCsvLine` below honors standard CSV quoting, but `;`
+// sidesteps the ambiguity entirely for the common, unquoted case).
+export const CSV_TEMPLATE = `employee_name,shift_kind,from_date,to_date,custom_start,custom_end,note,days
+Mia Chen,morning,2026-09-14,,,,,
+Leo Park,evening,2026-09-01,2026-09-30,,,,Tue;Thu`;
 
 /** Minimal RFC4180-style parser: handles quoted fields with embedded commas/quotes. */
 function parseCsvLine(line: string): string[] {
@@ -77,8 +88,10 @@ function parseCsvText(text: string): string[][] {
 
 /**
  * CSV row -> createShiftInstances() input, reusing 100% of the existing
- * pure expansion/default/overnight logic. See
- * docs/features/008-bulk-schedule-import.md.
+ * pure expansion/default/overnight logic (see
+ * docs/features/008-bulk-schedule-import.md), plus (Feature 027) the
+ * optional `days` column's own weekday filtering via
+ * recurring-shifts.ts, layered on top rather than duplicated.
  */
 export function parseScheduleCsv(input: {
   text: string;
@@ -126,6 +139,7 @@ export function parseScheduleCsv(input: {
       customStart: get("custom_start"),
       customEnd: get("custom_end"),
       note: get("note"),
+      days: get("days"),
     };
 
     if (!raw.employeeName) {
@@ -185,11 +199,43 @@ export function parseScheduleCsv(input: {
     }
     seenRowKeys.add(dedupeKey);
 
+    // Feature 027: `days` is optional -- an absent/empty value keeps the
+    // exact existing behavior (every consecutive day in the range).
+    // Present, it requires `to_date` too (matching the manual "Add
+    // shift" form's own rule: a single day has nothing to repeat
+    // across) and filters the range down to just the selected weekdays.
+    if (raw.days && !raw.toDate) {
+      return {
+        rowNumber,
+        raw,
+        status: "error",
+        error: "An end (to) date is required when using days.",
+      };
+    }
+
     try {
+      let dates: string[] | undefined;
+      if (raw.days) {
+        const daysOfWeek = parseWeekdayList(raw.days);
+        dates = expandRecurringDates({
+          fromDate: raw.fromDate,
+          toDate: raw.toDate,
+          daysOfWeek,
+        });
+        if (dates.length === 0) {
+          return {
+            rowNumber,
+            raw,
+            status: "error",
+            error: "No dates in the range match the selected days.",
+          };
+        }
+      }
       const instances = createShiftInstances({
         shiftKind: raw.shiftKind as ShiftKind,
         fromDate: raw.fromDate,
         toDate: raw.toDate || undefined,
+        dates,
         customStart: raw.customStart || undefined,
         customEnd: raw.customEnd || undefined,
         defaults: input.defaults,

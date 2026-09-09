@@ -102,15 +102,22 @@ export function CsvImportPanel({
 
   function commit() {
     if (!canCommit) return;
-    const shifts: DemoShift[] = includedRows.flatMap((row) =>
-      (row.instances ?? []).map((instance, index) => ({
+    const shifts: DemoShift[] = includedRows.flatMap((row) => {
+      // Feature 027: one series id per recurring row, shared by every
+      // instance it produces -- a plain (non-`days`) row gets neither,
+      // matching the manual "Add shift" form's own tagging.
+      const isRecurring = Boolean(row.raw.days);
+      const seriesId = isRecurring ? crypto.randomUUID() : undefined;
+      return (row.instances ?? []).map((instance, index) => ({
         id: `csv-${Date.now()}-${row.rowNumber}-${index}`,
         employeeId: row.employeeId!,
         ...instance,
         status: "draft" as const,
         note: row.raw.note || undefined,
-      })),
-    );
+        seriesId,
+        isRecurring,
+      }));
+    });
     onCommit(shifts);
     onClose();
   }
@@ -215,6 +222,14 @@ export function CsvImportPanel({
                           <td className="px-3 py-2 font-mono text-xs">
                             {row.raw.fromDate}
                             {row.raw.toDate ? `–${row.raw.toDate}` : ""}
+                            {row.raw.days ? (
+                              <span className="text-muted-foreground block font-sans">
+                                {row.raw.days}
+                                {row.status === "valid"
+                                  ? ` · ${row.instances?.length ?? 0} shift${(row.instances?.length ?? 0) === 1 ? "" : "s"}`
+                                  : ""}
+                              </span>
+                            ) : null}
                           </td>
                           <td className="px-3 py-2">
                             {row.status === "valid" ? (

@@ -23,6 +23,13 @@ function csv(rows: string[]) {
   ].join("\n");
 }
 
+function csvWithDays(rows: string[]) {
+  return [
+    "employee_name,shift_kind,from_date,to_date,custom_start,custom_end,note,days",
+    ...rows,
+  ].join("\n");
+}
+
 describe("parseScheduleCsv", () => {
   it("parses a valid single-day row", () => {
     const outcome = parseScheduleCsv({
@@ -146,5 +153,90 @@ describe("parseScheduleCsv", () => {
     expect(outcome.rows[0].status).toBe("valid");
     expect(outcome.rows[1].status).toBe("error");
     expect(outcome.rows[1].error).toContain("Duplicate row");
+  });
+
+  // Feature 027: the optional `days` column.
+  describe("recurring days", () => {
+    it("generates only the selected weekdays, semicolon-separated", () => {
+      const outcome = parseScheduleCsv({
+        text: csvWithDays([
+          "Leo Park,evening,2026-09-07,2026-09-13,,,,Tue;Thu",
+        ]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("valid");
+      expect(outcome.rows[0].instances?.map((i) => i.serviceDate)).toEqual([
+        "2026-09-08", // Tue
+        "2026-09-10", // Thu
+      ]);
+      expect(outcome.totalShiftCount).toBe(2);
+    });
+
+    it("also accepts a comma-separated days value", () => {
+      const outcome = parseScheduleCsv({
+        text: csvWithDays([
+          '"Leo Park",evening,2026-09-07,2026-09-13,,,,"Tue,Thu"',
+        ]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("valid");
+      expect(outcome.rows[0].instances).toHaveLength(2);
+    });
+
+    it("requires an end date when days is present", () => {
+      const outcome = parseScheduleCsv({
+        text: csvWithDays(["Mia Chen,morning,2026-09-14,,,,,Mon"]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("error");
+      expect(outcome.rows[0].error).toContain("end (to) date is required");
+    });
+
+    it("flags an unknown day token", () => {
+      const outcome = parseScheduleCsv({
+        text: csvWithDays(["Mia Chen,morning,2026-09-07,2026-09-13,,,,Funday"]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("error");
+      expect(outcome.rows[0].error).toContain("Unknown day");
+    });
+
+    it("flags a range that matches none of the selected days", () => {
+      // 2026-09-08 is a Tuesday -- a one-day range with only Sunday
+      // selected matches nothing.
+      const outcome = parseScheduleCsv({
+        text: csvWithDays(["Mia Chen,morning,2026-09-08,2026-09-08,,,,Sun"]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("error");
+      expect(outcome.rows[0].error).toContain("No dates in the range");
+    });
+
+    it("a row with no days value behaves exactly as before (every consecutive day)", () => {
+      const outcome = parseScheduleCsv({
+        text: csvWithDays(["Leo Park,evening,2026-09-14,2026-09-16,,,,"]),
+        employees,
+        defaults,
+      });
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.rows[0].status).toBe("valid");
+      expect(outcome.rows[0].instances).toHaveLength(3);
+    });
   });
 });
