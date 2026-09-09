@@ -1,134 +1,175 @@
-# Current Task: Feature 032 — Canonical Monk's Logo Integration into ReportLetterhead
+# Current Task: Features 034/035 — Team Status Categorization & Inactive Member Permanent Purge
 
-**Active Spec:** `docs/features/032-canonical-monks-logo.md`
-**Branch:** `feature/032-canonical-monks-logo` (branched from `main`, after Feature 031 / PR #30 merged)
-**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/31
-**Assigned Agent:** Claude Code (implementation, verification gate, and PR)
+**Active Spec:** `docs/features/034-team-status-filtering.md` & `docs/features/035-inactive-member-cascade-purge.md`
+**Branch:** `feature/034-035-team-status-and-purge` (branched from `main`, after Feature 032 / PR #31 merged)
+**Status:** Complete — ready to push and open PR
+**Assigned Agent:** Claude Code (audit, implementation, verification gate, and PR)
 
 ## 🎯 Objective
 
-Swap `<ReportLetterhead>`'s crest from Feature 031's original
-hand-authored placeholder mark to the real canonical "The Monk's"
-logo, once the user supplied that actual brand asset directly into the
-repo. No other change to the letterhead, its props, or any print
-surface that consumes it.
+Feature 034: default the Team page to showing only active members,
+with explicit Active/Inactive tabs and an intuitive path to reactivate
+anyone inactive. Feature 035: an explicit, guarded "Permanently
+Delete" action in the Inactive tab, requiring typed-name confirmation,
+that irreversibly erases the person's PII.
 
 ## 📖 Key Findings & Architecture
 
-1. **The asset didn't exist yet when first requested.** The user's
-   initial prompt claimed the canonical logo was "already placed" at
-   `public/brand/the-monks-logo.svg`, but `public/brand/` didn't exist
-   anywhere in the repo. Verified this directly (`ls`, repo-wide
-   `find`) before doing anything else, rather than trusting the claim
-   or fabricating a stand-in -- asked the user to place it, then
-   re-checked once they confirmed.
-2. **Manual transcription risk was real, not hypothetical.** The
-   logo's raw markup is ~167 `<path>` elements of high-precision
-   bezier curve data (~85K tokens as plain text) with no way for this
-   session to visually render/diff an SVG it hand-typed from chat
-   text -- a single mistyped digit in a `d` attribute corrupts the
-   artwork silently, no error thrown, no way to self-catch it. Asked
-   the user how to proceed rather than guessing; they chose to place
-   the exact file into the repo themselves so it could be read
-   byte-exact.
-3. **Mechanical extraction, not hand-conversion.** Once the real file
-   existed on disk, wrote inner markup to a TS constant via a one-time
-   Node script (`fs.readFileSync` + regex match on `<svg>...</svg>` +
-   `JSON.stringify` for safe escaping) instead of converting ~167
-   `<path>` tags to JSX by hand -- zero transcription risk, the file
-   content passes through unmodified.
-4. **`dangerouslySetInnerHTML` is the right tool here, not a shortcut
-   to avoid.** The markup is a static, pre-existing, machine-extracted
-   asset (never user input), and JSX has no simpler way to render a
-   large pre-existing block of raw SVG. Documented this reasoning
-   directly in the component's own comment so it doesn't read as an
-   unexplained deviation from this codebase's normal React patterns.
-5. **Live visual verification, not just automated assertions.** An
-   automated "one `<svg>` element exists" test would pass even for a
-   garbled or empty path. Started the dev server in demo mode, opened
-   the Combined Statement dialog, and took an actual screenshot to
-   confirm the crest renders as a legible, correctly scaled, properly
-   colored brand mark -- not just that markup was present in the DOM.
+1. **Audited before writing any code, not after.** A full read-only
+   audit of the existing schema/actions/UI (not code-search alone --
+   confirmed live against a local database) found Feature 034's own
+   spec was ~90% already shipped by Feature 017 (Member Deactivation)
+   and Feature 024 (Team Management Enhancements):
+   `memberships.active` has existed since the very first migration;
+   deactivate/reactivate is fully built and symmetric; every
+   scheduling/allocation/tips picker already receives a pre-filtered
+   `activeTeam`. The only real gap was the Team page's own UI --
+   one flat list with an inline badge, no tabs.
+2. **The literal "cascading delete" spec for Feature 035 didn't match
+   the real data model, and conflicted with a considered decision
+   Feature 017 already made.** Every FK from real operational history
+   to `memberships` (shifts, availability, time-off, rotation history,
+   tip allocations, audit-event actor) is `NO ACTION`, not `CASCADE` --
+   deliberately, specifically so deactivation would never orphan that
+   history. Attendance/payroll live in a wholly separate Neon
+   database, keyed by `neon_user_id`, not reachable by any Supabase
+   migration/RPC. A literal hard delete would fail immediately for any
+   member with real activity, or would require reversing Feature 017's
+   own decision and deleting real financial/audit records. This was
+   surfaced explicitly to the user as a decision point (not guessed at
+   silently) before any migration was written; the user chose
+   anonymization (a GDPR-style "right to erasure") over a hard delete.
+3. **A real, pre-existing bug was found live-testing Feature 034's own
+   premise.** `private.can_view_profile` required BOTH the viewer's
+   AND the target's membership to be `active` before anyone could read
+   that profile's `display_name` -- confirmed directly against a local
+   database that a deactivated member's name comes back `null` to
+   everyone but themself via the exact join
+   `getOrganizationRoster()` already runs. This would have made
+   Feature 034's own Inactive tab show "Unknown" for every row. Fixed
+   in the same migration (dropped the `target.active` half of the
+   predicate; `viewer.active` stays).
+4. **Manual retyping was avoided wherever byte-exact transfer mattered
+   more than convenience** -- not applicable to this feature directly,
+   but the same discipline carried over: the purge RPC's authorization
+   helper (`private.can_purge_member`) was modeled directly on the
+   existing, already-correct `private.can_manage_member`
+   (Feature 024's own rename-authorization function) rather than
+   re-derived from scratch, to avoid quietly diverging from an
+   already-proven role hierarchy.
+5. **Local pgTAP testing, not just reading the SQL.** Ran
+   `npx supabase db reset` + `npm run db:test` against a real local
+   Postgres instance repeatedly while building the migration --
+   caught the `can_view_profile` bug this way (a manual `docker exec
+psql` repro), not by inspection alone.
 
 ## 🔒 Non-negotiable Constraints
 
-- No change to `ReportLetterheadProps`, the letterhead's layout/copy,
-  or any filename convention -- this is an asset swap only.
-- No change to any other print surface
-  (`combined-statement-dialog.tsx`, `payroll-print-dialog.tsx`,
-  `attendance-report.tsx`) beyond what Feature 031 already shipped.
-- The crest must still be an inline `<svg>`, never an `<img>` -- same
-  print-reliability invariant as Feature 030/031, still enforced by
-  the existing `report-letterhead.test.tsx` test.
-- Quality gates (`npm run check`, `npm test`, `npm run build`) pass
-  before every commit.
+- Tenant isolation: every query/write stays scoped by
+  `organization_id` -- the purge RPC re-validates the caller's claimed
+  org against the target's actual row explicitly, not just inherited
+  from the authorization helper.
+- Role-based authorization: only owner/general_manager-tier actors (per
+  the existing `canDeactivateMember`/`can_manage_member` hierarchy) may
+  deactivate, reactivate, or purge -- unchanged, reused, not re-derived.
+- Active team view stays clean by default: unchanged (was already
+  true before this feature) -- no scheduling/allocation/tips picker
+  was ever touched.
+- Irreversible purge requires typed-name confirmation, enforced both
+  client-side (disables the submit button) and server-side (the route
+  re-checks it against the real name -- a client-only check would be
+  trivially bypassable from devtools).
+- Atomic execution: the entire purge (profile scrub + registration
+  scrub + membership marker + audit event) is one PL/pgSQL function
+  body -- genuinely atomic, unlike deactivate/reactivate's documented
+  best-effort three writes.
+- Quality gates (`npm run check`, `npm test`, `npm run db:test`, `npm
+run build`) pass before every commit.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: Verify the asset actually exists** before touching any
-      code -- confirmed `public/brand/the-monks-logo.svg` on disk
-      (167 `<path>` elements, `width="948" height="928"`, head/tail
-      spot-checked against what was originally supplied).
-- [x] **Step 2: Mechanical extraction** -- wrote a one-time Node
-      script to extract the file's inner `<path>` markup into
-      `src/components/print/the-monks-logo-markup.ts` as a
-      `JSON.stringify`-escaped string constant (`THE_MONKS_LOGO_MARKUP`),
-      byte-exact from the real file, no hand-retyping.
-- [x] **Step 3: Swap the crest** -- `report-letterhead.tsx`'s
-      `LetterheadMark` now renders `THE_MONKS_LOGO_MARKUP` via
-      `dangerouslySetInnerHTML` inside a component-owned
-      `<svg viewBox="0 0 948 928" width="37" height="36">` wrapper;
-      removed the old hand-authored `<path>` elements; updated the
-      component's header/doc comments to describe the canonical asset
-      instead of a placeholder.
-- [x] **Step 4: Unit test check** -- confirmed
-      `report-letterhead.test.tsx`'s existing 4 tests still pass
-      unmodified (none assert on specific path content, only
-      `<svg>`/`<img>` presence).
-- [x] **Step 5: Quality gate** -- `npm run check` (0 errors/warnings),
-      `npx vitest run` (44 files, 325/325 -- unchanged count), `npm
-run build` (clean).
-- [x] **Step 6: E2E regression check** -- re-ran
-      `payroll-timesheet-overhaul.spec.ts` +
-      `attendance-reporting.spec.ts` (30 tests across
-      desktop/host-tablet/server-mobile) -- 30/30 passing, confirming
-      the letterhead's `<svg>`-count/zero-`<img>` assertions still
-      hold with the new markup.
-- [x] **Step 7: Live visual verification** -- started the dev server
-      in demo mode, signed in (manager passcode 2468), opened
-      Attendance → Monthly Statement, and took a screenshot confirming
-      the real crest renders legibly and correctly (navy/gold/red,
-      "MONK'S" wordmark visible) -- not just an automated assertion.
-      Cleaned up the dev server process and screenshot artifact
-      afterward.
-- [x] **Step 8: Documentation** - [x] New `docs/features/032-canonical-monks-logo.md`. - [x] Updated `docs/DESIGN_SYSTEM.md`'s letterhead section to
-      note the canonical logo swap. - [x] Updated `docs/features/031-universal-letterhead-and-batch-statements.md`'s
-      two mentions of the placeholder mark decision to note it
-      was superseded by this feature (not rewritten, just
-      annotated -- the original decision record stays accurate
-      to when it was made). - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
-      Matrix row). - [x] This task file.
-- [x] **Step 9: Commit + push + PR** - [x] Commit with a clear message
-      (`40862c4`). - [x] Push `feature/032-canonical-monks-logo`. -
-      [x] Open [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31)
-      against `main`.
+- [x] **Step 1: Audit** -- read-only research (dispatched to a
+      sub-agent for thoroughness) covering schema, existing
+      deactivation logic, existing Team UI, every scheduling/
+      allocation/tips picker, existing RLS/FK behavior, the existing
+      audit-log convention, and the `db:types` workflow. Findings
+      directly determined the plan below.
+- [x] **Step 2: Clarify purge semantics with the user** -- presented
+      the FK/Neon-architecture conflict plainly via a clarifying
+      question before writing any migration; user chose anonymization
+      over a real hard delete.
+- [x] **Step 3: Migration**
+      (`supabase/migrations/20260909220000_member_status_and_purge.sql`):
+      `memberships_org_active_idx`; the `can_view_profile` fix;
+      `memberships.purged_at`/`purged_by`; `private.can_purge_member`;
+      `public.purge_inactive_member` (SECURITY DEFINER RPC).
+- [x] **Step 4: DB tests**
+      (`supabase/tests/database/0018_member_status_and_purge.test.sql`,
+      15 assertions) -- run against a real local Postgres via
+      `npx supabase db reset` + `npm run db:test`, not just written and
+      assumed correct. Caught and required a real fix
+      (`can_view_profile`) before passing.
+- [x] **Step 5: Generated types** -- `npm run db:types` targets
+      `--linked` (the hosted project, which doesn't have this
+      migration applied yet); used
+      `supabase gen types typescript --local` instead as the accurate
+      equivalent, and regenerated `src/types/database.generated.ts`
+      from the real local schema.
+- [x] **Step 6: TS domain layer** -- `canPurgeMember` in
+      `designations.ts` (mirrors `canDeactivateMember`'s hierarchy plus
+      the inactive/unpurged condition); 5 new unit tests.
+- [x] **Step 7: Route handler** -- `src/app/api/team/purge/route.ts`:
+      validates the request, re-checks state via the admin client,
+      enforces the typed-name confirmation server-side, then calls the
+      RPC via the regular per-request client (not admin, so
+      `auth.uid()` resolves for the function's own checks and the
+      audit actor).
+- [x] **Step 8: UI** - [x] `TeamMember.purgedAt` (`lib/demo-data.ts`); `roster.ts`
+      selects/maps `purged_at`. - [x] `TeamWorkspace`: Active/Inactive tab bar with live counts,
+      default Active, empty-state messages; "Permanently delete"
+      button (Inactive tab only, `canPurgeMember`-gated); danger-
+      toned "Purged" badge. - [x] `PurgeMemberDialog` (new component): typed-name
+      confirmation, accurate (anonymize-not-delete) copy,
+      danger styling. - [x] `restaurant-operations-app.tsx`: `purgeTeamMember` (demo +
+      real mode), wired as `onPurge`.
+- [x] **Step 9: Quality gate** - [x] `npm run check` clean. - [x] `npx vitest run` 44/44 files, 330/330 tests. - [x] `npm run db:test` 18/18 files, 226/226 assertions (local
+      Supabase, via Docker). - [x] `npm run build` clean.
+- [x] **Step 10: E2E** -- extended
+      `tests/e2e/team-management.spec.ts` with a full tab-switch +
+      deactivate + purge flow (wrong-name blocks submit, correct name
+      succeeds, "Deleted User"/"Purged" badge, action disappears
+      afterward); confirmed no regression in the file's existing tests;
+      re-ran the FULL Playwright suite (156/156 across 3 viewports, up
+      from 153).
+- [x] **Step 11: Documentation** - [x] New `docs/features/034-team-status-filtering.md`. - [x] New `docs/features/035-inactive-member-cascade-purge.md`
+      (includes the full "why anonymize, not hard-delete"
+      architecture record). - [x] Updated `docs/STATUS.md`. - [x] This task file.
+- [ ] **Step 12: Commit + push + PR** - [ ] Commit with clear, atomic commit message(s). - [ ] Push `feature/034-035-team-status-and-purge`. - [ ] Open PR against `main`.
 
 ## 🗂️ File List
 
-- `public/brand/the-monks-logo.svg` (new -- placed by the user
-  directly, not authored by this session)
-- `src/components/print/the-monks-logo-markup.ts` (new,
-  machine-generated)
-- `src/components/print/report-letterhead.tsx`
-- `docs/features/032-canonical-monks-logo.md` (new)
-- `docs/DESIGN_SYSTEM.md`
-- `docs/features/031-universal-letterhead-and-batch-statements.md`
+- `supabase/migrations/20260909220000_member_status_and_purge.sql` (new)
+- `supabase/tests/database/0018_member_status_and_purge.test.sql` (new)
+- `src/types/database.generated.ts`
+- `src/features/team/domain/designations.ts`
+- `src/features/team/domain/designations.test.ts`
+- `src/app/api/team/purge/route.ts` (new)
+- `src/features/team/components/purge-member-dialog.tsx` (new)
+- `src/features/team/components/team-workspace.tsx`
+- `src/features/team/data/roster.ts`
+- `src/lib/demo-data.ts`
+- `src/components/restaurant-operations-app.tsx`
+- `tests/e2e/team-management.spec.ts`
+- `docs/features/034-team-status-filtering.md` (new)
+- `docs/features/035-inactive-member-cascade-purge.md` (new)
 - `docs/STATUS.md`
 - `tasks/current-task.md`
 
 ## Current State & Next Step
 
-Feature 032 is fully complete: implemented, unit-tested, live-verified,
-regression-swept, documented, committed (`40862c4`), pushed, and opened
-as [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31) against
-`main`. Nothing further pending on this branch.
+Implementation, unit tests, pgTAP db tests, full quality gate, e2e
+regression sweep, and documentation are all complete and passing.
+Nothing has been committed to this branch yet -- everything above is
+currently uncommitted working-tree state on
+`feature/034-035-team-status-and-purge`. Next step: commit, push, and
+open a PR against `main`.
