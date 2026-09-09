@@ -273,7 +273,7 @@ export function PayrollPrintDialog({
       {printJob ? (
         <div className="hidden print:block">
           {printJob.pages.map((page) => (
-            <div key={page.neonUserId} className="print-page-break p-10">
+            <div key={page.neonUserId} className="print-page-break p-6">
               <ReportLetterhead
                 reportTitle={
                   monthChoice === ALL_OPEN_MONTHS

@@ -234,13 +234,26 @@ export function CombinedStatementDialog({
                   {partialFailureCount === 1 ? "is" : "are"} not included below.
                 </p>
               ) : null}
-              {statements.map((statement) => (
+              {statements.flatMap((statement) => [
+                // Feature 033: strict 2-page duplex pagination -- Page 1
+                // (Attendance) and Page 2 (Payroll + signatures) are two
+                // FLAT siblings of the print area, each its own
+                // `.print-page-break`, not one page split visually in
+                // half. That's what lets back-to-back/duplex printing
+                // put each employee on their own two-sided sheet
+                // (Employee 1 on pages 1-2, Employee 2 on pages 3-4,
+                // ...): a duplex printer flips physical sheets, not
+                // rendered pixels, so the break has to be a real second
+                // page boundary. Both stay flat (not nested inside a
+                // per-employee wrapper) so `.print-page-break:last-child`
+                // in globals.css still correctly identifies only the
+                // true final page of the whole batch.
                 <div
-                  key={statement.employee.neonUserId}
+                  key={`${statement.employee.neonUserId}-attendance`}
                   className="print-page-break statement-page space-y-6"
                 >
                   <ReportLetterhead
-                    reportTitle="Monthly Timesheet & Payroll Statement"
+                    reportTitle="Monthly Timesheet & Payroll Statement — Page 1 of 2: Attendance"
                     employeeName={statement.employee.name}
                     employeeRole={`${statement.employee.role} · ID #${statement.employee.neonUserId}`}
                     periodName={statement.period.monthLabel}
@@ -363,9 +376,20 @@ export function CombinedStatementDialog({
                       </table>
                     </div>
                   </div>
+                </div>,
+                <div
+                  key={`${statement.employee.neonUserId}-payroll`}
+                  className="print-page-break statement-page space-y-6"
+                >
+                  <ReportLetterhead
+                    reportTitle="Monthly Timesheet & Payroll Statement — Page 2 of 2: Payroll"
+                    employeeName={statement.employee.name}
+                    employeeRole={`${statement.employee.role} · ID #${statement.employee.neonUserId}`}
+                    periodName={statement.period.monthLabel}
+                  />
 
                   {/* Bottom Section: Payroll Compensation & Settlement */}
-                  <div className="space-y-3 border-t border-gray-200 pt-3">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-bold tracking-wider text-black uppercase">
                         Part 2: Payroll &amp; Compensation
@@ -487,7 +511,7 @@ export function CombinedStatementDialog({
                   </div>
 
                   {/* Signatures & Certification Block */}
-                  <div className="mt-8 border-t-2 border-black pt-6">
+                  <div className="mt-3 break-inside-avoid border-t-2 border-black pt-3">
                     <div className="grid grid-cols-2 gap-12 text-xs">
                       <div>
                         <div className="mb-1.5 border-b border-black pb-1" />
@@ -511,8 +535,8 @@ export function CombinedStatementDialog({
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                </div>,
+              ])}
             </div>
           ) : null}
         </CardContent>

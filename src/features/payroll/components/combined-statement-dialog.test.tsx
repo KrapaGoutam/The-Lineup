@@ -55,20 +55,22 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
 
     expect(mockedGetStatement).toHaveBeenCalledTimes(3);
 
-    // The letterhead concatenates name + role into one text node
-    // ("Employee 101 (Server)"), so these check a substring.
+    // Feature 033: each employee is now two flat `.print-page-break`
+    // pages (Attendance + Payroll, for duplex printing), so the
+    // letterhead's name+role text node appears twice per employee --
+    // once per page -- not once.
     await waitFor(() =>
-      expect(screen.getByText(/Employee 101/)).toBeInTheDocument(),
+      expect(screen.getAllByText(/Employee 101/)).toHaveLength(2),
     );
-    expect(screen.getByText(/Employee 102/)).toBeInTheDocument();
-    expect(screen.getByText(/Employee 103/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Employee 102/)).toHaveLength(2);
+    expect(screen.getAllByText(/Employee 103/)).toHaveLength(2);
 
     expect(
       screen.getByText("Monthly Statements — All Employees"),
     ).toBeInTheDocument();
     expect(screen.getByText(/— 3 employees/)).toBeInTheDocument();
 
-    expect(container.querySelectorAll(".print-page-break")).toHaveLength(3);
+    expect(container.querySelectorAll(".print-page-break")).toHaveLength(6);
   });
 
   it("renders the successful statements and shows a partial-failure note when some fetches fail", async () => {
@@ -93,9 +95,9 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText(/Employee 101/)).toBeInTheDocument(),
+      expect(screen.getAllByText(/Employee 101/)).toHaveLength(2),
     );
-    expect(screen.getByText(/Employee 103/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Employee 103/)).toHaveLength(2);
     expect(screen.queryByText(/Employee 102/)).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -145,7 +147,7 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText(/Employee 101/)).toBeInTheDocument(),
+      expect(screen.getAllByText(/Employee 101/)).toHaveLength(2),
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Print" }));

@@ -1,134 +1,153 @@
-# Current Task: Feature 032 — Canonical Monk's Logo Integration into ReportLetterhead
+# Current Task: Feature 033 — Print Layout Hardening, Isolation, and Duplex Pagination
 
-**Active Spec:** `docs/features/032-canonical-monks-logo.md`
-**Branch:** `feature/032-canonical-monks-logo` (branched from `main`, after Feature 031 / PR #30 merged)
-**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/31
+**Active Spec:** `docs/features/033-print-layout-hardening-duplex.md`
+**Branch:** `feature/033-print-layout-hardening-duplex` (branched from
+`main`, after Feature 032 / PR #31 merged)
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/33
 **Assigned Agent:** Claude Code (implementation, verification gate, and PR)
 
 ## 🎯 Objective
 
-Swap `<ReportLetterhead>`'s crest from Feature 031's original
-hand-authored placeholder mark to the real canonical "The Monk's"
-logo, once the user supplied that actual brand asset directly into the
-repo. No other change to the letterhead, its props, or any print
-surface that consumes it.
+Fix three real print bugs (Dashboard Leak, single-page overflow for
+Attendance/Payroll, and enforce strict 2-page-per-employee duplex
+pagination for the Combined Monthly Statement) without reintroducing
+the `visibility:hidden`/`position:absolute` isolation anti-pattern this
+codebase's own Feature 030 bug-fix pass already identified and moved
+away from.
 
 ## 📖 Key Findings & Architecture
 
-1. **The asset didn't exist yet when first requested.** The user's
-   initial prompt claimed the canonical logo was "already placed" at
-   `public/brand/the-monks-logo.svg`, but `public/brand/` didn't exist
-   anywhere in the repo. Verified this directly (`ls`, repo-wide
-   `find`) before doing anything else, rather than trusting the claim
-   or fabricating a stand-in -- asked the user to place it, then
-   re-checked once they confirmed.
-2. **Manual transcription risk was real, not hypothetical.** The
-   logo's raw markup is ~167 `<path>` elements of high-precision
-   bezier curve data (~85K tokens as plain text) with no way for this
-   session to visually render/diff an SVG it hand-typed from chat
-   text -- a single mistyped digit in a `d` attribute corrupts the
-   artwork silently, no error thrown, no way to self-catch it. Asked
-   the user how to proceed rather than guessing; they chose to place
-   the exact file into the repo themselves so it could be read
-   byte-exact.
-3. **Mechanical extraction, not hand-conversion.** Once the real file
-   existed on disk, wrote inner markup to a TS constant via a one-time
-   Node script (`fs.readFileSync` + regex match on `<svg>...</svg>` +
-   `JSON.stringify` for safe escaping) instead of converting ~167
-   `<path>` tags to JSX by hand -- zero transcription risk, the file
-   content passes through unmodified.
-4. **`dangerouslySetInnerHTML` is the right tool here, not a shortcut
-   to avoid.** The markup is a static, pre-existing, machine-extracted
-   asset (never user input), and JSX has no simpler way to render a
-   large pre-existing block of raw SVG. Documented this reasoning
-   directly in the component's own comment so it doesn't read as an
-   unexplained deviation from this codebase's normal React patterns.
-5. **Live visual verification, not just automated assertions.** An
-   automated "one `<svg>` element exists" test would pass even for a
-   garbled or empty path. Started the dev server in demo mode, opened
-   the Combined Statement dialog, and took an actual screenshot to
-   confirm the crest renders as a legible, correctly scaled, properly
-   colored brand mark -- not just that markup was present in the DOM.
+1. **Audited before trusting the bug list.** Of the four claimed bugs,
+   one ("Trailing Blank Page") was already fixed
+   (`.print-page-break:last-child` in `globals.css`, from Feature 030).
+   The Combined Statement file path named in the request
+   (`src/components/reports/combined-statement-dialog.tsx`) doesn't
+   exist -- the real file is
+   `src/features/payroll/components/combined-statement-dialog.tsx`.
+   `attendance-print-dialog.tsx` (named for a Step 2 fix) is a
+   scope-picker dialog with zero printable content; the real Attendance
+   print markup lives in `attendance-report.tsx`'s `PrintableReport`.
+2. **"Dashboard Leak" was real, narrowly.** Only
+   `attendance-report.tsx`'s own screen-only render branches lacked
+   `print:hidden` (confirmed via grep before any fix). Every other
+   print surface (`payroll-workspace.tsx`, `payroll-print-dialog.tsx`,
+   `combined-statement-dialog.tsx`) was already correctly isolated.
+3. **Kept the existing isolation strategy, not the spec's literal
+   one.** `globals.css`'s own header comment documents that
+   `visibility:hidden`+`position:absolute` is "a known cause of
+   duplicate/blank-page print bugs" and was deliberately replaced with
+   `hidden print:block`/`print:hidden`. Re-implementing the literal
+   spec'd mechanism would have risked reintroducing that bug class.
+   Fixed the real gap (two screen-wrapper `<div>`s missing
+   `print:hidden`) inside the existing, proven pattern instead --
+   documented in full in the feature doc's "Decisions and risks"
+   section, mirroring the Feature 035 "anonymize, don't hard-delete"
+   precedent from this same session (literal instruction conflicts with
+   an already-fixed architectural decision → fix the real root cause
+   under the existing architecture, don't revert the fix).
+4. **Page counts can't come from Playwright DOM assertions.**
+   Verified actual pagination with a one-off script that drove a real
+   signed-in demo session and called
+   `page.pdf({ preferCSSPageSize: true })` (the real Chromium print
+   pipeline), then counted `/Type /Page` objects in the resulting PDF
+   bytes -- Attendance single-employee: 1 page; Combined Statement: 2
+   pages; "All employees" (5 demo employees): 5 pages, no trailing
+   blank. A full-page screenshot with `page.emulateMedia({media:"print"})`
+   visually confirmed no dashboard leak.
 
 ## 🔒 Non-negotiable Constraints
 
-- No change to `ReportLetterheadProps`, the letterhead's layout/copy,
-  or any filename convention -- this is an asset swap only.
-- No change to any other print surface
-  (`combined-statement-dialog.tsx`, `payroll-print-dialog.tsx`,
-  `attendance-report.tsx`) beyond what Feature 031 already shipped.
-- The crest must still be an inline `<svg>`, never an `<img>` -- same
-  print-reliability invariant as Feature 030/031, still enforced by
-  the existing `report-letterhead.test.tsx` test.
-- Quality gates (`npm run check`, `npm test`, `npm run build`) pass
-  before every commit.
+- No change to the print isolation _strategy_ (`hidden print:block`) --
+  extend it to newly-found gaps, never reintroduce
+  `visibility:hidden`/`position:absolute`.
+- No data-fetching, authorization, or API changes -- print CSS and
+  print-surface JSX only.
+- The Combined Statement's two duplex pages must stay flat siblings of
+  the print area (never nested under a shared per-employee wrapper),
+  so `.print-page-break:last-child` keeps correctly identifying only
+  the batch's true final page.
+- Quality gates (`npm run check`, `npm test`, relevant Playwright
+  specs) pass before every commit.
 
 ## 🛠️ Implementation Steps
 
-- [x] **Step 1: Verify the asset actually exists** before touching any
-      code -- confirmed `public/brand/the-monks-logo.svg` on disk
-      (167 `<path>` elements, `width="948" height="928"`, head/tail
-      spot-checked against what was originally supplied).
-- [x] **Step 2: Mechanical extraction** -- wrote a one-time Node
-      script to extract the file's inner `<path>` markup into
-      `src/components/print/the-monks-logo-markup.ts` as a
-      `JSON.stringify`-escaped string constant (`THE_MONKS_LOGO_MARKUP`),
-      byte-exact from the real file, no hand-retyping.
-- [x] **Step 3: Swap the crest** -- `report-letterhead.tsx`'s
-      `LetterheadMark` now renders `THE_MONKS_LOGO_MARKUP` via
-      `dangerouslySetInnerHTML` inside a component-owned
-      `<svg viewBox="0 0 948 928" width="37" height="36">` wrapper;
-      removed the old hand-authored `<path>` elements; updated the
-      component's header/doc comments to describe the canonical asset
-      instead of a placeholder.
-- [x] **Step 4: Unit test check** -- confirmed
-      `report-letterhead.test.tsx`'s existing 4 tests still pass
-      unmodified (none assert on specific path content, only
-      `<svg>`/`<img>` presence).
-- [x] **Step 5: Quality gate** -- `npm run check` (0 errors/warnings),
-      `npx vitest run` (44 files, 325/325 -- unchanged count), `npm
-run build` (clean).
-- [x] **Step 6: E2E regression check** -- re-ran
-      `payroll-timesheet-overhaul.spec.ts` +
-      `attendance-reporting.spec.ts` (30 tests across
-      desktop/host-tablet/server-mobile) -- 30/30 passing, confirming
-      the letterhead's `<svg>`-count/zero-`<img>` assertions still
-      hold with the new markup.
-- [x] **Step 7: Live visual verification** -- started the dev server
-      in demo mode, signed in (manager passcode 2468), opened
-      Attendance → Monthly Statement, and took a screenshot confirming
-      the real crest renders legibly and correctly (navy/gold/red,
-      "MONK'S" wordmark visible) -- not just an automated assertion.
-      Cleaned up the dev server process and screenshot artifact
+- [x] **Step 1: Audit.** Read `attendance-print-dialog.tsx`,
+      `payroll-print-dialog.tsx`, `attendance-report.tsx`,
+      `combined-statement-dialog.tsx`, `globals.css`, and
+      `restaurant-operations-app.tsx`'s `<main>`/`<header>`/`<nav>`
+      structure before writing any code. Found the real root causes and
+      two wrong file-path assumptions in the original request (see
+      feature doc's "What the audit actually found").
+- [x] **Step 2: Global Print CSS.** Added the missing
+      `@page { size: letter portrait; margin: 8mm 8mm 6mm 8mm; }` to
+      `globals.css`; compacted `.print-timesheet-table` cell
+      padding/font-size. Deliberately did not add the
+      `.print-report-container`/`visibility:hidden` rules from the
+      original spec (see Constraints above).
+- [x] **Step 3: Fix Dashboard Leak.** Wrapped every screen-only render
+      branch in `attendance-report.tsx` (`accessError`, `!access`,
+      `unlinked`, `all`-scope loading/error, and the real `self`/`all`
+      content) in `print:hidden` -- as a _sibling_ of
+      `CombinedStatementDialog`/`PrintableReport`, not their ancestor.
+- [x] **Step 4: Attendance single-page guarantee.** Removed
+      `PrintableReport`'s forced `min-h-[98vh]`, compacted padding/KPI
+      margins, tightened the signature block (`mt-8 pt-6` →
+      `mt-2 pt-3`) with `break-inside-avoid`.
+- [x] **Step 5: Payroll single-page guarantee.** Compacted
+      `payroll-print-dialog.tsx`'s per-employee page padding
+      (`p-10` → `p-6`).
+- [x] **Step 6: Combined Statement duplex restructuring.** Rewrote
+      `combined-statement-dialog.tsx`'s per-employee render from one
+      `.map` producing one page to a `.flatMap` producing two flat
+      `.print-page-break` pages (Attendance, then Payroll +
+      signatures), each with its own full letterhead.
+- [x] **Step 7: Fix the two tests this broke.** Updated
+      `combined-statement-dialog.test.tsx` and
+      `payroll-workspace.test.tsx` (letterhead text now appears twice
+      per statement, `.print-page-break` count doubled) and
+      `payroll-timesheet-overhaul.spec.ts` (same, plus an explicit
+      `.print-page-break` count assertion).
+- [x] **Step 8: Quality gate.** `npm run check` (0 errors/warnings),
+      `npx vitest run` (44 files, 325/325 -- unchanged count).
+- [x] **Step 9: E2E regression check.** `attendance-reporting.spec.ts` +
+      `payroll-timesheet-overhaul.spec.ts`, 30/30 across
+      desktop/host-tablet/server-mobile.
+- [x] **Step 10: Live pagination verification.** Started the dev server
+      in demo mode, drove a real signed-in session, and rendered the
+      actual paginated PDF output via `page.pdf({ preferCSSPageSize: true })`
+      for Attendance (1 page), Combined Statement (2 pages), and "All
+      employees" Attendance (5 pages, no trailing blank) -- plus a
+      print-media screenshot confirming no dashboard leak. Cleaned up
+      the dev server process and all script/PDF/screenshot artifacts
       afterward.
-- [x] **Step 8: Documentation** - [x] New `docs/features/032-canonical-monks-logo.md`. - [x] Updated `docs/DESIGN_SYSTEM.md`'s letterhead section to
-      note the canonical logo swap. - [x] Updated `docs/features/031-universal-letterhead-and-batch-statements.md`'s
-      two mentions of the placeholder mark decision to note it
-      was superseded by this feature (not rewritten, just
-      annotated -- the original decision record stays accurate
-      to when it was made). - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
-      Matrix row). - [x] This task file.
-- [x] **Step 9: Commit + push + PR** - [x] Commit with a clear message
-      (`40862c4`). - [x] Push `feature/032-canonical-monks-logo`. -
-      [x] Open [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31)
-      against `main`.
+- [x] **Step 11: Documentation.**
+  - [x] New `docs/features/033-print-layout-hardening-duplex.md`.
+  - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
+        Matrix row).
+  - [x] This task file.
+- [x] **Step 12: Commit + push + PR.**
+  - [x] Commit with a clear conventional-commits message (`59662f5`).
+  - [x] Push `feature/033-print-layout-hardening-duplex`.
+  - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
+        against `main`.
 
 ## 🗂️ File List
 
-- `public/brand/the-monks-logo.svg` (new -- placed by the user
-  directly, not authored by this session)
-- `src/components/print/the-monks-logo-markup.ts` (new,
-  machine-generated)
-- `src/components/print/report-letterhead.tsx`
-- `docs/features/032-canonical-monks-logo.md` (new)
-- `docs/DESIGN_SYSTEM.md`
-- `docs/features/031-universal-letterhead-and-batch-statements.md`
+- `src/app/globals.css`
+- `src/features/attendance/components/attendance-report.tsx`
+- `src/features/payroll/components/payroll-print-dialog.tsx`
+- `src/features/payroll/components/combined-statement-dialog.tsx`
+- `src/features/payroll/components/combined-statement-dialog.test.tsx`
+- `src/features/payroll/components/payroll-workspace.test.tsx`
+- `tests/e2e/payroll-timesheet-overhaul.spec.ts`
+- `docs/features/033-print-layout-hardening-duplex.md` (new)
 - `docs/STATUS.md`
 - `tasks/current-task.md`
 
 ## Current State & Next Step
 
-Feature 032 is fully complete: implemented, unit-tested, live-verified,
-regression-swept, documented, committed (`40862c4`), pushed, and opened
-as [PR #31](https://github.com/KrapaGoutam/The-Lineup/pull/31) against
+Feature 033 is fully complete: implemented, unit-tested,
+e2e-regression-swept, live-verified via real PDF pagination (not just
+DOM assertions), documented, committed (`59662f5`), pushed, and opened
+as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) against
 `main`. Nothing further pending on this branch.

@@ -155,7 +155,7 @@ test.describe("Feature 030: Payroll UI, Option 1k, Timesheet Print & Statements"
     expect(pageCount).toBeGreaterThan(1);
   });
 
-  test("combined monthly statement modal shows the shared letterhead, one page's worth of content, and a dynamic filename", async ({
+  test("combined monthly statement modal shows the shared letterhead on both duplex pages, with a dynamic filename", async ({
     page,
   }) => {
     await signIn(page, "2468");
@@ -175,10 +175,13 @@ test.describe("Feature 030: Payroll UI, Option 1k, Timesheet Print & Statements"
       dialog.getByRole("heading", { name: "Monthly Statement" }),
     ).toBeVisible();
 
-    // Bug fix 1: the shared letterhead heading, not the old bare
-    // organization-name text.
+    // Feature 033: strict 2-page duplex pagination -- Page 1
+    // (Attendance) and Page 2 (Payroll + signatures) are each a full,
+    // separately-lettered page, so the letterhead heading/org-name text
+    // node now legitimately appears twice, not once (one per page, so a
+    // duplex printer's two physical sides both carry the full header).
     await expect(
-      dialog.getByText("The Monk's Indian Fusion - Webster"),
+      dialog.getByText("The Monk's Indian Fusion - Webster").first(),
     ).toBeVisible();
     await expect(dialog.getByText("Part 1: Recorded Attendance")).toBeVisible();
     await expect(
@@ -186,25 +189,32 @@ test.describe("Feature 030: Payroll UI, Option 1k, Timesheet Print & Statements"
     ).toBeVisible();
     await expect(dialog.getByText("Employee Signature & Date")).toBeVisible();
 
-    // Bug fix 3: exactly one copy of the statement content -- the
-    // duplicate-page bug's own confirmed root cause (a fragile
-    // visibility/position isolation trick) would have shown here as a
-    // second heading/img, not literally as two printed pages, since
-    // Playwright can't inspect paginated print output directly. Scoped
-    // to the print area itself, not the whole dialog -- the toolbar's
-    // own Print/Close icons are also <svg>s.
+    // Bug fix 3 (Feature 030) still holds: exactly one copy of each
+    // page's own content -- the duplicate-page bug's own confirmed root
+    // cause (a fragile visibility/position isolation trick) would have
+    // shown here as an extra heading/img on top of what a genuine 2nd
+    // duplex page already legitimately adds, not literally as two
+    // printed pages, since Playwright can't inspect paginated print
+    // output directly. Scoped to the print area itself, not the whole
+    // dialog -- the toolbar's own Print/Close icons are also <svg>s.
     const printArea = dialog.locator("#combined-statement-print-area");
     await expect(printArea.locator("img")).toHaveCount(0);
-    await expect(printArea.locator("svg")).toHaveCount(1);
+    // Feature 033: exactly 2 flat `.print-page-break` pages for this
+    // single employee (Attendance, then Payroll) -- the duplex
+    // architecture's own structural signature.
+    await expect(printArea.locator(".print-page-break")).toHaveCount(2);
+    // One letterhead SVG mark per page.
+    await expect(printArea.locator("svg")).toHaveCount(2);
     // Feature 031 letterhead redesign: the short "The Monk's" is the
     // <h1>, and the full org name/address/site moved to a plain
-    // right-aligned contact block (no longer a heading role).
+    // right-aligned contact block (no longer a heading role). Now once
+    // per duplex page.
     await expect(
       printArea.getByRole("heading", { name: "The Monk's", exact: true }),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
     await expect(
       printArea.getByText("The Monk's Indian Fusion - Webster"),
-    ).toHaveCount(1);
+    ).toHaveCount(2);
 
     const printBtn = dialog.getByRole("button", { name: "Print", exact: true });
     await expect(printBtn).toBeVisible();
