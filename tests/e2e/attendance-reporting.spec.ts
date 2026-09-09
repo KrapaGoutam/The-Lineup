@@ -240,3 +240,66 @@ test("a linked server's Print button skips the dialog and never exposes another 
   expect(text).not.toContain("Priya Nair");
   expect(text).not.toContain("Anil (Host)");
 });
+
+test("Feature 029 Phase 0: 'All employees' shows the combined roster with aggregate cards and prints directly", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToTab(page, "Attendance");
+  await stubPrint(page);
+
+  await page.getByLabel("Employee").selectOption("all");
+
+  // Two new aggregate cards, not the single-person "Days worked" stat
+  // set -- the whole fixture's September rows are 8 shifts (6 original
+  // + Feature 029's own 2 new open-shift rows on DEMO_ANCHOR_DATE) /
+  // 32.8 total hours (the 2 new rows are still-open, null-hoursWorked
+  // shifts -- counted as shifts, excluded from the hours sum, same as
+  // every other null-hours row), independently known from this same
+  // fixture (see demoNeonAttendance) and already live-verified during
+  // development. Each StatTile is a label span followed immediately by
+  // its value span -- scoped this way (rather than a bare
+  // page.getByText("8")) since a lone digit or "32.8h" isn't otherwise
+  // a unique string on the page.
+  const totalShiftsValue = page
+    .getByText("Total shifts", { exact: true })
+    .locator("xpath=following-sibling::span[1]");
+  await expect(totalShiftsValue).toHaveText("8");
+  const totalHoursValue = page
+    .getByText("Total hours", { exact: true })
+    .first()
+    .locator("xpath=following-sibling::span[1]");
+  await expect(totalHoursValue).toHaveText("32.8h");
+
+  // Every active employee gets their own section, including one with
+  // zero rows this period -- the existing zero-attendance state,
+  // unmodified.
+  for (const label of [
+    "Anil (Host)",
+    "Anil (Server)",
+    "Deepak Rao (Server)",
+    "Priya Nair (Manager)",
+    "Zoya Khan (server)",
+  ]) {
+    await expect(page.getByRole("heading", { name: label })).toBeVisible();
+  }
+  await expect(
+    page.getByText("No attendance recorded for this period."),
+  ).toBeVisible();
+
+  // Print skips the choice dialog entirely -- there's only one thing to
+  // print once "All" is already the selection.
+  await page.getByRole("button", { name: "Print", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await printCallCount(page)).toBe(1);
+  const text = await printAreaText(page);
+  for (const label of [
+    "Anil (Host)",
+    "Anil (Server)",
+    "Deepak Rao (Server)",
+    "Priya Nair (Manager)",
+    "Zoya Khan (server)",
+  ]) {
+    expect(text).toContain(label);
+  }
+});

@@ -203,7 +203,7 @@ restaurantSlug })`, zod-validated, manager/owner-only (defense
   - [x] `restaurant-operations-app.tsx`: new `pullClockedInTeam()`
         handler (demo/real dual branch, matching every other such
         handler this session), passed to `<TipWorkspace
-    onPullClockedInTeam={...}>`.
+onPullClockedInTeam={...}>`.
   - [x] `attendance/demo-data.ts`: two new **additive** open (unclosed)
         `demoNeonAttendance` rows dated `2026-09-10` (`DEMO_ANCHOR_DATE`)
         so demo mode has something real to pull once a manager links a
@@ -227,17 +227,24 @@ restaurantSlug })`, zod-validated, manager/owner-only (defense
         and 5 directly demonstrated live, not just asserted from code
         reading.
   - [x] Commit.
-- [ ] **Step 7: E2E**
-  - [ ] `tests/e2e/attendance-reporting.spec.ts`: new test for the "All"
-        filter (aggregate cards, combined view, direct print).
-  - [ ] New `tests/e2e/tips-clocked-in-roster.spec.ts`: link two people's
-        attendance from Team, pull clocked-in team on Tip Split, confirm
-        the right checkboxes are preset, finalize, then confirm nothing
-        about the finalized split changes regardless of further
-        attendance state.
-  - [ ] Run across all three Playwright projects.
-  - [ ] Full gate.
-  - [ ] Commit.
+- [x] **Step 7: E2E**
+  - [x] `tests/e2e/attendance-reporting.spec.ts`: new test for the "All"
+        filter (aggregate cards -- 8 shifts/32.8h, the 2 new Feature 029
+        fixture rows correctly counted as shifts but excluded from the
+        hours sum -- combined per-person view, direct print with every
+        person's label present in the printed area).
+  - [x] New `tests/e2e/tips-clocked-in-roster.spec.ts`: links two
+        people's attendance from Team, confirms the pull replaces (not
+        merges with) the original first-four default with exactly the
+        two linked/clocked-in people, adds and finalizes a $100
+        interval, then fully **unlinks** one person's attendance and
+        confirms the finalized split ($50/$50/$100 total) is completely
+        unaffected -- both from the manager's view and from that
+        person's own "My tip estimate" after signing in as them.
+  - [x] Run across all three Playwright projects: 18/18 passed.
+  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests,
+        build clean.
+  - [x] Commit.
 - [ ] **Step 8: Docs**
   - [ ] `docs/features/029-tips-from-clocked-in-attendance.md`: check off
         every acceptance criterion, noting which were already true
@@ -273,6 +280,5 @@ restaurantSlug })`, zod-validated, manager/owner-only (defense
 
 ## Current State & Next Step
 
-Steps 1-6 done and committed. Next: Step 7 (E2E -- new "All" filter
-test in `attendance-reporting.spec.ts`, new
-`tests/e2e/tips-clocked-in-roster.spec.ts`).
+Steps 1-7 done and committed. Next: Step 8 (docs -- check off Feature
+029's acceptance criteria, update `docs/STATUS.md`).
