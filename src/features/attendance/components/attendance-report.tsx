@@ -19,6 +19,7 @@ import {
 import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
 import { AttendancePrintDialog } from "@/features/attendance/components/attendance-print-dialog";
 import { CombinedStatementDialog } from "@/features/payroll/components/combined-statement-dialog";
+import { ReportLetterhead } from "@/components/print/report-letterhead";
 import type {
   NeonAttendanceRow,
   NeonUser,
@@ -43,6 +44,11 @@ import {
   demoNeonUsers,
 } from "@/features/attendance/demo-data";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import {
+  attendanceRosterFilename,
+  attendanceSingleFilename,
+  triggerPrintWithFilename,
+} from "@/lib/print-utils";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
@@ -176,6 +182,12 @@ export function AttendanceReport({
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printJob, setPrintJob] = useState<{
     sections: Array<{ label: string; rows: NeonAttendanceRow[] }>;
+    // Feature 030 bug fix: carried on the job itself (captured at the
+    // moment it's built) rather than read from `selectedYear`/
+    // `selectedMonth` when the effect fires -- avoids a stale filename
+    // if the browsed month somehow changes between the two.
+    year: number;
+    month: number;
   } | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [statementTarget, setStatementTarget] = useState<{
@@ -186,7 +198,19 @@ export function AttendanceReport({
 
   useEffect(() => {
     if (!printJob) return;
-    window.print();
+    // A single section is one person's own report (the "self"-scope
+    // Print button, or "all"-scope's "Print current employee"); more
+    // than one is a roster print (the dialog's "selected"/"all" choice,
+    // or the "All employees" filter's direct Print).
+    const filename =
+      printJob.sections.length === 1
+        ? attendanceSingleFilename(
+            printJob.sections[0].label,
+            printJob.year,
+            printJob.month,
+          )
+        : attendanceRosterFilename(printJob.year, printJob.month);
+    triggerPrintWithFilename(filename);
   }, [printJob]);
 
   const scope = access?.scope ?? null;
@@ -278,6 +302,8 @@ export function AttendanceReport({
           label: labelFor(id),
           rows: filtered.filter((row) => row.userId === id),
         })),
+        year: selectedYear,
+        month: selectedMonth,
       });
       return;
     }
@@ -296,6 +322,8 @@ export function AttendanceReport({
         label: labelFor(id),
         rows: result.data.rows.filter((row) => row.userId === id),
       })),
+      year: selectedYear,
+      month: selectedMonth,
     });
   }
 
@@ -546,7 +574,13 @@ export function AttendanceReport({
             <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
-                onClick={() => setPrintJob({ sections: [{ label, rows }] })}
+                onClick={() =>
+                  setPrintJob({
+                    sections: [{ label, rows }],
+                    year: selectedYear,
+                    month: selectedMonth,
+                  })
+                }
               >
                 <Printer aria-hidden="true" /> Print
               </Button>
@@ -630,6 +664,8 @@ export function AttendanceReport({
         label: activeUserDisplayLabels?.get(candidate.id) ?? candidate.fullName,
         rows: rows.filter((row) => row.userId === candidate.id),
       })),
+      year: selectedYear,
+      month: selectedMonth,
     });
   }
 
@@ -909,237 +945,152 @@ function PrintableReport({
 }) {
   const monthLabel = MONTH_NAMES[month - 1];
   return (
-    <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #${PRINT_AREA_ID}, #${PRINT_AREA_ID} * { visibility: visible; }
-          #${PRINT_AREA_ID} {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 0;
-            margin: 0;
-            background: white !important;
-            color: black !important;
-          }
-          .employee-timesheet {
-            page-break-after: always;
-            break-after: page;
-            padding: 2.5rem;
-            min-height: 98vh;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-          }
-          .employee-timesheet:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
-          .letterhead-banner {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-      `}</style>
-      <div id={PRINT_AREA_ID} className="hidden print:block">
-        {sections.map((section) => {
-          const summary = computeAttendanceSummary(section.rows);
-          return (
-            <div key={section.label} className="employee-timesheet">
-              {/* Corporate Letterhead */}
-              <div className="letterhead-banner border-b-2 border-black pb-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center rounded-md bg-zinc-950 p-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="https://www.monkswebster.com/assets/img/logo-light.png"
-                        alt="The Monk's Logo"
-                        className="h-8 w-auto object-contain"
-                        crossOrigin="anonymous"
-                      />
-                    </div>
-                    <div>
-                      <h1 className="text-xl font-bold tracking-tight text-black">
-                        The Monk&apos;s
-                      </h1>
-                      <p className="text-xs text-gray-600">
-                        Monthly Employee Timesheet
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right text-xs text-gray-600">
-                    <p className="font-semibold text-black">
-                      The Monk&apos;s Cellar
-                    </p>
-                    <p>Webster, New York</p>
-                    <p className="font-mono text-[11px] text-gray-500">
-                      monkswebster.com
-                    </p>
-                  </div>
-                </div>
-              </div>
+    <div id={PRINT_AREA_ID} className="hidden print:block">
+      {sections.map((section) => {
+        const summary = computeAttendanceSummary(section.rows);
+        return (
+          <div
+            key={section.label}
+            className="print-page-break box-border flex min-h-[98vh] flex-col p-10"
+          >
+            <ReportLetterhead
+              documentType="Monthly Attendance Timesheet"
+              employeeName={section.label}
+              period={`${monthLabel} ${year}`}
+            />
 
-              {/* Document Meta & Employee Info */}
-              <div className="mt-4 flex items-start justify-between border-b border-gray-200 pb-3">
-                <div>
-                  <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                    Employee
-                  </p>
-                  <h2 className="text-lg font-bold text-black">
-                    {section.label}
-                  </h2>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                    Pay Period
-                  </p>
-                  <p className="text-base font-semibold text-black">
-                    {monthLabel} {year}
-                  </p>
-                </div>
+            {/* Attendance Summary KPIs */}
+            <div className="my-4 grid grid-cols-3 gap-4 rounded-lg border border-gray-300 bg-gray-50/50 p-3">
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Days Worked
+                </span>
+                <span className="font-mono text-base font-bold text-black">
+                  {summary.daysWorked}
+                </span>
               </div>
-
-              {/* Attendance Summary KPIs */}
-              <div className="my-4 grid grid-cols-3 gap-4 rounded-lg border border-gray-300 bg-gray-50/50 p-3">
-                <div>
-                  <span className="block text-[11px] font-semibold text-gray-500 uppercase">
-                    Days Worked
-                  </span>
-                  <span className="font-mono text-base font-bold text-black">
-                    {summary.daysWorked}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[11px] font-semibold text-gray-500 uppercase">
-                    Total Hours
-                  </span>
-                  <span className="font-mono text-base font-bold text-black">
-                    {formatHours(summary.totalHours)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[11px] font-semibold text-gray-500 uppercase">
-                    Average / Day
-                  </span>
-                  <span className="font-mono text-base font-bold text-black">
-                    {formatHours(summary.avgPerDay)}
-                  </span>
-                </div>
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Total Hours
+                </span>
+                <span className="font-mono text-base font-bold text-black">
+                  {formatHours(summary.totalHours)}
+                </span>
               </div>
+              <div>
+                <span className="block text-[11px] font-semibold text-gray-500 uppercase">
+                  Average / Day
+                </span>
+                <span className="font-mono text-base font-bold text-black">
+                  {formatHours(summary.avgPerDay)}
+                </span>
+              </div>
+            </div>
 
-              {/* Timesheet Shift Records */}
-              <div className="flex-1">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead>
-                    <tr className="border-b-2 border-black bg-gray-100">
-                      <th className="px-2 py-2 font-bold text-black">Date</th>
-                      <th className="px-2 py-2 font-bold text-black">Day</th>
-                      <th className="px-2 py-2 font-bold text-black">
-                        Clock In
-                      </th>
-                      <th className="px-2 py-2 font-bold text-black">
-                        Clock Out
-                      </th>
-                      <th className="px-2 py-2 text-right font-bold text-black">
-                        Hours
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {section.rows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="py-4 text-center text-gray-500 italic"
-                        >
-                          No attendance records logged for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      section.rows.map((row) => {
-                        const isOpenShift =
-                          !row.clockOut && !row.autoClockedOut;
-                        const status = row.autoClockedOut
-                          ? " (Auto-closed)"
-                          : isOpenShift
-                            ? " (Open shift)"
-                            : "";
-                        return (
-                          <tr key={row.id} className="border-b border-gray-200">
-                            <td className="px-2 py-1.5 font-mono">
-                              {row.date}
-                            </td>
-                            <td className="px-2 py-1.5 text-gray-600">
-                              {calendarWeekday(row.date)}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono">
-                              {row.clockIn
-                                ? formatClockTime(row.clockIn, timeZone)
-                                : "—"}
-                            </td>
-                            <td className="px-2 py-1.5 font-mono">
-                              {(row.clockOut
-                                ? formatClockTime(row.clockOut, timeZone)
-                                : "—") + status}
-                            </td>
-                            <td className="px-2 py-1.5 text-right font-mono font-semibold">
-                              {row.hoursWorked === null
-                                ? "—"
-                                : formatHours(row.hoursWorked)}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-black font-bold">
+            {/* Timesheet Shift Records */}
+            <div className="flex-1">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b-2 border-black bg-gray-100">
+                    <th className="px-2 py-2 font-bold text-black">Date</th>
+                    <th className="px-2 py-2 font-bold text-black">Day</th>
+                    <th className="px-2 py-2 font-bold text-black">Clock In</th>
+                    <th className="px-2 py-2 font-bold text-black">
+                      Clock Out
+                    </th>
+                    <th className="px-2 py-2 text-right font-bold text-black">
+                      Hours
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.rows.length === 0 ? (
+                    <tr>
                       <td
-                        colSpan={4}
-                        className="px-2 py-2 text-right text-xs tracking-wider uppercase"
+                        colSpan={5}
+                        className="py-4 text-center text-gray-500 italic"
                       >
-                        Total {monthLabel} Hours:
-                      </td>
-                      <td className="px-2 py-2 text-right font-mono text-sm">
-                        {formatHours(summary.totalHours)}
+                        No attendance records logged for this period.
                       </td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
+                  ) : (
+                    section.rows.map((row) => {
+                      const isOpenShift = !row.clockOut && !row.autoClockedOut;
+                      const status = row.autoClockedOut
+                        ? " (Auto-closed)"
+                        : isOpenShift
+                          ? " (Open shift)"
+                          : "";
+                      return (
+                        <tr key={row.id} className="border-b border-gray-200">
+                          <td className="px-2 py-1.5 font-mono">{row.date}</td>
+                          <td className="px-2 py-1.5 text-gray-600">
+                            {calendarWeekday(row.date)}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">
+                            {row.clockIn
+                              ? formatClockTime(row.clockIn, timeZone)
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">
+                            {(row.clockOut
+                              ? formatClockTime(row.clockOut, timeZone)
+                              : "—") + status}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold">
+                            {row.hoursWorked === null
+                              ? "—"
+                              : formatHours(row.hoursWorked)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-black font-bold">
+                    <td
+                      colSpan={4}
+                      className="px-2 py-2 text-right text-xs tracking-wider uppercase"
+                    >
+                      Total {monthLabel} Hours:
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono text-sm">
+                      {formatHours(summary.totalHours)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-              {/* Verification & Sign-off Block */}
-              <div className="mt-8 border-t border-gray-300 pt-6">
-                <div className="grid grid-cols-2 gap-12 text-xs">
-                  <div>
-                    <div className="mb-1.5 border-b border-black pb-1" />
-                    <p className="font-semibold text-black">
-                      Employee Signature &amp; Date
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      I certify that the above hours worked are accurate and
-                      complete.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="mb-1.5 border-b border-black pb-1" />
-                    <p className="font-semibold text-black">
-                      Manager / Supervisor Signature &amp; Date
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      Verified and approved for restaurant payroll processing.
-                    </p>
-                  </div>
+            {/* Verification & Sign-off Block */}
+            <div className="mt-8 border-t border-gray-300 pt-6">
+              <div className="grid grid-cols-2 gap-12 text-xs">
+                <div>
+                  <div className="mb-1.5 border-b border-black pb-1" />
+                  <p className="font-semibold text-black">
+                    Employee Signature &amp; Date
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    I certify that the above hours worked are accurate and
+                    complete.
+                  </p>
+                </div>
+                <div>
+                  <div className="mb-1.5 border-b border-black pb-1" />
+                  <p className="font-semibold text-black">
+                    Manager / Supervisor Signature &amp; Date
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Verified and approved for restaurant payroll processing.
+                  </p>
                 </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-    </>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

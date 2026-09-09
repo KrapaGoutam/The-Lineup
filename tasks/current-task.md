@@ -234,15 +234,33 @@ all three print surfaces.
   - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests
         (13 new), build clean.
   - [x] Commit.
-- [ ] **Step 3: Fix Attendance print** (bugs 1, 2, 3)
-  - [ ] `attendance-report.tsx`'s `PrintableReport`: swap the raster
-        `<img>` letterhead for `<ReportLetterhead>`; drop the
-        component's own redundant `visibility:hidden` trick, keep only
-        the pagination rule via the shared `.print-page-break` class.
-  - [ ] Route the print-triggering effect through
+- [x] **Step 3: Fix Attendance print** (bugs 1, 2, 3)
+  - [x] `attendance-report.tsx`'s `PrintableReport`: swapped the raster
+        `<img>` letterhead for `<ReportLetterhead>`; dropped the
+        component's own redundant `visibility:hidden` +
+        `position:absolute` trick and its per-component `<style>` tag
+        entirely, now purely `hidden print:block` + the shared
+        `.print-page-break` class.
+  - [x] `printJob` now carries its own `year`/`month` (captured at build
+        time); the print-triggering effect routes through
         `triggerPrintWithFilename` with the roster/single-employee
-        filename convention.
-  - [ ] Full gate. Live-verify in demo mode. Commit.
+        filename convention (`sections.length === 1` picks single vs.
+        roster).
+  - [x] Full gate: format/lint/typecheck clean, 308/308 unit tests,
+        build clean.
+  - [x] Live-verified in demo mode (manager): single-employee print
+        (via the dialog's "Print current employee") set
+        `document.title` to exactly `"Anil (Host) Attendance Report Sep
+    2026"`, called `window.print()` with that title, restored the
+        original title after, rendered zero `<img>`/one `<svg>` in the
+        print area, exact letterhead text ("The Monk's Indian Fusion -
+        Webster" / "Monthly Attendance Timesheet" / "Generated Sep 9,
+        2026" / employee / period), and exactly one
+        `.print-page-break` element. "All employees" print (direct,
+        no dialog) set the title to `"Staff attendance Report Sep
+    2026"` and rendered exactly 5 `.print-page-break` elements (one
+        per active demo employee).
+  - [x] Commit.
 - [ ] **Step 4: Fix Combined Statement dialog** (bugs 1, 2, 3 -- the
       confirmed duplicate-page root cause)
   - [ ] `combined-statement-dialog.tsx`: swap the raster `<img>` for
@@ -314,6 +332,8 @@ all three print surfaces.
 
 ## In-Flight State (bug fix pass)
 
-Steps 1-2 done and committed. Next: Step 3 (fix Attendance print --
-swap the raster letterhead `<img>` for `<ReportLetterhead>` in
-`PrintableReport`, route through `triggerPrintWithFilename`).
+Steps 1-3 done and committed. Next: Step 4 (fix Combined Statement
+dialog -- the confirmed duplicate-page root cause: remove the
+`visibility:hidden`/`position:absolute` trick, add `print:hidden` to
+the overlay/toolbar chrome, reset the dialog's `max-h`/`overflow`
+clamps for print).
