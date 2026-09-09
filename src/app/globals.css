@@ -261,30 +261,6 @@ a {
     break-after: avoid;
   }
 
-  /* Feature 033 follow-up: Payroll print isolation & single-page
-     guarantee. Scoped to `.payroll-print-page` (the Payroll batch
-     dialog's own per-employee wrapper) only -- deliberately does not
-     touch the shared `.print-timesheet-table`/`.print-page-break`
-     rules above, which Attendance and the Combined Statement also
-     depend on. `break-inside: avoid` keeps a borderline-length page
-     (an employee with many open periods) from splitting mid-table
-     rather than forcing an unrealistic fit for arbitrarily long
-     content; `table-header-group` repeats the column headers if a
-     genuinely long table still has to spill. This still uses the same
-     `hidden print:block` isolation strategy as every other print
-     surface -- see the comment at the top of this stylesheet for why a
-     `visibility:hidden`/`position:absolute` container is deliberately
-     not used here either. */
-  .payroll-print-page {
-    break-inside: avoid;
-  }
-  .payroll-print-page table {
-    break-inside: avoid;
-  }
-  .payroll-print-page thead {
-    display: table-header-group;
-  }
-
   .letterhead-banner {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
