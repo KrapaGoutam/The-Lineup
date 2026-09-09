@@ -642,7 +642,7 @@ export function RestaurantOperationsApp({
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
-    ...(isManager && !demoMode ? [payrollTab] : []),
+    ...(!demoMode ? [payrollTab] : []),
   ];
   // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
   const moreTabs = [...secondaryTabs];
@@ -1870,7 +1870,7 @@ export function RestaurantOperationsApp({
             demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
           />
         ) : null}
-        {tab === "payroll" && isManager && !demoMode ? (
+        {tab === "payroll" && !demoMode ? (
           <PayrollWorkspace
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}

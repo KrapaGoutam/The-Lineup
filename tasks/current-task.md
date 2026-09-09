@@ -64,10 +64,10 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
   - [x] Rebuild `src/features/payroll/components/payroll-period-groups.tsx` and `src/features/payroll/components/payroll-balance-panel.tsx` with Option 1k design tokens, avatar colors, and expanded sub-tables.
   - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
-- [ ] **Step 4: Increment 3 — Staff Read-Only Payroll Access**
-  - [ ] Enable Payroll tab for regular staff in `src/components/restaurant-operations-app.tsx`.
-  - [ ] Polish `SelfPayrollView` in `src/features/payroll/components/payroll-workspace.tsx` for "My Payroll" view without admin actions.
-  - [ ] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+- [x] **Step 4: Increment 3 — Staff Read-Only Payroll Access**
+  - [x] Enable Payroll tab for regular staff in `src/components/restaurant-operations-app.tsx`.
+  - [x] Polish `SelfPayrollView` in `src/features/payroll/components/payroll-workspace.tsx` for "My Payroll" view without admin actions.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
 - [ ] **Step 5: Increment 4 — Timesheet Letterhead Print & Combined Statement**
   - [ ] Update `PrintableReport` in `src/features/attendance/components/attendance-report.tsx` with corporate letterhead logo and 1-employee-per-page pagination.
@@ -122,5 +122,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Step 1 (plan and first commit), Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates), and Step 3 (Increment 2: Option 1k Payroll Dashboard overhaul, 3 KPI cards, 2-column layout, part-paid badge, avatar colors).
-- Next immediate action: Step 4 (Increment 3: Staff Read-Only Payroll Access).
+- Completed Step 1 (plan and first commit), Step 2 (Increment 1: Dropdown contrast fix, default landing to allocation, removed redundant pay rates form, E2E test updates), Step 3 (Increment 2: Option 1k Payroll Dashboard overhaul), and Step 4 (Increment 3: Staff Read-Only Payroll Access).
+- Next immediate action: Step 5 (Increment 4: Timesheet Letterhead Print & Combined Statement).

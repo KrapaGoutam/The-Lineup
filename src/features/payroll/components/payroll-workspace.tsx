@@ -174,7 +174,6 @@ export function PayrollWorkspace({
       : "Your attendance";
     return (
       <div className="space-y-4">
-        <Header />
         <SelfPayrollView
           restaurantSlug={restaurantSlug}
           todayLocalDate={todayLocalDate}
@@ -402,14 +401,34 @@ function SelfPayrollView({
   }
   if (periods.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
-        No payroll has been generated for you yet.
-      </p>
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            My Payroll
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            View your monthly attendance hours, gross compensation, and payment
+            history.
+          </p>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          No payroll has been generated for you yet.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          My Payroll
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          View your monthly attendance hours, gross compensation, and payment
+          history.
+        </p>
+      </div>
       <PayrollDashboardTiles
         restaurantSlug={restaurantSlug}
         todayLocalDate={todayLocalDate}
