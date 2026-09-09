@@ -126,7 +126,7 @@ able to see.
 - [x] **Step 2: RLS fix + migration + pgTAP**
   - [x] New migration `20260909120000_payroll_periods_self_locked_only.sql`:
         tightened `payroll_periods_select_self` to `and status =
-    'locked'`.
+'locked'`.
   - [x] **Two real cascading regressions caught by re-running the full
         existing pgTAP suite before trusting the migration, not
         assumed safe:**
@@ -160,14 +160,17 @@ able to see.
   - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
         (unchanged -- no app code yet), build clean.
   - [x] Commit.
-- [ ] **Step 3: Domain — `payroll-balance-metrics.ts`**
-  - [ ] Pure functions: `computeOverallBalanceOwedCents`,
+- [x] **Step 3: Domain — `payroll-balance-metrics.ts`**
+  - [x] Pure functions: `computeOverallBalanceOwedCents`,
         `computeOwedForMonth`, `findOldestOpenPeriod`,
         `groupPeriodsByPerson`, `derivePeriodStatus`.
-  - [ ] Unit tests for each, including edge cases (no open periods, a
-        person fully paid, ties on oldest-open-month).
-  - [ ] Full gate.
-  - [ ] Commit.
+  - [x] Unit tests: 16 cases across all five functions, including
+        clamped-vs-unclamped balance summing, "owed" vs "generated"
+        being genuinely different figures, oldest-open ties/empty/
+        all-settled, and "paid" never applying to a still-draft period.
+  - [x] Full gate: format/lint/typecheck clean, 281/281 unit tests
+        (16 new), build clean.
+  - [x] Commit.
 - [ ] **Step 4: Action — extend the dashboard payload**
   - [ ] `getPayrollDashboardAction`: add `owedThisMonthCents`,
         `owedLastMonthCents`, `oldestOpenPeriod`, and the full `periods`
@@ -244,5 +247,5 @@ able to see.
 
 ## Current State & Next Step
 
-Steps 1-2 done and committed. Next: Step 3 (domain --
-`payroll-balance-metrics.ts`).
+Steps 1-3 done and committed. Next: Step 4 (action -- extend
+`getPayrollDashboardAction`'s payload).
