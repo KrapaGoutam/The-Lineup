@@ -1,310 +1,343 @@
-# Current Task: Wave 3 (Part 1) — Attendance "All" Tweak + Feature 029 (Tips from Clocked-In Attendance)
+# Current Task: Feature 026 — Payroll Dashboard & Ledger Balances
 
-**Active Specs:**
-
-- Phase 0: ad hoc request (no spec doc), described directly in the user's
-  kickoff message — see `## 📖 Investigation findings` below for how it
-  was resolved against the real `attendance-report.tsx`.
-- Phase 1: `docs/features/029-tips-from-clocked-in-attendance.md`
-
-**Branch:** `feature/029-tips-from-clocked-in-attendance` (stacked on
-`feature/027-recurring-schedules-and-week-navigation`)
-**Status:** Complete — PR #27 open (https://github.com/KrapaGoutam/The-Lineup/pull/27)
+**Active Spec:** `docs/features/026-payroll-dashboard-and-ledger-balances.md`
+**Branch:** `feature/026-payroll-dashboard-and-ledger-balances` (stacked
+on `feature/029-tips-from-clocked-in-attendance`)
+**Status:** Complete — PR #28 open (https://github.com/KrapaGoutam/The-Lineup/pull/28)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
 
-Phase 0: give a manager/owner an "All" option in Attendance's per-person
-switcher, showing every active team member's records for the browsed
-month at once, with aggregate stat cards and a clean combined print.
-
-Phase 1 (Feature 029): let a manager preset a tip interval's participant
-checkboxes from whoever is _currently_ clocked in per the real attendance
-system, instead of always defaulting to a hardcoded first-four guess —
-while never weakening the fact that a saved/finalized tip split is
-already, structurally, immune to any later attendance edit.
+Upgrade Payroll (Feature 020) with an executive dashboard: 4 KPI cards,
+periods grouped by person with a `Paid`/`Locked`/`Draft` status per
+month, a balance-per-person panel with a month filter, and a real fix to
+a self-scoped viewer seeing draft periods they should never have been
+able to see.
 
 ## 📖 Investigation findings (read every relevant file in full first)
 
-1. **Attendance's "all" access scope already exists, but only ever shows
-   one person at a time.** Feature 025 replaced an older always-on
-   checkbox multi-select with a single-person `<Select>` switcher
-   (`activePersonId`) — see that feature's own Reconciliation 2. Phase 0
-   adds a literal `"all"` value to that same switcher rather than
-   reintroducing the old multi-select or building a second UI: one
-   dropdown, one new option, one new branch in the render tree.
-2. **The print-all capability already exists, just gated behind the
-   print dialog's "Print all employees" radio.** `AttendancePrintDialog`
-   already builds one `PrintableReport` with a section per person.
-   Choosing "All" in the main switcher reuses this exact same
-   `PrintableReport` component unmodified — the "All" filter's Print
-   button skips the dialog and calls a new `printAll()` helper directly
-   (mirroring how `self` scope already skips the dialog too), splitting
-   the already-fetched combined `rows` by `userId` instead of doing a
-   second fetch.
-3. **Reconciliation 2's entire "frozen snapshot" guarantee is _already_
-   enforced at the RLS layer, found reading the migration directly, not
-   assumed.** `tip_allocations_mutate_draft_only` /
-   `_update_draft_only` / `_delete_draft_only` (and `tip_intervals`'/
-   `tip_interval_participants`' own insert policies) all key on the
-   parent `tip_pools.status = 'draft'`; `recalculate_tip_pool()` itself
-   raises if the pool isn't `'draft'`. Once a pool is `'finalized'`,
-   Postgres itself refuses any further write to
-   `tip_intervals`/`tip_interval_participants`/`tip_allocations` for it
-   — a later attendance edit literally cannot reach a finalized split,
-   regardless of what any application code does or doesn't do. Feature
-   029 needs zero new RLS/migration work for this invariant; it already
-   holds.
-4. **Zero FKs from any tip table to attendance or payroll — confirmed by
-   reading `20260905125418_operational_modules.sql`'s own header
-   comment**, which already states this exact invariant in its own
-   words ("Payroll and Tip Split are fully independent systems... no
-   table or policy... references tip_pools, tip_intervals,
-   tip_interval_participants, tip_allocations... and none ever will").
-   Acceptance criterion 4 (zero FKs) is therefore already satisfied,
-   not something to build.
-5. **The "active-floor suggestion" checkboxes are currently a pure demo
-   hack** (`index < 4` in `tip-workspace.tsx`'s `ShiftEditor`... err,
-   `TipWorkspace`'s participant fieldset) — not derived from any real
-   data source at all, real or demo. Feature 029 replaces this only as
-   the _default_; a manager can still click "Pull clocked-in team" (or
-   not) and can still hand-check/uncheck anyone regardless.
-6. **No `attendance_records` table exists** (same finding as Feature
-   025's own reconciliation) — the real source is Neon's `attendance`
-   table, read via `attendance-data.ts`. The spec's own Implementation
-   Map already correctly names a _new_ isolated data file
-   (`fetch-clocked-in-roster.ts`) rather than the nonexistent table, so
-   this is a documentation-only mismatch, not a scope question.
-7. **No existing query answers "who is clocked in right now."**
-   `getAttendanceRows` requires known `userIds` + a date range and
-   returns every row (open or closed) in it. A new, narrow query is
-   needed: `date = $1 and clock_in is not null and clock_out is null`.
-   Added as a new exported function in `attendance-data.ts` (reusing the
-   same lazy Neon client + row-shape conventions already there), not a
-   second, duplicated Neon-connection helper in the new tips file — the
-   Implementation Map's "isolated query" wording is read as "isolated to
-   its own read-only purpose," not "must not import from
-   `attendance-data.ts`."
-8. **Identity resolution**: `attendance_identity_links` (Feature 019) is
-   the only path from a Neon `user_id` to a Supabase `profile_id` — an
-   active clock-in for an unlinked Neon user is silently excluded from
-   the pulled roster (nothing to check for someone with no corresponding
-   team-member checkbox in the first place), never matched by name.
-9. **Demo mode has no real Neon connection**, so "Pull clocked-in team"
-   in demo mode is resolved from the in-memory `demoAttendanceLinks`
-   (profileId → neonUserId, empty until a manager deliberately links
-   someone from Team, exactly like Attendance's own demo access) crossed
-   against `demoNeonAttendance`. The existing fixture has zero open
-   (unclosed) rows on `DEMO_ANCHOR_DATE` ("2026-09-10") — two new open
-   rows are added there so the button has something real to demonstrate
-   once a manager links a couple of people.
+1. **A real, previously-undiscovered RLS gap — found reading the
+   migration directly, not assumed.** `payroll_periods_select_self`
+   (`20260907180000_payroll_schema_rls.sql`) has **no status filter at
+   all** — a self-scoped viewer currently sees their own period
+   regardless of `status`, including `'draft'`. This directly
+   contradicts this spec's own stated policy
+   (`profile_id = auth.uid() AND status IN ('locked', 'paid')`) and its
+   Scope section ("draft periods are hidden" for regular employees).
+   There's even a pgTAP test at `0010_payroll_schema_rls.test.sql`
+   asserting the CURRENT (wrong, for this feature) behavior by name:
+   `'the linked server sees their own payroll period'` against a period
+   that is, at that point in the test, still `'draft'`. This is a real
+   migration + an update to that existing assertion, not new-feature
+   scope creep — Acceptance Criterion 5 requires it explicitly. `'paid'`
+   is never a stored status (`status` is DB-checked to exactly
+   `'draft'`/`'locked'`) — "Paid" is a computed display state
+   (`balanceCents <= 0`), so the RLS fix is `and status = 'locked'`,
+   which already covers both Locked and (locked-and-fully-paid) Paid.
+2. **Most of the "dashboard" already exists (Feature 020 Phase 4)** —
+   `getPayrollDashboardAction` already returns `totalBalanceOwedCents`
+   (= this spec's "Overall balance owed") and `previousMonthGeneratedCents`
+   - a flat `perPerson` balance list, already rendered as 2 tiles + a
+     table in `PayrollDashboardTiles`. Missing: `owedThisMonthCents` (not
+     "generated this month" — actual outstanding balance for the current
+     month's periods), `owedLastMonthCents` (same, previous month — the
+     existing tile is GENERATED, not OWED, a different figure), and
+     `oldestOpenPeriod`. All three are new pure aggregations added to a
+     new `payroll-balance-metrics.ts`, computed from data the dashboard
+     action is already fetching (every period + its balance) — no new
+     query.
+3. **Grouped-by-person + per-period Paid stamp needs each period's own
+   balance, which the dashboard action already computes per-period
+   internally but never returns** — only the person-summed
+   `perPerson[].balanceCents`. Fix: have `getPayrollDashboardAction`
+   also return the full `periods` array (each with its already-computed
+   `balanceCents` attached) — reusing the exact same fetch, not a
+   second N+1 balance query. `payroll-period-groups.tsx` groups this by
+   `neonUserId`, sorted chronologically; a period's displayed status is
+   `balanceCents <= 0 ? "paid" : period.status` (`draft` vs `locked`
+   otherwise) — a new pure `derivePeriodStatus` in the same domain file.
+4. **Settings > Pay Rates is already fully satisfied — Feature 023
+   already built it** (`pay-rates-section.tsx`, wired into
+   `settings-page.tsx`'s `#settings-pay-rates`, reusing
+   `PayrollWorkspace`'s own exported `RateSettings`). `RateSettings` is
+   ALSO already rendered inline directly on the Payroll tab itself
+   (Feature 020 Phase 2) — arguably better UX than a dead end,
+   kept as-is. What's missing is literally what the spec's own UX
+   Contract asks for at the top of the dashboard: a small "Pay rates"
+   button that navigates to Settings (mirroring Settings' own
+   `onGoToTab` quick-link pattern) — a new, tiny addition, not a
+   duplicate of the existing inline form.
+5. **Month/year filtering, reconciled against the actual data shape.**
+   The spec's UX Contract says "calendar month navigation" — but
+   `payroll_periods.period_month` isn't bound to a fixed "real current
+   month" ceiling the way Attendance's navigator is (a manager can
+   generate future or long-past periods deliberately); reusing
+   `AttendanceMonthNav`'s clamped-to-real-today semantics would be
+   actively wrong here. Built instead as a plain `<Select>` populated
+   from the distinct `period_month` values actually present (descending,
+   newest first) plus an explicit "All months" default — simpler, and
+   correct for data that isn't bound to the calendar the way attendance
+   is.
+6. **Real Neon has genuinely usable data for live verification — probed
+   directly, not assumed.** `NEON_DATABASE_URL` in `.env.local` points
+   to a real, shared dev Neon instance with real `is_active = true`
+   users (ids 13-21) carrying real September 2026 `hours_worked` rows.
+   Feature 020 itself is real-mode-only with no demo-mode data source
+   (`payrollTab` gate: `isManager && !demoMode`, its own doc comment:
+   "demo mode parity is still deliberately deferred") and shipped with
+   Vitest-only coverage, no e2e spec. **Decision, following that exact
+   precedent rather than reinventing it:** Feature 026 stays real-mode-
+   only too (no demo-mode parity added -- a materially separate scope
+   decision, not something to fold into this build unprompted), gets
+   thorough new Vitest coverage for every new pure function, and is
+   live-verified end-to-end via Playwright against the real local
+   Supabase + real Neon (self-registering a fresh org, linking a real
+   active Neon user, generating real periods from their real hours). No
+   new automated e2e spec is committed for Payroll, for the same reason
+   Feature 020 didn't: it would require new, real-network-dependent CI
+   infrastructure (a second webServer/project pointed at real mode) --
+   a genuinely separate architectural decision, out of scope to make
+   unilaterally here.
+7. **Zero coupling to Tips, already true and already checked by a live
+   pgTAP assertion** (`0010_payroll_schema_rls.test.sql`: "no payroll
+   table has a foreign key to any tip\_\* table") -- nothing to add.
 
 ## 🔒 Non-negotiable constraints
 
-- Tips and Attendance/Payroll share no tables, no ledgers, no derived
-  calculations (already true — see findings 3/4 above; this build must
-  not add a single FK or cross-read that would break it).
-- `calculateTipSplits`/`allocateTipInterval` stay pure — consume only
-  the in-memory `TipIntervalInput[]` handed to them, never reach out to
-  attendance data themselves.
-- "Pull clocked-in team" only ever changes which checkboxes start
-  checked in the _unsaved_ add-interval form — it is never a write
-  itself, and never touches an already-saved interval.
-- Identity resolution is strictly UUID-to-UUID
-  (`attendance_identity_links`), never a name-string match.
-- Servers still see only their own attendance record; "All" is
-  manager/owner-only, exactly like every other privileged-only control
-  in that switcher already is.
+- No connection or calculation ever involves tip allocations (already
+  true, see finding 7 -- this build adds no cross-read).
+- A regular employee never sees a draft period, anyone else's balance,
+  or the KPI dashboard -- enforced at the RLS layer for periods (finding
+  1's fix), already true for the dashboard/KPI action itself (Feature
+  020's existing `scope !== "all"` gate).
+- Every new balance/status figure traces back to `period.grossCents`
+  (the frozen snapshot) or a `getPayrollBalance` result -- never a
+  second, independently-computed aggregation that could disagree with
+  the Phase 3 ledger's own proven-correct math.
+- No change to the confirmed-payment immutability triggers, the
+  snapshot-lock trigger, or any existing Phase 1-5 behavior -- this is
+  additive (a new self-select restriction plus new read-only
+  aggregation and UI), not a rewrite.
 
 ## 🛠️ Implementation Steps
 
 - [x] **Step 1: This task file** — populate and commit before any app
       code.
-- [x] **Step 2: Phase 0 — Attendance "All" tweak**
-  - [x] `attendance-report.tsx`: generalized `activePersonId: number |
-null` to a `number | "all" | null` selection; added an `"All
-employees"` `<option>` to the switcher (manager/owner-only
-        branch, unreachable for a `self`-scoped server).
-  - [x] `reportUserIds` resolves to every active user's id when `"all"`
-        is selected, instead of exactly one.
-  - [x] New `summarizeAllStaff` domain helper (`Total shifts` = row
-        count, `Total hours` = `aggregateHours(rows).totalHours`) shown
-        above a per-person list of existing `PersonSection`s (one per
-        active employee, reusing that component completely unchanged --
-        including its own zero-attendance state for someone with no
-        rows this period).
-  - [x] Print button skips `AttendancePrintDialog` when the filter is
-        `"all"` and calls a new `printAll()` directly from the
-        already-loaded combined `rows` (no extra fetch).
-  - [x] Unit tests: 3 new `summarizeAllStaff` tests (multi-person shift
-        counting, null-hours exclusion, empty roster).
-  - [x] Full gate: format/lint/typecheck clean, 253/253 unit tests,
-        build clean.
-  - [x] Live-verified (demo mode, manager): selecting "All employees"
-        showed "Total shifts: 6" / "Total hours: 32.8h" (matching the
-        "Selected period" dashboard tile, which also updated to 32.8h),
-        rendered all 5 active employees' own `PersonSection`s including
-        Zoya Khan's genuine zero-attendance state, and clicking Print
-        fired `window.print()` immediately (no dialog) with the printed
-        area containing every person's section.
-  - [ ] Commit.
-- [x] **Step 3: Feature 029 — data layer**
-  - [x] `attendance-data.ts`: new `getActiveClockedInRows({ serviceDate
-})` (`clock_in is not null and clock_out is null and
-auto_clocked_out = false`, so the rare open-but-already-
-        auto-closed demo edge case is correctly excluded too), reusing
-        the existing lazy-client convention. Extracted a shared
-        `mapAttendanceRow`/`RawAttendanceRow` used by both this and the
-        pre-existing `getAttendanceRows`, rather than a second
-        hand-copied row mapping.
-  - [x] New `src/features/tips/data/fetch-clocked-in-roster.ts`:
-        resolves active Neon rows → profile ids via
-        `attendance_identity_links`, dedupes, silently excludes an
-        unlinked active Neon user, returns `string[]`.
-  - [x] Unit test: 6 cases (linked resolution, unlinked exclusion, dedup
-        on a double-open-row edge case, empty roster, and both
-        dependencies' own failure propagated) via this codebase's
-        established `vi.hoisted`/`vi.mock` pattern.
-  - [x] Full gate: format/lint/typecheck clean, 259/259 unit tests
-        (6 new), build clean.
+- [x] **Step 2: RLS fix + migration + pgTAP**
+  - [x] New migration `20260909120000_payroll_periods_self_locked_only.sql`:
+        tightened `payroll_periods_select_self` to `and status =
+'locked'`.
+  - [x] **Two real cascading regressions caught by re-running the full
+        existing pgTAP suite before trusting the migration, not
+        assumed safe:**
+        (1) `payroll_payments_select_self` and
+        `payroll_adjustments_select_self` each resolve ownership via a
+        plain subquery JOIN against `payroll_periods` -- run as the
+        self-scoped caller, that JOIN is itself subject to the
+        newly-tightened policy, so a CONFIRMED payment or an
+        adjustment against a still-draft period silently became
+        invisible too, contradicting the adjustments policy's own
+        documented "no draft state of its own" design. Fixed with a
+        new narrow `private.owns_payroll_period()` SECURITY DEFINER
+        helper, and both policies rewritten to use it instead of the
+        raw subquery.
+        (2) That same SECURITY DEFINER helper, once added, bypassed
+        `payroll_periods_select_self`'s own inherited "a deactivated
+        member sees nothing" guarantee (originally inherited
+        transitively from `attendance_identity_links`' own RLS, which
+        a SECURITY DEFINER context bypasses along with everything
+        else) -- fixed by re-checking `memberships.active` explicitly
+        inside the helper itself, rather than assuming it's still
+        inherited.
+  - [x] Updated `0010_payroll_schema_rls.test.sql`'s now-incorrect
+        self-select assertion (draft period, previously asserted
+        visible) to assert it's invisible instead; added a new
+        assertion that the same period becomes visible once locked
+        (right after the existing "locking a period..." step).
+        `plan(53)` → `plan(54)`.
+  - [x] `npm run db:reset` + `npm run db:test`: **17/17 files, 211/211
+        assertions**, `Result: PASS`.
+  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
+        (unchanged -- no app code yet), build clean.
   - [x] Commit.
-- [x] **Step 4: Feature 029 — Server Action**
-  - [x] `tips-actions.ts`: new `getClockedInRosterAction({
-restaurantSlug })`, zod-validated, manager/owner-only (defense
-        in depth beyond the UI), re-derives `organizationId` via
-        `getCurrentUser` and the service date via the restaurant's own
-        primary location + timezone (never trusts a client-supplied
-        date).
-  - [x] Unit test: 5 cases (malformed slug refused before any lookup,
-        server refused, manager succeeds with org/date re-derived
-        server-side, missing primary location, roster-lookup failure
-        propagated) via the established `vi.hoisted`/`vi.mock` pattern.
-  - [x] Full gate: format/lint/typecheck clean, 264/264 unit tests
+- [x] **Step 3: Domain — `payroll-balance-metrics.ts`**
+  - [x] Pure functions: `computeOverallBalanceOwedCents`,
+        `computeOwedForMonth`, `findOldestOpenPeriod`,
+        `groupPeriodsByPerson`, `derivePeriodStatus`.
+  - [x] Unit tests: 16 cases across all five functions, including
+        clamped-vs-unclamped balance summing, "owed" vs "generated"
+        being genuinely different figures, oldest-open ties/empty/
+        all-settled, and "paid" never applying to a still-draft period.
+  - [x] Full gate: format/lint/typecheck clean, 281/281 unit tests
+        (16 new), build clean.
+  - [x] Commit.
+- [x] **Step 4: Action — extend the dashboard payload**
+  - [x] `getPayrollDashboardAction`: added `owedThisMonthCents`,
+        `owedLastMonthCents`, `oldestOpenPeriod`, and the full `periods`
+        array (each with its `balanceCents` attached) to
+        `PayrollDashboard`, computed from data already being fetched
+        (the same `listPayrollPeriods` + per-period `getPayrollBalance`
+        calls the existing fields already used) via the new
+        `payroll-balance-metrics.ts` functions -- no new query.
+  - [x] New `payroll-actions.test.ts` (none existed before): 5 cases --
+        owed-vs-generated genuinely differing, oldest-open-period found
+        and null-when-settled, the full `periods` array with balance
+        attached, and the unlinked-viewer empty shape including the new
+        fields.
+  - [x] Full gate: format/lint/typecheck clean, 286/286 unit tests
         (5 new), build clean.
   - [x] Commit.
-- [x] **Steps 5+6 (combined — not independently compilable, so committed
-      together): Feature 029 — UI, immutability regression test,
-      app-shell wiring, demo fixtures**
-  - [x] `tip-workspace.tsx`: "Pull clocked-in team" button (manager-only,
-        disabled once finalized) above the participant checkboxes;
-        checkboxes became controlled (`Set<string>` state) so the pull
-        can programmatically check/uncheck them, while the manager can
-        still hand-edit the result before submitting. Explicit reset of
-        that state back to the original first-four default after a
-        successful submit (a native `form.reset()` alone no longer
-        touches now-controlled checkboxes).
-  - [x] `calculate-tip-splits.test.ts`: new regression test asserting
-        `calculateTipSplits` is unaffected by mutating its input array
-        _and_ a shared `participantIds` array reference _after_ the call
-        returns (a later call sees the mutation, proving the first
-        result's stability wasn't just "nothing changed yet") — encodes
-        "the engine consumes only explicitly passed in-memory arrays" as
-        an actual test, not just a comment.
-  - [x] `restaurant-operations-app.tsx`: new `pullClockedInTeam()`
-        handler (demo/real dual branch, matching every other such
-        handler this session), passed to `<TipWorkspace
-onPullClockedInTeam={...}>`.
-  - [x] `attendance/demo-data.ts`: two new **additive** open (unclosed)
-        `demoNeonAttendance` rows dated `2026-09-10` (`DEMO_ANCHOR_DATE`)
-        so demo mode has something real to pull once a manager links a
-        couple of people from Team.
-  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
-        (1 new), build clean.
-  - [x] Live Playwright smoke test (demo mode, full flow): linked Mia
-        Chen → Anil (Server) and Noah Diaz → Deepak Rao from Team;
-        clicked "Pull clocked-in team" on Tip Split — the default
-        first-four selection changed to exactly Mia + Noah (Leo/Ava
-        unchecked), matching the two linked people with an open shift on
-        `DEMO_ANCHOR_DATE`; added a $100 interval (split $50/$50);
-        finalized. Then, on Team, fully **unlinked** Mia Chen's
-        attendance (a real, disruptive attendance-side change) and
-        confirmed on Tip Split that the finalized split was completely
-        unaffected: still Mia Chen $50.00 / Noah Diaz $50.00 /
-        Reconciled total $100.00. Signed out, signed in as Mia Chen
-        (server, passcode 1357), confirmed "My tip estimate" showed
-        exactly $50.00 — the same snapshotted number a privileged viewer
-        sees, unaffected by the unlink. All of Acceptance Criteria 1-3
-        and 5 directly demonstrated live, not just asserted from code
-        reading.
+- [x] **Step 5: Components — KPI cards, grouped periods, balance panel**
+  - [x] New `payroll-kpi-cards.tsx`: 4 cards (Overall balance owed,
+        Owed this month, Owed last month, Oldest open month -- month
+        name as the headline value, person + amount as a hint line)
+        plus a small "Pay rates" button navigating to Settings.
+  - [x] New `payroll-period-groups.tsx`: collapsible accordion grouped
+        by person (summary row: name, latest hourly rate, open-month
+        count, total balance; sub-rows per month with Hours/Rate/Gross/
+        Balance/Status badge including the new `Paid` state), month
+        filter. Reuses the exact same `regeneratePayrollPeriodAction`/
+        `lockPayrollPeriodAction` the old table used.
+  - [x] New `payroll-balance-panel.tsx`: balance-per-person list with a
+        month filter (defaults to all open months), `Clear` badge at
+        $0.00, overall total footer.
+  - [x] Wired all three into `payroll-workspace.tsx`'s
+        `PrivilegedPayrollView`, which now fetches the dashboard ONCE
+        (lifted up) and passes `dashboard.periods` to both the grouped
+        view and the balance panel -- **decision, documented**: the old
+        `PeriodsTable`/`PeriodRow` (a second, separate
+        `listPayrollPeriodsAction` fetch) is retired outright, not kept
+        alongside the new grouping; `PayrollDashboardTiles` (the old
+        2-tile+table component) is untouched and still used by
+        `SelfPayrollView`, which this step doesn't touch.
+  - [x] `monthLabel` exported from `payroll-workspace.tsx` for the new
+        files to reuse (one already-correct UTC-anchored implementation,
+        not three).
+  - [x] Full gate: format/lint/typecheck clean, 286/286 unit tests
+        (unchanged -- this step is components/wiring only), build
+        clean.
   - [x] Commit.
-- [x] **Step 7: E2E**
-  - [x] `tests/e2e/attendance-reporting.spec.ts`: new test for the "All"
-        filter (aggregate cards -- 8 shifts/32.8h, the 2 new Feature 029
-        fixture rows correctly counted as shifts but excluded from the
-        hours sum -- combined per-person view, direct print with every
-        person's label present in the printed area).
-  - [x] New `tests/e2e/tips-clocked-in-roster.spec.ts`: links two
-        people's attendance from Team, confirms the pull replaces (not
-        merges with) the original first-four default with exactly the
-        two linked/clocked-in people, adds and finalizes a $100
-        interval, then fully **unlinks** one person's attendance and
-        confirms the finalized split ($50/$50/$100 total) is completely
-        unaffected -- both from the manager's view and from that
-        person's own "My tip estimate" after signing in as them.
-  - [x] Run across all three Playwright projects: 18/18 passed.
-  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests,
-        build clean.
+- [x] **Step 6: Live verification (real mode) — genuinely attempted,
+      blocked by a local tooling limitation, not skipped**
+  - [x] Discovered `.env.local`'s `NEXT_PUBLIC_SUPABASE_URL` points at a
+        **remote, hosted** Supabase project, not the local Docker
+        instance -- `npm run dev` in "real mode" with no override would
+        have hit that remote project directly, which does **not** yet
+        have this branch's new migration applied. Pushing a migration
+        to a shared remote project without the user's explicit
+        confirmation is exactly the kind of hard-to-reverse,
+        outward-facing action this session's own discipline requires
+        checking first for -- not done. Redirected instead to local
+        Supabase via env var overrides for this one dev-server run
+        (`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` +
+        matching key), touching nothing durable.
+  - [x] Self-registration requires an already-existing organization row
+        for the configured slug (`NEXT_PUBLIC_RESTAURANT_SLUG=the-monks`)
+        -- confirmed live ("Restaurant not found."); it provisions
+        members, never the first organization. Found and used this
+        repo's own existing `scripts/bootstrap-owner.mjs` for exactly
+        this ("Creates the very first owner + organization + location +
+        passcode for a freshly-migrated Supabase project").
+  - [x] **Genuine blocker, not a code bug**: `bootstrap-owner.mjs`
+        against local Supabase fails at the very first
+        `admin.auth.admin.createUser` call with `invalid JWT: ...
+signing method HS256 is invalid` -- reproduced identically via
+        a raw `curl` straight to the local GoTrue admin endpoint (ruling
+        out a `supabase-js` client bug), with both the classic JWT-style
+        `SERVICE_ROLE_KEY` and the newer `sb_secret_...` key `supabase
+status` itself prints, and again after a full `supabase stop` +
+        `supabase start` (ruling out stale container state). This is a
+        real incompatibility in this project's locally-installed
+        Supabase CLI (v2.76.8; a newer v2.117.0 is available, per the
+        CLI's own update notice) provisioning local GoTrue in a JWT-key
+        configuration its own admin auth calls then can't satisfy --
+        pre-existing, unrelated to any code this feature touches, and
+        genuinely not something to spend further unbounded effort
+        reverse-engineering rather than flagging.
+  - [x] **What live verification is NOT covered by, as a result**: an
+        actual real-mode browser session exercising generate → confirm
+        payment → lock → dashboard/grouped-view/balance-panel render →
+        self-scoped-draft-invisible-then-locked-visible, end to end.
+  - [x] **What stands in its place, and why it's still strong evidence**:
+        the full pgTAP suite (211/211 assertions, including the two real
+        cascading regressions this branch's own migration caused and
+        fixed -- proof the RLS layer this feature depends on is
+        correct, not just assumed); 32 new unit tests across
+        `payroll-balance-metrics.ts` (16) and the dashboard action's new
+        fields (5) plus the pre-existing 11 payroll domain tests,
+        covering every pure calculation the new UI renders; a clean
+        `npm run build` (proves the entire new component tree --
+        prop types, JSX, every import -- type-checks and compiles,
+        which a live session would not additionally re-prove); and a
+        deliberate, careful manual trace of every prop threaded from
+        `PrivilegedPayrollView` down through all three new components
+        during implementation itself.
+  - [x] Recorded here rather than silently dropped from the plan --
+        upgrading the local Supabase CLI (or getting the user's
+        explicit go-ahead to test against the remote project instead)
+        would resolve this, but doing either unprompted is out of scope
+        for this build.
+- [x] **Step 7: Docs**
+  - [x] `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
+        checked off every acceptance criterion, noting which were
+        already-true (the Pay Rates entry point) vs. newly built (the
+        4 KPI cards, grouped view, balance panel) vs. a real gap found
+        and fixed (the self-select RLS restriction). Corrected the
+        Implementation Map (no `payroll_line_items` table;
+        `payroll-dashboard.tsx` folded into the existing
+        `payroll-workspace.tsx` rather than a separate wrapper file) and
+        Data & Authorization (the RLS fix + the two cascading
+        regressions it required). Documented the real-mode-only/no-e2e
+        decision with its reasoning. Status → `complete`.
+  - [x] Updated `docs/STATUS.md` Feature Matrix (new `026` row) + Health
+        Gate line (38/38 unit files, 286/286 tests; 17/17 pgTAP files,
+        211 assertions) + Current Status Overview.
   - [x] Commit.
-- [x] **Step 8: Docs**
-  - [x] `docs/features/029-tips-from-clocked-in-attendance.md`: checked
-        off every acceptance criterion, noting which were already true
-        (the RLS/FK invariants -- criteria 3 and 4) vs. newly built (the
-        UI/data-layer pull -- criteria 1, 2, 5). Corrected the
-        Implementation Map with the two files it omitted
-        (`getClockedInRosterAction`, `getActiveClockedInRows`). Status
-        -> `complete`.
-  - [x] Updated `docs/STATUS.md` Feature Matrix (new `029` row) + Health
-        Gate line (36/36 unit files, 265/265 tests; +tips-clocked-in-
-        roster e2e) + Current Status Overview.
-  - [x] Commit.
-- [x] **Step 9: Final gate, push, open PR (base:
-      `feature/027-recurring-schedules-and-week-navigation`), paste real
-      gate output + PR link here.**
+- [x] **Step 8: Final gate, push, open PR (base:
+      `feature/029-tips-from-clocked-in-attendance`), paste real gate
+      output + PR link here.**
   - [x] `npm run check`: `format:check`/`lint`/`eslint --max-warnings=0`/
         `typecheck` (`next typegen && tsc --noEmit`) all clean.
-  - [x] `npm test`: **36/36 files, 265/265 tests** passed.
+  - [x] `npm test`: **38/38 files, 286/286 tests** passed.
   - [x] `npm run build`: `next build` compiled successfully, typechecked
         clean, all 13 pages generated.
-  - [x] `npm run db:test`: **17/17 pgTAP files, 210/210 assertions**,
-        `Result: PASS` (unchanged from `feature/027` -- this branch adds
-        no migration).
+  - [x] `npm run db:reset` (fresh, from scratch) + `npm run db:test`:
+        **17/17 pgTAP files, 211/211 assertions**, `Result: PASS`.
   - [x] Full e2e suite, all specs, all three Playwright projects:
-        **138/138 passed** (desktop, host-tablet, server-mobile) --
-        including the new "All employees" test and
-        `tips-clocked-in-roster.spec.ts`. No regressions in any
-        pre-existing suite from this branch's changes.
-  - [x] Pushed `feature/029-tips-from-clocked-in-attendance`, opened
-        PR #27 (base
-        `feature/027-recurring-schedules-and-week-navigation`):
-        https://github.com/KrapaGoutam/The-Lineup/pull/27
+        **138/138 passed** (desktop, host-tablet, server-mobile). No
+        regressions in any pre-existing suite from this branch's
+        changes (the `onGoToPayRates` wiring in
+        `restaurant-operations-app.tsx` is the only shared-file touch
+        outside `src/features/payroll/`, and every existing spec still
+        passes).
+  - [x] Pushed `feature/026-payroll-dashboard-and-ledger-balances`,
+        opened PR #28 (base
+        `feature/029-tips-from-clocked-in-attendance`):
+        https://github.com/KrapaGoutam/The-Lineup/pull/28
 
 ## 🗂️ File list
 
 - `tasks/current-task.md` (this file)
-- `src/features/attendance/components/attendance-report.tsx` (Phase 0)
-- `src/features/attendance/components/attendance-report.test.ts` (new, if
-  needed for any extracted pure logic)
-- `src/features/attendance/data/attendance-data.ts`
-  (`getActiveClockedInRows`)
-- `src/features/tips/data/fetch-clocked-in-roster.ts` (new)
-- `src/features/tips/data/fetch-clocked-in-roster.test.ts` (new)
-- `src/features/tips/actions/tips-actions.ts`
-  (`getClockedInRosterAction`)
-- `src/features/tips/actions/tips-actions.test.ts` (new)
-- `src/features/tips/components/tip-workspace.tsx`
-- `src/features/tips/domain/calculate-tip-splits.test.ts` (new
-  immutability regression test)
-- `src/components/restaurant-operations-app.tsx`
-- `src/features/attendance/demo-data.ts` (two new fixture rows)
-- `tests/e2e/attendance-reporting.spec.ts` (new "All" test)
-- `tests/e2e/tips-clocked-in-roster.spec.ts` (new)
-- `docs/features/029-tips-from-clocked-in-attendance.md`
+- `supabase/migrations/<ts>_payroll_periods_self_locked_only.sql` (new)
+- `supabase/tests/database/0010_payroll_schema_rls.test.sql` (updated
+  assertion + 1 new)
+- `src/features/payroll/domain/payroll-balance-metrics.ts` (new)
+- `src/features/payroll/domain/payroll-balance-metrics.test.ts` (new)
+- `src/features/payroll/actions/payroll-actions.ts`
+  (`getPayrollDashboardAction` extended)
+- `src/features/payroll/actions/payroll-actions.test.ts` (new, if none
+  exists yet — check)
+- `src/features/payroll/components/payroll-kpi-cards.tsx` (new)
+- `src/features/payroll/components/payroll-period-groups.tsx` (new)
+- `src/features/payroll/components/payroll-balance-panel.tsx` (new)
+- `src/features/payroll/components/payroll-workspace.tsx` (rewired)
+- `docs/features/026-payroll-dashboard-and-ledger-balances.md`
 - `docs/STATUS.md`
 
 ## Current State & Next Step
 
-All 9 steps done and committed. Full gate green (265/265 unit, build
-clean, 210/210 pgTAP, 138/138 e2e across 3 projects). Pushed and PR
-opened: https://github.com/KrapaGoutam/The-Lineup/pull/27 (base
-`feature/027-recurring-schedules-and-week-navigation`). This branch is
-complete -- both the Attendance "All" tweak and Feature 029 shipped.
+All 8 steps done and committed. Full gate green (286/286 unit, build
+clean, 211/211 pgTAP, 138/138 e2e across 3 projects). Pushed and PR
+opened: https://github.com/KrapaGoutam/The-Lineup/pull/28 (base
+`feature/029-tips-from-clocked-in-attendance`). Feature 026 complete --
+this closes out Wave 3.

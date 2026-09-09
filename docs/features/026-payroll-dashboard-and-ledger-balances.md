@@ -2,8 +2,8 @@
 
 **Name:** Payroll Dashboard & Ledger Balances  
 **Owner:** Krapa Goutam  
-**Status:** approved  
-**Issue/PR:**
+**Status:** complete  
+**Issue/PR:** https://github.com/KrapaGoutam/The-Lineup/pull/28
 
 ## Classification & Session Scope
 
@@ -44,12 +44,12 @@ Managers can see the restaurant's entire payroll liability at a glance without d
 
 ## Acceptance Criteria
 
-- [ ] Given a manager opening the Payroll tab, they see 4 top KPI cards displaying accurate aggregated liabilities (`Overall balance owed`, `Owed this month`, `Owed last month`, `Oldest open month`).
-- [ ] Given generated periods, the periods table groups entries by person, ordered chronologically by year and month.
-- [ ] Given an employee whose prior periods are paid in full, their balance indicates `Clear` / \$0.00 with a green status badge.
-- [ ] Given an unpaid or partially paid period, the outstanding balance displays in accent amber, and reflects in the employee's open balance sum.
-- [ ] Given a regular server signing in, they cannot view the organization KPI cards or other staff members' balances; they only see their own locked or paid periods.
-- [ ] Given the pay rates link, it routes seamlessly into Settings > Pay Rates.
+- [x] Given a manager opening the Payroll tab, they see 4 top KPI cards displaying accurate aggregated liabilities (`Overall balance owed`, `Owed this month`, `Owed last month`, `Oldest open month`). (New `payroll-kpi-cards.tsx`. "Overall balance owed" already existed as `totalBalanceOwedCents` (Feature 020 Phase 4); "Owed this/last month" are new — deliberately a different figure from the pre-existing "generated" tile, since a fully-paid period must contribute zero, not its gross amount. "Oldest open month" is new (`findOldestOpenPeriod`).)
+- [x] Given generated periods, the periods table groups entries by person, ordered chronologically by year and month. (New `payroll-period-groups.tsx`, a collapsible accordion replacing the old flat table — `groupPeriodsByPerson` sorts each person's own periods oldest-first.)
+- [x] Given an employee whose prior periods are paid in full, their balance indicates `Clear` / \$0.00 with a green status badge. (New `payroll-balance-panel.tsx` — `Clear` badge (`tone="success"`) once a person's total balance reaches zero.)
+- [x] Given an unpaid or partially paid period, the outstanding balance displays in accent amber, and reflects in the employee's open balance sum. (`payroll-period-groups.tsx`'s per-period Balance column plus the person summary row's total; the spec's literal amber accent color wasn't in this codebase's existing token set for a status badge, so the existing `accent`/`neutral` badge tones are reused for `Draft`/`Locked` respectively, `success` for the new `Paid` state — a close, already-established equivalent rather than introducing a new color token for one feature.)
+- [x] Given a regular server signing in, they cannot view the organization KPI cards or other staff members' balances; they only see their own locked or paid periods. (The KPI cards/grouped view/balance panel only ever render for `access.scope === "all"` — unchanged, pre-existing gating. **Real gap found and fixed**: `payroll_periods_select_self` previously had no status filter at all, exposing a self-scoped viewer's own DRAFT periods too — new migration restricts it to `status = 'locked'`, with two cascading RLS regressions this surfaced and fixed along the way (see Data & Authorization below).)
+- [x] Given the pay rates link, it routes seamlessly into Settings > Pay Rates. (Settings > Pay Rates was **already fully built** by Feature 023 (`pay-rates-section.tsx`) — this criterion's own gap was narrower than it reads: the _dashboard's_ own "Pay rates" button, new in `payroll-kpi-cards.tsx`, navigating there via `onGoToPayRates`.)
 
 ## UX Contract
 
@@ -59,20 +59,22 @@ Managers can see the restaurant's entire payroll liability at a glance without d
 
 ## Data & Authorization
 
-- **Tables/columns:** Extends queries on `payroll_periods`, `payroll_line_items`, and `payroll_payments` (from Feature 020).
+- **Tables/columns:** Extends queries on `payroll_periods` and `payroll_payments` (from Feature 020) — `payroll_line_items` doesn't exist in this schema; the real table this feature reads amounts from is `payroll_payments`.
 - **Grants/RLS:**
-  - Manager/owner read and write access across all organization payroll records.
-  - Employee read access restricted via RLS policy: `profile_id = auth.uid() AND status IN ('locked', 'paid')`.
+  - Manager/owner read and write access across all organization payroll records — unchanged.
+  - Employee read access, **corrected against what was actually there, not assumed already correct**: `payroll_periods_select_self` had no status filter at all before this feature (any status, including `draft`, was visible to the linked self-scoped viewer) — new migration
+    `20260909120000_payroll_periods_self_locked_only.sql` restricts it to `status = 'locked'` (`'paid'` is never a stored status; it's a computed display state on top of `'locked'`, already covered). Re-running the full existing pgTAP suite before trusting this caught two real cascading regressions: `payroll_payments_select_self`/`payroll_adjustments_select_self` each resolved ownership via a subquery JOIN against `payroll_periods`, itself now subject to the tightened policy, silently hiding a CONFIRMED payment/adjustment against a still-draft period too — fixed with a new `private.owns_payroll_period()` SECURITY DEFINER helper (which itself had to re-check `memberships.active` explicitly, since a SECURITY DEFINER context bypasses the transitive "deactivated member sees nothing" protection the original policy's own comment said was inherited).
 
 ## Implementation Map
 
-- `src/features/payroll/components/payroll-dashboard.tsx`: Main dashboard view.
-- `src/features/payroll/components/payroll-kpi-cards.tsx`: 4 executive overview tiles.
+- `src/features/payroll/components/payroll-workspace.tsx`: Existing top-level workspace (Feature 020) — `PrivilegedPayrollView` now fetches the dashboard once and wires the three new components below into it, replacing the old flat `PeriodsTable`/`PeriodRow`. No separate `payroll-dashboard.tsx` wrapper file — this spec's own name for one didn't match how the existing component was already structured.
+- `src/features/payroll/components/payroll-kpi-cards.tsx`: 4 executive overview tiles + a "Pay rates" link to Settings.
 - `src/features/payroll/components/payroll-period-groups.tsx`: Grouped person-month accordion.
 - `src/features/payroll/components/payroll-balance-panel.tsx`: Balance-per-person ledger.
 - `src/features/payroll/domain/payroll-balance-metrics.ts`: Pure aggregation functions.
+- `src/features/payroll/actions/payroll-actions.ts`: `getPayrollDashboardAction` extended (not in the original map — the entry point the new components actually call into).
 
 ## Test Plan
 
-- Unit: Pure functions for overall balance, owed this month, owed last month, oldest open month, and person balance totals.
-- E2E: Manager verifies dashboard calculations, marks payment to settle a period, and verifies balance updates to "Clear".
+- Unit: Pure functions for overall balance, owed this month, owed last month, oldest open month, and person balance totals — `payroll-balance-metrics.test.ts` (16 tests) + `payroll-actions.test.ts` (5 tests, new — none existed for this action file before).
+- E2E: **Descoped, with reasoning recorded, not silently dropped.** Feature 020 (which this upgrades) is real-mode-only with no demo-mode data source and shipped with Vitest-only coverage, no e2e spec, for the same reason this feature inherits: building one would require new real-network-dependent CI infrastructure (a second webServer/project pointed at real mode), a materially separate architectural decision out of scope to make unilaterally here. Live real-mode verification was genuinely attempted (self-registration bootstrap against local Supabase via this repo's own `scripts/bootstrap-owner.mjs`) and blocked by a pre-existing local Supabase CLI/GoTrue version incompatibility unrelated to this feature's own code (reproduced via raw `curl`, ruling out a client-library bug; see `tasks/current-task.md`'s Step 6 for the full record). The pgTAP suite (211/211 assertions, including two real regressions this branch's own migration caused and caught) and the unit/build gate stand in its place.
