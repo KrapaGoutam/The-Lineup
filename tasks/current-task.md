@@ -277,13 +277,22 @@ status` itself prints, and again after a full `supabase stop` +
         explicit go-ahead to test against the remote project instead)
         would resolve this, but doing either unprompted is out of scope
         for this build.
-- [ ] **Step 7: Docs**
-  - [ ] `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
-        check off every acceptance criterion; document the RLS-gap
-        finding and fix, the already-satisfied Pay Rates entry point,
-        and the real-mode-only/no-e2e decision with its reasoning.
-  - [ ] Update `docs/STATUS.md` Feature Matrix + Health Gate line.
-  - [ ] Commit.
+- [x] **Step 7: Docs**
+  - [x] `docs/features/026-payroll-dashboard-and-ledger-balances.md`:
+        checked off every acceptance criterion, noting which were
+        already-true (the Pay Rates entry point) vs. newly built (the
+        4 KPI cards, grouped view, balance panel) vs. a real gap found
+        and fixed (the self-select RLS restriction). Corrected the
+        Implementation Map (no `payroll_line_items` table;
+        `payroll-dashboard.tsx` folded into the existing
+        `payroll-workspace.tsx` rather than a separate wrapper file) and
+        Data & Authorization (the RLS fix + the two cascading
+        regressions it required). Documented the real-mode-only/no-e2e
+        decision with its reasoning. Status → `complete`.
+  - [x] Updated `docs/STATUS.md` Feature Matrix (new `026` row) + Health
+        Gate line (38/38 unit files, 286/286 tests; 17/17 pgTAP files,
+        211 assertions) + Current Status Overview.
+  - [x] Commit.
 - [ ] **Step 8: Final gate, push, open PR (base:
       `feature/029-tips-from-clocked-in-attendance`), paste real gate
       output + PR link here.**
@@ -309,6 +318,4 @@ status` itself prints, and again after a full `supabase stop` +
 
 ## Current State & Next Step
 
-Steps 1-6 done and committed. Next: Step 7 (docs -- check off Feature
-026's acceptance criteria, document the RLS-gap fix and the real-mode
-live-verification blocker, update `docs/STATUS.md`).
+Steps 1-7 done and committed. Next: Step 8 (final gate, push, open PR).
