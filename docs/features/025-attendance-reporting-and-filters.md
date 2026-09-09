@@ -89,3 +89,33 @@ users`) — this feature adds no write path and no Neon-side schema.
 
 - Unit: Accurate calendar weekday calculation across month boundaries and leap years; metrics computation tests.
 - E2E: Month switching, summary stat metrics, and print dialog interactions across viewports.
+
+## Evolution in Feature 030 (Corporate Letterhead & Statement Integration)
+
+In **Feature 030** (`docs/features/030-combined-timesheet-payroll-statement.md`), Attendance Reporting received print and integration enhancements:
+
+1. **Corporate Letterhead Print Templates**:
+   - Integrated "The Monk's" official logo (`https://www.monkswebster.com/assets/img/logo-light.png`) nested in a dark contrast container (`#0b0b0d`) alongside restaurant details (address, phone, email, and tax ID).
+   - Document metadata header displaying Employee Name, Designation, Report Period, and Generation Timestamp.
+   - Comprehensive shifts table with calendar weekdays, in/out timestamps, auto-closed warnings, and total hours summary.
+   - Verification signature blocks: "Employee Signature" and "Authorized Manager Signature" with date lines for legal and administrative compliance.
+2. **1-Employee-Per-Page Print Pagination**:
+   - Enforced CSS print rules on multi-employee print runs:
+     ```css
+     @media print {
+       .employee-timesheet {
+         page-break-after: always;
+         break-after: page;
+       }
+       .employee-timesheet:last-child {
+         page-break-after: auto;
+         break-after: auto;
+       }
+     }
+     ```
+   - Prevents awkward mid-shift page splits and ensures clean single-sheet filing per employee.
+3. **Combined Monthly Statement Action**:
+   - Added a "Monthly Statement" action button beside "Print" in both single-employee and all-employee views.
+   - Triggers the Combined Monthly Timesheet & Payroll Statement dialog, bridging attendance clock-ins with gross wages, adjustments, and disbursement status.
+4. **Dropdown Contrast Fix**:
+   - Explicit popover theme tokens (`bg-popover text-popover-foreground [&>option]:bg-popover [&>option]:text-popover-foreground`) applied to employee, month, and year selectors to ensure dark-mode contrast.

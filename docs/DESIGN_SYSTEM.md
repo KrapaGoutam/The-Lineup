@@ -80,7 +80,7 @@ Use Geist Sans for product text and Geist Mono for times, table labels, counts, 
 
 **Desktop, row 1**: brand (left) — centered `CountdownPill` — avatar pill (right), which opens a floating quick-settings panel (Appearance switch, shift-hours summary, today's store hours, Change passcode, Store hours link, More options → the existing `HoursDialog`, Sign out). Non-modal: dismisses on outside pointerdown or Escape, no focus trap or backdrop (unlike this app's actual modal dialogs).
 
-**Desktop, row 2**: primary tabs (Schedule, Table Allocation, Tip Split — bottom-accent border when active) — vertical divider — secondary tabs (Team if manager, Attendance, Payroll if manager and not demo mode) — Settings button on the far right.
+**Desktop, row 2**: primary tabs (Schedule, Table Allocation, Tip Split — bottom-accent border when active) — vertical divider — secondary tabs (Team if manager, Attendance, Payroll if not demo mode; regular staff access their own self-payroll view) — Settings button on the far right. The application defaults directly to **Table Allocation** (`"allocation"`) upon authentication so floor and seating operations are immediately active.
 
 **Countdown pill urgency tiers** (`countdownTier()` in `restaurant-operations-app.tsx`, driven by `useRestaurantClock`'s `remainingSeconds`):
 
@@ -92,7 +92,54 @@ Use Geist Sans for product text and Geist Mono for times, table labels, counts, 
 
 The label swap (not just the color) is deliberate — urgency has to read without distinguishing amber from red. Digits are always `font-mono tabular-nums`.
 
-**Mobile**: a separate stacked header (brand, change-passcode icon, avatar chip that opens its own smaller panel — Appearance, Settings, Sign out — sharing `showAvatarPanel` state with the desktop panel), then a compact `CountdownPill`. Below the page content, a fixed 3-button bottom dock (`Allocation`, `Tip Split`, `More`) — all `min-h-11`+ touch targets. `More` opens a slide-up sheet (`role="dialog"`, dismissed the same outside-pointerdown-or-Escape way) listing Schedule, the secondary tabs, Settings, an `AppearanceSwitch`, Change passcode, and Sign out.
+**Mobile**: a separate stacked header (brand, change-passcode icon, avatar chip that opens its own smaller panel — Appearance, Settings, Sign out — sharing `showAvatarPanel` state with the desktop panel), then a compact `CountdownPill`. Below the page content, a fixed 3-button bottom dock (`Allocation`, `Tip Split`, `More`) — all `min-h-11`+ touch targets. `More` opens a slide-up sheet (`role="dialog"`, dismissed the same outside-pointerdown-or-Escape way) listing Schedule, the secondary tabs (including Payroll for regular staff in real mode), Settings, an `AppearanceSwitch`, Change passcode, and Sign out.
+
+### Option 1k Payroll Layout (Feature 030)
+
+- **3 Executive KPI Cards**:
+  - `Overall balance owed`: Displayed in a primary accent container (`bg-primary/10 border-primary/30 text-primary`) with large numbers (`text-3xl font-bold font-mono`).
+  - `This month`: Liability for active calendar month with count of draft/open periods.
+  - `Last month`: Prior month outstanding liability.
+- **Top Toolbar**: Immediate actions ("Pay rates" navigating to Settings > Pay Rates, and "Generate period" toggling the creation drawer).
+- **2-Column Operational Grid (`1fr 360px` on desktop, stacked on mobile)**:
+  - Left column ("Balances by person and month"): Accordion grouped by person. Each header features an employee initial avatar with deterministic hue assignment (`bg-primary/20 text-primary`, `bg-sky-500/20 text-sky-400`, etc.), role & rate subtitle, open month count, and personal balance. Expanded sub-table shows individual monthly periods, hours, gross pay, payments recorded, balance owed, status badge, and an inline "Ledger" button.
+  - Right column ("Balance per person"): Compact sidebar listing all staff with open balances, open months, an overall liability highlight box, and month visibility callout.
+- **Period Status Badges**:
+  - `Draft`: Tone `accent` (amber/primary subtle border) — draft period.
+  - `Locked`: Tone `neutral` (muted slate border) — approved/locked period.
+  - `Part-paid`: Tone `warn` (amber badge) — `balanceCents > 0 && balanceCents < grossCents`.
+  - `Paid`: Tone `ok` (emerald badge) — settled in full.
+
+### Corporate Print Letterhead & Timesheet Templates (Feature 030)
+
+- **Letterhead Branding**:
+  - Dark contrast container (`bg-[#0b0b0d] p-3 rounded-lg border border-border`) housing "The Monk's" official white brand logo (`https://www.monkswebster.com/assets/img/logo-light.png`).
+  - Restaurant metadata block: Address (Webster, TX), Phone, Email, and Federal Tax ID.
+  - Document header with Employee Name, Designation, Report Period, and Timestamp.
+- **Print Pagination**:
+  - Multi-employee reports enforce 1 employee per physical page via CSS:
+    ```css
+    @media print {
+      .employee-timesheet {
+        page-break-after: always;
+        break-after: page;
+      }
+      .employee-timesheet:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
+    ```
+- **Verification Signature Blocks**:
+  - Official sign-off blocks at the base of every printed timesheet and statement: "Employee Signature" and "Authorized Manager Signature" with signature rules and date lines.
+- **Print Media Isolation**:
+  - Non-printable controls (navigation headers, search/filter inputs, dialog overlay backdrops, action buttons) carry `no-print` or `print:hidden`.
+
+### Dark Mode Form Controls
+
+- Native `<select>` and `<option>` elements apply explicit popover tokens:
+  `bg-popover text-popover-foreground border-border [&>option]:bg-popover [&>option]:text-popover-foreground`
+  This ensures native select dropdown popovers render legible light text on dark backgrounds across all browsers and operating systems in dark mode.
 
 ## Motion
 

@@ -2,17 +2,17 @@
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
 **Last Updated:** September 9, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (38/38 files, 286/286 tests passing) | `npm run test:e2e` (settings.spec.ts 9/9, team-management.spec.ts 6/6, allocation-open-editing.spec.ts 9/9, attendance-reporting.spec.ts 12/12, recurring-schedules.spec.ts 6/6, tips-clocked-in-roster.spec.ts 1/1, all across desktop/host-tablet/server-mobile) | `npm run db:test` (17/17 pgTAP files, 211 assertions)  
+**Health Gate:** `npm run check` (Passing) | `npm test` (40/40 files, 295/295 tests passing) | `npm run test:e2e` (settings.spec.ts 9/9, team-management.spec.ts 6/6, allocation-open-editing.spec.ts 9/9, attendance-reporting.spec.ts 12/12, recurring-schedules.spec.ts 6/6, tips-clocked-in-roster.spec.ts 1/1, payroll-timesheet-overhaul.spec.ts 12/12, all across desktop/host-tablet/server-mobile) | `npm run db:test` (17/17 pgTAP files, 211 assertions)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
 
 ## 🚦 Current Status Overview
 
-- **Active Feature:** `Feature 026 — Payroll Dashboard & Ledger Balances`
-- **Active Task Spec:** [docs/features/026-payroll-dashboard-and-ledger-balances.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/026-payroll-dashboard-and-ledger-balances.md)
+- **Active Feature:** `Feature 030 — Combined Timesheet & Payroll Statement, Option 1k Dashboard, and Staff Access Overhaul`
+- **Active Task Spec:** [docs/features/030-combined-timesheet-payroll-statement.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/030-combined-timesheet-payroll-statement.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/026-payroll-dashboard-and-ledger-balances` (stacked on `feature/029-tips-from-clocked-in-attendance`); all quality gates green, acceptance criteria checked off. Found and fixed a real, previously-undiscovered RLS gap (`payroll_periods_select_self` had no status filter at all, exposing a self-scoped viewer's own draft periods) — re-running the full existing pgTAP suite before trusting the fix caught two further cascading regressions along the way. Real-mode live browser verification was genuinely attempted (self-registration bootstrap against local Supabase) and is documented as blocked by a pre-existing local Supabase CLI/GoTrue version incompatibility unrelated to this feature's own code; the pgTAP suite (211/211) and full unit/build gate stand in its place. PR open: [#28](https://github.com/KrapaGoutam/The-Lineup/pull/28), pending review/merge.
+- **Current State:** Implemented on `feature/030-payroll-ui-timesheet-print-overhaul`; all quality gates green (zero lint/typecheck warnings, 295 Vitest tests, 12/12 Playwright E2E tests across 3 viewports, clean Next.js build). Features delivered: Table Allocation default landing, dark mode dropdown contrast fix, Option 1k Executive Payroll Dashboard (3 KPI cards, 2-column layout, initial avatars, `part-paid` status, rate form deduplication), staff read-only self-payroll access, Corporate Letterhead Timesheet Print Templates with 1-employee pagination and signature verification lines, and secure multi-tenant Combined Monthly Timesheet & Payroll Statements.
 
 ---
 
@@ -50,6 +50,7 @@
 | `027`   | Recurring Schedules & Week Navigation                             | ✅ Shipped | pgTAP (0017_shifts_recurrence, 8 assertions) + Vitest (recurring-shifts, shift-planning, parse-schedule-csv, schedule-workspace) + e2e (recurring-schedules.spec.ts, 3 projects) |
 | `029`   | Tips from Clocked-In Attendance Roster (+ Attendance "All" tweak) | ✅ Shipped | Vitest (fetch-clocked-in-roster, tips-actions, calculate-tip-splits, attendance-report) + e2e (tips-clocked-in-roster.spec.ts + attendance-reporting.spec.ts, 3 projects)        |
 | `026`   | Payroll Dashboard & Ledger Balances                               | ✅ Shipped | pgTAP (0010 updated + payroll_periods_self_locked_only, 211 assertions) + Vitest (payroll-balance-metrics, payroll-actions)                                                      |
+| `030`   | Combined Statement, Option 1k Dashboard & Timesheet Letterhead    | ✅ Shipped | Vitest (payroll-balance-metrics, statement-actions, payroll-workspace, 295 tests) + e2e (payroll-timesheet-overhaul.spec.ts, 12 tests across 3 projects)                         |
 
 ---
 

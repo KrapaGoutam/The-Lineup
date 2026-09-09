@@ -84,13 +84,13 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
     - [x] Timesheet and Combined Statement print dialog triggers.
   - [x] Run full E2E test suite across desktop, tablet, and mobile projects.
 
-- [ ] **Step 7: Documentation Updates**
-  - [ ] Update `docs/features/026-payroll-dashboard-and-ledger-balances.md`.
-  - [ ] Update `docs/features/025-attendance-reporting-and-filters.md`.
-  - [ ] Create `docs/features/030-combined-timesheet-payroll-statement.md`.
-  - [ ] Update `docs/DESIGN_SYSTEM.md`.
-  - [ ] Update `docs/STATUS.md`.
-  - [ ] Run quality gates (`npm run check && npm test && npm run build`) and commit.
+- [x] **Step 7: Documentation Updates**
+  - [x] Update `docs/features/026-payroll-dashboard-and-ledger-balances.md`.
+  - [x] Update `docs/features/025-attendance-reporting-and-filters.md`.
+  - [x] Create `docs/features/030-combined-timesheet-payroll-statement.md`.
+  - [x] Update `docs/DESIGN_SYSTEM.md`.
+  - [x] Update `docs/STATUS.md`.
+  - [x] Run quality gates (`npm run check && npm test && npm run build`) and commit.
 
 - [ ] **Step 8: Final Gate & PR**
   - [ ] Full quality gate verification.
@@ -123,5 +123,5 @@ Deliver the Option 1k Payroll Dashboard overhaul, UI contrast bug fixes, staff s
 
 ## In-Flight State
 
-- Completed Steps 1-6 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement, Step 6 Playwright & Vitest test suites).
-- Next immediate action: Step 7 (Documentation Updates).
+- Completed Steps 1-7 (Initialization, Increment 1 UI fixes, Increment 2 Option 1k Dashboard overhaul, Increment 3 Staff read-only payroll access, Increment 4 Letterhead timesheet print & Combined Monthly Statement, Step 6 Playwright & Vitest test suites, Step 7 Documentation Updates).
+- Next immediate action: Step 8 (Final Gate & PR).
