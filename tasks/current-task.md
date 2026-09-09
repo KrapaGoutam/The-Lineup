@@ -170,7 +170,7 @@ auto_clocked_out = false`, so the rare open-but-already-
   - [x] Commit.
 - [x] **Step 4: Feature 029 — Server Action**
   - [x] `tips-actions.ts`: new `getClockedInRosterAction({
-    restaurantSlug })`, zod-validated, manager/owner-only (defense
+restaurantSlug })`, zod-validated, manager/owner-only (defense
         in depth beyond the UI), re-derives `organizationId` via
         `getCurrentUser` and the service date via the restaurant's own
         primary location + timezone (never trusts a client-supplied
@@ -182,33 +182,51 @@ auto_clocked_out = false`, so the rare open-but-already-
   - [x] Full gate: format/lint/typecheck clean, 264/264 unit tests
         (5 new), build clean.
   - [x] Commit.
-- [ ] **Step 5: Feature 029 — UI + immutability regression test**
-  - [ ] `tip-workspace.tsx`: "Pull clocked-in team" button (manager-only,
+- [x] **Steps 5+6 (combined — not independently compilable, so committed
+      together): Feature 029 — UI, immutability regression test,
+      app-shell wiring, demo fixtures**
+  - [x] `tip-workspace.tsx`: "Pull clocked-in team" button (manager-only,
         disabled once finalized) above the participant checkboxes;
-        checkboxes become controlled (`Set<string>` state) so the pull
+        checkboxes became controlled (`Set<string>` state) so the pull
         can programmatically check/uncheck them, while the manager can
-        still hand-edit the result before submitting.
-  - [ ] `calculate-tip-splits.test.ts`: new regression test asserting
+        still hand-edit the result before submitting. Explicit reset of
+        that state back to the original first-four default after a
+        successful submit (a native `form.reset()` alone no longer
+        touches now-controlled checkboxes).
+  - [x] `calculate-tip-splits.test.ts`: new regression test asserting
         `calculateTipSplits` is unaffected by mutating its input array
-        _after_ the call returns — encodes "the engine consumes only
-        explicitly passed in-memory arrays" as an actual test, not just
-        a comment.
-  - [ ] Full gate.
-  - [ ] Commit.
-- [ ] **Step 6: Feature 029 — app-shell wiring + demo fixtures**
-  - [ ] `restaurant-operations-app.tsx`: new `pullClockedInTeam()`
+        _and_ a shared `participantIds` array reference _after_ the call
+        returns (a later call sees the mutation, proving the first
+        result's stability wasn't just "nothing changed yet") — encodes
+        "the engine consumes only explicitly passed in-memory arrays" as
+        an actual test, not just a comment.
+  - [x] `restaurant-operations-app.tsx`: new `pullClockedInTeam()`
         handler (demo/real dual branch, matching every other such
         handler this session), passed to `<TipWorkspace
-onPullClockedInTeam={...}>`.
-  - [ ] `attendance/demo-data.ts`: two new **additive** open (unclosed)
+    onPullClockedInTeam={...}>`.
+  - [x] `attendance/demo-data.ts`: two new **additive** open (unclosed)
         `demoNeonAttendance` rows dated `2026-09-10` (`DEMO_ANCHOR_DATE`)
         so demo mode has something real to pull once a manager links a
         couple of people from Team.
-  - [ ] Full gate.
-  - [ ] Live Playwright smoke test (demo mode): Phase 0's "All" filter,
-        and Feature 029's link → pull → review → finalize → (attempt an)
-        attendance edit → confirm the split is unaffected.
-  - [ ] Commit.
+  - [x] Full gate: format/lint/typecheck clean, 265/265 unit tests
+        (1 new), build clean.
+  - [x] Live Playwright smoke test (demo mode, full flow): linked Mia
+        Chen → Anil (Server) and Noah Diaz → Deepak Rao from Team;
+        clicked "Pull clocked-in team" on Tip Split — the default
+        first-four selection changed to exactly Mia + Noah (Leo/Ava
+        unchecked), matching the two linked people with an open shift on
+        `DEMO_ANCHOR_DATE`; added a $100 interval (split $50/$50);
+        finalized. Then, on Team, fully **unlinked** Mia Chen's
+        attendance (a real, disruptive attendance-side change) and
+        confirmed on Tip Split that the finalized split was completely
+        unaffected: still Mia Chen $50.00 / Noah Diaz $50.00 /
+        Reconciled total $100.00. Signed out, signed in as Mia Chen
+        (server, passcode 1357), confirmed "My tip estimate" showed
+        exactly $50.00 — the same snapshotted number a privileged viewer
+        sees, unaffected by the unlink. All of Acceptance Criteria 1-3
+        and 5 directly demonstrated live, not just asserted from code
+        reading.
+  - [x] Commit.
 - [ ] **Step 7: E2E**
   - [ ] `tests/e2e/attendance-reporting.spec.ts`: new test for the "All"
         filter (aggregate cards, combined view, direct print).
@@ -255,6 +273,6 @@ onPullClockedInTeam={...}>`.
 
 ## Current State & Next Step
 
-Steps 1-4 done and committed. Next: Step 5 (Feature 029 UI --
-"Pull clocked-in team" button in `tip-workspace.tsx`, controlled
-checkboxes, `calculate-tip-splits.test.ts` immutability regression).
+Steps 1-6 done and committed. Next: Step 7 (E2E -- new "All" filter
+test in `attendance-reporting.spec.ts`, new
+`tests/e2e/tips-clocked-in-roster.spec.ts`).

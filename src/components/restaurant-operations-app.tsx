@@ -29,7 +29,10 @@ import {
   type AttendanceLinkOptions,
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceReport } from "@/features/attendance/components/attendance-report";
-import { demoNeonUsers } from "@/features/attendance/demo-data";
+import {
+  demoNeonAttendance,
+  demoNeonUsers,
+} from "@/features/attendance/demo-data";
 import {
   designationToRole,
   type Designation,
@@ -61,6 +64,7 @@ import { TeamWorkspace } from "@/features/team/components/team-workspace";
 import {
   addTipIntervalAction,
   finalizeTipsAction,
+  getClockedInRosterAction,
   reopenTipsAction,
 } from "@/features/tips/actions/tips-actions";
 import { TipWorkspace } from "@/features/tips/components/tip-workspace";
@@ -875,6 +879,40 @@ export function RestaurantOperationsApp({
     setTipPoolId(result.data.tipPoolId);
     setTipIntervals((current) => [...current, result.data.interval]);
     return { ok: true };
+  }
+
+  // Feature 029. Read-only convenience lookup, never a write -- demo
+  // mode resolves it from the same in-memory demoAttendanceLinks map
+  // Team's own link dialog already writes to (empty until a manager
+  // deliberately links someone), crossed against demoNeonAttendance's
+  // fixture rows for tipsServiceDate; real mode re-derives everything
+  // server-side via getClockedInRosterAction.
+  async function pullClockedInTeam(): Promise<
+    { ok: true; data: string[] } | { ok: false; error: string }
+  > {
+    if (demoMode) {
+      const activeNeonUserIds = new Set(
+        demoNeonAttendance
+          .filter(
+            (row) =>
+              row.date === tipsServiceDate &&
+              row.clockIn &&
+              !row.clockOut &&
+              !row.autoClockedOut,
+          )
+          .map((row) => row.userId),
+      );
+      const profileIds = Object.entries(demoAttendanceLinks)
+        .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
+        .map(([profileId]) => profileId);
+      return { ok: true, data: profileIds };
+    }
+    const result = await getClockedInRosterAction({ restaurantSlug });
+    if (!result.ok) {
+      if (result.sessionInvalid) forceSignOut();
+      return { ok: false, error: result.error };
+    }
+    return { ok: true, data: result.data.profileIds };
   }
 
   async function finalizeTips() {
@@ -1805,6 +1843,7 @@ export function RestaurantOperationsApp({
             onAddInterval={addTipInterval}
             onFinalize={finalizeTips}
             onReopen={reopenTips}
+            onPullClockedInTeam={pullClockedInTeam}
             auditLog={tipsAuditLog}
           />
         ) : null}
