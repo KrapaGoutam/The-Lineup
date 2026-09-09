@@ -2,7 +2,7 @@
 
 **Active Spec:** `docs/features/034-team-status-filtering.md` & `docs/features/035-inactive-member-cascade-purge.md`
 **Branch:** `feature/034-035-team-status-and-purge` (branched from `main`, after Feature 032 / PR #31 merged)
-**Status:** Complete — ready to push and open PR
+**Status:** Complete — PR open: https://github.com/KrapaGoutam/The-Lineup/pull/32
 **Assigned Agent:** Claude Code (audit, implementation, verification gate, and PR)
 
 ## 🎯 Objective
@@ -144,7 +144,11 @@ run build`) pass before every commit.
 - [x] **Step 11: Documentation** - [x] New `docs/features/034-team-status-filtering.md`. - [x] New `docs/features/035-inactive-member-cascade-purge.md`
       (includes the full "why anonymize, not hard-delete"
       architecture record). - [x] Updated `docs/STATUS.md`. - [x] This task file.
-- [ ] **Step 12: Commit + push + PR** - [ ] Commit with clear, atomic commit message(s). - [ ] Push `feature/034-035-team-status-and-purge`. - [ ] Open PR against `main`.
+- [x] **Step 12: Commit + push + PR** - [x] Commit with clear, atomic
+      commit messages (`31c6756` code+tests, `41d6f87` docs). - [x]
+      Push `feature/034-035-team-status-and-purge`. - [x] Open
+      [PR #32](https://github.com/KrapaGoutam/The-Lineup/pull/32)
+      against `main`.
 
 ## 🗂️ File List
 
@@ -167,9 +171,8 @@ run build`) pass before every commit.
 
 ## Current State & Next Step
 
-Implementation, unit tests, pgTAP db tests, full quality gate, e2e
-regression sweep, and documentation are all complete and passing.
-Nothing has been committed to this branch yet -- everything above is
-currently uncommitted working-tree state on
-`feature/034-035-team-status-and-purge`. Next step: commit, push, and
-open a PR against `main`.
+Features 034/035 are fully complete: implemented, unit-tested,
+db-tested, e2e-tested, documented, committed (`31c6756` code+tests,
+`41d6f87` docs), pushed, and opened as
+[PR #32](https://github.com/KrapaGoutam/The-Lineup/pull/32) against
+`main`. Nothing further pending on this branch.
