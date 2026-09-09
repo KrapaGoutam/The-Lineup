@@ -3,7 +3,7 @@
 **Name:** Recurring Schedules & Week Navigation  
 **Owner:** Krapa Goutam  
 **Status:** complete  
-**Issue/PR:**
+**Issue/PR:** https://github.com/KrapaGoutam/The-Lineup/pull/26
 
 ## Classification & Session Scope
 

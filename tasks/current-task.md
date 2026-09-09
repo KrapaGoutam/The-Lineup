@@ -3,7 +3,7 @@
 **Active Spec:** `docs/features/027-recurring-schedules-and-week-navigation.md`
 **Branch:** `feature/027-recurring-schedules-and-week-navigation` (stacked
 on `feature/025-attendance-reporting-and-filters`)
-**Status:** In progress
+**Status:** Complete — PR #26 open (https://github.com/KrapaGoutam/The-Lineup/pull/26)
 **Assigned Agent:** Claude Code (explicit implementer, per user request)
 
 ## 🎯 Objective
@@ -450,9 +450,9 @@ db:test` 210/210 assertions across 17 files (unchanged — Step 7
         `debug`, `recurring-schedules` (new, 6 tests × 3 projects = 18),
         `settings`, `team-management`. No regressions in any
         pre-existing suite from this feature's changes.
-  - [ ] Push `feature/027-recurring-schedules-and-week-navigation`, open
-        PR (base `feature/025-attendance-reporting-and-filters`), paste
-        the real PR link here.
+  - [x] Pushed `feature/027-recurring-schedules-and-week-navigation`,
+        opened PR #26 (base `feature/025-attendance-reporting-and-filters`):
+        https://github.com/KrapaGoutam/The-Lineup/pull/26
 
 ## 🗂️ File list
 
@@ -485,6 +485,7 @@ db:test` 210/210 assertions across 17 files (unchanged — Step 7
 
 ## Current State & Next Step
 
-Steps 1-9 done and committed. Next: Step 10 (final gate, push, open PR
-base `feature/025-attendance-reporting-and-filters`, paste real gate
-output + PR link here, final wrap-up commit).
+All 10 steps done and committed. Full gate green (250/250 unit,
+build clean, 210/210 pgTAP, 132/132 e2e across 3 projects). Pushed and
+PR opened: https://github.com/KrapaGoutam/The-Lineup/pull/26 (base
+`feature/025-attendance-reporting-and-filters`). Feature 027 complete.

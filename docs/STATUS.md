@@ -12,7 +12,7 @@
 - **Active Feature:** `Feature 027 — Recurring Schedules & Week Navigation`
 - **Active Task Spec:** [docs/features/027-recurring-schedules-and-week-navigation.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/027-recurring-schedules-and-week-navigation.md)
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/027-recurring-schedules-and-week-navigation` (stacked on `feature/025-attendance-reporting-and-filters`); all quality gates green, acceptance criteria checked off. Reused the existing, previously-unused `shifts.series_id` column instead of adding a redundant `recurrence_group_id`; confirmed RLS already permitted post-publish shift writes with no new policy needed. Pending push + PR.
+- **Current State:** Implemented on `feature/027-recurring-schedules-and-week-navigation` (stacked on `feature/025-attendance-reporting-and-filters`); all quality gates green, acceptance criteria checked off. Reused the existing, previously-unused `shifts.series_id` column instead of adding a redundant `recurrence_group_id`; confirmed RLS already permitted post-publish shift writes with no new policy needed. PR open: [#26](https://github.com/KrapaGoutam/The-Lineup/pull/26), pending review/merge.
 
 ---
 
