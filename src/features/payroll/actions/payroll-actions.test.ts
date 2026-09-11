@@ -6,6 +6,13 @@ const mocks = vi.hoisted(() => ({
   getOwnAttendanceLink: vi.fn(),
   listPayrollPeriods: vi.fn(),
   getPayrollBalance: vi.fn(),
+  getActiveNeonUsers: vi.fn(),
+  getAttendanceRows: vi.fn(),
+  getPayrollPeriod: vi.fn(),
+  generatePayrollPeriod: vi.fn(),
+  getPayrollRateOverrideCents: vi.fn(),
+  getPayrollDefaultRateCents: vi.fn(),
+  requireLiveSession: vi.fn(),
 }));
 
 vi.mock("@/lib/current-user", () => ({
@@ -14,19 +21,30 @@ vi.mock("@/lib/current-user", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mocks.createClient,
 }));
+vi.mock("@/lib/supabase/require-live-session", () => ({
+  requireLiveSession: mocks.requireLiveSession,
+}));
 vi.mock("@/features/attendance/data/identity-links", () => ({
   getOwnAttendanceLink: mocks.getOwnAttendanceLink,
 }));
 vi.mock("@/features/attendance/data/attendance-data", () => ({
-  getActiveNeonUsers: vi.fn(),
-  getAttendanceRows: vi.fn(),
+  getActiveNeonUsers: mocks.getActiveNeonUsers,
+  getAttendanceRows: mocks.getAttendanceRows,
 }));
 vi.mock("@/features/payroll/data/payroll-data", () => ({
   listPayrollPeriods: mocks.listPayrollPeriods,
   getPayrollBalance: mocks.getPayrollBalance,
+  getPayrollPeriod: mocks.getPayrollPeriod,
+  generatePayrollPeriod: mocks.generatePayrollPeriod,
+  getPayrollRateOverrideCents: mocks.getPayrollRateOverrideCents,
+  getPayrollDefaultRateCents: mocks.getPayrollDefaultRateCents,
 }));
 
-import { getPayrollDashboardAction } from "./payroll-actions";
+import {
+  generatePayrollForEmployeesAction,
+  getPayrollDashboardAction,
+  getPayrollGenerationEligibilityAction,
+} from "./payroll-actions";
 
 const organizationId = "00000000-0000-0000-0000-000000026101";
 const manager = {
@@ -185,6 +203,174 @@ describe("getPayrollDashboardAction", () => {
         perPerson: [],
         periods: [],
       },
+    });
+  });
+});
+
+describe("generatePayrollForEmployeesAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createClient.mockResolvedValue({});
+    mocks.getCurrentUser.mockResolvedValue(manager);
+    mocks.requireLiveSession.mockResolvedValue(null);
+    mocks.getPayrollRateOverrideCents.mockResolvedValue({
+      ok: true,
+      data: null,
+    });
+    mocks.getPayrollDefaultRateCents.mockResolvedValue({
+      ok: true,
+      data: 1500,
+    });
+    mocks.getAttendanceRows.mockResolvedValue({ ok: true, data: [] });
+    mocks.generatePayrollPeriod.mockImplementation(
+      async (_supabase: unknown, input: { neonUserId: number }) => ({
+        ok: true,
+        data: period({ neonUserId: input.neonUserId }),
+      }),
+    );
+  });
+
+  it("reports a mixed batch clearly: generated, skipped (already exists), and failed -- never silently", async () => {
+    mocks.getPayrollPeriod.mockImplementation(
+      async (_supabase: unknown, input: { neonUserId: number }) => {
+        if (input.neonUserId === 101) {
+          return { ok: true, data: period({ neonUserId: 101 }) }; // already exists
+        }
+        return { ok: true, data: null };
+      },
+    );
+    mocks.getPayrollDefaultRateCents.mockImplementation(
+      async (_supabase: unknown, input: { organizationId: string }) => {
+        void input;
+        return { ok: true, data: 1500 };
+      },
+    );
+    // 103's rate lookup fails outright -- a genuine failure, distinct
+    // from 101's "already exists" skip.
+    mocks.getPayrollRateOverrideCents.mockImplementation(
+      async (_supabase: unknown, input: { neonUserId: number }) =>
+        input.neonUserId === 103
+          ? {
+              ok: false,
+              error: "Attendance data unavailable. Try again shortly.",
+            }
+          : { ok: true, data: null },
+    );
+
+    const result = await generatePayrollForEmployeesAction({
+      restaurantSlug: "the-monks",
+      neonUserIds: [101, 102, 103],
+      periodMonth: "2026-09-01",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.skipped).toEqual([
+      { neonUserId: 101, reason: "Already generated for this month." },
+    ]);
+    expect(result.data.successful).toEqual([
+      { neonUserId: 102, period: expect.objectContaining({ neonUserId: 102 }) },
+    ]);
+    expect(result.data.failed).toEqual([
+      {
+        neonUserId: 103,
+        error: "Attendance data unavailable. Try again shortly.",
+      },
+    ]);
+    // Only the one genuinely-new employee actually hit the insert path.
+    expect(mocks.generatePayrollPeriod).toHaveBeenCalledTimes(1);
+  });
+
+  it("de-duplicates repeated ids -- a 'Select All' double-submit never generates the same person twice", async () => {
+    mocks.getPayrollPeriod.mockResolvedValue({ ok: true, data: null });
+
+    const result = await generatePayrollForEmployeesAction({
+      restaurantSlug: "the-monks",
+      neonUserIds: [101, 101, 101],
+      periodMonth: "2026-09-01",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.successful).toHaveLength(1);
+    expect(mocks.generatePayrollPeriod).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a non-manager caller entirely, before touching any employee", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ ...manager, role: "server" });
+    mocks.getOwnAttendanceLink.mockResolvedValue({ ok: true, data: null });
+
+    const result = await generatePayrollForEmployeesAction({
+      restaurantSlug: "the-monks",
+      neonUserIds: [101, 102],
+      periodMonth: "2026-09-01",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "You don't have access to payroll.",
+    });
+    expect(mocks.getPayrollPeriod).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty employee list as an invalid request rather than a no-op success", async () => {
+    const result = await generatePayrollForEmployeesAction({
+      restaurantSlug: "the-monks",
+      neonUserIds: [],
+      periodMonth: "2026-09-01",
+    });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("getPayrollGenerationEligibilityAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createClient.mockResolvedValue({});
+    mocks.getCurrentUser.mockResolvedValue(manager);
+  });
+
+  it("flags each active employee as already-generated or ready for the chosen month", async () => {
+    mocks.getActiveNeonUsers.mockResolvedValue({
+      ok: true,
+      data: [
+        { id: 101, fullName: "Anil Rao", role: "Host" },
+        { id: 102, fullName: "Priya Nair", role: "Server" },
+      ],
+    });
+    mocks.getPayrollPeriod.mockImplementation(
+      async (_supabase: unknown, input: { neonUserId: number }) => ({
+        ok: true,
+        data: input.neonUserId === 101 ? period({ neonUserId: 101 }) : null,
+      }),
+    );
+
+    const result = await getPayrollGenerationEligibilityAction({
+      restaurantSlug: "the-monks",
+      periodMonth: "2026-09-01",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { neonUserId: 101, fullName: "Anil Rao", alreadyGenerated: true },
+        { neonUserId: 102, fullName: "Priya Nair", alreadyGenerated: false },
+      ],
+    });
+  });
+
+  it("refuses a non-manager caller", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ ...manager, role: "server" });
+    mocks.getOwnAttendanceLink.mockResolvedValue({ ok: true, data: null });
+
+    const result = await getPayrollGenerationEligibilityAction({
+      restaurantSlug: "the-monks",
+      periodMonth: "2026-09-01",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "You don't have access to payroll.",
     });
   });
 });
