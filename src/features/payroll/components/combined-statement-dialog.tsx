@@ -12,6 +12,7 @@ import {
   type CombinedMonthlyStatement,
 } from "@/features/payroll/actions/statement-actions";
 import { calendarWeekday } from "@/features/attendance/domain/attendance-metrics";
+import { formatBusinessTime } from "@/lib/date-time";
 import {
   combinedStatementFilename,
   combinedStatementRosterFilename,
@@ -30,15 +31,6 @@ function money(cents: number): string {
 function formatHours(hours: number | null | undefined): string {
   if (hours == null || Number.isNaN(hours)) return "0h";
   return `${hours % 1 === 0 ? hours : hours.toFixed(1)}h`;
-}
-
-function formatClockTime(iso: string): string {
-  const date = new Date(iso);
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
 }
 
 function formatPaymentDate(isoDate: string): string {
@@ -64,12 +56,18 @@ export function CombinedStatementDialog({
   target,
   year,
   month,
+  timeZone,
   onClose,
 }: {
   restaurantSlug: string;
   target: CombinedStatementTarget;
   year: number;
   month: number;
+  /** Bug fix: the restaurant's business timezone (e.g. "America/Chicago"),
+   * required so clock-in/out times render correctly regardless of the
+   * viewer's own device/browser timezone -- see date-time.ts's header
+   * comment for the bug this closes. */
+  timeZone: string;
   onClose: () => void;
 }) {
   const [statements, setStatements] = useState<
@@ -343,12 +341,12 @@ export function CombinedStatementDialog({
                                 </td>
                                 <td className="px-2 py-1.5 font-mono">
                                   {row.clockIn
-                                    ? formatClockTime(row.clockIn)
+                                    ? formatBusinessTime(row.clockIn, timeZone)
                                     : "—"}
                                 </td>
                                 <td className="px-2 py-1.5 font-mono">
                                   {row.clockOut
-                                    ? formatClockTime(row.clockOut)
+                                    ? formatBusinessTime(row.clockOut, timeZone)
                                     : "—"}
                                 </td>
                                 <td className="px-2 py-1.5 text-right font-mono font-semibold">

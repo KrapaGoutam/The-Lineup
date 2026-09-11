@@ -442,6 +442,7 @@ describe("CombinedStatementDialog", () => {
         target={{ scope: "single", neonUserId: 101 }}
         year={2026}
         month={8}
+        timeZone="America/Chicago"
         onClose={vi.fn()}
       />,
     );

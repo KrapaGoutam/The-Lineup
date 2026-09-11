@@ -635,6 +635,7 @@ export function AttendanceReport({
             target={statementTarget}
             year={statementTarget.year}
             month={statementTarget.month}
+            timeZone={timeZone}
             onClose={() => setStatementTarget(null)}
           />
         ) : null}
@@ -864,6 +865,7 @@ export function AttendanceReport({
           target={statementTarget}
           year={statementTarget.year}
           month={statementTarget.month}
+          timeZone={timeZone}
           onClose={() => setStatementTarget(null)}
         />
       ) : null}
