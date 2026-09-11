@@ -14,8 +14,11 @@ async function signInOnCurrentPage(page: Page, passcode: string) {
   // MUST wait BEFORE filling the input, otherwise React hydration resets the value!
   await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill(passcode);
-  await page.getByRole("button", { name: "Open workspace" }).click();
-  // Wait for the dashboard to render (compilation can be slow in dev)
+  // Bug fix: a full 4-digit `fill()` now auto-submits on its own (see
+  // login-screen.tsx) -- every call site here passes a complete, valid
+  // passcode, so there's never a reason to also click "Open workspace":
+  // doing so would race the already-in-flight/-completed auto-submit and
+  // flakily click a button that's mid-unmount.
   await expect(accountButton(page)).toBeVisible({ timeout: 60000 });
 }
 
@@ -389,16 +392,31 @@ test("numeric keypad completes a full sign-in via taps alone at phone width", as
   for (const digit of ["2", "4", "6", "8"]) {
     await page.getByRole("button", { name: `Digit ${digit}` }).click();
   }
-  await page.getByRole("button", { name: "Open workspace" }).click();
+  // Bug fix: the 4th tap now auto-submits (see login-screen.tsx) -- no
+  // separate "Open workspace" click. Asserting straight through to the
+  // signed-in dashboard is what makes this "via taps alone": a manual
+  // submit click here would be racing an already-in-flight/-completed
+  // sign-in and flakily click a button that's mid-unmount.
   await expect(
     page.getByRole("heading", { name: "Table allocation rotation" }),
   ).toBeVisible();
 });
 
-test("numeric keypad is hidden at desktop width", async ({ page }) => {
+test("numeric keypad visibility follows pointer type, not just viewport width", async ({
+  page,
+}, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Digit 1" })).toHaveCount(0);
+  // Bug fix: a large touch tablet (coarse pointer) can easily reach
+  // desktop-class widths and must keep its only input method -- only a
+  // genuine fine-pointer (mouse/trackpad) device hides the keypad at this
+  // width. `desktop` is the sole fine-pointer project; `host-tablet` and
+  // `server-mobile` emulate touch and must keep the keypad regardless of
+  // this viewport override.
+  const isFinePointer = testInfo.project.name === "desktop";
+  await expect(page.getByRole("button", { name: "Digit 1" })).toHaveCount(
+    isFinePointer ? 0 : 1,
+  );
 });
 
 test("an unrostered employee can be added to the live allocation board", async ({

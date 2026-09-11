@@ -1428,10 +1428,16 @@ export function RestaurantOperationsApp({
   }
 
   async function signOut() {
-    console.log("Sign out clicked!");
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
     setTab("schedule");
+    // Bug fix: signing out always happens from inside this open menu --
+    // without closing it here, `showAvatarPanel` stays true underneath the
+    // login screen and is still true the instant the next person signs in,
+    // so their very first tap on the account button would toggle it
+    // *closed* instead of opening it.
+    setShowAvatarPanel(false);
+    setShowMobileSheet(false);
   }
 
   const initials = user.name

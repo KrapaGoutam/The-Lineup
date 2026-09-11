@@ -1,7 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, Delete, KeyRound, Sparkles, UserPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  CornerDownLeft,
+  Delete,
+  KeyRound,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -45,19 +52,33 @@ const KEYPAD_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 /**
  * Feature 013: additive alongside the typed input, never a replacement —
  * both write to the same `passcode` state via the same capped-at-4 rule,
- * so there's no divergence between typing and tapping. Hidden at desktop
- * width (`lg:hidden`); desktop already has a physical keyboard.
+ * so there's no divergence between typing and tapping.
+ *
+ * Bug fix: visibility is no longer a bare `lg:hidden` width breakpoint —
+ * a large landscape tablet (a real touch device, no physical keyboard)
+ * can easily exceed that width and would otherwise lose its only input
+ * method. The compound media query below hides the keypad only when
+ * BOTH conditions hold (desktop-width AND a fine pointer, i.e. an actual
+ * mouse/trackpad) -- a coarse-pointer (touch) device keeps the keypad
+ * at any width. `disabled` mirrors the submit button's own `pending`
+ * guard, so a request in flight can't be double-triggered by a second
+ * tap. The Enter button is a real `type="submit"` -- it participates in
+ * the surrounding `<form>`'s native submit, the same as a physical
+ * Enter key would, rather than a separate handler that could drift out
+ * of sync with it.
  */
 function NumericKeypad({
   onDigit,
   onBackspace,
+  disabled,
 }: {
   onDigit: (digit: string) => void;
   onBackspace: () => void;
+  disabled: boolean;
 }) {
   return (
     <div
-      className="mt-3 grid grid-cols-3 gap-2 lg:hidden"
+      className="mt-3 grid grid-cols-3 gap-2 [@media(min-width:64rem)_and_(pointer:fine)]:hidden"
       aria-label="Numeric keypad"
     >
       {KEYPAD_DIGITS.map((digit) => (
@@ -68,17 +89,27 @@ function NumericKeypad({
           className="h-14 font-mono text-lg font-semibold"
           aria-label={`Digit ${digit}`}
           onClick={() => onDigit(digit)}
+          disabled={disabled}
         >
           {digit}
         </Button>
       ))}
-      <div aria-hidden="true" />
+      <Button
+        type="submit"
+        variant="secondary"
+        className="h-14"
+        aria-label="Enter"
+        disabled={disabled}
+      >
+        <CornerDownLeft aria-hidden="true" />
+      </Button>
       <Button
         type="button"
         variant="secondary"
         className="h-14 font-mono text-lg font-semibold"
         aria-label="Digit 0"
         onClick={() => onDigit("0")}
+        disabled={disabled}
       >
         0
       </Button>
@@ -88,6 +119,7 @@ function NumericKeypad({
         className="h-14"
         aria-label="Backspace"
         onClick={onBackspace}
+        disabled={disabled}
       >
         <Delete aria-hidden="true" />
       </Button>
@@ -121,17 +153,34 @@ export function LoginScreen({
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setHydrated(true), []);
 
-  async function submitPasscode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  /**
+   * Bug fix: factored out of the form's `onSubmit` so both a real
+   * submit (physical Enter, the virtual keypad's Enter button -- it's
+   * a real `type="submit"`, so it already goes through this same
+   * `<form onSubmit>` path, no separate handler needed) and the
+   * auto-submit effect below call the exact same logic -- no risk of
+   * the two ever drifting apart.
+   *
+   * On any failure (invalid length, unrecognized passcode, a lockout,
+   * or a network error), the passcode is cleared: never leave a wrong
+   * 4-digit guess sitting in the field where it'd either get silently
+   * resubmitted or make it easy to keep guessing without noticing nothing
+   * changed. `pending` doubles as the re-entrancy guard the virtual
+   * keypad's own `disabled` prop already reflects, so a second tap or a
+   * stray auto-submit re-trigger while a request is in flight is a no-op.
+   */
+  async function attemptSignIn(candidatePasscode: string) {
+    if (pending) return;
     setError("");
-    if (!isValidPasscode(passcode)) {
+    if (!isValidPasscode(candidatePasscode)) {
       setError("Enter your 4-digit restaurant passcode.");
       return;
     }
     if (demoMode) {
-      const account = demoAccounts[passcode];
+      const account = demoAccounts[candidatePasscode];
       if (!account) {
         setError("Passcode not recognized. Check it or register.");
+        setPasscode("");
         return;
       }
       onSignIn(account);
@@ -142,7 +191,7 @@ export function LoginScreen({
       const response = await fetch("/api/auth/passcode", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ restaurantSlug, passcode }),
+        body: JSON.stringify({ restaurantSlug, passcode: candidatePasscode }),
       });
       const payload = (await response.json()) as {
         user?: SignedInUser;
@@ -155,15 +204,41 @@ export function LoginScreen({
             ? "Too many failed attempts across this restaurant right now. Ask a manager who's already signed in to clear the lockout, or try again shortly."
             : (payload.error ?? "Unable to sign in."),
         );
+        setPasscode("");
         return;
       }
       onSignIn(payload.user);
     } catch {
       setError("The restaurant service is unavailable. Please try again.");
+      setPasscode("");
     } finally {
       setPending(false);
     }
   }
+
+  function submitPasscode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void attemptSignIn(passcode);
+  }
+
+  // Bug fix: auto-submit the instant a 4th digit is entered, whether
+  // typed or tapped -- `attemptSignIn`'s own `isValidPasscode` guard
+  // (and the `pending` re-entrancy check) makes this safe to fire from
+  // an effect rather than only from an explicit submit. Triggering that
+  // state update the instant the 4th digit lands (not synchronizing
+  // from some external system) is the whole point here, hence the
+  // inline lint exception below rather than restructuring around it.
+  useEffect(() => {
+    if (mode === "login" && passcode.length === 4) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void attemptSignIn(passcode);
+    }
+    // attemptSignIn intentionally omitted -- it closes over `pending`/
+    // `passcode` fresh each render already; re-running this effect for
+    // every one of its own dependency changes (rather than only when
+    // `passcode` reaches 4 digits) would defeat the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passcode, mode]);
 
   async function submitRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -274,7 +349,11 @@ export function LoginScreen({
                       id="passcode"
                       aria-describedby="passcode-help"
                       autoComplete="current-password"
-                      type="tel"
+                      // Bug fix: masked -- a PIN must never render as
+                      // plain digits on screen. `type="password"` still
+                      // pairs correctly with `inputMode="numeric"` for a
+                      // numeric virtual keyboard on mobile.
+                      type="password"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={4}
@@ -287,6 +366,7 @@ export function LoginScreen({
                       placeholder="••••"
                       className="h-14 pl-11 text-center font-mono text-xl tracking-[0.35em]"
                       autoFocus
+                      disabled={pending}
                     />
                   </div>
                   <p
@@ -303,6 +383,7 @@ export function LoginScreen({
                     onBackspace={() =>
                       setPasscode((current) => current.slice(0, -1))
                     }
+                    disabled={pending}
                   />
                 </div>
                 {error ? (
@@ -369,7 +450,8 @@ export function LoginScreen({
                   <Input
                     id="register-passcode"
                     name="passcode"
-                    type="tel"
+                    // Bug fix: masked, matching the login passcode field.
+                    type="password"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={4}
