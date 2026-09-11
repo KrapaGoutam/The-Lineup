@@ -1,18 +1,19 @@
 # Project Status & Milestone Tracker
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** September 9, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (44/44 files, 325/325 tests passing) | `npm run test:e2e` (full suite, 153/153 passing across desktop/host-tablet/server-mobile) | `npm run db:test` (17/17 pgTAP files, 211 assertions)  
+**Last Updated:** September 11, 2026  
+**Health Gate:** `npm run check` (Passing) | `npm test` (45/45 files, 359/359 tests passing) | `npm run test:e2e` (full suite, 153/153 passing across desktop/host-tablet/server-mobile) | `npm run db:test` (18/18 pgTAP files, 228 assertions)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
 
 ## 🚦 Current Status Overview
 
-- **Active Feature:** `Feature 033 — Print Layout Hardening, Isolation, and Duplex Pagination`
-- **Active Task Spec:** [docs/features/033-print-layout-hardening-duplex.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/features/033-print-layout-hardening-duplex.md)
+- **Active Feature:** `Payroll UX / Timezone / PIN Keypad mega-request` — all 6 phases merged to `main` (PRs #35, #36, #41, #38, #39, #40); see the dedicated section below and `docs/agent-handoff.md`. `Feature 033` (below) was the last numbered feature-spec item shipped before this.
+- **Active Task Spec:** none (the mega-request is a bounded, multi-phase item, not a numbered `docs/features/` spec) — see [docs/agent-handoff.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/agent-handoff.md) for its full investigation, design decisions, and per-phase writeups.
 - **Active Task File:** [tasks/current-task.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/tasks/current-task.md)
-- **Current State:** Implemented on `feature/033-print-layout-hardening-duplex` (PR #33), off `main` after Feature 032 / PR #31 merged. Fixed a real "Dashboard Leak" (Attendance's screen UI had no `print:hidden` isolation on two render branches), compacted Attendance/Payroll single-employee print layouts to fit one page (removed a forced `min-h-[98vh]`, tightened padding/margins), added the missing `@page` margin rule, and restructured the Combined Monthly Statement into a strict 2-page-per-employee duplex layout (Page 1: Attendance, Page 2: Payroll). Deliberately kept the existing `hidden print:block`/`print:hidden` isolation strategy rather than the originally-requested `visibility:hidden`/`position:absolute` mechanism, which this codebase's own Feature 030 bug-fix pass had already identified and moved away from as "a known cause of duplicate/blank-page print bugs" -- documented in full in the feature doc. Verified real pagination (not just DOM assertions) via `page.pdf({ preferCSSPageSize: true })` against a live demo session: Attendance 1 page, Combined Statement 2 pages, "All employees" roster 5 pages with no trailing blank. All quality gates green: zero lint/typecheck warnings, 325 Vitest tests (unchanged count, two existing tests updated for the new duplex shape), the two print-related Playwright specs 30/30 across 3 viewports.
+- **Current State:** All 6 phases merged to `main` — attendance timezone fix (#35), payroll bulk generation (#36), Generate Payroll + ledger modal dialogs (#41, replacing the auto-closed #37), ledger unlock (#38), payment unconfirm/edit (#39), and PIN keypad hardening (#40). Integrated `main` independently re-verified post-merge (clean `npm ci`, full quality gate, full migration replay + pgTAP, full 3-project Playwright suite) — see the dedicated section below for the one known gap (a CI credentials issue blocking automatic production migration deployment, not a code or migration defect).
+- **Previous feature:** Implemented on `feature/033-print-layout-hardening-duplex` (PR #33), off `main` after Feature 032 / PR #31 merged. Fixed a real "Dashboard Leak" (Attendance's screen UI had no `print:hidden` isolation on two render branches), compacted Attendance/Payroll single-employee print layouts to fit one page (removed a forced `min-h-[98vh]`, tightened padding/margins), added the missing `@page` margin rule, and restructured the Combined Monthly Statement into a strict 2-page-per-employee duplex layout (Page 1: Attendance, Page 2: Payroll). Deliberately kept the existing `hidden print:block`/`print:hidden` isolation strategy rather than the originally-requested `visibility:hidden`/`position:absolute` mechanism, which this codebase's own Feature 030 bug-fix pass had already identified and moved away from as "a known cause of duplicate/blank-page print bugs" -- documented in full in the feature doc. Verified real pagination (not just DOM assertions) via `page.pdf({ preferCSSPageSize: true })` against a live demo session: Attendance 1 page, Combined Statement 2 pages, "All employees" roster 5 pages with no trailing blank. All quality gates green: zero lint/typecheck warnings, 325 Vitest tests (unchanged count, two existing tests updated for the new duplex shape), the two print-related Playwright specs 30/30 across 3 viewports.
 
 ---
 
@@ -54,6 +55,32 @@
 | `031`   | Universal Letterhead Redesign & All-Employees Statement Printing                                                                                                | ✅ Shipped | Vitest (report-letterhead, combined-statement-dialog, payroll-workspace, print-utils, 325 tests) + e2e (payroll-timesheet-overhaul.spec.ts, full suite 153/153 across 3 projects)                                                    |
 | `032`   | Canonical Monk's Logo Integration into ReportLetterhead                                                                                                         | ✅ Shipped | Vitest (report-letterhead, 325 tests) + e2e (payroll-timesheet-overhaul.spec.ts + attendance-reporting.spec.ts, 30/30 across 3 projects) + live screenshot verification                                                              |
 | `033`   | Print Layout Hardening, Isolation, and Duplex Pagination                                                                                                        | ✅ Shipped | Vitest (combined-statement-dialog, payroll-workspace, 325 tests) + e2e (payroll-timesheet-overhaul.spec.ts + attendance-reporting.spec.ts, 30/30 across 3 projects) + live PDF page-count verification (`page.pdf`)                  |
+
+**Payroll UX / Timezone / PIN Keypad mega-request** (not part of the sequential `Feature NNN` numbering above — a bounded, multi-phase bug-fix and feature request tracked in [docs/agent-handoff.md](file:///c:/Users/krapa/Documents/Projects/Restaurent/The%20Lineup/docs/agent-handoff.md), merged as PRs #35, #36, #41 (replaces the auto-closed #37), #38, #39, #40, in that dependency order):
+
+| Area                                                                         | Status     | Verification                                                                                                                                                           |
+| :--------------------------------------------------------------------------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Attendance timezone bug fix (PR #35)                                         | ✅ Shipped | `src/lib/date-time.test.ts` (7 tests) + `combined-statement-dialog.test.tsx` (+2); root cause was a zone-naive display formatter, not a Neon/region issue              |
+| Payroll bulk generation — single/multi/all (PR #36)                          | ✅ Shipped | Vitest (payroll-actions, payroll-workspace) — 6 + 1 new tests                                                                                                          |
+| Generate Payroll + ledger → modal dialogs (PR #41)                           | ✅ Shipped | Vitest (payroll-workspace) — reused existing fixed-overlay modal pattern, no new modal system                                                                          |
+| Payroll ledger unlock (PR #38)                                               | ✅ Shipped | Vitest (payroll-actions, payroll-workspace) — 5 + 1 new tests; plain audited UPDATE, no migration needed                                                               |
+| Payroll payment unconfirm/edit (PR #39)                                      | ✅ Shipped | pgTAP (`0018_payroll_payment_unconfirm`, 17 assertions) + Vitest (payroll-actions, payroll-workspace) — narrow, audited `SECURITY DEFINER` RPC; see docs/SECURITY.md   |
+| PIN keypad hardening — masking, auto-submit, touch-aware visibility (PR #40) | ✅ Shipped | Vitest (login-screen, +6 tests) + full 3-project Playwright suite (153/153) — see docs/agent-handoff.md for a real e2e-helper regression found and fixed along the way |
+
+Post-merge, integrated `main` was independently re-verified from a
+clean `npm ci`: format/lint/typecheck clean, 359/359 Vitest tests, a
+full `supabase db reset` + `npm run db:test` (18 files, 228 pgTAP
+assertions) against the fully-merged migration set, the complete
+3-project Playwright suite (153/153), and a clean production build.
+**Known gap**: the `Database` GitHub Actions workflow's
+`deploy-migrations` job failed on the push that merged PR #39
+(`supabase link` — "Your account does not have the necessary
+privileges to access this endpoint") — a `SUPABASE_ACCESS_TOKEN`
+credentials/permissions problem in CI, not a migration or code defect
+(the same migration applies cleanly locally and its `migrations-and-policies`
+PR check passed). Needs a repo-owner action (rotate/re-scope the
+token) before the new payment-unconfirm migration reaches the hosted
+production database automatically.
 
 ---
 
