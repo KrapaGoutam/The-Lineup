@@ -500,25 +500,39 @@ describe("PayrollWorkspace", () => {
       screen.getByRole("button", { name: "Open ledger for August 2026" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("August 2026 ledger")).toBeInTheDocument(),
-    );
+    // Bug fix: the ledger opens as a modal dialog now, not expanded
+    // inline at the bottom of the page.
+    const ledgerDialog = await screen.findByRole("dialog", {
+      name: "August 2026 Ledger",
+    });
+    expect(
+      within(ledgerDialog).getByText("August 2026 ledger"),
+    ).toBeInTheDocument();
     // The shared letterhead's own fixed heading, once per statement --
     // never the old bare organizationName-as-heading text.
     expect(
-      screen.getByText("The Monk's Indian Fusion - Webster"),
+      within(ledgerDialog).getByText("The Monk's Indian Fusion - Webster"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Payroll Compensation Statement"),
+      within(ledgerDialog).getByText("Payroll Compensation Statement"),
     ).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Print statement" }),
+      within(ledgerDialog).getByRole("button", { name: "Print statement" }),
     );
     await waitFor(() => expect(printSpy).toHaveBeenCalled());
     expect(document.title).toBe("Mia Chen (Server) Payroll Report Aug 2026");
 
     printSpy.mockRestore();
+
+    // Export/print functionality still works from inside the dialog,
+    // and the dialog itself can be explicitly closed.
+    await userEvent.click(
+      within(ledgerDialog).getByRole("button", { name: "Close dialog" }),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "August 2026 Ledger" }),
+    ).not.toBeInTheDocument();
   });
 });
 
