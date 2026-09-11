@@ -48,6 +48,7 @@ import {
   generatePayrollForEmployeesAction,
   getPayrollDashboardAction,
   getPayrollGenerationEligibilityAction,
+  unconfirmPaymentAction,
   unlockPayrollPeriodAction,
 } from "./payroll-actions";
 
@@ -493,5 +494,79 @@ describe("unlockPayrollPeriodAction", () => {
       error: "That payroll period could not be found.",
     });
     expect(mocks.unlockPayrollPeriod).not.toHaveBeenCalled();
+  });
+});
+
+describe("unconfirmPaymentAction", () => {
+  const rpcMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    rpcMock.mockReset();
+    mocks.createClient.mockResolvedValue({ rpc: rpcMock });
+    mocks.getCurrentUser.mockResolvedValue(manager);
+    mocks.requireLiveSession.mockResolvedValue(null);
+  });
+
+  it("calls the unconfirm_payroll_payment RPC with the exact payment id and reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    const result = await unconfirmPaymentAction({
+      restaurantSlug: "the-monks",
+      paymentId: 7,
+      reason: "Amount was recorded wrong.",
+    });
+
+    expect(result).toEqual({ ok: true, data: null });
+    expect(rpcMock).toHaveBeenCalledWith("unconfirm_payroll_payment", {
+      p_payment_id: 7,
+      p_reason: "Amount was recorded wrong.",
+    });
+  });
+
+  it("surfaces the RPC's own error message -- e.g. the trigger's refusal -- rather than a generic one", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "This payment is not confirmed." },
+    });
+
+    const result = await unconfirmPaymentAction({
+      restaurantSlug: "the-monks",
+      paymentId: 7,
+      reason: "Some reason",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "This payment is not confirmed.",
+    });
+  });
+
+  it("rejects a too-short reason before ever calling the RPC", async () => {
+    const result = await unconfirmPaymentAction({
+      restaurantSlug: "the-monks",
+      paymentId: 7,
+      reason: "no",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-manager caller before ever calling the RPC", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ ...manager, role: "server" });
+    mocks.getOwnAttendanceLink.mockResolvedValue({ ok: true, data: null });
+
+    const result = await unconfirmPaymentAction({
+      restaurantSlug: "the-monks",
+      paymentId: 7,
+      reason: "Some reason",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "You don't have access to payroll.",
+    });
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 });

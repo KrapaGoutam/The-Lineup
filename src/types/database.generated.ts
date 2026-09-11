@@ -7,11 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5";
-  };
   graphql_public: {
     Tables: {
       [_ in never]: never;
@@ -1849,6 +1844,7 @@ export type Database = {
           end_date: string;
           ends_at: string;
           id: number;
+          is_recurring: boolean;
           kind: Database["public"]["Enums"]["shift_kind"];
           location_id: string;
           notes: string | null;
@@ -1867,6 +1863,7 @@ export type Database = {
           end_date: string;
           ends_at: string;
           id?: never;
+          is_recurring?: boolean;
           kind?: Database["public"]["Enums"]["shift_kind"];
           location_id: string;
           notes?: string | null;
@@ -1885,6 +1882,7 @@ export type Database = {
           end_date?: string;
           ends_at?: string;
           id?: never;
+          is_recurring?: boolean;
           kind?: Database["public"]["Enums"]["shift_kind"];
           location_id?: string;
           notes?: string | null;
@@ -2316,6 +2314,15 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      board_clear_cell: {
+        Args: {
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
       board_clear_column: {
         Args: {
           p_member_id: number;
@@ -2362,6 +2369,10 @@ export type Database = {
         Args: { target_tip_pool_id: number };
         Returns: undefined;
       };
+      unconfirm_payroll_payment: {
+        Args: { p_payment_id: number; p_reason: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       access_request_status: "pending" | "approved" | "declined";
@@ -2383,7 +2394,8 @@ export type Database = {
         | "undo"
         | "redo"
         | "move_column"
-        | "add_row";
+        | "add_row"
+        | "clear_cell";
       request_status: "pending" | "approved" | "declined" | "cancelled";
       rotation_status: "active" | "paused" | "closing" | "unavailable";
       schedule_status: "draft" | "published" | "archived";
@@ -2539,6 +2551,7 @@ export const Constants = {
         "redo",
         "move_column",
         "add_row",
+        "clear_cell",
       ],
       request_status: ["pending", "approved", "declined", "cancelled"],
       rotation_status: ["active", "paused", "closing", "unavailable"],
