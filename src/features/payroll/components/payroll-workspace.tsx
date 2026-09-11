@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   removePayrollRateOverrideAction,
   setPayrollDefaultRateAction,
   setPayrollRateOverrideAction,
+  unlockPayrollPeriodAction,
   type BulkGeneratePayrollResult,
   type PayrollAccessView,
   type PayrollDashboard,
@@ -1289,6 +1290,7 @@ function PeriodLedgerPanel({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [showCombinedStatement, setShowCombinedStatement] = useState(false);
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1400,9 +1402,21 @@ function PeriodLedgerPanel({
     downloadCsv(`payroll-${safeName}-${period.periodMonth}.csv`, csv);
   }
 
+  const isLocked = period.status === "locked";
+
   const cardHeader = (
     <CardHeader className="flex flex-none flex-row flex-wrap items-center justify-between gap-2 print:hidden">
-      <h2 className="font-semibold">{monthLabel(period.periodMonth)} ledger</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="font-semibold">
+          {monthLabel(period.periodMonth)} ledger
+        </h2>
+        {isLocked ? (
+          <Badge tone="neutral">
+            <Lock className="size-3" aria-hidden="true" />
+            Ledger Locked
+          </Badge>
+        ) : null}
+      </div>
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
@@ -1428,6 +1442,17 @@ function PeriodLedgerPanel({
         >
           Download CSV
         </Button>
+        {!readOnly && isLocked ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10"
+            onClick={() => setShowUnlockDialog(true)}
+          >
+            Unlock Ledger
+          </Button>
+        ) : null}
         {onClose ? (
           <Button
             type="button"
@@ -1618,6 +1643,15 @@ function PeriodLedgerPanel({
     />
   ) : null;
 
+  const unlockDialog = showUnlockDialog ? (
+    <UnlockLedgerDialog
+      restaurantSlug={restaurantSlug}
+      periodId={period.id}
+      onClose={() => setShowUnlockDialog(false)}
+      onUnlocked={refresh}
+    />
+  ) : null;
+
   if (onClose) {
     return (
       <LedgerDialog
@@ -1628,6 +1662,7 @@ function PeriodLedgerPanel({
         {cardContent}
         {printArea}
         {combinedStatementDialog}
+        {unlockDialog}
       </LedgerDialog>
     );
   }
@@ -1638,7 +1673,120 @@ function PeriodLedgerPanel({
       {cardContent}
       {printArea}
       {combinedStatementDialog}
+      {unlockDialog}
     </Card>
+  );
+}
+
+/**
+ * Explicit, mandatory-reason confirmation before unlocking a locked
+ * payroll period -- unlocking allows further modification of an
+ * otherwise-finalized period, so this is deliberately not a single
+ * click. Stacks above `LedgerDialog` (a higher `z-index`) since it can
+ * be opened from inside that modal. Reuses the exact fixed-overlay +
+ * `Card` pattern every other dialog in this file already does, sized
+ * smaller (`max-w-md`) to read as a focused confirmation rather than a
+ * full panel.
+ */
+function UnlockLedgerDialog({
+  restaurantSlug,
+  periodId,
+  onClose,
+  onUnlocked,
+}: {
+  restaurantSlug: string;
+  periodId: number;
+  onClose: () => void;
+  onUnlocked: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function confirm() {
+    setError("");
+    if (reason.trim().length < 3) {
+      setError("Enter a brief reason (at least 3 characters).");
+      return;
+    }
+    setPending(true);
+    try {
+      const result = await unlockPayrollPeriodAction({
+        restaurantSlug,
+        periodId,
+        reason: reason.trim(),
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onUnlocked();
+      onClose();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label="Unlock Payroll Ledger"
+        className="border-border bg-card w-full max-w-md shadow-2xl"
+      >
+        <CardHeader>
+          <h2 className="text-lg font-semibold">Unlock Payroll Ledger?</h2>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-muted-foreground text-sm">
+            Unlocking will allow payroll modifications for this period.
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="unlock-reason">Reason</Label>
+            <textarea
+              id="unlock-reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              className="border-input bg-background focus-visible:border-primary/60 focus-visible:ring-ring/40 w-full rounded-xl border px-3 py-2 text-sm outline-none focus-visible:ring-2"
+              placeholder="Why does this period need to be unlocked?"
+              autoFocus
+            />
+          </div>
+          {error ? (
+            <p className="text-destructive text-sm" aria-live="polite">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={confirm}
+              disabled={pending}
+            >
+              {pending ? "Unlocking…" : "Unlock Ledger"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

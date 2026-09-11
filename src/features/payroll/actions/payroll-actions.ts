@@ -47,6 +47,7 @@ import {
   removePayrollRateOverride,
   setPayrollDefaultRateCents,
   setPayrollRateOverrideCents,
+  unlockPayrollPeriod,
   type PayrollAdjustment,
   type PayrollBalance,
   type PayrollPayment,
@@ -771,6 +772,58 @@ export async function lockPayrollPeriodAction(input: {
     periodId: period.id,
     organizationId: currentUser.organizationId,
     actorProfileId: currentUser.profileId,
+  });
+}
+
+/**
+ * The explicit, audited reversal of `lockPayrollPeriodAction`.
+ * Manager-only (`requirePayrollManager`, identical to every other write
+ * in this file), and requires a mandatory reason -- unlocking a period
+ * is exactly the kind of sensitive, "allows further modification"
+ * action Section 10 of the spec asks to gate behind explicit
+ * confirmation, and the reason is what makes the resulting audit event
+ * actually useful later, not just "someone unlocked this."
+ */
+export async function unlockPayrollPeriodAction(input: {
+  restaurantSlug: string;
+  periodId: number;
+  reason: string;
+}): Promise<ActionResult<null>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      periodId: z.number().int().positive(),
+      reason: reasonSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: parsed.data.periodId,
+  });
+  if (!periodResult.ok) return { ok: false, error: periodResult.error };
+  const period = periodResult.data;
+  if (!period || period.organizationId !== currentUser.organizationId) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (period.status !== "locked") {
+    return { ok: false, error: "This payroll period isn't locked." };
+  }
+
+  return unlockPayrollPeriod(supabase, {
+    periodId: period.id,
+    organizationId: currentUser.organizationId,
+    actorProfileId: currentUser.profileId,
+    reason: parsed.data.reason,
+    previousLockedAt: period.lockedAt,
+    previousLockedBy: period.lockedBy,
   });
 }
 
