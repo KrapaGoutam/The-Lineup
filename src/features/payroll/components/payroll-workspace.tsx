@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -298,34 +299,36 @@ function PrivilegedPayrollView({
           dashboard={dashboard}
           users={rateOptions?.users ?? []}
           onGoToPayRates={onGoToPayRates}
-          showGenerateForm={showGenerateForm}
-          onToggleGenerate={() => setShowGenerateForm((prev) => !prev)}
+          onToggleGenerate={() => setShowGenerateForm(true)}
           onOpenPrintDialog={() => setPrintDialogState({})}
         />
       )}
 
       {showGenerateForm ? (
-        rateOptionsError ? (
-          <ErrorPanel
-            message={rateOptionsError}
-            onRetry={() => setRateReloadKey((key) => key + 1)}
-          />
-        ) : !rateOptions ? (
-          <p className="text-muted-foreground text-sm" aria-live="polite">
-            Loading team…
-          </p>
-        ) : (
-          <GenerateForm
-            restaurantSlug={restaurantSlug}
-            users={rateOptions.users}
-            // Deliberately doesn't close the form -- a bulk generate can
-            // partially succeed, and the manager needs to actually see
-            // GenerateForm's own generated/skipped/failed summary before
-            // it's dismissed, not have it vanish the instant the request
-            // resolves.
-            onGenerated={reloadEverything}
-          />
-        )
+        <GenerateFormDialog onClose={() => setShowGenerateForm(false)}>
+          {rateOptionsError ? (
+            <ErrorPanel
+              message={rateOptionsError}
+              onRetry={() => setRateReloadKey((key) => key + 1)}
+            />
+          ) : !rateOptions ? (
+            <p className="text-muted-foreground text-sm" aria-live="polite">
+              Loading team…
+            </p>
+          ) : (
+            <GenerateForm
+              restaurantSlug={restaurantSlug}
+              users={rateOptions.users}
+              // Deliberately doesn't close the dialog -- a bulk generate
+              // can partially succeed, and the manager needs to actually
+              // see GenerateForm's own generated/skipped/failed summary
+              // before it's dismissed, not have it vanish the instant the
+              // request resolves. The manager closes it themselves via
+              // GenerateFormDialog's own close button once they're done.
+              onGenerated={reloadEverything}
+            />
+          )}
+        </GenerateFormDialog>
       ) : null}
 
       {dashboard ? (
@@ -866,6 +869,56 @@ function RateOverrideRow({
 }
 
 /**
+ * Bug fix: Generate Payroll used to expand `GenerateForm` inline below
+ * the page (`showGenerateForm`'s old placement); it now opens as a
+ * proper modal dialog, reusing this codebase's one existing modal
+ * convention -- a `fixed inset-0` overlay + `Card` with
+ * `role="dialog" aria-modal="true"` -- exactly the pattern
+ * `PayrollPrintDialog`/`CombinedStatementDialog` already use. There is
+ * no shadcn `Dialog` primitive anywhere in this codebase to reach for
+ * instead. `GenerateForm` itself no longer owns any `Card`/header
+ * chrome -- this component supplies all of it, so the same form content
+ * could in principle be reused in a non-modal context too.
+ */
+function GenerateFormDialog({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label="Generate Payroll"
+        className="border-border bg-card flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden shadow-2xl"
+      >
+        <CardHeader className="flex flex-none flex-row items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold">Generate Payroll</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            <X className="size-5" />
+          </Button>
+        </CardHeader>
+        <CardContent className="overflow-y-auto">{children}</CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
  * Feature: bulk payroll generation. One employee, an arbitrary subset,
  * or all of them, all through the same `generatePayrollForEmployeesAction`
  * call -- the UI's only job is deciding which `neonUserIds` to send.
@@ -980,132 +1033,127 @@ function GenerateForm({
         : "Generate Payroll";
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="font-semibold">Generate payroll</h2>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-0">
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="generate-month">Month</Label>
-            <Input
-              id="generate-month"
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-              className="w-40"
-            />
-          </div>
+    <div className="space-y-4">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="generate-month">Month</Label>
+          <Input
+            id="generate-month"
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="w-40"
+          />
+        </div>
 
-          {!month ? null : eligibilityError ? (
-            <p className="text-destructive text-sm" aria-live="polite">
-              {eligibilityError}
-            </p>
-          ) : !eligibility ? (
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              Checking existing payroll…
-            </p>
-          ) : eligibility.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No eligible employees.
-            </p>
-          ) : (
-            <fieldset className="space-y-2">
-              <div className="flex items-center justify-between">
-                <legend className="text-sm font-medium">Employees</legend>
-                <div className="flex items-center gap-3 text-xs">
-                  <button
-                    type="button"
-                    className="text-primary underline"
-                    onClick={() =>
-                      setSelected(
-                        new Set(eligibility.map((person) => person.neonUserId)),
-                      )
+        {!month ? null : eligibilityError ? (
+          <p className="text-destructive text-sm" aria-live="polite">
+            {eligibilityError}
+          </p>
+        ) : !eligibility ? (
+          <p className="text-muted-foreground text-sm" aria-live="polite">
+            Checking existing payroll…
+          </p>
+        ) : eligibility.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No eligible employees.
+          </p>
+        ) : (
+          <fieldset className="space-y-2">
+            <div className="flex items-center justify-between">
+              <legend className="text-sm font-medium">Employees</legend>
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  className="text-primary underline"
+                  onClick={() =>
+                    setSelected(
+                      new Set(eligibility.map((person) => person.neonUserId)),
+                    )
+                  }
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground underline"
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+            <div className="border-border grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border p-2 sm:grid-cols-2">
+              {eligibility.map((person) => (
+                <label
+                  key={person.neonUserId}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(person.neonUserId)}
+                    onChange={() => toggle(person.neonUserId)}
+                    className="accent-[var(--primary)]"
+                  />
+                  <span
+                    className={
+                      person.alreadyGenerated
+                        ? "text-muted-foreground"
+                        : undefined
                     }
                   >
-                    Select All
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline"
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
-              <div className="border-border grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border p-2 sm:grid-cols-2">
-                {eligibility.map((person) => (
-                  <label
-                    key={person.neonUserId}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(person.neonUserId)}
-                      onChange={() => toggle(person.neonUserId)}
-                      className="accent-[var(--primary)]"
-                    />
-                    <span
-                      className={
-                        person.alreadyGenerated
-                          ? "text-muted-foreground"
-                          : undefined
-                      }
-                    >
-                      {displayLabels.get(person.neonUserId) ?? person.fullName}
-                    </span>
-                    {person.alreadyGenerated ? (
-                      <Badge tone="neutral">Already generated</Badge>
-                    ) : null}
-                  </label>
-                ))}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                {selected.size} of {eligibility.length} selected
-              </p>
-            </fieldset>
-          )}
-
-          {error ? (
-            <p className="text-destructive text-sm" aria-live="polite">
-              {error}
+                    {displayLabels.get(person.neonUserId) ?? person.fullName}
+                  </span>
+                  {person.alreadyGenerated ? (
+                    <Badge tone="neutral">Already generated</Badge>
+                  ) : null}
+                </label>
+              ))}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {selected.size} of {eligibility.length} selected
             </p>
-          ) : null}
+          </fieldset>
+        )}
 
-          <Button
-            type="submit"
-            disabled={pending || !month || selected.size === 0}
-          >
-            {submitLabel}
-          </Button>
-        </form>
-
-        {result ? (
-          <div
-            className="border-border bg-secondary space-y-1.5 rounded-xl border p-3 text-sm"
-            aria-live="polite"
-          >
-            <p className="font-semibold">Payroll Generated</p>
-            <p className="text-muted-foreground">
-              {result.successful.length} generated · {result.skipped.length}{" "}
-              already existed · {result.failed.length} failed
-            </p>
-            {result.failed.length > 0 ? (
-              <ul className="space-y-0.5 text-xs">
-                {result.failed.map((failure) => (
-                  <li key={failure.neonUserId} className="text-destructive">
-                    {displayLabels.get(failure.neonUserId) ??
-                      `Employee #${failure.neonUserId}`}
-                    : {failure.error}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+        {error ? (
+          <p className="text-destructive text-sm" aria-live="polite">
+            {error}
+          </p>
         ) : null}
-      </CardContent>
-    </Card>
+
+        <Button
+          type="submit"
+          disabled={pending || !month || selected.size === 0}
+        >
+          {submitLabel}
+        </Button>
+      </form>
+
+      {result ? (
+        <div
+          className="border-border bg-secondary space-y-1.5 rounded-xl border p-3 text-sm"
+          aria-live="polite"
+        >
+          <p className="font-semibold">Payroll Generated</p>
+          <p className="text-muted-foreground">
+            {result.successful.length} generated · {result.skipped.length}{" "}
+            already existed · {result.failed.length} failed
+          </p>
+          {result.failed.length > 0 ? (
+            <ul className="space-y-0.5 text-xs">
+              {result.failed.map((failure) => (
+                <li key={failure.neonUserId} className="text-destructive">
+                  {displayLabels.get(failure.neonUserId) ??
+                    `Employee #${failure.neonUserId}`}
+                  : {failure.error}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

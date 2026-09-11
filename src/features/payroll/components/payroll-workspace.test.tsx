@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -159,7 +159,7 @@ describe("PayrollWorkspace", () => {
     expect(screen.getByText("Combined statement")).toBeInTheDocument();
 
     // Verifies admin controls are NOT rendered
-    expect(screen.queryByText("Generate period")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generate Payroll")).not.toBeInTheDocument();
     expect(screen.queryByText("Pay rates")).not.toBeInTheDocument();
     expect(screen.queryByText("Record payment")).not.toBeInTheDocument();
   });
@@ -345,27 +345,35 @@ describe("PayrollWorkspace", () => {
     );
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "Generate period" }),
+      await screen.findByRole("button", { name: "Generate Payroll" }),
     );
-    await userEvent.type(screen.getByLabelText("Month"), "2026-09");
+    // Feature: Generate Payroll now opens as a modal dialog -- the
+    // toolbar's own opener button stays mounted (just visually covered)
+    // behind it, sharing the same accessible name as the dialog's own
+    // submit button in the single-person case, so every query from here
+    // on must be scoped to the dialog to stay unambiguous.
+    const dialog = screen.getByRole("dialog", { name: "Generate Payroll" });
+    await userEvent.type(within(dialog).getByLabelText("Month"), "2026-09");
 
     await waitFor(() =>
-      expect(screen.getByText("Already generated")).toBeInTheDocument(),
+      expect(within(dialog).getByText("Already generated")).toBeInTheDocument(),
     );
     // Default selection: only the not-yet-generated employee (Leo).
-    const leoCheckbox = screen.getByRole("checkbox", { name: /Leo/ });
-    const miaCheckbox = screen.getByRole("checkbox", { name: /Mia/ });
+    const leoCheckbox = within(dialog).getByRole("checkbox", { name: /Leo/ });
+    const miaCheckbox = within(dialog).getByRole("checkbox", { name: /Mia/ });
     expect(leoCheckbox).toBeChecked();
     expect(miaCheckbox).not.toBeChecked();
     expect(
-      screen.getByRole("button", { name: "Generate Payroll" }),
+      within(dialog).getByRole("button", { name: "Generate Payroll" }),
     ).toBeInTheDocument();
 
     // Select All switches the button label to the "all employees" copy.
-    await userEvent.click(screen.getByRole("button", { name: "Select All" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Select All" }),
+    );
     expect(miaCheckbox).toBeChecked();
     expect(
-      screen.getByRole("button", {
+      within(dialog).getByRole("button", {
         name: "Generate Payroll for All Employees",
       }),
     ).toBeInTheDocument();
@@ -373,11 +381,11 @@ describe("PayrollWorkspace", () => {
     // Deselect Mia again -- back to a plain single-person submit label.
     await userEvent.click(miaCheckbox);
     expect(
-      screen.getByRole("button", { name: "Generate Payroll" }),
+      within(dialog).getByRole("button", { name: "Generate Payroll" }),
     ).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Generate Payroll" }),
+      within(dialog).getByRole("button", { name: "Generate Payroll" }),
     );
 
     expect(mockedGenerateForEmployees).toHaveBeenCalledWith({
@@ -386,15 +394,15 @@ describe("PayrollWorkspace", () => {
       periodMonth: "2026-09-01",
     });
     await waitFor(() =>
-      expect(screen.getByText("Payroll Generated")).toBeInTheDocument(),
+      expect(within(dialog).getByText("Payroll Generated")).toBeInTheDocument(),
     );
     expect(
-      screen.getByText("1 generated · 1 already existed · 0 failed"),
+      within(dialog).getByText("1 generated · 1 already existed · 0 failed"),
     ).toBeInTheDocument();
-    // The form stays open so this summary is actually visible -- it
+    // The dialog stays open so this summary is actually visible -- it
     // must not have been dismissed the instant the request resolved.
     expect(
-      screen.getByRole("button", { name: "Hide form" }),
+      screen.getByRole("dialog", { name: "Generate Payroll" }),
     ).toBeInTheDocument();
   });
 

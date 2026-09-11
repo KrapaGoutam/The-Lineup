@@ -137,7 +137,7 @@ export function PayrollPeriodGroups({
       <Card className="border-border bg-card">
         <CardContent className="py-8 text-center">
           <p className="text-muted-foreground text-sm">
-            No payroll periods generated yet. Click &quot;Generate period&quot;
+            No payroll periods generated yet. Click &quot;Generate Payroll&quot;
             above to create one.
           </p>
         </CardContent>

@@ -18,19 +18,19 @@ close together and both touch it.
 
 ## Status at a glance
 
-| Phase | Area                                       | Status                                             |
-| :---- | :----------------------------------------- | :------------------------------------------------- |
-| 1     | Investigation                              | ✅ Done — findings below                           |
-| 2     | Attendance timezone bug                    | ✅ Done — PR #35 (`fix/attendance-timezone`), open |
-| 3     | Payroll bulk generation (single/multi/all) | ✅ Done — branch `feature/payroll-bulk-generation` |
-| 4     | Generate Payroll → modal                   | ⏳ Not started                                     |
-| 5     | Ledger → modal                             | ⏳ Not started                                     |
-| 6     | Ledger unlock                              | ⏳ Not started                                     |
-| 7     | Payment unconfirm/edit                     | ⏳ Not started — **design decided, see below**     |
-| 8     | PIN keypad hardening                       | ⏳ Not started                                     |
-| 9     | Responsive verification                    | ⏳ Not started                                     |
-| 10    | Documentation sweep                        | 🔶 Partial (this file)                             |
-| 11    | Full CI                                    | Per-phase, not yet a final sweep                   |
+| Phase | Area                                       | Status                                                                 |
+| :---- | :----------------------------------------- | :--------------------------------------------------------------------- |
+| 1     | Investigation                              | ✅ Done — findings below                                               |
+| 2     | Attendance timezone bug                    | ✅ Done — PR #35 (`fix/attendance-timezone`), open                     |
+| 3     | Payroll bulk generation (single/multi/all) | ✅ Done — PR #36 (`feature/payroll-bulk-generation`), open             |
+| 4     | Generate Payroll → modal                   | ✅ Done — branch `feature/payroll-modal-workflow` (stacked on Phase 3) |
+| 5     | Ledger → modal                             | ⏳ Not started                                                         |
+| 6     | Ledger unlock                              | ⏳ Not started                                                         |
+| 7     | Payment unconfirm/edit                     | ⏳ Not started — **design decided, see below**                         |
+| 8     | PIN keypad hardening                       | ⏳ Not started                                                         |
+| 9     | Responsive verification                    | ⏳ Not started                                                         |
+| 10    | Documentation sweep                        | 🔶 Partial (this file)                                                 |
+| 11    | Full CI                                    | Per-phase, not yet a final sweep                                       |
 
 ## Architecture already in place — do not rebuild these
 
@@ -203,6 +203,47 @@ failed"` summary, listing each failure's reason. The submit button's
   component tests instead of e2e) — no new Playwright spec, matching
   that precedent; the new Vitest coverage above is this phase's real
   regression test, same tier as every other payroll surface.
+
+## Phase 4 (shipped on `feature/payroll-modal-workflow`, stacked on
+
+Phase 3's branch -- it rewrites the exact function Phase 3 just wrote,
+so it branches from `feature/payroll-bulk-generation`, not `main`;
+this PR's base is that branch, not `main`, until Phase 3 merges)
+
+- New `GenerateFormDialog` component in `payroll-workspace.tsx`: the
+  fixed-overlay + `Card` modal shell (`role="dialog" aria-modal="true"
+aria-label="Generate Payroll"`, a close `X` button, click-outside-to-
+  close), reusing this codebase's one existing modal convention
+  (`PayrollPrintDialog`/`CombinedStatementDialog`'s pattern) rather than
+  introducing anything new.
+- `GenerateForm` itself no longer owns any `Card`/header chrome -- it's
+  now bare form content, rendered as `GenerateFormDialog`'s `children`.
+  The parent (`PrivilegedPayrollView`) still gates on
+  `rateOptionsError`/`!rateOptions` before deciding what to render
+  inside the dialog, same as before Phase 3.
+- `PayrollKpiCards`'s toggle button lost its "Hide form"/"Generate
+  period" toggle-text behavior (a modal has its own close button, so
+  there's nothing left to "hide" by re-clicking the opener) -- it's now
+  a static "Generate Payroll" label, and `showGenerateForm` there is
+  now open-only (`onToggleGenerate={() => setShowGenerateForm(true)}`).
+  The now-unused `showGenerateForm` prop was removed from
+  `PayrollKpiCards`'s own signature (dead prop, not dead state --
+  `PrivilegedPayrollView` still needs `showGenerateForm` itself, to
+  decide whether to mount the dialog at all).
+- `PayrollPeriodGroups`'s empty-state copy ("Click 'Generate period'
+  above...") updated to match the renamed button.
+- **Gotcha for anyone testing this**: once the dialog is open, the
+  toolbar's opener button (still mounted behind the overlay, just
+  visually covered) and the dialog's own submit button can share the
+  exact same accessible name ("Generate Payroll", whenever exactly one
+  employee is selected) -- any query for that name must be scoped to
+  `within(screen.getByRole("dialog", { name: "Generate Payroll" }))` or
+  it throws on multiple matches. Hit this rewriting Phase 3's own test
+  after this phase's changes; fixed there, mentioned here so it doesn't
+  get rediscovered the hard way in Phase 5 (which will have the exact
+  same shape of problem for the Ledger modal's own print/export
+  buttons, if any of its now-inline `PeriodLedgerPanel` action buttons
+  share a name with something in the surrounding page).
 
 ## PIN keypad — specific confirmed gaps (Phase 8, not started)
 
