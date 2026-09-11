@@ -12,7 +12,8 @@ test("dump html", async ({ page }) => {
 
   await page.goto("/");
   await page.getByLabel("Restaurant passcode").fill("2468");
-  await page.getByRole("button", { name: "Open workspace" }).click();
+  // Bug fix: a full 4-digit fill() auto-submits on its own now -- no
+  // separate "Open workspace" click (see tests/e2e/dashboard.spec.ts).
   await page.waitForTimeout(2000);
 
   const main = page.locator("main");

@@ -1,116 +1,123 @@
-# Current Task: Attendance Timezone Bug Fix (Phase 2 of the mega-request)
+# Current Task: PIN Keypad Hardening (Phase 8 of the mega-request)
 
-**Active Spec:** none (bug fix, not a numbered feature) — see
+**Active Spec:** none (bounded phase, not a numbered feature) — see
 `docs/agent-handoff.md` for the full mega-request context and remaining
 phases.
-**Branch:** `fix/attendance-timezone`, branched from `main` after PR #34
-merged.
+**Branch:** `feature/pin-virtual-keyboard`, branched from `main`
+(independent of the payroll stack — phases 3–7 are separate).
 **Status:** Complete — ready to push and open a PR.
 **Assigned Agent:** Claude Code
 
 ## 🎯 Objective
 
-Fix the reported clock-in/out timezone bug (an 11:06 AM clock-in
-displaying as 6:06 AM) as Phase 2 of a much larger mega-request. See
-`docs/agent-handoff.md` for the full picture — this file only tracks
-this one bounded bug fix.
+Close the specific, narrow gaps in the already-shipped virtual PIN
+keypad (Feature 013) — masking, an Enter key, auto-submit at 4 digits,
+touch-aware visibility, disabled-while-pending, and wrong-PIN
+clearing. Not a rebuild: the keypad, the typed input, and the
+sign-in flow all already existed and worked.
 
-## 🔎 Root cause (confirmed by reading the actual data pipeline, not assumed)
+## 🛠️ What was built
 
-Not a Neon/region/storage issue — `attendance-data.ts` confirms
-`clock_in`/`clock_out` are genuine `timestamptz` columns, correctly
-parsed into real JS `Date` instants and correctly serialized via
-`.toISOString()`. That pipeline was already correct end to end.
+1. **Masking**: both passcode inputs (login, and registration's
+   "choose a passcode") changed `type="tel"` → `type="password"` —
+   still pairs with `inputMode="numeric"` for a numeric mobile
+   keyboard, but the display is now genuinely masked.
+2. **Enter key**: the keypad's previously-empty bottom-left cell is
+   now a real `type="submit"` button — participates in the
+   surrounding form's native submit, exactly like a physical Enter
+   key, no separate callback to keep in sync.
+3. **Auto-submit at 4 digits**: `submitPasscode` factored into
+   `attemptSignIn(candidatePasscode)`, called by the form's submit AND
+   a new effect that fires the instant `passcode.length === 4`
+   (typed or tapped). Guarded against re-entrancy (`if (pending)
+return`).
+4. **Touch-aware visibility**: `lg:hidden` → a compound arbitrary
+   media query hiding the keypad only when BOTH desktop-width AND a
+   fine (mouse) pointer are true — a large touch tablet keeps it
+   regardless of width.
+5. **Disabled while pending**: the keypad's `disabled` prop (every
+   button) and the typed input's own `disabled={pending}`.
+6. **Wrong-PIN clears the field**: every failure branch of
+   `attemptSignIn` now clears `passcode`, not just shows an error.
 
-The bug was entirely in display:
-`combined-statement-dialog.tsx` had its own local `formatClockTime`
-built on `Date.prototype.toLocaleTimeString` with **no `timeZone`
-option** — silently defaulting to the viewer's own browser timezone
-instead of the restaurant's business timezone. `attendance-report.tsx`
-already had a correct, timezone-aware `formatClockTime` (built on
-`zonedWallTimeFromInstant` from `src/lib/timezone.ts`, which already had
-full CDT/CST/DST-transition test coverage) — the Combined Statement
-dialog just never received a `timeZone` prop and rolled its own broken
-second implementation instead of reusing it.
+## 🔒 Non-negotiables honored
 
-## 🛠️ Fix
+- No rebuild — the existing `NumericKeypad`/typed-input/sign-in flow
+  is extended in place, not replaced.
+- Physical keyboard still works (unchanged — the typed `<Input>` is
+  still a real, fully functional text input).
+- No duplicate submit path — the Enter button and auto-submit both
+  funnel through the exact same `attemptSignIn`/form-submit logic.
 
-- New `src/lib/date-time.ts`: `formatBusinessTime` / `formatBusinessDate`
-  / `formatBusinessDateTime`, built on `Intl.DateTimeFormat` with an
-  explicit, required `timeZone` argument — no fallback to any implicit
-  environment zone anywhere in the module. This is the shared home
-  Section 17 of the mega-request asks for; every future 12-hour
-  print/statement surface should format through it rather than rolling
-  its own `toLocaleTimeString` call.
-- `combined-statement-dialog.tsx`: added a required `timeZone: string`
-  prop; replaced the local broken `formatClockTime` with
-  `formatBusinessTime` from the new shared module.
-- Threaded `timeZone` through every call site: both in
-  `attendance-report.tsx` (it already had `timeZone` in scope) and
-  through `payroll-workspace.tsx`'s
-  `PayrollWorkspace → PrivilegedPayrollView/SelfPayrollView →
-PeriodLedgerPanel → CombinedStatementDialog` chain (added as a new
-  prop at each level — it wasn't threaded that far down before).
-- `attendance-report.tsx`'s own already-correct 24-hour `formatClockTime`
-  was deliberately left untouched — different, intentional display style
-  (an internal ops table, not a formal statement), not the bug.
-- `combined-statement-dialog.tsx`'s `formatPaymentDate` was also left
-  untouched — it's a plain calendar-date column (`payment_date`, no time
-  component), already correctly formatted with an explicit
-  `timeZone: "UTC"` to avoid re-interpreting the date itself; not an
-  instant, not affected by this bug class.
+## 🧪 Tests
 
-## 🔒 Non-negotiable constraints honored
+- `login-screen.test.tsx` (+6): masking (`type="password"`),
+  auto-submit via typing, auto-submit via tapping, wrong-passcode
+  clears the field and shows the error, the Enter button submits
+  (tested with an incomplete passcode to isolate it from auto-submit),
+  keypad + typed input disabled while a real (non-demo) request is
+  pending (using a controlled-resolution `fetch` mock).
+- All 4 pre-existing tests in that file still pass unmodified.
 
-- Neon stayed read-only — no query changes, no schema changes.
-- No manual `-5`/`+5` hour offset anywhere — every zone conversion goes
-  through `Intl.DateTimeFormat`'s own `timeZone` option (or, for the
-  reverse/harder direction elsewhere in the app, the existing
-  DST-transition-aware `zonedWallTimeToInstant`).
-- `America/Chicago` is passed as a real IANA zone name, sourced from the
-  existing `timeZone` prop chain (itself ultimately DB-driven via
-  `scheduleContext.timeZone` in real mode) — never hardcoded as a raw
-  UTC offset.
+## 🐛 Regression found and fixed during E2E verification
 
-## 🧪 Tests added
+The full 3-project Playwright run surfaced two real problems, both now
+fixed (root-caused, not skipped/weakened — see `docs/agent-handoff.md`
+Phase 8 section for the full writeup):
 
-- `src/lib/date-time.test.ts` (new, 7 tests): CDT (summer, UTC-5) and CST
-  (winter, UTC-6) render the identical correct wall-clock time from two
-  different UTC instants; explicit assertion that the old broken output
-  ("4:06 PM") is NOT produced; midnight/noon boundaries; a second
-  explicit timezone (UTC) to prove the function isn't hardcoded to
-  Chicago either.
-- `combined-statement-dialog.test.tsx` (new describe block, 2 tests): a
-  real attendance row rendered through the actual dialog component,
-  asserting the correct wall-clock time appears (both a CDT and a CST
-  example) — the actual regression test for the reported bug, not just
-  the underlying utility.
+1. **Auto-submit race in every e2e sign-in helper.** Every spec file's
+   `signIn`/`signInOnCurrentPage` helper filled the 4-digit passcode
+   and then _also_ explicitly clicked "Open workspace" — redundant
+   once a full 4-digit `fill()` auto-submits on its own, and actively
+   racing it: the explicit click could land on a button that was
+   already mid-unmount, timing out the whole test. Fixed by removing
+   the now-redundant click from the helper in all 9 spec files (one
+   copy per file, no shared import) plus the two keypad-specific tests
+   in `dashboard.spec.ts`, which needed slightly different treatment
+   (see `docs/agent-handoff.md`).
+2. **Real, pre-existing app bug, newly exposed:** `signOut()` in
+   `restaurant-operations-app.tsx` reset `user` and `tab` but never
+   closed the still-open avatar panel (`showAvatarPanel`/
+   `showMobileSheet`) it was always invoked from — so the panel state
+   stayed `true` underneath the login screen and into the _next_
+   person's session, making their first tap on the account button
+   toggle it closed instead of open. Previously masked by an
+   incidental side effect of the old (redundant) "Open workspace"
+   click, which the outside-click-dismiss hook treated as an outside
+   click and closed the panel as a side effect. Fixed at the source in
+   `signOut()`, not in the tests.
 
 ## ✅ Verification Gate
 
-- [x] `npm run format:check` — clean.
-- [x] `npm run lint` — clean.
-- [x] `npx tsc --noEmit` — clean (also caught every test call site that
-      needed the new required `timeZone` prop).
-- [x] `npx vitest run` — 45/45 files, 334/334 tests (up from 325 — 9 new).
+- [x] `npm run lint` — clean (including the deliberate, commented
+      `react-hooks/set-state-in-effect` exception for the auto-submit
+      effect).
+- [x] `npx tsc --noEmit` — clean.
+- [x] `npx vitest run` — 44/44 files, 331/331 tests (up from 325 — 6 new).
 - [x] `npm run build` — clean.
-- [x] `npx playwright test tests/e2e/attendance-reporting.spec.ts tests/e2e/payroll-timesheet-overhaul.spec.ts --project=desktop` — 10/10.
-- [x] `npm run test:e2e -- --project=desktop` (full suite) — 51/51.
+- [x] `npm run test:e2e` (full 3-project suite: desktop/host-tablet/
+      server-mobile) — **153/153 passed, 0 failed, 0 flaky**, verified
+      via a clean targeted re-run after the two fixes above (not just
+      the background run's exit code).
 
 ## 🗂️ File List
 
-- `src/lib/date-time.ts` (new)
-- `src/lib/date-time.test.ts` (new)
-- `src/features/payroll/components/combined-statement-dialog.tsx`
-- `src/features/payroll/components/combined-statement-dialog.test.tsx`
-- `src/features/payroll/components/payroll-workspace.tsx`
-- `src/features/payroll/components/payroll-workspace.test.tsx`
-- `src/features/attendance/components/attendance-report.tsx`
-- `docs/agent-handoff.md` (new — full mega-request context)
+- `src/components/login-screen.tsx`
+- `src/components/login-screen.test.tsx`
+- `src/components/restaurant-operations-app.tsx` (the `signOut` bug fix)
+- `tests/e2e/dashboard.spec.ts`, `allocation-open-editing.spec.ts`,
+  `attendance-reporting.spec.ts`, `debug.spec.ts`,
+  `payroll-timesheet-overhaul.spec.ts`, `recurring-schedules.spec.ts`,
+  `settings.spec.ts`, `team-management.spec.ts`,
+  `tips-clocked-in-roster.spec.ts` (redundant post-fill click removed)
+- `docs/agent-handoff.md`
 - `tasks/current-task.md` (this file)
 
 ## Current State & Next Step
 
-This bug fix is complete and quality-gated. Next: commit, push, open a
-PR, verify CI, then continue to Phase 3 (payroll bulk generation) per
-`docs/agent-handoff.md`.
+Implementation, unit tests, and the full 3-project Playwright suite are
+all green (153/153). Quality gate is fully clean: lint, typecheck,
+vitest (331/331), build, and e2e. Ready to commit, push, and open the
+PR against `main`. After that: Phase 9 (live-device/browser responsive
+check) and Phase 10 (final documentation sweep), then the coordinated
+merge sequence for PRs #35–#39 + this one.

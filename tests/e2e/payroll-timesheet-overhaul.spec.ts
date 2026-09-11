@@ -4,7 +4,8 @@ async function signIn(page: Page, passcode: string) {
   await page.goto("/");
   await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill(passcode);
-  await page.getByRole("button", { name: "Open workspace" }).click();
+  // Bug fix: a full 4-digit fill() auto-submits on its own now -- no
+  // separate "Open workspace" click (see tests/e2e/dashboard.spec.ts).
   await expect(accountButton(page)).toBeVisible({ timeout: 60000 });
 }
 
