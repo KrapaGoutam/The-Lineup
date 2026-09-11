@@ -18,19 +18,19 @@ close together and both touch it.
 
 ## Status at a glance
 
-| Phase | Area                                       | Status                                                                 |
-| :---- | :----------------------------------------- | :--------------------------------------------------------------------- |
-| 1     | Investigation                              | ✅ Done — findings below                                               |
-| 2     | Attendance timezone bug                    | ✅ Done — PR #35 (`fix/attendance-timezone`), open                     |
-| 3     | Payroll bulk generation (single/multi/all) | ✅ Done — PR #36 (`feature/payroll-bulk-generation`), open             |
-| 4     | Generate Payroll → modal                   | ✅ Done — branch `feature/payroll-modal-workflow` (stacked on Phase 3) |
-| 5     | Ledger → modal                             | ⏳ Not started                                                         |
-| 6     | Ledger unlock                              | ⏳ Not started                                                         |
-| 7     | Payment unconfirm/edit                     | ⏳ Not started — **design decided, see below**                         |
-| 8     | PIN keypad hardening                       | ⏳ Not started                                                         |
-| 9     | Responsive verification                    | ⏳ Not started                                                         |
-| 10    | Documentation sweep                        | 🔶 Partial (this file)                                                 |
-| 11    | Full CI                                    | Per-phase, not yet a final sweep                                       |
+| Phase | Area                                       | Status                                                                         |
+| :---- | :----------------------------------------- | :----------------------------------------------------------------------------- |
+| 1     | Investigation                              | ✅ Done — findings below                                                       |
+| 2     | Attendance timezone bug                    | ✅ Done — PR #35 (`fix/attendance-timezone`), open                             |
+| 3     | Payroll bulk generation (single/multi/all) | ✅ Done — PR #36 (`feature/payroll-bulk-generation`), open                     |
+| 4     | Generate Payroll → modal                   | ✅ Done — branch `feature/payroll-modal-workflow` (stacked on Phase 3), PR #37 |
+| 5     | Ledger → modal                             | ✅ Done — same branch/PR as Phase 4 (2nd commit)                               |
+| 6     | Ledger unlock                              | ⏳ Not started                                                                 |
+| 7     | Payment unconfirm/edit                     | ⏳ Not started — **design decided, see below**                                 |
+| 8     | PIN keypad hardening                       | ⏳ Not started                                                                 |
+| 9     | Responsive verification                    | ⏳ Not started                                                                 |
+| 10    | Documentation sweep                        | 🔶 Partial (this file)                                                         |
+| 11    | Full CI                                    | Per-phase, not yet a final sweep                                               |
 
 ## Architecture already in place — do not rebuild these
 
@@ -244,6 +244,58 @@ aria-label="Generate Payroll"`, a close `X` button, click-outside-to-
   same shape of problem for the Ledger modal's own print/export
   buttons, if any of its now-inline `PeriodLedgerPanel` action buttons
   share a name with something in the surrounding page).
+
+## Phase 5 (shipped in the same branch/PR as Phase 4 --
+
+`feature/payroll-modal-workflow`, 2nd commit)
+
+- New `LedgerDialog` component: the exact same fixed-overlay + `Card`
+  modal shell pattern as `GenerateFormDialog`, factored out separately
+  (not reused verbatim) because the ledger has a genuinely different
+  close-button placement need: a real close button must be available
+  even while the ledger is still loading or failed to load, not only
+  once it successfully renders -- `PeriodLedgerPanel` has three
+  possible return states (error/loading/success) that all needed to
+  render inside the same dialog shell when opened as one.
+- `PeriodLedgerPanel` gained an **optional** `onClose?: () => void`
+  prop. When provided, the whole component (all three of its
+  error/loading/success states) renders inside `LedgerDialog`. When
+  omitted, it renders exactly as before -- a plain inline `Card`, byte-
+  identical output to before this phase.
+- **Only the privileged ("click a period row → Ledger") entry point in
+  `PrivilegedPayrollView` passes `onClose` (→ modal).**
+  `SelfPayrollView`'s usage deliberately does **not** pass `onClose` and
+  stays a plain inline `Card` -- for a regular employee, their ledger
+  _is_ the "My Payroll" page's own primary content (selected via a
+  month dropdown, always visible once a period exists), not something
+  triggered as a popup. Don't "fix" this into a modal too without
+  re-reading this reasoning -- it's a deliberate scope boundary, not an
+  oversight.
+- Internally, `PeriodLedgerPanel`'s single giant JSX return was split
+  into named fragments (`cardHeader`, `cardContent`, `printArea`,
+  `combinedStatementDialog`) computed once, then assembled at the very
+  end into either `<Card>{...}</Card>` (inline) or
+  `<LedgerDialog>{...}</LedgerDialog>` (modal) -- so the print-only area
+  (`hidden print:block`, unchanged) stays a flat sibling of the
+  screen-only header/content (`print:hidden`, unchanged) in both cases,
+  preserving the exact print-isolation invariant Feature 033 spent a
+  whole pass establishing. The close button lives inside `cardHeader`
+  (so it's `print:hidden` too, inheriting that from the header's own
+  className) and is conditionally rendered only when `onClose` is
+  passed.
+- `PeriodLedgerPanel`'s modal `aria-label` is dynamic:
+  `` `${monthLabel(period.periodMonth)} Ledger` `` once loaded (e.g.
+  "August 2026 Ledger"), or the generic "Payroll Ledger" during the
+  error/loading states (before the real month is known).
+- Confirmed the exact accessible-name-collision gotcha flagged after
+  Phase 4 did **not** actually recur here in practice for the specific
+  test scenario exercised so far (`getByRole("button", { name: "Print
+statement" })` etc. only exist once each in the DOM at any given
+  time in the test as written) -- but the existing regression test was
+  still tightened to scope every ledger-dialog query through
+  `within(ledgerDialog)` regardless, as defensive-by-construction
+  practice matching Phase 4's fix, not because a live collision was
+  found.
 
 ## PIN keypad — specific confirmed gaps (Phase 8, not started)
 
