@@ -18,6 +18,29 @@
 - Do not use the user object from an unverified client session as authorization evidence.
 - Keep sensitive access tokens short-lived and revoke sessions before destructive user removal when strict invalidation is required.
 
+### PIN entry hardening (login screen) — masking, keypad, and duplicate-submit protection
+
+`src/components/login-screen.tsx`'s passcode input is `type="password"`
+(paired with `inputMode="numeric"`/`pattern="[0-9]*"` for a numeric
+mobile keyboard), so a passcode never renders as plain digits on
+screen, on either the login form or the self-registration "choose a
+passcode" form. The virtual `NumericKeypad` (digits, Backspace, and a
+real `type="submit"` Enter button participating in the surrounding
+form's native submit — no separate callback) writes to the exact same
+`passcode` state the typed input does, so there is only one submit
+path (`attemptSignIn`) regardless of whether the 4th digit arrives by
+typing, tapping, or a physical Enter key. That function guards
+re-entrancy with the existing `pending` flag — the keypad and typed
+input are both `disabled` while a request is in flight, so a second
+tap or a stray auto-submit re-trigger during that window is a no-op,
+not a duplicate authentication request. Every failed attempt (an
+invalid length, an unrecognized passcode, a lockout, or a network
+error) clears the field, so a rejected guess is never left sitting
+there implicitly re-submittable. Keypad visibility is touch-aware, not
+just a width breakpoint (`pointer: fine` + a desktop-width media query
+together, not width alone) — a large touch tablet past that width
+still keeps its only practical input method.
+
 ### Passcode uniqueness within a restaurant
 
 Two people in the same organization can never hold the same passcode: the credential locator is `HMAC(APP_PIN_PEPPER, organization_id + ":" + passcode)`, and `passcode_credentials` carries a `unique (organization_id, locator)` constraint — two people choosing the same 4-digit code in the same organization collide on that constraint at the database level, not through an application-side check that could race or be bypassed. The same passcode is allowed across two different organizations, since the locator is namespaced by `organization_id`.
@@ -184,6 +207,63 @@ A forged query for another person's `payroll_payments` rows — any `select`, wi
 **Confirmed-payment immutability is a trigger, not an application convention**: `private.forbid_confirmed_payment_edit()` raises on any attempt to change `amount_cents`, `payment_date`, or `comment` once `status = 'confirmed'` — enforced on every `update` regardless of caller, verified with both a raw SQL update attempt and confirmation that an unrelated column (`updated_at`) remains editable. A correction is always a new row (`reverses_payment_id`), never a mutation of financial history already on the books.
 
 **`payroll_rates` is the one table in this feature with a `delete` policy** — a rate override is current configuration, not financial history, and removing one only changes what the _next_ generation uses; every already-generated `payroll_periods` row keeps its own frozen `rate_cents_snapshot` regardless. The other three tables have no `delete` policy at all.
+
+#### Bulk generation, ledger/unlock UX, and payment unconfirm — later phases, same security boundary
+
+Building on Phase 1's schema/RLS above, without weakening it:
+
+- **Bulk payroll generation** (single/multiple/all-eligible employees,
+  `generatePayrollForEmployeesAction` in
+  `src/features/payroll/actions/payroll-actions.ts`) is the same
+  single-employee generation path (`generatePayrollPeriod`), called in
+  a loop server-side — no new authorization surface, no client-trusted
+  bulk RPC. Duplicate generation for an already-generated
+  employee/month is skipped, not silently overwritten.
+- **Generate Payroll and the ledger moved from inline, expandable
+  `<Card>`s to modal dialogs** — a pure UI placement change (the app's
+  existing hand-rolled `fixed inset-0` overlay pattern, the same one
+  `PayrollPrintDialog`/`CombinedStatementDialog` already use; there is
+  no second modal system). No security impact.
+- **Ledger unlock** (`unlockPayrollPeriodAction`) is architecturally
+  safe because `payroll_periods.status`/`locked_at`/`locked_by` were
+  deliberately left outside the immutability trigger from Phase 1 (see
+  `20260908090000_payroll_period_snapshot_lock.sql`'s own comment) —
+  unlock is a plain, manager-only, audited UPDATE
+  (`recordAuditEvent`), mirroring `lockPayrollPeriodAction` exactly. A
+  mandatory reason is required and recorded.
+- **Payment unconfirm/edit** is the one place this feature set touches
+  the confirmed-payment immutability trigger described above, and it
+  was a deliberate design decision, not an oversight: the original ask
+  ("let a manager unconfirm and edit a confirmed payment") would, read
+  literally, reverse the exact vulnerability
+  `private.forbid_confirmed_payment_edit()` was built to close. Rather
+  than weaken the trigger, the implementation adds one narrow, audited
+  door through it:
+  - Migration `20260911130000_payroll_payment_unconfirm.sql` updates
+    the trigger to allow exactly one bypass: a transaction-local
+    session flag (`set_config('app.allow_confirmed_payment_unconfirm',
+'on', true)`, `is_local => true` so it never leaks past the
+    transaction) that only one function ever sets.
+  - `public.unconfirm_payroll_payment(p_payment_id, p_reason)` is a
+    `SECURITY DEFINER` function (`set search_path = ''`, `revoke all
+... from public, anon; grant execute ... to authenticated`) that
+    verifies the caller holds a privileged role for the payment's
+    organization, requires a non-empty `p_reason`, sets the bypass flag
+    for its own transaction only, flips `status` back to `'draft'`,
+    and records an audit event (`payroll_payment_unconfirmed`,
+    before/after state, actor, reason) — all in one transaction. Any
+    other UPDATE path (a forged client request, a different function,
+    a raw SQL statement outside this RPC) still hits the trigger at
+    full strength; the fixed vulnerability is not reintroduced.
+  - Once unconfirmed, editing reuses the pre-existing
+    `editDraftPaymentAction`/`editDraftPayment` path for a
+    draft-status payment — no new edit code path was needed.
+  - pgTAP coverage (`supabase/tests/database/0018_payroll_payment_unconfirm.test.sql`,
+    17 assertions) proves: a privileged caller can unconfirm; a
+    non-privileged caller cannot; a plain client-side `UPDATE ...
+SET status='draft'` bypassing the RPC entirely still fails exactly as
+    it did before this migration; an audit event is recorded with the
+    correct before/after state.
 
 ## Keys and secrets
 
