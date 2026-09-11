@@ -515,6 +515,165 @@ export async function generatePayrollPeriodAction(input: {
   });
 }
 
+export type BulkGeneratePayrollResult = {
+  successful: Array<{ neonUserId: number; period: PayrollPeriod }>;
+  /** Already has a period for this person/month -- not silently
+   * overwritten; regenerate is a separate, single-person action. */
+  skipped: Array<{ neonUserId: number; reason: string }>;
+  failed: Array<{ neonUserId: number; error: string }>;
+};
+
+const neonUserIdsSchema = z.array(neonUserIdSchema).min(1).max(200);
+
+/**
+ * Single, multiple, or "all" employee generation are all the same call --
+ * the UI just decides which `neonUserIds` to pass (every active employee
+ * for "all"). Deliberately NOT wrapped in one all-or-nothing database
+ * transaction: this loop reuses `getPayrollPeriod` (the exact duplicate
+ * check `generatePayrollPeriodAction` already makes) and `computeSnapshot`/
+ * `generatePayrollPeriod` (the exact calculation and insert
+ * `generatePayrollPeriodAction` already makes) per person, one at a time,
+ * so one person's Neon/rate lookup failing can never roll back or block
+ * every other person's already-successful generation in the same batch --
+ * the structured result below is how the caller finds out which is which,
+ * never a silent partial success.
+ */
+export async function generatePayrollForEmployeesAction(input: {
+  restaurantSlug: string;
+  neonUserIds: number[];
+  periodMonth: string;
+}): Promise<ActionResult<BulkGeneratePayrollResult>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      neonUserIds: neonUserIdsSchema,
+      periodMonth: periodMonthSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const periodMonth = normalizePeriodMonth(parsed.data.periodMonth);
+  // De-duplicated -- a caller passing the same id twice (e.g. a UI bug)
+  // generates it once, not twice.
+  const neonUserIds = [...new Set(parsed.data.neonUserIds)];
+
+  const result: BulkGeneratePayrollResult = {
+    successful: [],
+    skipped: [],
+    failed: [],
+  };
+
+  for (const neonUserId of neonUserIds) {
+    const existing = await getPayrollPeriod(supabase, {
+      organizationId: currentUser.organizationId,
+      neonUserId,
+      periodMonth,
+    });
+    if (!existing.ok) {
+      result.failed.push({ neonUserId, error: existing.error });
+      continue;
+    }
+    if (existing.data) {
+      result.skipped.push({
+        neonUserId,
+        reason: "Already generated for this month.",
+      });
+      continue;
+    }
+
+    const snapshot = await computeSnapshot(supabase, {
+      organizationId: currentUser.organizationId,
+      neonUserId,
+      periodMonth,
+    });
+    if (!snapshot.ok) {
+      result.failed.push({ neonUserId, error: snapshot.error });
+      continue;
+    }
+
+    const generated = await generatePayrollPeriod(supabase, {
+      organizationId: currentUser.organizationId,
+      neonUserId,
+      periodMonth,
+      ...snapshot.data,
+      actorProfileId: currentUser.profileId,
+    });
+    if (!generated.ok) {
+      result.failed.push({ neonUserId, error: generated.error });
+      continue;
+    }
+    result.successful.push({ neonUserId, period: generated.data });
+  }
+
+  return { ok: true, data: result };
+}
+
+export type PayrollGenerationEligibility = {
+  neonUserId: number;
+  fullName: string;
+  alreadyGenerated: boolean;
+};
+
+/**
+ * Feeds the bulk-generate dialog's own per-employee status column
+ * ("Already generated" / "Ready") -- read-only, no write, so the
+ * dialog can show this BEFORE the manager commits to generating,
+ * rather than only finding out about a skip after the fact.
+ */
+export async function getPayrollGenerationEligibilityAction(input: {
+  restaurantSlug: string;
+  periodMonth: string;
+}): Promise<ActionResult<PayrollGenerationEligibility[]>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      periodMonth: periodMonthSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const usersResult = await getActiveNeonUsers();
+  if (!usersResult.ok) return { ok: false, error: usersResult.error };
+
+  const supabase = await createClient();
+  const periodMonth = normalizePeriodMonth(parsed.data.periodMonth);
+  const existingResults = await Promise.all(
+    usersResult.data.map((user) =>
+      getPayrollPeriod(supabase, {
+        organizationId: currentUser.organizationId,
+        neonUserId: user.id,
+        periodMonth,
+      }),
+    ),
+  );
+  const failed = existingResults.find((result) => !result.ok);
+  if (failed && !failed.ok) return { ok: false, error: failed.error };
+
+  return {
+    ok: true,
+    data: usersResult.data.map((user, index) => {
+      const existingResult = existingResults[index];
+      return {
+        neonUserId: user.id,
+        fullName: user.fullName,
+        alreadyGenerated: existingResult.ok
+          ? Boolean(existingResult.data)
+          : false,
+      };
+    }),
+  };
+}
+
 export async function regeneratePayrollPeriodAction(input: {
   restaurantSlug: string;
   periodId: number;
