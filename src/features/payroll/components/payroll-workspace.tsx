@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import {
   confirmPaymentAction,
   deleteDraftPaymentAction,
+  editDraftPaymentAction,
   generatePayrollForEmployeesAction,
   getPayrollAccessAction,
   getPayrollDashboardAction,
@@ -24,6 +25,7 @@ import {
   removePayrollRateOverrideAction,
   setPayrollDefaultRateAction,
   setPayrollRateOverrideAction,
+  unconfirmPaymentAction,
   unlockPayrollPeriodAction,
   type BulkGeneratePayrollResult,
   type PayrollAccessView,
@@ -1291,6 +1293,16 @@ function PeriodLedgerPanel({
   const [reloadKey, setReloadKey] = useState(0);
   const [showCombinedStatement, setShowCombinedStatement] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
+  // Bug fix: which confirmed payment (if any) the manager is currently
+  // unconfirming -- lifted up here rather than kept as local state
+  // inside PaymentRow, since UnconfirmPaymentDialog is a fixed-overlay
+  // modal and a <tr>/<tbody> can only legally contain more table rows;
+  // rendering a modal as a row's own child would be invalid HTML that
+  // the browser silently restructures. One dialog, rendered once here,
+  // targeting whichever row's button was clicked.
+  const [unconfirmingPaymentId, setUnconfirmingPaymentId] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1522,6 +1534,9 @@ function PeriodLedgerPanel({
                     payment={payment}
                     readOnly={readOnly}
                     onChanged={refresh}
+                    onUnconfirmClick={() =>
+                      setUnconfirmingPaymentId(payment.id)
+                    }
                   />
                 ))}
               </tbody>
@@ -1652,6 +1667,16 @@ function PeriodLedgerPanel({
     />
   ) : null;
 
+  const unconfirmDialog =
+    unconfirmingPaymentId !== null ? (
+      <UnconfirmPaymentDialog
+        restaurantSlug={restaurantSlug}
+        paymentId={unconfirmingPaymentId}
+        onClose={() => setUnconfirmingPaymentId(null)}
+        onUnconfirmed={refresh}
+      />
+    ) : null;
+
   if (onClose) {
     return (
       <LedgerDialog
@@ -1663,6 +1688,7 @@ function PeriodLedgerPanel({
         {printArea}
         {combinedStatementDialog}
         {unlockDialog}
+        {unconfirmDialog}
       </LedgerDialog>
     );
   }
@@ -1790,6 +1816,119 @@ function UnlockLedgerDialog({
   );
 }
 
+/**
+ * Explicit, mandatory-reason confirmation before unconfirming a
+ * confirmed payment -- mirrors `UnlockLedgerDialog`'s shape exactly
+ * (same danger styling, same reason-gated submit), but targets
+ * `unconfirmPaymentAction`, which is backed by a dedicated
+ * `SECURITY DEFINER` RPC rather than a plain data-layer update -- see
+ * that action's own doc comment for why. Rendered once at
+ * `PeriodLedgerPanel`'s level (not owned by any one `PaymentRow`) so
+ * it isn't nested inside a `<tr>`.
+ */
+function UnconfirmPaymentDialog({
+  restaurantSlug,
+  paymentId,
+  onClose,
+  onUnconfirmed,
+}: {
+  restaurantSlug: string;
+  paymentId: number;
+  onClose: () => void;
+  onUnconfirmed: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function confirm() {
+    setError("");
+    if (reason.trim().length < 3) {
+      setError("Enter a brief reason (at least 3 characters).");
+      return;
+    }
+    setPending(true);
+    try {
+      const result = await unconfirmPaymentAction({
+        restaurantSlug,
+        paymentId,
+        reason: reason.trim(),
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onUnconfirmed();
+      onClose();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label="Unconfirm Payment"
+        className="border-border bg-card w-full max-w-md shadow-2xl"
+      >
+        <CardHeader>
+          <h2 className="text-lg font-semibold">Unconfirm this payment?</h2>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-muted-foreground text-sm">
+            This will allow the payment to be edited again and may change the
+            payroll balance.
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="unconfirm-reason">Reason</Label>
+            <textarea
+              id="unconfirm-reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              className="border-input bg-background focus-visible:border-primary/60 focus-visible:ring-ring/40 w-full rounded-xl border px-3 py-2 text-sm outline-none focus-visible:ring-2"
+              placeholder="Why does this payment need to be unconfirmed?"
+              autoFocus
+            />
+          </div>
+          {error ? (
+            <p className="text-destructive text-sm" aria-live="polite">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={confirm}
+              disabled={pending}
+            >
+              {pending ? "Unconfirming…" : "Unconfirm"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function BalanceTile({
   label,
   value,
@@ -1824,14 +1963,31 @@ function PaymentRow({
   payment,
   readOnly,
   onChanged,
+  onUnconfirmClick,
 }: {
   restaurantSlug: string;
   payment: PayrollPayment;
   readOnly: boolean;
   onChanged: () => void;
+  /** Bug fix: opens UnconfirmPaymentDialog, rendered once at
+   * PeriodLedgerPanel's own level -- see that component's own comment
+   * for why this can't be a modal owned by the row itself. */
+  onUnconfirmClick: () => void;
 }) {
   const [error, setError] = useState("");
-  const [pending, setPending] = useState<"confirm" | "delete" | null>(null);
+  const [pending, setPending] = useState<"confirm" | "delete" | "save" | null>(
+    null,
+  );
+  // Bug fix: inline edit for a draft payment's amount/date/comment --
+  // editDraftPaymentAction already existed and already worked for any
+  // draft payment (not only one freshly un-confirmed from "confirmed"),
+  // it just had no UI trigger anywhere before this.
+  const [isEditing, setIsEditing] = useState(false);
+  const [editAmount, setEditAmount] = useState(() =>
+    centsToInputValue(payment.amountCents),
+  );
+  const [editDate, setEditDate] = useState(payment.paymentDate);
+  const [editComment, setEditComment] = useState(payment.comment ?? "");
 
   async function confirm() {
     setError("");
@@ -1869,6 +2025,120 @@ function PaymentRow({
     }
   }
 
+  function startEditing() {
+    setError("");
+    setEditAmount(centsToInputValue(payment.amountCents));
+    setEditDate(payment.paymentDate);
+    setEditComment(payment.comment ?? "");
+    setIsEditing(true);
+  }
+
+  async function save() {
+    setError("");
+    if (!editDate) {
+      setError("Choose the date the payment was made.");
+      return;
+    }
+    let amountCents: number;
+    try {
+      amountCents = dollarsToCents(editAmount);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enter a valid amount.");
+      return;
+    }
+    if (amountCents <= 0) {
+      setError("Enter an amount greater than zero.");
+      return;
+    }
+    setPending("save");
+    try {
+      const result = await editDraftPaymentAction({
+        restaurantSlug,
+        paymentId: payment.id,
+        amountCents,
+        paymentDate: editDate,
+        comment: editComment.trim() || null,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setIsEditing(false);
+      onChanged();
+    } finally {
+      setPending(null);
+    }
+  }
+
+  if (!readOnly && isEditing) {
+    return (
+      <tr>
+        <td className="py-1.5 pr-3">
+          <Input
+            type="date"
+            value={editDate}
+            onChange={(event) => setEditDate(event.target.value)}
+            className="h-8 w-36 text-xs"
+            aria-label="Payment date"
+          />
+        </td>
+        <td className="py-1.5 pr-3">
+          <Input
+            type="text"
+            inputMode="decimal"
+            value={editAmount}
+            onChange={(event) => setEditAmount(event.target.value)}
+            className="h-8 w-24 font-mono text-xs"
+            aria-label="Amount"
+          />
+        </td>
+        <td className="py-1.5 pr-3">
+          <Badge tone="warning">Draft</Badge>
+        </td>
+        <td className="py-1.5 pr-3">
+          <Input
+            type="text"
+            value={editComment}
+            onChange={(event) => setEditComment(event.target.value)}
+            className="h-8 w-full text-xs"
+            placeholder="Comment"
+            aria-label="Comment"
+          />
+        </td>
+        <td className="py-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={save}
+              disabled={pending !== null}
+            >
+              {pending === "save" ? "Saving…" : "Save"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsEditing(false);
+                setError("");
+              }}
+              disabled={pending !== null}
+            >
+              Cancel
+            </Button>
+          </div>
+          {error ? (
+            <p className="text-destructive mt-1 text-xs" aria-live="polite">
+              {error}
+            </p>
+          ) : null}
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
       <td className="py-1.5 pr-3">{formatPaymentDate(payment.paymentDate)}</td>
@@ -1881,28 +2151,49 @@ function PaymentRow({
       <td className="py-1.5 pr-3">{payment.comment ?? "—"}</td>
       {readOnly ? null : (
         <td className="py-1.5">
-          {payment.status === "draft" ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={confirm}
-                disabled={pending !== null}
-              >
-                {pending === "confirm" ? "Confirming…" : "Confirm"}
-              </Button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {payment.status === "draft" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={confirm}
+                  disabled={pending !== null}
+                >
+                  {pending === "confirm" ? "Confirming…" : "Confirm"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={startEditing}
+                  disabled={pending !== null}
+                >
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={remove}
+                  disabled={pending !== null}
+                >
+                  {pending === "delete" ? "Deleting…" : "Delete"}
+                </Button>
+              </>
+            ) : (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={remove}
-                disabled={pending !== null}
+                className="text-destructive hover:bg-destructive/10"
+                onClick={onUnconfirmClick}
               >
-                {pending === "delete" ? "Deleting…" : "Delete"}
+                Unconfirm
               </Button>
-            </div>
-          ) : null}
+            )}
+          </div>
           {error ? (
             <p className="text-destructive mt-1 text-xs" aria-live="polite">
               {error}

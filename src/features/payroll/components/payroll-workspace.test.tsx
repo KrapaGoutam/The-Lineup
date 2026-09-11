@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  editDraftPaymentAction,
   generatePayrollForEmployeesAction,
   getPayrollAccessAction,
   getPayrollDashboardAction,
@@ -10,6 +11,7 @@ import {
   getPayrollLedgerAction,
   getPayrollRateOptionsAction,
   listPayrollPeriodsAction,
+  unconfirmPaymentAction,
   unlockPayrollPeriodAction,
 } from "@/features/payroll/actions/payroll-actions";
 import { getCombinedMonthlyStatementAction } from "@/features/payroll/actions/statement-actions";
@@ -33,6 +35,8 @@ vi.mock("@/features/payroll/actions/payroll-actions", () => ({
   regeneratePayrollPeriodAction: vi.fn(),
   lockPayrollPeriodAction: vi.fn(),
   unlockPayrollPeriodAction: vi.fn(),
+  editDraftPaymentAction: vi.fn(),
+  unconfirmPaymentAction: vi.fn(),
 }));
 
 vi.mock("@/features/payroll/actions/statement-actions", () => ({
@@ -48,6 +52,8 @@ const mockedGetStatement = vi.mocked(getCombinedMonthlyStatementAction);
 const mockedGetEligibility = vi.mocked(getPayrollGenerationEligibilityAction);
 const mockedGenerateForEmployees = vi.mocked(generatePayrollForEmployeesAction);
 const mockedUnlockPeriod = vi.mocked(unlockPayrollPeriodAction);
+const mockedEditDraftPayment = vi.mocked(editDraftPaymentAction);
+const mockedUnconfirmPayment = vi.mocked(unconfirmPaymentAction);
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -678,6 +684,310 @@ describe("PayrollWorkspace", () => {
     expect(
       screen.getByRole("dialog", { name: "August 2026 Ledger" }),
     ).toBeInTheDocument();
+  });
+
+  it("a manager can unconfirm a confirmed payment through an explicit, reason-gated confirmation", async () => {
+    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetRateOptions.mockResolvedValue({
+      ok: true,
+      data: {
+        users: [
+          {
+            id: 101,
+            fullName: "Mia Chen",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+        ],
+        defaultRateCents: 1500,
+        overrides: [],
+      },
+    });
+    mockedGetDashboard.mockResolvedValue({
+      ok: true,
+      data: {
+        totalBalanceOwedCents: 30000,
+        previousMonthGeneratedCents: 60000,
+        owedThisMonthCents: 0,
+        owedLastMonthCents: 30000,
+        oldestOpenPeriod: null,
+        perPerson: [
+          { neonUserId: 101, balanceCents: 30000, totalGeneratedCents: 60000 },
+        ],
+        periods: [
+          {
+            id: 1,
+            neonUserId: 101,
+            periodMonth: "2026-08-01",
+            hoursSnapshot: 40,
+            rateCentsSnapshot: 1500,
+            grossCents: 60000,
+            status: "draft",
+            balanceCents: 30000,
+          },
+        ],
+      },
+    });
+    mockedGetLedger.mockResolvedValue({
+      ok: true,
+      data: {
+        period: {
+          id: 1,
+          organizationId: "org-1",
+          neonUserId: 101,
+          periodMonth: "2026-08-01",
+          hoursSnapshot: 40,
+          rateCentsSnapshot: 1500,
+          grossCents: 60000,
+          status: "draft",
+          generatedAt: "2026-08-01T00:00:00Z",
+          generatedBy: "admin-1",
+          regeneratedAt: null,
+          regeneratedBy: null,
+          lockedAt: null,
+          lockedBy: null,
+        },
+        payments: [
+          {
+            id: 7,
+            organizationId: "org-1",
+            payrollPeriodId: 1,
+            amountCents: 30000,
+            paymentDate: "2026-08-15",
+            comment: "Bi-weekly settlement",
+            status: "confirmed",
+            createdAt: "2026-08-15T00:00:00Z",
+            createdBy: "admin-1",
+            updatedAt: "2026-08-15T00:00:00Z",
+            confirmedAt: "2026-08-15T00:00:00Z",
+            confirmedBy: "admin-1",
+            reversesPaymentId: null,
+          },
+        ],
+        adjustments: [],
+        balance: {
+          grossCents: 60000,
+          confirmedPaymentsCents: 30000,
+          draftPaymentsCents: 0,
+          adjustmentsCents: 0,
+          balanceCents: 30000,
+          fullyPaid: false,
+        },
+        organizationName: "The Monk's Restaurant & Bar",
+      },
+    });
+    mockedUnconfirmPayment.mockResolvedValue({ ok: true, data: null });
+
+    render(
+      <PayrollWorkspace
+        restaurantSlug="the-monks"
+        timeZone="America/Chicago"
+        onGoToPayRates={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Overall balance owed")).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open ledger for August 2026" }),
+    );
+
+    const ledgerDialog = await screen.findByRole("dialog", {
+      name: "August 2026 Ledger",
+    });
+    expect(within(ledgerDialog).getByText("Confirmed")).toBeInTheDocument();
+
+    await userEvent.click(
+      within(ledgerDialog).getByRole("button", { name: "Unconfirm" }),
+    );
+
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: "Unconfirm Payment",
+    });
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Unconfirm" }),
+    );
+    expect(
+      within(confirmDialog).getByText(
+        "Enter a brief reason (at least 3 characters).",
+      ),
+    ).toBeInTheDocument();
+    expect(mockedUnconfirmPayment).not.toHaveBeenCalled();
+
+    await userEvent.type(
+      within(confirmDialog).getByLabelText("Reason"),
+      "Amount was recorded wrong.",
+    );
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Unconfirm" }),
+    );
+
+    expect(mockedUnconfirmPayment).toHaveBeenCalledWith({
+      restaurantSlug: "the-monks",
+      paymentId: 7,
+      reason: "Amount was recorded wrong.",
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Unconfirm Payment" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "August 2026 Ledger" }),
+    ).toBeInTheDocument();
+  });
+
+  it("a manager can edit a draft payment's amount, date, and comment inline", async () => {
+    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetRateOptions.mockResolvedValue({
+      ok: true,
+      data: {
+        users: [
+          {
+            id: 101,
+            fullName: "Mia Chen",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+        ],
+        defaultRateCents: 1500,
+        overrides: [],
+      },
+    });
+    mockedGetDashboard.mockResolvedValue({
+      ok: true,
+      data: {
+        totalBalanceOwedCents: 60000,
+        previousMonthGeneratedCents: 60000,
+        owedThisMonthCents: 0,
+        owedLastMonthCents: 60000,
+        oldestOpenPeriod: null,
+        perPerson: [
+          { neonUserId: 101, balanceCents: 60000, totalGeneratedCents: 60000 },
+        ],
+        periods: [
+          {
+            id: 1,
+            neonUserId: 101,
+            periodMonth: "2026-08-01",
+            hoursSnapshot: 40,
+            rateCentsSnapshot: 1500,
+            grossCents: 60000,
+            status: "draft",
+            balanceCents: 60000,
+          },
+        ],
+      },
+    });
+    mockedGetLedger.mockResolvedValue({
+      ok: true,
+      data: {
+        period: {
+          id: 1,
+          organizationId: "org-1",
+          neonUserId: 101,
+          periodMonth: "2026-08-01",
+          hoursSnapshot: 40,
+          rateCentsSnapshot: 1500,
+          grossCents: 60000,
+          status: "draft",
+          generatedAt: "2026-08-01T00:00:00Z",
+          generatedBy: "admin-1",
+          regeneratedAt: null,
+          regeneratedBy: null,
+          lockedAt: null,
+          lockedBy: null,
+        },
+        payments: [
+          {
+            id: 9,
+            organizationId: "org-1",
+            payrollPeriodId: 1,
+            amountCents: 20000,
+            paymentDate: "2026-08-10",
+            comment: "First installment",
+            status: "draft",
+            createdAt: "2026-08-10T00:00:00Z",
+            createdBy: "admin-1",
+            updatedAt: "2026-08-10T00:00:00Z",
+            confirmedAt: null,
+            confirmedBy: null,
+            reversesPaymentId: null,
+          },
+        ],
+        adjustments: [],
+        balance: {
+          grossCents: 60000,
+          confirmedPaymentsCents: 0,
+          draftPaymentsCents: 20000,
+          adjustmentsCents: 0,
+          balanceCents: 60000,
+          fullyPaid: false,
+        },
+        organizationName: "The Monk's Restaurant & Bar",
+      },
+    });
+    mockedEditDraftPayment.mockResolvedValue({
+      ok: true,
+      data: {
+        id: 9,
+        organizationId: "org-1",
+        payrollPeriodId: 1,
+        amountCents: 25000,
+        paymentDate: "2026-08-11",
+        comment: "Corrected installment",
+        status: "draft",
+        createdAt: "2026-08-10T00:00:00Z",
+        createdBy: "admin-1",
+        updatedAt: "2026-08-11T00:00:00Z",
+        confirmedAt: null,
+        confirmedBy: null,
+        reversesPaymentId: null,
+      },
+    });
+
+    render(
+      <PayrollWorkspace
+        restaurantSlug="the-monks"
+        timeZone="America/Chicago"
+        onGoToPayRates={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Overall balance owed")).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open ledger for August 2026" }),
+    );
+
+    const ledgerDialog = await screen.findByRole("dialog", {
+      name: "August 2026 Ledger",
+    });
+    await userEvent.click(
+      within(ledgerDialog).getByRole("button", { name: "Edit" }),
+    );
+
+    const amountInput = within(ledgerDialog).getByLabelText("Amount");
+    await userEvent.clear(amountInput);
+    await userEvent.type(amountInput, "250.00");
+
+    await userEvent.click(
+      within(ledgerDialog).getByRole("button", { name: "Save" }),
+    );
+
+    expect(mockedEditDraftPayment).toHaveBeenCalledWith({
+      restaurantSlug: "the-monks",
+      paymentId: 9,
+      amountCents: 25000,
+      paymentDate: "2026-08-10",
+      comment: "First installment",
+    });
   });
 });
 

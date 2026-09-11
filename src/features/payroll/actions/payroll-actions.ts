@@ -1011,6 +1011,57 @@ export async function confirmPaymentAction(input: {
   });
 }
 
+/**
+ * The explicit, audited reversal of `confirmPaymentAction`. Unlike
+ * every other write in this file, this does NOT call a plain
+ * `payroll-data.ts` update function -- `private.forbid_confirmed_payment_edit()`
+ * (the trigger `20260907200000` added specifically to close a real,
+ * proven vulnerability: a privileged role flipping status back to
+ * draft and silently re-editing a "confirmed" payment) unconditionally
+ * blocks any ordinary UPDATE that changes a confirmed payment's status,
+ * for every role, including this one. The only door is the
+ * `public.unconfirm_payroll_payment` SECURITY DEFINER RPC
+ * (`20260911130000_payroll_payment_unconfirm.sql`), which re-validates
+ * privilege and payment state itself, requires a mandatory reason, and
+ * writes its own audit event atomically in the same transaction --
+ * this action is a thin, validated wrapper around it, not a second
+ * authorization layer duplicating what the RPC already does.
+ *
+ * Deliberately still checks `requirePayrollManager` up front anyway,
+ * even though the RPC re-checks privilege itself: a cheap early exit
+ * for the common case, consistent with every other action in this
+ * file, not a claim that it's the real security boundary here (the
+ * RPC is).
+ */
+export async function unconfirmPaymentAction(input: {
+  restaurantSlug: string;
+  paymentId: number;
+  reason: string;
+}): Promise<ActionResult<null>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      paymentId: paymentIdSchema,
+      reason: reasonSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
+  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const { error } = await supabase.rpc("unconfirm_payroll_payment", {
+    p_payment_id: parsed.data.paymentId,
+    p_reason: parsed.data.reason,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: null };
+}
+
 // -- Adjustments --------------------------------------------------------------
 
 /**
