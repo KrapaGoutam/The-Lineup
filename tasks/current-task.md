@@ -1,186 +1,104 @@
-# Current Task: Feature 033 — Print Layout Hardening, Isolation, and Duplex Pagination
+# Current Task: Payroll Bulk Generation (Phase 3 of the mega-request)
 
-**Active Spec:** `docs/features/033-print-layout-hardening-duplex.md`
-**Branch:** `feature/033-print-layout-hardening-duplex` (merged as PR #33);
-Step 13's follow-up continues on `feature/033-payroll-print-isolation`,
-branched from `main` after PR #33 merged.
-**Status:** Complete — PR #33 merged; Step 13 follow-up open as
-[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34)
-**Assigned Agent:** Claude Code (implementation, verification gate, and PR)
+**Active Spec:** none (bounded phase, not a numbered feature) — see
+`docs/agent-handoff.md` for the full mega-request context and remaining
+phases.
+**Branch:** `feature/payroll-bulk-generation`, branched from `main`.
+**Status:** Complete — ready to push and open a PR.
+**Assigned Agent:** Claude Code
 
 ## 🎯 Objective
 
-Fix three real print bugs (Dashboard Leak, single-page overflow for
-Attendance/Payroll, and enforce strict 2-page-per-employee duplex
-pagination for the Combined Monthly Statement) without reintroducing
-the `visibility:hidden`/`position:absolute` isolation anti-pattern this
-codebase's own Feature 030 bug-fix pass already identified and moved
-away from.
+Let a manager generate payroll for one employee, an arbitrary subset,
+or all eligible employees in one action, with clear reporting of what
+was generated/skipped (already existed)/failed — never a silent
+partial success. Phase 3 of the mega-request; see
+`docs/agent-handoff.md` for the full picture.
 
-## 📖 Key Findings & Architecture
+## 🛠️ What was built
 
-1. **Audited before trusting the bug list.** Of the four claimed bugs,
-   one ("Trailing Blank Page") was already fixed
-   (`.print-page-break:last-child` in `globals.css`, from Feature 030).
-   The Combined Statement file path named in the request
-   (`src/components/reports/combined-statement-dialog.tsx`) doesn't
-   exist -- the real file is
-   `src/features/payroll/components/combined-statement-dialog.tsx`.
-   `attendance-print-dialog.tsx` (named for a Step 2 fix) is a
-   scope-picker dialog with zero printable content; the real Attendance
-   print markup lives in `attendance-report.tsx`'s `PrintableReport`.
-2. **"Dashboard Leak" was real, narrowly.** Only
-   `attendance-report.tsx`'s own screen-only render branches lacked
-   `print:hidden` (confirmed via grep before any fix). Every other
-   print surface (`payroll-workspace.tsx`, `payroll-print-dialog.tsx`,
-   `combined-statement-dialog.tsx`) was already correctly isolated.
-3. **Kept the existing isolation strategy, not the spec's literal
-   one.** `globals.css`'s own header comment documents that
-   `visibility:hidden`+`position:absolute` is "a known cause of
-   duplicate/blank-page print bugs" and was deliberately replaced with
-   `hidden print:block`/`print:hidden`. Re-implementing the literal
-   spec'd mechanism would have risked reintroducing that bug class.
-   Fixed the real gap (two screen-wrapper `<div>`s missing
-   `print:hidden`) inside the existing, proven pattern instead --
-   documented in full in the feature doc's "Decisions and risks"
-   section, mirroring the Feature 035 "anonymize, don't hard-delete"
-   precedent from this same session (literal instruction conflicts with
-   an already-fixed architectural decision → fix the real root cause
-   under the existing architecture, don't revert the fix).
-4. **Page counts can't come from Playwright DOM assertions.**
-   Verified actual pagination with a one-off script that drove a real
-   signed-in demo session and called
-   `page.pdf({ preferCSSPageSize: true })` (the real Chromium print
-   pipeline), then counted `/Type /Page` objects in the resulting PDF
-   bytes -- Attendance single-employee: 1 page; Combined Statement: 2
-   pages; "All employees" (5 demo employees): 5 pages, no trailing
-   blank. A full-page screenshot with `page.emulateMedia({media:"print"})`
-   visually confirmed no dashboard leak.
+- `generatePayrollForEmployeesAction` (new,
+  `src/features/payroll/actions/payroll-actions.ts`): takes
+  `neonUserIds: number[]`, loops per employee reusing the exact same
+  duplicate-check (`getPayrollPeriod`) and calculation/insert
+  (`computeSnapshot`/`generatePayrollPeriod`) the original
+  single-employee `generatePayrollPeriodAction` already used, and
+  returns a structured `{ successful, skipped, failed }` result.
+  Deliberately not one all-or-nothing DB transaction — one person's
+  failure never blocks or rolls back another's success in the same
+  batch (the "Acceptable" tier from the request's own Section 6, matching
+  this codebase's existing non-transactional payroll-generation style).
+- `getPayrollGenerationEligibilityAction` (new, same file): read-only,
+  reports which active employees already have a period for the chosen
+  month, so the UI can show status before the manager commits.
+- `GenerateForm` (`payroll-workspace.tsx`) rewritten: month → fetch
+  eligibility → checklist (Select All / Clear All / per-row "Already
+  generated" badge, defaulting the selection to exactly the
+  not-yet-generated employees) → submit → result summary ("N generated
+  · N already existed · N failed", failures listed by name). Submit
+  button label adapts: "Generate Payroll" / "Generate Payroll for N
+  Employees" / "Generate Payroll for All Employees".
+- The form no longer auto-closes after submitting — the manager needs
+  to actually see the outcome summary. `PrivilegedPayrollView`'s
+  `onGenerated` callback now only reloads the dashboard.
 
-## 🔒 Non-negotiable Constraints
+## 🔒 Non-negotiables honored
 
-- No change to the print isolation _strategy_ (`hidden print:block`) --
-  extend it to newly-found gaps, never reintroduce
-  `visibility:hidden`/`position:absolute`.
-- No data-fetching, authorization, or API changes -- print CSS and
-  print-surface JSX only.
-- The Combined Statement's two duplex pages must stay flat siblings of
-  the print area (never nested under a shared per-employee wrapper),
-  so `.print-page-break:last-child` keeps correctly identifying only
-  the batch's true final page.
-- Quality gates (`npm run check`, `npm test`, relevant Playwright
-  specs) pass before every commit.
+- Every write still goes through `requirePayrollManager` — a
+  non-manager caller is refused before touching any employee.
+- No duplicate calculation logic — the bulk path reuses
+  `computeSnapshot`/`generatePayrollPeriod`/`getPayrollPeriod` byte-for-
+  byte, not a second implementation that could drift from the
+  single-employee path.
+- No silent overwrite — an existing period is always reported as
+  "skipped", never regenerated by this action (regenerate stays its own
+  explicit, single-person action).
+- Not yet wrapped in a modal — deliberately deferred to Phase 4 per the
+  original request's own phase split, so this diff stays reviewable on
+  its own (bulk-selection logic vs. placement are two different
+  changes).
 
-## 🛠️ Implementation Steps
+## 🧪 Tests added
 
-- [x] **Step 1: Audit.** Read `attendance-print-dialog.tsx`,
-      `payroll-print-dialog.tsx`, `attendance-report.tsx`,
-      `combined-statement-dialog.tsx`, `globals.css`, and
-      `restaurant-operations-app.tsx`'s `<main>`/`<header>`/`<nav>`
-      structure before writing any code. Found the real root causes and
-      two wrong file-path assumptions in the original request (see
-      feature doc's "What the audit actually found").
-- [x] **Step 2: Global Print CSS.** Added the missing
-      `@page { size: letter portrait; margin: 8mm 8mm 6mm 8mm; }` to
-      `globals.css`; compacted `.print-timesheet-table` cell
-      padding/font-size. Deliberately did not add the
-      `.print-report-container`/`visibility:hidden` rules from the
-      original spec (see Constraints above).
-- [x] **Step 3: Fix Dashboard Leak.** Wrapped every screen-only render
-      branch in `attendance-report.tsx` (`accessError`, `!access`,
-      `unlinked`, `all`-scope loading/error, and the real `self`/`all`
-      content) in `print:hidden` -- as a _sibling_ of
-      `CombinedStatementDialog`/`PrintableReport`, not their ancestor.
-- [x] **Step 4: Attendance single-page guarantee.** Removed
-      `PrintableReport`'s forced `min-h-[98vh]`, compacted padding/KPI
-      margins, tightened the signature block (`mt-8 pt-6` →
-      `mt-2 pt-3`) with `break-inside-avoid`.
-- [x] **Step 5: Payroll single-page guarantee.** Compacted
-      `payroll-print-dialog.tsx`'s per-employee page padding
-      (`p-10` → `p-6`).
-- [x] **Step 6: Combined Statement duplex restructuring.** Rewrote
-      `combined-statement-dialog.tsx`'s per-employee render from one
-      `.map` producing one page to a `.flatMap` producing two flat
-      `.print-page-break` pages (Attendance, then Payroll +
-      signatures), each with its own full letterhead.
-- [x] **Step 7: Fix the two tests this broke.** Updated
-      `combined-statement-dialog.test.tsx` and
-      `payroll-workspace.test.tsx` (letterhead text now appears twice
-      per statement, `.print-page-break` count doubled) and
-      `payroll-timesheet-overhaul.spec.ts` (same, plus an explicit
-      `.print-page-break` count assertion).
-- [x] **Step 8: Quality gate.** `npm run check` (0 errors/warnings),
-      `npx vitest run` (44 files, 325/325 -- unchanged count).
-- [x] **Step 9: E2E regression check.** `attendance-reporting.spec.ts` +
-      `payroll-timesheet-overhaul.spec.ts`, 30/30 across
-      desktop/host-tablet/server-mobile.
-- [x] **Step 10: Live pagination verification.** Started the dev server
-      in demo mode, drove a real signed-in session, and rendered the
-      actual paginated PDF output via `page.pdf({ preferCSSPageSize: true })`
-      for Attendance (1 page), Combined Statement (2 pages), and "All
-      employees" Attendance (5 pages, no trailing blank) -- plus a
-      print-media screenshot confirming no dashboard leak. Cleaned up
-      the dev server process and all script/PDF/screenshot artifacts
-      afterward.
-- [x] **Step 11: Documentation.**
-  - [x] New `docs/features/033-print-layout-hardening-duplex.md`.
-  - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
-        Matrix row).
-  - [x] This task file.
-- [x] **Step 12: Commit + push + PR.**
-  - [x] Commit with a clear conventional-commits message (`59662f5`).
-  - [x] Push `feature/033-print-layout-hardening-duplex`.
-  - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
-        against `main`.
-- [x] **Step 13 (follow-up): Payroll print isolation & single-page
-      guarantee, scoped to exactly `payroll-print-dialog.tsx` +
-      `globals.css`.** A supplied diff referenced a fictional version
-      of the file (`<Dialog>`, `handleExport`, `triggerPrint`,
-      `PayrollTable`, a `.print-report-container` class) that doesn't
-      match the real component or this codebase's already-documented
-      isolation strategy, so it was not applied verbatim. Audited the
-      real file first: the screen/print split it asked for already
-      existed and was already correct (this dialog was never part of
-      the Dashboard Leak bug). Added a `.payroll-print-page` class
-      (new, additive) with `break-inside: avoid` +
-      `table-header-group` print rules scoped to that class only --
-      real, Payroll-scoped hardening, without touching the shared
-      `.print-timesheet-table`/`.print-page-break` rules Attendance
-      and the Combined Statement depend on, and without touching any
-      other file/module. Full writeup in
-      `docs/features/033-print-layout-hardening-duplex.md`'s "Payroll
-      Print Isolation (follow-up)" section. Quality gate re-run clean.
-      **Process correction:** this was first committed and pushed
-      directly to `main` by mistake (not checking the current branch
-      before starting -- PR #33 had been merged between turns). Caught
-      immediately, reverted on `main`, and redone properly on its own
-      branch (`feature/033-payroll-print-isolation`) via
-      `git cherry-pick` of the original commit, per the user's explicit
-      choice when asked how to remediate it.
+- `payroll-actions.test.ts` (+6): a 3-employee batch with one skip
+  (already exists), one success, one genuine failure, asserting the
+  exact structured result and that only the genuinely-new employee hit
+  the insert path; id de-duplication (repeated ids generate once);
+  non-manager refusal (both actions); empty-list rejection; eligibility
+  mapping correctness.
+- `payroll-workspace.test.tsx` (+1): full render as a manager → open
+  the form → type a month → assert the default selection is exactly the
+  not-yet-generated employee → Select All → deselect → submit → assert
+  the bulk action was called with the exact expected `neonUserIds` →
+  assert the result summary text renders → assert the form is still
+  open afterward (proving it doesn't auto-close before the manager can
+  read the outcome).
+- No new Playwright spec — payroll has no demo-mode UI path (real-mode
+  only), so this codebase's established precedent for this surface is
+  Vitest/jsdom component coverage, not e2e (see
+  `payroll-timesheet-overhaul.spec.ts`'s own comment on this).
+
+## ✅ Verification Gate
+
+- [x] `npm run format:check` — clean.
+- [x] `npm run lint` — clean.
+- [x] `npx tsc --noEmit` — clean.
+- [x] `npx vitest run` — 44/44 files, 332/332 tests (up from 325 — 7 new).
+- [x] `npm run build` — clean.
+- [x] `npm run test:e2e -- --project=desktop` (full suite, regression
+      check only — this surface has no e2e coverage of its own) — 51/51.
 
 ## 🗂️ File List
 
-- `src/app/globals.css`
-- `src/features/attendance/components/attendance-report.tsx`
-- `src/features/payroll/components/payroll-print-dialog.tsx`
-- `src/features/payroll/components/combined-statement-dialog.tsx`
-- `src/features/payroll/components/combined-statement-dialog.test.tsx`
+- `src/features/payroll/actions/payroll-actions.ts`
+- `src/features/payroll/actions/payroll-actions.test.ts`
+- `src/features/payroll/components/payroll-workspace.tsx`
 - `src/features/payroll/components/payroll-workspace.test.tsx`
-- `tests/e2e/payroll-timesheet-overhaul.spec.ts`
-- `docs/features/033-print-layout-hardening-duplex.md` (new)
-- `docs/STATUS.md`
-- `tasks/current-task.md`
+- `docs/agent-handoff.md`
+- `tasks/current-task.md` (this file)
 
 ## Current State & Next Step
 
-Feature 033 is fully complete: implemented, unit-tested,
-e2e-regression-swept, live-verified via real PDF pagination (not just
-DOM assertions), documented, committed (`59662f5`), pushed, and merged
-as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) into
-`main`. Step 13's Payroll print isolation follow-up is implemented,
-quality-gated, and committed (`bad6ac9`, cherry-picked from the
-mistakenly-direct-to-main `81a864e`, which was reverted on `main` as
-`f9dd68e`) on its own branch
-(`feature/033-payroll-print-isolation`), pushed, and opened as
-[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34) against
-`main`. Nothing further pending.
+This phase is complete and quality-gated. Next: commit, push, open a
+PR, verify CI, then continue to Phase 4 (Generate Payroll → modal) per
+`docs/agent-handoff.md`.

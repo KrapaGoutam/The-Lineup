@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  generatePayrollForEmployeesAction,
   getPayrollAccessAction,
   getPayrollDashboardAction,
+  getPayrollGenerationEligibilityAction,
   getPayrollLedgerAction,
   getPayrollRateOptionsAction,
   listPayrollPeriodsAction,
@@ -25,6 +27,8 @@ vi.mock("@/features/payroll/actions/payroll-actions", () => ({
   deletePayrollPaymentAction: vi.fn(),
   editPayrollPaymentAction: vi.fn(),
   generatePayrollPeriodAction: vi.fn(),
+  generatePayrollForEmployeesAction: vi.fn(),
+  getPayrollGenerationEligibilityAction: vi.fn(),
   regeneratePayrollPeriodAction: vi.fn(),
   lockPayrollPeriodAction: vi.fn(),
 }));
@@ -39,6 +43,8 @@ const mockedGetDashboard = vi.mocked(getPayrollDashboardAction);
 const mockedListPeriods = vi.mocked(listPayrollPeriodsAction);
 const mockedGetLedger = vi.mocked(getPayrollLedgerAction);
 const mockedGetStatement = vi.mocked(getCombinedMonthlyStatementAction);
+const mockedGetEligibility = vi.mocked(getPayrollGenerationEligibilityAction);
+const mockedGenerateForEmployees = vi.mocked(generatePayrollForEmployeesAction);
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -249,6 +255,147 @@ describe("PayrollWorkspace", () => {
     expect(
       screen.queryByText("Set fallback rate applied to anyone without one"),
     ).not.toBeInTheDocument();
+  });
+
+  it("bulk-generates payroll for a manager-chosen subset, defaults the checklist to not-yet-generated employees, and reports the mixed outcome clearly", async () => {
+    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetRateOptions.mockResolvedValue({
+      ok: true,
+      data: {
+        users: [
+          {
+            id: 101,
+            fullName: "Mia Chen",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+          {
+            id: 102,
+            fullName: "Leo Park",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+        ],
+        defaultRateCents: 1500,
+        overrides: [],
+      },
+    });
+    mockedGetDashboard.mockResolvedValue({
+      ok: true,
+      data: {
+        totalBalanceOwedCents: 0,
+        previousMonthGeneratedCents: 0,
+        owedThisMonthCents: 0,
+        owedLastMonthCents: 0,
+        oldestOpenPeriod: null,
+        perPerson: [],
+        periods: [],
+      },
+    });
+    // Mia already has a period for the chosen month; Leo doesn't --
+    // the checklist should default to selecting only Leo.
+    mockedGetEligibility.mockResolvedValue({
+      ok: true,
+      data: [
+        { neonUserId: 101, fullName: "Mia Chen", alreadyGenerated: true },
+        { neonUserId: 102, fullName: "Leo Park", alreadyGenerated: false },
+      ],
+    });
+    mockedGenerateForEmployees.mockResolvedValue({
+      ok: true,
+      data: {
+        successful: [
+          {
+            neonUserId: 102,
+            period: {
+              id: 5,
+              organizationId: "org-1",
+              neonUserId: 102,
+              periodMonth: "2026-09-01",
+              hoursSnapshot: 80,
+              rateCentsSnapshot: 1500,
+              grossCents: 120000,
+              status: "draft",
+              generatedAt: "2026-09-10T00:00:00Z",
+              generatedBy: "manager-1",
+              regeneratedAt: null,
+              regeneratedBy: null,
+              lockedAt: null,
+              lockedBy: null,
+            },
+          },
+        ],
+        skipped: [
+          { neonUserId: 101, reason: "Already generated for this month." },
+        ],
+        failed: [],
+      },
+    });
+
+    render(
+      <PayrollWorkspace
+        restaurantSlug="the-monks"
+        timeZone="America/Chicago"
+        onGoToPayRates={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Generate period" }),
+    );
+    await userEvent.type(screen.getByLabelText("Month"), "2026-09");
+
+    await waitFor(() =>
+      expect(screen.getByText("Already generated")).toBeInTheDocument(),
+    );
+    // Default selection: only the not-yet-generated employee (Leo).
+    const leoCheckbox = screen.getByRole("checkbox", { name: /Leo/ });
+    const miaCheckbox = screen.getByRole("checkbox", { name: /Mia/ });
+    expect(leoCheckbox).toBeChecked();
+    expect(miaCheckbox).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Generate Payroll" }),
+    ).toBeInTheDocument();
+
+    // Select All switches the button label to the "all employees" copy.
+    await userEvent.click(screen.getByRole("button", { name: "Select All" }));
+    expect(miaCheckbox).toBeChecked();
+    expect(
+      screen.getByRole("button", {
+        name: "Generate Payroll for All Employees",
+      }),
+    ).toBeInTheDocument();
+
+    // Deselect Mia again -- back to a plain single-person submit label.
+    await userEvent.click(miaCheckbox);
+    expect(
+      screen.getByRole("button", { name: "Generate Payroll" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Generate Payroll" }),
+    );
+
+    expect(mockedGenerateForEmployees).toHaveBeenCalledWith({
+      restaurantSlug: "the-monks",
+      neonUserIds: [102],
+      periodMonth: "2026-09-01",
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Payroll Generated")).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByText("1 generated · 1 already existed · 0 failed"),
+    ).toBeInTheDocument();
+    // The form stays open so this summary is actually visible -- it
+    // must not have been dismissed the instant the request resolved.
+    expect(
+      screen.getByRole("button", { name: "Hide form" }),
+    ).toBeInTheDocument();
   });
 
   it("PeriodLedgerPanel's single-statement print renders the shared letterhead and a dynamic filename", async () => {
