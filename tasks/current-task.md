@@ -1,186 +1,116 @@
-# Current Task: Feature 033 — Print Layout Hardening, Isolation, and Duplex Pagination
+# Current Task: Attendance Timezone Bug Fix (Phase 2 of the mega-request)
 
-**Active Spec:** `docs/features/033-print-layout-hardening-duplex.md`
-**Branch:** `feature/033-print-layout-hardening-duplex` (merged as PR #33);
-Step 13's follow-up continues on `feature/033-payroll-print-isolation`,
-branched from `main` after PR #33 merged.
-**Status:** Complete — PR #33 merged; Step 13 follow-up open as
-[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34)
-**Assigned Agent:** Claude Code (implementation, verification gate, and PR)
+**Active Spec:** none (bug fix, not a numbered feature) — see
+`docs/agent-handoff.md` for the full mega-request context and remaining
+phases.
+**Branch:** `fix/attendance-timezone`, branched from `main` after PR #34
+merged.
+**Status:** Complete — ready to push and open a PR.
+**Assigned Agent:** Claude Code
 
 ## 🎯 Objective
 
-Fix three real print bugs (Dashboard Leak, single-page overflow for
-Attendance/Payroll, and enforce strict 2-page-per-employee duplex
-pagination for the Combined Monthly Statement) without reintroducing
-the `visibility:hidden`/`position:absolute` isolation anti-pattern this
-codebase's own Feature 030 bug-fix pass already identified and moved
-away from.
+Fix the reported clock-in/out timezone bug (an 11:06 AM clock-in
+displaying as 6:06 AM) as Phase 2 of a much larger mega-request. See
+`docs/agent-handoff.md` for the full picture — this file only tracks
+this one bounded bug fix.
 
-## 📖 Key Findings & Architecture
+## 🔎 Root cause (confirmed by reading the actual data pipeline, not assumed)
 
-1. **Audited before trusting the bug list.** Of the four claimed bugs,
-   one ("Trailing Blank Page") was already fixed
-   (`.print-page-break:last-child` in `globals.css`, from Feature 030).
-   The Combined Statement file path named in the request
-   (`src/components/reports/combined-statement-dialog.tsx`) doesn't
-   exist -- the real file is
-   `src/features/payroll/components/combined-statement-dialog.tsx`.
-   `attendance-print-dialog.tsx` (named for a Step 2 fix) is a
-   scope-picker dialog with zero printable content; the real Attendance
-   print markup lives in `attendance-report.tsx`'s `PrintableReport`.
-2. **"Dashboard Leak" was real, narrowly.** Only
-   `attendance-report.tsx`'s own screen-only render branches lacked
-   `print:hidden` (confirmed via grep before any fix). Every other
-   print surface (`payroll-workspace.tsx`, `payroll-print-dialog.tsx`,
-   `combined-statement-dialog.tsx`) was already correctly isolated.
-3. **Kept the existing isolation strategy, not the spec's literal
-   one.** `globals.css`'s own header comment documents that
-   `visibility:hidden`+`position:absolute` is "a known cause of
-   duplicate/blank-page print bugs" and was deliberately replaced with
-   `hidden print:block`/`print:hidden`. Re-implementing the literal
-   spec'd mechanism would have risked reintroducing that bug class.
-   Fixed the real gap (two screen-wrapper `<div>`s missing
-   `print:hidden`) inside the existing, proven pattern instead --
-   documented in full in the feature doc's "Decisions and risks"
-   section, mirroring the Feature 035 "anonymize, don't hard-delete"
-   precedent from this same session (literal instruction conflicts with
-   an already-fixed architectural decision → fix the real root cause
-   under the existing architecture, don't revert the fix).
-4. **Page counts can't come from Playwright DOM assertions.**
-   Verified actual pagination with a one-off script that drove a real
-   signed-in demo session and called
-   `page.pdf({ preferCSSPageSize: true })` (the real Chromium print
-   pipeline), then counted `/Type /Page` objects in the resulting PDF
-   bytes -- Attendance single-employee: 1 page; Combined Statement: 2
-   pages; "All employees" (5 demo employees): 5 pages, no trailing
-   blank. A full-page screenshot with `page.emulateMedia({media:"print"})`
-   visually confirmed no dashboard leak.
+Not a Neon/region/storage issue — `attendance-data.ts` confirms
+`clock_in`/`clock_out` are genuine `timestamptz` columns, correctly
+parsed into real JS `Date` instants and correctly serialized via
+`.toISOString()`. That pipeline was already correct end to end.
 
-## 🔒 Non-negotiable Constraints
+The bug was entirely in display:
+`combined-statement-dialog.tsx` had its own local `formatClockTime`
+built on `Date.prototype.toLocaleTimeString` with **no `timeZone`
+option** — silently defaulting to the viewer's own browser timezone
+instead of the restaurant's business timezone. `attendance-report.tsx`
+already had a correct, timezone-aware `formatClockTime` (built on
+`zonedWallTimeFromInstant` from `src/lib/timezone.ts`, which already had
+full CDT/CST/DST-transition test coverage) — the Combined Statement
+dialog just never received a `timeZone` prop and rolled its own broken
+second implementation instead of reusing it.
 
-- No change to the print isolation _strategy_ (`hidden print:block`) --
-  extend it to newly-found gaps, never reintroduce
-  `visibility:hidden`/`position:absolute`.
-- No data-fetching, authorization, or API changes -- print CSS and
-  print-surface JSX only.
-- The Combined Statement's two duplex pages must stay flat siblings of
-  the print area (never nested under a shared per-employee wrapper),
-  so `.print-page-break:last-child` keeps correctly identifying only
-  the batch's true final page.
-- Quality gates (`npm run check`, `npm test`, relevant Playwright
-  specs) pass before every commit.
+## 🛠️ Fix
 
-## 🛠️ Implementation Steps
+- New `src/lib/date-time.ts`: `formatBusinessTime` / `formatBusinessDate`
+  / `formatBusinessDateTime`, built on `Intl.DateTimeFormat` with an
+  explicit, required `timeZone` argument — no fallback to any implicit
+  environment zone anywhere in the module. This is the shared home
+  Section 17 of the mega-request asks for; every future 12-hour
+  print/statement surface should format through it rather than rolling
+  its own `toLocaleTimeString` call.
+- `combined-statement-dialog.tsx`: added a required `timeZone: string`
+  prop; replaced the local broken `formatClockTime` with
+  `formatBusinessTime` from the new shared module.
+- Threaded `timeZone` through every call site: both in
+  `attendance-report.tsx` (it already had `timeZone` in scope) and
+  through `payroll-workspace.tsx`'s
+  `PayrollWorkspace → PrivilegedPayrollView/SelfPayrollView →
+PeriodLedgerPanel → CombinedStatementDialog` chain (added as a new
+  prop at each level — it wasn't threaded that far down before).
+- `attendance-report.tsx`'s own already-correct 24-hour `formatClockTime`
+  was deliberately left untouched — different, intentional display style
+  (an internal ops table, not a formal statement), not the bug.
+- `combined-statement-dialog.tsx`'s `formatPaymentDate` was also left
+  untouched — it's a plain calendar-date column (`payment_date`, no time
+  component), already correctly formatted with an explicit
+  `timeZone: "UTC"` to avoid re-interpreting the date itself; not an
+  instant, not affected by this bug class.
 
-- [x] **Step 1: Audit.** Read `attendance-print-dialog.tsx`,
-      `payroll-print-dialog.tsx`, `attendance-report.tsx`,
-      `combined-statement-dialog.tsx`, `globals.css`, and
-      `restaurant-operations-app.tsx`'s `<main>`/`<header>`/`<nav>`
-      structure before writing any code. Found the real root causes and
-      two wrong file-path assumptions in the original request (see
-      feature doc's "What the audit actually found").
-- [x] **Step 2: Global Print CSS.** Added the missing
-      `@page { size: letter portrait; margin: 8mm 8mm 6mm 8mm; }` to
-      `globals.css`; compacted `.print-timesheet-table` cell
-      padding/font-size. Deliberately did not add the
-      `.print-report-container`/`visibility:hidden` rules from the
-      original spec (see Constraints above).
-- [x] **Step 3: Fix Dashboard Leak.** Wrapped every screen-only render
-      branch in `attendance-report.tsx` (`accessError`, `!access`,
-      `unlinked`, `all`-scope loading/error, and the real `self`/`all`
-      content) in `print:hidden` -- as a _sibling_ of
-      `CombinedStatementDialog`/`PrintableReport`, not their ancestor.
-- [x] **Step 4: Attendance single-page guarantee.** Removed
-      `PrintableReport`'s forced `min-h-[98vh]`, compacted padding/KPI
-      margins, tightened the signature block (`mt-8 pt-6` →
-      `mt-2 pt-3`) with `break-inside-avoid`.
-- [x] **Step 5: Payroll single-page guarantee.** Compacted
-      `payroll-print-dialog.tsx`'s per-employee page padding
-      (`p-10` → `p-6`).
-- [x] **Step 6: Combined Statement duplex restructuring.** Rewrote
-      `combined-statement-dialog.tsx`'s per-employee render from one
-      `.map` producing one page to a `.flatMap` producing two flat
-      `.print-page-break` pages (Attendance, then Payroll +
-      signatures), each with its own full letterhead.
-- [x] **Step 7: Fix the two tests this broke.** Updated
-      `combined-statement-dialog.test.tsx` and
-      `payroll-workspace.test.tsx` (letterhead text now appears twice
-      per statement, `.print-page-break` count doubled) and
-      `payroll-timesheet-overhaul.spec.ts` (same, plus an explicit
-      `.print-page-break` count assertion).
-- [x] **Step 8: Quality gate.** `npm run check` (0 errors/warnings),
-      `npx vitest run` (44 files, 325/325 -- unchanged count).
-- [x] **Step 9: E2E regression check.** `attendance-reporting.spec.ts` +
-      `payroll-timesheet-overhaul.spec.ts`, 30/30 across
-      desktop/host-tablet/server-mobile.
-- [x] **Step 10: Live pagination verification.** Started the dev server
-      in demo mode, drove a real signed-in session, and rendered the
-      actual paginated PDF output via `page.pdf({ preferCSSPageSize: true })`
-      for Attendance (1 page), Combined Statement (2 pages), and "All
-      employees" Attendance (5 pages, no trailing blank) -- plus a
-      print-media screenshot confirming no dashboard leak. Cleaned up
-      the dev server process and all script/PDF/screenshot artifacts
-      afterward.
-- [x] **Step 11: Documentation.**
-  - [x] New `docs/features/033-print-layout-hardening-duplex.md`.
-  - [x] Updated `docs/STATUS.md` (Current Status Overview, Feature
-        Matrix row).
-  - [x] This task file.
-- [x] **Step 12: Commit + push + PR.**
-  - [x] Commit with a clear conventional-commits message (`59662f5`).
-  - [x] Push `feature/033-print-layout-hardening-duplex`.
-  - [x] Open [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33)
-        against `main`.
-- [x] **Step 13 (follow-up): Payroll print isolation & single-page
-      guarantee, scoped to exactly `payroll-print-dialog.tsx` +
-      `globals.css`.** A supplied diff referenced a fictional version
-      of the file (`<Dialog>`, `handleExport`, `triggerPrint`,
-      `PayrollTable`, a `.print-report-container` class) that doesn't
-      match the real component or this codebase's already-documented
-      isolation strategy, so it was not applied verbatim. Audited the
-      real file first: the screen/print split it asked for already
-      existed and was already correct (this dialog was never part of
-      the Dashboard Leak bug). Added a `.payroll-print-page` class
-      (new, additive) with `break-inside: avoid` +
-      `table-header-group` print rules scoped to that class only --
-      real, Payroll-scoped hardening, without touching the shared
-      `.print-timesheet-table`/`.print-page-break` rules Attendance
-      and the Combined Statement depend on, and without touching any
-      other file/module. Full writeup in
-      `docs/features/033-print-layout-hardening-duplex.md`'s "Payroll
-      Print Isolation (follow-up)" section. Quality gate re-run clean.
-      **Process correction:** this was first committed and pushed
-      directly to `main` by mistake (not checking the current branch
-      before starting -- PR #33 had been merged between turns). Caught
-      immediately, reverted on `main`, and redone properly on its own
-      branch (`feature/033-payroll-print-isolation`) via
-      `git cherry-pick` of the original commit, per the user's explicit
-      choice when asked how to remediate it.
+## 🔒 Non-negotiable constraints honored
+
+- Neon stayed read-only — no query changes, no schema changes.
+- No manual `-5`/`+5` hour offset anywhere — every zone conversion goes
+  through `Intl.DateTimeFormat`'s own `timeZone` option (or, for the
+  reverse/harder direction elsewhere in the app, the existing
+  DST-transition-aware `zonedWallTimeToInstant`).
+- `America/Chicago` is passed as a real IANA zone name, sourced from the
+  existing `timeZone` prop chain (itself ultimately DB-driven via
+  `scheduleContext.timeZone` in real mode) — never hardcoded as a raw
+  UTC offset.
+
+## 🧪 Tests added
+
+- `src/lib/date-time.test.ts` (new, 7 tests): CDT (summer, UTC-5) and CST
+  (winter, UTC-6) render the identical correct wall-clock time from two
+  different UTC instants; explicit assertion that the old broken output
+  ("4:06 PM") is NOT produced; midnight/noon boundaries; a second
+  explicit timezone (UTC) to prove the function isn't hardcoded to
+  Chicago either.
+- `combined-statement-dialog.test.tsx` (new describe block, 2 tests): a
+  real attendance row rendered through the actual dialog component,
+  asserting the correct wall-clock time appears (both a CDT and a CST
+  example) — the actual regression test for the reported bug, not just
+  the underlying utility.
+
+## ✅ Verification Gate
+
+- [x] `npm run format:check` — clean.
+- [x] `npm run lint` — clean.
+- [x] `npx tsc --noEmit` — clean (also caught every test call site that
+      needed the new required `timeZone` prop).
+- [x] `npx vitest run` — 45/45 files, 334/334 tests (up from 325 — 9 new).
+- [x] `npm run build` — clean.
+- [x] `npx playwright test tests/e2e/attendance-reporting.spec.ts tests/e2e/payroll-timesheet-overhaul.spec.ts --project=desktop` — 10/10.
+- [x] `npm run test:e2e -- --project=desktop` (full suite) — 51/51.
 
 ## 🗂️ File List
 
-- `src/app/globals.css`
-- `src/features/attendance/components/attendance-report.tsx`
-- `src/features/payroll/components/payroll-print-dialog.tsx`
+- `src/lib/date-time.ts` (new)
+- `src/lib/date-time.test.ts` (new)
 - `src/features/payroll/components/combined-statement-dialog.tsx`
 - `src/features/payroll/components/combined-statement-dialog.test.tsx`
+- `src/features/payroll/components/payroll-workspace.tsx`
 - `src/features/payroll/components/payroll-workspace.test.tsx`
-- `tests/e2e/payroll-timesheet-overhaul.spec.ts`
-- `docs/features/033-print-layout-hardening-duplex.md` (new)
-- `docs/STATUS.md`
-- `tasks/current-task.md`
+- `src/features/attendance/components/attendance-report.tsx`
+- `docs/agent-handoff.md` (new — full mega-request context)
+- `tasks/current-task.md` (this file)
 
 ## Current State & Next Step
 
-Feature 033 is fully complete: implemented, unit-tested,
-e2e-regression-swept, live-verified via real PDF pagination (not just
-DOM assertions), documented, committed (`59662f5`), pushed, and merged
-as [PR #33](https://github.com/KrapaGoutam/The-Lineup/pull/33) into
-`main`. Step 13's Payroll print isolation follow-up is implemented,
-quality-gated, and committed (`bad6ac9`, cherry-picked from the
-mistakenly-direct-to-main `81a864e`, which was reverted on `main` as
-`f9dd68e`) on its own branch
-(`feature/033-payroll-print-isolation`), pushed, and opened as
-[PR #34](https://github.com/KrapaGoutam/The-Lineup/pull/34) against
-`main`. Nothing further pending.
+This bug fix is complete and quality-gated. Next: commit, push, open a
+PR, verify CI, then continue to Phase 3 (payroll bulk generation) per
+`docs/agent-handoff.md`.

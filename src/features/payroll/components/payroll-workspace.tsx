@@ -185,6 +185,7 @@ export function PayrollWorkspace({
           restaurantSlug={restaurantSlug}
           todayLocalDate={todayLocalDate}
           personLabel={personLabel}
+          timeZone={timeZone}
         />
       </div>
     );
@@ -195,6 +196,7 @@ export function PayrollWorkspace({
         restaurantSlug={restaurantSlug}
         todayLocalDate={todayLocalDate}
         onGoToPayRates={onGoToPayRates}
+        timeZone={timeZone}
       />
     </div>
   );
@@ -204,10 +206,12 @@ function PrivilegedPayrollView({
   restaurantSlug,
   todayLocalDate,
   onGoToPayRates,
+  timeZone,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
   onGoToPayRates: () => void;
+  timeZone: string;
 }) {
   const [rateOptions, setRateOptions] = useState<PayrollRateOptions | null>(
     null,
@@ -356,6 +360,7 @@ function PrivilegedPayrollView({
           periodId={selectedPeriodId}
           readOnly={false}
           onChanged={reloadEverything}
+          timeZone={timeZone}
           personLabel={(() => {
             const selectedPeriod = dashboard?.periods.find(
               (period) => period.id === selectedPeriodId,
@@ -377,10 +382,12 @@ function SelfPayrollView({
   restaurantSlug,
   todayLocalDate,
   personLabel,
+  timeZone,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
   personLabel: string;
+  timeZone: string;
 }) {
   const [periods, setPeriods] = useState<PayrollPeriod[] | null>(null);
   const [periodsError, setPeriodsError] = useState<string | null>(null);
@@ -487,6 +494,7 @@ function SelfPayrollView({
           readOnly
           onChanged={() => setReloadKey((key) => key + 1)}
           personLabel={personLabel}
+          timeZone={timeZone}
         />
       ) : null}
     </div>
@@ -1005,12 +1013,14 @@ function PeriodLedgerPanel({
   readOnly,
   onChanged,
   personLabel,
+  timeZone,
 }: {
   restaurantSlug: string;
   periodId: number;
   readOnly: boolean;
   onChanged: () => void;
   personLabel: string;
+  timeZone: string;
 }) {
   const [ledger, setLedger] = useState<PayrollLedger | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1311,6 +1321,7 @@ function PeriodLedgerPanel({
           target={{ scope: "single", neonUserId: period.neonUserId }}
           year={Number(period.periodMonth.slice(0, 4))}
           month={Number(period.periodMonth.slice(5, 7))}
+          timeZone={timeZone}
           onClose={() => setShowCombinedStatement(false)}
         />
       ) : null}

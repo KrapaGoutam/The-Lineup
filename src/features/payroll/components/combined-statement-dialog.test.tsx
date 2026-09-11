@@ -49,6 +49,7 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
         target={{ scope: "all", neonUserIds: [101, 102, 103] }}
         year={2026}
         month={9}
+        timeZone="America/Chicago"
         onClose={vi.fn()}
       />,
     );
@@ -90,6 +91,7 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
         target={{ scope: "all", neonUserIds: [101, 102, 103] }}
         year={2026}
         month={9}
+        timeZone="America/Chicago"
         onClose={vi.fn()}
       />,
     );
@@ -118,6 +120,7 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
         target={{ scope: "all", neonUserIds: [101, 102] }}
         year={2026}
         month={9}
+        timeZone="America/Chicago"
         onClose={vi.fn()}
       />,
     );
@@ -142,6 +145,7 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
         target={{ scope: "all", neonUserIds: [101, 102] }}
         year={2026}
         month={9}
+        timeZone="America/Chicago"
         onClose={vi.fn()}
       />,
     );
@@ -155,5 +159,84 @@ describe("CombinedStatementDialog -- 'all' scope (Feature 031)", () => {
     expect(document.title).toBe("Staff Payroll Statements Sep 2026");
 
     printSpy.mockRestore();
+  });
+});
+
+describe("CombinedStatementDialog -- clock-in/out timezone (bug fix)", () => {
+  it("renders clock-in/out times in the restaurant's business timezone, not the test environment's default", async () => {
+    const statement = makeStatement(101, "Employee 101", "Server");
+    statement.attendance.rows = [
+      {
+        id: 1,
+        userId: 101,
+        date: "2026-09-10",
+        // 16:06 UTC is 11:06 AM in America/Chicago during CDT (UTC-5).
+        // Vitest's default test environment timezone is UTC, so this
+        // would previously have rendered as "4:06 PM" (or worse, an
+        // arbitrary offset on CI) without an explicit business
+        // timeZone passed through to the dialog.
+        clockIn: "2026-09-10T16:06:00.000Z",
+        clockOut: "2026-09-10T23:30:00.000Z",
+        hoursWorked: 7.4,
+        autoClockedOut: false,
+      },
+    ];
+    mockedGetStatement.mockResolvedValue({ ok: true, data: statement });
+
+    render(
+      <CombinedStatementDialog
+        restaurantSlug="the-monks"
+        target={{ scope: "single", neonUserId: 101 }}
+        year={2026}
+        month={9}
+        timeZone="America/Chicago"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("11:06 AM")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("6:30 PM")).toBeInTheDocument();
+    // The exact wrong reading the original bug would have produced for
+    // the clock-in instant if formatted with no timezone in a UTC test
+    // environment -- asserted absent so a regression can't silently
+    // pass by coincidence.
+    expect(screen.queryByText("4:06 PM")).not.toBeInTheDocument();
+  });
+
+  it("renders the same wall-clock reading correctly across a DST boundary (CST, winter)", async () => {
+    const statement = makeStatement(101, "Employee 101", "Server");
+    statement.attendance.rows = [
+      {
+        id: 1,
+        userId: 101,
+        date: "2026-01-10",
+        // 17:06 UTC is 11:06 AM in America/Chicago during CST (UTC-6) --
+        // a different UTC instant than the CDT case above, rendering to
+        // the identical wall-clock time, proving the offset isn't
+        // hardcoded anywhere in the render path.
+        clockIn: "2026-01-10T17:06:00.000Z",
+        clockOut: null,
+        hoursWorked: null,
+        autoClockedOut: false,
+      },
+    ];
+    mockedGetStatement.mockResolvedValue({ ok: true, data: statement });
+
+    render(
+      <CombinedStatementDialog
+        restaurantSlug="the-monks"
+        target={{ scope: "single", neonUserId: 101 }}
+        year={2026}
+        month={1}
+        timeZone="America/Chicago"
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("11:06 AM")).toBeInTheDocument(),
+    );
   });
 });
