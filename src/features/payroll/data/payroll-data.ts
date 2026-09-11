@@ -488,6 +488,73 @@ export async function lockPayrollPeriod(
   return { ok: true, data: null };
 }
 
+/**
+ * The explicit, audited reversal of `lockPayrollPeriod`. `status`/
+ * `locked_at`/`locked_by` have no immutability trigger on
+ * `payroll_periods` (only the snapshot columns do, and only once a
+ * payment exists -- see `forbid_payroll_period_snapshot_edit`'s own
+ * comment, which deliberately leaves these three columns unprotected
+ * "so locking an already-paid period still works") -- so this is a
+ * plain, ordinary UPDATE, unlike payment un-confirm (which needs a
+ * dedicated SECURITY DEFINER RPC to get past a real trigger). A
+ * mandatory `reason` is required and audited, matching the same
+ * discipline `recordAdjustment` already applies to its own sensitive,
+ * money-moving correction path. `previousLockedAt`/`previousLockedBy`
+ * come from the caller's own already-fetched period row (read before
+ * this call, in the server action) so a failed audit write can roll
+ * this back to the exact prior state, not just a generic "was locked"
+ * guess.
+ */
+export async function unlockPayrollPeriod(
+  supabase: TypedSupabaseClient,
+  input: {
+    periodId: number;
+    organizationId: string;
+    actorProfileId: string;
+    reason: string;
+    previousLockedAt: string | null;
+    previousLockedBy: string | null;
+  },
+): Promise<PayrollResult<null>> {
+  const { error } = await supabase
+    .from("payroll_periods")
+    .update({ status: "draft", locked_at: null, locked_by: null })
+    .eq("id", input.periodId);
+  if (error) {
+    console.error("unlockPayrollPeriod failed", error);
+    return { ok: false, error: UNAVAILABLE_ERROR };
+  }
+
+  const audit = await recordAuditEvent(supabase, {
+    organizationId: input.organizationId,
+    actorProfileId: input.actorProfileId,
+    action: "payroll_period_unlocked",
+    entityType: "payroll_period",
+    entityId: String(input.periodId),
+    beforeState: {
+      status: "locked",
+      locked_at: input.previousLockedAt,
+      locked_by: input.previousLockedBy,
+    },
+    afterState: { status: "draft", reason: input.reason },
+  });
+  if (!audit.ok) {
+    const { error: rollbackError } = await supabase
+      .from("payroll_periods")
+      .update({
+        status: "locked",
+        locked_at: input.previousLockedAt,
+        locked_by: input.previousLockedBy,
+      })
+      .eq("id", input.periodId);
+    if (rollbackError) {
+      console.error("unlockPayrollPeriod rollback failed", rollbackError);
+    }
+    return audit;
+  }
+  return { ok: true, data: null };
+}
+
 // -- Payments -----------------------------------------------------------
 
 export type PayrollPayment = {

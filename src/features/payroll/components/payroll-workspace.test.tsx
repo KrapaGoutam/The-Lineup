@@ -10,6 +10,7 @@ import {
   getPayrollLedgerAction,
   getPayrollRateOptionsAction,
   listPayrollPeriodsAction,
+  unlockPayrollPeriodAction,
 } from "@/features/payroll/actions/payroll-actions";
 import { getCombinedMonthlyStatementAction } from "@/features/payroll/actions/statement-actions";
 import { CombinedStatementDialog } from "./combined-statement-dialog";
@@ -31,6 +32,7 @@ vi.mock("@/features/payroll/actions/payroll-actions", () => ({
   getPayrollGenerationEligibilityAction: vi.fn(),
   regeneratePayrollPeriodAction: vi.fn(),
   lockPayrollPeriodAction: vi.fn(),
+  unlockPayrollPeriodAction: vi.fn(),
 }));
 
 vi.mock("@/features/payroll/actions/statement-actions", () => ({
@@ -45,6 +47,7 @@ const mockedGetLedger = vi.mocked(getPayrollLedgerAction);
 const mockedGetStatement = vi.mocked(getCombinedMonthlyStatementAction);
 const mockedGetEligibility = vi.mocked(getPayrollGenerationEligibilityAction);
 const mockedGenerateForEmployees = vi.mocked(generatePayrollForEmployeesAction);
+const mockedUnlockPeriod = vi.mocked(unlockPayrollPeriodAction);
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -533,6 +536,148 @@ describe("PayrollWorkspace", () => {
     expect(
       screen.queryByRole("dialog", { name: "August 2026 Ledger" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("a manager can unlock a locked period through an explicit, reason-gated confirmation", async () => {
+    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetRateOptions.mockResolvedValue({
+      ok: true,
+      data: {
+        users: [
+          {
+            id: 101,
+            fullName: "Mia Chen",
+            role: "Server",
+            phone: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            isActive: true,
+          },
+        ],
+        defaultRateCents: 1500,
+        overrides: [],
+      },
+    });
+    mockedGetDashboard.mockResolvedValue({
+      ok: true,
+      data: {
+        totalBalanceOwedCents: 30000,
+        previousMonthGeneratedCents: 60000,
+        owedThisMonthCents: 0,
+        owedLastMonthCents: 30000,
+        oldestOpenPeriod: null,
+        perPerson: [
+          { neonUserId: 101, balanceCents: 30000, totalGeneratedCents: 60000 },
+        ],
+        periods: [
+          {
+            id: 1,
+            neonUserId: 101,
+            periodMonth: "2026-08-01",
+            hoursSnapshot: 40,
+            rateCentsSnapshot: 1500,
+            grossCents: 60000,
+            status: "locked",
+            balanceCents: 30000,
+          },
+        ],
+      },
+    });
+    mockedGetLedger.mockResolvedValue({
+      ok: true,
+      data: {
+        period: {
+          id: 1,
+          organizationId: "org-1",
+          neonUserId: 101,
+          periodMonth: "2026-08-01",
+          hoursSnapshot: 40,
+          rateCentsSnapshot: 1500,
+          grossCents: 60000,
+          status: "locked",
+          generatedAt: "2026-08-01T00:00:00Z",
+          generatedBy: "admin-1",
+          regeneratedAt: null,
+          regeneratedBy: null,
+          lockedAt: "2026-08-02T00:00:00Z",
+          lockedBy: "admin-1",
+        },
+        payments: [],
+        adjustments: [],
+        balance: {
+          grossCents: 60000,
+          confirmedPaymentsCents: 30000,
+          draftPaymentsCents: 0,
+          adjustmentsCents: 0,
+          balanceCents: 30000,
+          fullyPaid: false,
+        },
+        organizationName: "The Monk's Restaurant & Bar",
+      },
+    });
+    mockedUnlockPeriod.mockResolvedValue({ ok: true, data: null });
+
+    render(
+      <PayrollWorkspace
+        restaurantSlug="the-monks"
+        timeZone="America/Chicago"
+        onGoToPayRates={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Overall balance owed")).toBeInTheDocument(),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open ledger for August 2026" }),
+    );
+
+    const ledgerDialog = await screen.findByRole("dialog", {
+      name: "August 2026 Ledger",
+    });
+    expect(within(ledgerDialog).getByText("Ledger Locked")).toBeInTheDocument();
+
+    await userEvent.click(
+      within(ledgerDialog).getByRole("button", { name: "Unlock Ledger" }),
+    );
+
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: "Unlock Payroll Ledger",
+    });
+
+    // Refuses to submit without a real reason.
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Unlock Ledger" }),
+    );
+    expect(
+      within(confirmDialog).getByText(
+        "Enter a brief reason (at least 3 characters).",
+      ),
+    ).toBeInTheDocument();
+    expect(mockedUnlockPeriod).not.toHaveBeenCalled();
+
+    await userEvent.type(
+      within(confirmDialog).getByLabelText("Reason"),
+      "Wrong hours snapshot, needs regeneration.",
+    );
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Unlock Ledger" }),
+    );
+
+    expect(mockedUnlockPeriod).toHaveBeenCalledWith({
+      restaurantSlug: "the-monks",
+      periodId: 1,
+      reason: "Wrong hours snapshot, needs regeneration.",
+    });
+    // The confirmation dialog closes once unlocked; the ledger dialog
+    // itself stays open (only the confirmation was dismissed).
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Unlock Payroll Ledger" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "August 2026 Ledger" }),
+    ).toBeInTheDocument();
   });
 });
 

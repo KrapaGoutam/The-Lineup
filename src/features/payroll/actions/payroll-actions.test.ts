@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
   getActiveNeonUsers: vi.fn(),
   getAttendanceRows: vi.fn(),
   getPayrollPeriod: vi.fn(),
+  getPayrollPeriodById: vi.fn(),
   generatePayrollPeriod: vi.fn(),
+  unlockPayrollPeriod: vi.fn(),
   getPayrollRateOverrideCents: vi.fn(),
   getPayrollDefaultRateCents: vi.fn(),
   requireLiveSession: vi.fn(),
@@ -35,7 +37,9 @@ vi.mock("@/features/payroll/data/payroll-data", () => ({
   listPayrollPeriods: mocks.listPayrollPeriods,
   getPayrollBalance: mocks.getPayrollBalance,
   getPayrollPeriod: mocks.getPayrollPeriod,
+  getPayrollPeriodById: mocks.getPayrollPeriodById,
   generatePayrollPeriod: mocks.generatePayrollPeriod,
+  unlockPayrollPeriod: mocks.unlockPayrollPeriod,
   getPayrollRateOverrideCents: mocks.getPayrollRateOverrideCents,
   getPayrollDefaultRateCents: mocks.getPayrollDefaultRateCents,
 }));
@@ -44,6 +48,7 @@ import {
   generatePayrollForEmployeesAction,
   getPayrollDashboardAction,
   getPayrollGenerationEligibilityAction,
+  unlockPayrollPeriodAction,
 } from "./payroll-actions";
 
 const organizationId = "00000000-0000-0000-0000-000000026101";
@@ -372,5 +377,121 @@ describe("getPayrollGenerationEligibilityAction", () => {
       ok: false,
       error: "You don't have access to payroll.",
     });
+  });
+});
+
+describe("unlockPayrollPeriodAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createClient.mockResolvedValue({});
+    mocks.getCurrentUser.mockResolvedValue(manager);
+    mocks.requireLiveSession.mockResolvedValue(null);
+    mocks.unlockPayrollPeriod.mockResolvedValue({ ok: true, data: null });
+  });
+
+  it("unlocks a locked period with a reason, passing the period's own previous lock metadata through for rollback", async () => {
+    mocks.getPayrollPeriodById.mockResolvedValue({
+      ok: true,
+      data: period({
+        id: 5,
+        status: "locked",
+        lockedAt: "2026-09-02T00:00:00.000Z",
+        lockedBy: "manager-1",
+      }),
+    });
+
+    const result = await unlockPayrollPeriodAction({
+      restaurantSlug: "the-monks",
+      periodId: 5,
+      reason: "Wrong hours snapshot, needs regeneration.",
+    });
+
+    expect(result).toEqual({ ok: true, data: null });
+    expect(mocks.unlockPayrollPeriod).toHaveBeenCalledWith(
+      {},
+      {
+        periodId: 5,
+        organizationId,
+        actorProfileId: manager.profileId,
+        reason: "Wrong hours snapshot, needs regeneration.",
+        previousLockedAt: "2026-09-02T00:00:00.000Z",
+        previousLockedBy: "manager-1",
+      },
+    );
+  });
+
+  it("refuses to unlock a period that isn't locked", async () => {
+    mocks.getPayrollPeriodById.mockResolvedValue({
+      ok: true,
+      data: period({ id: 5, status: "draft" }),
+    });
+
+    const result = await unlockPayrollPeriodAction({
+      restaurantSlug: "the-monks",
+      periodId: 5,
+      reason: "Some reason",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "This payroll period isn't locked.",
+    });
+    expect(mocks.unlockPayrollPeriod).not.toHaveBeenCalled();
+  });
+
+  it("rejects a too-short reason as an invalid request", async () => {
+    mocks.getPayrollPeriodById.mockResolvedValue({
+      ok: true,
+      data: period({ id: 5, status: "locked" }),
+    });
+
+    const result = await unlockPayrollPeriodAction({
+      restaurantSlug: "the-monks",
+      periodId: 5,
+      reason: "no",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(mocks.unlockPayrollPeriod).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-manager caller entirely, before fetching the period", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ ...manager, role: "server" });
+    mocks.getOwnAttendanceLink.mockResolvedValue({ ok: true, data: null });
+
+    const result = await unlockPayrollPeriodAction({
+      restaurantSlug: "the-monks",
+      periodId: 5,
+      reason: "Some reason",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "You don't have access to payroll.",
+    });
+    expect(mocks.getPayrollPeriodById).not.toHaveBeenCalled();
+  });
+
+  it("refuses a period belonging to a different organization", async () => {
+    mocks.getPayrollPeriodById.mockResolvedValue({
+      ok: true,
+      data: period({
+        id: 5,
+        status: "locked",
+        organizationId: "00000000-0000-0000-0000-000000099999",
+      }),
+    });
+
+    const result = await unlockPayrollPeriodAction({
+      restaurantSlug: "the-monks",
+      periodId: 5,
+      reason: "Some reason",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "That payroll period could not be found.",
+    });
+    expect(mocks.unlockPayrollPeriod).not.toHaveBeenCalled();
   });
 });
