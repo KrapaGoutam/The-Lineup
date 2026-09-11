@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -302,34 +303,36 @@ function PrivilegedPayrollView({
           dashboard={dashboard}
           users={rateOptions?.users ?? []}
           onGoToPayRates={onGoToPayRates}
-          showGenerateForm={showGenerateForm}
-          onToggleGenerate={() => setShowGenerateForm((prev) => !prev)}
+          onToggleGenerate={() => setShowGenerateForm(true)}
           onOpenPrintDialog={() => setPrintDialogState({})}
         />
       )}
 
       {showGenerateForm ? (
-        rateOptionsError ? (
-          <ErrorPanel
-            message={rateOptionsError}
-            onRetry={() => setRateReloadKey((key) => key + 1)}
-          />
-        ) : !rateOptions ? (
-          <p className="text-muted-foreground text-sm" aria-live="polite">
-            Loading team…
-          </p>
-        ) : (
-          <GenerateForm
-            restaurantSlug={restaurantSlug}
-            users={rateOptions.users}
-            // Deliberately doesn't close the form -- a bulk generate can
-            // partially succeed, and the manager needs to actually see
-            // GenerateForm's own generated/skipped/failed summary before
-            // it's dismissed, not have it vanish the instant the request
-            // resolves.
-            onGenerated={reloadEverything}
-          />
-        )
+        <GenerateFormDialog onClose={() => setShowGenerateForm(false)}>
+          {rateOptionsError ? (
+            <ErrorPanel
+              message={rateOptionsError}
+              onRetry={() => setRateReloadKey((key) => key + 1)}
+            />
+          ) : !rateOptions ? (
+            <p className="text-muted-foreground text-sm" aria-live="polite">
+              Loading team…
+            </p>
+          ) : (
+            <GenerateForm
+              restaurantSlug={restaurantSlug}
+              users={rateOptions.users}
+              // Deliberately doesn't close the dialog -- a bulk generate
+              // can partially succeed, and the manager needs to actually
+              // see GenerateForm's own generated/skipped/failed summary
+              // before it's dismissed, not have it vanish the instant the
+              // request resolves. The manager closes it themselves via
+              // GenerateFormDialog's own close button once they're done.
+              onGenerated={reloadEverything}
+            />
+          )}
+        </GenerateFormDialog>
       ) : null}
 
       {dashboard ? (
@@ -366,6 +369,7 @@ function PrivilegedPayrollView({
           readOnly={false}
           onChanged={reloadEverything}
           timeZone={timeZone}
+          onClose={() => setSelectedPeriodId(null)}
           personLabel={(() => {
             const selectedPeriod = dashboard?.periods.find(
               (period) => period.id === selectedPeriodId,
@@ -874,6 +878,56 @@ function RateOverrideRow({
 }
 
 /**
+ * Bug fix: Generate Payroll used to expand `GenerateForm` inline below
+ * the page (`showGenerateForm`'s old placement); it now opens as a
+ * proper modal dialog, reusing this codebase's one existing modal
+ * convention -- a `fixed inset-0` overlay + `Card` with
+ * `role="dialog" aria-modal="true"` -- exactly the pattern
+ * `PayrollPrintDialog`/`CombinedStatementDialog` already use. There is
+ * no shadcn `Dialog` primitive anywhere in this codebase to reach for
+ * instead. `GenerateForm` itself no longer owns any `Card`/header
+ * chrome -- this component supplies all of it, so the same form content
+ * could in principle be reused in a non-modal context too.
+ */
+function GenerateFormDialog({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label="Generate Payroll"
+        className="border-border bg-card flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden shadow-2xl"
+      >
+        <CardHeader className="flex flex-none flex-row items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold">Generate Payroll</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            <X className="size-5" />
+          </Button>
+        </CardHeader>
+        <CardContent className="overflow-y-auto">{children}</CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
  * Feature: bulk payroll generation. One employee, an arbitrary subset,
  * or all of them, all through the same `generatePayrollForEmployeesAction`
  * call -- the UI's only job is deciding which `neonUserIds` to send.
@@ -988,132 +1042,127 @@ function GenerateForm({
         : "Generate Payroll";
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="font-semibold">Generate payroll</h2>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-0">
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="generate-month">Month</Label>
-            <Input
-              id="generate-month"
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-              className="w-40"
-            />
-          </div>
+    <div className="space-y-4">
+      <form onSubmit={submit} className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="generate-month">Month</Label>
+          <Input
+            id="generate-month"
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+            className="w-40"
+          />
+        </div>
 
-          {!month ? null : eligibilityError ? (
-            <p className="text-destructive text-sm" aria-live="polite">
-              {eligibilityError}
-            </p>
-          ) : !eligibility ? (
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              Checking existing payroll…
-            </p>
-          ) : eligibility.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No eligible employees.
-            </p>
-          ) : (
-            <fieldset className="space-y-2">
-              <div className="flex items-center justify-between">
-                <legend className="text-sm font-medium">Employees</legend>
-                <div className="flex items-center gap-3 text-xs">
-                  <button
-                    type="button"
-                    className="text-primary underline"
-                    onClick={() =>
-                      setSelected(
-                        new Set(eligibility.map((person) => person.neonUserId)),
-                      )
+        {!month ? null : eligibilityError ? (
+          <p className="text-destructive text-sm" aria-live="polite">
+            {eligibilityError}
+          </p>
+        ) : !eligibility ? (
+          <p className="text-muted-foreground text-sm" aria-live="polite">
+            Checking existing payroll…
+          </p>
+        ) : eligibility.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No eligible employees.
+          </p>
+        ) : (
+          <fieldset className="space-y-2">
+            <div className="flex items-center justify-between">
+              <legend className="text-sm font-medium">Employees</legend>
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  className="text-primary underline"
+                  onClick={() =>
+                    setSelected(
+                      new Set(eligibility.map((person) => person.neonUserId)),
+                    )
+                  }
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground underline"
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+            <div className="border-border grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border p-2 sm:grid-cols-2">
+              {eligibility.map((person) => (
+                <label
+                  key={person.neonUserId}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(person.neonUserId)}
+                    onChange={() => toggle(person.neonUserId)}
+                    className="accent-[var(--primary)]"
+                  />
+                  <span
+                    className={
+                      person.alreadyGenerated
+                        ? "text-muted-foreground"
+                        : undefined
                     }
                   >
-                    Select All
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline"
-                    onClick={() => setSelected(new Set())}
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
-              <div className="border-border grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border p-2 sm:grid-cols-2">
-                {eligibility.map((person) => (
-                  <label
-                    key={person.neonUserId}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(person.neonUserId)}
-                      onChange={() => toggle(person.neonUserId)}
-                      className="accent-[var(--primary)]"
-                    />
-                    <span
-                      className={
-                        person.alreadyGenerated
-                          ? "text-muted-foreground"
-                          : undefined
-                      }
-                    >
-                      {displayLabels.get(person.neonUserId) ?? person.fullName}
-                    </span>
-                    {person.alreadyGenerated ? (
-                      <Badge tone="neutral">Already generated</Badge>
-                    ) : null}
-                  </label>
-                ))}
-              </div>
-              <p className="text-muted-foreground text-xs">
-                {selected.size} of {eligibility.length} selected
-              </p>
-            </fieldset>
-          )}
-
-          {error ? (
-            <p className="text-destructive text-sm" aria-live="polite">
-              {error}
+                    {displayLabels.get(person.neonUserId) ?? person.fullName}
+                  </span>
+                  {person.alreadyGenerated ? (
+                    <Badge tone="neutral">Already generated</Badge>
+                  ) : null}
+                </label>
+              ))}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {selected.size} of {eligibility.length} selected
             </p>
-          ) : null}
+          </fieldset>
+        )}
 
-          <Button
-            type="submit"
-            disabled={pending || !month || selected.size === 0}
-          >
-            {submitLabel}
-          </Button>
-        </form>
-
-        {result ? (
-          <div
-            className="border-border bg-secondary space-y-1.5 rounded-xl border p-3 text-sm"
-            aria-live="polite"
-          >
-            <p className="font-semibold">Payroll Generated</p>
-            <p className="text-muted-foreground">
-              {result.successful.length} generated · {result.skipped.length}{" "}
-              already existed · {result.failed.length} failed
-            </p>
-            {result.failed.length > 0 ? (
-              <ul className="space-y-0.5 text-xs">
-                {result.failed.map((failure) => (
-                  <li key={failure.neonUserId} className="text-destructive">
-                    {displayLabels.get(failure.neonUserId) ??
-                      `Employee #${failure.neonUserId}`}
-                    : {failure.error}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+        {error ? (
+          <p className="text-destructive text-sm" aria-live="polite">
+            {error}
+          </p>
         ) : null}
-      </CardContent>
-    </Card>
+
+        <Button
+          type="submit"
+          disabled={pending || !month || selected.size === 0}
+        >
+          {submitLabel}
+        </Button>
+      </form>
+
+      {result ? (
+        <div
+          className="border-border bg-secondary space-y-1.5 rounded-xl border p-3 text-sm"
+          aria-live="polite"
+        >
+          <p className="font-semibold">Payroll Generated</p>
+          <p className="text-muted-foreground">
+            {result.successful.length} generated · {result.skipped.length}{" "}
+            already existed · {result.failed.length} failed
+          </p>
+          {result.failed.length > 0 ? (
+            <ul className="space-y-0.5 text-xs">
+              {result.failed.map((failure) => (
+                <li key={failure.neonUserId} className="text-destructive">
+                  {displayLabels.get(failure.neonUserId) ??
+                    `Employee #${failure.neonUserId}`}
+                  : {failure.error}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1162,6 +1211,46 @@ function downloadCsv(filename: string, csvContent: string) {
 }
 
 /**
+ * Bug fix: the fixed-overlay + `Card` modal shell for the ledger,
+ * reusing the exact same pattern `GenerateFormDialog`/
+ * `PayrollPrintDialog`/`CombinedStatementDialog` already use -- see
+ * those for why this codebase never reaches for a second modal system.
+ * A separate component (rather than folding this into
+ * `PeriodLedgerPanel` itself) because it's used identically across
+ * that component's error/loading/success states -- there is a real
+ * close button available even while the ledger is still loading or
+ * failed to load, not just once it's ready.
+ */
+function LedgerDialog({
+  onClose,
+  ariaLabel,
+  children,
+}: {
+  onClose: () => void;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-xs sm:p-6 print:static print:inset-auto print:h-auto print:overflow-visible print:bg-transparent print:p-0 print:backdrop-blur-none"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel}
+        className="border-border bg-card flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden shadow-2xl print:max-h-none print:w-full print:max-w-none print:overflow-visible print:border-none print:shadow-none"
+      >
+        {children}
+      </Card>
+    </div>
+  );
+}
+
+/**
  * Feature 020 Phase 3. The ledger for one period -- balance, every
  * payment, every adjustment -- and, for a privileged (non-readOnly)
  * viewer, the forms/actions that write to it. `readOnly` is the only
@@ -1170,6 +1259,14 @@ function downloadCsv(filename: string, csvContent: string) {
  * `getPayrollLedgerAction` (privileged sees both payment statuses and
  * everyone's adjustments; self sees only their own confirmed payments
  * and their own adjustments, via RLS, not a client-side filter here).
+ *
+ * Bug fix: `onClose`, when provided, renders this inside `LedgerDialog`
+ * as a modal (the privileged "click a period row" entry point) instead
+ * of expanding inline at the bottom of the page. Omitted entirely for
+ * the self-service view (`SelfPayrollView`), where the ledger already
+ * *is* the page's own primary content, selected via a month dropdown --
+ * not a triggered popup, so it stays a plain inline `Card` there,
+ * unchanged from before.
  */
 function PeriodLedgerPanel({
   restaurantSlug,
@@ -1178,6 +1275,7 @@ function PeriodLedgerPanel({
   onChanged,
   personLabel,
   timeZone,
+  onClose,
 }: {
   restaurantSlug: string;
   periodId: number;
@@ -1185,6 +1283,7 @@ function PeriodLedgerPanel({
   onChanged: () => void;
   personLabel: string;
   timeZone: string;
+  onClose?: () => void;
 }) {
   const [ledger, setLedger] = useState<PayrollLedger | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1215,18 +1314,32 @@ function PeriodLedgerPanel({
   }
 
   if (error) {
-    return (
+    const errorContent = (
       <ErrorPanel
         message={error}
         onRetry={() => setReloadKey((key) => key + 1)}
       />
     );
+    return onClose ? (
+      <LedgerDialog onClose={onClose} ariaLabel="Payroll Ledger">
+        <CardContent className="p-6">{errorContent}</CardContent>
+      </LedgerDialog>
+    ) : (
+      errorContent
+    );
   }
   if (!ledger) {
-    return (
+    const loadingContent = (
       <p className="text-muted-foreground text-sm" aria-live="polite">
         Loading ledger…
       </p>
+    );
+    return onClose ? (
+      <LedgerDialog onClose={onClose} ariaLabel="Payroll Ledger">
+        <CardContent className="p-6">{loadingContent}</CardContent>
+      </LedgerDialog>
+    ) : (
+      loadingContent
     );
   }
 
@@ -1287,208 +1400,244 @@ function PeriodLedgerPanel({
     downloadCsv(`payroll-${safeName}-${period.periodMonth}.csv`, csv);
   }
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 print:hidden">
-        <h2 className="font-semibold">
-          {monthLabel(period.periodMonth)} ledger
-        </h2>
-        <div className="flex gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCombinedStatement(true)}
-          >
-            Combined statement
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={printStatement}
-          >
-            Print statement
-          </Button>
+  const cardHeader = (
+    <CardHeader className="flex flex-none flex-row flex-wrap items-center justify-between gap-2 print:hidden">
+      <h2 className="font-semibold">{monthLabel(period.periodMonth)} ledger</h2>
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowCombinedStatement(true)}
+        >
+          Combined statement
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={printStatement}
+        >
+          Print statement
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={downloadStatementCsv}
+        >
+          Download CSV
+        </Button>
+        {onClose ? (
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            onClick={downloadStatementCsv}
+            size="icon"
+            onClick={onClose}
+            aria-label="Close dialog"
           >
-            Download CSV
+            <X className="size-4" />
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-0 print:hidden">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <BalanceTile label="Generated" value={money(balance.grossCents)} />
-          <BalanceTile
-            label="Confirmed paid"
-            value={money(balance.confirmedPaymentsCents)}
-          />
-          <BalanceTile
-            label="Adjustments"
-            value={money(balance.adjustmentsCents)}
-          />
-          <BalanceTile
-            label="Balance"
-            value={money(balance.balanceCents)}
-            emphasize
-          />
-        </div>
-        {balance.draftPaymentsCents > 0 ? (
-          <p className="text-muted-foreground text-xs">
-            {money(balance.draftPaymentsCents)} recorded but not yet confirmed
-            -- not reflected in the balance above until confirmed.
-          </p>
         ) : null}
-        {balance.fullyPaid ? <Badge tone="accent">Paid ✓</Badge> : null}
+      </div>
+    </CardHeader>
+  );
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold">Payments</h3>
-          {payments.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No payments recorded{readOnly ? " yet" : ""}.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-border border-b text-xs uppercase">
-                    <th className="py-1.5 pr-3 font-medium">Date</th>
-                    <th className="py-1.5 pr-3 font-medium">Amount</th>
-                    <th className="py-1.5 pr-3 font-medium">Status</th>
-                    <th className="py-1.5 pr-3 font-medium">Comment</th>
-                    {readOnly ? null : (
-                      <th className="py-1.5 font-medium">Actions</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-border divide-y">
-                  {payments.map((payment) => (
-                    <PaymentRow
-                      key={payment.id}
-                      restaurantSlug={restaurantSlug}
-                      payment={payment}
-                      readOnly={readOnly}
-                      onChanged={refresh}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+  const cardContent = (
+    <CardContent className="flex-1 space-y-4 overflow-y-auto pt-0 print:hidden">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <BalanceTile label="Generated" value={money(balance.grossCents)} />
+        <BalanceTile
+          label="Confirmed paid"
+          value={money(balance.confirmedPaymentsCents)}
+        />
+        <BalanceTile
+          label="Adjustments"
+          value={money(balance.adjustmentsCents)}
+        />
+        <BalanceTile
+          label="Balance"
+          value={money(balance.balanceCents)}
+          emphasize
+        />
+      </div>
+      {balance.draftPaymentsCents > 0 ? (
+        <p className="text-muted-foreground text-xs">
+          {money(balance.draftPaymentsCents)} recorded but not yet confirmed --
+          not reflected in the balance above until confirmed.
+        </p>
+      ) : null}
+      {balance.fullyPaid ? <Badge tone="accent">Paid ✓</Badge> : null}
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold">Adjustments</h3>
-          {adjustments.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No adjustments recorded.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px] text-left text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-border border-b text-xs uppercase">
-                    <th className="py-1.5 pr-3 font-medium">Date</th>
-                    <th className="py-1.5 pr-3 font-medium">Amount</th>
-                    <th className="py-1.5 font-medium">Reason</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-border divide-y">
-                  {adjustments.map((adjustment) => (
-                    <tr key={adjustment.id}>
-                      <td className="py-1.5 pr-3">
-                        {formatPaymentDate(adjustment.createdAt.slice(0, 10))}
-                      </td>
-                      <td className="py-1.5 pr-3 font-mono">
-                        {adjustment.deltaCents > 0 ? "+" : ""}
-                        {money(adjustment.deltaCents)}
-                      </td>
-                      <td className="py-1.5">{adjustment.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {readOnly ? null : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <RecordPaymentForm
-              restaurantSlug={restaurantSlug}
-              periodId={period.id}
-              onRecorded={refresh}
-            />
-            <RecordAdjustmentForm
-              restaurantSlug={restaurantSlug}
-              periodId={period.id}
-              onRecorded={refresh}
-            />
+      <div>
+        <h3 className="mb-2 text-sm font-semibold">Payments</h3>
+        {payments.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No payments recorded{readOnly ? " yet" : ""}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-border border-b text-xs uppercase">
+                  <th className="py-1.5 pr-3 font-medium">Date</th>
+                  <th className="py-1.5 pr-3 font-medium">Amount</th>
+                  <th className="py-1.5 pr-3 font-medium">Status</th>
+                  <th className="py-1.5 pr-3 font-medium">Comment</th>
+                  {readOnly ? null : (
+                    <th className="py-1.5 font-medium">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-border divide-y">
+                {payments.map((payment) => (
+                  <PaymentRow
+                    key={payment.id}
+                    restaurantSlug={restaurantSlug}
+                    payment={payment}
+                    readOnly={readOnly}
+                    onChanged={refresh}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </CardContent>
-
-      {/* Printed/exported statement -- hidden on screen (`hidden
-          print:block`), shown only when printing. `CardHeader`/
-          `CardContent` above are both `print:hidden`, so "Print
-          statement" produces just this document, not a screenshot of
-          the whole tab or its own on-screen controls. Built from the
-          exact same `ledgerLines` the CSV download uses, so the two
-          formats can never show different numbers for the same period. */}
-      <div id={printAreaId} className="hidden print:block">
-        <ReportLetterhead
-          reportTitle="Payroll Compensation Statement"
-          employeeName={personLabel}
-          periodName={monthLabel(period.periodMonth)}
-        />
-        <table className="print-timesheet-table mt-6 w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-black">
-              <th className="py-1 pr-4 font-medium">Date</th>
-              <th className="py-1 pr-4 font-medium">Description</th>
-              <th className="py-1 pr-4 text-right font-medium">Amount</th>
-              <th className="py-1 text-right font-medium">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ledgerLines.map((line, index) => (
-              <tr key={index} className="border-b border-gray-300">
-                <td className="py-1 pr-4">{line.date}</td>
-                <td className="py-1 pr-4">{line.description}</td>
-                <td className="py-1 pr-4 text-right font-mono">
-                  {line.amountCents < 0 ? "−" : ""}
-                  {money(Math.abs(line.amountCents))}
-                </td>
-                <td className="py-1 text-right font-mono">
-                  {money(line.runningBalanceCents)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-4 text-right text-base font-semibold">
-          Final balance: {money(balance.balanceCents)}
-          {balance.fullyPaid ? " — Paid" : ""}
-        </p>
-        <p className="text-muted-foreground mt-10 text-xs">
-          Printed {new Date().toLocaleDateString()} · ServiceFlow payroll
-          statement · confirmed payments and adjustments only
-        </p>
       </div>
-      {showCombinedStatement ? (
-        <CombinedStatementDialog
-          restaurantSlug={restaurantSlug}
-          target={{ scope: "single", neonUserId: period.neonUserId }}
-          year={Number(period.periodMonth.slice(0, 4))}
-          month={Number(period.periodMonth.slice(5, 7))}
-          timeZone={timeZone}
-          onClose={() => setShowCombinedStatement(false)}
-        />
-      ) : null}
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold">Adjustments</h3>
+        {adjustments.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No adjustments recorded.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-border border-b text-xs uppercase">
+                  <th className="py-1.5 pr-3 font-medium">Date</th>
+                  <th className="py-1.5 pr-3 font-medium">Amount</th>
+                  <th className="py-1.5 font-medium">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-border divide-y">
+                {adjustments.map((adjustment) => (
+                  <tr key={adjustment.id}>
+                    <td className="py-1.5 pr-3">
+                      {formatPaymentDate(adjustment.createdAt.slice(0, 10))}
+                    </td>
+                    <td className="py-1.5 pr-3 font-mono">
+                      {adjustment.deltaCents > 0 ? "+" : ""}
+                      {money(adjustment.deltaCents)}
+                    </td>
+                    <td className="py-1.5">{adjustment.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {readOnly ? null : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <RecordPaymentForm
+            restaurantSlug={restaurantSlug}
+            periodId={period.id}
+            onRecorded={refresh}
+          />
+          <RecordAdjustmentForm
+            restaurantSlug={restaurantSlug}
+            periodId={period.id}
+            onRecorded={refresh}
+          />
+        </div>
+      )}
+    </CardContent>
+  );
+
+  // Printed/exported statement -- hidden on screen (`hidden
+  // print:block`), shown only when printing. `cardHeader`/`cardContent`
+  // are both `print:hidden`, so "Print statement" produces just this
+  // document, not a screenshot of the whole tab (or dialog chrome) or
+  // its own on-screen controls. Built from the exact same `ledgerLines`
+  // the CSV download uses, so the two formats can never show different
+  // numbers for the same period.
+  const printArea = (
+    <div id={printAreaId} className="hidden print:block">
+      <ReportLetterhead
+        reportTitle="Payroll Compensation Statement"
+        employeeName={personLabel}
+        periodName={monthLabel(period.periodMonth)}
+      />
+      <table className="print-timesheet-table mt-6 w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-black">
+            <th className="py-1 pr-4 font-medium">Date</th>
+            <th className="py-1 pr-4 font-medium">Description</th>
+            <th className="py-1 pr-4 text-right font-medium">Amount</th>
+            <th className="py-1 text-right font-medium">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ledgerLines.map((line, index) => (
+            <tr key={index} className="border-b border-gray-300">
+              <td className="py-1 pr-4">{line.date}</td>
+              <td className="py-1 pr-4">{line.description}</td>
+              <td className="py-1 pr-4 text-right font-mono">
+                {line.amountCents < 0 ? "−" : ""}
+                {money(Math.abs(line.amountCents))}
+              </td>
+              <td className="py-1 text-right font-mono">
+                {money(line.runningBalanceCents)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-4 text-right text-base font-semibold">
+        Final balance: {money(balance.balanceCents)}
+        {balance.fullyPaid ? " — Paid" : ""}
+      </p>
+      <p className="text-muted-foreground mt-10 text-xs">
+        Printed {new Date().toLocaleDateString()} · ServiceFlow payroll
+        statement · confirmed payments and adjustments only
+      </p>
+    </div>
+  );
+
+  const combinedStatementDialog = showCombinedStatement ? (
+    <CombinedStatementDialog
+      restaurantSlug={restaurantSlug}
+      target={{ scope: "single", neonUserId: period.neonUserId }}
+      year={Number(period.periodMonth.slice(0, 4))}
+      month={Number(period.periodMonth.slice(5, 7))}
+      timeZone={timeZone}
+      onClose={() => setShowCombinedStatement(false)}
+    />
+  ) : null;
+
+  if (onClose) {
+    return (
+      <LedgerDialog
+        onClose={onClose}
+        ariaLabel={`${monthLabel(period.periodMonth)} Ledger`}
+      >
+        {cardHeader}
+        {cardContent}
+        {printArea}
+        {combinedStatementDialog}
+      </LedgerDialog>
+    );
+  }
+
+  return (
+    <Card>
+      {cardHeader}
+      {cardContent}
+      {printArea}
+      {combinedStatementDialog}
     </Card>
   );
 }

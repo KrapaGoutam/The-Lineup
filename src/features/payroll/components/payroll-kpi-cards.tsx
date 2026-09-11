@@ -26,14 +26,12 @@ export function PayrollKpiCards({
   dashboard,
   onGoToPayRates,
   onToggleGenerate,
-  showGenerateForm = false,
   onOpenPrintDialog,
 }: {
   dashboard: PayrollDashboard;
   users?: Array<{ id: number; fullName: string; role: string }>;
   onGoToPayRates: () => void;
   onToggleGenerate?: () => void;
-  showGenerateForm?: boolean;
   /** Feature 030 bug fix: opens the multi-select batch print dialog,
    * with no person pre-selected (the global entry point). */
   onOpenPrintDialog?: () => void;
@@ -79,9 +77,15 @@ export function PayrollKpiCards({
             </Button>
           ) : null}
           {onToggleGenerate ? (
+            // Bug fix: this used to expand GenerateForm inline below the
+            // page; it now opens GenerateForm as a modal dialog (see
+            // that component), so the button is a plain opener, not a
+            // toggle -- there's nothing to "hide" once it's a modal with
+            // its own close button. `showGenerateForm` is still the same
+            // state either way, just no longer reflected in this label.
             <Button size="sm" onClick={onToggleGenerate}>
               <Plus className="mr-1.5 size-4" aria-hidden="true" />
-              {showGenerateForm ? "Hide form" : "Generate period"}
+              Generate Payroll
             </Button>
           ) : null}
         </div>
