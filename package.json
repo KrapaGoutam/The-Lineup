@@ -23,20 +23,20 @@
     "db:types": "supabase gen types typescript --linked > src/types/database.generated.ts"
   },
   "dependencies": {
-    "@hookform/resolvers": "5.2.2",
+    "@hookform/resolvers": "5.9.1",
     "@neondatabase/serverless": "^1.1.0",
-    "@supabase/ssr": "0.12.6",
-    "@supabase/supabase-js": "2.115.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.116.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "4.4.0",
     "framer-motion": "13.2.0",
-    "lucide-react": "1.41.0",
+    "lucide-react": "1.43.0",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "7.87.0",
-    "tailwind-merge": "3.3.1",
+    "tailwind-merge": "3.6.0",
     "zod": "4.5.4"
   },
   "devDependencies": {
