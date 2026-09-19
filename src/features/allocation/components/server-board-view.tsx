@@ -70,7 +70,12 @@ export function ServerBoardView({
         );
         const paused = column.status === "paused";
         return (
-          <Card key={column.id} className={paused ? "opacity-70" : undefined}>
+          <Card
+            key={column.id}
+            role="group"
+            aria-label={`${column.name} server card`}
+            className={paused ? "opacity-70" : undefined}
+          >
             <CardHeader className="flex flex-row items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span
