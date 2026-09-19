@@ -408,9 +408,20 @@ export function AllocationWorkspace({
         .sort((a, b) => a.position - b.position),
     [board.columns],
   );
-  const availableMembers = team.filter(
-    (member) => !visibleColumns.some(({ id }) => id === member.id),
-  );
+  // Table Rotation Multi-View: Quick Add's clocked-in prioritization --
+  // a suggestion/ordering signal only, never an auto-add (see
+  // allocation-data.ts's clockedInProfileIds doc comment). Demo mode has
+  // no attendance data, so this is simply empty there and the order is
+  // unaffected.
+  const clockedInProfileIds = initialContext?.clockedInProfileIds ?? [];
+  const availableMembers = team
+    .filter((member) => !visibleColumns.some(({ id }) => id === member.id))
+    .sort((a, b) => {
+      const aClockedIn = clockedInProfileIds.includes(a.id);
+      const bClockedIn = clockedInProfileIds.includes(b.id);
+      if (aClockedIn === bClockedIn) return 0;
+      return aClockedIn ? -1 : 1;
+    });
   // The row people are actually filling in, not the standing empty
   // buffer row past it (see `getWorkingRound`'s doc comment).
   const currentRound = getWorkingRound(board);
@@ -759,30 +770,42 @@ export function AllocationWorkspace({
                     <p className="font-semibold">Floor team changed?</p>
                     <p className="text-muted-foreground text-xs">
                       Add a server column without rebuilding the board.
+                      {clockedInProfileIds.length
+                        ? " Clocked-in staff are listed first."
+                        : ""}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {availableMembers.map((member) => (
-                    <Button
-                      key={member.id}
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        execute({
-                          type: "add-column",
-                          column: {
-                            id: member.id,
-                            name: member.name,
-                            position: board.columns.length,
-                            status: "active",
-                          },
-                        })
-                      }
-                    >
-                      <Plus aria-hidden="true" /> {member.shortName}
-                    </Button>
-                  ))}
+                  {availableMembers.map((member) => {
+                    const clockedIn = clockedInProfileIds.includes(member.id);
+                    return (
+                      <Button
+                        key={member.id}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          execute({
+                            type: "add-column",
+                            column: {
+                              id: member.id,
+                              name: member.name,
+                              position: board.columns.length,
+                              status: "active",
+                            },
+                          })
+                        }
+                      >
+                        <Plus aria-hidden="true" /> {member.shortName}
+                        {clockedIn ? (
+                          <span
+                            className="size-1.5 rounded-full bg-emerald-300"
+                            aria-label="Clocked in"
+                          />
+                        ) : null}
+                      </Button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

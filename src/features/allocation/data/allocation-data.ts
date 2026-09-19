@@ -6,6 +6,7 @@ import type {
 } from "@/features/allocation/domain/rotation-board";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
+import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -39,6 +40,11 @@ export type AllocationContext = {
   // was somehow left "active" on a past date still renders read-only.
   serviceDate: string;
   isHistorical: boolean;
+  // Table Rotation Multi-View: Quick Add's clocked-in prioritization
+  // signal only -- reuses Tip Split's own fetchClockedInRoster (Feature
+  // 029) rather than a second attendance query. Never used to auto-add
+  // anyone; see allocation-workspace.tsx's availableMembers sort.
+  clockedInProfileIds: string[];
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -71,6 +77,14 @@ export async function getAllocationContext(
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
   const serviceDate = requestedServiceDate ?? today;
   const isHistorical = serviceDate < today;
+
+  const clockedInResult = await fetchClockedInRoster(supabase, {
+    organizationId,
+    serviceDate,
+  });
+  // Prioritization only, never a hard dependency -- an attendance-lookup
+  // failure shouldn't take down the whole board read.
+  const clockedInProfileIds = clockedInResult.ok ? clockedInResult.data : [];
 
   // Feature 028: dropped the `.eq("status", "active")` filter that used to
   // scope this to only today's session. location_id + service_date +
@@ -105,6 +119,7 @@ export async function getAllocationContext(
       canRedo: false,
       serviceDate,
       isHistorical,
+      clockedInProfileIds,
     };
   }
 
@@ -243,5 +258,6 @@ export async function getAllocationContext(
     canRedo,
     serviceDate,
     isHistorical,
+    clockedInProfileIds,
   };
 }
