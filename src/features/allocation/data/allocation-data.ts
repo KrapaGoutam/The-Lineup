@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
 import type {
   ColumnStatus,
   RotationBoard,
@@ -45,6 +46,14 @@ export type AllocationContext = {
   // 029) rather than a second attendance query. Never used to auto-add
   // anyone; see allocation-workspace.tsx's availableMembers sort.
   clockedInProfileIds: string[];
+  // Table Rotation Multi-View: the location's registered physical tables
+  // (public.dining_tables, now connected -- IMPLEMENTATION_CONTRACT.md
+  // section 3/10), for the Floor/Picker map. Empty until an organization
+  // has actually registered its floor plan -- no data is seeded by this
+  // feature (there's no stable fixture to attach it to; see
+  // IMPLEMENTATION_LOG.md). Demo mode never reads this -- it uses the
+  // static DEMO_FLOOR_LAYOUT instead.
+  physicalTables: FloorLayoutEntry[];
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -86,6 +95,27 @@ export async function getAllocationContext(
   // failure shouldn't take down the whole board read.
   const clockedInProfileIds = clockedInResult.ok ? clockedInResult.data : [];
 
+  const { data: tableRows, error: tableError } = await supabase
+    .from("dining_tables")
+    .select("label, position_x, position_y, active, dining_areas(name)")
+    .eq("location_id", location.id)
+    .eq("active", true);
+  if (tableError)
+    console.error("getAllocationContext: dining_tables", tableError);
+  const physicalTables: FloorLayoutEntry[] = (tableRows ?? [])
+    .filter((row) => row.position_x !== null && row.position_y !== null)
+    .map((row) => ({
+      label: row.label,
+      x: Number(row.position_x),
+      y: Number(row.position_y),
+      // No dedicated resource-type column on dining_tables -- inferred
+      // from the dining area's own name until/unless a real onboarding
+      // flow needs a first-class field for it.
+      resourceType: /bar/i.test(row.dining_areas?.[0]?.name ?? "")
+        ? "bar_seat"
+        : "table",
+    }));
+
   // Feature 028: dropped the `.eq("status", "active")` filter that used to
   // scope this to only today's session. location_id + service_date +
   // meal_period is already a unique-enough combination in practice (the
@@ -120,6 +150,7 @@ export async function getAllocationContext(
       serviceDate,
       isHistorical,
       clockedInProfileIds,
+      physicalTables,
     };
   }
 
@@ -259,5 +290,6 @@ export async function getAllocationContext(
     serviceDate,
     isHistorical,
     clockedInProfileIds,
+    physicalTables,
   };
 }
