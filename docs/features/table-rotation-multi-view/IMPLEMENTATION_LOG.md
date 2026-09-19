@@ -220,50 +220,100 @@ New `tests/e2e/table-rotation-multi-view.spec.ts` (6 tests): Floor assign
   metrics + read-only Master Rotation (asserts zero editable `Table #`
   inputs), and that a plain server has all 4 new tabs. Commit `435127a`.
 
-## Known issue found during final validation: server-mobile Playwright project is unreliable in this sandbox
+## server-mobile investigation — RESOLVED: real feature regression, root-caused and fixed
 
-Running the full 3-project `npm run test:e2e` surfaced systemic failures
-and multi-minute timeouts confined to the `server-mobile` (Pixel 7)
-project only:
+The previous session's entry here classified this as likely pre-existing/
+environmental. That conclusion was **wrong** and is retracted below with
+the actual evidence — the correct classification is CASE B, a genuine
+feature regression, now fixed.
 
-- `desktop`: 57/57 pass (51 baseline + 6 new), ~14s.
-- `host-tablet`: 57/57 pass (51 baseline + 6 new), ~29s.
-- `server-mobile`: only 9/57 passed in a from-scratch isolated run
-  (8.3 minutes), and a targeted rerun of just the 6 new tests failed all
-  6 with `<element> intercepts pointer events` / click-retry-timeout
-  errors when clicking the main nav ("Table Allocation" / "More").
+**Reproduction, in the original workspace:**
 
-Diagnosis performed, not guessed:
+```
+npm run test:e2e -- --project=server-mobile
+```
 
-- Reproduced on a **completely unrelated, pre-existing test**
-  (`recurring-schedules.spec.ts`, "week navigation: Previous/Next/Today")
-  run in isolation on this same branch — it also fails with the identical
-  click-retry pattern on the "More" nav button. This test touches nothing
-  this feature changed, which is strong evidence the problem isn't
-  something introduced here.
-- Killed several zombie `node.exe` processes (leftover from repeated
-  local `npm run dev` restarts during manual browser verification) and
-  retried — no change.
-- Attempted to confirm pre-existence on `main` directly via a `git
-worktree` + a `node_modules` junction (to avoid a slow `npm install`);
-  Turbopack refused to start against a junctioned `node_modules`
-  ("Symlink ... points out of the filesystem root"), so this could not be
-  conclusively proven against a byte-for-byte clean `main` checkout in
-  the time available.
-- Given the unrelated-test reproduction, this is very likely a
-  pre-existing characteristic of running Pixel-7 touch-emulation Chromium
-  in this specific sandboxed environment (resource/timing-related), not a
-  regression from this feature's changes -- but that could not be proven
-  with full certainty, so it is reported here rather than asserted as
-  fact.
+Result: systemic failures across the whole project (an early attempt
+timed out after 300s+; a from-scratch retry in the same workspace passed
+only 9/57 in 8.3 minutes). The failure signature, from Playwright's own
+error-context capture: clicking the main nav's "More" button (or a
+direct top-level tab button) failed with
+`<p class="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">Recorded events</p> from <main>… subtree intercepts pointer events`,
+retried ~226 times before timing out.
 
-**What this means for trustworthiness of this session's validation**:
-Vitest, pgTAP, `npm run check`, `npm run build`, Playwright desktop, and
-Playwright host-tablet are all fully, reliably green, including every new
-test this feature added. Playwright server-mobile could not be reliably
-exercised in this environment for either the baseline or this feature's
-changes -- its results here should not be read as either a pass or a
-fail for this feature specifically.
+**Clean-environment A/B proof (the previous session's inconclusive
+worktree+junction attempt was abandoned and replaced with two genuinely
+independent `git clone` + `npm ci` checkouts, per instruction — no shared
+`node_modules`):**
+
+```
+git clone "The Lineup" The-Lineup-main-baseline-temp --branch main --single-branch
+cd The-Lineup-main-baseline-temp && npm ci
+npm run test:e2e -- --project=server-mobile -g "week navigation"
+# -> 1 passed (12.3s), commit 2130026 (main)
+
+git clone "The Lineup" The-Lineup-feature-clean-temp --branch feature/table-rotation-multi-view --single-branch
+cd The-Lineup-feature-clean-temp && npm ci
+npm run test:e2e -- --project=server-mobile -g "week navigation"
+# -> 1 failed, identical signature, commit 1117692 (this branch, before the fix below)
+```
+
+Same unrelated, pre-existing test (`recurring-schedules.spec.ts`, "week
+navigation: Previous/Next/Today" — touches nothing this feature changed),
+same tooling, same Playwright/Chromium version, only difference is the
+checked-out application code: **main passes, this branch failed, every
+time.** This is CASE B (feature regression), not CASE A/C/D
+(pre-existing/environmental) — the earlier conclusion was disproven by
+this evidence, not merely re-asserted.
+
+**Root cause, found by direct DOM measurement (Playwright MCP, Pixel 7
+viewport 412×839, against a live dev server) rather than guessing:**
+
+- The new 5-tab view switcher (`role="tablist"`) measured **449.5px
+  wide** against a 412px viewport. Its wrapper used `inline-flex w-fit`
+  with no overflow handling, so instead of scrolling internally it
+  **widened the whole page past the viewport**:
+  `document.documentElement.scrollWidth` (449) `> window.innerWidth`
+  (412) — a real horizontal-page-overflow regression, confirmed by
+  comparing the same measurement on `main` (no such row exists there,
+  no overflow).
+- That horizontal overflow was sufficient to break Playwright's
+  click-actionability checks for the app's pre-existing fixed bottom
+  mobile nav bar on the same page (`<nav class="… fixed inset-x-0
+bottom-0 z-40 …">`), which is what every failing test actually hit —
+  clicking "More" or another nav button — regardless of whether the test
+  itself touched Table Rotation at all. (The nav bar and its fixed
+  positioning are unchanged, pre-existing code; this feature's new
+  content pushed the page into a horizontal-overflow state that exposed
+  a click-interception failure mode against it.)
+
+**Fix** (commit `17594c0`): the tab row now scrolls horizontally within
+itself instead of stretching the page — `overflow-x-auto` on the wrapper,
+`shrink-0` on each tab — the exact same pattern the Grid table itself
+already uses for its own horizontal overflow. Verified directly:
+`document.documentElement.scrollWidth` (397) `≤ window.innerWidth` (412)
+after the fix, zero horizontal overflow.
+
+**Verification after the fix:**
+
+```
+npm run test:e2e -- --project=server-mobile -g "week navigation"
+# -> 1 passed (4.0s) -- matches main's timing
+
+npm run test:e2e -- --project=server-mobile
+# -> 57 passed (14.5s) -- full project, zero failures
+
+npm run test:e2e
+# -> 171 passed (57.6s) -- all 3 projects (153 baseline + 18 new: 6 tests × 3 projects)
+```
+
+**Conclusion**: FIXED. Not pre-existing, not environmental — a real,
+now-corrected layout regression this feature introduced. The temporary
+clone directories used for the A/B proof were deleted after use; nothing
+was left in the repository from that investigation except this record
+and the fix itself. `docs/DESIGN_SYSTEM.md`'s and this codebase's own
+"Grid: horizontal scrolling is acceptable" convention (contract section 23) is exactly the pattern this fix follows, applied consistently to the
+new tab row.
 
 ## Final local validation (this session)
 
@@ -271,13 +321,25 @@ fail for this feature specifically.
 - `npm test`: PASS, 366/366 (was 359/359; +7 net new: 1 delete-row test +
   6 floor-layout tests)
 - `npm run build`: PASS
-- `npm run test:e2e`: desktop 57/57 PASS, host-tablet 57/57 PASS,
-  server-mobile unreliable in this sandbox (see above) — not a known
-  regression, not confirmed clean either
 - `npm run db:test`: PASS, 248/248 (was 228/228; +20 net new)
-- Manual browser smoke test (demo mode, manager + server passcodes): all
-  5 views verified working end-to-end, cross-view consistent, both themes
-  legible.
+- `npm run test:e2e` (all 3 projects, single run): **PASS, 171/171**
+  (desktop 57/57, host-tablet 57/57, server-mobile 57/57 — 153 baseline +
+  18 new, zero regressions, zero exclusions)
+- Manual browser smoke test (demo mode, manager + server passcodes, and
+  Pixel-7-viewport spot check): all 5 views verified working end-to-end,
+  cross-view consistent, both themes legible, no horizontal page overflow
+  at any of the 3 supported viewports.
+- Implementation screenshots captured via Playwright automation
+  (`docs/features/table-rotation-multi-view/tools/capture-implementation-screenshots.mjs`)
+  into `docs/features/table-rotation-multi-view/screenshots/{dark,light,tablet}/`
+  — 17 files (7 dark, 5 light, 5 tablet), all verified non-zero size and
+  visually inspected (correct view, correct theme, no loading overlay, no
+  broken layout, no non-demo data). `floor-team.png` and `quick-add.png`
+  both show the Grid's "Floor team changed?" quick-add card — this
+  implementation doesn't have a separate drawer/dialog for those two
+  design-reference concepts (documented deliberately in Phase G+H: no
+  Dialog/Popover primitive exists in this repo), so the two files are
+  intentionally near-identical rather than fabricated distinct screens.
 
 ## What is NOT done (honest accounting — see AGENT_HANDOFF.md for the full risk-ranked list and recommended next step)
 
@@ -297,12 +359,12 @@ fail for this feature specifically.
   not formally done beyond what native `<button>`/`role="group"`
   semantics and the existing design-token discipline already provide by
   construction.
-- **server-mobile Playwright reliability**: unresolved in this
-  environment (see above) — worth investigating in a genuinely clean
-  environment (fresh `npm install`, no leftover dev-server processes)
-  before treating a future server-mobile failure there as a real
-  regression.
-- **Design-screenshot comparison pass** (contract section 49/50): not
-  formally done — implementation was verified against the design
-  reference by eye during manual testing, not via a systematic side-by-
-  side screenshot diff.
+- **Design-screenshot comparison pass** (contract section 49/50): done
+  informally — implementation screenshots exist
+  (`docs/features/table-rotation-multi-view/screenshots/`) and were
+  compared by eye against `docs/design/table-rotation/screenshots/` and
+  the approved export; no systematic pixel-diff tooling was set up (not
+  requested, and this repo has no existing convention for one).
+- ~~server-mobile Playwright reliability~~ — **RESOLVED**, see the
+  investigation section above. Was a real regression, root-caused, fixed,
+  verified 171/171 across all 3 projects.

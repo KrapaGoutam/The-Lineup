@@ -7,12 +7,13 @@ feature only (2026-09-19).
 **Current branch:** `feature/table-rotation-multi-view`
 **Current phase:** Implementation — COMPLETE for all 5 views and the full
 backend (occupancy integrity, permission expansion, auto-row
-reconciliation, retention). Locally validated (Vitest/pgTAP/build/
-Playwright desktop+host-tablet all green; Playwright server-mobile
-unreliable in this sandbox, see below — not a known regression). A small
-number of items are explicitly out of scope for this session (dining_tables
+reconciliation, retention). Locally validated: Vitest/pgTAP/`check`/
+`build`/full 3-project Playwright (171/171) all green — the previously
+open `server-mobile` question is resolved, see below. A small number of
+items are explicitly out of scope for this session (dining_tables
 seeding/onboarding, broader retention) — see "What's not done" below and
-`IMPLEMENTATION_LOG.md` for the full phase-by-phase record.
+`IMPLEMENTATION_LOG.md` for the full phase-by-phase record. **No merge to
+`main` has been performed or authorized.**
 
 **Design reference:** `docs/design/table-rotation/` — primary HTML
 `approved-design-export/Table Rotation Multi-View v2.dc.html`
@@ -27,16 +28,12 @@ whether to continue on it or cut fresh from `main` before Codex starts).
 359/359, Playwright 153/153, pgTAP 228 assertions — all independently
 re-run, not just read from `docs/STATUS.md`.
 
-**Current state (reproduced live 2026-09-19, end of this implementation
-session):** Vitest 366/366, pgTAP 248/248, `npm run check` and
-`npm run build` both pass. Playwright: desktop 57/57 and host-tablet
-57/57 (51 baseline + 6 new each), server-mobile unreliable in this
-sandbox — reproduces on an unrelated, pre-existing test too, so it does
-not look like a regression from this feature, but could not be proven
-clean either (see `IMPLEMENTATION_LOG.md`'s "Known issue" section for the
-full diagnosis). Zero regressions in everything that could be reliably
-run. Full detail in `IMPLEMENTATION_LOG.md`'s "Final local validation"
-section.
+**Current state (reproduced live 2026-09-19):** Vitest 366/366, pgTAP
+248/248, `npm run check` and `npm run build` both pass, **Playwright
+171/171 across all 3 projects** (desktop 57/57, host-tablet 57/57,
+server-mobile 57/57 — 153 baseline + 18 new, zero exclusions). Zero
+regressions. Full detail in `IMPLEMENTATION_LOG.md`'s "Final local
+validation" section.
 
 **Important existing features this upgrade builds on or supersedes in
 part:** 003 (live table-allocation rotation, RPC architecture), 009 (any
@@ -100,6 +97,18 @@ table-rotation-multi-view" notes.
   themes legible. Automated Playwright coverage for all four
   (`tests/e2e/table-rotation-multi-view.spec.ts`).
 
+## server-mobile investigation — RESOLVED
+
+Previously reported as an open question (possibly pre-existing/
+environmental). That was investigated further and **disproven**: it was
+a real regression this feature introduced (the new 5-tab view switcher
+caused horizontal page overflow on narrow viewports, which broke click-
+actionability against the app's pre-existing fixed bottom mobile nav).
+Proven via a clean two-clone A/B comparison (`git clone` + `npm ci`, no
+shared `node_modules`) — see `IMPLEMENTATION_LOG.md`'s "server-mobile
+investigation" section for exact commands, measurements, and the fix
+(commit `17594c0`). Verified: 171/171 across all 3 Playwright projects.
+
 ## What's not done
 
 - **`dining_tables` seeding/onboarding** — intentionally not done, no
@@ -108,24 +117,19 @@ table-rotation-multi-view" notes.
   registered a floor plan.
 - **`table_rotation_entries`/`rotation_rounds` retention** — deliberately
   deferred per the contract, needs explicit product sign-off.
-- Design-screenshot comparison pass, formal accessibility/performance
-  review passes (contract sections 50, 24, 57) — not formally done.
-- **Playwright `server-mobile` project reliability in this sandbox** —
-  see `IMPLEMENTATION_LOG.md`'s "Known issue" section. Worth a fresh
-  investigation (clean environment, no leftover dev-server processes)
-  before this repo relies on that project's results here.
+- Formal accessibility/performance review passes (contract sections 24, 57) — not formally done beyond what native semantics and the existing
+  design-token discipline provide by construction. Design-screenshot
+  comparison was done informally (see `IMPLEMENTATION_LOG.md`).
 
 ## Pending next action
 
-All 5 views and the full backend are implemented, tested, and manually
-verified. Recommended: review the branch, decide on the `server-mobile`
-Playwright question above (retry in a clean environment, or accept
-desktop+host-tablet as sufficient local evidence), then proceed to
-push/PR/remote CI once you're ready — none of that has happened yet.
-
-Per the mega-prompt's own explicit instruction: local implementation and
-validation are complete. No push, PR, merge, or deploy has happened or
-should happen without further explicit approval.
+All 5 views and the full backend are implemented, tested, and verified —
+including the full 3-project Playwright suite, with no open questions.
+Recommended next step: push the feature branch, open a PR, and watch CI.
+Per the mega-prompt's own explicit instruction: **no push, PR, merge, or
+deploy has happened without explicit authorization** — pushing the
+feature branch and opening a PR (not merging) is explicitly authorized
+by the current instruction and is the very next step from here.
 
 ## Documentation created/updated this phase
 
@@ -168,6 +172,9 @@ should happen without further explicit approval.
 - `.prettierignore`, `eslint.config.mjs` — exclude the copied design
   export from formatting/linting (reference material, not ours to
   reformat).
+- `docs/features/table-rotation-multi-view/tools/capture-implementation-screenshots.mjs`
+  (new) + `docs/features/table-rotation-multi-view/screenshots/{dark,light,tablet}/`
+  (17 PNGs, new).
 
 ## Design handoff copy record
 
