@@ -1,9 +1,15 @@
 # Table Rotation Multi-View — Agent Handoff
 
 **Planning agent:** Claude (Claude Code)
-**Implementation agent:** Codex
-**Current phase:** Planning / contract freeze — COMPLETE. Awaiting user
-review/approval of `IMPLEMENTATION_CONTRACT.md` before Codex begins.
+**Implementation agent:** Claude Code — explicit user-approved override of
+the normal Claude-plans/Codex-implements division of labor, for this
+feature only (2026-09-19).
+**Current branch:** `feature/table-rotation-multi-view`
+**Current phase:** Implementation — PARTIAL. Backend (occupancy integrity,
+permission expansion, auto-row reconciliation, retention) and the Grid +
+Floor views are complete, tested, and locally validated. Picker, Servers,
+and Dashboard are not built. See "What's done" / "What's not done" below
+and `IMPLEMENTATION_LOG.md` for the full phase-by-phase record.
 
 **Design reference:** `docs/design/table-rotation/` — primary HTML
 `approved-design-export/Table Rotation Multi-View v2.dc.html`
@@ -14,11 +20,15 @@ review/approval of `IMPLEMENTATION_CONTRACT.md` before Codex begins.
 (this repo's current branch already matches — confirm with the user
 whether to continue on it or cut fresh from `main` before Codex starts).
 
-**Baseline (reproduced live 2026-09-19):** Vitest 359/359 (independently
-re-run). Playwright 153/153, pgTAP 228 assertions (per `docs/STATUS.md`,
-not independently re-run this session — Codex should re-run
-`npm run test:e2e` and `npm run db:test` once a local Supabase stack is up,
-before making any changes, to reconfirm).
+**Baseline before this feature (reproduced live 2026-09-19):** Vitest
+359/359, Playwright 153/153, pgTAP 228 assertions — all independently
+re-run, not just read from `docs/STATUS.md`.
+
+**Current state (reproduced live 2026-09-19, end of this implementation
+session):** Vitest 366/366, Playwright 153/153 (same count — 3 tests
+updated for the intentional permission change, none deleted), pgTAP
+248/248, `npm run check` and `npm run build` both pass. Zero regressions.
+Full detail in `IMPLEMENTATION_LOG.md`'s "Final local validation" section.
 
 **Important existing features this upgrade builds on or supersedes in
 part:** 003 (live table-allocation rotation, RPC architecture), 009 (any
@@ -28,7 +38,7 @@ employee addable), 010 (reorder), 011 (open cross-column editing), 028
 section 2 and the individual feature docs' new "Superseded in part by
 table-rotation-multi-view" notes.
 
-## Major risks (ranked)
+## Major risks (ranked) — status: 1-4 and 6 addressed and tested; see below
 
 1. **Occupancy/data-integrity implementation** — the `table_occupancy` +
    combined-table locking design (contract section 6/3.4) is the most
@@ -52,14 +62,60 @@ table-rotation-multi-view" notes.
    `table_rotation_entries`/`rotation_rounds` without explicit product
    sign-off (Feature 028's date navigation depends on that data).
 
+## What's done
+
+- **Occupancy integrity** (risk #1): `section_assignments` (existing,
+  previously-dead table) extended into the authoritative ledger, one
+  `SECURITY DEFINER` trigger on `table_rotation_entries` keeps it in sync
+  for every mutation path automatically. Deviates from the frozen
+  contract's `table_occupancy`/`table_occupancy_members` design — reuses
+  existing schema instead; see `IMPLEMENTATION_LOG.md` for why. 15 pgTAP
+  assertions covering conflict/transfer/release/combined-tables.
+- **Auto-row rule** (risk #2): single reconciled rule (~2 trailing empty
+  rounds), implemented identically in the real-mode RPC and the demo-mode
+  reducer. pgTAP + Vitest coverage.
+- **Permission expansion** (risk #3): enforced at the RPC/RLS layer first
+  (`private.assert_is_active_board_member`, `rotation_members_operate_service`
+  role array), frontend gates changed to match. pgTAP + Playwright
+  coverage.
+- **Undo/redo compatibility** (risk #4): no new mechanism — occupancy
+  changes ride the existing `table_rotation_entries` mutations
+  automatically; `delete_row` got its own case branch.
+- **Retention** (risk #6): `board_events` only, 7 days, `pg_cron`. Correctly
+  did NOT touch `table_rotation_entries`/`rotation_rounds`.
+- **Grid**: delete-row control, Active Floor Operations gates, Quick Add
+  clocked-in prioritization.
+- **Floor view + shared TableMap**: built, manually verified working
+  end-to-end in the browser (see `IMPLEMENTATION_LOG.md`), including
+  cross-view consistency with the Grid and both themes.
+
+## What's not done
+
+- **Picker, Servers, Dashboard views** — not built. See
+  `IMPLEMENTATION_LOG.md`'s "What is NOT done" section for exactly what
+  each would need (all three reuse already-built, already-tested
+  pieces — `TableMap`, the permission-expanded RPCs, the `readOnly` Grid
+  path — no further backend work is anticipated for any of them).
+- **Playwright coverage for Floor** — none yet; only manually verified.
+- **dining_tables seeding/onboarding** — intentionally not done, no stable
+  fixture exists to attach it to (see `IMPLEMENTATION_LOG.md`).
+- **`table_rotation_entries`/`rotation_rounds` retention** — deliberately
+  deferred per the contract, needs explicit product sign-off.
+- Design-screenshot comparison pass, formal accessibility/performance
+  review passes (contract sections 50, 24, 57) — not formally done.
+
 ## Pending next action
 
-User reviews/approves `IMPLEMENTATION_CONTRACT.md`. Once approved, hand
-`CODEX_IMPLEMENTATION_PROMPT.md` to Codex. Codex implements per that
-prompt and this handoff, stops after local validation
-(`npm run check && npm test && npm run build && npm run test:e2e && npm run db:test`
-all green), and does not push/PR/merge/deploy without further explicit
-user approval.
+Recommended: review what's built (Grid + Floor, fully tested), then
+decide whether to continue this session/a follow-up implementing Picker →
+Servers → Dashboard in that order (Picker and Servers are the smallest
+increments — both reuse `TableMap` directly), or hand the remainder to
+Codex via `CODEX_IMPLEMENTATION_PROMPT.md` (still accurate for whatever's
+left, since nothing in it was invalidated by what's built).
+
+Per the mega-prompt's own explicit instruction: local implementation and
+validation are complete **for what was built**. No push, PR, merge, or
+deploy has happened or should happen without further explicit approval.
 
 ## Documentation created/updated this phase
 
@@ -80,6 +136,26 @@ user approval.
 - `docs/features/003-table-allocation.md`, `009-*.md`, `010-*.md`,
   `011-*.md`, `028-*.md` — each gets a short pointer note (not a rewrite)
   to this feature where it materially supersedes/extends their content.
+- `docs/features/table-rotation-multi-view/IMPLEMENTATION_LOG.md` — the
+  phase-by-phase implementation record (created during implementation,
+  not planning).
+
+## Implementation files (this session, see IMPLEMENTATION_LOG.md for detail)
+
+- `supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql`,
+  `20260919130000_board_events_retention.sql`
+- `supabase/tests/database/0019_*.test.sql`, `0020_*.test.sql`
+- `src/features/allocation/domain/floor-layout.ts` (+ `.test.ts`)
+- `src/features/allocation/components/table-map.tsx`,
+  `floor-view.tsx`
+- Modified: `rotation-board.ts` (+`.test.ts`), `allocation-workspace.tsx`,
+  `allocation-actions.ts`, `allocation-data.ts`,
+  `src/features/auth/domain/passcode.ts`, `src/types/database.generated.ts`
+- Modified: `tests/e2e/allocation-open-editing.spec.ts`,
+  `tests/e2e/dashboard.spec.ts` (permission-expansion assertions updated)
+- `.prettierignore`, `eslint.config.mjs` — exclude the copied design
+  export from formatting/linting (reference material, not ours to
+  reformat).
 
 ## Design handoff copy record
 

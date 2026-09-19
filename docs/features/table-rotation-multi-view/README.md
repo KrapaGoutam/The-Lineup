@@ -65,7 +65,10 @@ Codex.
 
 ## Status
 
-Planning / contract freeze complete (Claude Code). No production code
-implemented by Claude. Next: user reviews `IMPLEMENTATION_CONTRACT.md`,
-then hands `CODEX_IMPLEMENTATION_PROMPT.md` to Codex. See
-`AGENT_HANDOFF.md` for full state.
+Planning / contract freeze complete. Implementation in progress (Claude
+Code, explicit user-approved override of the normal Claude→Codex division
+of labor for this feature, 2026-09-19): backend (occupancy integrity,
+permission expansion, auto-row reconciliation, retention) and the Grid +
+Floor views are complete, tested, and locally validated. Picker, Servers,
+and Dashboard are not built yet. See `AGENT_HANDOFF.md` and
+`IMPLEMENTATION_LOG.md` for the full current state and what's left.
