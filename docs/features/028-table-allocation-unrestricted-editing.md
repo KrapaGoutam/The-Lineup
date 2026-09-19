@@ -5,6 +5,15 @@
 **Status:** approved  
 **Issue/PR:**
 
+**Extended by `table-rotation-multi-view`** (2026-09-19): the manager-only
+gates this feature deliberately kept (Clear Row/Column/Board, Add Row,
+reorder, pause/resume, remove-server) are opened to Staff by explicit
+product decision — see
+`docs/features/table-rotation-multi-view/PERMISSIONS.md`. This is a
+further, explicit expansion beyond what this feature approved, not a
+reversal of it — Staff still gains nothing outside table-allocation floor
+operations.
+
 ## Classification & Session Scope
 
 - **Category:** FEATURE UPGRADE

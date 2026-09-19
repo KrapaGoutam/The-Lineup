@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0}
+  a{color:var(--primary)}
+  a:hover{color:var(--primary)}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- global header -->
+  <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;max-width:1500px;margin:0 auto 16px;">
+    <div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--primary);border-color:color-mix(in srgb, var(--primary) 30%, transparent);background:color-mix(in srgb, var(--primary) 12%, transparent);color:var(--primary);padding:4px 10px;font-size:12px;font-weight:600;">Module 2</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid color-mix(in srgb, var(--ok) 35%, transparent);background:color-mix(in srgb, var(--ok) 15%, transparent);color:var(--ok);padding:4px 10px;font-size:12px;font-weight:600;"><span style="width:6px;height:6px;border-radius:999px;background:var(--ok);"></span>Live board</span>
+        <span style="font-size:11px;font-weight:600;color:var(--faint);padding:4px 8px;border-radius:999px;border:1px dashed var(--border);">v2</span>
+      </div>
+      <h1 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-0.03em;">Table allocation rotation</h1>
+      <p style="margin:6px 0 0;color:var(--muted-foreground);font-size:13px;max-width:560px;line-height:1.5;">One live rotation, five views. Switch freely — nothing is lost.</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:8px 14px;">
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);">Next</span>
+        <span style="font-weight:600;font-size:14px;color:var(--primary);">{{ nextServerName }}</span>
+      </div>
+      <button onclick="{{ undo }}" disabled="{{ undoDisabled }}" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;opacity:{{ undoOpacity }};"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg> Undo</button>
+      <button onclick="{{ redo }}" disabled="{{ redoDisabled }}" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;opacity:{{ redoOpacity }};"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14 20 9l-5-5"></path><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"></path></svg> Redo</button>
+      <button onclick="{{ toggleFloorTeam }}" style="display:inline-flex;align-items:center;gap:8px;min-height:44px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 14px;font-size:14px;font-weight:600;cursor:pointer;">Floor Team: {{ activeServersCount }}</button>
+      <button onclick="{{ toggleQuickAdd }}" style="display:inline-flex;align-items:center;gap:8px;min-height:44px;border-radius:12px;border:none;background:var(--primary);color:var(--primary-foreground);padding:0 16px;font-size:14px;font-weight:600;cursor:pointer;">+ Quick Add</button>
+      <button onclick="{{ toggleTheme }}" aria-label="Toggle theme" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;min-width:44px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;">{{ themeIcon }} {{ themeLabel }}</button>
+    </div>
+  </div>
+
+  <!-- view switcher -->
+  <div style="max-width:1500px;margin:0 auto 20px;border-bottom:1px solid var(--border);overflow-x:auto;">
+    <div style="display:flex;gap:4px;min-width:max-content;">
+      <sc-for list="{{ viewTabs }}" as="tab" hint-placeholder-count="5">
+        <button onclick="{{ tab.onClick }}" style="padding:12px 16px;background:none;border:none;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap;">
+          <span style="color:{{ tab.color }};border-bottom:2px solid {{ tab.borderColor }};padding-bottom:12px;display:inline-block;margin-bottom:-13px;">{{ tab.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="max-width:1500px;margin:0 auto;">
+
+  <!-- ============ VIEW 1: GRID ============ -->
+  <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button onclick="{{ prevDay }}" style="width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);cursor:pointer;">‹</button>
+          <span style="font-family:'Geist Mono',monospace;font-size:13px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:8px 14px;">{{ viewDate }}</span>
+          <button onclick="{{ nextDay }}" style="width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);cursor:pointer;">›</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="{{ addRow }}" style="display:inline-flex;align-items:center;gap:6px;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg> Add row</button>
+          <button onclick="{{ clearBoard }}" style="display:inline-flex;align-items:center;gap:6px;min-height:40px;border-radius:10px;border:1px solid color-mix(in srgb, var(--destructive) 35%, transparent);background:color-mix(in srgb, var(--destructive) 10%, transparent);color:var(--destructive);padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg> Clear board</button>
+        </div>
+      </div>
+
+      <section style="display:grid;gap:10px;grid-template-columns:repeat(3, minmax(150px,1fr));">
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;">
+          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Servers on floor</p>
+          <p style="margin:6px 0 0;font-size:22px;font-weight:600;">{{ activeServersCount }}</p>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;">
+          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Next turn</p>
+          <p style="margin:6px 0 0;font-size:22px;font-weight:600;">{{ nextServerName }}</p>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;">
+          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Recorded events</p>
+          <p style="margin:6px 0 0;font-size:22px;font-weight:600;">{{ eventCount }}</p>
+        </div>
+      </section>
+
+      <sc-if value="{{ hasQuickAddBanner }}" hint-placeholder-val="{{ true }}">
+        <div style="border:1px solid color-mix(in srgb, var(--primary) 18%, transparent);border-radius:14px;background:var(--card);padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="width:38px;height:38px;border-radius:10px;background:color-mix(in srgb, var(--primary) 12%, transparent);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:16px;">+</span>
+            <div><p style="margin:0;font-weight:600;font-size:14px;">Floor team changed?</p><p style="margin:2px 0 0;color:var(--muted-foreground);font-size:12px;">Add a server column without rebuilding the board.</p></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <sc-for list="{{ bannerCandidates }}" as="m" hint-placeholder-count="3">
+              <button onclick="{{ m.onAdd }}" style="display:inline-flex;align-items:center;gap:6px;min-height:36px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;">+ {{ m.name }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div><h2 style="margin:0;font-size:15px;font-weight:600;">Dinner rotation</h2><p style="margin:2px 0 0;color:var(--muted-foreground);font-size:12px;">Scrollable both ways · sticky Turn column &amp; header row</p></div>
+          <span style="display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--border);background:var(--muted);color:var(--muted-foreground);padding:4px 10px;font-size:12px;font-weight:600;">{{ displayRounds.length }} rows</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <div style="display:grid;grid-template-columns:64px repeat({{ servers.length }}, minmax(118px, 1fr));min-width:max-content;">
+            <div style="position:sticky;left:0;z-index:20;border-right:1px solid var(--border);background:var(--secondary);color:var(--muted-foreground);padding:10px;font-size:11px;font-weight:600;">Turn</div>
+            <sc-for list="{{ servers }}" as="s" hint-placeholder-count="5">
+              <div style="border-right:1px solid var(--border);background:var(--secondary);padding:10px;opacity:{{ s.columnOpacity }};position:relative;">
+                <div style="display:flex;align-items:flex-start;gap:6px;">
+                  <span style="width:8px;height:8px;border-radius:999px;background:{{ s.color }};flex:none;margin-top:4px;"></span>
+                  <p style="margin:0;font-size:12px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ s.name }}</p>
+                </div>
+                <p style="margin:3px 0 6px;font-size:10px;color:{{ s.statusColor }};font-weight:600;text-transform:uppercase;letter-spacing:.05em;">{{ s.statusLabel }}</p>
+                <div style="display:flex;gap:2px;">
+                  <button onclick="{{ s.onMoveUp }}" aria-label="Move left" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+                  <button onclick="{{ s.onMoveDown }}" aria-label="Move right" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+                  <button onclick="{{ s.onToggleMenu }}" aria-label="More actions" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+                </div>
+                <sc-if value="{{ s.menuOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;top:100%;left:6px;z-index:30;width:150px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);padding:4px;display:flex;flex-direction:column;">
+                    <button onclick="{{ s.onTogglePause }}" style="display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--foreground);font-size:12px;cursor:pointer;"><sc-if value="{{ s.showPauseIcon }}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if><sc-if value="{{ s.showResumeIcon }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg></sc-if>{{ s.pauseActionLabel }}</button>
+                    <button onclick="{{ s.onClearColumn }}" style="display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--foreground);font-size:12px;cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>Clear column</button>
+                    <button onclick="{{ s.onRemove }}" style="display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--destructive);font-size:12px;cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6l-1.5 14a2 2 0 0 1-2 2H8.5a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>Remove column</button>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+
+            <sc-for list="{{ displayRounds }}" as="round" hint-placeholder-count="4">
+              <div style="display:contents;">
+                <div style="position:sticky;left:0;z-index:10;border-top:1px solid var(--border);border-right:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:72px;padding:6px;">
+                  <span style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;">{{ round.sequence }}</span>
+                  <div style="display:flex;gap:2px;margin-top:4px;">
+                    <button onclick="{{ round.onClear }}" aria-label="Clear row" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg></button>
+                    <button onclick="{{ round.onToggleMenu }}" aria-label="Row actions" style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+                  </div>
+                  <sc-if value="{{ round.menuOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;z-index:30;margin-top:56px;width:120px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);padding:4px;">
+                      <button onclick="{{ round.onDelete }}" style="width:100%;display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--destructive);font-size:12px;cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6l-1.5 14a2 2 0 0 1-2 2H8.5a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>Delete row</button>
+                    </div>
+                  </sc-if>
+                </div>
+                <sc-for list="{{ round.cells }}" as="cell" hint-placeholder-count="5">
+                  <div style="border-top:1px solid var(--border);border-right:1px solid var(--border);min-height:72px;padding:8px;opacity:{{ cell.opacity }};">
+                    <sc-if value="{{ cell.showPaused }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;justify-content:center;min-height:48px;color:var(--faint);font-size:12px;">—</div>
+                    </sc-if>
+                    <sc-if value="{{ cell.showEditing }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;gap:5px;">
+                        <input value="{{ editingValue }}" oninput="{{ handleEditChange }}" placeholder="Table #" autofocus="{{ true }}" style="min-width:0;flex:1;min-height:36px;border-radius:8px;border:1px solid var(--border);background:var(--background);color:var(--foreground);padding:0 8px;font-family:'Geist Mono',monospace;font-size:12px;outline:none;" />
+                        <button onclick="{{ submitEdit }}" style="min-height:36px;width:36px;flex:none;border-radius:8px;border:none;background:var(--primary);color:var(--primary-foreground);cursor:pointer;">✓</button>
+                        <button onclick="{{ cancelEdit }}" style="min-height:36px;width:36px;flex:none;border-radius:8px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);cursor:pointer;">✕</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ cell.showBadge }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:48px;border:1px solid var(--border);background:var(--muted);border-radius:10px;padding:5px 8px;">
+                        <span style="display:flex;align-items:center;gap:5px;font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;">{{ cell.label }}<span style="width:7px;height:7px;border-radius:999px;background:var(--ok);"></span></span>
+                        <div style="display:flex;gap:1px;">
+                          <button onclick="{{ cell.onEdit }}" aria-label="Edit" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>
+                          <button onclick="{{ cell.onClear }}" aria-label="Clear" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg></button>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ cell.showEmptyInput }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;gap:5px;">
+                        <input onfocus="{{ cell.onFocus }}" placeholder="Table #" style="min-width:0;flex:1;min-height:36px;border-radius:8px;border:1px solid var(--border);background:var(--background);color:var(--foreground);padding:0 8px;font-family:'Geist Mono',monospace;font-size:12px;outline:none;" />
+                        <button onclick="{{ cell.onFocus }}" aria-label="Add table" style="min-height:36px;width:36px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:var(--primary);color:var(--primary-foreground);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ VIEW 2: FLOOR MAP ============ -->
+  <sc-if value="{{ isFloor }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div><h2 style="margin:0;font-size:15px;font-weight:600;">Live floor map</h2><p style="margin:4px 0 0;color:var(--muted-foreground);font-size:12px;">Tap an available table to assign · tap an assigned table for details</p></div>
+        <div style="display:flex;gap:14px;font-size:12px;color:var(--muted-foreground);">
+          <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;border:1px solid var(--border);background:var(--card);"></span>Available</span>
+          <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--primary);"></span>Assigned</span>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);padding:20px;">
+        <div style="display:grid;grid-template-columns:104px 70px minmax(0,1fr);gap:16px;">
+
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <p style="margin:0 0 2px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);">Wall</p>
+            <sc-for list="{{ wallTables }}" as="t" hint-placeholder-count="5">
+              <button onclick="{{ t.onClick }}" style="min-height:48px;border-radius:8px;border-left:5px solid {{ t.accentColor }};border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:{{ t.bg }};color:var(--foreground);cursor:pointer;text-align:left;padding:6px 8px;">
+                <div style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;">{{ t.label }}</div>
+                <sc-if value="{{ t.assigned }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--muted-foreground);">{{ t.assignedName }} · {{ t.elapsedMin }}m</div></sc-if>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <p style="margin:0 0 2px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);">Bar</p>
+            <sc-for list="{{ barTables }}" as="t" hint-placeholder-count="8">
+              <button onclick="{{ t.onClick }}" style="width:50px;height:50px;border-radius:999px;border:2px solid {{ t.accentColor }};background:{{ t.bg }};color:var(--foreground);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+                <div style="font-family:'Geist Mono',monospace;font-size:11px;font-weight:700;">{{ t.label }}</div>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:22px;">
+            <div>
+              <p style="margin:0 0 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);">Booths</p>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <sc-for list="{{ topBoothTables }}" as="t" hint-placeholder-count="5">
+                  <button onclick="{{ t.onClick }}" style="flex:1;min-width:88px;min-height:64px;border-radius:12px;border-bottom:6px solid {{ t.accentColor }};border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);background:{{ t.bg }};color:var(--foreground);cursor:pointer;padding:8px;">
+                    <div style="font-family:'Geist Mono',monospace;font-size:14px;font-weight:700;">{{ t.label }}</div>
+                    <sc-if value="{{ t.assigned }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--muted-foreground);">{{ t.assignedName }} · {{ t.elapsedMin }}m</div></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <p style="margin:0 0 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);">Two-tops</p>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <sc-for list="{{ twoTopTables }}" as="t" hint-placeholder-count="6">
+                  <button onclick="{{ t.onClick }}" style="width:64px;height:64px;flex:none;border-radius:10px;border:2px solid {{ t.accentColor }};background:{{ t.bg }};color:var(--foreground);cursor:pointer;padding:6px;">
+                    <div style="font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;">{{ t.label }}</div>
+                    <sc-if value="{{ t.assigned }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:var(--muted-foreground);">{{ t.assignedName }}</div></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <p style="margin:0 0 8px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);">Booths</p>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <sc-for list="{{ lowBoothTables }}" as="t" hint-placeholder-count="3">
+                  <button onclick="{{ t.onClick }}" style="flex:1;min-width:88px;min-height:64px;border-radius:12px;border-bottom:6px solid {{ t.accentColor }};border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);background:{{ t.bg }};color:var(--foreground);cursor:pointer;padding:8px;">
+                    <div style="font-family:'Geist Mono',monospace;font-size:14px;font-weight:700;">{{ t.label }}</div>
+                    <sc-if value="{{ t.assigned }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--muted-foreground);">{{ t.assignedName }} · {{ t.elapsedMin }}m</div></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ VIEW 3: PICKER ============ -->
+  <sc-if value="{{ isPicker }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div><h2 style="margin:0;font-size:15px;font-weight:600;">Grid + visual picker</h2><p style="margin:4px 0 0;color:var(--muted-foreground);font-size:12px;">Empty cells open the floor map instead of a text field.</p></div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="{{ addRow }}" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg> Add row</button>
+          <button onclick="{{ clearBoard }}" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;border-radius:10px;border:1px solid color-mix(in srgb, var(--destructive) 35%, transparent);background:color-mix(in srgb, var(--destructive) 10%, transparent);color:var(--destructive);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg> Clear board</button>
+        </div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <div style="display:grid;grid-template-columns:64px repeat({{ servers.length }}, minmax(118px, 1fr));min-width:max-content;">
+            <div style="position:sticky;left:0;z-index:20;border-right:1px solid var(--border);background:var(--secondary);color:var(--muted-foreground);padding:10px;font-size:11px;font-weight:600;">Turn</div>
+            <sc-for list="{{ servers }}" as="s" hint-placeholder-count="5">
+              <div style="border-right:1px solid var(--border);background:var(--secondary);padding:10px;opacity:{{ s.columnOpacity }};">
+                <div style="display:flex;align-items:flex-start;gap:6px;">
+                  <span style="width:8px;height:8px;border-radius:999px;background:{{ s.color }};flex:none;margin-top:4px;"></span>
+                  <p style="margin:0;font-size:12px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ s.name }}</p>
+                </div>
+                <p style="margin:3px 0 0;font-size:10px;color:{{ s.statusColor }};font-weight:600;text-transform:uppercase;">{{ s.statusLabel }}</p>
+              </div>
+            </sc-for>
+            <sc-for list="{{ pickerRounds }}" as="round" hint-placeholder-count="4">
+              <div style="display:contents;">
+                <div style="position:sticky;left:0;z-index:10;border-top:1px solid var(--border);border-right:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;min-height:72px;">
+                  <span style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:700;">{{ round.sequence }}</span>
+                </div>
+                <sc-for list="{{ round.cells }}" as="cell" hint-placeholder-count="5">
+                  <div style="border-top:1px solid var(--border);border-right:1px solid var(--border);min-height:72px;padding:8px;opacity:{{ cell.opacity }};">
+                    <sc-if value="{{ cell.showPaused }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;justify-content:center;min-height:48px;color:var(--faint);font-size:12px;">—</div></sc-if>
+                    <sc-if value="{{ cell.showBadge }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:48px;border:1px solid var(--border);background:var(--muted);border-radius:10px;padding:5px 8px;">
+                        <span style="font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;">{{ cell.label }}</span>
+                        <button onclick="{{ cell.onClear }}" aria-label="Clear" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg></button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ cell.showPick }}" hint-placeholder-val="{{ false }}">
+                      <button onclick="{{ cell.onPick }}" style="width:100%;min-height:48px;border-radius:10px;border:1px dashed var(--border);background:none;color:var(--muted-foreground);cursor:pointer;font-size:12px;">Pick table</button>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ VIEW 4: SERVERS ============ -->
+  <sc-if value="{{ isServers }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><h2 style="margin:0;font-size:15px;font-weight:600;">Server board</h2><p style="margin:4px 0 0;color:var(--muted-foreground);font-size:12px;">Ordered by turn — reorder here updates the whole rotation.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(250px, 1fr));gap:12px;">
+        <sc-for list="{{ serverBoard }}" as="s" hint-placeholder-count="6">
+          <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);padding:14px;opacity:{{ s.cardOpacity }};position:relative;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="width:30px;height:30px;border-radius:999px;background:var(--avatar);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-weight:700;font-size:12px;flex:none;">{{ s.turnNumber }}</span>
+              <div style="min-width:0;flex:1;">
+                <p style="margin:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ s.name }}</p>
+                <p style="margin:2px 0 0;font-size:11px;color:{{ s.statusColor }};font-weight:600;text-transform:uppercase;">{{ s.statusLabel }} · {{ s.activeTables.length }} active</p>
+              </div>
+              <button onclick="{{ s.onMoveUp }}" aria-label="Move up" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+              <button onclick="{{ s.onMoveDown }}" aria-label="Move down" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+              <button onclick="{{ s.onToggleMenu }}" aria-label="More" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+            </div>
+            <sc-if value="{{ s.menuOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;top:46px;right:12px;z-index:30;width:160px;background:var(--popover);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);padding:4px;">
+                <button onclick="{{ s.onTogglePause }}" style="width:100%;display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--foreground);font-size:12px;cursor:pointer;"><sc-if value="{{ s.showPauseIcon }}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if><sc-if value="{{ s.showResumeIcon }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg></sc-if>{{ s.pauseActionLabel }}</button>
+                <button onclick="{{ s.onClearAssignments }}" style="width:100%;display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--foreground);font-size:12px;cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>Clear assignments</button>
+                <button onclick="{{ s.onRemove }}" style="width:100%;display:flex;align-items:center;gap:7px;text-align:left;padding:8px 10px;border-radius:8px;border:none;background:none;color:var(--destructive);font-size:12px;cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6l-1.5 14a2 2 0 0 1-2 2H8.5a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg>Remove from rotation</button>
+              </div>
+            </sc-if>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;">
+              <sc-for list="{{ s.activeTables }}" as="t" hint-placeholder-count="2">
+                <span style="display:inline-flex;align-items:center;gap:4px;border-radius:8px;border:1px solid var(--border);background:var(--muted);padding:5px 9px;font-family:'Geist Mono',monospace;font-size:11px;font-weight:600;">{{ t.label }}</span>
+              </sc-for>
+              <button onclick="{{ s.onAddTable }}" style="display:inline-flex;align-items:center;gap:4px;border-radius:8px;border:1px dashed var(--border);background:none;color:var(--muted-foreground);padding:5px 9px;font-size:11px;cursor:pointer;">+ Table</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ VIEW 5: DASHBOARD ============ -->
+  <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><h2 style="margin:0;font-size:15px;font-weight:600;">Floor dashboard</h2><p style="margin:4px 0 0;color:var(--muted-foreground);font-size:12px;">What's happening on the floor right now.</p></div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:10px;">
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;"><p style="margin:0;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Servers on floor</p><p style="margin:6px 0 0;font-size:24px;font-weight:600;">{{ activeServersCount }}</p></div>
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;"><p style="margin:0;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Active tables</p><p style="margin:6px 0 0;font-size:24px;font-weight:600;">{{ activeTablesCount }}</p></div>
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;"><p style="margin:0;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Available tables</p><p style="margin:6px 0 0;font-size:24px;font-weight:600;">{{ availableTablesCount }}</p></div>
+        <div style="border:1px solid color-mix(in srgb, var(--primary) 20%, transparent);border-radius:14px;background:color-mix(in srgb, var(--primary) 10%, transparent);padding:14px;"><p style="margin:0;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--primary);">Next turn</p><p style="margin:6px 0 0;font-size:20px;font-weight:600;color:var(--primary);">{{ nextServerName }}</p></div>
+        <div style="border:1px solid var(--border);border-radius:14px;background:var(--card);padding:14px;"><p style="margin:0;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);">Recorded events</p><p style="margin:6px 0 0;font-size:24px;font-weight:600;">{{ eventCount }}</p></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);gap:12px;">
+        <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);padding:16px;">
+          <p style="margin:0 0 12px;font-size:13px;font-weight:600;">Current table load</p>
+          <div style="display:flex;flex-direction:column;gap:9px;">
+            <sc-for list="{{ tableLoad }}" as="row" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="width:9px;height:9px;border-radius:999px;background:{{ row.color }};flex:none;"></span>
+                <span style="flex:none;width:80px;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ row.name }}</span>
+                <div style="flex:1;height:7px;border-radius:999px;background:var(--muted);overflow:hidden;"><div style="height:100%;border-radius:999px;background:{{ row.color }};width:{{ row.barWidth }};"></div></div>
+                <span style="width:16px;text-align:right;font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;">{{ row.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);padding:16px;">
+          <p style="margin:0 0 10px;font-size:13px;font-weight:600;">Recent activity</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <sc-for list="{{ recentActivity }}" as="a" hint-placeholder-count="4">
+              <p style="margin:0;font-size:12px;color:var(--muted-foreground);"><span style="font-family:'Geist Mono',monospace;color:var(--foreground);">{{ a.time }}</span>  {{ a.text }}</p>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:16px;background:var(--card);overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);">
+          <div><h3 style="margin:0;font-size:14px;font-weight:600;">Master rotation</h3><p style="margin:2px 0 0;color:var(--muted-foreground);font-size:11px;">Read-only history — switch to Grid or Picker to edit.</p></div>
+          <button onclick="{{ openGrid }}" style="min-height:34px;border-radius:9px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 12px;font-size:12px;font-weight:600;cursor:pointer;">Open Grid</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <div style="display:grid;grid-template-columns:56px repeat({{ servers.length }}, minmax(96px, 1fr));min-width:max-content;">
+            <div style="position:sticky;left:0;z-index:10;border-right:1px solid var(--border);background:var(--secondary);color:var(--muted-foreground);padding:8px;font-size:10px;font-weight:600;">Turn</div>
+            <sc-for list="{{ servers }}" as="s" hint-placeholder-count="5">
+              <div style="border-right:1px solid var(--border);background:var(--secondary);padding:8px;opacity:{{ s.columnOpacity }};"><span style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">{{ s.name }}</span></div>
+            </sc-for>
+            <sc-for list="{{ masterRounds }}" as="round" hint-placeholder-count="4">
+              <div style="display:contents;">
+                <div style="position:sticky;left:0;z-index:5;border-top:1px solid var(--border);border-right:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;min-height:44px;font-family:'Geist Mono',monospace;font-size:12px;font-weight:700;">{{ round.sequence }}</div>
+                <sc-for list="{{ round.cells }}" as="cell" hint-placeholder-count="5">
+                  <div style="border-top:1px solid var(--border);border-right:1px solid var(--border);min-height:44px;display:flex;align-items:center;padding:0 8px;font-family:'Geist Mono',monospace;font-size:11px;color:{{ cell.color }};">{{ cell.label }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  </div>
+
+  <!-- FLOOR TEAM DRAWER -->
+  <sc-if value="{{ floorTeamOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ toggleFloorTeam }}" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;"></div>
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(380px, 100vw);background:var(--popover);border-left:1px solid var(--border);z-index:41;display:flex;flex-direction:column;">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><h3 style="margin:0;font-size:15px;font-weight:600;">Floor team</h3><button onclick="{{ toggleFloorTeam }}" style="width:36px;height:36px;border-radius:10px;border:none;background:var(--secondary);color:var(--foreground);cursor:pointer;">✕</button></div>
+      <div style="flex:1;overflow-y:auto;padding:14px 20px;display:flex;flex-direction:column;gap:8px;">
+        <sc-if value="{{ servers.length }}" hint-placeholder-val="{{ true }}">
+          <sc-for list="{{ servers }}" as="s" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:var(--card);border-radius:12px;padding:10px 12px;opacity:{{ s.columnOpacity }};">
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--faint);width:16px;">{{ s.turnNumber }}</span>
+              <span style="width:8px;height:8px;border-radius:999px;background:{{ s.color }};flex:none;"></span>
+              <div style="flex:1;min-width:0;"><span style="display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ s.name }}</span><span style="font-size:10px;font-weight:600;color:{{ s.statusColor }};text-transform:uppercase;">{{ s.statusLabel }}</span></div>
+              <button onclick="{{ s.onMoveUp }}" aria-label="Move up" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+              <button onclick="{{ s.onMoveDown }}" aria-label="Move down" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+              <button onclick="{{ s.onTogglePause }}" aria-label="Pause or resume" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:none;color:var(--muted-foreground);cursor:pointer;"><sc-if value="{{ s.showPauseIcon }}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if><sc-if value="{{ s.showResumeIcon }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg></sc-if></button>
+              <button onclick="{{ s.onRemove }}" aria-label="Remove from floor rotation" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:none;background:none;color:var(--destructive);cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6l-1.5 14a2 2 0 0 1-2 2H8.5a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path></svg></button>
+            </div>
+          </sc-for>
+        </sc-if>
+        <sc-if value="{{ noServers }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:40px 12px;color:var(--muted-foreground);"><p style="margin:0;font-size:14px;">No floor team yet</p></div></sc-if>
+      </div>
+      <div style="padding:16px 20px;border-top:1px solid var(--border);"><button onclick="{{ toggleQuickAdd }}" style="width:100%;min-height:44px;border-radius:12px;border:none;background:var(--primary);color:var(--primary-foreground);font-weight:600;font-size:14px;cursor:pointer;">+ Quick Add Staff</button></div>
+    </div>
+  </sc-if>
+
+  <!-- QUICK ADD -->
+  <sc-if value="{{ quickAddOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ toggleQuickAdd }}" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;"></div>
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px, 92vw);max-height:80vh;background:var(--popover);border:1px solid var(--border);border-radius:20px;z-index:51;display:flex;flex-direction:column;">
+      <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><h3 style="margin:0;font-size:15px;font-weight:600;">Quick add staff</h3><button onclick="{{ toggleQuickAdd }}" style="width:36px;height:36px;border-radius:10px;border:none;background:var(--secondary);color:var(--foreground);cursor:pointer;">✕</button></div>
+      <div style="overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:18px;">
+        <sc-if value="{{ hasClockedFloor }}" hint-placeholder-val="{{ true }}">
+          <div><p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);">Clocked in — floor/servers</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;"><sc-for list="{{ clockedInFloor }}" as="m" hint-placeholder-count="3"><button onclick="{{ m.onAdd }}" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;border-radius:10px;border:1px solid color-mix(in srgb, var(--ok) 35%, transparent);background:color-mix(in srgb, var(--ok) 12%, transparent);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;">+ {{ m.name }}</button></sc-for></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hasClockedOther }}" hint-placeholder-val="{{ false }}">
+          <div><p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Clocked in — other staff</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;"><sc-for list="{{ clockedInOther }}" as="m" hint-placeholder-count="3"><button onclick="{{ m.onAdd }}" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;">+ {{ m.name }} <span style="color:var(--muted-foreground);font-weight:400;">({{ m.role }})</span></button></sc-for></div>
+          </div>
+        </sc-if>
+        <div>
+          <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Other members</p>
+          <input value="{{ quickAddSearch }}" oninput="{{ handleSearchChange }}" placeholder="Search staff..." style="width:100%;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--background);color:var(--foreground);padding:0 12px;font-size:13px;margin-bottom:10px;outline:none;" />
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <sc-for list="{{ otherMembers }}" as="m" hint-placeholder-count="3"><label style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;"><input type="checkbox" checked="{{ m.checked }}" onchange="{{ m.onToggle }}" style="width:18px;height:18px;flex:none;" /><span style="font-size:13px;font-weight:500;">{{ m.name }}</span></label></sc-for>
+            <sc-if value="{{ noOtherMembers }}" hint-placeholder-val="{{ false }}"><p style="margin:6px 0;color:var(--muted-foreground);font-size:12px;">No matching staff.</p></sc-if>
+          </div>
+        </div>
+      </div>
+      <div style="padding:16px 22px;border-top:1px solid var(--border);"><button onclick="{{ addSelectedToRotation }}" disabled="{{ addDisabled }}" style="width:100%;min-height:44px;border-radius:12px;border:none;background:var(--primary);color:var(--primary-foreground);font-weight:600;font-size:14px;cursor:pointer;opacity:{{ addOpacity }};">Add {{ quickAddSelected.length }} to Rotation</button></div>
+    </div>
+  </sc-if>
+
+  <!-- FLOOR TABLE SHEET -->
+  <sc-if value="{{ showFloorSheet }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ closeFloorSheet }}" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;"></div>
+    <div style="position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(420px, 100vw);max-height:82vh;overflow-y:auto;background:var(--popover);border:1px solid var(--border);border-bottom:none;border-radius:20px 20px 0 0;z-index:51;padding:20px 22px 28px;">
+      <sc-if value="{{ sheetIsAssign }}" hint-placeholder-val="{{ true }}">
+        <h3 style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:22px;font-weight:700;">{{ selectedTableLabel }}</h3>
+        <p style="margin:0 0 16px;color:var(--muted-foreground);font-size:12px;">Available</p>
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Next in rotation</p>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--muted-foreground);">{{ upcomingList }}</p>
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Quick assign</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+          <sc-for list="{{ activeServersOnly }}" as="s" hint-placeholder-count="5"><button onclick="{{ s.onQuickAssign }}" style="display:flex;align-items:center;gap:10px;min-height:48px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--foreground);padding:0 14px;font-size:14px;font-weight:600;cursor:pointer;"><span style="width:8px;height:8px;border-radius:999px;background:{{ s.color }};flex:none;"></span>{{ s.name }}</button></sc-for>
+        </div>
+        <label style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:12px;padding:12px 14px;"><span style="font-size:13px;font-weight:600;">Advance rotation</span><input type="checkbox" checked="{{ advanceRotation }}" onchange="{{ toggleAdvanceRotation }}" style="width:20px;height:20px;" /></label>
+      </sc-if>
+      <sc-if value="{{ sheetIsDetail }}" hint-placeholder-val="{{ false }}">
+        <h3 style="margin:0 0 4px;font-family:'Geist Mono',monospace;font-size:22px;font-weight:700;">{{ selectedTableLabel }}</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;margin:16px 0 20px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--muted-foreground);">Assigned to</span><span style="font-weight:600;">{{ selectedAssignedName }}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--muted-foreground);">Elapsed</span><span style="font-weight:600;font-family:'Geist Mono',monospace;">{{ selectedElapsedMin }} min</span></div>
+        </div>
+        <p style="margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);">Transfer to</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;"><sc-for list="{{ transferTargets }}" as="s" hint-placeholder-count="3"><button onclick="{{ s.onTransfer }}" style="display:inline-flex;align-items:center;gap:6px;min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--foreground);padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;"><span style="width:8px;height:8px;border-radius:999px;background:{{ s.color }};flex:none;"></span>{{ s.name }}</button></sc-for></div>
+        <div style="display:flex;gap:8px;"><button onclick="{{ unassignTable }}" style="flex:1;min-height:44px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font-weight:600;font-size:13px;cursor:pointer;">Unassign</button><button onclick="{{ closeTable }}" style="flex:1;min-height:44px;border-radius:12px;border:1px solid color-mix(in srgb, var(--destructive) 35%, transparent);background:color-mix(in srgb, var(--destructive) 12%, transparent);color:var(--destructive);font-weight:600;font-size:13px;cursor:pointer;">Close / Release</button></div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- TABLE PICKER MODAL -->
+  <sc-if value="{{ pickerTarget }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ closePicker }}" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;"></div>
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(620px, 92vw);max-height:82vh;overflow-y:auto;background:var(--popover);border:1px solid var(--border);border-radius:20px;z-index:51;padding:22px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="margin:0;font-size:15px;font-weight:600;">Pick a table for {{ pickerServerName }}{{ pickerTurnSuffix }}</h3><button onclick="{{ closePicker }}" style="width:36px;height:36px;border-radius:10px;border:none;background:var(--secondary);color:var(--foreground);cursor:pointer;">✕</button></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <sc-for list="{{ pickerTableList }}" as="t" hint-placeholder-count="10">
+          <button onclick="{{ t.pickerOnClick }}" disabled="{{ t.assigned }}" style="min-width:56px;min-height:48px;border-radius:10px;border:1px solid {{ t.pickerBorder }};background:{{ t.pickerBg }};color:var(--foreground);opacity:{{ t.pickerOpacity }};cursor:{{ t.pickerCursor }};padding:6px 10px;font-family:'Geist Mono',monospace;font-weight:700;font-size:13px;">
+            {{ t.label }}
+            <sc-if value="{{ t.assigned }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:var(--muted-foreground);font-weight:400;">{{ t.assignedName }}</div></sc-if>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const SERVER_COLORS_DARK = ["#f2a65a","#7dd3fc","#a7f3d0","#c4b5fd","#fda4af","#fde68a","#94a3b8"];
+const SERVER_COLORS_LIGHT = ["#b45309","#0369a1","#047857","#6d28d9","#be123c","#854d0e","#475569"];
+
+const TOKENS = {
+  dark: { background:"#0b0b0d", foreground:"#f6f3ed", card:"#141416", popover:"#141416", primary:"#f2a65a", primaryFg:"#1c1007", secondary:"#1b1b1e", secondaryFg:"#f6f3ed", muted:"#202024", mutedFg:"#aaa7a1", accent:"#252329", destructive:"#ef4444", border:"rgba(255,255,255,.12)", ring:"#f2a65a", surface:"#141416", faint:"#666460", avatar:"#2a2a2c", warn:"#f59e0b", ok:"#10b981" },
+  light: { background:"#e9e7e2", foreground:"#1c1a17", card:"#ffffff", popover:"#ffffff", primary:"#d97706", primaryFg:"#ffffff", secondary:"#f1efe9", secondaryFg:"#1c1a17", muted:"#ede9e2", mutedFg:"rgba(28,26,23,.6)", accent:"#f4ece0", destructive:"#dc2626", border:"rgba(0,0,0,.12)", ring:"#d97706", surface:"#f4f2ee", faint:"rgba(28,26,23,.4)", avatar:"rgba(0,0,0,.08)", warn:"#d97706", ok:"#059669" },
+};
+
+const INITIAL_SERVERS = [
+  { id: "saima", name: "Saima", status: "active" },
+  { id: "conan", name: "Conan", status: "active" },
+  { id: "bhoomi", name: "Bhoomi", status: "paused" },
+  { id: "raj", name: "Raj", status: "active" },
+  { id: "sidhu", name: "Sidhu", status: "active" },
+  { id: "tom", name: "Tom", status: "active" },
+  { id: "taniya", name: "Taniya", status: "active" },
+  { id: "anil", name: "Anil", status: "active" },
+  { id: "priya", name: "Priya", status: "active" },
+  { id: "farah", name: "Farah", status: "active" },
+  { id: "elena", name: "Elena", status: "active" },
+];
+
+const INITIAL_TABLES = [
+  { id: "t15", label: "T15", zone: "top-booth", assignedTo: "saima", elapsedMin: 24 },
+  { id: "t16", label: "T16", zone: "top-booth", assignedTo: null, elapsedMin: 0 },
+  { id: "t17", label: "T17", zone: "top-booth", assignedTo: null, elapsedMin: 0 },
+  { id: "t18", label: "T18", zone: "top-booth", assignedTo: "conan", elapsedMin: 38 },
+  { id: "t19", label: "T19", zone: "top-booth", assignedTo: null, elapsedMin: 0 },
+  { id: "t14", label: "T14", zone: "twotop", assignedTo: null, elapsedMin: 0 },
+  { id: "t13", label: "T13", zone: "twotop", assignedTo: "raj", elapsedMin: 6 },
+  { id: "t12", label: "T12", zone: "twotop", assignedTo: null, elapsedMin: 0 },
+  { id: "t11", label: "T11", zone: "twotop", assignedTo: "saima", elapsedMin: 42 },
+  { id: "t10", label: "T10", zone: "twotop", assignedTo: "sidhu", elapsedMin: 19 },
+  { id: "t9", label: "T9", zone: "twotop", assignedTo: null, elapsedMin: 0 },
+  { id: "t6", label: "T6", zone: "low-booth", assignedTo: null, elapsedMin: 0 },
+  { id: "t7", label: "T7", zone: "low-booth", assignedTo: "tom", elapsedMin: 15 },
+  { id: "t8", label: "T8", zone: "low-booth", assignedTo: null, elapsedMin: 0 },
+  { id: "t5", label: "T5", zone: "wall", assignedTo: null, elapsedMin: 0 },
+  { id: "t4", label: "T4", zone: "wall", assignedTo: null, elapsedMin: 0 },
+  { id: "t3", label: "T3", zone: "wall", assignedTo: "taniya", elapsedMin: 8 },
+  { id: "t2", label: "T2", zone: "wall", assignedTo: null, elapsedMin: 0 },
+  { id: "t1", label: "T1", zone: "wall", assignedTo: "anil", elapsedMin: 29 },
+  { id: "b1", label: "B1", zone: "bar", assignedTo: "priya", elapsedMin: 33 },
+  { id: "b2", label: "B2", zone: "bar", assignedTo: null, elapsedMin: 0 },
+  { id: "b3", label: "B3", zone: "bar", assignedTo: "farah", elapsedMin: 17 },
+  { id: "b4", label: "B4", zone: "bar", assignedTo: null, elapsedMin: 0 },
+  { id: "b5", label: "B5", zone: "bar", assignedTo: null, elapsedMin: 0 },
+  { id: "b6", label: "B6", zone: "bar", assignedTo: "elena", elapsedMin: 9 },
+  { id: "b7", label: "B7", zone: "bar", assignedTo: null, elapsedMin: 0 },
+  { id: "b8", label: "B8", zone: "bar", assignedTo: null, elapsedMin: 0 },
+];
+
+function emptyValues(servers) { const v = {}; servers.forEach(s => v[s.id] = null); return v; }
+
+const INITIAL_ROUNDS = [
+  { id: "r1", sequence: 1, values: { saima: "T15", conan: "T18", bhoomi: null, raj: "T13", sidhu: "T10", tom: "T7", taniya: "T3", anil: "T1", priya: "B1", farah: "B3", elena: "B6" } },
+  { id: "r2", sequence: 2, values: { saima: "T11", conan: null, bhoomi: null, raj: null, sidhu: null, tom: null, taniya: null, anil: null, priya: null, farah: null, elena: null } },
+  { id: "r3", sequence: 3, values: emptyValues(INITIAL_SERVERS) },
+  { id: "r4", sequence: 4, values: emptyValues(INITIAL_SERVERS) },
+];
+
+const ROSTER_POOL = [
+  { id: "priyanka", name: "Priyanka", role: "Server", group: "floor" },
+  { id: "kabir", name: "Kabir", role: "Server", group: "floor" },
+  { id: "mira", name: "Mira", role: "Server", group: "floor" },
+  { id: "chef-lee", name: "Lee", role: "Kitchen", group: "other" },
+  { id: "hostess-nina", name: "Nina", role: "Host", group: "other" },
+  { id: "bar-omar", name: "Omar", role: "Bartender", group: "other" },
+  { id: "vik", name: "Vik", role: "Server", group: "off" },
+  { id: "asha", name: "Asha", role: "Server", group: "off" },
+  { id: "leo", name: "Leo", role: "Server", group: "off" },
+];
+
+function ensureTrailing(rounds, servers) {
+  let list = rounds.map(r => ({ ...r, values: { ...r.values } }));
+  list.forEach(r => servers.forEach(sv => { if (!(sv.id in r.values)) r.values[sv.id] = null; }));
+  let lastFilled = -1;
+  list.forEach((r, i) => { if (Object.values(r.values).some(Boolean)) lastFilled = i; });
+  while (list.length < lastFilled + 3) {
+    list.push({ id: `auto-${list.length}-${Math.random().toString(36).slice(2, 6)}`, sequence: list.length + 1, values: emptyValues(servers) });
+  }
+  list.forEach((r, i) => { r.sequence = i + 1; });
+  return list;
+}
+
+class Component extends DCLogic {
+  state = {
+    theme: "dark",
+    activeView: "grid",
+    viewDate: "09/18/2026",
+    eventCount: 35,
+    floorTeamOpen: false,
+    quickAddOpen: false,
+    quickAddSearch: "",
+    quickAddSelected: [],
+    advanceRotation: true,
+    selectedTableId: null,
+    pickerTarget: null,
+    editingCell: null,
+    editingValue: "",
+    openColumnMenu: null,
+    openRowMenu: null,
+    servers: INITIAL_SERVERS,
+    tables: INITIAL_TABLES,
+    rounds: ensureTrailing(INITIAL_ROUNDS, INITIAL_SERVERS),
+    history: { past: [], future: [] },
+  };
+
+  commit(partial) {
+    this.setState(s => {
+      const snapshot = { servers: s.servers, tables: s.tables, rounds: s.rounds };
+      const servers = partial.servers ?? s.servers;
+      const tables = partial.tables ?? s.tables;
+      const rounds = ensureTrailing(partial.rounds ?? s.rounds, servers);
+      return { servers, tables, rounds, history: { past: [...s.history.past, snapshot].slice(-25), future: [] }, eventCount: s.eventCount + 1 };
+    });
+  }
+  undo = () => this.setState(s => {
+    const prev = s.history.past.at(-1);
+    if (!prev) return {};
+    const cur = { servers: s.servers, tables: s.tables, rounds: s.rounds };
+    return { ...prev, history: { past: s.history.past.slice(0, -1), future: [cur, ...s.history.future] } };
+  });
+  redo = () => this.setState(s => {
+    const next = s.history.future[0];
+    if (!next) return {};
+    const cur = { servers: s.servers, tables: s.tables, rounds: s.rounds };
+    return { ...next, history: { past: [...s.history.past, cur], future: s.history.future.slice(1) } };
+  });
+
+  toggleTheme = () => this.setState(s => ({ theme: s.theme === "dark" ? "light" : "dark" }));
+  toggleFloorTeam = () => this.setState(s => ({ floorTeamOpen: !s.floorTeamOpen }));
+  toggleQuickAdd = () => this.setState(s => ({ quickAddOpen: !s.quickAddOpen }));
+  setView = (v) => this.setState({ activeView: v, openColumnMenu: null, openRowMenu: null });
+  prevDay = () => {};
+  nextDay = () => {};
+  toggleColumnMenu(id) { this.setState(s => ({ openColumnMenu: s.openColumnMenu === id ? null : id })); }
+  toggleRowMenu(id) { this.setState(s => ({ openRowMenu: s.openRowMenu === id ? null : id })); }
+
+  moveServer(id, dir) {
+    const arr = this.state.servers.slice();
+    const i = arr.findIndex(x => x.id === id);
+    const j = dir === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    this.commit({ servers: arr });
+  }
+  togglePause(id) {
+    const servers = this.state.servers.map(s => s.id === id ? { ...s, status: s.status === "paused" ? "active" : "paused" } : s);
+    this.commit({ servers });
+  }
+  removeServer(id) {
+    const servers = this.state.servers.filter(x => x.id !== id);
+    const tables = this.state.tables.map(t => t.assignedTo === id ? { ...t, assignedTo: null, elapsedMin: 0 } : t);
+    this.commit({ servers, tables });
+    this.setState({ openColumnMenu: null });
+  }
+  clearColumn(id) {
+    const rounds = this.state.rounds.map(r => ({ ...r, values: { ...r.values, [id]: null } }));
+    this.commit({ rounds });
+    this.setState({ openColumnMenu: null });
+  }
+  addMember(member) { this.commit({ servers: [...this.state.servers, { id: member.id, name: member.name, status: "active" }] }); }
+  addSelectedToRotation = () => {
+    const toAdd = ROSTER_POOL.filter(m => this.state.quickAddSelected.includes(m.id));
+    this.commit({ servers: [...this.state.servers, ...toAdd.map(m => ({ id: m.id, name: m.name, status: "active" }))] });
+    this.setState({ quickAddSelected: [] });
+  };
+  toggleQuickAddSelect(id) { this.setState(s => ({ quickAddSelected: s.quickAddSelected.includes(id) ? s.quickAddSelected.filter(x => x !== id) : [...s.quickAddSelected, id] })); }
+  handleSearchChange = (e) => this.setState({ quickAddSearch: e.target.value });
+
+  selectFloorTable(id) { this.setState({ selectedTableId: id }); }
+  closeFloorSheet = () => this.setState({ selectedTableId: null });
+  quickAssignServer(serverId) {
+    const tables = this.state.tables.map(t => t.id === this.state.selectedTableId ? { ...t, assignedTo: serverId, elapsedMin: 0 } : t);
+    let servers = this.state.servers;
+    if (this.state.advanceRotation) {
+      const arr = servers.slice();
+      const i = arr.findIndex(x => x.id === serverId);
+      if (i > -1) { const [m] = arr.splice(i, 1); arr.push(m); servers = arr; }
+    }
+    this.commit({ tables, servers });
+    this.setState({ selectedTableId: null });
+  }
+  transferTable(serverId) {
+    const tables = this.state.tables.map(t => t.id === this.state.selectedTableId ? { ...t, assignedTo: serverId, elapsedMin: 0 } : t);
+    this.commit({ tables });
+    this.setState({ selectedTableId: null });
+  }
+  unassignTable = () => {
+    const tables = this.state.tables.map(t => t.id === this.state.selectedTableId ? { ...t, assignedTo: null, elapsedMin: 0 } : t);
+    this.commit({ tables });
+    this.setState({ selectedTableId: null });
+  };
+  closeTable = () => this.unassignTable();
+  toggleAdvanceRotation = () => this.setState(s => ({ advanceRotation: !s.advanceRotation }));
+
+  startEdit(roundId, serverId, current) { this.setState({ editingCell: { roundId, serverId }, editingValue: current || "" }); }
+  handleEditChange = (e) => this.setState({ editingValue: e.target.value });
+  submitEdit = () => {
+    const ec = this.state.editingCell;
+    if (!ec) return;
+    const value = this.state.editingValue.trim();
+    const rounds = this.state.rounds.map(r => r.id === ec.roundId ? { ...r, values: { ...r.values, [ec.serverId]: value || null } } : r);
+    this.commit({ rounds });
+    this.setState({ editingCell: null, editingValue: "" });
+  };
+  cancelEdit = () => this.setState({ editingCell: null, editingValue: "" });
+  clearCell(roundId, serverId) {
+    const rounds = this.state.rounds.map(r => r.id === roundId ? { ...r, values: { ...r.values, [serverId]: null } } : r);
+    this.commit({ rounds });
+  }
+  clearRow(roundId) {
+    const rounds = this.state.rounds.map(r => r.id === roundId ? { ...r, values: emptyValues(this.state.servers) } : r);
+    this.commit({ rounds });
+  }
+  deleteRow(roundId) {
+    const rounds = this.state.rounds.filter(r => r.id !== roundId);
+    this.commit({ rounds });
+    this.setState({ openRowMenu: null });
+  }
+  addRow = () => { this.commit({ rounds: [...this.state.rounds, { id: `manual-${Date.now()}`, sequence: this.state.rounds.length + 1, values: emptyValues(this.state.servers) }] }); };
+  clearBoard = () => { this.commit({ rounds: [] }); };
+
+  openPicker(target) { this.setState({ pickerTarget: target }); }
+  closePicker = () => this.setState({ pickerTarget: null });
+  pickTable(label) {
+    const t = this.state.pickerTarget;
+    if (!t) return;
+    if (t.mode === "board") {
+      const tables = this.state.tables.map(x => x.label === label ? { ...x, assignedTo: t.serverId, elapsedMin: 0 } : x);
+      this.commit({ tables });
+    } else {
+      const rounds = this.state.rounds.map(r => r.id === t.roundId ? { ...r, values: { ...r.values, [t.serverId]: label } } : r);
+      this.commit({ rounds });
+    }
+    this.setState({ pickerTarget: null });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const T = TOKENS[s.theme];
+    const colorSet = s.theme === "dark" ? SERVER_COLORS_DARK : SERVER_COLORS_LIGHT;
+    const rootStyle = `--background:${T.background};--foreground:${T.foreground};--card:${T.card};--popover:${T.popover};--primary:${T.primary};--primary-foreground:${T.primaryFg};--secondary:${T.secondary};--secondary-foreground:${T.secondaryFg};--muted:${T.muted};--muted-foreground:${T.mutedFg};--accent:${T.accent};--destructive:${T.destructive};--border:${T.border};--ring:${T.ring};--surface:${T.surface};--faint:${T.faint};--avatar:${T.avatar};--warn:${T.warn};--ok:${T.ok};min-height:100vh;background:radial-gradient(circle at 88% -10%, rgba(242,166,90,.14), transparent 28rem), radial-gradient(circle at 8% 38%, rgba(125,211,252,.05), transparent 24rem), var(--background);color:var(--foreground);font-family:'Geist','Inter',ui-sans-serif,system-ui,sans-serif;padding:20px 24px 80px;`;
+
+    const servers = s.servers.map((srv, i) => {
+      const paused = srv.status === "paused";
+      return {
+        ...srv,
+        color: colorSet[i % colorSet.length],
+        turnNumber: i + 1,
+        columnOpacity: paused ? "0.55" : "1",
+        cardOpacity: paused ? "0.7" : "1",
+        statusLabel: paused ? "Paused" : "Active",
+        statusColor: paused ? "var(--warn)" : "var(--ok)",
+        paused, showPauseIcon: !paused, showResumeIcon: paused,
+        pauseActionLabel: paused ? "Resume" : "Pause",
+        menuOpen: s.openColumnMenu === srv.id,
+        onMoveUp: () => this.moveServer(srv.id, "up"),
+        onMoveDown: () => this.moveServer(srv.id, "down"),
+        onToggleMenu: () => this.toggleColumnMenu(srv.id),
+        onTogglePause: () => { this.togglePause(srv.id); this.setState({ openColumnMenu: null }); },
+        onClearColumn: () => this.clearColumn(srv.id),
+        onRemove: () => this.removeServer(srv.id),
+        onQuickAssign: () => this.quickAssignServer(srv.id),
+        onTransfer: () => this.transferTable(srv.id),
+      };
+    });
+    const serverById = Object.fromEntries(servers.map(x => [x.id, x]));
+    const activeServersOnly = servers.filter(x => x.status !== "paused");
+    const activeServersCount = activeServersOnly.length;
+    const nextServerName = activeServersOnly[0]?.name ?? "—";
+    const upcomingList = activeServersOnly.slice(1, 5).map(x => x.name).join(" → ") || "—";
+
+    const buildCell = (round, srv, forPicker) => {
+      const label = round.values[srv.id] ?? null;
+      const paused = srv.status === "paused";
+      const editing = !forPicker && s.editingCell && s.editingCell.roundId === round.id && s.editingCell.serverId === srv.id;
+      return {
+        key: round.id + srv.id, label, opacity: paused ? "0.5" : "1",
+        showPaused: paused, showEditing: !paused && !!editing,
+        showBadge: !paused && !editing && !!label,
+        showEmptyInput: !forPicker && !paused && !editing && !label,
+        showPick: !!forPicker && !paused && !label,
+        onEdit: () => this.startEdit(round.id, srv.id, label),
+        onClear: () => this.clearCell(round.id, srv.id),
+        onFocus: () => this.startEdit(round.id, srv.id, ""),
+        onPick: () => this.openPicker({ mode: "grid", roundId: round.id, serverId: srv.id }),
+      };
+    };
+    const displayRounds = s.rounds.map(round => ({
+      id: round.id, sequence: round.sequence, menuOpen: s.openRowMenu === round.id,
+      onClear: () => this.clearRow(round.id), onDelete: () => this.deleteRow(round.id), onToggleMenu: () => this.toggleRowMenu(round.id),
+      cells: servers.map(srv => buildCell(round, srv, false)),
+    }));
+    const pickerRounds = s.rounds.map(round => ({ id: round.id, sequence: round.sequence, cells: servers.map(srv => buildCell(round, srv, true)) }));
+    const masterRounds = s.rounds.map(round => ({
+      id: round.id, sequence: round.sequence,
+      cells: servers.map(srv => ({ key: round.id + srv.id, label: round.values[srv.id] || "—", color: srv.status === "paused" ? "var(--faint)" : "var(--foreground)" })),
+    }));
+
+    const decorate = (t) => {
+      const assignedSrv = t.assignedTo ? serverById[t.assignedTo] : null;
+      return {
+        ...t, assigned: !!assignedSrv, assignedName: assignedSrv ? assignedSrv.name : "",
+        accentColor: assignedSrv ? assignedSrv.color : "var(--border)",
+        bg: assignedSrv ? "color-mix(in srgb, var(--primary) 8%, var(--card))" : "var(--card)",
+        onClick: () => this.selectFloorTable(t.id),
+        pickerOnClick: assignedSrv ? undefined : () => this.pickTable(t.label),
+        pickerBorder: assignedSrv ? "var(--border)" : "var(--primary)",
+        pickerBg: assignedSrv ? "var(--muted)" : "color-mix(in srgb, var(--primary) 10%, var(--card))",
+        pickerOpacity: assignedSrv ? "0.45" : "1", pickerCursor: assignedSrv ? "not-allowed" : "pointer",
+      };
+    };
+    const byZone = (z) => s.tables.filter(t => t.zone === z).map(decorate);
+    const pickerTableList = s.tables.map(decorate);
+
+    const selectedTable = s.tables.find(t => t.id === s.selectedTableId);
+    const selectedAssignedSrv = selectedTable?.assignedTo ? serverById[selectedTable.assignedTo] : null;
+
+    const inServers = new Set(s.servers.map(x => x.id));
+    const q = s.quickAddSearch.trim().toLowerCase();
+    const clockedInFloor = ROSTER_POOL.filter(m => m.group === "floor" && !inServers.has(m.id)).map(m => ({ ...m, onAdd: () => this.addMember(m) }));
+    const clockedInOther = ROSTER_POOL.filter(m => m.group === "other" && !inServers.has(m.id)).map(m => ({ ...m, onAdd: () => this.addMember(m) }));
+    const otherMembers = ROSTER_POOL.filter(m => m.group === "off" && !inServers.has(m.id) && m.name.toLowerCase().includes(q)).map(m => ({ ...m, checked: s.quickAddSelected.includes(m.id), onToggle: () => this.toggleQuickAddSelect(m.id) }));
+    const bannerCandidates = [...clockedInFloor, ...clockedInOther].slice(0, 5);
+
+    const serverBoard = servers.map(srv => ({
+      ...srv, activeTables: s.tables.filter(t => t.assignedTo === srv.id),
+      onAddTable: () => this.openPicker({ mode: "board", serverId: srv.id }),
+      onClearAssignments: () => { const tables = s.tables.map(t => t.assignedTo === srv.id ? { ...t, assignedTo: null, elapsedMin: 0 } : t); this.commit({ tables }); this.setState({ openColumnMenu: null }); },
+    }));
+
+    const activeTablesCount = s.tables.filter(t => t.assignedTo).length;
+    const availableTablesCount = s.tables.length - activeTablesCount;
+    const maxLoad = Math.max(1, ...serverBoard.map(x => x.activeTables.length));
+    const tableLoad = serverBoard.map(x => ({ name: x.name, color: x.color, count: x.activeTables.length, barWidth: `${Math.round((x.activeTables.length / maxLoad) * 100)}%` }));
+    const recentActivity = [
+      { time: "6:42", text: `T17 assigned to ${servers[0]?.name ?? ""}` },
+      { time: "6:39", text: "T11 assigned to Conan" },
+      { time: "6:34", text: "T18 released" },
+      { time: "6:31", text: "Bhoomi paused" },
+    ];
+
+    const viewDefs = [["grid", "Grid"], ["floor", "Floor"], ["picker", "Picker"], ["servers", "Servers"], ["dashboard", "Dashboard"]];
+    const viewTabs = viewDefs.map(([key, label]) => ({
+      key, label, onClick: () => this.setView(key),
+      color: s.activeView === key ? "var(--primary)" : "var(--muted-foreground)",
+      borderColor: s.activeView === key ? "var(--primary)" : "transparent",
+    }));
+
+    return {
+      rootStyle,
+      themeIcon: s.theme === "dark" ? "☀" : "☾",
+      themeLabel: s.theme === "dark" ? "Light" : "Dark",
+      toggleTheme: this.toggleTheme,
+      undo: this.undo, redo: this.redo,
+      undoDisabled: s.history.past.length === 0, redoDisabled: s.history.future.length === 0,
+      undoOpacity: s.history.past.length === 0 ? "0.5" : "1", redoOpacity: s.history.future.length === 0 ? "0.5" : "1",
+      isGrid: s.activeView === "grid", isFloor: s.activeView === "floor", isPicker: s.activeView === "picker", isServers: s.activeView === "servers", isDashboard: s.activeView === "dashboard",
+      viewTabs, servers, activeServersOnly, activeServersCount, nextServerName, upcomingList,
+      viewDate: s.viewDate, prevDay: this.prevDay, nextDay: this.nextDay, eventCount: s.eventCount,
+      hasQuickAddBanner: bannerCandidates.length > 0, bannerCandidates,
+      addRow: this.addRow, clearBoard: this.clearBoard,
+      displayRounds, pickerRounds, masterRounds,
+      editingValue: s.editingValue, submitEdit: this.submitEdit, cancelEdit: this.cancelEdit, handleEditChange: this.handleEditChange,
+      topBoothTables: byZone("top-booth"), twoTopTables: byZone("twotop"), lowBoothTables: byZone("low-booth"), wallTables: byZone("wall"), barTables: byZone("bar"),
+      serverBoard, activeTablesCount, availableTablesCount, tableLoad, recentActivity,
+      openGrid: () => this.setView("grid"),
+
+      floorTeamOpen: s.floorTeamOpen, toggleFloorTeam: this.toggleFloorTeam, noServers: servers.length === 0,
+      quickAddOpen: s.quickAddOpen, toggleQuickAdd: this.toggleQuickAdd,
+      hasClockedFloor: clockedInFloor.length > 0, hasClockedOther: clockedInOther.length > 0,
+      clockedInFloor, clockedInOther, otherMembers, noOtherMembers: otherMembers.length === 0,
+      quickAddSearch: s.quickAddSearch, handleSearchChange: this.handleSearchChange,
+      quickAddSelected: s.quickAddSelected, addSelectedToRotation: this.addSelectedToRotation,
+      addDisabled: s.quickAddSelected.length === 0, addOpacity: s.quickAddSelected.length === 0 ? "0.5" : "1",
+
+      showFloorSheet: !!selectedTable, closeFloorSheet: this.closeFloorSheet,
+      sheetIsAssign: !!selectedTable && !selectedTable.assignedTo, sheetIsDetail: !!selectedTable && !!selectedTable.assignedTo,
+      selectedTableLabel: selectedTable?.label ?? "", selectedAssignedName: selectedAssignedSrv?.name ?? "", selectedElapsedMin: selectedTable?.elapsedMin ?? 0,
+      transferTargets: selectedAssignedSrv ? activeServersOnly.filter(x => x.id !== selectedAssignedSrv.id) : activeServersOnly,
+      unassignTable: this.unassignTable, closeTable: this.closeTable,
+      advanceRotation: s.advanceRotation, toggleAdvanceRotation: this.toggleAdvanceRotation,
+
+      pickerTarget: s.pickerTarget, closePicker: this.closePicker,
+      pickerServerName: s.pickerTarget ? (serverById[s.pickerTarget.serverId]?.name ?? "") : "",
+      pickerTurnSuffix: s.pickerTarget && s.pickerTarget.mode === "grid" ? ` · Turn ${s.rounds.find(r => r.id === s.pickerTarget.roundId)?.sequence ?? ""}` : "",
+      pickerTableList,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -2,6 +2,13 @@
 
 Status: shipped, later revised
 
+**Extended by `table-rotation-multi-view`** (2026-09-19): the "any active
+member may write to any column, always attributed, no reason field" rule
+this feature established must be preserved exactly by every new view
+(Floor, Picker, Servers, Dashboard) — same attribution semantics, not a
+reintroduced reason field. See
+`docs/features/table-rotation-multi-view/INTERACTIONS.md`.
+
 **Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex was not in this loop.
 
 **Build note**: kept on its own commit, separate from 009/010 — the permissions reasoning below needed its own diff to review.

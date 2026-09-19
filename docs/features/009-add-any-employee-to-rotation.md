@@ -2,6 +2,14 @@
 
 Status: shipped, later revised
 
+**Extended by `table-rotation-multi-view`** (2026-09-19): the Quick Add
+flow this feature established gains clocked-in-first prioritization and
+becomes available to Staff (previously already true here at the RPC level,
+now also true in the new views' UI) — see
+`docs/features/table-rotation-multi-view/IMPLEMENTATION_CONTRACT.md`
+section 12. The "not schedule-filtered, reads the live roster" invariant
+this feature protects is unchanged.
+
 **Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex was not in this loop.
 
 **Build note**: implemented together with Feature 010 in one session (both touch `rotation-board.ts` and its undo/redo logic), committed separately.

@@ -2,6 +2,14 @@
 
 Status: wired to hosted Supabase (Feature 015, Phase C). `allocation-workspace.tsx`'s `rotation-board.ts` reducer stays the pure source of truth for the board's _shape_ (unchanged by this phase, per the Phase C spec); in real mode every action calls one of ten new SECURITY INVOKER RPCs (one per action type, plus undo/redo) that write the mutation and its `board_events` row in one transaction, and a Realtime subscription on `board_events` (scoped to the open `service_session_id`) refreshes every other open board within a couple of seconds. Wiring this up surfaced four real RLS/grant gaps in the schema below — see `docs/SECURITY.md`'s updated "Allocation-board open editing" section and the three fixup migrations' own comments for what they were and why Feature 011 shipping demo-only let them go unnoticed until now. See `docs/AUDIT.md` (2026-09-05) for the pre-Phase-C state.
 
+**Extended by `table-rotation-multi-view`** (2026-09-19): adds Floor/
+Picker/Servers/Dashboard views over this same rotation state, closes the
+`table_label` occupancy-integrity gap (no uniqueness enforcement today —
+two columns could claim the same table), opens Clear Row/Column/Board and
+Add Row to Staff (previously manager-only), and reconciles the auto-row
+rule to ~2 trailing empty rows. See
+`docs/features/table-rotation-multi-view/IMPLEMENTATION_CONTRACT.md`.
+
 **Superseded in part by Features 009, 010, and 011** (2026-09-05): the "own active column only" rule below is a deliberate reversal, not an oversight — see `docs/features/011-allocation-board-open-editing.md` for the reasoning (including the tip-math question it required answering) and `docs/SECURITY.md`'s "Allocation-board open editing" section for the full authorization treatment. The quick-add list was never actually schedule-filtered (Feature 009 proved and locked that instead of changing it), and column reordering (Feature 010) is a genuinely new capability this spec didn't originally include.
 
 ## User outcome
