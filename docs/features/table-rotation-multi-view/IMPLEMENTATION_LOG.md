@@ -173,52 +173,136 @@ button (should be 4, one per demo-seed column). All 153 Playwright tests
 pass across all 3 device projects — same count as baseline. Commit
 `479909e`.
 
+## Phase I+J+K — Picker, Server Board, and Dashboard views
+
+- **Picker**: the existing Grid Card, rendered unmodified for both `grid`
+  and `picker` `activeView`s (no duplicate Grid implementation). Added
+  `pickerTarget` state and a plain `onClick` on each cell's existing
+  wrapper `<div>` (only wired to a handler when `activeView === "picker"`
+  — zero behavior change for Grid-only usage). A `TableMap` panel renders
+  below the Grid when in Picker mode; tapping an available table assigns
+  into `pickerTarget` via the same `execute({type:"assign"})` path;
+  tapping an occupied one surfaces the existing `actionError` banner
+  instead of silently no-op'ing.
+- **Server Board** (`server-board-view.tsx`, new): one card per active
+  column — position, status, workload (derived from `resolvedTables`),
+  assigned-table badges, reorder/pause/clear/remove (existing RPCs,
+  unchanged), and `+ Table` opening `TableMap` scoped to that column's
+  current round. Added `role="group"` + `aria-label` to each card for
+  unambiguous addressing (tests and screen readers alike).
+- **Dashboard** (`dashboard-view.tsx`, new): summary metrics (servers on
+  floor, next turn, active/available tables from `resolvedTables`),
+  upcoming rotation list, recent cross-column activity, and a **read-only
+  Master Rotation** — a purpose-built table over the same `board` data,
+  not a second instance of the interactive Grid (that component isn't
+  factored out of `allocation-workspace.tsx` yet); same data, no mutation
+  controls, "Open Grid" routes back. Also fixed a duplicate
+  summary-section render (the shared top-level summary and Dashboard's
+  own richer one were both showing) caught during manual verification.
+- View switcher extended to all 5 tabs (`Crosshair`/`UsersRound`/
+  `LayoutDashboard` icons for Picker/Servers/Dashboard).
+- Manually verified end-to-end in the browser (demo mode, manager 2468):
+  Picker cell-select → table-tap assign shows up on Grid; Server Board's
+  `+ Table` shows up on Grid and updates workload count; Dashboard metrics
+  and Master Rotation reflect the same assignments; "Next turn" and
+  "Recorded events" update correctly across all of it.
+- `npm run check` / `npm test` (366/366) / `npm run build` /
+  Playwright desktop (57/57 including all 6 new tests) all pass.
+  Commit `e312229`.
+
+## Playwright coverage for Floor/Picker/Servers/Dashboard
+
+New `tests/e2e/table-rotation-multi-view.spec.ts` (6 tests): Floor assign
+
+- cross-view consistency, Floor's occupancy-conflict surfacing Transfer/
+  Unassign instead of silent overwrite, Picker's select-then-assign flow,
+  Server Board's `+ Table` + cross-view order consistency, Dashboard's
+  metrics + read-only Master Rotation (asserts zero editable `Table #`
+  inputs), and that a plain server has all 4 new tabs. Commit `435127a`.
+
+## Known issue found during final validation: server-mobile Playwright project is unreliable in this sandbox
+
+Running the full 3-project `npm run test:e2e` surfaced systemic failures
+and multi-minute timeouts confined to the `server-mobile` (Pixel 7)
+project only:
+
+- `desktop`: 57/57 pass (51 baseline + 6 new), ~14s.
+- `host-tablet`: 57/57 pass (51 baseline + 6 new), ~29s.
+- `server-mobile`: only 9/57 passed in a from-scratch isolated run
+  (8.3 minutes), and a targeted rerun of just the 6 new tests failed all
+  6 with `<element> intercepts pointer events` / click-retry-timeout
+  errors when clicking the main nav ("Table Allocation" / "More").
+
+Diagnosis performed, not guessed:
+
+- Reproduced on a **completely unrelated, pre-existing test**
+  (`recurring-schedules.spec.ts`, "week navigation: Previous/Next/Today")
+  run in isolation on this same branch — it also fails with the identical
+  click-retry pattern on the "More" nav button. This test touches nothing
+  this feature changed, which is strong evidence the problem isn't
+  something introduced here.
+- Killed several zombie `node.exe` processes (leftover from repeated
+  local `npm run dev` restarts during manual browser verification) and
+  retried — no change.
+- Attempted to confirm pre-existence on `main` directly via a `git
+worktree` + a `node_modules` junction (to avoid a slow `npm install`);
+  Turbopack refused to start against a junctioned `node_modules`
+  ("Symlink ... points out of the filesystem root"), so this could not be
+  conclusively proven against a byte-for-byte clean `main` checkout in
+  the time available.
+- Given the unrelated-test reproduction, this is very likely a
+  pre-existing characteristic of running Pixel-7 touch-emulation Chromium
+  in this specific sandboxed environment (resource/timing-related), not a
+  regression from this feature's changes -- but that could not be proven
+  with full certainty, so it is reported here rather than asserted as
+  fact.
+
+**What this means for trustworthiness of this session's validation**:
+Vitest, pgTAP, `npm run check`, `npm run build`, Playwright desktop, and
+Playwright host-tablet are all fully, reliably green, including every new
+test this feature added. Playwright server-mobile could not be reliably
+exercised in this environment for either the baseline or this feature's
+changes -- its results here should not be read as either a pass or a
+fail for this feature specifically.
+
 ## Final local validation (this session)
 
 - `npm run check`: PASS
-- `npm test`: PASS, 366/366 (was 359/359; +7 net new: 1 delete-row +6
-  floor-layout tests, in rotation-board.test.ts and floor-layout.test.ts)
+- `npm test`: PASS, 366/366 (was 359/359; +7 net new: 1 delete-row test +
+  6 floor-layout tests)
 - `npm run build`: PASS
-- `npm run test:e2e` (all 3 projects): PASS, 153/153 (same as baseline;
-  3 tests updated for the intentional permission change, none deleted)
-- `npm run db:test`: PASS, 248/248 (was 228/228; +20 net new, all in
-  0019/0020)
-- Manual browser smoke test (demo mode): Grid and Floor both verified
-  working, cross-view consistent, both themes legible (see Phase G+H).
+- `npm run test:e2e`: desktop 57/57 PASS, host-tablet 57/57 PASS,
+  server-mobile unreliable in this sandbox (see above) — not a known
+  regression, not confirmed clean either
+- `npm run db:test`: PASS, 248/248 (was 228/228; +20 net new)
+- Manual browser smoke test (demo mode, manager + server passcodes): all
+  5 views verified working end-to-end, cross-view consistent, both themes
+  legible.
 
-## What is NOT done (honest accounting — see AGENT_HANDOFF.md for the
+## What is NOT done (honest accounting — see AGENT_HANDOFF.md for the full risk-ranked list and recommended next step)
 
-## full risk-ranked list and recommended next step)
-
-- **Picker view**: not built. Would reuse `TableMap` + the existing Grid
-  component per the contract, but the "assign to whichever Grid cell is
-  currently selected" interaction needs new selection state this session
-  did not add.
-- **Server Board view**: not built. `+ Table` would reuse `TableMap` in a
-  third mode; reorder/pause/remove would reuse the existing RPCs (already
-  permission-expanded and tested) — no new backend work needed, only the
-  view itself.
-- **Dashboard + read-only Master Rotation**: not built. Master Rotation
-  would reuse the Grid component with `readOnly` forced true (that prop
-  path already exists); the summary widgets (servers on floor, next turn,
-  active/available tables, recent activity) are all derivable from data
-  already fetched in `AllocationContext` — no new queries needed for most
-  of them.
-- **dining_tables seeding / onboarding**: intentionally not done (see
+- **`dining_tables` seeding / onboarding**: intentionally not done (see
   `IMPLEMENTATION_CONTRACT.md` section 3.1's own caveat) — there is no
   stable org/location fixture in this repo to attach seed data to
   (`supabase/seed.sql` is effectively empty; organizations are created via
-  the real registration flow at runtime). Real-mode Floor will show an
-  empty map until an org has actually registered tables. This is a
-  genuine onboarding-flow gap, not something this feature should paper
-  over with fake seed data.
-- **Playwright coverage for Floor**: none added. The manual browser
-  verification above exercised the real interaction, but there is no
-  checked-in automated test for it yet.
-- **Retention scope for table_rotation_entries/rotation_rounds**: not
+  the real registration flow at runtime). Real-mode Floor/Picker/Servers
+  will show no physical tables until an org has actually registered a
+  floor plan. This is a genuine onboarding-flow gap, not something this
+  feature should paper over with fake seed data.
+- **Retention scope for `table_rotation_entries`/`rotation_rounds`**: not
   addressed — deliberately deferred per `IMPLEMENTATION_CONTRACT.md`
   section 21 (Feature 028's date navigation depends on that data; needs
   explicit product sign-off before any retention rule touches it).
 - **Accessibility/performance review passes** (contract sections 24, 57):
-  not formally done beyond what native `<button>` semantics and the
-  existing design-token discipline already provide by construction.
+  not formally done beyond what native `<button>`/`role="group"`
+  semantics and the existing design-token discipline already provide by
+  construction.
+- **server-mobile Playwright reliability**: unresolved in this
+  environment (see above) — worth investigating in a genuinely clean
+  environment (fresh `npm install`, no leftover dev-server processes)
+  before treating a future server-mobile failure there as a real
+  regression.
+- **Design-screenshot comparison pass** (contract section 49/50): not
+  formally done — implementation was verified against the design
+  reference by eye during manual testing, not via a systematic side-by-
+  side screenshot diff.

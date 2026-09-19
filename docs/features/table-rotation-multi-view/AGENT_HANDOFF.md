@@ -5,11 +5,14 @@
 the normal Claude-plans/Codex-implements division of labor, for this
 feature only (2026-09-19).
 **Current branch:** `feature/table-rotation-multi-view`
-**Current phase:** Implementation — PARTIAL. Backend (occupancy integrity,
-permission expansion, auto-row reconciliation, retention) and the Grid +
-Floor views are complete, tested, and locally validated. Picker, Servers,
-and Dashboard are not built. See "What's done" / "What's not done" below
-and `IMPLEMENTATION_LOG.md` for the full phase-by-phase record.
+**Current phase:** Implementation — COMPLETE for all 5 views and the full
+backend (occupancy integrity, permission expansion, auto-row
+reconciliation, retention). Locally validated (Vitest/pgTAP/build/
+Playwright desktop+host-tablet all green; Playwright server-mobile
+unreliable in this sandbox, see below — not a known regression). A small
+number of items are explicitly out of scope for this session (dining_tables
+seeding/onboarding, broader retention) — see "What's not done" below and
+`IMPLEMENTATION_LOG.md` for the full phase-by-phase record.
 
 **Design reference:** `docs/design/table-rotation/` — primary HTML
 `approved-design-export/Table Rotation Multi-View v2.dc.html`
@@ -25,10 +28,15 @@ whether to continue on it or cut fresh from `main` before Codex starts).
 re-run, not just read from `docs/STATUS.md`.
 
 **Current state (reproduced live 2026-09-19, end of this implementation
-session):** Vitest 366/366, Playwright 153/153 (same count — 3 tests
-updated for the intentional permission change, none deleted), pgTAP
-248/248, `npm run check` and `npm run build` both pass. Zero regressions.
-Full detail in `IMPLEMENTATION_LOG.md`'s "Final local validation" section.
+session):** Vitest 366/366, pgTAP 248/248, `npm run check` and
+`npm run build` both pass. Playwright: desktop 57/57 and host-tablet
+57/57 (51 baseline + 6 new each), server-mobile unreliable in this
+sandbox — reproduces on an unrelated, pre-existing test too, so it does
+not look like a regression from this feature, but could not be proven
+clean either (see `IMPLEMENTATION_LOG.md`'s "Known issue" section for the
+full diagnosis). Zero regressions in everything that could be reliably
+run. Full detail in `IMPLEMENTATION_LOG.md`'s "Final local validation"
+section.
 
 **Important existing features this upgrade builds on or supersedes in
 part:** 003 (live table-allocation rotation, RPC architecture), 009 (any
@@ -85,37 +93,39 @@ table-rotation-multi-view" notes.
   did NOT touch `table_rotation_entries`/`rotation_rounds`.
 - **Grid**: delete-row control, Active Floor Operations gates, Quick Add
   clocked-in prioritization.
-- **Floor view + shared TableMap**: built, manually verified working
-  end-to-end in the browser (see `IMPLEMENTATION_LOG.md`), including
-  cross-view consistency with the Grid and both themes.
+- **Floor, Picker, Servers, Dashboard views**: all built on the shared
+  `TableMap` and the same `execute()` mutation path the Grid uses.
+  Manually verified working end-to-end in the browser (assign via any
+  view shows up correctly on every other view, in the same round), both
+  themes legible. Automated Playwright coverage for all four
+  (`tests/e2e/table-rotation-multi-view.spec.ts`).
 
 ## What's not done
 
-- **Picker, Servers, Dashboard views** — not built. See
-  `IMPLEMENTATION_LOG.md`'s "What is NOT done" section for exactly what
-  each would need (all three reuse already-built, already-tested
-  pieces — `TableMap`, the permission-expanded RPCs, the `readOnly` Grid
-  path — no further backend work is anticipated for any of them).
-- **Playwright coverage for Floor** — none yet; only manually verified.
-- **dining_tables seeding/onboarding** — intentionally not done, no stable
-  fixture exists to attach it to (see `IMPLEMENTATION_LOG.md`).
+- **`dining_tables` seeding/onboarding** — intentionally not done, no
+  stable fixture exists to attach it to (see `IMPLEMENTATION_LOG.md`).
+  Real-mode Floor/Picker/Servers show no physical tables until an org has
+  registered a floor plan.
 - **`table_rotation_entries`/`rotation_rounds` retention** — deliberately
   deferred per the contract, needs explicit product sign-off.
 - Design-screenshot comparison pass, formal accessibility/performance
   review passes (contract sections 50, 24, 57) — not formally done.
+- **Playwright `server-mobile` project reliability in this sandbox** —
+  see `IMPLEMENTATION_LOG.md`'s "Known issue" section. Worth a fresh
+  investigation (clean environment, no leftover dev-server processes)
+  before this repo relies on that project's results here.
 
 ## Pending next action
 
-Recommended: review what's built (Grid + Floor, fully tested), then
-decide whether to continue this session/a follow-up implementing Picker →
-Servers → Dashboard in that order (Picker and Servers are the smallest
-increments — both reuse `TableMap` directly), or hand the remainder to
-Codex via `CODEX_IMPLEMENTATION_PROMPT.md` (still accurate for whatever's
-left, since nothing in it was invalidated by what's built).
+All 5 views and the full backend are implemented, tested, and manually
+verified. Recommended: review the branch, decide on the `server-mobile`
+Playwright question above (retry in a clean environment, or accept
+desktop+host-tablet as sufficient local evidence), then proceed to
+push/PR/remote CI once you're ready — none of that has happened yet.
 
 Per the mega-prompt's own explicit instruction: local implementation and
-validation are complete **for what was built**. No push, PR, merge, or
-deploy has happened or should happen without further explicit approval.
+validation are complete. No push, PR, merge, or deploy has happened or
+should happen without further explicit approval.
 
 ## Documentation created/updated this phase
 
@@ -146,11 +156,13 @@ deploy has happened or should happen without further explicit approval.
   `20260919130000_board_events_retention.sql`
 - `supabase/tests/database/0019_*.test.sql`, `0020_*.test.sql`
 - `src/features/allocation/domain/floor-layout.ts` (+ `.test.ts`)
-- `src/features/allocation/components/table-map.tsx`,
-  `floor-view.tsx`
+- `src/features/allocation/components/table-map.tsx`, `floor-view.tsx`,
+  `server-board-view.tsx`, `dashboard-view.tsx`
 - Modified: `rotation-board.ts` (+`.test.ts`), `allocation-workspace.tsx`,
   `allocation-actions.ts`, `allocation-data.ts`,
   `src/features/auth/domain/passcode.ts`, `src/types/database.generated.ts`
+- `tests/e2e/table-rotation-multi-view.spec.ts` (new — Floor/Picker/
+  Servers/Dashboard coverage)
 - Modified: `tests/e2e/allocation-open-editing.spec.ts`,
   `tests/e2e/dashboard.spec.ts` (permission-expansion assertions updated)
 - `.prettierignore`, `eslint.config.mjs` — exclude the copied design

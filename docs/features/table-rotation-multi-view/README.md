@@ -65,10 +65,10 @@ Codex.
 
 ## Status
 
-Planning / contract freeze complete. Implementation in progress (Claude
-Code, explicit user-approved override of the normal Claude→Codex division
-of labor for this feature, 2026-09-19): backend (occupancy integrity,
-permission expansion, auto-row reconciliation, retention) and the Grid +
-Floor views are complete, tested, and locally validated. Picker, Servers,
-and Dashboard are not built yet. See `AGENT_HANDOFF.md` and
+Planning and implementation complete (Claude Code, explicit user-approved
+override of the normal Claude→Codex division of labor for this feature,
+2026-09-19): the full backend (occupancy integrity, permission expansion,
+auto-row reconciliation, retention) and all 5 views (Grid, Floor, Picker,
+Servers, Dashboard) are built, tested, and locally validated. See
+`AGENT_HANDOFF.md` and
 `IMPLEMENTATION_LOG.md` for the full current state and what's left.
