@@ -60,8 +60,11 @@ export function TableMap({
               "border-border bg-card focus-visible:ring-ring absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border font-mono text-[11px] font-bold shadow-sm transition-transform focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
               isBar ? "size-9 rounded-full" : "size-11 rounded-lg",
               selected && "ring-ring ring-2",
-              !occupied &&
-                "hover:bg-accent border-emerald-400/40 text-emerald-100",
+              // Matches Badge's tone="success" convention (--ok token) --
+              // never a raw Tailwind color, so this reads correctly in
+              // both themes instead of only the one it happened to look
+              // right in.
+              !occupied && "border-ok/40 bg-ok/10 text-ok hover:bg-ok/20",
             )}
             style={{
               left: `${table.x}%`,

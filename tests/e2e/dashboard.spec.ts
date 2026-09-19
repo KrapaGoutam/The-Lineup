@@ -138,12 +138,14 @@ test("server sees published schedule, can edit any column (Feature 011), and see
   await expect(page.getByRole("button", { name: "Add shift" })).toHaveCount(0);
 
   await navigateToTab(page, /^Table Allocation$|^Allocation$/);
-  // Manage-only actions (clear board, reorder) stay manager/owner-only.
+  // Table Rotation Multi-View: clear board/reorder are now Active Floor
+  // Operations, open to a plain server too (PERMISSIONS.md).
   await expect(page.getByRole("button", { name: "Clear board" })).toHaveCount(
-    0,
+    1,
   );
+  // One "Move up" button per column (4 in the demo seed).
   await expect(page.getByRole("button", { name: /^Move .* up$/ })).toHaveCount(
-    0,
+    4,
   );
   // But Feature 011 opens plain column writes to everyone: a server sees
   // more than just their own enabled input — one input, no second field
@@ -429,7 +431,7 @@ test("an unrostered employee can be added to the live allocation board", async (
   await expect(page.getByText("Ivy Tran")).toBeVisible();
 });
 
-test("manager can add a row on demand, and undo removes it; a server never sees the control", async ({
+test("manager can add a row on demand, and undo removes it", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -444,12 +446,16 @@ test("manager can add a row on demand, and undo removes it; a server never sees 
   await expect(rowsBadge).toHaveText(`${before} rows`);
 });
 
-test("a server never sees the manual add-row control on the allocation board", async ({
+test("Table Rotation Multi-View: a server now sees and can use the manual add-row control", async ({
   page,
 }) => {
   await signIn(page, "1357");
   await navigateToTab(page, /^Table Allocation$|^Allocation$/);
-  await expect(page.getByRole("button", { name: "Add row" })).toHaveCount(0);
+  const rowsBadge = page.getByText(/^\d+ rows$/);
+  const before = Number((await rowsBadge.textContent())?.match(/\d+/)?.[0]);
+
+  await page.getByRole("button", { name: "Add row" }).click();
+  await expect(rowsBadge).toHaveText(`${before + 1} rows`);
 });
 
 test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {

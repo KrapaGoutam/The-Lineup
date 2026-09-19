@@ -43,7 +43,7 @@ async function goToAllocation(page: Page) {
 // below that edits or clears someone else's cell deliberately targets
 // Leo's or Noah's column instead, so the edit is provably cross-column,
 // not just "a server editing their own row".
-test("a server can edit an already-assigned table in a teammate's column, with correct attribution, while administrative actions stay manager-only", async ({
+test("a server can edit an already-assigned table in a teammate's column, with correct attribution, and now also has Active Floor Operations", async ({
   page,
 }) => {
   await signIn(page, "1357");
@@ -68,14 +68,18 @@ test("a server can edit an already-assigned table in a teammate's column, with c
     page.getByText("Mia Chen edited Leo Park's column"),
   ).toBeVisible();
 
-  // Admin board actions remain manager/owner-only even though per-cell
-  // editing is wide open.
+  // Table Rotation Multi-View: Add row/Clear board/reorder are now open
+  // to any active member too, not just managers -- the explicit,
+  // approved Active Floor Operations expansion (PERMISSIONS.md).
   await expect(page.getByRole("button", { name: "Clear board" })).toHaveCount(
-    0,
+    1,
   );
-  await expect(page.getByRole("button", { name: "Add row" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add row" })).toHaveCount(1);
+  // One "Move up" button per column (4 in the demo seed), not "any
+  // reorder control exists at all" -- some are disabled at the boundary
+  // but still present with this accessible name.
   await expect(page.getByRole("button", { name: /^Move .* up$/ })).toHaveCount(
-    0,
+    4,
   );
 });
 
