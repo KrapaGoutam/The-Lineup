@@ -646,7 +646,15 @@ export function AllocationWorkspace({
       </div>
 
       <div
-        className="border-border bg-muted/30 inline-flex w-fit gap-1 rounded-lg border p-1"
+        // Table Rotation Multi-View: fixed at 5 tabs, this row is wider
+        // than a narrow phone viewport (measured ~450px vs. a 412px Pixel
+        // 7 viewport). Without overflow-x-auto here, the row instead
+        // widens the whole page (main content, not just this row) past
+        // the viewport -- a real horizontal-page-overflow regression this
+        // exact shape caused, confirmed by comparing main vs. this branch
+        // in two genuinely clean environments. `shrink-0` on each tab
+        // (below) keeps them from being squashed instead of scrolling.
+        className="border-border bg-muted/30 flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:w-fit"
         role="tablist"
         aria-label="Table rotation view"
       >
@@ -656,6 +664,7 @@ export function AllocationWorkspace({
           aria-selected={activeView === "grid"}
           variant={activeView === "grid" ? "secondary" : "ghost"}
           size="sm"
+          className="shrink-0"
           onClick={() => setActiveView("grid")}
         >
           <LayoutGrid aria-hidden="true" /> Grid
@@ -666,6 +675,7 @@ export function AllocationWorkspace({
           aria-selected={activeView === "floor"}
           variant={activeView === "floor" ? "secondary" : "ghost"}
           size="sm"
+          className="shrink-0"
           onClick={() => setActiveView("floor")}
         >
           <MapPin aria-hidden="true" /> Floor
@@ -676,6 +686,7 @@ export function AllocationWorkspace({
           aria-selected={activeView === "picker"}
           variant={activeView === "picker" ? "secondary" : "ghost"}
           size="sm"
+          className="shrink-0"
           onClick={() => setActiveView("picker")}
         >
           <Crosshair aria-hidden="true" /> Picker
@@ -686,6 +697,7 @@ export function AllocationWorkspace({
           aria-selected={activeView === "servers"}
           variant={activeView === "servers" ? "secondary" : "ghost"}
           size="sm"
+          className="shrink-0"
           onClick={() => setActiveView("servers")}
         >
           <UsersRound aria-hidden="true" /> Servers
@@ -696,6 +708,7 @@ export function AllocationWorkspace({
           aria-selected={activeView === "dashboard"}
           variant={activeView === "dashboard" ? "secondary" : "ghost"}
           size="sm"
+          className="shrink-0"
           onClick={() => setActiveView("dashboard")}
         >
           <LayoutDashboard aria-hidden="true" /> Dashboard
