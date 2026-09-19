@@ -49,10 +49,10 @@ the `SECURITY INVOKER` RPCs that already gate at the RPC-body level per
   `dining_tables`, claim/check `table_occupancy` transactionally, accept
   a new `p_confirm_transfer boolean default false` parameter.
 - `board_delete_row(p_organization_id uuid, p_service_session_id bigint,
-  p_round_id bigint) returns void` — new; rejects if the round has any
+p_round_id bigint) returns void` — new; rejects if the round has any
   entries.
 - `private.assert_is_active_board_member(p_organization_id uuid)
-  returns void` — new private helper (section 4/12 of the contract),
+returns void` — new private helper (section 4/12 of the contract),
   used instead of `private.assert_is_board_manager` in
   `board_clear_row`/`clear_column`/`clear_board`/`add_row`/`delete_row`.
 

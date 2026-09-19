@@ -105,6 +105,7 @@ contract was frozen).
 **After local validation passes, STOP.**
 
 Do NOT:
+
 - push
 - open a pull request
 - merge

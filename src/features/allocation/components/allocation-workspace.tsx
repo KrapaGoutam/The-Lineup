@@ -50,6 +50,7 @@ import {
   type BoardHistory,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+import { can } from "@/features/auth/domain/passcode";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -429,6 +430,14 @@ export function AllocationWorkspace({
   // client that already holds a past day's serviceSessionId could
   // otherwise call executeBoardActionRemote directly, bypassing this.
   const readOnly = boardLocked || isHistoricalView;
+  // Table Rotation Multi-View: Active Floor Operations (add/clear row,
+  // clear column/board, reorder, pause/resume, remove server, quick add)
+  // are open to every active member, not just managers -- distinct from
+  // `isManager`, which still gates the unrelated tips-reopen control
+  // below. Server-side enforcement is the real gate (RLS/RPC, see
+  // supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql);
+  // this only controls visibility.
+  const canOperateFloor = can(user.role, "allocation:operate") && !readOnly;
 
   async function execute(action: BoardAction) {
     // Defense in depth, same principle as RLS re-checking eligibility
@@ -570,7 +579,7 @@ export function AllocationWorkspace({
           >
             <Redo2 aria-hidden="true" /> Redo
           </Button>
-          {isManager && !readOnly ? (
+          {canOperateFloor ? (
             <Button
               variant="outline"
               onClick={() => execute({ type: "add-row" })}
@@ -578,7 +587,7 @@ export function AllocationWorkspace({
               <Rows3 aria-hidden="true" /> Add row
             </Button>
           ) : null}
-          {isManager && !readOnly ? (
+          {canOperateFloor ? (
             <Button
               variant="outline"
               onClick={() => execute({ type: "clear-board" })}
@@ -739,7 +748,7 @@ export function AllocationWorkspace({
             </Card>
           </section>
 
-          {isManager && !readOnly && availableMembers.length ? (
+          {canOperateFloor && availableMembers.length ? (
             <Card className="border-primary/15">
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
@@ -829,7 +838,7 @@ export function AllocationWorkspace({
                         <p className="text-muted-foreground mt-1 text-[11px] capitalize">
                           {column.status}
                         </p>
-                        {isManager && !readOnly ? (
+                        {canOperateFloor ? (
                           <div className="mt-2 flex flex-wrap gap-1">
                             <Button
                               variant="ghost"
@@ -921,18 +930,44 @@ export function AllocationWorkspace({
                         <span className="font-mono text-sm font-bold">
                           {round.sequence}
                         </span>
-                        {isManager && !readOnly ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="mt-1 size-8 min-h-8"
-                            aria-label={`Clear row ${round.sequence}`}
-                            onClick={() =>
-                              execute({ type: "clear-row", roundId: round.id })
-                            }
-                          >
-                            <Eraser className="size-3.5" />
-                          </Button>
+                        {canOperateFloor ? (
+                          <div className="mt-1 flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 min-h-8"
+                              aria-label={`Clear row ${round.sequence}`}
+                              onClick={() =>
+                                execute({
+                                  type: "clear-row",
+                                  roundId: round.id,
+                                })
+                              }
+                            >
+                              <Eraser className="size-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 min-h-8"
+                              aria-label={`Delete row ${round.sequence}`}
+                              // Delete is structural, not content-clearing —
+                              // only safe once the row has nothing recorded
+                              // (clear first, then delete). See
+                              // board_delete_row's own migration comment.
+                              disabled={round.cells.some(
+                                (cell) => cell.tableLabel,
+                              )}
+                              onClick={() =>
+                                execute({
+                                  type: "delete-row",
+                                  roundId: round.id,
+                                })
+                              }
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
                         ) : null}
                       </div>
                       {visibleColumns.map((column) => {

@@ -8,12 +8,12 @@ prevent.
 ## Role vocabulary — three layers, exact mapping
 
 | DB `app_role` (enum, array on `memberships.roles`) | App `AppRole` (`src/features/auth/domain/passcode.ts`) | UI `Designation` (Feature 014, same file) |
-|---|---|---|
-| `owner` | `owner` | `owner` |
-| `general_manager` | `manager` | `manager` |
-| `shift_manager` | `manager` | `assistant_manager` |
-| `host` | `server` | `staff` |
-| `server` | `server` | `staff` |
+| -------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `owner`                                            | `owner`                                                | `owner`                                   |
+| `general_manager`                                  | `manager`                                              | `manager`                                 |
+| `shift_manager`                                    | `manager`                                              | `assistant_manager`                       |
+| `host`                                             | `server`                                               | `staff`                                   |
+| `server`                                           | `server`                                               | `staff`                                   |
 
 Mapping functions (unchanged by this feature): `normalizeDatabaseRole(roles)
 → AppRole`, `designationForRoles(roles) → Designation`,
@@ -49,18 +49,18 @@ in this feature touches Schedule, Tips, Payroll, Team, or auth code.
 All in `src/features/allocation/components/allocation-workspace.tsx`
 (exact line numbers drift; match by control):
 
-| Control | Current gate | New gate |
-|---|---|---|
-| `isManager` definition (`user.role !== "server"`) | — | Superseded for this feature's purposes by a new `can(user.role, "allocation:operate")` capability, granted to all 3 `AppRole` values. Keep `isManager` only if still used elsewhere in the file for something outside this list (verify via typecheck; remove if dead). |
-| Add row | `isManager && !readOnly` | `can(user.role, "allocation:operate") && !readOnly` |
-| Clear board | `isManager && !readOnly` | same |
-| Move column up/down (reorder) | inside `isManager && !readOnly` block | same |
-| Pause/Resume | inside `isManager && !readOnly` block | same |
-| Clear column | inside `isManager && !readOnly` block | same |
-| Remove server (column) | inside `isManager && !readOnly` block | same |
-| Clear row | `isManager && !readOnly` | same |
-| Undo / Redo | not gated by `isManager` today | unchanged |
-| Cell assign/clear-cell | not gated by `isManager` today | unchanged |
+| Control                                           | Current gate                          | New gate                                                                                                                                                                                                                                                                |
+| ------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isManager` definition (`user.role !== "server"`) | —                                     | Superseded for this feature's purposes by a new `can(user.role, "allocation:operate")` capability, granted to all 3 `AppRole` values. Keep `isManager` only if still used elsewhere in the file for something outside this list (verify via typecheck; remove if dead). |
+| Add row                                           | `isManager && !readOnly`              | `can(user.role, "allocation:operate") && !readOnly`                                                                                                                                                                                                                     |
+| Clear board                                       | `isManager && !readOnly`              | same                                                                                                                                                                                                                                                                    |
+| Move column up/down (reorder)                     | inside `isManager && !readOnly` block | same                                                                                                                                                                                                                                                                    |
+| Pause/Resume                                      | inside `isManager && !readOnly` block | same                                                                                                                                                                                                                                                                    |
+| Clear column                                      | inside `isManager && !readOnly` block | same                                                                                                                                                                                                                                                                    |
+| Remove server (column)                            | inside `isManager && !readOnly` block | same                                                                                                                                                                                                                                                                    |
+| Clear row                                         | `isManager && !readOnly`              | same                                                                                                                                                                                                                                                                    |
+| Undo / Redo                                       | not gated by `isManager` today        | unchanged                                                                                                                                                                                                                                                               |
+| Cell assign/clear-cell                            | not gated by `isManager` today        | unchanged                                                                                                                                                                                                                                                               |
 
 Add `"allocation:operate"` to the `Capability` union in
 `src/features/auth/domain/passcode.ts`, granted to `owner`, `manager`,
@@ -73,7 +73,7 @@ Add `"allocation:operate"` to the `Capability` union in
   `owner, general_manager, shift_manager, host`) — **stop calling it** from
   `board_clear_row`, `board_clear_column`, `board_clear_board`,
   `board_add_row`. Add a new `private.assert_is_active_board_member
-  (p_organization_id)` (role array: all 5 DB roles, active membership) and
+(p_organization_id)` (role array: all 5 DB roles, active membership) and
   call that instead from those four RPCs plus the new `board_delete_row`.
   Do not delete `assert_is_board_manager` itself — it may still be used
   elsewhere or in a future feature that needs a true manager-only gate.
@@ -82,7 +82,7 @@ Add `"allocation:operate"` to the `Capability` union in
 - `board_move_column`, `board_set_column_status` — no RPC-level guard
   function today; gated purely by the `rotation_members_operate_service`
   RLS policy (role array today: `owner, general_manager, shift_manager,
-  host` — **not** `server`). Add `server` to that policy's role array.
+host` — **not** `server`). Add `server` to that policy's role array.
 - New `board_delete_row` — gated by `private.assert_is_active_board_member`
   (same population as the other newly-opened RPCs), plus its own check
   that the target round has zero `table_rotation_entries`.

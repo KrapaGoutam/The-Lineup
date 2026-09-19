@@ -36,9 +36,11 @@ function computeNextColumnId(board: ReturnType<typeof createRotationBoard>) {
 }
 
 describe("rotation board", () => {
-  it("opens a new empty row the moment the trailing row gets its first value, not once every column fills it", () => {
+  it("opens enough empty rows to keep a two-row trailing buffer, not once every column fills it", () => {
     let history = createBoardHistory(createRotationBoard(columns));
-    expect(history.present.rounds).toHaveLength(1);
+    // Table Rotation Multi-View: the reconciled rule keeps ~2 empty
+    // trailing rounds, not 1 -- a fresh board already has 2.
+    expect(history.present.rounds).toHaveLength(2);
     const roundId = history.present.rounds[0].id;
 
     // A single column's first value is enough -- leo hasn't gone yet.
@@ -48,23 +50,27 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "12",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
     expect(
-      history.present.rounds[1].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds
+        .slice(1)
+        .every((round) =>
+          round.cells.every((cell) => cell.tableLabel === null),
+        ),
     ).toBe(true);
 
-    // Leo completing the same row doesn't push a second extra row --
-    // the fresh buffer row (still untouched) already covers it.
+    // Leo completing the same row doesn't push a third extra row -- the
+    // two fresh buffer rows (still untouched) already cover it.
     history = executeBoardAction(history, {
       type: "assign",
       roundId,
       columnId: "leo",
       tableLabel: "14 + 15",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
   });
 
-  it("fills rows sequentially and opens a new row at each row's first value, never waiting for the row to complete", () => {
+  it("fills rows sequentially and keeps a two-row trailing buffer, never waiting for the row to complete", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const round1 = history.present.rounds[0].id;
 
@@ -74,14 +80,14 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "1",
     });
-    expect(history.present.rounds).toHaveLength(2); // row 2 opened already
+    expect(history.present.rounds).toHaveLength(3); // buffer topped back up to 2
     history = executeBoardAction(history, {
       type: "assign",
       roundId: round1,
       columnId: "leo",
       tableLabel: "2",
     });
-    expect(history.present.rounds).toHaveLength(2); // row 1 now complete, no new row yet
+    expect(history.present.rounds).toHaveLength(3); // row 1 now complete, buffer unchanged
 
     const round2 = history.present.rounds[1].id;
     history = executeBoardAction(history, {
@@ -90,14 +96,14 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "3",
     });
-    expect(history.present.rounds).toHaveLength(3); // row 3 opened on row 2's first value
+    expect(history.present.rounds).toHaveLength(4); // buffer topped up again on row 2's first value
     history = executeBoardAction(history, {
       type: "assign",
       roundId: round2,
       columnId: "leo",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(3);
+    expect(history.present.rounds).toHaveLength(4);
   });
 
   it("an uneven floor -- two columns racing far ahead while others never fill a single row -- still always gets a trailing empty row (reproduces the reported stuck-at-N-rows bug)", () => {
@@ -129,11 +135,15 @@ describe("rotation board", () => {
       });
     }
 
-    // A 4th, completely empty row must exist -- Ava and Noah having
-    // never gone must never block it.
-    expect(history.present.rounds).toHaveLength(4);
+    // Two completely empty trailing rows must exist -- Ava and Noah
+    // having never gone must never block them.
+    expect(history.present.rounds).toHaveLength(5);
     expect(
-      history.present.rounds[3].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds
+        .slice(3)
+        .every((round) =>
+          round.cells.every((cell) => cell.tableLabel === null),
+        ),
     ).toBe(true);
   });
 
@@ -150,7 +160,7 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
   });
 
   it("a manager can add a row on demand, on top of the automatic buffer, and undo/redo it like any other action", () => {
@@ -184,7 +194,7 @@ describe("rotation board", () => {
     ).toBe("8");
   });
 
-  it("resets a cleared board to one fresh row", () => {
+  it("resets a cleared board to two fresh rows", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const firstRound = history.present.rounds[0].id;
     history = executeBoardAction(history, {
@@ -201,9 +211,11 @@ describe("rotation board", () => {
     });
     history = executeBoardAction(history, { type: "clear-board" });
 
-    expect(history.present.rounds).toHaveLength(1);
+    expect(history.present.rounds).toHaveLength(2);
     expect(
-      history.present.rounds[0].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds.every((round) =>
+        round.cells.every((cell) => cell.tableLabel === null),
+      ),
     ).toBe(true);
   });
 
@@ -414,6 +426,47 @@ describe("rotation board", () => {
         .find(({ id }) => id === roundId)
         ?.cells.find(({ columnId }) => columnId === "mia")?.tableLabel,
     ).toBeNull();
+  });
+
+  it("delete-row removes an empty round but refuses one with any recorded value", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const [round1, round2] = history.present.rounds;
+    const countBefore = history.present.rounds.length;
+
+    const rejected = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1.id,
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    const stillThere = executeBoardAction(rejected, {
+      type: "delete-row",
+      roundId: round1.id,
+    });
+    expect(stillThere).toBe(rejected); // no-op: round1 has a value
+
+    // Deleting round2 drops the board below its own two-row trailing
+    // buffer, so ensureTrailingRound immediately replaces it with a fresh
+    // round -- the count is unchanged, but round2's own id is gone.
+    const deleted = executeBoardAction(history, {
+      type: "delete-row",
+      roundId: round2.id,
+    });
+    expect(deleted.present.rounds).toHaveLength(countBefore);
+    expect(deleted.present.rounds.some((r) => r.id === round2.id)).toBe(false);
+
+    // Deleting a round that isn't needed to satisfy the buffer actually
+    // shrinks the board.
+    const withExtraRow = executeBoardAction(history, { type: "add-row" });
+    const extraRoundId = withExtraRow.present.rounds.at(-1)!.id;
+    const shrunk = executeBoardAction(withExtraRow, {
+      type: "delete-row",
+      roundId: extraRoundId,
+    });
+    expect(shrunk.present.rounds).toHaveLength(countBefore);
+    expect(shrunk.present.rounds.some((r) => r.id === extraRoundId)).toBe(
+      false,
+    );
   });
 
   it("identifies a cross-column write for attribution, but never blocks it on a reason", () => {

@@ -30,6 +30,7 @@ service_session_id, dining_table_id, server_profile_id, one-row-per-table-
 per-session uniqueness), already has correct `_select_member` RLS and
 Realtime publication membership, and was confirmed dead code (Phase 0).
 Extended it instead of adding two new tables:
+
 - Added `rotation_member_id`, `table_rotation_entry_id`, `released_at`.
 - Replaced its old always-unique `(service_session_id, dining_table_id)`
   constraint with a partial unique index (`where released_at is null`) —
@@ -52,6 +53,7 @@ directly) — a scalar FK on `table_rotation_entries` couldn't represent a
 combined-table entry correctly anyway (two tables, one entry).
 
 **What else this migration does**:
+
 - `board_assign` gained `p_confirm_transfer boolean default false` (old
   6-arg overload explicitly dropped, not left ambiguous for PostgREST).
   Threaded into the trigger via a transaction-local GUC

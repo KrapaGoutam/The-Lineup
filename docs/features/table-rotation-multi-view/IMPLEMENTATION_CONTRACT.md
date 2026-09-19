@@ -38,11 +38,11 @@ pgTAP 228 assertions (per `docs/STATUS.md`, not independently re-run).
   every open client — no client merges partial state itself.
 - Undo/redo (real mode) is **server-authoritative event replay** against
   `board_events.payload`/`inverse_payload`, not a client snapshot stack.
-  (A *separate*, purely client-side snapshot-stack undo/redo exists in
+  (A _separate_, purely client-side snapshot-stack undo/redo exists in
   `rotation-board.ts` for demo mode only — do not confuse the two or let
   new code merge them.)
 - Roles: DB `app_role` enum (`owner, general_manager, shift_manager, host,
-  server`) → app `AppRole` (`owner, manager, server`) → UI `Designation`
+server`) → app `AppRole` (`owner, manager, server`) → UI `Designation`
   (`owner, manager, assistant_manager, staff`). Exact mapping in
   `PERMISSIONS.md`.
 - A `dining_tables` table (physical table registry: label, seat count,
@@ -58,27 +58,27 @@ pgTAP 228 assertions (per `docs/STATUS.md`, not independently re-run).
 
 ## 2. Reuse / Extend / Modify / New
 
-| Capability | Disposition | Notes |
-|---|---|---|
-| Grid rendering, `rotation-board.ts` pure reducer | REUSE | Demo-mode shape/reducer unchanged |
-| `service_sessions` / `rotation_rounds` / `table_rotation_entries` / `rotation_members` schema | EXTEND | Add `dining_table_id` link + occupancy table (section 6); no breaking column changes |
-| `board_assign` | MODIFY | Add authoritative occupancy check/claim (section 6) |
-| `board_clear_row` / `column` / `board` / `add_row` | MODIFY | Remove manager-only gate, open to any active member (section 12) |
-| `board_move_column` (reorder), `board_set_column_status` (pause/resume/remove) | MODIFY | RLS role-array change only (section 12) — RPC bodies unchanged |
-| `board_undo` / `board_redo` | REUSE | Already open to any active member; must keep working for every new mutation type this feature adds |
-| `board_clear_cell` | REUSE | Already open to any active member |
-| `dining_tables` | EXTEND | Becomes the live physical-table registry (seeded per location); still no RLS/behavior change needed beyond enabling reads for this feature |
-| `allocation-workspace.tsx` (Grid) | MODIFY | Auto-row rule reconciliation, permission-gate removal, view-switcher chrome |
-| `allocation-date-filter.tsx` | REUSE | All 5 views share the same date-scoped session |
-| `allocation-actions.ts`, `allocation-data.ts` | EXTEND | New actions/queries for occupancy, Quick Add clocked-in source, row delete |
-| Theme system (`globals.css` tokens + `use-theme.ts`) | REUSE | No new palette; all 5 views must support both `data-theme` values |
-| lucide-react icon set already used in `allocation-workspace.tsx` | REUSE | Same icons for the same actions in new views (section 21) |
-| `fetchClockedInRoster` (Tips feature) | REUSE | Exact existing pattern for Quick Add's clocked-in source (section 13) |
-| Floor Map, Picker, Server Board, Dashboard views | NEW | Sections 10–19 |
-| Shared Floor/Picker table-map renderer | NEW | Section 11 |
-| `table_occupancy` table | NEW | Section 6 |
-| `board_delete_row` RPC | NEW | Section 12 |
-| Retention job | NEW | Section 21 |
+| Capability                                                                                    | Disposition | Notes                                                                                                                                      |
+| --------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Grid rendering, `rotation-board.ts` pure reducer                                              | REUSE       | Demo-mode shape/reducer unchanged                                                                                                          |
+| `service_sessions` / `rotation_rounds` / `table_rotation_entries` / `rotation_members` schema | EXTEND      | Add `dining_table_id` link + occupancy table (section 6); no breaking column changes                                                       |
+| `board_assign`                                                                                | MODIFY      | Add authoritative occupancy check/claim (section 6)                                                                                        |
+| `board_clear_row` / `column` / `board` / `add_row`                                            | MODIFY      | Remove manager-only gate, open to any active member (section 12)                                                                           |
+| `board_move_column` (reorder), `board_set_column_status` (pause/resume/remove)                | MODIFY      | RLS role-array change only (section 12) — RPC bodies unchanged                                                                             |
+| `board_undo` / `board_redo`                                                                   | REUSE       | Already open to any active member; must keep working for every new mutation type this feature adds                                         |
+| `board_clear_cell`                                                                            | REUSE       | Already open to any active member                                                                                                          |
+| `dining_tables`                                                                               | EXTEND      | Becomes the live physical-table registry (seeded per location); still no RLS/behavior change needed beyond enabling reads for this feature |
+| `allocation-workspace.tsx` (Grid)                                                             | MODIFY      | Auto-row rule reconciliation, permission-gate removal, view-switcher chrome                                                                |
+| `allocation-date-filter.tsx`                                                                  | REUSE       | All 5 views share the same date-scoped session                                                                                             |
+| `allocation-actions.ts`, `allocation-data.ts`                                                 | EXTEND      | New actions/queries for occupancy, Quick Add clocked-in source, row delete                                                                 |
+| Theme system (`globals.css` tokens + `use-theme.ts`)                                          | REUSE       | No new palette; all 5 views must support both `data-theme` values                                                                          |
+| lucide-react icon set already used in `allocation-workspace.tsx`                              | REUSE       | Same icons for the same actions in new views (section 21)                                                                                  |
+| `fetchClockedInRoster` (Tips feature)                                                         | REUSE       | Exact existing pattern for Quick Add's clocked-in source (section 13)                                                                      |
+| Floor Map, Picker, Server Board, Dashboard views                                              | NEW         | Sections 10–19                                                                                                                             |
+| Shared Floor/Picker table-map renderer                                                        | NEW         | Section 11                                                                                                                                 |
+| `table_occupancy` table                                                                       | NEW         | Section 6                                                                                                                                  |
+| `board_delete_row` RPC                                                                        | NEW         | Section 12                                                                                                                                 |
+| Retention job                                                                                 | NEW         | Section 21                                                                                                                                 |
 
 ## 3. Database changes
 
@@ -94,13 +94,13 @@ shape and constraints Codex must implement.
    below) for at least one real `location_id`. `position_x`/`position_y`
    already exist as columns — use them for the SVG layout (section 16).
 2. **`table_rotation_entries.dining_table_id bigint references
-   dining_tables(id)`, nullable.** Nullable because free-text labels that
+dining_tables(id)`, nullable.** Nullable because free-text labels that
    don't resolve to a registered table (e.g. typos, non-standard labels,
    a table not yet in the registry) must remain possible — the Grid's
    free-text input is not removed. Populate it by resolving `table_label`
    against `dining_tables.label` for the entry's `location_id` at write
    time (inside `board_assign`); leave it null when no match. Floor/Picker
-   availability is only computed for tables that *do* resolve (i.e., are
+   availability is only computed for tables that _do_ resolve (i.e., are
    in the registry) — see section 6.
 3. **New `table_occupancy` table** — the single authoritative "who holds
    this physical table right now" source, decoupled from the historical
@@ -135,7 +135,7 @@ shape and constraints Codex must implement.
    ```
    The uniqueness guarantee still has to hold per physical table, not per
    occupancy row — Codex must enforce that no `dining_table_id` appears in
-   more than one *active* (non-released) occupancy's membership at a time.
+   more than one _active_ (non-released) occupancy's membership at a time.
    A partial unique index can't express this across a junction table
    directly; use a constraint trigger or an `EXCLUDE`-style check inside
    the claiming RPC under a transaction with `FOR UPDATE` row locking on
@@ -198,7 +198,7 @@ transactionally by the same RPCs that write the grid log:
   existing production combined-table syntax from
   `docs/features/003-table-allocation.md` — do not invent new syntax):
   - If none of those tables have an active claim, or the only active claim
-    is already held by *this same* `rotation_member_id`: proceed — write
+    is already held by _this same_ `rotation_member_id`: proceed — write
     the grid entry, then claim (or re-claim) `table_occupancy` for those
     tables under row-level locking (section 3.4).
   - If any of those tables are actively claimed by a **different**
@@ -251,13 +251,13 @@ Existing production syntax (confirmed, not invented): a cell may contain
 Floor/Picker: selecting multiple adjacent/compatible tables in one
 assignment action produces a `"A + B"` label and a single `table_occupancy`
 row with two `table_occupancy_members` rows (section 3.4). Availability:
-a table is unavailable if it appears in *any* active occupancy's member
+a table is unavailable if it appears in _any_ active occupancy's member
 set, whether it's the sole table or part of a combination. Undo/redo:
 reversing a combined assignment releases/reclaims the whole membership set
 atomically (one `table_occupancy` row, one `inverse_payload` entry).
 `dining_tables.combinable_group` (existing column) should be used by the
-Picker UI to *suggest* which tables are physically combinable, but must
-not be used to *block* the free-text Grid path, which has never enforced
+Picker UI to _suggest_ which tables are physically combinable, but must
+not be used to _block_ the free-text Grid path, which has never enforced
 that today.
 
 ## 8. Authoritative rotation source
@@ -280,7 +280,7 @@ p_target integer default 2)`:
   (member status never affects row emptiness — only presence/absence of
   entries does).
 - **Trigger**: called at the end of every RPC that can add an entry to the
-  *current* trailing rounds — in practice, only `board_assign` need call
+  _current_ trailing rounds — in practice, only `board_assign` need call
   it (clear/delete/pause/reorder never add an entry, so they never need to
   top up). After the entry write, recompute the count of consecutive empty
   rounds at the tail of the session's round sequence; if that count is
@@ -310,7 +310,7 @@ p_target integer default 2)`:
   concurrent `board_assign` calls each attempting to top up will race on
   the same next `sequence` value, but the unique constraint plus a retry-
   on-conflict (or `insert ... on conflict (service_session_id, sequence)
-  do nothing` in a loop advancing the candidate sequence) prevents
+do nothing` in a loop advancing the candidate sequence) prevents
   duplicate/colliding rounds. No client-side auto-row logic is needed or
   permitted — clients only ever render whatever `rotation_rounds` rows the
   server returns.
@@ -340,8 +340,9 @@ availability + which server (if occupied) via the existing
 
 One component, e.g. `src/features/allocation/components/table-map.tsx`,
 React + SVG (`viewBox`-based, data-driven from `dining_tables.position_x/y`
-— not a static image of the JPG reference, which only defines the *layout*
+— not a static image of the JPG reference, which only defines the _layout_
 data used to seed the table). Props determine mode:
+
 ```
 <TableMap
   tables={resolvedTables}       // dining_tables + derived occupancy status
@@ -350,6 +351,7 @@ data used to seed the table). Props determine mode:
   selection={...}                // for multi-select combined-table picking
 />
 ```
+
 Consumers: Floor view (mode="floor", full interactive tap-to-assign),
 Picker view (mode="picker", embedded next to the Grid), Server Board's
 `+ Table` (mode="server-picker", opened inside a `Dialog`/`Popover` per
@@ -366,6 +368,7 @@ which already queries the Neon `attendance` table for
 resolved to Supabase profile IDs via `attendance_identity_links`). Add an
 equivalent `fetchClockedInRosterForAllocation` (or extend the existing
 function with an allocation-specific exclusion list) that:
+
 - Groups results into "Clocked in — floor/servers" and "Clocked in — other
   staff" (per the design's `INTERACTIONS.md`), by whatever role/position
   data distinguishes them (Codex to confirm against `memberships`/profile
@@ -407,7 +410,7 @@ function with an allocation-specific exclusion list) that:
   permits it" per the brief; a non-empty round must be cleared first, then
   deleted, preserving history for anything that was ever assigned). Calls
   new `board_delete_row(p_organization_id, p_service_session_id,
-  p_round_id)` RPC, which raises an exception if the round has any
+p_round_id)` RPC, which raises an exception if the round has any
   entries, else deletes it and writes a `board_events` row
   (`event_type = 'delete_row'`).
 - Add the view switcher (Grid / Floor / Picker / Servers / Dashboard) —
@@ -588,11 +591,12 @@ after this — no push, PR, merge, or deploy without explicit user approval
 Existing `.github/workflows/ci.yml` (`application` job: format/lint/
 typecheck/test/build; `browser-smoke` job: Playwright desktop project) and
 `.github/workflows/database.yml` (`migrations-and-policies`: local Supabase
-+ `db:reset` + `db:test` on PRs; `deploy-migrations`: `supabase db push` on
-merge to `main`) already cover everything this feature adds — no new job
-needed unless Codex finds a gap (e.g. non-desktop Playwright projects
-aren't in `browser-smoke` today; flag if that matters for this feature's
-tablet/mobile requirements, don't change CI silently).
+
+- `db:reset` + `db:test` on PRs; `deploy-migrations`: `supabase db push` on
+  merge to `main`) already cover everything this feature adds — no new job
+  needed unless Codex finds a gap (e.g. non-desktop Playwright projects
+  aren't in `browser-smoke` today; flag if that matters for this feature's
+  tablet/mobile requirements, don't change CI silently).
 
 ## 29. Rollout / rollback considerations
 

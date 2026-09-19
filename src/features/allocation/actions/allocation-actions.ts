@@ -95,6 +95,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
           p_member_id: memberId,
           p_table_label: action.tableLabel,
+          p_confirm_transfer: action.confirmTransfer ?? false,
         });
         if (error) return { ok: false, error: error.message };
         revalidatePath(`/r/${input.restaurantSlug}`);
@@ -264,6 +265,21 @@ export async function executeBoardActionRemote(
         const { error } = await supabase.rpc("board_add_row", {
           p_organization_id: input.organizationId,
           p_service_session_id: sessionId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
+      case "delete-row": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const { error } = await supabase.rpc("board_delete_row", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_round_id: Number(action.roundId),
         });
         if (error) return { ok: false, error: error.message };
         revalidatePath(`/r/${input.restaurantSlug}`);

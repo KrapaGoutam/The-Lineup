@@ -15,6 +15,11 @@ const eslintConfig = defineConfig([
     "test-results/**",
     "build/**",
     "next-env.d.ts",
+    // Table Rotation Multi-View: a Claude Design export copied verbatim
+    // from its source repo (docs/design/table-rotation/README.md) --
+    // reference material we don't own the authoring of, not linted for
+    // the same reason .prettierignore excludes this same directory.
+    "docs/design/table-rotation/approved-design-export/**",
   ]),
 ]);
 

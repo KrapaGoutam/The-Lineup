@@ -6,6 +6,7 @@ production architecture. Where they conflict, this document and
 `IMPLEMENTATION_CONTRACT.md` win.
 
 ## Quick Add
+
 - Available to Staff, Assistant Manager, Manager, Owner (all `AppRole`
   values) — matches the approved permission expansion (`PERMISSIONS.md`).
 - Clocked-in members sourced via the existing `fetchClockedInRoster`
@@ -14,6 +15,7 @@ production architecture. Where they conflict, this document and
 - A member already on the floor never appears again (no duplicate-add).
 
 ## Server lifecycle
+
 - **Add**: Quick Add or Grid's "Floor team changed?" banner →
   `board_add_column`. Appends to the end of `position` order.
 - **Remove from rotation**: `board_set_column_status(status: "removed")`
@@ -27,6 +29,7 @@ production architecture. Where they conflict, this document and
   order used everywhere.
 
 ## Assignment
+
 - **Floor Map**: tap available table → quick-assign sheet → pick server →
   `board_assign` (2 taps). "Advance rotation" toggle — see contract
   section 14 for the exact default-value caveat.
@@ -43,6 +46,7 @@ production architecture. Where they conflict, this document and
 - **Close/Release**: same effect as Unassign (no separate sub-state).
 
 ## Clear vs Delete (must stay visually distinct)
+
 - **Clear cell/row/column/board**: `Eraser` icon (row/board) or
   `RotateCcw` (column, per existing convention — see contract section 21
   icon table), non-destructive styling — removes contents, keeps
@@ -57,6 +61,7 @@ production architecture. Where they conflict, this document and
   missing).
 
 ## Undo / Redo
+
 - Global, header-level, available regardless of active view.
 - Server-authoritative (event replay against `board_events`), not a client
   snapshot stack — see contract section 1/19.
@@ -68,12 +73,14 @@ production architecture. Where they conflict, this document and
   input.
 
 ## Auto-row rule
+
 See `IMPLEMENTATION_CONTRACT.md` section 9 for the single, reconciled
 exact rule (replaces the design doc's description and the current
 single-trailing-round `ensure_trailing_round` behavior — implement the
 contract's version, not either of those two).
 
 ## Combined tables
+
 Existing production syntax `"12 + 13"` (confirmed in
 `docs/features/003-table-allocation.md`) — new views parse this against
 the `dining_tables` registry rather than inventing new syntax. See

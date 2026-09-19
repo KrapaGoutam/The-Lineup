@@ -25,7 +25,19 @@ export type RotationBoard = {
 };
 
 export type BoardAction =
-  | { type: "assign"; roundId: string; columnId: string; tableLabel: string }
+  | {
+      type: "assign";
+      roundId: string;
+      columnId: string;
+      tableLabel: string;
+      // Table Rotation Multi-View: threaded through to board_assign's
+      // p_confirm_transfer in real mode when the caller has explicitly
+      // confirmed taking a table from its current holder (see
+      // IMPLEMENTATION_CONTRACT.md section 6). The pure reducer has no
+      // occupancy concept of its own (demo mode is single-user), so it
+      // ignores this field entirely.
+      confirmTransfer?: boolean;
+    }
   | { type: "clear-cell"; roundId: string; columnId: string }
   | { type: "add-column"; column: RotationColumn }
   | { type: "set-column-status"; columnId: string; status: ColumnStatus }
@@ -33,7 +45,8 @@ export type BoardAction =
   | { type: "clear-column"; columnId: string }
   | { type: "clear-board" }
   | { type: "move-column"; columnId: string; direction: "up" | "down" }
-  | { type: "add-row" };
+  | { type: "add-row" }
+  | { type: "delete-row"; roundId: string };
 
 export type BoardHistory = {
   past: RotationBoard[];
@@ -62,28 +75,32 @@ function makeRound(board: RotationBoard): RotationRound {
   };
 }
 
+// Table Rotation Multi-View: reconciled to ~2 trailing empty rounds (was
+// exactly 1). "Empty" = no cell in the round has a tableLabel, regardless
+// of any column's active/paused/removed status — matching the real-mode
+// rule in private.ensure_trailing_round (see
+// supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql).
+// Recomputing and topping up to a fixed target after every action is
+// mathematically equivalent to "when the last or second-to-last round
+// gets a value, restore the buffer" — deliberately not implemented as a
+// separate last-row/second-to-last-row check, to avoid two mechanisms
+// that could drift apart. Only ever adds rounds, never removes them.
+const TRAILING_EMPTY_TARGET = 2;
+
+function isRoundEmpty(round: RotationRound) {
+  return round.cells.every((cell) => !cell.tableLabel);
+}
+
 function ensureTrailingRound(board: RotationBoard) {
-  if (board.rounds.length === 0) {
-    board.rounds.push(makeRound(board));
-    board.nextRoundNumber += 1;
-    return;
+  let trailingEmpty = 0;
+  for (let i = board.rounds.length - 1; i >= 0; i -= 1) {
+    if (!isRoundEmpty(board.rounds[i])) break;
+    trailingEmpty += 1;
   }
-  // A fresh empty row is kept ready one row ahead of wherever anyone is
-  // actually working, the moment the trailing round gets its first
-  // value — not once every active column has filled it. That
-  // "everyone" condition was the bug: with an uneven floor (some
-  // columns racing ahead, one lagging every round), a row that always
-  // has at least one unfilled active column never counts as complete,
-  // so no new row ever appears, no matter how far ahead the fast
-  // columns get. A single value is the actual per-board signal that
-  // work has started on this row and a clean one should already exist
-  // past it — not a per-column one, and not one that waits for the
-  // slowest column on the floor.
-  const last = board.rounds.at(-1)!;
-  const hasAnyValue = last.cells.some((cell) => Boolean(cell.tableLabel));
-  if (hasAnyValue) {
+  while (trailingEmpty < TRAILING_EMPTY_TARGET) {
     board.rounds.push(makeRound(board));
     board.nextRoundNumber += 1;
+    trailingEmpty += 1;
   }
 }
 
@@ -197,6 +214,15 @@ export function applyBoardAction(
       board.rounds.push(makeRound(board));
       board.nextRoundNumber += 1;
       break;
+    case "delete-row": {
+      // Structural removal, only for a round with no recorded values —
+      // clear first, then delete, same rule as board_delete_row (real
+      // mode). Preserves history for anything ever assigned.
+      const round = board.rounds.find(({ id }) => id === action.roundId);
+      if (!round || !isRoundEmpty(round)) return current;
+      board.rounds = board.rounds.filter(({ id }) => id !== action.roundId);
+      break;
+    }
   }
   ensureTrailingRound(board);
   return board;
@@ -252,8 +278,12 @@ export function mayWriteColumn() {
 
 /**
  * The row people are actually filling in right now — as opposed to
- * `rounds.at(-1)`, which is the standing empty buffer row once one
- * exists (see `ensureTrailingRound`). Consumers that need "who's up
+ * `rounds.at(-1)`, which is one of the standing ~2 empty buffer rows once
+ * they exist (see `ensureTrailingRound`). The working round is the last
+ * round with at least one recorded value, or the first round if the
+ * board is entirely fresh. (Before the buffer grew to 2 rows, `at(-2)`
+ * was an equivalent shortcut for this; it stopped being one once a
+ * second trailing empty row could exist.) Consumers that need "who's up
  * next" (the allocation workspace's summary card, `computeNextColumnId`
  * in tests) must derive it from this, not from the literal last round,
  * or they'll compute against a row nobody has touched yet.
@@ -261,7 +291,10 @@ export function mayWriteColumn() {
 export function getWorkingRound(
   board: RotationBoard,
 ): RotationRound | undefined {
-  return board.rounds.length >= 2 ? board.rounds.at(-2) : board.rounds.at(-1);
+  for (let i = board.rounds.length - 1; i >= 0; i -= 1) {
+    if (!isRoundEmpty(board.rounds[i])) return board.rounds[i];
+  }
+  return board.rounds[0];
 }
 
 /**

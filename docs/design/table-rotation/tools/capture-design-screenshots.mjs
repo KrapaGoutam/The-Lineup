@@ -65,14 +65,20 @@ function startServer() {
     const server = createServer(async (req, res) => {
       try {
         const urlPath = decodeURIComponent(req.url.split("?")[0]);
-        const filePath = path.join(exportDir, urlPath === "/" ? PRIMARY_HTML : urlPath);
+        const filePath = path.join(
+          exportDir,
+          urlPath === "/" ? PRIMARY_HTML : urlPath,
+        );
         if (!filePath.startsWith(exportDir)) {
           res.writeHead(403);
           res.end("Forbidden");
           return;
         }
         const body = await readFile(filePath);
-        res.writeHead(200, { "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream" });
+        res.writeHead(200, {
+          "Content-Type":
+            MIME[path.extname(filePath)] || "application/octet-stream",
+        });
         res.end(body);
       } catch {
         res.writeHead(404);
@@ -97,7 +103,9 @@ const playwrightTestEntry = path.resolve(
 );
 // Dynamic import() needs a file:// URL for an absolute path (a plain path
 // string is not reliably supported, especially on Windows).
-const { chromium } = await import(`file://${playwrightTestEntry.replaceAll("\\", "/")}`);
+const { chromium } = await import(
+  `file://${playwrightTestEntry.replaceAll("\\", "/")}`
+);
 
 const VIEWS = [
   { tab: "Grid", file: "01-grid", heading: "Dinner rotation" },
@@ -128,12 +136,16 @@ async function ensureTheme(page, wantDark) {
     // handling, not an animation.
     await page.waitForTimeout(150);
   }
-  throw new Error(`Could not reach ${wantDark ? "dark" : "light"} theme after 3 toggle attempts`);
+  throw new Error(
+    `Could not reach ${wantDark ? "dark" : "light"} theme after 3 toggle attempts`,
+  );
 }
 
 async function gotoView(page, view) {
   await page.getByRole("button", { name: view.tab, exact: true }).click();
-  await page.getByRole("heading", { name: view.heading, exact: true }).waitFor({ state: "visible" });
+  await page
+    .getByRole("heading", { name: view.heading, exact: true })
+    .waitFor({ state: "visible" });
 }
 
 async function shoot(page, outDir, name) {
@@ -160,13 +172,19 @@ async function captureFloorTeamAndQuickAdd(page, outDir) {
   await gotoView(page, VIEWS[0]); // Grid - where both entry points live
 
   await page.getByRole("button", { name: /^Floor Team:/ }).click();
-  await page.getByRole("heading", { name: "Floor team", exact: true }).waitFor({ state: "visible" });
+  await page
+    .getByRole("heading", { name: "Floor team", exact: true })
+    .waitFor({ state: "visible" });
   await shoot(page, outDir, "06-floor-team");
   await page.getByRole("button", { name: "✕" }).click();
-  await page.getByRole("heading", { name: "Floor team", exact: true }).waitFor({ state: "hidden" });
+  await page
+    .getByRole("heading", { name: "Floor team", exact: true })
+    .waitFor({ state: "hidden" });
 
   await page.getByRole("button", { name: "+ Quick Add" }).click();
-  await page.getByRole("heading", { name: "Quick add staff", exact: true }).waitFor({ state: "visible" });
+  await page
+    .getByRole("heading", { name: "Quick add staff", exact: true })
+    .waitFor({ state: "visible" });
   // Shows both clocked-in groupings ("Clocked in — floor/servers" and
   // "Clocked in — other staff") plus the Other Members search list, per
   // INTERACTIONS.md's Quick Add spec.
@@ -187,8 +205,12 @@ async function main() {
     ]) {
       const outDir = path.join(screenshotsDir, themeName);
       console.log(`\n=== ${themeName} (1440x1000) ===`);
-      const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-      await page.goto(`http://127.0.0.1:${PORT}/${encodeURIComponent(PRIMARY_HTML)}`);
+      const page = await browser.newPage({
+        viewport: { width: 1440, height: 1000 },
+      });
+      await page.goto(
+        `http://127.0.0.1:${PORT}/${encodeURIComponent(PRIMARY_HTML)}`,
+      );
       await ensureTheme(page, wantDark);
       await captureViews(page, outDir);
       await captureFloorTeamAndQuickAdd(page, outDir);
@@ -203,8 +225,12 @@ async function main() {
     // "only capture the design's existing responsive behavior."
     const tabletDir = path.join(screenshotsDir, "tablet");
     console.log("\n=== tablet (1024x768, dark) ===");
-    const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-    await page.goto(`http://127.0.0.1:${PORT}/${encodeURIComponent(PRIMARY_HTML)}`);
+    const page = await browser.newPage({
+      viewport: { width: 1024, height: 768 },
+    });
+    await page.goto(
+      `http://127.0.0.1:${PORT}/${encodeURIComponent(PRIMARY_HTML)}`,
+    );
     await ensureTheme(page, true);
     await captureViews(page, tabletDir);
     await page.close();
