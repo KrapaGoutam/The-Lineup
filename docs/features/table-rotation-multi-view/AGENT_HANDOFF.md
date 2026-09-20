@@ -380,7 +380,7 @@ area names; `pg_cron` confirmed available, retention job scheduled.
 **No merge to `main` has been performed or authorized for this fix
 branch.**
 
-## PGRST201 hotfix (2026-09-20) — status: implemented, tested locally, PR open
+## PGRST201 hotfix (2026-09-20) — status: MERGED to `main` (PR #48, `5553913`), verified live in production
 
 The live production smoke test (below) found production Floor/Picker/
 Servers still showed no physical tables and Dashboard still showed
@@ -407,6 +407,22 @@ before and after. Branch: `fix/table-rotation-postgrest-embed`, from
 330/330 (unchanged, no migration); `npm run build` PASS; Playwright
 297/297 (unchanged, demo mode never exercises this query).
 
+**Merge + production verification (2026-09-20, user-approved)**: PR #48
+merged to `main` (`5553913`). No `Database` workflow run fired (correct
+— no migration files touched). `CI` passed post-merge. Vercel
+production deployment succeeded. Live smoke test against
+`https://the-lineup-dusky.vercel.app/` with all three real test
+accounts (TestOwner, TestManager, TestStaff) confirmed: Floor shows all
+27 tables, Dashboard "Available tables" reads 27, the assignment popup
+works, zero console errors, and Supabase edge logs confirm the live
+`dining_tables` request now returns `200` with 27 rows using the
+qualified embed — PGRST201 is resolved in production. Two unrelated,
+pre-existing, cosmetic-only findings surfaced during this pass (a
+login-transition stale-render race, and bar-seat tiles rendering
+square instead of round) — see `IMPLEMENTATION_LOG.md`'s "Post-merge
+production verification" section; neither is fixed, both are flagged
+for a future separately-scoped look.
+
 ## Pending next action
 
 **Migration-history bookkeeping — resolved** (prior session): the user
@@ -414,23 +430,22 @@ granted explicit permission, the six-row `version` correction was
 re-run and verified — production's migration history matches local
 filenames exactly.
 
+**PGRST201 hotfix — resolved and verified live** (this session): see
+above.
+
 Outstanding:
 
 1. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
    rotation/re-scoping from an account with sufficient privileges on
    project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
    `deploy-migrations` CI path works again for future migrations. Not
-   this hotfix's concern (it requires no migration at all), but still
-   open.
-2. **This hotfix's own PR**: push, open PR against `main`, watch CI,
-   launch locally, then STOP for user approval before merging — see
-   "Pending next action" is superseded by whatever this session's own
-   final status says lower in this file, if a handoff checkpoint was
-   needed.
-
-Once those are resolved: confirm PR #47 is current with `main`, re-run
-CI, and wait for explicit user approval before merging (never
-automatic).
+   this hotfix's concern (it required no migration at all), but still
+   open — the only remaining item from this whole engagement that
+   needs the user's own action.
+2. Two newly-flagged, unrelated, cosmetic findings (login-transition
+   stale render; bar-seat square-vs-round tiles) — not fixed, not
+   blocking, no PR opened for either. Pick up only if/when the user
+   asks for them specifically.
 
 ## Documentation created/updated this phase
 

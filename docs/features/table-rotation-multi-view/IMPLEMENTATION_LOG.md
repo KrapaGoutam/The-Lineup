@@ -1058,3 +1058,58 @@ member (`set local role authenticated`, TestManager's `sub` claim): all
 migration); `npm run build` PASS; `npx playwright test` PASS, 297/297
 (unchanged counts — demo mode never exercises this query, so no
 existing test's assertions moved).
+
+## Post-merge production verification (PGRST201 hotfix)
+
+PR #48 merged to `main` at `5553913`. No `Database` workflow run fired
+for this push (correct — its path filter only matches
+`supabase/migrations/**`/`package.json`/`package-lock.json`/itself, and
+this merge touched none of those, empirically confirming no migration
+was needed). `CI` (`application`, `browser-smoke`) passed. Vercel
+production deployment for `5553913` (id `6554464652`) reported
+`"Deployment has completed"` / `"success"`.
+
+Live smoke test against `https://the-lineup-dusky.vercel.app/` with all
+three real test accounts (TestOwner PIN 1346, TestManager PIN 1234,
+TestStaff PIN 0369 — never persisted anywhere in this repo): Floor
+showed all 27 tables (T1-T19, B1-B8) correctly for all three; Dashboard
+"Available tables" read 27; the Floor assignment popup opened
+correctly; zero browser console errors for any account. Confirmed via
+Supabase edge log inspection that the live `dining_tables` request now
+uses the qualified `dining_areas!dining_tables_dining_area_id_fkey`
+embed and returns `200`/`content-range: 0-26/*` (27 rows) — PGRST201 is
+resolved in production, not just in the local reproduction.
+
+Two pre-existing, unrelated issues surfaced during this verification
+pass (both out of scope for the PGRST201 fix itself, neither touched):
+
+1. **Login-transition stale render (client-side, transient).** The
+   very first render immediately after a passcode submit can show an
+   all-default board (`EMPTY_BOARD`, `eventCount` fallback `6`,
+   `physicalTables: []`) even though the server-side fetch for that
+   same page load already succeeded with real data — confirmed via
+   Supabase edge logs showing the correct, successful, 27-row request
+   landing around the same moment the stale render was observed. A
+   subsequent hard navigation (or any action that re-triggers a
+   server read) immediately shows the correct data. Not a data or RLS
+   problem, not caused by or related to this hotfix's query change;
+   most likely a timing race in `AllocationWorkspace`'s
+   `initialContext`/`syncedContext` resync (`allocation-workspace.tsx`
+   around line 395-417) versus the passcode flow's post-login
+   navigation. Cosmetic/self-healing; not reproduced on every login.
+   Not fixed here — flagged for a future, separately-scoped look.
+2. **Bar-seat tiles render as squares, not circles, in real mode.**
+   `getAllocationContext`'s `row.dining_areas?.[0]?.name` accessor
+   assumes the `dining_areas` embed is an array; for a many-to-one FK
+   embed (`dining_tables` → one `dining_areas` row), PostgREST returns
+   a single object instead, so `[0]` always misses, `name` is always
+   `undefined`, and `resourceType` always resolves to `"table"` — B1-B8
+   render with the square "table" shape instead of the round
+   "bar_seat" shape `table-map.tsx` gives real bar seats. Confirmed
+   visually via screenshot against production (TestOwner, Floor tab).
+   Purely cosmetic — does not affect availability, assignment,
+   occupancy, or any data path; this accessor was never exercised
+   against real embedded data before today (PGRST201 blocked it, and
+   before that `dining_tables` was empty), so it's a latent bug, not a
+   regression from this hotfix. Not fixed here — flagged for a future,
+   separately-scoped look (`row.dining_areas?.name`, no `[0]`).
