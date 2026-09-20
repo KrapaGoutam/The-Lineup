@@ -335,6 +335,57 @@ decision flow Floor already had. Full spec:
   horizontal overflow, touch-friendly targets — and visually
   spot-checked in both `light` and `dark`.
 
+## Floor available-table popup + ownership visuals
+
+Full spec: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11.
+
+- **CASE A — popup opens, no inline panel**: clicking an available Floor
+  table opens an "Assign `<table>`" popup; no "pick a server" section
+  ever renders inline below the map. (Playwright, unit `getInitials`)
+- **CASE B — Cancel**: Cancel from the popup makes zero state changes.
+  (Playwright)
+- **CASE C — zero active tables**: selecting a server with none assigns
+  directly, no decision dialog. (Playwright)
+- **CASE D — existing active tables**: selecting a server with one or
+  more opens the existing four-choice decision dialog on top, unchanged
+  from section 8. (Playwright)
+- **Assigned tile visual**: after assigning, the tile shows the table
+  label and the server's initials (e.g. "MC" for Mia Chen) on that
+  server's accent color; the legend shows the same initials, the
+  server's name, and the correct active-table count. (Playwright)
+- **End visual**: ending the table removes the initials/accent
+  immediately and restores available styling; the legend's count for
+  that server decrements. (Playwright)
+- **Unassign visual**: same outcome as End — initials/accent removed,
+  available styling restored, legend count decrements. (Playwright)
+- **Transfer visual**: transferring the table replaces the old server's
+  initials/accent with the new server's immediately, with the table
+  remaining assigned throughout (no available-state flash); legend
+  counts move from the old server to the new one. (Playwright)
+- **Multiple tables, same server**: assigning several tables to the same
+  server shows matching initials/accent on every one of them, and the
+  legend's count reflects the total. (Playwright)
+- **`getInitials`**: two-part names ("Mia Chen" → "MC"), more than two
+  parts (first + last only), a single-word name (its own first two
+  letters), case-insensitivity, extra whitespace, and an empty string.
+  (Vitest)
+- **Accessibility**: an assigned tile's accessible name is unchanged —
+  "Table `<n>`, assigned to `<full name>`" — the initials/color are
+  supplementary, never the only place identity is exposed; an available
+  tile stays "Table `<n>`, available." (Playwright, inherited from
+  existing TableMap coverage — this follow-up added no new aria
+  attributes, only visible text/color.)
+- **Selected vs. ownership**: the temporary "tapped" ring renders
+  distinctly from, and on top of, whatever ownership accent a tile
+  already has — visually spot-checked, not independently asserted by an
+  automated test (there is no accessible-name distinction to assert;
+  it's a purely visual ring vs. background/border difference).
+- **Responsive/theme**: the Floor legend (`overflow-x-auto` chip row)
+  and the assign popup validated on desktop, iPad-landscape
+  (`host-tablet`), and Pixel-mobile (`server-mobile`) — no body
+  horizontal overflow, initials/legend readable, touch-friendly targets
+  — and visually spot-checked in both `light` and `dark`.
+
 ## Regression
 
 - Features 003, 009, 010, 011, 028 — all existing acceptance criteria

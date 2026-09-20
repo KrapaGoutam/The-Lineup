@@ -845,3 +845,84 @@ table while the server already holds one opens the identical
 four-choice decision dialog, and the End existing table(s) multi-select
 renders its checkboxes/"Select all"/running count correctly — no
 horizontal overflow at mobile width in either case.
+
+## Floor available-table popup + ownership visuals follow-up (2026-09-20)
+
+Every decision-flow semantic from the prior follow-ups is unchanged.
+This follow-up: (1) converts Floor's own AVAILABLE-table "pick a server"
+step from an always-visible side-panel section into a popup, matching
+Picker/Server Board; (2) replaces the color-only ownership indicator on
+assigned tiles with the server's initials plus their accent color; (3)
+adds a compact server legend above Floor's map. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11; staged as
+three commits per the explicit instruction it was implemented under.
+
+**Stage 1 (`f03a062`) — Floor popup**: `floor-view.tsx`'s side `Card`
+used to branch on `selected.occupiedBy` — occupied showed
+Transfer/End/Unassign, available showed a "pick a server" button list.
+That available-table branch moved into a new `<Dialog>` ("Assign
+`<table>`" / "Available. Select a server to assign this table to." /
+one button per active server / Cancel); the side `Card` now only ever
+renders the occupied-table panel or the plain "Tap a table…"
+placeholder. Selecting a server inside the new popup always calls
+`closePanel()` first, then `decision.beginAssign(...)` — the same
+choreography Server Board's popup already used, so a second native
+`<dialog>` (the decision dialog, when the server already has active
+tables) never opens stacked behind an already-open one. 8 new/updated
+Playwright tests (CASE A–D matching the spec's lettering, plus the
+pre-existing base "assign" test updated to assert the popup instead of
+the removed inline text).
+
+**Stage 2 (`b4b12c8`) — ownership visuals + legend**: `getInitials`
+(`floor-layout.ts`, new, pure) derives two-letter initials from a
+server's existing display name ("Mia Chen" → "MC"; a single-word name →
+its own first two letters) — no new manual-entry field. `TableMap`
+(shared by Floor, Picker's popup, and Server Board's popup) now renders
+an occupied tile as the table label plus `getInitials(occupiedBy.name)`
+stacked in two lines, on the same per-server accent color it already
+computed; an available tile is unchanged (label only, neutral). The
+"selected" ring was strengthened
+(`ring-primary ring-offset-2`) to stay visually distinct from whatever
+ownership color, if any, a tile already has. `FloorLegend` (new, private
+to `floor-view.tsx`) renders one chip per currently active-on-floor
+column — including ones with zero active tables, so it reads as "the
+floor team" — each showing a color dot, initials, name, and a live
+`tables.filter(t => t.occupiedBy?.columnId === column.id).length`
+count; this is a fresh read every render, not a running tally, so
+Ended/Unassigned rows are automatically excluded and a Transfer's count
+moves from the old server to the new one for free. `FloorView` gained a
+new `team: TeamMember[]` prop (color source for servers with zero
+tables, since `RotationColumn` itself carries no color field), threaded
+from `allocation-workspace.tsx`. No RPC or schema changes — this is
+presentation-only, reading data every other view already shared. 6 new
+`getInitials` Vitest cases, 5 new Playwright tests (assigned-tile
+visual + legend, End removes ownership, Unassign removes ownership,
+Transfer replaces ownership, multiple tables under one server all match).
+
+**Stage 3 (this commit) — docs**: this log entry plus
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11,
+`INTERACTIONS.md`, `ARCHITECTURE.md`, `TEST_PLAN.md`, `README.md`,
+`AGENT_HANDOFF.md`.
+
+**Local validation, reproduced at each stage**: `npm run check` PASS at
+every stage; Vitest 395/395 (+6 over the previous follow-up, all in
+Stage 2); pgTAP 319 assertions (unchanged — no schema/RPC touched);
+`npm run build` PASS; Playwright PASS at every stage (144/144 across all
+3 projects — desktop/host-tablet/server-mobile — by the end of Stage 2,
+net +13 new/updated over the previous follow-up). Manual visual check
+via the running dev server (live browser interaction, not just
+screenshots): confirmed at desktop width in light theme that the
+available-table popup and the resulting decision dialog render exactly
+as specified, and that an assigned tile shows "T13" / "MC" on Mia's
+accent color with the legend correctly reading "Mia Chen · 1 table";
+confirmed again at 390×844 mobile width in dark theme that the legend
+scrolls horizontally without any page-level overflow and the assigned
+tile remains legible at that size.
+
+**Staged git/CI**: each stage was committed and pushed to
+`feature/table-rotation-multi-view` individually (not one final dump),
+with CI (`application`, `browser-smoke`, `migrations-and-policies`)
+checked after each push before proceeding to the next stage — per the
+explicit staged-git instruction this follow-up was implemented under.
+No push to `main` at any point; PR #46 was updated in place by each
+push.

@@ -159,3 +159,12 @@ assigned table. Every RPC these call
 Floor — Server Board simply gained new client-side call sites for them,
 confirmed unchanged by the full pgTAP suite (319 assertions, all still
 passing) requiring no new migration.
+
+## Floor popup + ownership visuals follow-up delta
+
+No schema or RPC changes. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11. Presentation
+only — a `getInitials(name)` pure function and a `TableMap`/`FloorView`
+rendering change, both reading data (`FloorOccupant.name`/`.color` from
+`resolveFloorTables`) that was already being returned. Confirmed
+unchanged by the full pgTAP suite (319 assertions, all still passing).

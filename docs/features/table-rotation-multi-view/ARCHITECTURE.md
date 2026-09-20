@@ -220,6 +220,47 @@ call sites (`board_assign`, `board_transfer`, `board_end_table`,
 `board_clear_cell`, `board_end_and_assign`) all already existed and were
 already exercised from Floor.
 
+## Floor popup + ownership visuals follow-up
+
+```
+FloorView's available-table flow
+  tap available table -> a Dialog ("Assign <table>") replaces the
+  side-panel "pick a server" section that used to render inline;
+  picking a server closes it, then runs the same beginAssign() flow
+  section 8/10 already used (zero -> assign, one+ -> decision dialog)
+
+getInitials(name)  -- floor-layout.ts, new, pure
+  "Mia Chen" -> "MC" (first+last initials); a single-word name -> its
+  own first two letters. No new data field -- reads the same `name`
+  already carried on FloorOccupant/RotationColumn.
+
+TableMap (shared by Floor/Picker/Server Board -- one implementation)
+  occupied tile   -> label + getInitials(occupiedBy.name), on the same
+                     accent color already computed from occupiedBy.color
+  available tile  -> label only, neutral -- nothing left to derive
+                     initials/color from once occupiedBy is null
+  selected state  -> a stronger ring, layered independently of whatever
+                     ownership color the tile already has
+
+FloorLegend (floor-view.tsx, new, private)
+  one row per assignableColumns entry (same "active on floor" set Floor
+  already used for "pick a server"), each: color dot + initials +
+  name + a live count = tables.filter(t => t.occupiedBy?.columnId ===
+  column.id).length -- a fresh read every render, not a running tally,
+  so Ended/Unassigned rows are excluded and a Transfer's count moves
+  from the old column to the new one for free. team: TeamMember[] is a
+  new FloorView prop, needed for color on servers with zero tables
+  (RotationColumn itself has no color field).
+```
+
+No RPC or schema changes -- this is presentation-only. Ownership visuals
+never introduce a second, client-only "current owner" concept: both the
+tile and the legend are direct reads of the same `resolveFloorTables`
+occupancy Grid/Picker/Servers/Dashboard already share (see "Occupancy
+integrity" above), so End/Unassign/Transfer update them as a side effect
+of the next render, not through a dedicated "clear/replace the ownership
+label" step.
+
 ## Retention (v1 scope)
 
 ```

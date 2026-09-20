@@ -295,16 +295,66 @@ correctly with no horizontal overflow at mobile width.
 
 **No merge to `main` has been performed or authorized.**
 
+This follow-up was committed as `e9c4d57 feat(table-rotation): open
+picker table map directly, add floor-style actions to server view` and
+pushed to `feature/table-rotation-multi-view` at the start of the next
+phase below (explicitly authorized by that phase's own staged-git
+instruction) — see `IMPLEMENTATION_LOG.md`.
+
+## Floor available-table popup + ownership visuals follow-up (2026-09-20) — status: implemented, tested, locally validated
+
+Every decision-flow semantic from the prior follow-ups is unchanged.
+This follow-up: (1) Floor's own AVAILABLE-table "pick a server" step
+also became a popup (previously an always-visible side-panel section —
+the one thing Picker/Server Board's popups didn't yet match on Floor
+itself); (2) an assigned tile (Floor/Picker/Servers, via the shared
+`TableMap`) now shows the current server's initials and accent color
+instead of a color-only indicator; (3) a new compact server legend sits
+above Floor's map, listing every active-on-floor server's initials,
+name, and live active-table count. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11; implementation
+record: `IMPLEMENTATION_LOG.md`'s "Floor available-table popup +
+ownership visuals follow-up" section.
+
+No schema or RPC changes — presentation-only, reading the same
+`resolveFloorTables` occupancy data every other view already shared, so
+End/Unassign/Transfer update ownership visuals as a side effect of the
+next render rather than through any separate "clear/replace ownership"
+step.
+
+Implemented and pushed as three staged commits (per this follow-up's
+explicit staged-git-and-CI instruction): `f03a062` (Floor popup),
+`b4b12c8` (ownership visuals + legend), and this documentation commit —
+CI checked green after each of the first two pushes before proceeding.
+
+**Local validation, reproduced live 2026-09-20**: `npm run check` PASS
+at every stage; Vitest 395/395 (+6, all `getInitials` cases); pgTAP 319
+assertions (unchanged); `npm run build` PASS; Playwright 144/144 across
+all 3 projects (desktop/host-tablet/server-mobile). Manual visual check
+via the running dev server (live browser interaction): at desktop width
+in light theme, tapping an available table opened the "Assign `<table>`"
+popup exactly as specified, and assigning it to a server who already had
+active tables correctly chained into the existing decision dialog;
+assigning T13 to Mia Chen showed "T13" / "MC" on her accent color with
+the legend reading "Mia Chen · 1 table"; at 390×844 mobile width in dark
+theme, the legend scrolled horizontally with no page-level overflow and
+the assigned tile stayed legible.
+
+**No merge to `main` has been performed or authorized.**
+
 ## Pending next action
 
-The Picker direct popup / Server decision flow follow-up is implemented
-and fully validated locally. Per the explicit instruction it was
-implemented under: **the very next step is to launch the app locally for
-the user's own manual testing and stop** — no commit, push, PR, CI run,
-or merge until the user explicitly approves after testing it themselves.
-Once approved: commit any remaining working-tree changes, push the
-`feature/table-rotation-multi-view` branch, open/update the PR, watch
-CI, and report back before any `main` merge is considered.
+The Floor available-table popup + ownership visuals follow-up is
+implemented and fully validated locally, and the feature branch/PR are
+current with all three staged commits. Per the explicit instruction it
+was implemented under: **the very next step is to confirm remote CI is
+green, then launch the app locally for the user's own manual testing and
+stop** — no merge until the user explicitly approves after testing it
+themselves. Once approved: re-verify the working tree is clean, re-run
+PR CI, confirm the branch is current with `main`, then merge using this
+repo's existing convention (inspect prior merge history rather than
+assuming squash/rebase/merge), watch post-merge CI/CD and deployment,
+and report back.
 
 ## Documentation created/updated this phase
 
@@ -332,6 +382,10 @@ CI, and report back before any `main` merge is considered.
   section 10 (new), `INTERACTIONS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`,
   `TEST_PLAN.md`, `README.md`, `IMPLEMENTATION_LOG.md`, this file — all
   updated for the shared decision hook and Picker's direct-popup change.
+- Floor popup/ownership visuals follow-up:
+  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11 (new),
+  `INTERACTIONS.md`, `ARCHITECTURE.md`, `TEST_PLAN.md`, `README.md`,
+  `IMPLEMENTATION_LOG.md`, this file.
 
 ## Implementation files (this session, see IMPLEMENTATION_LOG.md for detail)
 
@@ -361,6 +415,12 @@ CI, and report back before any `main` merge is considered.
   — popup TableMap, decision flow, per-table action dialog),
   `allocation-workspace.tsx` (Picker's direct-popup cell click, popup
   Skip Turn/Cancel, new Server Board props), `tests/e2e/table-rotation-multi-view.spec.ts`.
+- Floor popup/ownership visuals follow-up: Modified:
+  `floor-view.tsx` (available-table popup, `FloorLegend`, new `team`
+  prop), `table-map.tsx` (initials + strengthened selected ring),
+  `floor-layout.ts` (+`.test.ts`, new `getInitials`),
+  `allocation-workspace.tsx` (threads `team` into `FloorView`),
+  `tests/e2e/table-rotation-multi-view.spec.ts`.
 
 ## Design handoff copy record
 

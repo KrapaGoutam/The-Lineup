@@ -19,7 +19,12 @@ opens directly from a cell click (no intermediate "Choose table" step,
 Skip Turn moved inside the popup), and Server Board's `+ Table` gained
 the exact same zero/one-or-more decision flow Floor uses, via a shared
 `useTableAssignmentDecision` hook, plus per-table Transfer/End/Unassign
-scoped to one tapped assigned table.
+scoped to one tapped assigned table. Section 11 records a fifth
+follow-up: Floor's own available-table "pick a server" step also became
+a popup (matching Picker/Server Board), and every assigned tile
+(Floor/Picker/Servers, via the shared `TableMap`) now shows the current
+server's initials and accent color instead of a color-only indicator,
+with a new compact server legend on Floor.
 
 ## 1. Scope
 
@@ -465,3 +470,104 @@ path (section 10.1) — it still never shows Transfer/End, and an
 additional table for an already-busy server via Picker is still always
 additive with no decision dialog, since Picker's cell is always already
 explicit.
+
+## 11. Fifth follow-up: Floor's available-table popup, ownership initials/accent, server legend
+
+Every decision-flow semantic from sections 8-10 is unchanged. This
+follow-up touches only two things: how Floor's AVAILABLE-table "pick a
+server" step is presented, and how an ASSIGNED table communicates whose
+it is.
+
+### 11.1 Available-table assignment is a popup, not a side-panel section
+
+Before this follow-up, tapping an available table on Floor revealed a
+"pick a server" list inside the same always-visible side `Card` used for
+occupied tables (`selected.occupiedBy` branching between the two
+states). That available-table branch is now a `<Dialog>` ("Assign
+`<table>`" / "Available. Select a server to assign this table to." /
+one button per active server / Cancel). The occupied-table side panel
+(Transfer/End table/Unassign) is untouched — this only affects the
+available-table case, which the side `Card` now never renders; it falls
+back to the plain "Tap a table…" placeholder whenever nothing occupied
+is selected. Selecting a server always closes this popup first
+(`closePanel()`), then calls the same `useTableAssignmentDecision`
+hook's `beginAssign` used since section 10 — zero active tables assigns
+immediately; one or more opens the decision dialog on top, exactly the
+same choreography Server Board's popup already used, so a native
+`<dialog>` is never left open behind another one.
+
+### 11.2 Ownership initials + accent replace a color-only indicator
+
+`getInitials(name)` (`floor-layout.ts`, new, pure): two-letter initials
+from an existing display name — first + last name's first letters
+("Mia Chen" → "MC"), or a single word's own first two letters ("Mia" →
+"MI"). No new manual-entry field; always derived from the same `name`
+already carried on `FloorOccupant`/`RotationColumn`.
+
+`TableMap` (shared by Floor, Picker's popup, and Server Board's popup —
+one implementation, so this applies everywhere a table tile renders)
+now shows, for an occupied tile, the table label **and**
+`getInitials(occupiedBy.name)` stacked in two lines, on the same
+per-server accent background/border color the map already computed
+(`color-mix(...occupiedBy.color...)`) — color remains supporting
+information, never the sole identifier; the accessible name (`"Table
+<n>, assigned to <full name>"`) already carried the full identity and is
+unchanged. An available tile shows only its label, in the same neutral
+`--ok` styling as before — no stale initials or color ever survive past
+End/Unassign, because the tile has nothing else to render from once
+`occupiedBy` is `null` (see 11.4). The "selected" (tapped) ring
+(`ring-primary ring-offset-2`) was strengthened and is layered on top of
+whichever background color, if any, already applies — selection is a
+separate, temporary UI state, never confusable with ownership.
+
+### 11.3 Compact server legend
+
+`FloorLegend` (`floor-view.tsx`, new, private to that file): one row per
+currently active-on-floor column (the same set Floor already computes
+as `assignableColumns` for "pick a server" — paused/removed servers
+excluded), each showing a color dot, initials, display name, and a live
+active-table count — including columns with zero active tables right
+now, so the legend reads as "the floor team," not just "who currently
+has a table" (the documented choice for section 18 of the follow-up
+spec: crowding was judged acceptable at up to a handful of servers,
+matching the existing Floor Team model where every active column is
+always visible regardless of whether it currently holds anything).
+Count is a fresh `tables.filter(t => t.occupiedBy?.columnId ===
+column.id).length` every render — not a separate running tally — so
+Ended/Unassigned rows are automatically excluded and a Transfer's count
+moves from the old server to the new one for free, with no dedicated
+transfer-count logic. Rendered as a single `role="list"` /
+`role="listitem"` row with `overflow-x-auto` + `shrink-0` chips — the
+same working horizontal-scroll pattern already proven for the view-
+switcher tabs (see `allocation-workspace.tsx`'s own comment on why that
+pattern, not `flex-wrap`, is what reliably avoids page-level horizontal
+overflow on mobile) — rather than wrapping to multiple rows on
+tablet-width viewports. `TeamMember[]` (color source) is threaded into
+`FloorView` as a new `team` prop for this — `RotationColumn` itself
+carries a name but not a color.
+
+### 11.4 End/Unassign/Transfer are visually free — no separate ownership state
+
+Ownership visuals (tile initials/accent, legend entries/counts) are
+never stored or computed independently of the same `resolveFloorTables`
+occupancy read every other view already shares. Ending or unassigning a
+table removes its `table_rotation_entries` active row (or marks it
+`ended`) exactly as before this follow-up (sections 2/8); the next
+render's `resolveFloorTables` call simply no longer attributes that
+table label to anyone, so `occupiedBy` becomes `null` and the tile and
+legend update with it — there is no extra "clear the ownership label"
+step to forget. The same is true for Transfer: the destination server's
+`occupiedBy` appears, the source's disappears, both purely as a
+consequence of `resolveFloorTables` re-scanning current state, matching
+section 21's requirement that Floor's ownership display can never drift
+from Grid/Picker/Servers/Dashboard's own reads of the same data.
+
+### 11.5 Explicit non-goals for this follow-up
+
+No RPC or schema changes — this is presentation-only, reading data that
+was already being returned. No change to the decision-dialog semantics
+themselves (Assign Also/Transfer/End existing table(s)/Cancel, sections
+8-9) or to Picker/Server Board's own popups beyond inheriting the
+shared `TableMap`'s new tile rendering for free. No change to Grid or
+Dashboard, which have never used `TableMap` and keep their own existing
+`TableEntry`/summary rendering untouched.

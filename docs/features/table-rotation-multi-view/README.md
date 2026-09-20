@@ -119,3 +119,17 @@ two surfaces can't drift into different semantics), and each
 already-assigned table on a server card is now its own button, scoping
 Transfer/End/Unassign to that one table. No schema or RPC changes — see
 `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10.
+
+**Floor available-table popup + ownership visuals follow-up**: Floor's
+own AVAILABLE-table "pick a server" step is now a popup too (previously
+an always-visible side-panel section — the one entry point that hadn't
+yet matched Picker/Server Board's popups). An assigned table
+(Floor/Picker/Servers, via the shared `TableMap`) now shows the current
+server's initials (derived from their existing display name, e.g. "Mia
+Chen" → "MC") on that server's accent color, instead of a color-only
+indicator; a new compact server legend above Floor's map lists every
+active-on-floor server's initials, name, and live active-table count.
+Ending, unassigning, or transferring a table updates these visuals as a
+side effect of the same shared occupancy read every other view already
+uses — no separate ownership state to keep in sync. No schema or RPC
+changes — see `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11.

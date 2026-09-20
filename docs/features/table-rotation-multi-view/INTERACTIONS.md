@@ -32,21 +32,25 @@ production architecture. Where they conflict, this document and
 
 - **Floor Map** (multi-table follow-up, see
   `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8): tap an
-  available table → pick a server. A server may hold zero, one, or many
-  active tables — nothing limits this. If the chosen server has **zero**
-  active tables, `board_assign` fires immediately, into that server's
-  own earliest genuinely empty round
-  (`findEarliestEmptyRoundForColumn`), not a single round shared across
-  every server (that shared pointer was the entire cause of the original
-  "assigning a second table auto-transfers the first" bug). If the
-  server already has **one or more**, a decision dialog asks: **Assign
-  Also** (a plain `board_assign` at their own earliest empty round —
-  additive, touches nothing else), **Transfer an existing table** (see
-  below — same server, relabels one existing row in place), **End an
-  existing table & assign** (`board_end_and_assign`, see below), or
-  **Cancel** (zero state changes). With more than one existing table,
-  Transfer and End each ask which one first — never an assumed
-  oldest/newest/first/last.
+  available table → a popup opens ("Assign `<table>`" / "Available.
+  Select a server…" / one button per active server / Cancel — floor
+  ownership visual follow-up, section 11.1; previously an always-visible
+  "pick a server" section rendered inside the same side panel occupied
+  tables use). Choosing a server closes that popup and picks a server. A
+  server may hold zero, one, or many active tables — nothing limits
+  this. If the chosen server has **zero** active tables, `board_assign`
+  fires immediately, into that server's own earliest genuinely empty
+  round (`findEarliestEmptyRoundForColumn`), not a single round shared
+  across every server (that shared pointer was the entire cause of the
+  original "assigning a second table auto-transfers the first" bug). If
+  the server already has **one or more**, a decision dialog opens on top
+  and asks: **Assign Also** (a plain `board_assign` at their own
+  earliest empty round — additive, touches nothing else), **Transfer an
+  existing table** (see below — same server, relabels one existing row
+  in place), **End an existing table & assign** (`board_end_and_assign`,
+  see below), or **Cancel** (zero state changes). With more than one
+  existing table, Transfer and End each ask which one first — never an
+  assumed oldest/newest/first/last.
 - **Picker**: same `board_assign` call as typing in Grid — identical
   behavior (occupancy, auto-row, undo) regardless of entry path. Its
   target cell is always an explicit, already-selected empty cell, so
@@ -126,6 +130,41 @@ production architecture. Where they conflict, this document and
   never the literal editable label `"0"`) — occupies no physical table,
   but counts as a used cell for the auto-row rule exactly like any other
   real entry.
+
+## Floor ownership visuals (fifth follow-up)
+
+See `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11 for the
+full spec.
+
+- **Assigned tile**: shows the table label plus the current server's
+  initials (`getInitials`, derived from their existing display name —
+  never a separate manual field), on that server's own accent color —
+  color is supporting information, never the sole identifier. Rendered
+  once in the shared `TableMap`, so Floor, Picker's popup, and Server
+  Board's popup all show it for free.
+- **Available tile**: label only, neutral styling — no initials or color
+  ever survive from a table's previous owner.
+- **Selected (tapped) tile**: a separate, temporary ring state layered
+  on top of whichever ownership color, if any, already applies — never
+  confusable with ownership itself.
+- **End / Unassign**: both simply remove that table's active
+  `table_rotation_entries` row exactly as they already did (see above);
+  the tile's initials/accent disappear as a direct consequence of the
+  next `resolveFloorTables` read no longer attributing the table to
+  anyone, not through any separate "clear the ownership label" step.
+- **Transfer**: the destination server's initials/accent appear and the
+  source's disappear in the same render, for the same reason — one
+  fresh occupancy read, not two independent updates that could
+  momentarily disagree.
+- **Server legend**: a compact row above the Floor map, one entry per
+  currently active-on-floor server (including servers with zero active
+  tables right now — the legend represents "the floor team," matching
+  every other Floor Team list in this feature), each showing the same
+  initials/accent plus a live active-table count. The count is a fresh
+  filter over the same shared table data every render, so Ended/
+  Unassigned rows never count and a Transfer's count moves from the old
+  server to the new one automatically — there is no separate running
+  tally to keep in sync.
 
 ## Clear vs Delete (must stay visually distinct)
 
