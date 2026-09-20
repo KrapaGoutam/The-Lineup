@@ -996,3 +996,65 @@ as already applied.
 (+11); `npm run build` PASS; `npx playwright test` PASS, 297/297 across
 all 3 projects (desktop/host-tablet/server-mobile) — all reproduced
 against the exact same 6-migration set now live in production.
+
+## PGRST201 hotfix (2026-09-20) — dining_tables/dining_areas embed ambiguity
+
+Discovered during the live production smoke test that followed the fix
+above: Floor/Picker/Servers still rendered no physical tables, and
+Dashboard still showed "Available tables: 0," despite the floor-layout
+backfill being confirmed correct via direct SQL. Root-caused by testing
+the app's exact PostgREST query directly (anon key, same request shape)
+against the live API:
+
+```
+PGRST201 (HTTP 300): Could not embed because more than one relationship
+was found for 'dining_tables' and 'dining_areas'
+hint: 'dining_areas!dining_tables_area_tenant_fk' or
+      'dining_areas!dining_tables_dining_area_id_fkey'
+```
+
+**Not caused by anything deployed in this feature.** `dining_tables` has
+carried two separate foreign keys to `dining_areas` since the original
+`initial_schema` migration:
+
+- `dining_tables_dining_area_id_fkey` — plain `(dining_area_id) →
+dining_areas(id)`, `ON DELETE CASCADE`. The actual "which area is
+  this table in" relationship.
+- `dining_tables_area_tenant_fk` — composite `(dining_area_id,
+organization_id) → dining_areas(id, organization_id)`, no cascade.
+  Tenant-isolation integrity only (the same pattern as
+  `dining_tables_location_tenant_fk`) — guarantees a table's area
+  belongs to the same organization, not a display relationship.
+
+Neither is redundant (only the plain FK cascades on delete), so neither
+was dropped. This ambiguity has existed in production the whole time
+but was **dormant**: `dining_tables` had zero rows until the floor-
+layout backfill, so PostgREST's embed resolution was never actually
+exercised until real rows existed to return.
+
+**Fix**: `getAllocationContext`'s (`allocation-data.ts`) `dining_tables`
+query — the one and only place in the repo that embeds
+`dining_areas(...)` (confirmed by a full-repo search) — now explicitly
+qualifies the relationship: `dining_areas!dining_tables_dining_area_id_fkey(name)`.
+Extracted into an exported `DINING_TABLES_SELECT` constant (rather than
+an inline string) specifically so a Vitest regression test
+(`allocation-data.test.ts`, 3 assertions) can assert the relationship
+stays qualified and never silently reverts to the ambiguous
+`dining_areas(name)` form. The disambiguation doesn't rename the
+response key, so the existing `row.dining_areas?.[0]?.name` mapping
+code needed no changes.
+
+**No schema migration required or added** — this is a pure query-string
+fix. Verified directly against the live PostgREST API (anon key, same
+query shape) before implementing: the disambiguated query no longer
+returns PGRST201, it now correctly proceeds to the expected RLS/grant
+check (`anon` has no SELECT grant on `dining_tables`, by design — only
+`authenticated`). Verified again with RLS simulated as an authenticated
+member (`set local role authenticated`, TestManager's `sub` claim): all
+27 rows return correctly with area names resolved.
+
+**Local validation**: `npm run check` PASS; `npx vitest run` PASS,
+400/400 (+3); `npx supabase test db` PASS, 330/330 (unchanged — no
+migration); `npm run build` PASS; `npx playwright test` PASS, 297/297
+(unchanged counts — demo mode never exercises this query, so no
+existing test's assertions moved).

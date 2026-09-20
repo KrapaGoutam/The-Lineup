@@ -380,25 +380,53 @@ area names; `pg_cron` confirmed available, retention job scheduled.
 **No merge to `main` has been performed or authorized for this fix
 branch.**
 
+## PGRST201 hotfix (2026-09-20) — status: implemented, tested locally, PR open
+
+The live production smoke test (below) found production Floor/Picker/
+Servers still showed no physical tables and Dashboard still showed
+"Available tables: 0," despite the floor-layout backfill being
+confirmed correct in the database directly. Root cause: `dining_tables`
+has always carried two FKs to `dining_areas` (a plain one and a
+tenant-composite one); embedding `dining_areas(name)` without
+qualifying which one is ambiguous, and PostgREST returns `PGRST201`
+(HTTP 300) rather than guessing. This was dormant the whole time
+`dining_tables` was empty, and only surfaced once the backfill gave it
+real rows to actually embed. Full root-cause and fix:
+`IMPLEMENTATION_LOG.md`'s "PGRST201 hotfix" section.
+
+**Fix**: one query in `allocation-data.ts` (`getAllocationContext`, the
+only `dining_areas(...)` embed in the repo) now explicitly says
+`dining_areas!dining_tables_dining_area_id_fkey(name)`, extracted into
+an exported `DINING_TABLES_SELECT` constant with a 3-assertion Vitest
+regression guard (`allocation-data.test.ts`). **No schema migration** —
+pure query-string fix, verified directly against the live PostgREST API
+before and after. Branch: `fix/table-rotation-postgrest-embed`, from
+`main` at `d830da8`.
+
+**Local validation**: `npm run check` PASS; Vitest 400/400 (+3); pgTAP
+330/330 (unchanged, no migration); `npm run build` PASS; Playwright
+297/297 (unchanged, demo mode never exercises this query).
+
 ## Pending next action
 
-**Migration-history bookkeeping — resolved**: the user granted explicit
-permission, the six-row `version` correction was re-run and verified —
-production's migration history now matches local filenames exactly.
+**Migration-history bookkeeping — resolved** (prior session): the user
+granted explicit permission, the six-row `version` correction was
+re-run and verified — production's migration history matches local
+filenames exactly.
 
-Two items remain (neither blocks production working right now — the
-schema/data fix is already live and verified):
+Outstanding:
 
 1. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
    rotation/re-scoping from an account with sufficient privileges on
    project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
-   `deploy-migrations` CI path works again for future migrations.
-2. **Live production smoke test**: not yet performed. This agent could
-   not independently determine the public production URL (the
-   Vercel MCP connector returned a 403 for this account scope, and the
-   deployment URL found via GitHub's deployments API redirects to
-   Vercel SSO) — the user is providing the correct URL so this can run
-   with the existing test accounts.
+   `deploy-migrations` CI path works again for future migrations. Not
+   this hotfix's concern (it requires no migration at all), but still
+   open.
+2. **This hotfix's own PR**: push, open PR against `main`, watch CI,
+   launch locally, then STOP for user approval before merging — see
+   "Pending next action" is superseded by whatever this session's own
+   final status says lower in this file, if a handoff checkpoint was
+   needed.
 
 Once those are resolved: confirm PR #47 is current with `main`, re-run
 CI, and wait for explicit user approval before merging (never
