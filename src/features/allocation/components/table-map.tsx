@@ -31,12 +31,34 @@ export function TableMap({
   selectedLabel,
   onSelectTable,
   disabled = false,
+  loadError = false,
 }: {
   tables: ResolvedFloorTable[];
   selectedLabel: string | null;
   onSelectTable: (label: string) => void;
   disabled?: boolean;
+  // Production stability hotfix: true only when the dining_tables query
+  // itself failed server-side (allocation-data.ts's
+  // physicalTablesQueryFailed) -- distinct from `tables.length === 0`,
+  // which is also true for a genuinely empty, correctly-loaded location.
+  // Conflating the two used to show "No tables are configured" for a
+  // query failure too, which reads as a data/onboarding problem instead
+  // of the transient error it actually is.
+  loadError?: boolean;
 }) {
+  if (loadError) {
+    return (
+      <div
+        className="border-border bg-muted/20 flex aspect-square w-full items-center justify-center rounded-xl border p-6 text-center sm:aspect-video"
+        role="status"
+      >
+        <p className="text-muted-foreground text-sm">
+          Couldn&apos;t load the floor layout. Try refreshing the page.
+        </p>
+      </div>
+    );
+  }
+
   // Production parity fix: a genuinely unconfigured location (zero
   // dining_tables rows -- confirmed the root cause of Floor/Picker/
   // Servers all rendering blank in production, see
