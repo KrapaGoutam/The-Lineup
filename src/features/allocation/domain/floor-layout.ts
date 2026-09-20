@@ -74,6 +74,20 @@ export function parseCombinedTableLabel(label: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Floor ownership visual follow-up: two-letter initials derived from a
+ * server's existing display name -- no separate manual initials field.
+ * "Mia Chen" -> "MC" (first + last), a single-word name -> its own
+ * first two letters ("Mia" -> "MI"). Shared by TableMap (assigned-table
+ * tiles) and Floor's server legend so both read from the same rule.
+ */
+export function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export type FloorOccupant = {
   columnId: string;
   name: string;

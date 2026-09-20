@@ -1021,6 +1021,7 @@ export function AllocationWorkspace({
             <FloorView
               tables={resolvedTables}
               activeColumns={visibleColumns}
+              team={team}
               board={board}
               disabled={!canOperateFloor}
               onAssign={({ label, columnId, roundId, confirmTransfer }) =>

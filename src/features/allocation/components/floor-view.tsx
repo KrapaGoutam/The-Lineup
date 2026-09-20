@@ -13,7 +13,66 @@ import type {
   RotationBoard,
   RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
-import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
+import {
+  getInitials,
+  type ResolvedFloorTable,
+} from "@/features/allocation/domain/floor-layout";
+import type { TeamMember } from "@/lib/demo-data";
+
+/**
+ * Floor ownership visual follow-up: a compact "who's on the floor and
+ * how many tables do they hold right now" strip, supporting information
+ * alongside the table tiles' own initials -- never the only place
+ * ownership is legible. One entry per currently active-on-floor column
+ * (paused/removed servers are excluded, matching the same
+ * `assignableColumns` set Floor already uses for "pick a server"),
+ * including servers who currently hold zero active tables, so it reads
+ * as "the floor team," not just "who has a table right now." Overflow
+ * scrolls horizontally rather than wrapping, the same working pattern
+ * already proven for the view-switcher tabs (see
+ * allocation-workspace.tsx's own comment on that) -- reliable no-page-
+ * overflow behavior at any width, including mobile.
+ */
+function FloorLegend({
+  entries,
+}: {
+  entries: {
+    id: string;
+    name: string;
+    initials: string;
+    color: string;
+    activeTableCount: number;
+  }[];
+}) {
+  if (!entries.length) return null;
+  return (
+    <div
+      className="border-border bg-muted/20 flex w-full max-w-full gap-2 overflow-x-auto rounded-lg border p-2"
+      role="list"
+      aria-label="Server legend"
+    >
+      {entries.map((entry) => (
+        <div
+          key={entry.id}
+          role="listitem"
+          className="border-border bg-card flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs whitespace-nowrap"
+        >
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: entry.color }}
+            aria-hidden="true"
+          />
+          <span className="font-mono font-bold">{entry.initials}</span>
+          <span>{entry.name}</span>
+          <span className="text-muted-foreground">
+            · {entry.activeTableCount}{" "}
+            {entry.activeTableCount === 1 ? "table" : "tables"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 14,
@@ -39,6 +98,7 @@ import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layo
 export function FloorView({
   tables,
   activeColumns,
+  team,
   board,
   disabled,
   onAssign,
@@ -49,6 +109,7 @@ export function FloorView({
 }: {
   tables: ResolvedFloorTable[];
   activeColumns: RotationColumn[];
+  team: TeamMember[];
   board: RotationBoard;
   disabled: boolean;
   onAssign: (input: {
@@ -104,123 +165,145 @@ export function FloorView({
     (column) => column.status === "active",
   );
 
+  // Legend entries: active-table count derived from the same `tables`
+  // (resolveFloorTables) prop the map itself renders from -- Ended/
+  // Unassigned rows are already excluded there, and a Transfer's count
+  // moves from the old column to the new one automatically, since it's
+  // just a fresh read of current occupancy each render, not a separate
+  // running tally.
+  const legendEntries = assignableColumns.map((column) => {
+    const member = team.find((m) => m.id === column.id);
+    return {
+      id: column.id,
+      name: column.name,
+      initials: getInitials(column.name),
+      color: member?.color ?? "var(--muted-foreground)",
+      activeTableCount: tables.filter(
+        (table) => table.occupiedBy?.columnId === column.id,
+      ).length,
+    };
+  });
+
   return (
-    <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-      <TableMap
-        tables={tables}
-        selectedLabel={selectedLabel}
-        onSelectTable={selectTable}
-        disabled={disabled}
-      />
-      {selected?.occupiedBy ? (
-        <Card className="h-fit">
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <p className="font-mono font-semibold">
-              Table {selected.label}
-              {selected.resourceType === "bar_seat" ? (
-                <Badge tone="neutral" className="ml-2">
-                  Bar
-                </Badge>
-              ) : null}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Close"
-              onClick={closePanel}
-            >
-              <X aria-hidden="true" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm">
-              Assigned to{" "}
-              <span
-                className="font-semibold"
-                style={{ color: selected.occupiedBy.color }}
+    <div className="flex flex-col gap-3">
+      <FloorLegend entries={legendEntries} />
+      <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+        <TableMap
+          tables={tables}
+          selectedLabel={selectedLabel}
+          onSelectTable={selectTable}
+          disabled={disabled}
+        />
+        {selected?.occupiedBy ? (
+          <Card className="h-fit">
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <p className="font-mono font-semibold">
+                Table {selected.label}
+                {selected.resourceType === "bar_seat" ? (
+                  <Badge tone="neutral" className="ml-2">
+                    Bar
+                  </Badge>
+                ) : null}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                onClick={closePanel}
               >
-                {selected.occupiedBy.name}
-              </span>
-            </p>
-            {!transferring ? (
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => setTransferring(true)}
+                <X aria-hidden="true" />
+              </Button>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <p className="text-sm">
+                Assigned to{" "}
+                <span
+                  className="font-semibold"
+                  style={{ color: selected.occupiedBy.color }}
                 >
-                  <ArrowRightLeft aria-hidden="true" /> Transfer
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => {
-                    onEndTable({
-                      columnId: selected.occupiedBy!.columnId,
-                      roundId: selected.occupiedBy!.roundId,
-                    });
-                    closePanel();
-                  }}
-                >
-                  <LogOut aria-hidden="true" /> End table
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => {
-                    onUnassign({
-                      columnId: selected.occupiedBy!.columnId,
-                      roundId: selected.occupiedBy!.roundId,
-                    });
-                    closePanel();
-                  }}
-                >
-                  Unassign
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-muted-foreground text-xs">
-                  Give this table to:
-                </p>
-                {assignableColumns
-                  .filter(
-                    (column) => column.id !== selected.occupiedBy!.columnId,
-                  )
-                  .map((column) => (
-                    <Button
-                      key={column.id}
-                      variant="secondary"
-                      size="sm"
-                      disabled={disabled}
-                      onClick={() => {
-                        onTransfer({
-                          sourceRoundId: selected.occupiedBy!.roundId,
-                          sourceColumnId: selected.occupiedBy!.columnId,
-                          destColumnId: column.id,
-                        });
-                        closePanel();
-                      }}
-                    >
-                      {column.name}
-                    </Button>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="h-fit">
-          <CardContent>
-            <p className="text-muted-foreground text-xs">
-              Tap a table to assign, transfer, or release it.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+                  {selected.occupiedBy.name}
+                </span>
+              </p>
+              {!transferring ? (
+                <div className="flex flex-col gap-1.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => setTransferring(true)}
+                  >
+                    <ArrowRightLeft aria-hidden="true" /> Transfer
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => {
+                      onEndTable({
+                        columnId: selected.occupiedBy!.columnId,
+                        roundId: selected.occupiedBy!.roundId,
+                      });
+                      closePanel();
+                    }}
+                  >
+                    <LogOut aria-hidden="true" /> End table
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => {
+                      onUnassign({
+                        columnId: selected.occupiedBy!.columnId,
+                        roundId: selected.occupiedBy!.roundId,
+                      });
+                      closePanel();
+                    }}
+                  >
+                    Unassign
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-muted-foreground text-xs">
+                    Give this table to:
+                  </p>
+                  {assignableColumns
+                    .filter(
+                      (column) => column.id !== selected.occupiedBy!.columnId,
+                    )
+                    .map((column) => (
+                      <Button
+                        key={column.id}
+                        variant="secondary"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => {
+                          onTransfer({
+                            sourceRoundId: selected.occupiedBy!.roundId,
+                            sourceColumnId: selected.occupiedBy!.columnId,
+                            destColumnId: column.id,
+                          });
+                          closePanel();
+                        }}
+                      >
+                        {column.name}
+                      </Button>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="h-fit">
+            <CardContent>
+              <p className="text-muted-foreground text-xs">
+                Tap a table to assign, transfer, or release it.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Floor UX follow-up: an AVAILABLE table's "pick a server" flow is
           a popup, not an always-visible section below the map -- see

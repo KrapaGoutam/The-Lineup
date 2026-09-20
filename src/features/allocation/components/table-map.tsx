@@ -1,6 +1,9 @@
 "use client";
 
-import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
+import {
+  getInitials,
+  type ResolvedFloorTable,
+} from "@/features/allocation/domain/floor-layout";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,9 +60,15 @@ export function TableMap({
             }
             aria-pressed={selected}
             className={cn(
-              "border-border bg-card focus-visible:ring-ring absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border font-mono text-[11px] font-bold shadow-sm transition-transform focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+              "border-border bg-card focus-visible:ring-ring absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center border font-mono font-bold shadow-sm transition-transform focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+              occupied ? "leading-tight" : "text-[11px]",
               isBar ? "size-9 rounded-full" : "size-11 rounded-lg",
-              selected && "ring-ring ring-2",
+              // Selected is a separate, temporary state from ownership --
+              // a stronger ring plus an offset so it stays visible on top
+              // of any server accent color, never confusable with
+              // ownership itself.
+              selected &&
+                "ring-primary ring-offset-background ring-2 ring-offset-2",
               // Matches Badge's tone="success" convention (--ok token) --
               // never a raw Tailwind color, so this reads correctly in
               // both themes instead of only the one it happened to look
@@ -78,7 +87,16 @@ export function TableMap({
                 : undefined),
             }}
           >
-            {table.label}
+            {occupied ? (
+              <>
+                <span className="text-[9px]">{table.label}</span>
+                <span className="text-[8px] tracking-wide">
+                  {getInitials(table.occupiedBy!.name)}
+                </span>
+              </>
+            ) : (
+              table.label
+            )}
           </button>
         );
       })}

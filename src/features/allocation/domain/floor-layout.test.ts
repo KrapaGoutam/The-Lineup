@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_FLOOR_LAYOUT,
   combinedTableLabel,
+  getInitials,
   parseCombinedTableLabel,
   resolveFloorTables,
 } from "./floor-layout";
@@ -133,5 +134,32 @@ describe("floor layout", () => {
     expect(resolved.find((t) => t.label === "T1")?.occupiedBy?.columnId).toBe(
       "leo",
     );
+  });
+
+  describe("getInitials", () => {
+    it("takes the first letter of the first and last name for a two-part name", () => {
+      expect(getInitials("Mia Chen")).toBe("MC");
+      expect(getInitials("John Smith")).toBe("JS");
+    });
+
+    it("takes the first and last of a name with more than two parts", () => {
+      expect(getInitials("Alex Rao Jr")).toBe("AJ");
+    });
+
+    it("takes the first two letters of a single-word name", () => {
+      expect(getInitials("Mia")).toBe("MI");
+    });
+
+    it("uppercases regardless of input case", () => {
+      expect(getInitials("mia chen")).toBe("MC");
+    });
+
+    it("tolerates extra whitespace", () => {
+      expect(getInitials("  Mia   Chen  ")).toBe("MC");
+    });
+
+    it("returns an empty string for an empty name", () => {
+      expect(getInitials("")).toBe("");
+    });
   });
 });

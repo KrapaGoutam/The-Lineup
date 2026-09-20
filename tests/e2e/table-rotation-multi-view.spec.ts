@@ -185,6 +185,191 @@ test("Floor: selecting a server with existing active tables from the assign popu
   ).toBeVisible();
 });
 
+// Floor ownership visual follow-up: an assigned table shows the current
+// server's initials and accent color (not just a thin colored line),
+// and a compact legend mirrors the same identity plus an active-table
+// count. Ownership visuals always derive from the same authoritative
+// active-assignment state Grid/Picker/Servers/Dashboard already read --
+// see
+// docs/features/table-rotation-multi-view/TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md
+// section 12.
+
+test("Floor: an assigned table shows the server's initials, and the legend shows initials/name/count", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Zara Reed" })
+    .click();
+
+  const tile = page.getByRole("button", {
+    name: "Table T13, assigned to Zara Reed",
+  });
+  await expect(tile).toBeVisible();
+  await expect(tile.getByText("ZR")).toBeVisible();
+
+  const legend = page.getByRole("list", { name: "Server legend" });
+  const zaraEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Zara Reed" });
+  await expect(zaraEntry).toContainText("ZR");
+  await expect(zaraEntry).toContainText("1 table");
+});
+
+test("Floor: Ending an assigned table immediately removes initials/accent and restores available styling", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Zara Reed" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Table T13, assigned to Zara Reed" })
+    .click();
+  await page.getByRole("button", { name: "End table" }).click();
+
+  const tile = page.getByRole("button", { name: "Table T13, available" });
+  await expect(tile).toBeVisible();
+  await expect(tile.getByText("ZR")).toHaveCount(0);
+
+  const legend = page.getByRole("list", { name: "Server legend" });
+  const zaraEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Zara Reed" });
+  await expect(zaraEntry).toContainText("0 tables");
+});
+
+test("Floor: Unassigning an assigned table immediately removes initials/accent and restores available styling", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Zara Reed" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Table T13, assigned to Zara Reed" })
+    .click();
+  await page.getByRole("button", { name: "Unassign" }).click();
+
+  const tile = page.getByRole("button", { name: "Table T13, available" });
+  await expect(tile).toBeVisible();
+  await expect(tile.getByText("ZR")).toHaveCount(0);
+
+  const legend = page.getByRole("list", { name: "Server legend" });
+  const zaraEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Zara Reed" });
+  await expect(zaraEntry).toContainText("0 tables");
+});
+
+test("Floor: Transfer replaces the assigned table's initials/accent immediately, with the table remaining assigned", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await page.getByRole("button", { name: "Sam" }).click();
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Zara Reed" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Table T13, assigned to Zara Reed" })
+    .click();
+  await page.getByRole("button", { name: "Transfer" }).click();
+  await page.getByRole("button", { name: "Sam Ellis" }).click();
+
+  const tile = page.getByRole("button", {
+    name: "Table T13, assigned to Sam Ellis",
+  });
+  await expect(tile).toBeVisible();
+  await expect(tile.getByText("SE")).toBeVisible();
+  await expect(tile.getByText("ZR")).toHaveCount(0);
+
+  const legend = page.getByRole("list", { name: "Server legend" });
+  const zaraEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Zara Reed" });
+  const samEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Sam Ellis" });
+  await expect(zaraEntry).toContainText("0 tables");
+  await expect(samEntry).toContainText("1 table");
+});
+
+test("Floor: multiple tables assigned to the same server all show matching initials/accent, and the legend counts them together", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Floor");
+
+  for (const label of ["T1", "T4", "T7"]) {
+    await page
+      .getByRole("button", { name: `Table ${label}, available` })
+      .click();
+    const dialog = page.locator("dialog[open]");
+    await dialog.getByRole("button", { name: "Zara Reed" }).click();
+    if (label !== "T1") {
+      await page
+        .getByRole("button", { name: new RegExp(`Assign ${label} also`) })
+        .click();
+    }
+    await expect(
+      page.getByRole("button", {
+        name: `Table ${label}, assigned to Zara Reed`,
+      }),
+    ).toBeVisible();
+  }
+
+  for (const label of ["T1", "T4", "T7"]) {
+    const tile = page.getByRole("button", {
+      name: `Table ${label}, assigned to Zara Reed`,
+    });
+    await expect(tile.getByText("ZR")).toBeVisible();
+  }
+
+  const legend = page.getByRole("list", { name: "Server legend" });
+  const zaraEntry = legend
+    .getByRole("listitem")
+    .filter({ hasText: "Zara Reed" });
+  await expect(zaraEntry).toContainText("3 tables");
+});
+
 test("Picker: selecting a Grid cell immediately opens the table layout popup, and choosing a table assigns it", async ({
   page,
 }) => {
