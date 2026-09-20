@@ -37,6 +37,26 @@ export function TableMap({
   onSelectTable: (label: string) => void;
   disabled?: boolean;
 }) {
+  // Production parity fix: a genuinely unconfigured location (zero
+  // dining_tables rows -- confirmed the root cause of Floor/Picker/
+  // Servers all rendering blank in production, see
+  // TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md section 12) must say so
+  // explicitly, not render a silent, unexplained empty panel that looks
+  // broken. Every caller (Floor, Picker's popup, Server Board's popup)
+  // shares this one component, so the message only needs to exist here.
+  if (tables.length === 0) {
+    return (
+      <div
+        className="border-border bg-muted/20 flex aspect-square w-full items-center justify-center rounded-xl border p-6 text-center sm:aspect-video"
+        role="status"
+      >
+        <p className="text-muted-foreground text-sm">
+          No tables are configured for this location.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       className="border-border bg-muted/20 relative aspect-square w-full overflow-hidden rounded-xl border sm:aspect-video"
