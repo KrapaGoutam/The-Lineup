@@ -181,8 +181,18 @@ export function DashboardView({
                         key={`${round.id}-${column.id}`}
                         className="border-border min-h-14 border-t border-r p-3 text-sm last:border-r-0"
                       >
-                        {cell?.tableLabel ?? (
-                          <span className="text-muted-foreground">—</span>
+                        {cell?.status === "skipped" ? (
+                          <span role="status" aria-label="Skip turn">
+                            0
+                          </span>
+                        ) : cell?.status === "ended" ? (
+                          <span className="text-muted-foreground line-through decoration-2">
+                            {cell.tableLabel}
+                          </span>
+                        ) : (
+                          (cell?.tableLabel ?? (
+                            <span className="text-muted-foreground">—</span>
+                          ))
                         )}
                       </div>
                     );

@@ -181,7 +181,7 @@ export async function getAllocationContext(
     roundIds.length > 0
       ? supabase
           .from("table_rotation_entries")
-          .select("rotation_round_id, rotation_member_id, table_label")
+          .select("rotation_round_id, rotation_member_id, table_label, status")
           .in("rotation_round_id", roundIds)
       : Promise.resolve({ data: [], error: null }),
     supabase
@@ -225,6 +225,10 @@ export async function getAllocationContext(
       .map((entry) => ({
         columnId: memberIdToProfileId.get(entry.rotation_member_id) ?? "",
         tableLabel: entry.table_label,
+        // A row's mere existence means "active" pre-Upgrade-1.1; the DB
+        // column's values (active/ended/skipped) already match
+        // RotationCellStatus directly, no translation needed.
+        status: (entry.status ?? "active") as "active" | "ended" | "skipped",
       }))
       .filter((cell) => cell.columnId !== ""),
   }));

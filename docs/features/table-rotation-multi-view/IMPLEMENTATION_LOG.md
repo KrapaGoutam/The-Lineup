@@ -368,3 +368,369 @@ new tab row.
 - ~~server-mobile Playwright reliability~~ — **RESOLVED**, see the
   investigation section above. Was a real regression, root-caused, fixed,
   verified 171/171 across all 3 projects.
+
+## Upgrade 1.1 (2026-09-20) — Assign / Transfer / End Table / Unassign / Skip Turn as five distinct semantics
+
+Prior to this phase, a Grid cell only had two states in practice ("has a
+label" or "doesn't") — Transfer was a second `board_assign` call with
+`p_confirm_transfer: true` into the _same_ round (leaving the source
+cell's stale text behind, a real bug not real transfer semantics), there
+was no way to end a table without deleting the record of it ever having
+happened, and there was no way to record "this server's turn produced no
+table" other than leaving the cell blank (indistinguishable from "hasn't
+gone yet"). Full spec and reconciliation:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md`.
+
+**Schema** (`supabase/migrations/20260920100000_table_rotation_upgrade_1_1.sql`):
+additive only. `table_rotation_entries` gained `status text` (active/
+ended/skipped, default 'active') and `ended_at timestamptz`; `table_label`
+became nullable, with a check constraint tying `status='skipped'` to
+`table_label is null`. No new tables — deliberately reused the existing
+row instead of introducing a second table for lifecycle, the same
+"adapt what's there" principle the original occupancy-integrity decision
+already established (see the "Occupancy integrity" phase above).
+
+**Trigger**: `private.sync_table_occupancy` gained one guard — only
+claim occupancy when `NEW.status = 'active'` (on top of the existing
+"has a real label" check). An ended row keeps its label for history but
+never re-claims the table; this is also what makes reassigning a
+just-ended table's physical resource to someone else work correctly
+(the new active row is the only one the trigger and `resolveFloorTables`
+ever look at).
+
+**New RPCs**: `board_transfer` (deletes the source row, inserts an active
+row at the destination's earliest round with _no row at all_ for that
+member — never overwriting an ended/skipped row there), `board_end_table`
+(updates status='ended' in place, row never deleted), `board_skip_turn`
+(inserts status='skipped', table_label=null, guarded against a non-empty
+target cell). `board_assign` gained a guard rejecting an attempt to
+overwrite an ended/skipped row (editing an already-active row in place is
+unchanged). `board_clear_row`/`clear_column`/`clear_board` were also
+touched: their undo snapshots now capture `status` per entry (previously
+they only captured `table_label`), so undoing a bulk clear that swept up
+an ended/skipped entry restores it as it actually was, not as a plain
+active assignment — a real correctness gap that only existed once
+non-active statuses were possible.
+
+**A genuine pre-existing bug found and fixed while touching `board_redo`**:
+its target-selection query computed "the most recent still-active event"
+and "was this undone after that" using `created_at`/`undone_at`
+timestamps. `now()` is fixed for the lifetime of one transaction, and an
+undo's own `board_events` log row is inserted in the _same_ transaction
+as the update that performs it — so the just-undone event's `undone_at`
+and its own log row's `created_at` are bit-identical, which broke the
+`>` comparison `board_redo` relied on to find a fresh redo target. This
+surfaced immediately in this migration's own pgTAP coverage (a redo
+called right after an undo, both inside one `begin;...rollback;` test
+transaction) and, on inspection, is a real latent bug in production too
+(not just a test artifact) under back-to-back calls landing in the same
+transaction. Fixed by rewriting `board_redo`'s target selection to order
+by `board_events.id` (a `generated always as identity` column — a total,
+gap-free order) via a "latest touch" CTE, instead of timestamps. See
+`DATA_MODEL.md`'s Upgrade 1.1 section for the exact mechanism.
+
+**Domain layer** (`rotation-board.ts`): `RotationCell` gained a `status`
+field (`"empty" | "active" | "ended" | "skipped"`); `BoardAction` gained
+`transfer`/`end-table`/`skip-turn` variants with matching cases in
+`applyBoardAction`, using the identical compaction/guard rules as the
+RPCs, so demo mode and real mode behave identically. `isRoundEmpty`
+(and therefore the auto-row rule) now treats _any_ non-empty status as
+"used" — active, ended, and skipped all count, matching the real-mode
+rule exactly (which already counted any row regardless of a future
+status value, so no change was needed there).
+
+**Frontend**: `floor-layout.ts`'s `resolveFloorTables` only treats
+`status === "active"` cells as occupying a table, so Floor, Picker,
+Servers, and Dashboard's metrics all inherit the Ended/Skipped
+distinction from one place. The Grid's `TableEntry` (in
+`allocation-workspace.tsx`) now renders per-status: Empty gets Assign
+and Skip Turn controls; Active gets Edit/Transfer/End/Unassign (Transfer
+opens an inline destination list, no new Dialog/Popover primitive
+needed); Ended renders a struck-through history badge; Skipped renders
+`0` via a `role="status"` element with accessible name "Skip turn" (not
+a literal editable label), both with an Unassign-as-correction control.
+Floor (`floor-view.tsx`) gained an "End table" button alongside the
+existing Transfer/Unassign, and Transfer was rewired from the old
+`board_assign(confirmTransfer: true)` misuse to the real `board_transfer`
+RPC. Picker gained a "Skip turn instead" button for an empty selected
+cell. Dashboard's Master Rotation cell rendering shows an ended entry's
+label struck through and a skip as `0`, matching the Grid.
+
+**Testing**: 31 new pgTAP assertions
+(`supabase/tests/database/0021_table_rotation_upgrade_1_1.test.sql`) —
+End Table (history + occupancy release + undo/redo), reassigning a freed
+table, Unassign-not-Skip, Skip Turn (semantic state, no occupancy, guard,
+auto-row counting, undo/redo), Transfer (compaction, never overwriting
+ended/skipped, undo/redo), and Assign's new overwrite guard. 13 new
+Vitest tests across `rotation-board.test.ts` and `floor-layout.test.ts`.
+6 new Playwright tests in `table-rotation-multi-view.spec.ts` (Grid Skip
+Turn, Picker Skip Turn, a full Floor assign→transfer→end→reassign→
+unassign lifecycle with a Servers-view compaction check, and a Dashboard
+Master Rotation history/skip check) plus one existing Playwright test
+(`allocation-open-editing.spec.ts`) updated for the intentional
+"Clear table N" → "Unassign table N" accessible-name rename.
+
+## Upgrade 1.1 local validation
+
+- `npm run check` (format + lint + typecheck): PASS
+- `npx vitest run`: PASS, 379/379 (was 366/366; +13 net new)
+- `npx supabase test db`: PASS, 279 assertions (was 248; +31 net new)
+- `npm run build`: PASS
+- `npx playwright test` (all 3 projects, single run): **PASS, 183/183**
+  (61/61 × desktop/host-tablet/server-mobile — zero regressions once the
+  one intentional accessible-name rename was reflected in
+  `allocation-open-editing.spec.ts`)
+- Manual visual check (Playwright screenshots, desktop viewport, both
+  `light` and `dark` `prefers-color-scheme`): Grid's Transfer inline
+  menu, Ended strikethrough badge, and Skip `0` badge; Floor's occupied-
+  table panel with Transfer/End table/Unassign. All legible, correct
+  contrast, no layout breakage, in both themes.
+
+## Upgrade 1.1 follow-up (2026-09-20) — Transfer and End Table are Floor-only
+
+A follow-up instruction simplified the Grid/Picker UI for this release:
+keep only Assign/Edit, Unassign, and Skip Turn there; Floor stays the one
+surface for the full occupied-table action set (Transfer, End, Unassign).
+Explicitly not a backend change — `board_transfer`, `board_end_table`,
+their `BoardAction` variants, and `rotation-board.ts`'s `applyBoardAction`
+cases are untouched and still fully tested; only the Grid's `TableEntry`
+component (shared by Grid and Picker, since Picker renders the same
+table underneath its map card) had its Transfer button, End button, and
+the inline "Transfer to…" destination-list submenu removed, along with
+the now-unused `onTransfer`/`onEndTable`/`transferTargets` props and the
+`ArrowRightLeft`/`LogOut`/`RotationColumn` imports that only existed to
+support them. `floor-view.tsx` is unaffected.
+
+**Tests**: fixed the existing "Dashboard: Master Rotation preserves an
+ended table's history…" Playwright test, which had used Grid's own
+(now-removed) End button to set up its fixture state — it now ends a
+table via Floor instead, exactly like a real user would. Added two new
+Playwright tests, "Grid: Transfer and End Table controls are hidden…"
+and "Picker: Transfer and End Table controls are hidden…", asserting
+zero matches for `/^Transfer/` and `/^End table/` button names while
+confirming Edit/Unassign remain. No pgTAP or Vitest changes needed (this
+is a UI-only change; the domain/RPC layer these tests exercise did not
+change).
+
+**Local validation**: `npm run check` PASS; `npx vitest run` PASS,
+379/379 (unchanged — UI-only); `npx supabase test db` PASS, 279
+assertions (unchanged); `npm run build` PASS; `npx playwright test` (all
+3 projects) **PASS, 189/189** (63/63 × desktop/host-tablet/server-mobile;
++6 net new, zero regressions).
+
+## Multi-table follow-up (2026-09-20) — a server may hold zero, one, or many active tables
+
+**Root cause investigation**: the reported "assigning a second table
+auto-transfers the first" behavior traced to Floor's (and Servers'
+`+ Table`'s) assign flow always targeting one shared "current round"
+pointer (`getWorkingRound(board)`) for every new assignment. Since
+`board_assign` upserts on `(round, member)`, a second Floor assignment
+for a server who already had an active entry in that shared round
+collided with it — the trigger released the old table and claimed the
+new one in the same row. It looked exactly like a transfer; it was
+really an unintended overwrite from bad round selection.
+
+**Confirmed before writing any code**: the domain model already
+supports a member holding many simultaneously active rows — nothing in
+`table_rotation_entries` ever limited a member to one active row (each
+round is its own independent slot). No schema change was needed at all.
+The fix is entirely: never reuse a shared round pointer for a _new_
+assignment; always use the target column's _own_ earliest genuinely
+empty round.
+
+**Domain layer** (`rotation-board.ts`): two new exported functions —
+`findEarliestEmptyRoundForColumn` (factored out of the existing
+`"transfer"` case's inline destination search, now reused by it, a new
+`"end-and-assign"` case, and every external "create a new assignment"
+call site) and `getActiveTablesForColumn` (every active row for one
+column across all its rounds — powers Floor's zero/one-or-more branch
+and its "which table" sub-pickers). New `BoardAction` variant
+`"end-and-assign"` with a matching `applyBoardAction` case: ends the
+chosen cell in place, then creates a new active cell for the same
+column at its own earliest empty round (search happens before the end,
+so the round being ended can never be picked as the new destination).
+
+**Migration** (`supabase/migrations/20260921100000_table_rotation_multi_table_per_server.sql`):
+one new RPC, `board_end_and_assign` — ends one round's entry and creates
+a new one for the same member, in one transaction, one `board_events`
+row (`end_and_assign`, a new `board_event_type` value). A transactional
+RPC was chosen over two sequential client calls specifically to avoid a
+partial-failure window (old table ended, new assignment never lands).
+`board_undo`/`board_redo` got one matching case branch each; undo
+reactivates the ended row via the exact same `update ... set status =
+'active'` path `board_end_table`'s undo already uses, so it inherits the
+identical typed occupancy-conflict protection for free — proven
+generically in `0021_table_rotation_upgrade_1_1.test.sql`, no new "don't
+steal a table back" logic needed. No other RPC's signature or guard
+changed.
+
+**Floor's decision dialog** (`floor-view.tsx`): tapping an available
+table and choosing a server now checks `getActiveTablesForColumn`. Zero
+active tables assigns directly (into the column's own earliest empty
+round, fixing the root-cause bug for this path too). One or more opens
+a dialog: **Assign Also** (plain `board_assign` at the column's own
+earliest empty round — additive, touches nothing else); **Transfer an
+existing table** — a genuinely different mechanism from the pre-existing
+occupied-table-tap Transfer: this is _same server_, and relabels the
+chosen existing active row _in place_ via plain `board_assign` onto that
+row's own round (the table changes, the round/entry doesn't) — it does
+**not** call `board_transfer` at all, since `board_transfer` is for
+moving a table between two _different_ servers while keeping the same
+label. This was caught and corrected mid-implementation: the first draft
+mistakenly wired "Transfer" here to `board_transfer(sourceMember=
+destMember=Mia)`, which doesn't relabel anything — it just relocates the
+same label to a new round for the same member, not what "T1 becomes
+available, T3 becomes active under Mia" actually requires; **End an
+existing table & assign** (the new `board_end_and_assign` RPC); or
+**Cancel** (zero state changes). With more than one existing table,
+Transfer and End each show a sub-step asking which one, listing every
+option — never assuming oldest/newest/first/last.
+
+**Servers' `+ Table`** (`server-board-view.tsx`): same root-cause fix —
+now computes `findEarliestEmptyRoundForColumn(board, column.id)` per
+column instead of receiving one shared `currentRound` prop. Left
+deliberately dialog-free (always "Assign Also" behavior) since Servers'
+whole card-based UX is already about adding workload — its own multi-
+table _display_ needed no code change at all: `assignedTables` already
+filters `resolvedTables` by `occupiedBy?.columnId`, which naturally
+returns every physical table a column currently owns.
+
+**Picker popup** (`components/ui/dialog.tsx`, new; wired into
+`allocation-workspace.tsx` and `floor-view.tsx`): this repo has no
+Dialog/Sheet/Popover primitive anywhere — every existing
+`components/ui/*` file wraps a plain native element (see `select.tsx`).
+Consistent with that, and to avoid adding a new dependency for one
+feature, the new component wraps the native `<dialog>` element:
+`showModal()`/`close()` give a focus trap, ESC-to-close, top-layer
+rendering, and default focus restoration for free. Responsive by
+construction (near-full-width on small viewports) rather than a
+separate mobile "Sheet" variant. Picker's "Choose table" button now
+opens this dialog with the shared `TableMap` inside, instead of always
+rendering it inline below the rotation grid; selecting a table assigns
+and closes the popup. Picker never opens Floor's decision dialog — its
+target cell is always an explicit, already-selected empty cell, so a
+second table for an already-busy server is always unambiguous.
+
+**A real bug found and fixed during manual verification, before writing
+any new automated tests**: the Floor decision dialog's completion paths
+(Assign Also, Transfer, End Existing & Assign) didn't call `closePanel()`
+after their action executed. `selectedLabel` stayed set to the just-acted-on
+table, so tapping that same table again toggled the selection _off_
+(since `selectTable` toggles), instead of reopening its detail panel in
+the new, now-occupied state. Fixed by having `closeDecisionDialog` call
+`closePanel()` as part of leaving the dialog, on every exit path
+including Cancel. Caught by the pre-existing "Floor: a second device
+cannot silently double-book…" Playwright test, which re-selects a table
+immediately after assigning it — not by manual smoke testing, which
+never happened to repeat that exact sequence.
+
+**Tests**: 6 new Vitest tests in `rotation-board.test.ts`
+(`findEarliestEmptyRoundForColumn`, `getActiveTablesForColumn`, Assign
+Also via the domain layer, `end-and-assign` success/no-op, and an
+undo/redo round-trip through demo mode's full-snapshot history). 18 new
+pgTAP assertions in
+`0022_table_rotation_multi_table_per_server.test.sql` (a member holding
+two simultaneous active tables, Assign Also leaving the first untouched,
+same-server Transfer relabeling in place, `board_end_and_assign`
+success/guard/undo/redo, and a documented explanation of why a direct
+"undo steals a table back" repro isn't constructible under this
+session's single global LIFO undo stack — see the test file's own
+comment). 10 new Playwright tests per device project (zero-active direct
+assign, the decision dialog's four choices, Cancel, Transfer with one
+and with multiple existing tables, End Existing & Assign with one and
+with multiple, the Picker popup opening as a real `<dialog>` and not
+inline, Picker's no-auto-transfer guarantee, and Servers' multi-table
+display) plus fixes to 6 existing Playwright tests whose flows now hit
+the decision dialog (every demo-seed server already has at least one
+active table from the seed data, so any test assigning to mia/leo/ava/
+noah now sees the dialog) or referenced stale Picker copy/flow from
+before the popup change.
+
+**Local validation**: `npm run check` PASS; `npx vitest run` PASS,
+385/385 (+6); `npx supabase test db` PASS, 297 assertions (+18);
+`npm run build` PASS; `npx playwright test` (all 3 projects) **PASS,
+219/219** (73/73 × desktop/host-tablet/server-mobile; +30 net new, zero
+regressions). Manual visual check (Playwright screenshots, desktop +
+Pixel-7-viewport mobile, both `light` and `dark`): the Floor decision
+dialog and the Picker popup are both legible, correctly contrasted, and
+produce no body horizontal overflow on mobile, in both themes.
+
+## "End one or more" follow-up (2026-09-20) — the End sub-step is a multi-select
+
+Expands "End existing table(s) & assign" from ending exactly one
+existing table to ending any non-empty selection — one, several, or
+every one — in the same atomic step as assigning the newly selected
+table. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 9.
+
+**Migration** (`supabase/migrations/20260922100000_table_rotation_end_multiple_and_assign.sql`):
+`board_end_and_assign`'s `p_end_round_id bigint` parameter became
+`p_end_round_ids bigint[]` — dropped and recreated (Postgres has no
+in-place parameter-type change on a function). Validation is now one
+all-or-nothing count check (`count(*) where rotation_round_id = any(...)
+and status = 'active'` must equal `array_length(...)`) run before
+touching anything, rather than a single-row status check — a selection
+containing even one stale entry (already ended/reassigned by someone
+else) rejects the whole call, not just the invalid one. An empty array
+is rejected up front with its own message. Ending is one
+`update ... where rotation_round_id = any(p_end_round_ids)`; since
+`private.sync_table_occupancy` is a row-level trigger, it still fires
+once per ended row, so a conflict releasing any single one of them rolls
+back the whole statement (and transaction) — no partial-ending window.
+`board_events.payload`/`inverse_payload` carry `end_round_ids` (a JSON
+array) instead of `end_round_id`; `board_undo`/`board_redo`'s
+`end_and_assign` branches restore/re-apply the whole array in one
+statement each, inheriting the same all-or-nothing guarantee on the way
+back — if reactivating any one of them on undo would steal a table from
+a newer valid claim, the whole undo rolls back rather than partially
+restoring.
+
+**Domain layer** (`rotation-board.ts`): `BoardAction`'s `"end-and-assign"`
+variant's `endRoundId: string` became `endRoundIds: string[]`. The
+`applyBoardAction` case now maps every id to its cell, rejects the whole
+action (returns `current` unchanged) if any of them isn't currently
+`"active"` for that column or if the array is empty, then ends every one
+of them together before creating the new active cell.
+
+**Floor UI** (`floor-view.tsx`): the "which table" End sub-step is now a
+checkbox multi-select (`selectedEndRoundIds`, a `Set<string>`) instead
+of a list of single-choice buttons — one `<label><input
+type="checkbox">…</label>` row per active table, a "Select all"/"Clear
+all" toggle, a running "N of M selected" count, and a primary button
+("End N Table(s) & Assign `<table>`") disabled whenever the selection is
+empty. The main choice button's wording changed from "End an existing
+table & assign" to "End existing table(s) & assign" to reflect this.
+Exactly one active table still skips the sub-step and acts immediately,
+unchanged from before this follow-up. The Transfer sub-step is
+unaffected (unchanged single-choice list) — Transfer only ever relabels
+one existing row, never several.
+
+**Tests**: 4 new Vitest tests in `rotation-board.test.ts` (end multiple,
+end all, all-or-nothing rejection when any selected round isn't active,
+empty-selection no-op). 22 new pgTAP assertions in
+`0022_table_rotation_multi_table_per_server.test.sql` covering CASE A–I
+from the spec (end one/several/all, cancel is a Playwright-only concern
+since it never calls the RPC, no-selection rejection, a concurrent
+new-table conflict leaving nothing partially ended, a stale selected
+table rejecting the whole call, and undo/redo of a multi-table
+End+Assign) — using two fresh sessions to keep each scenario's
+accumulated state clean rather than reusing session 900022's already
+Transfer/single-end-exercised state. One pre-existing assertion's
+expected error message was updated to match the new all-or-nothing
+validation message (a real, intentional wording change, not a weakened
+assertion). 4 new Playwright tests (end multiple leaving one active, End
+All, canceling the multi-select via the dialog's own close button
+leaving zero changes, and undo/redo of a multi-table End) plus updates
+to 3 existing tests whose button-text/flow expectations were stale
+("End an existing table & assign" → "End existing table(s) & assign",
+and the old single-choice "which table" list → checking a checkbox and
+clicking the new primary button).
+
+**Local validation**: `npm run check` PASS; `npx vitest run` PASS,
+389/389 (+4); `npx supabase test db` PASS, 319 assertions (+22);
+`npm run build` PASS; `npx playwright test` (all 3 projects) **PASS,
+231/231** (77/77 × desktop/host-tablet/server-mobile; +12 net new, zero
+regressions). Manual visual check (Playwright screenshots, desktop +
+Pixel-7-viewport mobile, both `light` and `dark`): the checkbox
+multi-select is legible, correctly contrasted, touch-friendly, and
+produces no body horizontal overflow on mobile, in both themes.

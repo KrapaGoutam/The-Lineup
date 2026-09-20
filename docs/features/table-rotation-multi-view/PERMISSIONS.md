@@ -33,7 +33,8 @@ gains all **Active Floor Operations**:
 
 - Quick Add Staff/Members, add/remove active rotation member
 - Reorder servers, pause, resume
-- Assign table, transfer, unassign, update/edit an assignment
+- Assign table, transfer, end table, unassign, skip turn, update/edit an
+  assignment
 - Clear cell, clear row, clear column, clear board
 - Add row, delete row (empty rows only)
 - Undo, redo (already available to Staff today — unchanged)
@@ -79,6 +80,9 @@ Add `"allocation:operate"` to the `Capability` union in
   elsewhere or in a future feature that needs a true manager-only gate.
 - `board_assign`, `board_clear_cell`, `board_undo`, `board_redo` — already
   open to any active member; unchanged.
+- Upgrade 1.1's `board_transfer`, `board_end_table`, `board_skip_turn` —
+  new RPCs, gated by the same `private.assert_is_active_board_member` as
+  the other newly-opened RPCs above, not a new/separate permission tier.
 - `board_move_column`, `board_set_column_status` — no RPC-level guard
   function today; gated purely by the `rotation_members_operate_service`
   RLS policy (role array today: `owner, general_manager, shift_manager,

@@ -18,6 +18,7 @@ import {
   Rows3,
   RotateCcw,
   ShieldAlert,
+  SkipForward,
   Trash2,
   Undo2,
   UserPlus,
@@ -29,6 +30,7 @@ import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   executeBoardActionRemote,
@@ -123,16 +125,36 @@ function buildInitialHistory() {
   return { past: [], present: history.present, future: [] };
 }
 
+// Table Rotation Multi-View Upgrade 1.1: a Grid cell renders one of four
+// distinct states (rotation-board.ts's RotationCellStatus) instead of
+// just "has a label or not". Empty -> Assign or Skip Turn; Active ->
+// Edit/Unassign; Ended/Skipped -> a read-only history badge plus
+// Unassign-as-correction (the same clear-cell tool used for plain
+// Unassign, unrestricted per the existing audit model -- no separate
+// permission gate for correcting history).
+//
+// Transfer and End Table are intentionally NOT exposed here (Grid and
+// Picker both render this component for their shared table) -- per the
+// final Upgrade 1.1 UI decision, Floor is the one surface for those two
+// actions (see floor-view.tsx). The underlying board_transfer/
+// board_end_table RPCs, the "transfer"/"end-table" BoardAction variants,
+// and this component's own onTransfer/onEndTable-shaped execute() calls
+// from Floor are all still fully live -- only this component's buttons
+// were removed, not the capability.
 function TableEntry({
   value,
+  status,
   disabled,
   onSubmit,
   onClear,
+  onSkipTurn,
 }: {
   value: string | null;
+  status: "empty" | "active" | "ended" | "skipped";
   disabled: boolean;
   onSubmit: (value: string) => void;
   onClear: () => void;
+  onSkipTurn: () => void;
 }) {
   // Feature 028: an occupied cell used to be a static, permanently
   // read-only badge -- nobody, manager included, had any way to correct
@@ -161,7 +183,56 @@ function TableEntry({
     event.currentTarget.reset();
   }
 
-  if (value && !editing) {
+  if (status === "skipped") {
+    return (
+      <div className="border-border bg-muted/40 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
+        <span
+          role="status"
+          className="flex min-h-11 items-center gap-1.5 font-mono text-sm font-bold"
+          aria-label="Skip turn"
+        >
+          0
+        </span>
+        {!disabled ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            aria-label="Unassign skip turn"
+          >
+            <X aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (status === "ended") {
+    return (
+      <div className="border-border bg-muted/40 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
+        <span className="flex min-h-11 flex-col justify-center gap-0.5">
+          <span className="text-muted-foreground font-mono text-sm font-bold line-through decoration-2">
+            Table {value}
+          </span>
+          <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
+            Ended
+          </span>
+        </span>
+        {!disabled ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            aria-label={`Unassign ended table ${value}`}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (status === "active" && !editing) {
     return (
       <div className="border-border bg-background/80 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
         <span className="flex min-h-11 items-center gap-1.5 font-mono text-sm font-bold">
@@ -185,7 +256,7 @@ function TableEntry({
               variant="ghost"
               size="icon"
               onClick={onClear}
-              aria-label={`Clear table ${value}`}
+              aria-label={`Unassign table ${value}`}
             >
               <X aria-hidden="true" />
             </Button>
@@ -224,6 +295,18 @@ function TableEntry({
       >
         {editing ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
       </Button>
+      {status === "empty" && !disabled ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          onClick={onSkipTurn}
+          aria-label="Skip turn"
+          title="Skip turn"
+        >
+          <SkipForward aria-hidden="true" />
+        </Button>
+      ) : null}
     </form>
   );
 }
@@ -289,6 +372,11 @@ export function AllocationWorkspace({
     roundId: string;
     columnId: string;
   } | null>(null);
+  // Table Rotation Multi-View Upgrade 1.1 (multi-table): the TableMap
+  // opens as a popup once a cell is selected, rather than always
+  // rendering inline below the rotation table. Gated on `!!pickerTarget`
+  // at the render site too, so it can never show with nothing selected.
+  const [pickerMapOpen, setPickerMapOpen] = useState(false);
   const board = history.present;
 
   // Feature 028: `initialContext` (the Server Component's own page-load
@@ -923,7 +1011,7 @@ export function AllocationWorkspace({
             <FloorView
               tables={resolvedTables}
               activeColumns={visibleColumns}
-              currentRoundId={currentRound?.id ?? null}
+              board={board}
               disabled={!canOperateFloor}
               onAssign={({ label, columnId, roundId, confirmTransfer }) =>
                 execute({
@@ -937,13 +1025,32 @@ export function AllocationWorkspace({
               onUnassign={({ columnId, roundId }) =>
                 execute({ type: "clear-cell", roundId, columnId })
               }
+              onTransfer={({ sourceRoundId, sourceColumnId, destColumnId }) =>
+                execute({
+                  type: "transfer",
+                  sourceRoundId,
+                  sourceColumnId,
+                  destColumnId,
+                })
+              }
+              onEndTable={({ roundId, columnId }) =>
+                execute({ type: "end-table", roundId, columnId })
+              }
+              onEndAndAssign={({ endRoundIds, columnId, tableLabel }) =>
+                execute({
+                  type: "end-and-assign",
+                  endRoundIds,
+                  columnId,
+                  tableLabel,
+                })
+              }
             />
           ) : activeView === "servers" ? (
             <ServerBoardView
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
-              currentRound={currentRound}
+              board={board}
               disabled={!canOperateFloor}
               onAssign={({ label, columnId, roundId, confirmTransfer }) =>
                 execute({
@@ -1145,7 +1252,7 @@ export function AllocationWorkspace({
                                   // (clear first, then delete). See
                                   // board_delete_row's own migration comment.
                                   disabled={round.cells.some(
-                                    (cell) => cell.tableLabel,
+                                    (cell) => cell.status !== "empty",
                                   )}
                                   onClick={() =>
                                     execute({
@@ -1199,6 +1306,7 @@ export function AllocationWorkspace({
                               >
                                 <TableEntry
                                   value={cell?.tableLabel ?? null}
+                                  status={cell?.status ?? "empty"}
                                   disabled={!canWrite}
                                   onSubmit={(tableLabel) => {
                                     execute({
@@ -1238,6 +1346,13 @@ export function AllocationWorkspace({
                                       ]);
                                     }
                                   }}
+                                  onSkipTurn={() =>
+                                    execute({
+                                      type: "skip-turn",
+                                      roundId: round.id,
+                                      columnId: column.id,
+                                    })
+                                  }
                                 />
                               </div>
                             );
@@ -1249,16 +1364,56 @@ export function AllocationWorkspace({
                 </CardContent>
               </Card>
               {activeView === "picker" ? (
-                <Card>
-                  <CardHeader>
-                    <h2 className="font-semibold">Table picker</h2>
-                    <p className="text-muted-foreground text-xs">
-                      {pickerTarget
-                        ? "Tap an available table to assign it to the selected cell."
-                        : "Tap a cell above, then tap a table below to assign it."}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
+                <>
+                  <Card>
+                    <CardHeader>
+                      <h2 className="font-semibold">Table picker</h2>
+                      <p className="text-muted-foreground text-xs">
+                        {pickerTarget
+                          ? "Choose a table for the selected cell, or skip this turn."
+                          : "Tap a cell above, then choose a table for it."}
+                      </p>
+                    </CardHeader>
+                    {pickerTarget ? (
+                      <CardContent className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={!canOperateFloor}
+                          onClick={() => setPickerMapOpen(true)}
+                        >
+                          <Crosshair aria-hidden="true" /> Choose table
+                        </Button>
+                        {canOperateFloor ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              execute({
+                                type: "skip-turn",
+                                roundId: pickerTarget.roundId,
+                                columnId: pickerTarget.columnId,
+                              });
+                              setPickerTarget(null);
+                            }}
+                          >
+                            <SkipForward aria-hidden="true" /> Skip turn instead
+                          </Button>
+                        ) : null}
+                      </CardContent>
+                    ) : null}
+                  </Card>
+                  {/* Table Rotation Multi-View Upgrade 1.1 (multi-table):
+                      the TableMap opens as a popup, not inline below the
+                      rotation table -- see components/ui/dialog.tsx. */}
+                  <Dialog
+                    open={pickerMapOpen && !!pickerTarget}
+                    onClose={() => setPickerMapOpen(false)}
+                    title="Choose a table"
+                    description="Select an available physical table to assign to the selected cell."
+                  >
                     <TableMap
                       tables={resolvedTables}
                       selectedLabel={null}
@@ -1274,6 +1429,12 @@ export function AllocationWorkspace({
                           );
                           return;
                         }
+                        // Picker is a rotation-cell-driven surface, not a
+                        // physical-operations one -- it never triggers
+                        // Floor's decision dialog. Assigning here always
+                        // just creates a new active row at the selected
+                        // cell, additive to whatever else this server
+                        // already holds (Upgrade 1.1 multi-table).
                         execute({
                           type: "assign",
                           roundId: pickerTarget.roundId,
@@ -1281,10 +1442,11 @@ export function AllocationWorkspace({
                           tableLabel: label,
                         });
                         setPickerTarget(null);
+                        setPickerMapOpen(false);
                       }}
                     />
-                  </CardContent>
-                </Card>
+                  </Dialog>
+                </>
               ) : null}
             </>
           )}

@@ -16,10 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TableMap } from "@/features/allocation/components/table-map";
 import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
-import type {
-  ColumnStatus,
-  RotationColumn,
-  RotationRound,
+import {
+  findEarliestEmptyRoundForColumn,
+  type ColumnStatus,
+  type RotationBoard,
+  type RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
 import type { TeamMember } from "@/lib/demo-data";
 
@@ -35,7 +36,7 @@ export function ServerBoardView({
   columns,
   team,
   tables,
-  currentRound,
+  board,
   disabled,
   onAssign,
   onMove,
@@ -45,7 +46,7 @@ export function ServerBoardView({
   columns: RotationColumn[];
   team: TeamMember[];
   tables: ResolvedFloorTable[];
-  currentRound: RotationRound | undefined;
+  board: RotationBoard;
   disabled: boolean;
   onAssign: (input: {
     label: string;
@@ -69,6 +70,15 @@ export function ServerBoardView({
           (table) => table.occupiedBy?.columnId === column.id,
         );
         const paused = column.status === "paused";
+        // Upgrade 1.1 (multi-table): this column's own earliest
+        // genuinely empty round, not a single round shared by every
+        // column -- see rotation-board.ts's own doc comment on why a
+        // shared pointer caused a second assignment to silently collide
+        // with (and look like it transferred) a column's existing one.
+        // "+ Table" here is always additive (Assign Also), matching
+        // Servers' own workload-focused UX -- Floor is the surface for
+        // the ambiguous Transfer/End decision.
+        const destRound = findEarliestEmptyRoundForColumn(board, column.id);
         return (
           <Card
             key={column.id}
@@ -111,7 +121,7 @@ export function ServerBoardView({
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={disabled || !currentRound}
+                  disabled={disabled || !destRound}
                   onClick={() =>
                     setPickingForColumnId((current) =>
                       current === column.id ? null : column.id,
@@ -172,7 +182,7 @@ export function ServerBoardView({
                 </Button>
               </div>
 
-              {pickingForColumnId === column.id && currentRound ? (
+              {pickingForColumnId === column.id && destRound ? (
                 <TableMap
                   tables={tables}
                   selectedLabel={null}
@@ -181,7 +191,7 @@ export function ServerBoardView({
                     onAssign({
                       label,
                       columnId: column.id,
-                      roundId: currentRound.id,
+                      roundId: destRound.id,
                       confirmTransfer: false,
                     });
                     setPickingForColumnId(null);

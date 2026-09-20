@@ -30,20 +30,91 @@ production architecture. Where they conflict, this document and
 
 ## Assignment
 
-- **Floor Map**: tap available table → quick-assign sheet → pick server →
-  `board_assign` (2 taps). "Advance rotation" toggle — see contract
-  section 14 for the exact default-value caveat.
+- **Floor Map** (multi-table follow-up, see
+  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8): tap an
+  available table → pick a server. A server may hold zero, one, or many
+  active tables — nothing limits this. If the chosen server has **zero**
+  active tables, `board_assign` fires immediately, into that server's
+  own earliest genuinely empty round
+  (`findEarliestEmptyRoundForColumn`), not a single round shared across
+  every server (that shared pointer was the entire cause of the original
+  "assigning a second table auto-transfers the first" bug). If the
+  server already has **one or more**, a decision dialog asks: **Assign
+  Also** (a plain `board_assign` at their own earliest empty round —
+  additive, touches nothing else), **Transfer an existing table** (see
+  below — same server, relabels one existing row in place), **End an
+  existing table & assign** (`board_end_and_assign`, see below), or
+  **Cancel** (zero state changes). With more than one existing table,
+  Transfer and End each ask which one first — never an assumed
+  oldest/newest/first/last.
 - **Picker**: same `board_assign` call as typing in Grid — identical
-  behavior (occupancy, auto-row, undo) regardless of entry path.
+  behavior (occupancy, auto-row, undo) regardless of entry path. Its
+  target cell is always an explicit, already-selected empty cell, so
+  Picker never needs Floor's decision dialog — assigning a table to a
+  server who already has one elsewhere is always unambiguous (an
+  additional active row). The TableMap itself opens as a popup
+  (`components/ui/dialog.tsx`), not inline below the rotation grid — see
+  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8.5.
 - **Server Board `+ Table`**: opens the shared `<TableMap mode="server-picker">`;
-  selecting assigns directly via `board_assign` — same RPC, not a separate
-  "direct floor assignment" mechanism.
-- **Transfer**: from an occupied table's detail sheet, `board_assign` again
-  with `p_confirm_transfer: true` (contract section 6) — releases the
-  prior holder's `table_occupancy` claim and reassigns, atomically.
-- **Unassign**: `board_clear_cell` on that entry — clears the table,
-  releases its `table_occupancy` claim, keeps rotation order untouched.
+  selecting assigns directly via `board_assign`, at that server's own
+  earliest empty round — same RPC, not a separate "direct floor
+  assignment" mechanism, and always additive (no decision dialog here —
+  Servers' whole card-based UX is already about adding workload).
+- **Transfer** — two distinct entry points, two distinct mechanisms:
+  - From an occupied table's detail sheet on Floor (cross-**server**,
+    unchanged since Upgrade 1.1): `board_transfer` moves the _same_
+    assignment to a _different_ server's earliest genuinely empty
+    round — the source cell is deleted outright (no stale label left
+    behind), the destination gets a fresh active row with the same
+    table label. This replaced an earlier implementation that called
+    `board_assign` again with `p_confirm_transfer: true` into the
+    _same_ round, which left the source cell's old text in place — a
+    real bug, not intended transfer semantics; see
+    `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 3.
+    `p_confirm_transfer` still exists on `board_assign` itself, for the
+    unrelated case of forcing a fresh assignment through a stale
+    occupancy conflict — that is not Transfer.
+  - From Floor's decision dialog for an already-busy server
+    (multi-table follow-up, **same server**): "Transfer an existing
+    table" relabels the chosen existing active row _in place_, via
+    plain `board_assign` targeting that row's own round — the table
+    changes, the round/entry doesn't. This is a completely different
+    RPC call from the cross-server case above (no `board_transfer`
+    involved at all); see
+    `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8.3.
+- **End Table** (Upgrade 1.1): from an occupied table's detail sheet on
+  Floor, `board_end_table` marks the entry `ended` in place (never
+  deleted — history stays) and releases the physical table.
+- **End existing table(s) & Assign** (multi-table follow-up, expanded to
+  a multi-select): from Floor's decision dialog, `board_end_and_assign`
+  ends **one, several, or every one** of the server's active rows
+  (history preserved, each as its own distinct entry) and creates one
+  brand new active row for the same server, in one transaction —
+  different from Transfer above, which keeps one continuous row/turn
+  rather than recording separate historical entries. With more than one
+  active table, a checkbox multi-select ("Select all"/"Clear all", a
+  running "N of M selected" count, primary action disabled until at
+  least one is checked) lets the operator choose exactly which ones;
+  with exactly one, it acts immediately with no sub-step.
+- **Transfer/End are Floor-only** (follow-up UI refinement, see
+  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 7): Grid and
+  Picker intentionally do not render Transfer or End controls — both
+  keep only Assign/Edit, Unassign, and Skip Turn, to stay simple. This is
+  a UI-only choice: `board_transfer`/`board_end_table` and their
+  domain-layer equivalents are fully implemented and tested regardless of
+  which view calls them. Servers/Dashboard inherit the resulting
+  availability change automatically via `resolveFloorTables`, but have no
+  direct Transfer/End action of their own.
+- **Unassign**: `board_clear_cell` on that entry — a hard delete, for any
+  status (active, ended, or skipped), releasing occupancy where relevant.
+  It is a correction: an unassigned entry is gone, never converted into a
+  Skip.
 - **Close/Release**: same effect as Unassign (no separate sub-state).
+- **Skip Turn** (Upgrade 1.1): on an empty Grid cell or Picker's selected
+  target, `board_skip_turn` records the turn as skipped (rendered `0`,
+  never the literal editable label `"0"`) — occupies no physical table,
+  but counts as a used cell for the auto-row rule exactly like any other
+  real entry.
 
 ## Clear vs Delete (must stay visually distinct)
 
@@ -68,9 +139,14 @@ production architecture. Where they conflict, this document and
 - Covers every mutation this feature adds (occupancy claim/release,
   delete_row) in addition to the existing set (assign, clear cell/row/
   column/board, add row, pause/resume, remove server, reorder, quick-add,
-  transfer, unassign).
-- Does not cover: active view, dialog/drawer open state, in-progress text
-  input.
+  unassign) — and, as of Upgrade 1.1, `transfer`, `end`, and `skip` too,
+  via matching `board_undo`/`board_redo` case branches. The multi-table
+  follow-up added one more, `end_and_assign` (its own composite RPC —
+  see `DATA_MODEL.md`); Floor's "Assign Also" and same-server "Transfer"
+  are both plain `board_assign` calls underneath, so they're already
+  covered by the existing `assign` branch, not new event types.
+- Does not cover: active view, dialog/drawer open state (including the
+  Floor decision dialog and the Picker popup), in-progress text input.
 
 ## Auto-row rule
 

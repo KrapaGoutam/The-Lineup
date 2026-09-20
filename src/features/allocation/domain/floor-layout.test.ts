@@ -78,4 +78,60 @@ describe("floor layout", () => {
     const resolved = resolveFloorTables(DEMO_FLOOR_LAYOUT, board, team);
     expect(resolved.find((t) => t.label === "T1")?.occupiedBy).toBeNull();
   });
+
+  // Table Rotation Multi-View, Upgrade 1.1: only an "active" cell ever
+  // occupies a physical table -- an "ended" cell keeps its label for
+  // history, but the table itself must show available again.
+  it("an ended cell keeps its historical label but does not occupy the table", () => {
+    const board = {
+      rounds: [
+        {
+          id: "round-1",
+          cells: [
+            { columnId: "mia", tableLabel: "T1", status: "ended" as const },
+          ],
+        },
+      ],
+    };
+    const resolved = resolveFloorTables(DEMO_FLOOR_LAYOUT, board, team);
+    expect(resolved.find((t) => t.label === "T1")?.occupiedBy).toBeNull();
+  });
+
+  it("a skipped cell (no label) never occupies a table", () => {
+    const board = {
+      rounds: [
+        {
+          id: "round-1",
+          cells: [
+            { columnId: "mia", tableLabel: null, status: "skipped" as const },
+          ],
+        },
+      ],
+    };
+    const resolved = resolveFloorTables(DEMO_FLOOR_LAYOUT, board, team);
+    expect(resolved.every((t) => t.occupiedBy === null)).toBe(true);
+  });
+
+  it("reassigning a table's physical resource after it's ended lets the new active row win, regardless of round order", () => {
+    const board = {
+      rounds: [
+        {
+          id: "round-1",
+          cells: [
+            { columnId: "mia", tableLabel: "T1", status: "ended" as const },
+          ],
+        },
+        {
+          id: "round-2",
+          cells: [
+            { columnId: "leo", tableLabel: "T1", status: "active" as const },
+          ],
+        },
+      ],
+    };
+    const resolved = resolveFloorTables(DEMO_FLOOR_LAYOUT, board, team);
+    expect(resolved.find((t) => t.label === "T1")?.occupiedBy?.columnId).toBe(
+      "leo",
+    );
+  });
 });

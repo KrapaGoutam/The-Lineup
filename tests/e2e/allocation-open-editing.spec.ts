@@ -90,7 +90,9 @@ test("a server can clear an already-assigned table in a teammate's column, and t
   await goToAllocation(page);
 
   await expect(page.getByText("Table 4")).toBeVisible(); // Noah Diaz's seeded cell.
-  await page.getByRole("button", { name: "Clear table 4" }).click();
+  // Table Rotation Multi-View Upgrade 1.1: renamed from "Clear table 4"
+  // to "Unassign table 4" to match the domain's own Unassign terminology.
+  await page.getByRole("button", { name: "Unassign table 4" }).click();
 
   await expect(page.getByText("Table 4")).toHaveCount(0);
   await expect(

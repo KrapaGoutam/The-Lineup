@@ -105,13 +105,24 @@ export type ResolvedFloorTable = FloorLayoutEntry & {
  * for a moment (e.g. immediately after a clear, before the client
  * refreshes) without ever meaning the underlying data was actually
  * double-booked.
+ *
+ * Upgrade 1.1: only a cell whose status is "active" ever counts as
+ * occupying a physical table. An "ended" cell keeps its tableLabel for
+ * history but the table itself is available again; a "skipped" cell has
+ * no tableLabel at all. This is also what makes reassigning a
+ * just-ended table's physical resource work correctly -- the new active
+ * row wins here, and the old ended row simply never contributes.
  */
 export function resolveFloorTables(
   layout: FloorLayoutEntry[],
   board: {
     rounds: {
       id: string;
-      cells: { columnId: string; tableLabel: string | null }[];
+      cells: {
+        columnId: string;
+        tableLabel: string | null;
+        status?: "empty" | "active" | "ended" | "skipped";
+      }[];
     }[];
   },
   team: { id: string; name: string; color: string }[],
@@ -122,6 +133,9 @@ export function resolveFloorTables(
   for (const round of board.rounds) {
     for (const cell of round.cells) {
       if (!cell.tableLabel) continue;
+      // status is optional only for callers that predate Upgrade 1.1's
+      // schema; treat a missing status as active (its only prior meaning).
+      if (cell.status && cell.status !== "active") continue;
       for (const part of parseCombinedTableLabel(cell.tableLabel)) {
         ownerByLabel.set(part, { columnId: cell.columnId, roundId: round.id });
       }
