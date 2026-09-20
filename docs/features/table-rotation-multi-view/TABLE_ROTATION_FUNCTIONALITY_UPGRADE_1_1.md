@@ -13,7 +13,13 @@ one already exists, and the Picker's TableMap must open as a popup
 rather than render inline. Section 9 records a third follow-up: "End
 existing table(s)" is a multi-select — the operator may end exactly one,
 several, or every one of a server's active tables in the same step, not
-just one at a time.
+just one at a time. Section 10 records a fourth follow-up, with Floor's
+decision flow now treated as approved and unchanged: Picker's popup
+opens directly from a cell click (no intermediate "Choose table" step,
+Skip Turn moved inside the popup), and Server Board's `+ Table` gained
+the exact same zero/one-or-more decision flow Floor uses, via a shared
+`useTableAssignmentDecision` hook, plus per-table Transfer/End/Unassign
+scoped to one tapped assigned table.
 
 ## 1. Scope
 
@@ -380,3 +386,82 @@ combined-table handling — each combined label is still one
 together, so ending it (selected or not) is unaffected by the
 single-row-per-selection vs. multi-row-per-selection distinction this
 follow-up is about.
+
+## 10. Fourth follow-up: Picker direct popup, Server Board gains Floor's decision flow
+
+Floor's multi-table decision flow (section 8) is treated as approved and
+unchanged. This follow-up touches two other surfaces only: Picker's
+entry path into the shared `TableMap` popup, and Server Board's `+
+Table`, which previously always did a plain additive assign with no
+decision dialog at all.
+
+### 10.1 Picker: no inline Table Picker section, no intermediate click
+
+Before this follow-up, selecting a Picker cell revealed a small
+always-visible "Table picker" card below the rotation grid, with its own
+"Choose table" button that opened the `TableMap` popup, plus a separate
+"Skip turn instead" button next to it. That intermediate card is gone.
+Selecting an eligible empty cell now opens the popup immediately
+(`allocation-workspace.tsx`'s cell `onClick` sets `pickerTarget` and
+`pickerMapOpen` together, instead of `pickerTarget` alone). Skip Turn
+moved inside the popup itself, alongside the table layout, titled
+"Choose a table for `<server>`" with "Turn `<n>`" as the description —
+so the operator never leaves the popup to decide there's no table this
+turn. Cancel (a plain button, plus ESC/backdrop/the dialog's own close
+icon) clears both `pickerMapOpen` and `pickerTarget`, fully returning to
+an unselected Picker with zero state changes. This is a UI entry-path
+change only — the underlying `board_assign`/`board_skip_turn` calls, and
+Picker's "never triggers Floor's decision dialog" rule (section 8, since
+Picker's target cell is always an explicit already-selected empty cell),
+are unchanged.
+
+### 10.2 Server Board: `+ Table` now runs the same decision flow as Floor
+
+`useTableAssignmentDecision` (`components/table-assignment-decision.tsx`,
+new) extracts Floor's zero/one-or-more branching and its three-step
+dialog (choice / transfer-pick / end-pick) out of `floor-view.tsx` into a
+shared hook, parameterized by `board`, `disabled`, `onAssign`, and
+`onEndAndAssign`. Floor now calls it instead of owning that state
+itself; behavior is identical to before this follow-up (see section 8),
+just relocated so Server Board can call the exact same hook rather than
+re-implementing the same semantics a second time and risking drift.
+
+Server Board's `+ Table` now opens the shared `TableMap` as a popup
+(`<Dialog>`, titled "Choose a table for `<server>`") instead of
+rendering it inline below the card — matching `ARCHITECTURE.md`'s
+original "opens `<TableMap mode="server-picker">` in a Dialog"
+description, which the pre-follow-up implementation had not actually
+matched. Selecting an available table calls
+`decision.beginAssign(label, columnId, columnName)`: zero active tables
+for that server assigns immediately (unchanged outcome from before this
+follow-up); one or more opens the identical Assign Also / Transfer / End
+existing table(s) & Assign / Cancel dialog Floor uses. The server is
+never re-asked for — the card the operator tapped `+ Table` on already
+identifies it, unlike Floor, which always picks the table before the
+server.
+
+### 10.3 Server Board: per-table actions scoped to one tapped table
+
+Each already-assigned table on a Server card is now itself a button
+(`aria-label="Table <label>, assigned to <server> -- open table
+actions"`), not a static badge. Tapping one opens a small dialog scoped
+to that one `roundId` only: Transfer (cross-server, `board_transfer` —
+the same RPC as Floor's occupied-table-tap Transfer, not the same-server
+relabel from the decision dialog), End table (`board_end_table`), or
+Unassign (`board_clear_cell`). A server holding T1/T3/T8 and tapping
+T3's badge only ever affects T3 — T1 and T8 are untouched, matching
+Floor's existing "acts on the one selected table only" guarantee.
+
+### 10.4 Explicit non-goals for this follow-up
+
+No RPC or migration changes — every action Server Board now performs
+(`board_assign`, `board_transfer`, `board_end_table`, `board_clear_cell`,
+`board_end_and_assign`) already existed and was already exercised from
+Floor; Server Board simply gained UI call sites for the same
+`allocation-actions.ts` dispatches `floor-view.tsx` already used. No
+change to Grid — it still has no Transfer/End controls and never will
+(section 7). No change to Picker's assignment semantics, only its entry
+path (section 10.1) — it still never shows Transfer/End, and an
+additional table for an already-busy server via Picker is still always
+additive with no decision dialog, since Picker's cell is always already
+explicit.

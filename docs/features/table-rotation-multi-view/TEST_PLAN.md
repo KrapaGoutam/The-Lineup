@@ -289,6 +289,52 @@ one of a server's active tables — in the same atomic step. Full spec:
   targets, no body horizontal overflow — and visually spot-checked in
   both `light` and `dark`.
 
+## Picker direct popup / Server decision flow
+
+Floor's decision flow (above) is treated as approved and unchanged. This
+follow-up touches Picker's entry path and gives Server Board the same
+decision flow Floor already had. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10.
+
+- **CASE A — direct popup**: clicking an eligible empty Picker cell opens
+  the Table Layout popup immediately; no inline "Table Picker" section
+  renders below the rotation grid, and no intermediate click is needed.
+  (Playwright)
+- **CASE B — Skip Turn in the popup**: the popup itself contains a "Skip
+  turn (0)" action; selecting it records the cell as skipped, closes the
+  popup, and changes no physical-table occupancy. (Playwright)
+- **CASE C — table selection**: selecting an available table in the
+  popup assigns it to the already-selected cell/server and closes the
+  popup; Grid/Floor/Servers/Dashboard all reflect it. (Playwright)
+- **CASE D — multi-table server, no auto-transfer**: assigning an
+  additional table to a server who already has one via Picker never
+  disturbs the existing one — always an additional active row, never a
+  decision dialog (Picker's cell is always already explicit). (Playwright)
+- **CASE E/F — Transfer/End stay hidden**: Picker never renders Transfer
+  or End controls, popup or otherwise. (Playwright)
+- **Server zero active**: `+ Table` → select an available table → direct
+  assign, no decision dialog. (Playwright)
+- **Server existing active**: `+ Table` → select an available table →
+  the same four-choice decision dialog Floor uses (Assign Also /
+  Transfer / End existing table(s) & Assign / Cancel), server already
+  known from the card — never re-asked. (Playwright)
+- **Server Assign Also / Transfer (single + multi-table sub-picker) /
+  End one / End multiple / End all**: same outcomes as the equivalent
+  Floor cases (above), reached via a server card instead of tapping a
+  table first. (Playwright)
+- **Server per-table actions**: tapping one already-assigned table's
+  badge opens Transfer/End/Unassign scoped to that one table only —
+  other active tables on the same server are untouched. (Playwright)
+- **Cancel, everywhere**: Picker popup Cancel, Server Board's table
+  layout popup close, Server Board's decision-dialog Cancel, and Server
+  Board's multi-end dialog close each make zero state changes.
+  (Playwright)
+- **Responsive/theme**: Picker's popup and Server Board's table layout/
+  decision/multi-end dialogs validated on desktop, iPad-landscape
+  (`host-tablet`), and Pixel-mobile (`server-mobile`) — no body
+  horizontal overflow, touch-friendly targets — and visually
+  spot-checked in both `light` and `dark`.
+
 ## Regression
 
 - Features 003, 009, 010, 011, 028 — all existing acceptance criteria

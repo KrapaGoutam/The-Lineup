@@ -103,3 +103,19 @@ Cancel). Picker's TableMap now opens as a popup (`components/ui/dialog.tsx`,
 this repo's first Dialog primitive — a native `<dialog>` element, no new
 dependency) instead of rendering inline below the rotation grid. See
 `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8.
+
+**"End existing table(s)" is a multi-select**: the operator may end one,
+several, or every one of a server's active tables in the same step as
+assigning the new one, not just exactly one. See
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 9.
+
+**Picker direct popup / Server decision flow follow-up**: Floor's
+decision flow above is unchanged. Picker's popup now opens directly from
+a cell click — no inline "Table picker" section, no intermediate
+"Choose table" click — with Skip Turn moved inside the popup itself.
+Server Board's `+ Table` gained the exact same zero/one-or-more decision
+flow Floor uses (via a shared `useTableAssignmentDecision` hook, so the
+two surfaces can't drift into different semantics), and each
+already-assigned table on a server card is now its own button, scoping
+Transfer/End/Unassign to that one table. No schema or RPC changes — see
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10.

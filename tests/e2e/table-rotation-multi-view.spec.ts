@@ -97,7 +97,7 @@ test("Floor: a second device cannot silently double-book a table already held by
   await expect(page.getByRole("button", { name: "Unassign" })).toBeVisible();
 });
 
-test("Picker: selecting a Grid cell then a table assigns it, visible on both Picker and Grid", async ({
+test("Picker: selecting a Grid cell immediately opens the table layout popup, and choosing a table assigns it", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -111,11 +111,11 @@ test("Picker: selecting a Grid cell then a table assigns it, visible on both Pic
   });
   await row3.getByPlaceholder("Table #").first().click();
 
-  await expect(
-    page.getByText("Choose a table for the selected cell, or skip this turn."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Choose table" }).click();
-  await page.getByRole("button", { name: "Table T7, available" }).click();
+  // Picker/Server follow-up: the popup opens immediately on cell click,
+  // with no intermediate "Choose table" step.
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Table T7, available" }).click();
 
   // Choosing a table closes the popup (nothing left on Picker itself to
   // assert on -- its only TableMap instance was inside the now-closed
@@ -125,7 +125,7 @@ test("Picker: selecting a Grid cell then a table assigns it, visible on both Pic
   await expect(page.getByText("Table T7")).toBeVisible();
 });
 
-test("Servers: + Table assigns via the shared picker, and reorder updates the same order Grid uses", async ({
+test("Servers: + Table opens the shared table layout as a popup, already scoped to that server", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -136,8 +136,20 @@ test("Servers: + Table assigns via the shared picker, and reorder updates the sa
   await expect(page.getByText("Leo Park")).toBeVisible();
 
   const leoCard = page.getByRole("group", { name: "Leo Park server card" });
-  await leoCard.getByRole("button", { name: "Table" }).click();
-  await page.getByRole("button", { name: "Table T9, available" }).click();
+  await leoCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Choose a table for Leo Park")).toBeVisible();
+  await dialog.getByRole("button", { name: "Table T9, available" }).click();
+
+  // Leo already has active tables from the demo seed ("8", "10") --
+  // ambiguous, same branching as Floor -- the decision dialog appears
+  // instead of an immediate assignment. Leo was never asked to choose
+  // himself again -- the server card already told the flow who this is.
+  await expect(
+    page.getByText("Leo Park already has active tables"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Assign T9 also/ }).click();
   await expect(leoCard.getByText("T9")).toBeVisible();
 
   await switchView(page, "Grid");
@@ -212,7 +224,7 @@ test("Grid: Skip Turn records a turn with no table, rendered as 0, and Unassign 
   await expect(row3.getByPlaceholder("Table #")).toHaveCount(4);
 });
 
-test("Picker: Skip Turn on a selected empty cell works alongside picking a table for another", async ({
+test("Picker: Skip Turn inside the popup works alongside picking a table for another cell", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -222,16 +234,19 @@ test("Picker: Skip Turn on a selected empty cell works alongside picking a table
   const row3 = page.locator("div.contents", {
     has: page.getByRole("button", { name: "Clear row 3" }),
   });
-  // Select Mia Chen's row-3 cell (first column) and skip it.
+  // Select Mia Chen's row-3 cell (first column) -- the popup opens
+  // immediately; Skip Turn lives inside it, not as a separate always-
+  // visible button outside.
   await row3.getByPlaceholder("Table #").nth(0).click();
-  await page.getByRole("button", { name: "Skip turn instead" }).click();
+  await page.getByRole("button", { name: "Skip turn (0)" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
   await expect(row3.getByRole("status", { name: "Skip turn" })).toBeVisible();
 
   // Selecting a different (still empty) cell and picking a table assigns
   // it normally -- Skip Turn on one column never disturbs another.
   await row3.getByPlaceholder("Table #").nth(0).click(); // now Leo Park's cell
-  await page.getByRole("button", { name: "Choose table" }).click();
-  await page.getByRole("button", { name: "Table T11, available" }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T11, available" }).click();
   await expect(page.locator("dialog[open]")).toHaveCount(0);
 
   await switchView(page, "Grid");
@@ -636,7 +651,40 @@ test("Floor: End existing table(s) & assign shows a multi-select when the server
   ).toBeVisible();
 });
 
-test("Picker: the TableMap opens as a popup dialog, not inline below the rotation grid", async ({
+// Picker/Server follow-up: clicking an eligible empty cell opens the
+// Table Layout popup immediately -- no inline "Table Picker" section, no
+// intermediate "Choose table" click. Skip Turn lives inside the popup.
+// CASE letters match
+// docs/features/table-rotation-multi-view/TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md.
+
+test("Picker: clicking an empty cell opens the table layout popup immediately, with no inline Table Picker section (CASE A)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Picker");
+
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.getByText("Table picker")).toHaveCount(0);
+
+  const row3 = page.locator("div.contents", {
+    has: page.getByRole("button", { name: "Clear row 3" }),
+  });
+  await row3.getByPlaceholder("Table #").first().click();
+
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Table T1, available" }),
+  ).toBeVisible();
+  // Still no inline Table Picker section rendered below the grid.
+  await expect(page.getByText("Table picker")).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+});
+
+test("Picker popup: Skip Turn is inside it, and selecting it records 0 without touching occupancy (CASE B)", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -648,22 +696,37 @@ test("Picker: the TableMap opens as a popup dialog, not inline below the rotatio
   });
   await row3.getByPlaceholder("Table #").first().click();
 
-  // Not open until "Choose table" is clicked.
-  await expect(page.locator("dialog[open]")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Choose table" }).click();
   const dialog = page.locator("dialog[open]");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Choose a table")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: "Table T1, available" }),
+    dialog.getByRole("button", { name: "Skip turn (0)" }),
   ).toBeVisible();
+  await dialog.getByRole("button", { name: "Skip turn (0)" }).click();
 
-  await dialog.getByRole("button", { name: "Close" }).click();
   await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(row3.getByRole("status", { name: "Skip turn" })).toBeVisible();
 });
 
-test("Picker: assigning an additional table to a server who already has one never disturbs it, and never shows Transfer/End", async ({
+test("Picker popup: selecting an available table assigns it and closes the popup (CASE C)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Picker");
+
+  const row3 = page.locator("div.contents", {
+    has: page.getByRole("button", { name: "Clear row 3" }),
+  });
+  await row3.getByPlaceholder("Table #").first().click();
+
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T6, available" }).click();
+
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await switchView(page, "Grid");
+  await expect(page.getByText("Table T6")).toBeVisible();
+});
+
+test("Picker: assigning an additional table to a server who already has one never disturbs it (CASE D), and never shows Transfer/End (CASE E/F)", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -676,8 +739,8 @@ test("Picker: assigning an additional table to a server who already has one neve
   // Mia Chen's row-3 cell (first column, still empty) -- Mia already
   // has "12" and "15" active from the demo seed.
   await row3.getByPlaceholder("Table #").nth(0).click();
-  await page.getByRole("button", { name: "Choose table" }).click();
-  await page.getByRole("button", { name: "Table T5, available" }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T5, available" }).click();
 
   await switchView(page, "Grid");
   await expect(page.getByText("Table 12")).toBeVisible();
@@ -685,6 +748,24 @@ test("Picker: assigning an additional table to a server who already has one neve
   await expect(page.getByText("Table T5")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Transfer/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^End table/ })).toHaveCount(0);
+});
+
+test("Picker: Cancel from the popup returns to Picker with zero state changes", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Picker");
+
+  const row3 = page.locator("div.contents", {
+    has: page.getByRole("button", { name: "Clear row 3" }),
+  });
+  await row3.getByPlaceholder("Table #").first().click();
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(row3.getByPlaceholder("Table #").first()).toBeVisible();
+  await expect(row3.getByRole("status", { name: "Skip turn" })).toHaveCount(0);
 });
 
 test("Servers: a server can show multiple simultaneously active tables", async ({
@@ -712,6 +793,333 @@ test("Servers: a server can show multiple simultaneously active tables", async (
   const noahCard = page.getByRole("group", { name: "Noah Diaz server card" });
   await expect(noahCard.getByText("T1")).toBeVisible();
   await expect(noahCard.getByText("T3")).toBeVisible();
+});
+
+// Table Rotation Multi-View, Picker/Server follow-up: Server Board's
+// "+ Table" now runs through the exact same `useTableAssignmentDecision`
+// flow Floor uses -- zero active tables assigns directly, one or more
+// opens the decision dialog (Assign Also / Transfer / End existing
+// table(s) & Assign / Cancel), scoped to the server the card already
+// identifies (no "choose a server" step, unlike Floor).
+
+test("Servers: a server with zero active tables is assigned directly -- no decision dialog", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Servers");
+
+  const zaraCard = page.getByRole("group", { name: "Zara Reed server card" });
+  await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+
+  await expect(page.getByText("already has active tables")).toHaveCount(0);
+  await expect(zaraCard.getByText("T1")).toBeVisible();
+});
+
+test("Servers: a server with an existing active table opens the decision dialog with all four choices", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Servers");
+
+  // Leo Park already has active tables from the demo seed ("8", "10").
+  const leoCard = page.getByRole("group", { name: "Leo Park server card" });
+  await leoCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T2, available" }).click();
+
+  await expect(
+    page.getByText("Leo Park already has active tables"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Assign T2 also/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Transfer an existing table" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: /End existing table\(s\) & assign T2/,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+});
+
+test("Servers: Cancel in the decision dialog makes zero state changes", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Servers");
+
+  const leoCard = page.getByRole("group", { name: "Leo Park server card" });
+  await leoCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T2, available" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByText("already has active tables")).toHaveCount(0);
+  await expect(leoCard.getByText("T2")).toHaveCount(0);
+  await switchView(page, "Floor");
+  await expect(
+    page.getByRole("button", { name: "Table T2, available" }),
+  ).toBeVisible();
+});
+
+test("Servers: Assign Also keeps every existing active table and adds the new one", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Servers");
+
+  const leoCard = page.getByRole("group", { name: "Leo Park server card" });
+  await leoCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T2, available" }).click();
+  await page.getByRole("button", { name: /Assign T2 also/ }).click();
+
+  await expect(leoCard.getByText("T2")).toBeVisible();
+  await switchView(page, "Floor");
+  await expect(
+    page.getByRole("button", { name: "Table T2, assigned to Leo Park" }),
+  ).toBeVisible();
+});
+
+test("Servers: Transfer prompts for which table when the server has multiple active tables, and only the chosen one is replaced", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Sam" }).click();
+  await switchView(page, "Servers");
+
+  const samCard = page.getByRole("group", { name: "Sam Ellis server card" });
+
+  // Build up two active tables: zero-active direct assign, then Assign
+  // Also for the second.
+  await samCard.getByRole("button", { name: "Table", exact: true }).click();
+  let dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+  await expect(samCard.getByText("T1")).toBeVisible();
+
+  await samCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T4, available" }).click();
+  await page.getByRole("button", { name: /Assign T4 also/ }).click();
+  await expect(samCard.getByText("T4")).toBeVisible();
+
+  // Sam now holds two real active tables -- transferring must ask which
+  // one T3 should replace, not assume oldest/newest/first/last.
+  await samCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T3, available" }).click();
+  await page
+    .getByRole("button", { name: "Transfer an existing table" })
+    .click();
+  await expect(
+    page.getByText("Which table should be replaced by T3?"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "T1 → T3" }).click();
+
+  await expect(samCard.getByText("T3")).toBeVisible();
+  await expect(samCard.getByText("T4")).toBeVisible();
+  await expect(samCard.getByText("T1")).toHaveCount(0);
+});
+
+test("Servers: End existing table(s) can end several selected tables, leaving the rest active", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Ivy" }).click();
+  await switchView(page, "Servers");
+
+  const ivyCard = page.getByRole("group", { name: "Ivy Tran server card" });
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  let dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+  await expect(ivyCard.getByText("T1")).toBeVisible();
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T4, available" }).click();
+  await page.getByRole("button", { name: /Assign T4 also/ }).click();
+  await expect(ivyCard.getByText("T4")).toBeVisible();
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T7, available" }).click();
+  await page.getByRole("button", { name: /Assign T7 also/ }).click();
+  await expect(ivyCard.getByText("T7")).toBeVisible();
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T3, available" }).click();
+  await page
+    .getByRole("button", { name: /End existing table\(s\) & assign T3/ })
+    .click();
+
+  for (const label of ["T1", "T4"]) {
+    await page
+      .locator("label", { hasText: new RegExp(`^${label}$`) })
+      .locator('input[type="checkbox"]')
+      .check();
+  }
+  await page.getByRole("button", { name: /^End 2 Tables & Assign T3/ }).click();
+
+  await expect(ivyCard.getByText("T3")).toBeVisible();
+  await expect(ivyCard.getByText("T7")).toBeVisible();
+  await expect(ivyCard.getByText("T1")).toHaveCount(0);
+  await expect(ivyCard.getByText("T4")).toHaveCount(0);
+
+  await switchView(page, "Floor");
+  await expect(
+    page.getByRole("button", { name: "Table T1, available" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Table T4, available" }),
+  ).toBeVisible();
+});
+
+test("Servers: End existing table(s) 'Select all' ends every active table before assigning the new one", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Servers");
+
+  const zaraCard = page.getByRole("group", { name: "Zara Reed server card" });
+
+  await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
+  let dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+  await expect(zaraCard.getByText("T1")).toBeVisible();
+
+  await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T4, available" }).click();
+  await page.getByRole("button", { name: /Assign T4 also/ }).click();
+  await expect(zaraCard.getByText("T4")).toBeVisible();
+
+  await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T3, available" }).click();
+  await page
+    .getByRole("button", { name: /End existing table\(s\) & assign T3/ })
+    .click();
+  await page.getByRole("button", { name: "Select all" }).click();
+  await expect(page.getByText("2 of 2 selected")).toBeVisible();
+  await page.getByRole("button", { name: /^End 2 Tables & Assign T3/ }).click();
+
+  await expect(zaraCard.getByText("T3")).toBeVisible();
+  await expect(zaraCard.getByText("T1")).toHaveCount(0);
+  await expect(zaraCard.getByText("T4")).toHaveCount(0);
+});
+
+test("Servers: closing the table layout popup without selecting makes zero state changes", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Servers");
+
+  const leoCard = page.getByRole("group", { name: "Leo Park server card" });
+  await leoCard.getByRole("button", { name: "Table", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+  await switchView(page, "Floor");
+  await expect(
+    page.getByRole("button", { name: "Table T1, available" }),
+  ).toBeVisible();
+});
+
+test("Servers: closing the End existing table(s) multi-select makes zero state changes", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Ivy" }).click();
+  await switchView(page, "Servers");
+
+  const ivyCard = page.getByRole("group", { name: "Ivy Tran server card" });
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  let dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+  await expect(ivyCard.getByText("T1")).toBeVisible();
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T4, available" }).click();
+  await page.getByRole("button", { name: /Assign T4 also/ }).click();
+  await expect(ivyCard.getByText("T4")).toBeVisible();
+
+  await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T3, available" }).click();
+  await page
+    .getByRole("button", { name: /End existing table\(s\) & assign T3/ })
+    .click();
+  await page
+    .locator("label", { hasText: /^T1$/ })
+    .locator('input[type="checkbox"]')
+    .check();
+
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+  await expect(ivyCard.getByText("T1")).toBeVisible();
+  await expect(ivyCard.getByText("T4")).toBeVisible();
+  await expect(ivyCard.getByText("T3")).toHaveCount(0);
+});
+
+test("Servers: tapping one active table's badge scopes Transfer/End/Unassign to that table only", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Sam" }).click();
+  await switchView(page, "Servers");
+
+  const samCard = page.getByRole("group", { name: "Sam Ellis server card" });
+
+  await samCard.getByRole("button", { name: "Table", exact: true }).click();
+  let dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T1, available" }).click();
+  await expect(samCard.getByText("T1")).toBeVisible();
+
+  await samCard.getByRole("button", { name: "Table", exact: true }).click();
+  dialog = page.locator("dialog[open]");
+  await dialog.getByRole("button", { name: "Table T8, available" }).click();
+  await page.getByRole("button", { name: /Assign T8 also/ }).click();
+  await expect(samCard.getByText("T8")).toBeVisible();
+
+  // Tap T1's badge specifically -- End here must only end T1, T8 stays.
+  await samCard
+    .getByRole("button", { name: /Table T1, assigned to Sam Ellis/ })
+    .click();
+  await page.getByRole("button", { name: "End table" }).click();
+
+  await expect(samCard.getByText("T1")).toHaveCount(0);
+  await expect(samCard.getByText("T8")).toBeVisible();
+
+  await switchView(page, "Floor");
+  await expect(
+    page.getByRole("button", { name: "Table T1, available" }),
+  ).toBeVisible();
 });
 
 // "End one or more" -- the Floor decision dialog's "End existing

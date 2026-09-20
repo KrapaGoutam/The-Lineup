@@ -556,6 +556,16 @@ export function AllocationWorkspace({
     return resolveFloorTables(floorLayout, board, team);
   }, [demoMode, initialContext?.physicalTables, board, team]);
 
+  // Picker popup: the server/turn context shown in the dialog's title --
+  // "Choose a table for {server} · Turn {N}" -- so the operator doesn't
+  // have to remember which cell they just tapped.
+  const pickerColumnForTarget = pickerTarget
+    ? visibleColumns.find((column) => column.id === pickerTarget.columnId)
+    : undefined;
+  const pickerRoundForTarget = pickerTarget
+    ? board.rounds.find((round) => round.id === pickerTarget.roundId)
+    : undefined;
+
   // Feature 028: a historical view is read-only for the same reason
   // boardLocked is -- both collapse into this one flag everywhere the UI
   // gates a write, so a browsed-to previous day never has to be handled
@@ -1070,6 +1080,28 @@ export function AllocationWorkspace({
               onClearColumn={(columnId) =>
                 execute({ type: "clear-column", columnId })
               }
+              onTransfer={({ sourceRoundId, sourceColumnId, destColumnId }) =>
+                execute({
+                  type: "transfer",
+                  sourceRoundId,
+                  sourceColumnId,
+                  destColumnId,
+                })
+              }
+              onEndTable={({ roundId, columnId }) =>
+                execute({ type: "end-table", roundId, columnId })
+              }
+              onEndAndAssign={({ endRoundIds, columnId, tableLabel }) =>
+                execute({
+                  type: "end-and-assign",
+                  endRoundIds,
+                  columnId,
+                  tableLabel,
+                })
+              }
+              onUnassign={({ columnId, roundId }) =>
+                execute({ type: "clear-cell", roundId, columnId })
+              }
             />
           ) : activeView === "dashboard" ? (
             <DashboardView
@@ -1291,16 +1323,20 @@ export function AllocationWorkspace({
                                   isPickerTarget &&
                                     "ring-ring ring-2 ring-inset",
                                 )}
-                                // Picker: tapping an available cell here marks it
-                                // as the target for the next table tap below,
-                                // instead of typing directly.
+                                // Picker: tapping an eligible cell selects
+                                // it as the target and immediately opens
+                                // the Table Layout popup -- no separate
+                                // "Choose table" step in between (Picker/
+                                // Server follow-up).
                                 onClick={
                                   activeView === "picker" && canWrite
-                                    ? () =>
+                                    ? () => {
                                         setPickerTarget({
                                           roundId: round.id,
                                           columnId: column.id,
-                                        })
+                                        });
+                                        setPickerMapOpen(true);
+                                      }
                                     : undefined
                                 }
                               >
@@ -1364,89 +1400,95 @@ export function AllocationWorkspace({
                 </CardContent>
               </Card>
               {activeView === "picker" ? (
-                <>
-                  <Card>
-                    <CardHeader>
-                      <h2 className="font-semibold">Table picker</h2>
-                      <p className="text-muted-foreground text-xs">
-                        {pickerTarget
-                          ? "Choose a table for the selected cell, or skip this turn."
-                          : "Tap a cell above, then choose a table for it."}
-                      </p>
-                    </CardHeader>
-                    {pickerTarget ? (
-                      <CardContent className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          disabled={!canOperateFloor}
-                          onClick={() => setPickerMapOpen(true)}
-                        >
-                          <Crosshair aria-hidden="true" /> Choose table
-                        </Button>
-                        {canOperateFloor ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              execute({
-                                type: "skip-turn",
-                                roundId: pickerTarget.roundId,
-                                columnId: pickerTarget.columnId,
-                              });
-                              setPickerTarget(null);
-                            }}
-                          >
-                            <SkipForward aria-hidden="true" /> Skip turn instead
-                          </Button>
-                        ) : null}
-                      </CardContent>
-                    ) : null}
-                  </Card>
-                  {/* Table Rotation Multi-View Upgrade 1.1 (multi-table):
-                      the TableMap opens as a popup, not inline below the
-                      rotation table -- see components/ui/dialog.tsx. */}
-                  <Dialog
-                    open={pickerMapOpen && !!pickerTarget}
-                    onClose={() => setPickerMapOpen(false)}
-                    title="Choose a table"
-                    description="Select an available physical table to assign to the selected cell."
-                  >
-                    <TableMap
-                      tables={resolvedTables}
-                      selectedLabel={null}
-                      disabled={!canOperateFloor}
-                      onSelectTable={(label) => {
-                        if (!pickerTarget) return;
-                        const table = resolvedTables.find(
-                          (t) => t.label === label,
+                // Picker/Server follow-up: clicking an eligible empty cell
+                // (above) immediately opens this popup -- there is no
+                // inline "Table picker" section rendered below the grid
+                // anymore, and no intermediate "Choose table" click. Skip
+                // Turn lives inside the popup itself, alongside the table
+                // layout, rather than as a separate always-visible button.
+                <Dialog
+                  open={pickerMapOpen && !!pickerTarget}
+                  onClose={() => {
+                    setPickerMapOpen(false);
+                    setPickerTarget(null);
+                  }}
+                  title={
+                    pickerColumnForTarget
+                      ? `Choose a table for ${pickerColumnForTarget.name}`
+                      : "Choose a table"
+                  }
+                  description={
+                    pickerRoundForTarget
+                      ? `Turn ${pickerRoundForTarget.sequence}`
+                      : undefined
+                  }
+                >
+                  <TableMap
+                    tables={resolvedTables}
+                    selectedLabel={null}
+                    disabled={!canOperateFloor}
+                    onSelectTable={(label) => {
+                      if (!pickerTarget) return;
+                      const table = resolvedTables.find(
+                        (t) => t.label === label,
+                      );
+                      if (table?.occupiedBy) {
+                        setActionError(
+                          `Table ${label} is already assigned to ${table.occupiedBy.name}. Use Floor to transfer it.`,
                         );
-                        if (table?.occupiedBy) {
-                          setActionError(
-                            `Table ${label} is already assigned to ${table.occupiedBy.name}. Use Floor to transfer it.`,
-                          );
-                          return;
-                        }
-                        // Picker is a rotation-cell-driven surface, not a
-                        // physical-operations one -- it never triggers
-                        // Floor's decision dialog. Assigning here always
-                        // just creates a new active row at the selected
-                        // cell, additive to whatever else this server
-                        // already holds (Upgrade 1.1 multi-table).
-                        execute({
-                          type: "assign",
-                          roundId: pickerTarget.roundId,
-                          columnId: pickerTarget.columnId,
-                          tableLabel: label,
-                        });
-                        setPickerTarget(null);
-                        setPickerMapOpen(false);
-                      }}
-                    />
-                  </Dialog>
-                </>
+                        return;
+                      }
+                      // Picker is a rotation-cell-driven surface, not a
+                      // physical-operations one -- it never triggers
+                      // Floor's decision dialog. Assigning here always
+                      // just creates a new active row at the selected
+                      // cell, additive to whatever else this server
+                      // already holds (Upgrade 1.1 multi-table).
+                      execute({
+                        type: "assign",
+                        roundId: pickerTarget.roundId,
+                        columnId: pickerTarget.columnId,
+                        tableLabel: label,
+                      });
+                      setPickerTarget(null);
+                      setPickerMapOpen(false);
+                    }}
+                  />
+                  {canOperateFloor && pickerTarget ? (
+                    <div className="border-border flex flex-col gap-1.5 border-t pt-3">
+                      <p className="text-muted-foreground text-xs">
+                        No table this turn?
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          execute({
+                            type: "skip-turn",
+                            roundId: pickerTarget.roundId,
+                            columnId: pickerTarget.columnId,
+                          });
+                          setPickerTarget(null);
+                          setPickerMapOpen(false);
+                        }}
+                      >
+                        <SkipForward aria-hidden="true" /> Skip turn (0)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPickerMapOpen(false);
+                          setPickerTarget(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : null}
+                </Dialog>
               ) : null}
             </>
           )}

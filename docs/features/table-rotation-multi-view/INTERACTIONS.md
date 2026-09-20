@@ -52,14 +52,25 @@ production architecture. Where they conflict, this document and
   target cell is always an explicit, already-selected empty cell, so
   Picker never needs Floor's decision dialog — assigning a table to a
   server who already has one elsewhere is always unambiguous (an
-  additional active row). The TableMap itself opens as a popup
-  (`components/ui/dialog.tsx`), not inline below the rotation grid — see
-  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 8.5.
-- **Server Board `+ Table`**: opens the shared `<TableMap mode="server-picker">`;
-  selecting assigns directly via `board_assign`, at that server's own
-  earliest empty round — same RPC, not a separate "direct floor
-  assignment" mechanism, and always additive (no decision dialog here —
-  Servers' whole card-based UX is already about adding workload).
+  additional active row). Selecting an eligible cell opens the shared
+  `TableMap` as a popup (`components/ui/dialog.tsx`) immediately — no
+  inline "Table picker" section and no intermediate "Choose table"
+  click (Picker/Server follow-up, see
+  `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10.1). Skip Turn
+  lives inside that same popup, alongside the table layout, rather than
+  as a separate always-visible button.
+- **Server Board `+ Table`**: opens the shared `<TableMap mode="server-picker">`
+  as a popup, already scoped to the card's own server — no "choose a
+  server" step, unlike Floor. Selecting an available table runs through
+  the same `useTableAssignmentDecision` hook Floor uses (section 10.2):
+  zero active tables for that server assigns immediately via
+  `board_assign` at their own earliest empty round; one or more opens
+  the identical Assign Also / Transfer / End existing table(s) & Assign
+  / Cancel dialog Floor shows. Each already-assigned table on the card
+  is itself a button; tapping one opens a small dialog scoped to that
+  one table only (Transfer via `board_transfer`, End via
+  `board_end_table`, or Unassign via `board_clear_cell`) — a server
+  holding several tables and tapping one never touches the others.
 - **Transfer** — two distinct entry points, two distinct mechanisms:
   - From an occupied table's detail sheet on Floor (cross-**server**,
     unchanged since Upgrade 1.1): `board_transfer` moves the _same_

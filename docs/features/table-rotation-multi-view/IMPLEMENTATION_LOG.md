@@ -734,3 +734,114 @@ regressions). Manual visual check (Playwright screenshots, desktop +
 Pixel-7-viewport mobile, both `light` and `dark`): the checkbox
 multi-select is legible, correctly contrasted, touch-friendly, and
 produces no body horizontal overflow on mobile, in both themes.
+
+## Floor commit (2026-09-20) — the above two follow-ups committed
+
+The multi-table lifecycle and "End one or more" follow-ups above were
+implemented and locally validated in this repo's working tree across
+this and the prior session, but never actually committed. Before
+starting the Picker/Server follow-up below (which builds directly on
+top of Floor's approved decision flow), that accumulated work was
+committed as
+`2e464f7 feat(table-rotation): support multi-table floor assignment
+lifecycle` — 27 files, +6207/-102. Floor's behavior is unchanged by this
+commit; it only turns previously-uncommitted-but-validated work into a
+real commit boundary before the next follow-up builds on it.
+
+## Picker direct popup / Server decision flow follow-up (2026-09-20)
+
+Floor's decision flow (multi-table lifecycle + "End one or more" above)
+is treated as approved and left unchanged. This follow-up touches two
+other surfaces: Picker's entry path into the shared `TableMap` popup,
+and Server Board's `+ Table`, which previously always did a plain
+additive assign with no decision dialog at all — unlike Floor. Full
+spec: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10.
+
+**New shared hook** (`components/table-assignment-decision.tsx`):
+`useTableAssignmentDecision` extracts Floor's `pendingAssign`/
+`decisionStep`/`selectedEndRoundIds` state and its three-step Dialog
+(choice / transfer-pick / end-pick) out of `floor-view.tsx` verbatim,
+parameterized by `board`, `disabled`, `onAssign`, `onEndAndAssign`, and
+an optional `onClosed` callback. `beginAssign(label, columnId,
+columnName)` returns a boolean — `false` if it assigned directly (zero
+active tables), `true` if it opened the dialog — so a caller with its
+own separate selection panel (Floor) knows whether to close that panel
+immediately or wait for the dialog to close on its own. `floor-view.tsx`
+now calls this hook instead of owning the state itself; its behavior is
+byte-for-byte identical to before this extraction (verified: the full
+pre-existing Floor Playwright/pgTAP/Vitest coverage for the decision
+dialog still passes unmodified).
+
+**Picker** (`allocation-workspace.tsx`): the always-visible "Table
+picker" card below the rotation grid (with its own "Choose table" and
+"Skip turn instead" buttons) is gone. Clicking an eligible empty cell's
+`onClick` now sets `pickerTarget` and `pickerMapOpen` together, opening
+the `TableMap` popup immediately. The popup's title/description now show
+the target server and turn number (`pickerColumnForTarget`/
+`pickerRoundForTarget`, computed from `pickerTarget`); a "No table this
+turn?" / "Skip turn (0)" / "Cancel" block was added inside the popup,
+below the map, replacing the two buttons that used to live in the
+now-removed card. Closing the popup (X, ESC, backdrop, or the new
+Cancel button) clears both `pickerMapOpen` and `pickerTarget`, so a
+canceled Picker interaction always returns to a fully unselected state.
+
+**Server Board** (`server-board-view.tsx`, rewritten): `+ Table` now
+opens the shared `TableMap` inside a `<Dialog>` (`mapOpenForColumnId`
+state) instead of rendering it inline below the card — matching
+`ARCHITECTURE.md`'s original (previously unfulfilled) "opens
+`<TableMap mode="server-picker">` in a Dialog" description. Selecting an
+available table calls `decision.beginAssign(label, column.id,
+column.name)` from the shared hook: zero active tables assigns
+immediately (unchanged outcome); one or more opens the identical
+decision dialog Floor uses, with the server already known from the card
+(never re-asked, unlike Floor). Selecting an occupied table shows an
+inline error instead of silently doing nothing. Each already-assigned
+table badge became its own `<button>` (`aria-label="Table <label>,
+assigned to <server> -- open table actions"`); tapping one opens a new
+`activeTableAction` dialog scoped to that one `roundId` — Transfer
+(cross-server, `board_transfer`, same RPC as Floor's occupied-table-tap
+Transfer), End table (`board_end_table`), or Unassign
+(`board_clear_cell`) — mirroring Floor's occupied-table panel but never
+touching any other table the same server holds.
+
+**Props threaded through** (`allocation-workspace.tsx`): `ServerBoardView`
+gained `onTransfer`, `onEndTable`, `onEndAndAssign`, `onUnassign` —
+identical `execute({ type: ... })` dispatches `FloorView` already used;
+no new action types, no new server actions, no new RPCs.
+
+**Bug caught during implementation, not user-reported**: the badge
+button's `aria-label` starts with the word "Table" ("Table T1, assigned
+to Mia Chen -- open table actions"), which collided via Playwright's
+default substring `getByRole` matching with the `+ Table` button's own
+accessible name ("Table") once a server held at least one assigned
+table — the exact same locator-ambiguity pattern hit twice in the prior
+session's Floor tests. Fixed by adding `{ exact: true }` to every
+`+ Table` button locator in the new and updated tests.
+
+**Tests**: 22 Playwright tests updated/added in
+`table-rotation-multi-view.spec.ts` (net: rewrote 5 pre-existing tests
+that referenced the now-removed "Choose table" button/"Table picker"
+text; added CASE-A–F-labeled Picker popup tests, and 12 new Server Board
+tests covering zero-active direct assign, the four-choice decision
+dialog, Assign Also, Transfer with a multi-table sub-picker, End
+multiple, End all, per-table scoped Transfer/End/Unassign, and Cancel
+from every dialog in this flow). No domain (Vitest) or pgTAP changes —
+this follow-up is UI-only; every RPC/BoardAction it calls already
+existed and was already covered.
+
+**Local validation**: `npm run check` PASS; `npx vitest run` PASS,
+389/389 (unchanged); `npx supabase test db` PASS, 319 assertions
+(unchanged); `npm run build` PASS; `npx playwright test`
+(all 3 projects) **PASS, 270/270** (90/90 × desktop/host-tablet/
+server-mobile). Manual visual check via the running dev server
+(Playwright MCP browser, live interaction, not just screenshots):
+confirmed at a 390×844 mobile viewport in dark mode — Picker's popup
+opens directly on cell click with correct title ("Choose a table for
+Mia Chen" / "Turn 3"), Skip Turn and Cancel render inside it, selecting
+a table closes the popup and the assignment is immediately visible
+(Undo became enabled, event count incremented); Server Board's `+ Table`
+opens the same popup scoped to that server, selecting an available
+table while the server already holds one opens the identical
+four-choice decision dialog, and the End existing table(s) multi-select
+renders its checkboxes/"Select all"/running count correctly — no
+horizontal overflow at mobile width in either case.

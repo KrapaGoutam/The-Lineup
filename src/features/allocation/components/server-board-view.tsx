@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import {
+  ArrowRightLeft,
   ChevronDown,
   ChevronUp,
+  LogOut,
   Pause,
   Play,
   Plus,
@@ -14,10 +16,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { TableMap } from "@/features/allocation/components/table-map";
+import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
 import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
 import {
-  findEarliestEmptyRoundForColumn,
   type ColumnStatus,
   type RotationBoard,
   type RotationColumn,
@@ -25,12 +28,27 @@ import {
 import type { TeamMember } from "@/lib/demo-data";
 
 /**
- * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 16.
- * One card per active rotation column. Reorder/pause/resume/clear/remove
- * all call the exact same RPCs the Grid's column header controls use --
- * same global `position` order, no separate per-view state. "+ Table"
- * opens the shared TableMap (mode: server-picker) scoped to this column's
- * current round.
+ * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 16,
+ * extended by the Floor-parity follow-up. One card per active rotation
+ * column. Reorder/pause/resume/clear/remove all call the exact same RPCs
+ * the Grid's column header controls use -- same global `position` order,
+ * no separate per-view state.
+ *
+ * "+ Table" opens the shared TableMap (mode: server-picker) as a popup,
+ * already scoped to this card's server -- no server-choice step, unlike
+ * Floor, which always picks the table first. Selecting an available
+ * table then runs through the exact same `useTableAssignmentDecision`
+ * flow Floor uses (zero active tables -> assign immediately; one or more
+ * -> Assign Also / Transfer / End existing table(s) & Assign / Cancel),
+ * so the two surfaces can never drift into different semantics for the
+ * same underlying action -- only how the operator arrives at the
+ * (table, server) pair differs.
+ *
+ * Each already-assigned table badge is itself a button: tapping it opens
+ * a small dialog scoped to *that one table* (Transfer / End table /
+ * Unassign), mirroring Floor's occupied-table panel but acting only on
+ * the tapped round -- a server holding T1/T3/T8 and tapping T3 never
+ * touches T1 or T8.
  */
 export function ServerBoardView({
   columns,
@@ -42,6 +60,10 @@ export function ServerBoardView({
   onMove,
   onSetStatus,
   onClearColumn,
+  onTransfer,
+  onEndTable,
+  onEndAndAssign,
+  onUnassign,
 }: {
   columns: RotationColumn[];
   team: TeamMember[];
@@ -57,9 +79,55 @@ export function ServerBoardView({
   onMove: (columnId: string, direction: "up" | "down") => void;
   onSetStatus: (columnId: string, status: ColumnStatus) => void;
   onClearColumn: (columnId: string) => void;
+  onTransfer: (input: {
+    sourceRoundId: string;
+    sourceColumnId: string;
+    destColumnId: string;
+  }) => void;
+  onEndTable: (input: { roundId: string; columnId: string }) => void;
+  onEndAndAssign: (input: {
+    endRoundIds: string[];
+    columnId: string;
+    tableLabel: string;
+  }) => void;
+  onUnassign: (input: { columnId: string; roundId: string }) => void;
 }) {
-  const [pickingForColumnId, setPickingForColumnId] = useState<string | null>(
+  const [mapOpenForColumnId, setMapOpenForColumnId] = useState<string | null>(
     null,
+  );
+  const [mapError, setMapError] = useState<string | null>(null);
+  // Scoped to one already-assigned table at a time -- Transfer/End
+  // Table/Unassign here only ever act on this one roundId, never any
+  // other table the same server might also hold.
+  const [activeTableAction, setActiveTableAction] = useState<{
+    roundId: string;
+    columnId: string;
+    tableLabel: string;
+  } | null>(null);
+  const [transferringActiveTable, setTransferringActiveTable] = useState(false);
+
+  const decision = useTableAssignmentDecision({
+    board,
+    disabled,
+    onAssign,
+    onEndAndAssign,
+  });
+
+  function closeMap() {
+    setMapOpenForColumnId(null);
+    setMapError(null);
+  }
+
+  function closeTableAction() {
+    setActiveTableAction(null);
+    setTransferringActiveTable(false);
+  }
+
+  const mapOpenColumn = columns.find(
+    (column) => column.id === mapOpenForColumnId,
+  );
+  const assignableColumns = columns.filter(
+    (column) => column.status === "active",
   );
 
   return (
@@ -70,15 +138,6 @@ export function ServerBoardView({
           (table) => table.occupiedBy?.columnId === column.id,
         );
         const paused = column.status === "paused";
-        // Upgrade 1.1 (multi-table): this column's own earliest
-        // genuinely empty round, not a single round shared by every
-        // column -- see rotation-board.ts's own doc comment on why a
-        // shared pointer caused a second assignment to silently collide
-        // with (and look like it transferred) a column's existing one.
-        // "+ Table" here is always additive (Assign Also), matching
-        // Servers' own workload-focused UX -- Floor is the surface for
-        // the ambiguous Transfer/End decision.
-        const destRound = findEarliestEmptyRoundForColumn(board, column.id);
         return (
           <Card
             key={column.id}
@@ -106,9 +165,22 @@ export function ServerBoardView({
               {assignedTables.length ? (
                 <div className="flex flex-wrap gap-1">
                   {assignedTables.map((table) => (
-                    <Badge key={table.label} tone="success">
-                      {table.label}
-                    </Badge>
+                    <button
+                      key={table.label}
+                      type="button"
+                      disabled={disabled}
+                      aria-label={`Table ${table.label}, assigned to ${column.name} -- open table actions`}
+                      onClick={() =>
+                        setActiveTableAction({
+                          roundId: table.occupiedBy!.roundId,
+                          columnId: column.id,
+                          tableLabel: table.label,
+                        })
+                      }
+                      className="rounded-full p-0.5 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <Badge tone="success">{table.label}</Badge>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -121,12 +193,8 @@ export function ServerBoardView({
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={disabled || !destRound}
-                  onClick={() =>
-                    setPickingForColumnId((current) =>
-                      current === column.id ? null : column.id,
-                    )
-                  }
+                  disabled={disabled}
+                  onClick={() => setMapOpenForColumnId(column.id)}
                 >
                   <Plus aria-hidden="true" /> Table
                 </Button>
@@ -181,27 +249,124 @@ export function ServerBoardView({
                   <Trash2 aria-hidden="true" />
                 </Button>
               </div>
-
-              {pickingForColumnId === column.id && destRound ? (
-                <TableMap
-                  tables={tables}
-                  selectedLabel={null}
-                  disabled={disabled}
-                  onSelectTable={(label) => {
-                    onAssign({
-                      label,
-                      columnId: column.id,
-                      roundId: destRound.id,
-                      confirmTransfer: false,
-                    });
-                    setPickingForColumnId(null);
-                  }}
-                />
-              ) : null}
             </CardContent>
           </Card>
         );
       })}
+
+      <Dialog
+        open={!!mapOpenForColumnId}
+        onClose={closeMap}
+        title={mapOpenColumn ? `Choose a table for ${mapOpenColumn.name}` : ""}
+        description="Select an available physical table to assign to this server."
+      >
+        <TableMap
+          tables={tables}
+          selectedLabel={null}
+          disabled={disabled}
+          onSelectTable={(label) => {
+            if (!mapOpenColumn) return;
+            const table = tables.find((t) => t.label === label);
+            if (table?.occupiedBy) {
+              setMapError(
+                `Table ${label} is already assigned to ${table.occupiedBy.name}.`,
+              );
+              return;
+            }
+            setMapOpenForColumnId(null);
+            setMapError(null);
+            decision.beginAssign(label, mapOpenColumn.id, mapOpenColumn.name);
+          }}
+        />
+        {mapError ? (
+          <p className="text-destructive text-xs" aria-live="polite">
+            {mapError}
+          </p>
+        ) : null}
+      </Dialog>
+
+      {decision.dialog}
+
+      <Dialog
+        open={!!activeTableAction}
+        onClose={closeTableAction}
+        title={activeTableAction ? `Table ${activeTableAction.tableLabel}` : ""}
+      >
+        {activeTableAction && !transferringActiveTable ? (
+          <div className="flex flex-col gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={disabled}
+              onClick={() => setTransferringActiveTable(true)}
+            >
+              <ArrowRightLeft aria-hidden="true" /> Transfer
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() => {
+                onEndTable({
+                  roundId: activeTableAction.roundId,
+                  columnId: activeTableAction.columnId,
+                });
+                closeTableAction();
+              }}
+            >
+              <LogOut aria-hidden="true" /> End table
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={() => {
+                onUnassign({
+                  columnId: activeTableAction.columnId,
+                  roundId: activeTableAction.roundId,
+                });
+                closeTableAction();
+              }}
+            >
+              Unassign
+            </Button>
+            <Button variant="ghost" size="sm" onClick={closeTableAction}>
+              Cancel
+            </Button>
+          </div>
+        ) : activeTableAction ? (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-muted-foreground text-xs">Give this table to:</p>
+            {assignableColumns
+              .filter((column) => column.id !== activeTableAction.columnId)
+              .map((column) => (
+                <Button
+                  key={column.id}
+                  variant="secondary"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => {
+                    onTransfer({
+                      sourceRoundId: activeTableAction.roundId,
+                      sourceColumnId: activeTableAction.columnId,
+                      destColumnId: column.id,
+                    });
+                    closeTableAction();
+                  }}
+                >
+                  {column.name}
+                </Button>
+              ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTransferringActiveTable(false)}
+            >
+              Back
+            </Button>
+          </div>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

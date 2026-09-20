@@ -144,3 +144,18 @@ never partially ending some of the selected tables. `board_events`'
 instead of `end_round_id`; `board_undo`/`board_redo`'s `end_and_assign`
 branches restore/re-apply the whole array in one statement each, with
 the same all-or-nothing guarantee on the way back.
+
+## Picker direct popup / Server decision flow follow-up delta
+
+No schema or RPC changes. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10. This follow-up
+is UI-only: Picker's popup now opens directly from a cell click instead
+of via an intermediate "Choose table" button, and Server Board's
+`+ Table` gained the same `useTableAssignmentDecision` flow Floor
+already used, plus per-table Transfer/End/Unassign scoped to one tapped
+assigned table. Every RPC these call
+(`board_assign`, `board_transfer`, `board_end_table`, `board_clear_cell`,
+`board_end_and_assign`) already existed and was already exercised from
+Floor — Server Board simply gained new client-side call sites for them,
+confirmed unchanged by the full pgTAP suite (319 assertions, all still
+passing) requiring no new migration.

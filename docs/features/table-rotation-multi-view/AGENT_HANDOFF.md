@@ -250,14 +250,61 @@ produces no body horizontal overflow on mobile.
 
 **No merge to `main` has been performed or authorized.**
 
+The multi-table lifecycle and "End one or more" follow-ups above were
+committed as `2e464f7 feat(table-rotation): support multi-table floor
+assignment lifecycle` at the start of the next phase below, before that
+phase's own work began — see `IMPLEMENTATION_LOG.md`'s "Floor commit"
+entry. Floor's approved behavior is unaffected by that commit.
+
+## Picker direct popup / Server decision flow follow-up (2026-09-20) — status: implemented, tested, locally validated
+
+Floor's decision flow (multi-table lifecycle + "End one or more") is
+treated as approved and left unchanged. This follow-up: (1) Picker's
+`TableMap` popup now opens directly from an eligible cell click — no
+inline "Table picker" section, no intermediate "Choose table" click —
+with Skip Turn moved inside the popup; (2) Server Board's `+ Table` now
+runs the exact same zero/one-or-more decision flow Floor uses (via a new
+shared `useTableAssignmentDecision` hook,
+`components/table-assignment-decision.tsx`, extracted out of
+`floor-view.tsx` so the two surfaces can't drift apart), instead of
+always doing a plain additive assign with no decision dialog; (3) each
+already-assigned table on a Server card is now its own button, scoping
+Transfer/End/Unassign to that one table only. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 10; implementation
+record: `IMPLEMENTATION_LOG.md`'s "Picker direct popup / Server decision
+flow follow-up" section.
+
+No schema or RPC changes — every action Server Board now performs
+(`board_assign`, `board_transfer`, `board_end_table`, `board_clear_cell`,
+`board_end_and_assign`) already existed and was already exercised from
+Floor.
+
+**Local validation, reproduced live 2026-09-20**: `npm run check` PASS,
+Vitest 389/389 (unchanged), pgTAP 319 assertions (unchanged), `npm run
+build` PASS, Playwright 270/270 across all 3 projects (90/90 ×
+desktop/host-tablet/server-mobile). Manual visual check via the running
+dev server (live browser interaction at 390×844 mobile, dark theme):
+Picker's popup opens immediately on cell click with the correct
+server/turn title, Skip Turn and Cancel render inside it, and selecting
+a table both closes the popup and visibly assigns (Undo enabled, event
+count incremented); Server Board's `+ Table` opens the same popup
+scoped to the card's server, and selecting a table for an already-busy
+server opens the identical four-choice decision dialog, including its
+checkbox multi-select for End existing table(s) — all rendering
+correctly with no horizontal overflow at mobile width.
+
+**No merge to `main` has been performed or authorized.**
+
 ## Pending next action
 
-The "End one or more" follow-up is implemented and fully validated
-locally. Per the explicit instruction it was implemented under: **the
-very next
-step is to launch the app locally for the user's own manual testing and
-stop** — no commit, push, PR, CI run, or merge until the user explicitly
-approves after testing it themselves.
+The Picker direct popup / Server decision flow follow-up is implemented
+and fully validated locally. Per the explicit instruction it was
+implemented under: **the very next step is to launch the app locally for
+the user's own manual testing and stop** — no commit, push, PR, CI run,
+or merge until the user explicitly approves after testing it themselves.
+Once approved: commit any remaining working-tree changes, push the
+`feature/table-rotation-multi-view` branch, open/update the PR, watch
+CI, and report back before any `main` merge is considered.
 
 ## Documentation created/updated this phase
 
@@ -281,6 +328,10 @@ approves after testing it themselves.
 - `docs/features/table-rotation-multi-view/IMPLEMENTATION_LOG.md` — the
   phase-by-phase implementation record (created during implementation,
   not planning).
+- Picker/Server follow-up: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md`
+  section 10 (new), `INTERACTIONS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`,
+  `TEST_PLAN.md`, `README.md`, `IMPLEMENTATION_LOG.md`, this file — all
+  updated for the shared decision hook and Picker's direct-popup change.
 
 ## Implementation files (this session, see IMPLEMENTATION_LOG.md for detail)
 
@@ -303,6 +354,13 @@ approves after testing it themselves.
 - `docs/features/table-rotation-multi-view/tools/capture-implementation-screenshots.mjs`
   (new) + `docs/features/table-rotation-multi-view/screenshots/{dark,light,tablet}/`
   (17 PNGs, new).
+- Picker/Server follow-up (new):
+  `src/features/allocation/components/table-assignment-decision.tsx`.
+  Modified: `floor-view.tsx` (now calls the shared hook instead of
+  owning the decision-dialog state), `server-board-view.tsx` (rewritten
+  — popup TableMap, decision flow, per-table action dialog),
+  `allocation-workspace.tsx` (Picker's direct-popup cell click, popup
+  Skip Turn/Cancel, new Server Board props), `tests/e2e/table-rotation-multi-view.spec.ts`.
 
 ## Design handoff copy record
 

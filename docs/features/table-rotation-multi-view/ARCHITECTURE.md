@@ -172,14 +172,53 @@ sub-step and acts immediately, same as before this follow-up.
 
 `components/ui/dialog.tsx` is new: a native `<dialog>`-based component
 (no headless-UI dependency added — consistent with every other
-`components/ui/*` file wrapping a plain native element). Used for both
-the Floor decision dialog and Picker's TableMap popup (Picker no longer
-renders `<TableMap>` inline below the rotation grid — selecting an empty
-cell shows "Choose table"/"Skip turn instead," and "Choose table" opens
-the map inside this `Dialog`). Picker never opens the Floor decision
-dialog: its target cell is always an explicit, already-selected empty
-cell, so a second table for an already-busy server is always
-unambiguous (an additional active row), never something to ask about.
+`components/ui/*` file wrapping a plain native element). Used for the
+Floor decision dialog, Picker's TableMap popup, Server Board's TableMap
+popup, and Server Board's per-table action dialog. Picker never opens
+the Floor decision dialog: its target cell is always an explicit,
+already-selected empty cell, so a second table for an already-busy
+server is always unambiguous (an additional active row), never
+something to ask about.
+
+## Picker/Server follow-up: direct popup, shared decision hook
+
+```
+useTableAssignmentDecision({ board, disabled, onAssign, onEndAndAssign, onClosed? })
+  -- components/table-assignment-decision.tsx, new
+  extracted out of floor-view.tsx: owns pendingAssign/decisionStep/
+  selectedEndRoundIds state and renders the same three-step Dialog
+  (choice / transfer-pick / end-pick) both Floor and Server Board use.
+  beginAssign(label, columnId, columnName) -> boolean:
+    zero active tables for that column -> assigns immediately, returns
+      false (nothing for the caller to wait on)
+    one or more -> opens the dialog, returns true (Floor uses this to
+      know whether to leave its own selected-table panel open)
+
+FloorView          -- calls the hook instead of owning this state itself;
+                      behavior identical to the pre-follow-up version
+ServerBoardView    -- new caller: "+ Table" opens <TableMap> in a Dialog
+                      (previously rendered inline, and always did a
+                      plain additive assign with no decision dialog at
+                      all -- this follow-up brings it to parity with
+                      Floor's zero/one-or-more branching), scoped to the
+                      card's own server (no "choose a server" step,
+                      unlike Floor). Each already-assigned table badge
+                      is its own button; tapping one opens a dialog
+                      scoped to that one roundId (Transfer/End Table/
+                      Unassign), mirroring Floor's occupied-table panel.
+
+Picker (allocation-workspace.tsx)
+  cell click now sets pickerTarget AND opens the popup in the same
+  handler (previously: cell click selected the cell, revealing an
+  always-visible "Table picker" card with its own "Choose table" button
+  that opened the popup, plus a separate "Skip turn instead" button).
+  Skip Turn moved inside the popup itself, next to the TableMap.
+```
+
+No RPC or migration changes for this follow-up -- Server Board's new
+call sites (`board_assign`, `board_transfer`, `board_end_table`,
+`board_clear_cell`, `board_end_and_assign`) all already existed and were
+already exercised from Floor.
 
 ## Retention (v1 scope)
 
