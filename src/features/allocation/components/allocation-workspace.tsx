@@ -512,6 +512,40 @@ export function AllocationWorkspace({
       supabase.removeChannel(channel);
     };
   }, [demoMode, serviceSessionId, user.organizationId, router]);
+
+  // Production stability hotfix (multi-device sync, reconnect safety):
+  // the Realtime subscription above only pushes events it actually
+  // received while connected -- a tablet that slept, backgrounded the
+  // tab, or lost wifi and reconnects gets no backlog of whatever it
+  // missed, so it can sit on stale data indefinitely until the next new
+  // event happens to arrive. This is deliberately a *secondary* safety
+  // net, not the primary sync mechanism: a single revalidation
+  // (router.refresh(), the same one-shot re-fetch used everywhere else
+  // in this file, never a reload or a poll) whenever the tab becomes
+  // visible again or the browser regains network connectivity -- exactly
+  // the two moments a missed-backlog gap can exist. Debounced against
+  // firing twice for the same moment (e.g. focus and reconnect landing
+  // together).
+  useEffect(() => {
+    if (demoMode) return;
+    let lastRefreshAt = 0;
+    function revalidateIfDue() {
+      const now = Date.now();
+      if (now - lastRefreshAt < 2000) return;
+      lastRefreshAt = now;
+      router.refresh();
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") revalidateIfDue();
+    }
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", revalidateIfDue);
+    return () => {
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", revalidateIfDue);
+    };
+  }, [demoMode, router]);
+
   const visibleColumns = useMemo(
     () =>
       board.columns
@@ -555,6 +589,13 @@ export function AllocationWorkspace({
       : (initialContext?.physicalTables ?? []);
     return resolveFloorTables(floorLayout, board, team);
   }, [demoMode, initialContext?.physicalTables, board, team]);
+  // Production stability hotfix: distinguishes "this location has zero
+  // registered tables" from "the tables query itself failed" -- see
+  // table-map.tsx's `loadError` prop and allocation-data.ts's
+  // physicalTablesQueryFailed. Demo mode has no such query to fail.
+  const physicalTablesLoadError = demoMode
+    ? false
+    : (initialContext?.physicalTablesQueryFailed ?? false);
 
   // Picker popup: the server/turn context shown in the dialog's title --
   // "Choose a table for {server} · Turn {N}" -- so the operator doesn't
@@ -1020,6 +1061,7 @@ export function AllocationWorkspace({
           {activeView === "floor" ? (
             <FloorView
               tables={resolvedTables}
+              tablesLoadError={physicalTablesLoadError}
               activeColumns={visibleColumns}
               team={team}
               board={board}
@@ -1061,6 +1103,7 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
+              tablesLoadError={physicalTablesLoadError}
               board={board}
               disabled={!canOperateFloor}
               onAssign={({ label, columnId, roundId, confirmTransfer }) =>
@@ -1426,6 +1469,7 @@ export function AllocationWorkspace({
                 >
                   <TableMap
                     tables={resolvedTables}
+                    loadError={physicalTablesLoadError}
                     selectedLabel={null}
                     disabled={!canOperateFloor}
                     onSelectTable={(label) => {

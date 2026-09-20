@@ -54,6 +54,7 @@ export function ServerBoardView({
   columns,
   team,
   tables,
+  tablesLoadError = false,
   board,
   disabled,
   onAssign,
@@ -68,6 +69,7 @@ export function ServerBoardView({
   columns: RotationColumn[];
   team: TeamMember[];
   tables: ResolvedFloorTable[];
+  tablesLoadError?: boolean;
   board: RotationBoard;
   disabled: boolean;
   onAssign: (input: {
@@ -262,6 +264,7 @@ export function ServerBoardView({
       >
         <TableMap
           tables={tables}
+          loadError={tablesLoadError}
           selectedLabel={null}
           disabled={disabled}
           onSelectTable={(label) => {

@@ -131,12 +131,15 @@ export async function executeBoardActionRemote(
       }
 
       case "add-column": {
+        // Position is computed server-side (concurrency-safe row lock +
+        // max(position)+1) -- action.column.position exists only for the
+        // demo-mode reducer's own in-memory shape and is intentionally
+        // not sent here. See the concurrency-safe-positions migration.
         const { data, error } = await supabase.rpc("board_add_column", {
           p_organization_id: input.organizationId,
           p_location_id: input.locationId,
           p_service_date: serviceDate,
           p_server_profile_id: action.column.id,
-          p_position: action.column.position,
         });
         if (error) return { ok: false, error: error.message };
         // board_add_column returns the new member id, not the session id --

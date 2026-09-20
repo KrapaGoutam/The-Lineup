@@ -54,6 +54,13 @@ export type AllocationContext = {
   // IMPLEMENTATION_LOG.md). Demo mode never reads this -- it uses the
   // static DEMO_FLOOR_LAYOUT instead.
   physicalTables: FloorLayoutEntry[];
+  // Production stability hotfix: true only when the dining_tables query
+  // itself failed (network/PostgREST/RLS error, already console.error'd
+  // above) -- distinct from a legitimate zero rows result. Lets the
+  // Floor/Picker/Server empty-state message say "couldn't load" instead
+  // of incorrectly claiming "no tables are configured" for what's
+  // actually a query failure (see table-map.tsx).
+  physicalTablesQueryFailed: boolean;
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -95,6 +102,21 @@ const EMPTY_BOARD: RotationBoard = {
 export const DINING_TABLES_SELECT =
   "label, position_x, position_y, active, dining_areas!dining_tables_dining_area_id_fkey(name)";
 
+// A many-to-one PostgREST embed (many dining_tables -> one dining_areas)
+// resolves to a single object at runtime, never an array -- see the
+// resourceType inference below for why this matters. Typed to accept
+// either shape anyway (defensive, not just runtime-correct): Supabase's
+// generated types for a `!fkey`-qualified embed have been observed to
+// still describe it as an array in this codebase's own
+// database.generated.ts, so narrowing only to the object shape would
+// fight the generated type rather than the actual PostgREST response.
+export function diningAreaName(
+  embed: { name: string | null } | { name: string | null }[] | null,
+): string | null {
+  if (!embed) return null;
+  return Array.isArray(embed) ? (embed[0]?.name ?? null) : embed.name;
+}
+
 export async function getAllocationContext(
   organizationId: string,
   requestedServiceDate?: string,
@@ -123,6 +145,7 @@ export async function getAllocationContext(
     .eq("active", true);
   if (tableError)
     console.error("getAllocationContext: dining_tables", tableError);
+  const physicalTablesQueryFailed = tableError !== null;
   const physicalTables: FloorLayoutEntry[] = (tableRows ?? [])
     .filter((row) => row.position_x !== null && row.position_y !== null)
     .map((row) => ({
@@ -132,7 +155,17 @@ export async function getAllocationContext(
       // No dedicated resource-type column on dining_tables -- inferred
       // from the dining area's own name until/unless a real onboarding
       // flow needs a first-class field for it.
-      resourceType: /bar/i.test(row.dining_areas?.[0]?.name ?? "")
+      //
+      // Production stability hotfix (bar-seat visual bug): PostgREST
+      // embeds a many-to-one relationship (many dining_tables -> one
+      // dining_areas) as a single object, e.g. `{ name: "Bar" }` --
+      // never an array. `row.dining_areas?.[0]?.name` always missed
+      // (index 0 of an object is undefined), so `name` was always
+      // undefined and resourceType always fell back to "table" -- B1-B8
+      // rendered with the square dining-table shape instead of the
+      // round bar-seat one. Confirmed against the actual qualified
+      // embed's shape (DINING_TABLES_SELECT), not assumed.
+      resourceType: /bar/i.test(diningAreaName(row.dining_areas) ?? "")
         ? "bar_seat"
         : "table",
     }));
@@ -172,6 +205,7 @@ export async function getAllocationContext(
       isHistorical,
       clockedInProfileIds,
       physicalTables,
+      physicalTablesQueryFailed,
     };
   }
 
@@ -316,5 +350,6 @@ export async function getAllocationContext(
     isHistorical,
     clockedInProfileIds,
     physicalTables,
+    physicalTablesQueryFailed,
   };
 }

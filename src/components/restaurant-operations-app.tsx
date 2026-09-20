@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Banknote,
   CalendarDays,
@@ -495,6 +496,7 @@ export function RestaurantOperationsApp({
   initialTipsContext?: TipsContext | null;
   initialAllocationContext?: AllocationContext | null;
 }) {
+  const router = useRouter();
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   const [tab, setTab] = useState<AppTab>("allocation");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -619,12 +621,35 @@ export function RestaurantOperationsApp({
     return { ok: true, account };
   }
 
+  // Production stability hotfix (login stale render): the passcode API
+  // route commits the auth session (Set-Cookie) before this ever runs --
+  // ordering is already correct. What was missing was a re-fetch of the
+  // Server Component data this component was seeded with: `setUser`
+  // alone only flips *local* client state, so every `initial*Context`
+  // prop (schedule/tips/allocation) -- each captured once via a lazy
+  // useState initializer at first (pre-login, unauthenticated) mount --
+  // stayed frozen at its pre-login snapshot (null/empty) until something
+  // else forced a fresh server round-trip, e.g. a manual reload, or any
+  // later board action's own revalidatePath. `router.refresh()` is the
+  // same mechanism this file's own realtime subscription already uses
+  // (allocation-workspace.tsx) to pick up fresh server data without
+  // losing client-side state -- applying it once, right after sign-in,
+  // makes the destination page load with the just-authenticated
+  // session's real data on the very first render, no reload needed. Not
+  // needed in demo mode, which has no server-fetched context to refresh.
+  function handleSignIn(account: SignedInUser) {
+    setUser(account);
+    if (!demoMode) {
+      router.refresh();
+    }
+  }
+
   if (!user) {
     return (
       <LoginScreen
         demoMode={demoMode}
         restaurantSlug={restaurantSlug}
-        onSignIn={setUser}
+        onSignIn={handleSignIn}
         demoAccounts={demoAccounts}
         onRegisterDemo={registerDemoMember}
       />

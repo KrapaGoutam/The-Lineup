@@ -37,3 +37,47 @@ describe("TableMap empty state", () => {
     ).toBeNull();
   });
 });
+
+// Production stability hotfix: a query FAILURE must never be presented
+// as "no tables are configured" -- that reads as a data/onboarding
+// problem when it's actually a transient error. loadError takes
+// priority over the empty-tables message even when tables is also [].
+describe("TableMap load error state", () => {
+  it("shows a distinct message when the tables query itself failed", () => {
+    render(
+      <TableMap
+        tables={[]}
+        loadError
+        selectedLabel={null}
+        onSelectTable={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Couldn't load the floor layout. Try refreshing the page.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("No tables are configured for this location."),
+    ).toBeNull();
+  });
+
+  it("prefers the load-error message over the map even if tables happen to be non-empty", () => {
+    render(
+      <TableMap
+        tables={[
+          { label: "T1", x: 8, y: 72, resourceType: "table", occupiedBy: null },
+        ]}
+        loadError
+        selectedLabel={null}
+        onSelectTable={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Couldn't load the floor layout. Try refreshing the page.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Floor map" })).toBeNull();
+  });
+});

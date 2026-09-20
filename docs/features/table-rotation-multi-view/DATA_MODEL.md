@@ -184,3 +184,26 @@ the live production schema (not assumed) that no other data-shape gap
 existed: `dining_tables`/`dining_areas`/`section_assignments` all
 already had the exact columns/constraints Upgrade 1.1 expects, from the
 original `initial_schema` migration.
+
+## Production stability hotfix delta
+
+New migration:
+`20260923100000_table_rotation_concurrency_safe_positions.sql`. Full
+spec: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 13,
+root-cause detail in `IMPLEMENTATION_LOG.md`. No column/table changes.
+`rotation_members`'s existing `unique (service_session_id, position)
+deferrable initially deferred` constraint is untouched — this fix
+makes position _computation_ safe under concurrency, it does not
+change what the constraint enforces. Two functions changed:
+
+- `public.board_add_column`: signature changed (old 5-arg overload with
+  a client-supplied `p_position integer` dropped; new 4-arg overload
+  computes position internally).
+- `private.get_or_create_active_session`: unchanged signature, added
+  internal `unique_violation` handling for its own session-bootstrap
+  insert race.
+
+No RLS/grant changes beyond `board_add_column`'s own
+revoke-all/grant-execute-to-authenticated, matching its prior grants
+exactly (just re-applied against the new signature, per PostgREST's
+per-signature grant model).

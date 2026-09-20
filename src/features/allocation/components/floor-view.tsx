@@ -97,6 +97,7 @@ function FloorLegend({
  */
 export function FloorView({
   tables,
+  tablesLoadError = false,
   activeColumns,
   team,
   board,
@@ -108,6 +109,7 @@ export function FloorView({
   onEndAndAssign,
 }: {
   tables: ResolvedFloorTable[];
+  tablesLoadError?: boolean;
   activeColumns: RotationColumn[];
   team: TeamMember[];
   board: RotationBoard;
@@ -190,6 +192,7 @@ export function FloorView({
       <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
         <TableMap
           tables={tables}
+          loadError={tablesLoadError}
           selectedLabel={selectedLabel}
           onSelectTable={selectTable}
           disabled={disabled}

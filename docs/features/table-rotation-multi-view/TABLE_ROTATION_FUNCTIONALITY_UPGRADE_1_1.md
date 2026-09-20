@@ -653,3 +653,45 @@ inspection before and after deployment). No changes to any already-
 deployed, already-correct RPC signature. No new dummy users created;
 production validation uses only the existing test/staff accounts
 already known to the user, never persisted anywhere in this repo.
+
+## 13. Production stability hotfix: concurrency, login, assignment, sync, bar seats
+
+Full root-cause detail: `IMPLEMENTATION_LOG.md`'s "Production
+stability hotfix" section. Summary of what changed:
+
+- **`rotation_members.position` race**: `board_add_column` computed
+  position client-side (`board.columns.length`); two devices adding a
+  server around the same moment could compute and insert the same
+  value. Now computed server-side, inside the RPC, under a row lock on
+  the owning `service_sessions` row — concurrent calls for the same
+  session serialize instead of colliding. New migration
+  (`20260923100000`), 10 new pgTAP assertions, and a genuine two-
+  connection concurrency test against local Postgres.
+- **Stale first render after login**: `onSignIn` only updated local
+  client state; `initial*Context` props stayed frozen at their pre-
+  login snapshot. Fixed with one `router.refresh()` call right after
+  sign-in.
+- **Multi-device sync gap**: the existing realtime subscription was
+  already architecturally correct and shared by all 5 views; added a
+  secondary, debounced revalidation on tab-visible/network-reconnect
+  as a fallback for events missed while disconnected.
+- **Floor/Server assignment silently no-opping** (zero-active-table
+  direct assign, and "Assign Also"): `findEarliestEmptyRoundForColumn`
+  only matched an explicit `status: "empty"` cell, but real-mode board
+  data never materializes one — a round with no
+  `table_rotation_entries` row for a column simply has no cell object
+  at all. One-line fallback (`cell?.status ?? "empty"`), matching the
+  Grid's own already-correct convention. Shared by Floor and Server
+  Board (both call the same domain function), so one fix covers both.
+  Transfer and End existing table(s) & Assign were traced separately
+  and confirmed unaffected (neither uses this function for its
+  destination search).
+- **Bar seats (B1-B8) rendering square, not round**: `row.dining_areas
+?.[0]?.name` assumed an array; PostgREST returns a many-to-one embed
+  as a single object. Extracted `diningAreaName()`, reads the real
+  shape, still tolerates an array defensively.
+- **Query failure vs. empty floor plan**: a failed `dining_tables`
+  query and a genuinely unconfigured location both used to show "No
+  tables are configured for this location." Added
+  `physicalTablesQueryFailed` so the UI can tell them apart without
+  exposing raw PostgREST/SQL error text.

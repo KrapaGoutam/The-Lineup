@@ -10,6 +10,7 @@ import {
   isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
+  type RotationBoard,
   undoBoard,
 } from "./rotation-board";
 
@@ -790,6 +791,25 @@ describe("rotation board — Upgrade 1.1 multi-table", () => {
     const leoNext = findEarliestEmptyRoundForColumn(history.present, "leo");
     expect(miaNext?.id).not.toBe(round1);
     expect(leoNext?.id).toBe(round1);
+  });
+
+  // Production stability hotfix: real mode (allocation-data.ts) never
+  // materializes an explicit "empty" cell -- a round with no
+  // table_rotation_entries row for a column simply has no cell object
+  // for it at all (RotationCellStatus's own doc comment: "empty there
+  // means no row at all, rather than a stored value"). The demo reducer
+  // above always creates one, so every other test in this file never
+  // exercises that shape. Without the `cell?.status ?? "empty"`
+  // fallback, this always returned undefined for a server who has never
+  // been assigned anything, silently no-opping every Floor/Picker/
+  // Server "assign this available table" and "Assign Also" action.
+  it("findEarliestEmptyRoundForColumn treats a missing cell (real mode's shape) as empty, not just an explicit status: 'empty' cell", () => {
+    const board: RotationBoard = {
+      columns,
+      rounds: [{ id: "r1", sequence: 1, cells: [] }],
+      nextRoundNumber: 2,
+    };
+    expect(findEarliestEmptyRoundForColumn(board, "mia")?.id).toBe("r1");
   });
 
   it("getActiveTablesForColumn lists every active table for a column across all its rounds, but not ended/skipped ones", () => {

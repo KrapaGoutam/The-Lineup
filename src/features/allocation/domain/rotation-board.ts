@@ -171,7 +171,16 @@ export function findEarliestEmptyRoundForColumn(
 ): RotationRound | undefined {
   return board.rounds.find((round) => {
     const cell = round.cells.find((c) => c.columnId === columnId);
-    return cell?.status === "empty";
+    // Real mode never materializes an explicit "empty" cell -- a round
+    // with no table_rotation_entries row for this column simply has no
+    // cell at all for it (see RotationCellStatus's own doc comment).
+    // Matches the Grid's identical `cell?.status ?? "empty"` convention
+    // (allocation-workspace.tsx) -- without this fallback, a column with
+    // zero rows anywhere (a server who has never been assigned a table
+    // yet) has no cell that ever satisfies `=== "empty"`, so this always
+    // returned undefined and every Floor/Picker/Server assign-into-a-
+    // fresh-round path (direct assign, Assign Also) silently no-opped.
+    return (cell?.status ?? "empty") === "empty";
   });
 }
 
