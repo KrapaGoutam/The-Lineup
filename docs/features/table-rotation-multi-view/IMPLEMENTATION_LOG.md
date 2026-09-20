@@ -1388,3 +1388,57 @@ correctness of any fix. Recorded here for anyone picking this up:
 fixing local real-mode dev testing for this repo (either updating the
 Supabase CLI, or documenting the correct local key format) is a
 worthwhile, separate follow-up.
+
+### Merge + production deployment + live verification
+
+PR #50 merged to `main` at `3403058` (user-approved). Post-merge `CI`
+(`application`, `browser-smoke`) passed. The `Database` workflow fired
+this time (unlike PR #48's merge) because this merge touches
+`supabase/migrations/**` — `deploy-migrations` failed at the identical
+`supabase link --project-ref` step, same "Your account does not have
+the necessary privileges" error as every prior occurrence, confirmed
+via the job log (not assumed) to be the same pre-existing
+`SUPABASE_ACCESS_TOKEN` issue, not a new problem.
+
+Deploying frontend code that no longer sends `p_position` while
+production's database still had the old 5-arg `board_add_column`
+would have broken Quick Add outright (PostgREST's exact-named-
+parameter matching would find no matching function) — flagged to the
+user immediately post-merge, with the urgency explained, before taking
+any production DB action. Explicit approval given, then:
+
+1. Confirmed production's migration history was still exactly at
+   `20260923090000` (no drift) before applying anything.
+2. Applied the migration via Supabase MCP `apply_migration` (the exact
+   file content, unmodified).
+3. Verified `board_add_column`'s only remaining signature is the new
+   4-arg one (old 5-arg overload confirmed gone) and that
+   `get_or_create_active_session`'s function body now contains the
+   `unique_violation` handling.
+4. Same migration-version-bookkeeping issue as PR #47's deployment
+   recurred (`apply_migration` stamps `version` with the apply-time
+   timestamp and `name` without the filename's timestamp prefix, not
+   the filename's own values) — corrected with a single-row `UPDATE
+supabase_migrations.schema_migrations`, verified `version`/`name`
+   now exactly match `20260923100000_table_rotation_concurrency_safe_positions`.
+   Unlike PR #47's deployment, this specific `UPDATE` was not blocked
+   by the auto-mode classifier this time.
+5. Live smoke test against `https://the-lineup-dusky.vercel.app/`,
+   signed in as TestOwner (session already live from the pre-merge
+   report): **Quick Add** ("Saima") — succeeded, `Servers on floor: 1`,
+   0 console errors, exercising the exact new RPC signature end-to-end.
+   **Floor zero-active direct-assign** (available table T5 → Saima,
+   who had zero active tables) — succeeded, tile immediately showed
+   "assigned to Saima" with her initials/accent, legend updated to "1
+   table," no manual refresh — this is the precise interaction that was
+   silently no-opping before section D's fix. **Floor "Assign Also"**
+   (T3 → Saima, who now had one active table, via the decision dialog)
+   — succeeded, legend updated to "2 tables," both T5 and T3 tiles
+   showed her ownership — the precise interaction that was also
+   silently no-opping before the same fix. **Bar seats** — B1-B8
+   confirmed rendering round on this same Floor view. All three test
+   mutations (Quick Add + two assignments) undone via the app's own
+   Undo button afterward, verified the board returned to `Servers on
+floor: 0` / all tables available — production left in the same
+   clean state it was found in, consistent with every prior smoke
+   test's cleanup convention. Signed out.

@@ -4,22 +4,39 @@
 **Implementation agent:** Claude Code — explicit user-approved override of
 the normal Claude-plans/Codex-implements division of labor, for this
 feature only (2026-09-19).
-**Current branch:** `fix/table-rotation-realtime-assignment`, branched
-from `main` at `5553913` (after PR #48, the PGRST201 hotfix, merged).
+**Current branch:** `main`, at `3403058` — PR #50 merged (user-approved)
+and its migration deployed to production (user-approved), both
+verified live.
 **Current phase:** `feature/table-rotation-multi-view` itself —
-COMPLETE and MERGED to `main` long ago (PR #46). Since then, three
+COMPLETE and MERGED to `main` long ago (PR #46). Since then, four
 production hotfixes have followed the same pattern (root-cause live,
 fix minimally, verify live): the schema/data parity fix (PR #47), the
-PGRST201 embed-ambiguity fix (PR #48), and now this one — PR #50,
-**status: implemented, tested (406 Vitest + 340 pgTAP, +CI green),
-local browser two-session validation blocked by unrelated local
-tooling (see IMPLEMENTATION_LOG.md), waiting for user approval to
-merge.** Fixes: concurrency-unsafe `rotation_members.position`
-(production duplicate-key error), a stale first render right after
-login, Floor/Server table assignment silently not completing, a
-multi-device realtime reconnect gap, and the bar-seat visual bug. Full
-root-cause writeups: IMPLEMENTATION_LOG.md's "Production stability
-hotfix" section.
+PGRST201 embed-ambiguity fix (PR #48), and now PR #50 — **status:
+MERGED (`3403058`), migration deployed to production via the manual
+Supabase MCP path (`20260923100000`, user-approved), verified live**:
+Quick Add (the RPC whose signature changed) tested end-to-end in
+production immediately after deployment — succeeded, no error, 0
+console errors. Floor's zero-active direct-assign and "Assign Also"
+(the two broken paths) both re-tested live in production and now work
+correctly (`T5`/`T3` assigned to Saima, tiles updated immediately, no
+refresh) — this is independent confirmation beyond the local pgTAP/
+Vitest suites that the actual reported production bugs are fixed, not
+just the code paths. All test data cleaned up via Undo afterward.
+Fixes: concurrency-unsafe `rotation_members.position` (production
+duplicate-key error), a stale first render right after login, Floor/
+Server table assignment silently not completing, a multi-device
+realtime reconnect gap, and the bar-seat visual bug. Full root-cause
+writeups: IMPLEMENTATION_LOG.md's "Production stability hotfix"
+section, now updated with the production-deployment/verification
+subsection.
+
+**Migration-version bookkeeping**: `apply_migration` again stamped
+`version` with the apply-time timestamp instead of the filename's
+(`20260920172855` instead of `20260923100000`) and `name` without the
+timestamp prefix — the same class of issue seen once before (PR #47's
+deployment). Corrected via a single-row `UPDATE
+supabase_migrations.schema_migrations` immediately after applying,
+verified: `version`/`name` now exactly match the local filename.
 **Docs-only PR #49** (from the prior session's PGRST201 production
 smoke test) is still open, untouched, disposition left to the user —
 its two findings (stale login render, bar-seat squares) are the ones
@@ -416,7 +433,7 @@ unrelated findings surfaced during that pass (stale login render,
 bar-seat squares) — see `IMPLEMENTATION_LOG.md`; both are what the
 current hotfix below actually fixes.
 
-## Production stability hotfix (2026-09-20) — status: implemented, tested, PR #50 open, waiting for user approval
+## Production stability hotfix (2026-09-20) — status: MERGED to `main` (PR #50, `3403058`), migration deployed and verified live in production
 
 Branch `fix/table-rotation-realtime-assignment`, from `main` at
 `5553913`. Fixes, in order investigated and implemented: (A)
@@ -435,48 +452,65 @@ summary here.
 (`20260923100000_table_rotation_concurrency_safe_positions.sql`) —
 drops and recreates `board_add_column` (parameter removed) and updates
 `private.get_or_create_active_session`. No previously-applied
-migration was edited. **Not yet deployed to production** — same
-`SUPABASE_ACCESS_TOKEN` CI blocker as before applies; production
-deployment needs the same manual Supabase-MCP path used for the prior
-two hotfixes, with explicit user approval, after this PR itself is
-approved and merged.
+migration was edited. **Deployed to production** (user-approved) via
+the same manual Supabase MCP `apply_migration` path used for PR #47's
+migrations, since `deploy-migrations` CI failed on the identical
+pre-existing `SUPABASE_ACCESS_TOKEN` privilege error (confirmed same
+failure point, not a new problem). Migration-version bookkeeping
+corrected in the same follow-up (see the header note above) — resolved
+immediately this time, no separate permission prompt needed.
 
 **Local validation**: `npm run check` PASS; Vitest 406/406 (+6); pgTAP
 340/340 (+10, new file); `npm run build` PASS; genuine two-connection
 concurrency test against local Postgres (raw `psql`, two parallel
 sessions) — PASS, no duplicate-key error, distinct positions. PR CI
-(`application`, `browser-smoke`, `migrations-and-policies`) all green.
+(`application`, `browser-smoke`, `migrations-and-policies`) all green,
+both pre- and post-doc-commit.
+
+**Production verification** (post-merge, post-migration, live):
+Quick Add (TestOwner, `board_add_column`'s new signature) — PASS, 0
+console errors. Floor zero-active direct-assign (T5 → Saima) — PASS,
+tile updated immediately with initials+accent, no refresh. Floor
+"Assign Also" (T3 → Saima, decision dialog) — PASS, legend correctly
+showed "2 tables." Bar seats (B1-B8) — PASS, rendered round. All test
+data (the two assignments + the Quick Add) undone via the app's own
+Undo afterward, board left in a clean state matching what it was
+before this smoke test.
+
 **Not done**: local browser-based two-session multi-device validation
 — attempted, blocked by a local Supabase CLI/GoTrue admin-key-format
 mismatch unrelated to this PR's own changes (see
-IMPLEMENTATION_LOG.md's "Local validation" subsection for the exact
-error and why it's an environment issue, not a code issue).
+IMPLEMENTATION_LOG.md's "Local validation" subsection). Superseded in
+practice by the live production verification above, which exercises
+the actual reported bugs end-to-end (not a substitute for genuine
+two-device realtime testing specifically, which remains unverified).
 
 ## Pending next action
 
-**Migration-history bookkeeping — resolved** (older session): the
-user granted explicit permission, the six-row `version` correction was
-re-run and verified — production's migration history matches local
-filenames exactly, through `20260923090000` (the floor-layout
-backfill). The new `20260923100000` migration in this hotfix has not
-been deployed to production yet — see above.
+**Migration-history bookkeeping — resolved** (this session and one
+prior): production's migration history matches local filenames
+exactly, through `20260923100000` (this hotfix's own migration).
 
 Outstanding:
 
 1. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
    rotation/re-scoping from an account with sufficient privileges on
    project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
-   `deploy-migrations` CI path works again for future migrations. Not
-   this hotfix's concern to fix, but it does block that migration's
-   normal deployment path once this PR is approved.
-2. **PR #50** (this hotfix): CI green, waiting for explicit user
-   approval before merging (never automatic). After merge: production
-   migration deployment (manual Supabase-MCP path, explicit user
-   approval required first) and a full production smoke test, same
-   pattern as PR #47/#48.
+   `deploy-migrations` CI path works again. This has now caused the
+   same manual-deployment workaround twice (PR #47, PR #50) — worth
+   prioritizing.
+2. **Genuine two-device realtime sync** (one tablet's change appearing
+   on another without a manual reload) has not been verified live,
+   only reasoned about at the code level plus the pre-existing
+   architecture audit. Worth a dedicated live check next time two
+   sessions are available.
 3. **Local real-mode dev testing is currently broken** for this repo's
-   own tooling (see above) — worth fixing separately so the next hotfix
-   doesn't hit the same wall.
+   own tooling (local Supabase CLI/GoTrue admin-key-format mismatch,
+   see above) — worth fixing separately so the next hotfix doesn't hit
+   the same wall.
+4. **Docs-only PR #49** is still open and untouched — its findings are
+   now fully superseded by this hotfix's own fixes and documentation;
+   disposition (merge/close) is left to the user.
 
 ## Documentation created/updated this phase
 
