@@ -293,3 +293,20 @@ section 12 has the full incident writeup and a known follow-up: the six
 migrations applied via MCP need their
 `supabase_migrations.schema_migrations.version` values corrected to
 match their local filenames before the normal CI path is trusted again).
+
+## Realtime sync: primary path + reconnect safety net
+
+One `board_events` INSERT subscription per `AllocationWorkspace`
+instance (not one per view -- Grid/Floor/Picker/Servers/Dashboard are
+five tabs inside one instance sharing one `board`/`resolvedTables`/
+`initialContext` state), calling `router.refresh()` on every event.
+Audited during the production stability hotfix and confirmed this was
+already the correct shared-listener shape -- no per-view duplication to
+consolidate. The one real gap: Realtime only pushes events received
+while connected, so a tablet that slept/lost connectivity and
+reconnects gets no backlog of whatever it missed. A second, secondary
+`useEffect` now calls the same `router.refresh()` (debounced to at
+most once per 2s) on the tab becoming visible again or the browser
+regaining network connectivity -- a safety net, not the primary sync
+mechanism, and never a poll or a reload. Full writeup:
+`IMPLEMENTATION_LOG.md`'s "Production stability hotfix" section C.

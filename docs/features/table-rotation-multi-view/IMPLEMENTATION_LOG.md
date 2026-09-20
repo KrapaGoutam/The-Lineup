@@ -1058,3 +1058,333 @@ member (`set local role authenticated`, TestManager's `sub` claim): all
 migration); `npm run build` PASS; `npx playwright test` PASS, 297/297
 (unchanged counts — demo mode never exercises this query, so no
 existing test's assertions moved).
+
+## Post-merge production verification (PGRST201 hotfix)
+
+PR #48 merged to `main` at `5553913`. No `Database` workflow run fired
+for this push (correct — its path filter only matches
+`supabase/migrations/**`/`package.json`/`package-lock.json`/itself, and
+this merge touched none of those, empirically confirming no migration
+was needed). `CI` (`application`, `browser-smoke`) passed. Vercel
+production deployment for `5553913` (id `6554464652`) reported
+`"Deployment has completed"` / `"success"`.
+
+Live smoke test against `https://the-lineup-dusky.vercel.app/` with all
+three real test accounts (TestOwner, TestManager, TestStaff — never
+persisted anywhere in this repo): Floor showed all 27 tables (T1-T19,
+B1-B8) correctly for all three; Dashboard "Available tables" read 27;
+the Floor assignment popup opened correctly; zero browser console
+errors for any account. Confirmed via Supabase edge log inspection
+that the live `dining_tables` request now uses the qualified
+`dining_areas!dining_tables_dining_area_id_fkey` embed and returns
+`200`/`content-range: 0-26/*` (27 rows) — PGRST201 is resolved in
+production, not just in the local reproduction.
+
+Two pre-existing issues surfaced during this verification pass turned
+out to be the seeds of the next hotfix (see "Production stability
+hotfix" below, which fixes both properly rather than just documenting
+them):
+
+1. **Login-transition stale render.** The very first render
+   immediately after a passcode submit could show an all-default board
+   even though the server-side fetch for that same page load already
+   succeeded with real data.
+2. **Bar-seat tiles render as squares, not circles.** `resourceType`
+   inference always fell back to `"table"` for real-mode data.
+
+## Production stability hotfix (2026-09-20) — duplicate positions, stale login, broken assignment, sync gap, bar seats
+
+Four new production issues plus the two carried over above, all
+investigated end-to-end before any code changed, per this session's
+explicit root-cause-map-first instruction. Branch:
+`fix/table-rotation-realtime-assignment`, from `main` at `5553913`.
+
+### A. Duplicate `rotation_members.position`
+
+Production error: `duplicate key value violates unique constraint
+"rotation_members_service_session_id_position_key"`.
+
+Constraint: `unique (service_session_id, position)` on
+`public.rotation_members` (`20260905065702_initial_schema.sql`), made
+`deferrable initially deferred` in `20260906140000` specifically so
+`board_move_column`'s two-row swap can't trip it mid-statement. That
+migration's own comment already explains why: a _single_ transaction's
+mid-statement ordering is the only thing DEFERRABLE protects against —
+it does nothing for two separate, genuinely concurrent transactions.
+
+Audited every write path to `rotation_members.position`:
+`board_add_column` (insert), `board_move_column` (swap, already safe
+via the deferred constraint), `board_undo`/`board_redo`'s
+`move_column` branches (restore a previously-computed pair of values,
+not a fresh computation, so no new race). Only one path computes a
+_new_ position from scratch: `board_add_column`. Its signature took
+`p_position integer` as a **client-supplied** parameter —
+`allocation-workspace.tsx`'s Quick Add computed it as
+`board.columns.length` from whatever local board snapshot that device
+last read. Two tablets Quick-Adding around the same moment, each
+seeing (say) 3 existing columns, both compute and send position `3` —
+two independent transactions, the deferred constraint doesn't help,
+one of them gets the duplicate-key error at commit.
+
+A second, structurally identical race sits one level up:
+`private.get_or_create_active_session`'s own read-then-insert of the
+day's `service_sessions` row, against the pre-existing partial unique
+index `service_sessions_one_active_per_meal` — two tablets both
+finding no active session, both inserting, one loses. Not the reported
+constraint, but the same class of bug, in the same causal chain
+(`board_add_column` calls this first), so fixed in the same migration.
+
+**Fix** (`20260923100000_table_rotation_concurrency_safe_positions.sql`):
+
+- `get_or_create_active_session`: the session-bootstrap insert is now
+  wrapped in its own exception block; a `unique_violation` there means
+  another concurrent call won the race, so this one just re-selects
+  and returns the winner's session id instead of erroring.
+- `board_add_column`: `p_position` removed from the signature entirely
+  (old 5-arg overload dropped, matching this feature's established
+  precedent for `board_assign`/`board_end_and_assign`'s own breaking
+  signature changes). Position is now computed _inside_ the function,
+  as `coalesce(max(position), -1) + 1` over the session's existing
+  rows, immediately after `select 1 from service_sessions where id =
+v_session_id for update` — a row lock on the owning session. Two
+  concurrent `board_add_column` calls for the _same_ session now
+  serialize on that lock: the second caller's `for update` blocks
+  until the first commits, so it always computes its `max(position)+1`
+  against a state that already reflects the first insert. Different
+  sessions lock different rows, so this never serializes unrelated
+  locations/dates against each other. Client
+  (`allocation-actions.ts`'s `"add-column"` case) updated to stop
+  sending `p_position`; `action.column.position` still exists for the
+  demo-mode reducer's own shape, it's just no longer read here.
+  Reactivating a previously-removed member (the existing
+  `on conflict (service_session_id, server_profile_id) do update`
+  path) is unaffected — it keeps that member's own original position,
+  never touching `v_next_position`.
+
+Positions are never compacted or reused (`board_set_column_status`'s
+`'removed'` path only flips `status`, confirmed by reading it — this
+migration doesn't change that), so `max(position)+1` staying correct
+across gaps was already true and remains true.
+
+**Verified two ways**: (1) 10 new pgTAP assertions
+(`0024_table_rotation_concurrency_safe_positions.test.sql`) covering
+the new/old signature swap, sequential position assignment, gap
+tolerance after a removal, reactivation keeping its own position, and
+that the unique constraint itself is still fully enforced (forced via
+`set constraints ... immediate`, since it's deferred by design). (2) A
+**genuine two-connection concurrency test**, outside of pgTAP (which
+can't run two transactions in true parallel within one test file): two
+separate `psql` sessions against the local Supabase Postgres
+container, each sleeping 0.5s then calling `board_add_column` for the
+_same_ session with a _different_ new server — fired via shell
+backgrounding so both are actually in flight together. Result: both
+succeeded, positions `0` and `1` (never colliding), and exactly one
+`service_sessions` row existed afterward (proving the bootstrap-race
+fix too). This is the one piece of local verification that used raw
+`psql` against the local Postgres container directly rather than the
+app — the concurrency guarantee lives entirely in the database, so
+that's what needed to be exercised, not the UI.
+
+### B. Stale first render after login
+
+Traced the actual data flow rather than assuming: `LoginScreen`'s
+`onSignIn` prop was wired directly to `setUser`
+(`restaurant-operations-app.tsx`) — a plain client `useState` setter,
+nothing else. Every `initial*Context` prop (`initialScheduleContext`,
+`initialTipsContext`, `initialAllocationContext`) is captured **once**
+via a lazy `useState(() => ...)` initializer, the very first time this
+component mounts — which, for anyone hitting `/` or `/r/[slug]`
+unauthenticated, is _before_ sign-in, when `loadPageData` correctly
+returns `allocationContext: null` (no `initialUser` yet). Flipping
+`user` from `null` to the signed-in account re-renders this component,
+but React's `useState` lazy initializers never re-run on a later
+render just because a prop changed — so every one of those contexts
+stayed frozen at its pre-login snapshot. The auth session itself was
+never the problem: `/api/auth/passcode`'s response already commits it
+(`Set-Cookie`) synchronously before `onSignIn` is ever called, so
+ordering was already correct.
+
+Confirmed live against production data flow (browser session, Supabase
+edge logs) before writing the fix: the server-side `dining_tables`
+fetch for the _same_ page load that showed stale data had already
+succeeded with the correct 27 rows — the round trip was fine, nothing
+downstream of it was picking up the result.
+
+**Fix**: `onSignIn` now calls `setUser(account)` and then, outside
+demo mode, `router.refresh()` — the exact mechanism this same file's
+realtime subscription already uses elsewhere to re-fetch fresh Server
+Component data without discarding client-side state. `AllocationWorkspace`
+already had its own `initialContext`/`syncedContext` resync-during-render
+logic (added earlier for the realtime case) specifically to pick up a
+changed `initialContext` prop after mount; this fix is what actually
+makes that prop change after login, so that existing mechanism now
+fires on the very first render.
+
+Schedule/Team/Tips (`team`, `operatingHours`, `shiftDefaults`,
+`shifts`, `tipPoolId`, etc. in `restaurant-operations-app.tsx`) share
+the _identical_ frozen-useState-initializer shape and are refreshed by
+the same `router.refresh()` call, but — unlike `AllocationWorkspace` —
+have no resync-during-render logic of their own, so a changed prop
+after `router.refresh()` won't update their already-initialized state
+on its own. This is a real, related, pre-existing gap, out of scope
+for this Table Rotation hotfix (would touch Schedule/Team/Tips'
+components, not this feature) — flagged here for a future,
+separately-scoped look, not fixed.
+
+### C. Multi-device sync gap (reconnect/focus safety)
+
+Audited the existing realtime architecture before assuming it needed
+restructuring: one `board_events` INSERT subscription per
+`AllocationWorkspace` instance (not per-view — Grid/Floor/Picker/
+Servers/Dashboard are five tabs inside one instance, all reading the
+same `board`/`resolvedTables`/`initialContext` state), calling
+`router.refresh()` on every event. This is already the "shared
+board-level listener → revalidation → authoritative server data"
+shape the spec asks for, and already correctly updates every view at
+once — there was no evidence of a per-view duplicated implementation
+to consolidate.
+
+The real gap: **no fallback for a missed backlog**. Supabase Realtime
+only pushes events received while connected; a tablet that sleeps,
+backgrounds the tab, or loses wifi and reconnects gets nothing for
+whatever happened while it was gone, and can sit on stale data
+indefinitely until the next new event happens to fire.
+
+**Fix**: a second, deliberately secondary `useEffect` in
+`allocation-workspace.tsx` — `router.refresh()` (same one-shot
+mechanism, never a reload) on the tab becoming visible again
+(`visibilitychange` → `document.visibilityState === "visible"`) or the
+browser regaining connectivity (`online`), debounced to at most once
+per 2 seconds so focus-and-reconnect landing together doesn't double
+up. No polling, no `setInterval`, no full-page reload.
+
+### D. Floor/Server table assignment silently not completing
+
+Reproduced live before touching code: signed in as TestOwner against
+production, added two servers with zero active tables (Saima, Taniya),
+tapped an available table, picked a server — the popup closed, the
+tile stayed "available," the legend stayed "0 tables," **and no
+network request was made at all** (confirmed via
+`browser_network_requests` immediately after the click — not even a
+failed one). No console error either. This ruled out a server-side
+failure being swallowed and pointed at the click handler never
+reaching `execute()`/the server action in the first place.
+
+Traced the call chain: `FloorView`'s "pick a server" popup → shared
+`useTableAssignmentDecision.beginAssign` → (zero active tables)
+`assignToColumn` → `findEarliestEmptyRoundForColumn(board, columnId)`
+→ if it finds nothing, **silently returns without ever calling
+`onAssign`**. That silent early-return, doing exactly nothing
+observable, is the entire bug.
+
+`findEarliestEmptyRoundForColumn` (`rotation-board.ts`):
+
+```
+return board.rounds.find((round) => {
+  const cell = round.cells.find((c) => c.columnId === columnId);
+  return cell?.status === "empty";
+});
+```
+
+`RotationCellStatus`'s own doc comment already says the real-mode
+convention: _"empty" there means no row at all, rather than a stored
+value_ — confirmed directly in `allocation-data.ts`'s round mapping,
+which builds `cells` **only** from `table_rotation_entries` rows that
+actually exist; a round with no row for a given column simply has no
+cell object for it, not a cell with `status: "empty"`. For any server
+who has never been assigned a table, `round.cells.find(...)` returns
+`undefined` in _every_ round, so `cell?.status === "empty"` is
+`undefined === "empty"` → `false`, always — this function could never
+return a round for such a server, in real mode, ever. The Grid already
+gets this right elsewhere in the very same file:
+`status={cell?.status ?? "empty"}` — a fallback this function never
+had.
+
+Demo mode never hit this: its reducer's `"add-column"` case explicitly
+pushes a `{ status: "empty" }` cell for every column into every round
+up front, so `cell` is never `undefined` there — confirmed by reading
+it, not assumed.
+
+**Fix**: one-line fallback, `(cell?.status ?? "empty") === "empty"`,
+matching the Grid's own established convention exactly. Demo mode is
+provably unaffected (its cells are never undefined, so the fallback
+never triggers a different branch).
+
+**Transfer** (within the decision dialog) and **End existing table(s)
+& Assign** were traced separately and found _not_ to share this bug:
+Transfer targets an already-active row directly
+(`pendingAssign.activeTables[...].roundId`, which by definition
+already has a cell), and End+Assign's destination round is found
+**server-side**, inside `board_end_and_assign`'s own SQL (`select r.id
+... where not exists (select 1 from table_rotation_entries e where
+...)`), never through this client function. Both were re-verified live
+against production after the merge (see the pre-merge report) to
+confirm this reasoning rather than assuming it from code alone.
+
+### E. Server view assignment
+
+Same root cause as D — `ServerBoardView`'s `"+ Table"` flow reuses the
+identical shared `useTableAssignmentDecision` hook Floor uses, calling
+the same `assignToColumn`/`findEarliestEmptyRoundForColumn`. One fix
+in `rotation-board.ts` (domain layer, shared by both UIs) resolves
+both D and E — no separate Server-specific change was needed, and
+none was made, consistent with Floor and Server sharing domain logic
+rather than reimplementing it.
+
+### Bar-seat visual bug (carried over from the PGRST201 hotfix's findings)
+
+Root cause confirmed by directly checking what PostgREST actually
+returns for a many-to-one embed (many `dining_tables` → one
+`dining_areas`): a single object (e.g. `{ name: "Bar" }`), never an
+array. `row.dining_areas?.[0]?.name` always missed — `[0]` on an
+object is `undefined` — so `name` was always `undefined` and
+`resourceType` always fell back to `"table"`; confirmed visually
+against production last session (screenshot showed B1-B8 as square
+tiles, not round).
+
+**Fix**: extracted `diningAreaName()` in `allocation-data.ts`, which
+reads the real (object) shape directly while still tolerating an array
+shape defensively — the generated Supabase types for a `!fkey`-
+qualified embed were observed to still describe this relationship as
+an array in this codebase's own `database.generated.ts`, so narrowing
+the parameter type to only the object shape would fight the generated
+type rather than the actual runtime response. 4 new Vitest assertions.
+
+### Query failure vs. empty state
+
+Separately, `getAllocationContext`'s `dining_tables` query failing
+(network/PostgREST/RLS error) and a location that genuinely has zero
+registered tables both collapsed to the same `physicalTables: []`, so
+`table-map.tsx` always said "No tables are configured for this
+location" even when the query itself had failed — misleading during
+exactly the kind of incident this hotfix is about. Added
+`physicalTablesQueryFailed` to `AllocationContext`, threaded through
+to `TableMap`'s new `loadError` prop (shared by Floor, Picker's popup,
+and Server Board's popup) — shows "Couldn't load the floor layout. Try
+refreshing the page." instead, without ever exposing the raw
+PostgREST/SQL error text to end users. 2 new component tests.
+
+### Local validation
+
+`npm run check` PASS; `npx vitest run` PASS, 406/406 (+6); `npx
+supabase test db` PASS, 340/340 (+10, all in the new file); `npm run
+build` PASS. Full local browser-based two-session multi-device
+validation was **attempted but blocked** by an unrelated local
+environment issue: this repo's `.env.local` points `npm run dev` at
+production Supabase by default, and standing up a genuinely local
+real-mode session (local Postgres + local Auth) for self-serve
+registration hit a local GoTrue/Supabase-CLI admin-key-format
+mismatch (`sb_secret_...` vs. the legacy JWT `service_role` format
+GoTrue's admin endpoints in this CLI version still require) —
+confirmed via the local Auth container's own logs (`"token signature
+is invalid: signing method HS256 is invalid"`), not caused by
+anything in this PR's diff. This is purely local tooling friction;
+CI's `migrations-and-policies` job independently applies and tests
+this same migration against a _fresh_ ephemeral Supabase instance on
+every push and passed, and the concurrency fix itself was verified
+directly at the database level (see section A above), so the gap is
+specifically UI-level live two-tablet validation, not the underlying
+correctness of any fix. Recorded here for anyone picking this up:
+fixing local real-mode dev testing for this repo (either updating the
+Supabase CLI, or documenting the correct local key format) is a
+worthwhile, separate follow-up.

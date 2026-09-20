@@ -416,3 +416,46 @@ floor_layout_backfill.test.sql`, 11 assertions (pgTAP).
 - Authentication, attendance, payroll, and unrelated schedule/timezone
   behavior — unaffected (no code touched outside
   `src/features/allocation/**` and its RPCs/migrations).
+
+## Production stability hotfix
+
+10 new pgTAP assertions
+(`0024_table_rotation_concurrency_safe_positions.test.sql`): old/new
+`board_add_column` signature swap, sequential position assignment
+starting at 0, gap tolerance after a removal (`max(position)+1` never
+reuses a vacated position), reactivation of a previously-removed
+member keeps its own original position, and the unique
+`(service_session_id, position)` constraint remains fully enforced
+(forced immediate via `set constraints ... immediate`, since it's
+deferred by design).
+
+6 new Vitest assertions: `findEarliestEmptyRoundForColumn` treats a
+missing cell (real mode's shape) as empty, not just an explicit
+`status: "empty"` cell (`rotation-board.test.ts`); `diningAreaName`
+reads the real single-object PostgREST shape correctly while
+tolerating an array shape defensively, for both a populated and a
+`null`/empty case (`allocation-data.test.ts`); `TableMap`'s new
+`loadError` state takes priority over both the map and the "no tables
+configured" message (`table-map.test.tsx`).
+
+**Genuine two-connection concurrency test** (not pgTAP, not Vitest —
+pgTAP runs each test file as one transaction, so it cannot exercise
+true cross-connection concurrency): two parallel `psql` sessions
+against the local Supabase Postgres container, each `pg_sleep(0.5)`
+then calling `board_add_column` for the same session with a different
+server, launched via shell backgrounding so both are genuinely in
+flight together. Result: both succeeded, positions `0` and `1`, no
+duplicate-key error, exactly one `service_sessions` row created.
+
+**Not run**: local browser-based two-session multi-device validation
+(login → immediate data, cross-tablet realtime sync, Floor/Server
+assignment through the UI). Attempted; blocked by a local Supabase
+CLI/GoTrue admin-key-format mismatch in this repo's local dev tooling,
+unrelated to this hotfix's own changes — see
+`IMPLEMENTATION_LOG.md`'s "Local validation" subsection for the exact
+error and reasoning. CI's `migrations-and-policies` job independently
+applied and pgTAP-tested this same migration against a fresh ephemeral
+Supabase instance and passed, and the concurrency guarantee itself was
+verified directly at the database level (above) rather than through
+the UI, so this gap is specifically live two-tablet UI validation, not
+the underlying correctness of any fix.

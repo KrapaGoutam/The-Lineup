@@ -4,22 +4,28 @@
 **Implementation agent:** Claude Code — explicit user-approved override of
 the normal Claude-plans/Codex-implements division of labor, for this
 feature only (2026-09-19).
-**Current branch (as of the production parity fix):**
-`fix/table-rotation-production-upgrade`, branched from `main` after
-`feature/table-rotation-multi-view` merged (PR #46, merge commit
-`d1161c9`, explicit user approval given).
+**Current branch:** `fix/table-rotation-realtime-assignment`, branched
+from `main` at `5553913` (after PR #48, the PGRST201 hotfix, merged).
 **Current phase:** `feature/table-rotation-multi-view` itself —
-COMPLETE and MERGED to `main`: all 5 views, the full backend (occupancy
-integrity, permission expansion, auto-row reconciliation, retention),
-Upgrade 1.1, the multi-table follow-up, the "End one or more"
-follow-up, and the Floor popup/ownership-visuals follow-up (see that
-section below). Since merging, production reported a blank Floor/
-Picker/Servers layout and a missing `board_skip_turn` RPC — root-caused
-and fixed on `fix/table-rotation-production-upgrade` (PR #47); see the
-"Production parity fix" section below for current status and the two
-items still needing user action. `dining_tables` seeding, once listed
-under "What's not done," is now done in production (section below) —
-that list entry is historical.
+COMPLETE and MERGED to `main` long ago (PR #46). Since then, three
+production hotfixes have followed the same pattern (root-cause live,
+fix minimally, verify live): the schema/data parity fix (PR #47), the
+PGRST201 embed-ambiguity fix (PR #48), and now this one — PR #50,
+**status: implemented, tested (406 Vitest + 340 pgTAP, +CI green),
+local browser two-session validation blocked by unrelated local
+tooling (see IMPLEMENTATION_LOG.md), waiting for user approval to
+merge.** Fixes: concurrency-unsafe `rotation_members.position`
+(production duplicate-key error), a stale first render right after
+login, Floor/Server table assignment silently not completing, a
+multi-device realtime reconnect gap, and the bar-seat visual bug. Full
+root-cause writeups: IMPLEMENTATION_LOG.md's "Production stability
+hotfix" section.
+**Docs-only PR #49** (from the prior session's PGRST201 production
+smoke test) is still open, untouched, disposition left to the user —
+its two findings (stale login render, bar-seat squares) are the ones
+this hotfix actually fixes; see IMPLEMENTATION_LOG.md's "Post-merge
+production verification" section, now restored here since this branch
+was cut from `main`, which never had PR #49's content.
 
 **Design reference:** `docs/design/table-rotation/` — primary HTML
 `approved-design-export/Table Rotation Multi-View v2.dc.html`
@@ -380,7 +386,7 @@ area names; `pg_cron` confirmed available, retention job scheduled.
 **No merge to `main` has been performed or authorized for this fix
 branch.**
 
-## PGRST201 hotfix (2026-09-20) — status: implemented, tested locally, PR open
+## PGRST201 hotfix (2026-09-20) — status: MERGED to `main` (PR #48, `5553913`), verified live in production
 
 The live production smoke test (below) found production Floor/Picker/
 Servers still showed no physical tables and Dashboard still showed
@@ -400,19 +406,60 @@ only `dining_areas(...)` embed in the repo) now explicitly says
 an exported `DINING_TABLES_SELECT` constant with a 3-assertion Vitest
 regression guard (`allocation-data.test.ts`). **No schema migration** —
 pure query-string fix, verified directly against the live PostgREST API
-before and after. Branch: `fix/table-rotation-postgrest-embed`, from
-`main` at `d830da8`.
+before and after.
 
-**Local validation**: `npm run check` PASS; Vitest 400/400 (+3); pgTAP
-330/330 (unchanged, no migration); `npm run build` PASS; Playwright
-297/297 (unchanged, demo mode never exercises this query).
+**Merge + production verification (user-approved)**: merged, CI green
+post-merge, Vercel deployment succeeded, and a live smoke test with all
+three real test accounts confirmed PGRST201 resolved (Supabase edge
+logs: `200`/27 rows) and all 27 tables rendering correctly. Two
+unrelated findings surfaced during that pass (stale login render,
+bar-seat squares) — see `IMPLEMENTATION_LOG.md`; both are what the
+current hotfix below actually fixes.
+
+## Production stability hotfix (2026-09-20) — status: implemented, tested, PR #50 open, waiting for user approval
+
+Branch `fix/table-rotation-realtime-assignment`, from `main` at
+`5553913`. Fixes, in order investigated and implemented: (A)
+concurrency-unsafe `rotation_members.position` (the reported
+`rotation_members_service_session_id_position_key` duplicate-key
+error), (B) stale first render after login, (C) a multi-device
+realtime reconnect gap, (D)/(E) Floor and Server table assignment
+silently not completing, plus the carried-over bar-seat visual bug and
+a query-failure-vs-empty-state distinction. Full root-cause writeups
+and the exact fix for each: `IMPLEMENTATION_LOG.md`'s "Production
+stability hotfix" section — read that before touching any of this
+again, it has the precise code paths and reasoning, not just the
+summary here.
+
+**Database migration**: yes, one new additive migration
+(`20260923100000_table_rotation_concurrency_safe_positions.sql`) —
+drops and recreates `board_add_column` (parameter removed) and updates
+`private.get_or_create_active_session`. No previously-applied
+migration was edited. **Not yet deployed to production** — same
+`SUPABASE_ACCESS_TOKEN` CI blocker as before applies; production
+deployment needs the same manual Supabase-MCP path used for the prior
+two hotfixes, with explicit user approval, after this PR itself is
+approved and merged.
+
+**Local validation**: `npm run check` PASS; Vitest 406/406 (+6); pgTAP
+340/340 (+10, new file); `npm run build` PASS; genuine two-connection
+concurrency test against local Postgres (raw `psql`, two parallel
+sessions) — PASS, no duplicate-key error, distinct positions. PR CI
+(`application`, `browser-smoke`, `migrations-and-policies`) all green.
+**Not done**: local browser-based two-session multi-device validation
+— attempted, blocked by a local Supabase CLI/GoTrue admin-key-format
+mismatch unrelated to this PR's own changes (see
+IMPLEMENTATION_LOG.md's "Local validation" subsection for the exact
+error and why it's an environment issue, not a code issue).
 
 ## Pending next action
 
-**Migration-history bookkeeping — resolved** (prior session): the user
-granted explicit permission, the six-row `version` correction was
+**Migration-history bookkeeping — resolved** (older session): the
+user granted explicit permission, the six-row `version` correction was
 re-run and verified — production's migration history matches local
-filenames exactly.
+filenames exactly, through `20260923090000` (the floor-layout
+backfill). The new `20260923100000` migration in this hotfix has not
+been deployed to production yet — see above.
 
 Outstanding:
 
@@ -420,17 +467,16 @@ Outstanding:
    rotation/re-scoping from an account with sufficient privileges on
    project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
    `deploy-migrations` CI path works again for future migrations. Not
-   this hotfix's concern (it requires no migration at all), but still
-   open.
-2. **This hotfix's own PR**: push, open PR against `main`, watch CI,
-   launch locally, then STOP for user approval before merging — see
-   "Pending next action" is superseded by whatever this session's own
-   final status says lower in this file, if a handoff checkpoint was
-   needed.
-
-Once those are resolved: confirm PR #47 is current with `main`, re-run
-CI, and wait for explicit user approval before merging (never
-automatic).
+   this hotfix's concern to fix, but it does block that migration's
+   normal deployment path once this PR is approved.
+2. **PR #50** (this hotfix): CI green, waiting for explicit user
+   approval before merging (never automatic). After merge: production
+   migration deployment (manual Supabase-MCP path, explicit user
+   approval required first) and a full production smoke test, same
+   pattern as PR #47/#48.
+3. **Local real-mode dev testing is currently broken** for this repo's
+   own tooling (see above) — worth fixing separately so the next hotfix
+   doesn't hit the same wall.
 
 ## Documentation created/updated this phase
 
