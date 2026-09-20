@@ -74,6 +74,27 @@ const EMPTY_BOARD: RotationBoard = {
   nextRoundNumber: 1,
 };
 
+// Production hotfix: dining_tables carries TWO foreign keys to
+// dining_areas -- dining_tables_dining_area_id_fkey (the plain "which
+// area is this table in" relationship, ON DELETE CASCADE) and
+// dining_tables_area_tenant_fk (a composite (dining_area_id,
+// organization_id) FK, tenant-isolation integrity only -- guarantees a
+// table's area belongs to the same org, never a display relationship on
+// its own). Both are legitimate and neither is redundant (only the
+// plain FK cascades; the tenant FK doesn't), so neither should be
+// dropped. Without qualifying which one to embed, PostgREST can't
+// choose and returns PGRST201 ("more than one relationship was found")
+// -- undetected until production actually had dining_tables rows to
+// return (see docs/features/table-rotation-multi-view/IMPLEMENTATION_LOG.md's
+// "PGRST201" entry). `!dining_tables_dining_area_id_fkey` explicitly
+// selects the plain relationship -- the correct one for "what area is
+// this table displayed under" -- without renaming the response key, so
+// the row-mapping code below needs no changes. Exported as a named
+// constant (not an inline string) so a regression test can assert the
+// relationship stays explicitly qualified.
+export const DINING_TABLES_SELECT =
+  "label, position_x, position_y, active, dining_areas!dining_tables_dining_area_id_fkey(name)";
+
 export async function getAllocationContext(
   organizationId: string,
   requestedServiceDate?: string,
@@ -97,7 +118,7 @@ export async function getAllocationContext(
 
   const { data: tableRows, error: tableError } = await supabase
     .from("dining_tables")
-    .select("label, position_x, position_y, active, dining_areas(name)")
+    .select(DINING_TABLES_SELECT)
     .eq("location_id", location.id)
     .eq("active", true);
   if (tableError)
