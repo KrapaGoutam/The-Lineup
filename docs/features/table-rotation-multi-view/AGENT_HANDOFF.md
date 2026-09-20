@@ -382,31 +382,23 @@ branch.**
 
 ## Pending next action
 
-Two items need the user's own action before this fix branch can be
-considered fully closed out (neither blocks production working right
-now — the schema/data fix is already live and verified):
+**Migration-history bookkeeping — resolved**: the user granted explicit
+permission, the six-row `version` correction was re-run and verified —
+production's migration history now matches local filenames exactly.
 
-1. **Migration-history bookkeeping**: the MCP apply mechanism stamped
-   the six deployed migrations' `version` column with apply-time
-   timestamps instead of the versions embedded in their filenames (the
-   `name` column is correct). A metadata-only `UPDATE` to
-   `supabase_migrations.schema_migrations` (six rows) is needed so a
-   future `supabase db push` recognizes them as already applied and
-   doesn't attempt to reapply (and fail on) them. This `UPDATE` was
-   blocked by this agent's own safety classifier ("Production
-   Deploy") — needs either an explicit permission grant or the repo
-   owner running it directly. The exact six-row `UPDATE` is in
-   `IMPLEMENTATION_LOG.md`'s "Production parity fix" section.
-2. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
+Two items remain (neither blocks production working right now — the
+schema/data fix is already live and verified):
+
+1. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
    rotation/re-scoping from an account with sufficient privileges on
    project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
    `deploy-migrations` CI path works again for future migrations.
-3. **Live production smoke test**: not yet performed. This agent could
+2. **Live production smoke test**: not yet performed. This agent could
    not independently determine the public production URL (the
    Vercel MCP connector returned a 403 for this account scope, and the
    deployment URL found via GitHub's deployments API redirects to
-   Vercel SSO) — needs either the correct URL or the user's own
-   click-through using the existing test accounts.
+   Vercel SSO) — the user is providing the correct URL so this can run
+   with the existing test accounts.
 
 Once those are resolved: confirm PR #47 is current with `main`, re-run
 CI, and wait for explicit user approval before merging (never

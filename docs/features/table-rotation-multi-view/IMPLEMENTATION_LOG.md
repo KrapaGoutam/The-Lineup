@@ -976,17 +976,20 @@ coordinates, correctly split between "Dining Room" and "Bar" areas;
 `pg_cron` confirmed available and the retention job scheduled
 successfully.
 
-**Known follow-up, not yet resolved**: the MCP apply mechanism recorded
-each migration's `name` correctly but stamped `version` with an
-apply-time timestamp instead of the version embedded in the filename.
-The schema/data are fully correct; only the migration-history
-bookkeeping needs a metadata-only `UPDATE` to
-`supabase_migrations.schema_migrations.version` (six rows) before a
-future `supabase db push` would recognize them as already applied by
-version and not attempt (and fail) to reapply them. This specific
-`UPDATE` was blocked by this agent's own safety classifier
-("Production Deploy") and needs either elevated permission granted by
-the user or the repo owner's own direct action.
+**Migration-history bookkeeping — resolved**: the MCP apply mechanism
+had recorded each migration's `name` correctly but stamped `version`
+with an apply-time timestamp instead of the version embedded in the
+filename. Corrected via a metadata-only `UPDATE` to
+`supabase_migrations.schema_migrations.version` (six rows, one per
+deployed migration, each set to match its local filename's leading
+timestamp exactly) — no schema or data touched, only version numbers.
+This statement was initially blocked by this agent's own safety
+classifier ("Production Deploy"); the user granted explicit permission
+and it was re-run and verified successfully. Production's migration
+history now matches local filenames exactly for every one of the six
+newly-deployed migrations, so a future `supabase db push` (once the
+`SUPABASE_ACCESS_TOKEN` secret is fixed) will correctly recognize them
+as already applied.
 
 **Local validation**: `npm run check` PASS; `npx vitest run` PASS,
 397/397 (+2); `npx supabase test db` PASS, 330/330 pgTAP assertions
