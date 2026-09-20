@@ -2,6 +2,13 @@
 
 Status: shipped
 
+**Extended by `table-rotation-multi-view`** (2026-09-19): reorder becomes
+available to Staff (previously manager/owner/host only at the RLS layer),
+and the Server Board view's reorder controls must update this same global
+`position` order — no separate ordering state. See
+`docs/features/table-rotation-multi-view/PERMISSIONS.md` and
+`IMPLEMENTATION_CONTRACT.md` section 16.
+
 **Implementation note**: same division-of-labor change as Feature 005 — Claude implemented this batch directly, Codex is not in this loop. See 005 for the full note.
 
 **Build note**: implemented together with Feature 009 in one session (both touch `rotation-board.ts` and its undo/redo logic), committed separately.

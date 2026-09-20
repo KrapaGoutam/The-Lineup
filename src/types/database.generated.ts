@@ -7,6 +7,11 @@ export type Json =
   | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5";
+  };
   graphql_public: {
     Tables: {
       [_ in never]: never;
@@ -2367,10 +2372,6 @@ export type Database = {
       };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
-        Returns: undefined;
-      };
-      unconfirm_payroll_payment: {
-        Args: { p_payment_id: number; p_reason: string };
         Returns: undefined;
       };
     };

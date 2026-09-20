@@ -16,6 +16,13 @@ export type Capability =
   | "schedule:view-team"
   | "allocation:manage"
   | "allocation:write-any"
+  // Table Rotation Multi-View: Active Floor Operations (add/clear row,
+  // clear column/board, reorder, pause/resume, remove server, quick add).
+  // Granted to all three roles by explicit product decision -- see
+  // docs/features/table-rotation-multi-view/PERMISSIONS.md. Distinct from
+  // allocation:write-any (assign/clear a single cell), which was already
+  // server-inclusive.
+  | "allocation:operate"
   | "tips:manage"
   | "tips:view-own"
   | "settings:manage";
@@ -26,6 +33,7 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "schedule:view-team",
     "allocation:manage",
     "allocation:write-any",
+    "allocation:operate",
     "tips:manage",
     "tips:view-own",
     "settings:manage",
@@ -35,12 +43,14 @@ const roleCapabilities: Record<AppRole, ReadonlySet<Capability>> = {
     "schedule:view-team",
     "allocation:manage",
     "allocation:write-any",
+    "allocation:operate",
     "tips:manage",
     "tips:view-own",
   ]),
   server: new Set([
     "schedule:view-team",
     "allocation:write-any",
+    "allocation:operate",
     "tips:view-own",
   ]),
 };

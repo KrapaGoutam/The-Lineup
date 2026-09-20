@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronUp,
+  Crosshair,
   Eraser,
+  LayoutDashboard,
+  LayoutGrid,
+  MapPin,
   Pause,
   Pencil,
   Play,
@@ -14,6 +18,7 @@ import {
   Rows3,
   RotateCcw,
   ShieldAlert,
+  SkipForward,
   Trash2,
   Undo2,
   UserPlus,
@@ -25,6 +30,7 @@ import type { SignedInUser } from "@/components/login-screen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   executeBoardActionRemote,
@@ -33,10 +39,18 @@ import {
   undoBoardAction,
 } from "@/features/allocation/actions/allocation-actions";
 import { AllocationDateFilter } from "@/features/allocation/components/allocation-date-filter";
+import { DashboardView } from "@/features/allocation/components/dashboard-view";
+import { FloorView } from "@/features/allocation/components/floor-view";
+import { ServerBoardView } from "@/features/allocation/components/server-board-view";
+import { TableMap } from "@/features/allocation/components/table-map";
 import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
+import {
+  DEMO_FLOOR_LAYOUT,
+  resolveFloorTables,
+} from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
   createRotationBoard,
@@ -50,6 +64,7 @@ import {
   type BoardHistory,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+import { can } from "@/features/auth/domain/passcode";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -110,16 +125,36 @@ function buildInitialHistory() {
   return { past: [], present: history.present, future: [] };
 }
 
+// Table Rotation Multi-View Upgrade 1.1: a Grid cell renders one of four
+// distinct states (rotation-board.ts's RotationCellStatus) instead of
+// just "has a label or not". Empty -> Assign or Skip Turn; Active ->
+// Edit/Unassign; Ended/Skipped -> a read-only history badge plus
+// Unassign-as-correction (the same clear-cell tool used for plain
+// Unassign, unrestricted per the existing audit model -- no separate
+// permission gate for correcting history).
+//
+// Transfer and End Table are intentionally NOT exposed here (Grid and
+// Picker both render this component for their shared table) -- per the
+// final Upgrade 1.1 UI decision, Floor is the one surface for those two
+// actions (see floor-view.tsx). The underlying board_transfer/
+// board_end_table RPCs, the "transfer"/"end-table" BoardAction variants,
+// and this component's own onTransfer/onEndTable-shaped execute() calls
+// from Floor are all still fully live -- only this component's buttons
+// were removed, not the capability.
 function TableEntry({
   value,
+  status,
   disabled,
   onSubmit,
   onClear,
+  onSkipTurn,
 }: {
   value: string | null;
+  status: "empty" | "active" | "ended" | "skipped";
   disabled: boolean;
   onSubmit: (value: string) => void;
   onClear: () => void;
+  onSkipTurn: () => void;
 }) {
   // Feature 028: an occupied cell used to be a static, permanently
   // read-only badge -- nobody, manager included, had any way to correct
@@ -148,7 +183,56 @@ function TableEntry({
     event.currentTarget.reset();
   }
 
-  if (value && !editing) {
+  if (status === "skipped") {
+    return (
+      <div className="border-border bg-muted/40 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
+        <span
+          role="status"
+          className="flex min-h-11 items-center gap-1.5 font-mono text-sm font-bold"
+          aria-label="Skip turn"
+        >
+          0
+        </span>
+        {!disabled ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            aria-label="Unassign skip turn"
+          >
+            <X aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (status === "ended") {
+    return (
+      <div className="border-border bg-muted/40 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
+        <span className="flex min-h-11 flex-col justify-center gap-0.5">
+          <span className="text-muted-foreground font-mono text-sm font-bold line-through decoration-2">
+            Table {value}
+          </span>
+          <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
+            Ended
+          </span>
+        </span>
+        {!disabled ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClear}
+            aria-label={`Unassign ended table ${value}`}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (status === "active" && !editing) {
     return (
       <div className="border-border bg-background/80 flex min-h-14 flex-wrap items-center justify-between gap-1.5 rounded-xl border px-3 py-1.5">
         <span className="flex min-h-11 items-center gap-1.5 font-mono text-sm font-bold">
@@ -172,7 +256,7 @@ function TableEntry({
               variant="ghost"
               size="icon"
               onClick={onClear}
-              aria-label={`Clear table ${value}`}
+              aria-label={`Unassign table ${value}`}
             >
               <X aria-hidden="true" />
             </Button>
@@ -211,6 +295,18 @@ function TableEntry({
       >
         {editing ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
       </Button>
+      {status === "empty" && !disabled ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          onClick={onSkipTurn}
+          aria-label="Skip turn"
+          title="Skip turn"
+        >
+          <SkipForward aria-hidden="true" />
+        </Button>
+      ) : null}
     </form>
   );
 }
@@ -265,6 +361,22 @@ export function AllocationWorkspace({
   const [actionError, setActionError] = useState<string | null>(null);
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
+  // Table Rotation Multi-View: local UI state, not synced -- Undo/Redo
+  // deliberately excludes "which view is active" (INTERACTIONS.md).
+  const [activeView, setActiveView] = useState<
+    "grid" | "floor" | "picker" | "servers" | "dashboard"
+  >("grid");
+  // Picker: which Grid cell the next table tap assigns into. Cleared
+  // after each assignment and whenever the view changes away from Picker.
+  const [pickerTarget, setPickerTarget] = useState<{
+    roundId: string;
+    columnId: string;
+  } | null>(null);
+  // Table Rotation Multi-View Upgrade 1.1 (multi-table): the TableMap
+  // opens as a popup once a cell is selected, rather than always
+  // rendering inline below the rotation table. Gated on `!!pickerTarget`
+  // at the render site too, so it can never show with nothing selected.
+  const [pickerMapOpen, setPickerMapOpen] = useState(false);
   const board = history.present;
 
   // Feature 028: `initialContext` (the Server Component's own page-load
@@ -407,9 +519,20 @@ export function AllocationWorkspace({
         .sort((a, b) => a.position - b.position),
     [board.columns],
   );
-  const availableMembers = team.filter(
-    (member) => !visibleColumns.some(({ id }) => id === member.id),
-  );
+  // Table Rotation Multi-View: Quick Add's clocked-in prioritization --
+  // a suggestion/ordering signal only, never an auto-add (see
+  // allocation-data.ts's clockedInProfileIds doc comment). Demo mode has
+  // no attendance data, so this is simply empty there and the order is
+  // unaffected.
+  const clockedInProfileIds = initialContext?.clockedInProfileIds ?? [];
+  const availableMembers = team
+    .filter((member) => !visibleColumns.some(({ id }) => id === member.id))
+    .sort((a, b) => {
+      const aClockedIn = clockedInProfileIds.includes(a.id);
+      const bClockedIn = clockedInProfileIds.includes(b.id);
+      if (aClockedIn === bClockedIn) return 0;
+      return aClockedIn ? -1 : 1;
+    });
   // The row people are actually filling in, not the standing empty
   // buffer row past it (see `getWorkingRound`'s doc comment).
   const currentRound = getWorkingRound(board);
@@ -420,6 +543,29 @@ export function AllocationWorkspace({
         ?.tableLabel,
   );
 
+  // Table Rotation Multi-View: Floor's physical layout -- demo mode uses
+  // the static approved layout (no attendance/dining_tables data exists
+  // there); real mode uses whatever this location has actually
+  // registered in dining_tables (empty until someone has). Recomputed
+  // from `board` on every render, same as the Grid, so Floor and Grid
+  // always agree.
+  const resolvedTables = useMemo(() => {
+    const floorLayout = demoMode
+      ? DEMO_FLOOR_LAYOUT
+      : (initialContext?.physicalTables ?? []);
+    return resolveFloorTables(floorLayout, board, team);
+  }, [demoMode, initialContext?.physicalTables, board, team]);
+
+  // Picker popup: the server/turn context shown in the dialog's title --
+  // "Choose a table for {server} · Turn {N}" -- so the operator doesn't
+  // have to remember which cell they just tapped.
+  const pickerColumnForTarget = pickerTarget
+    ? visibleColumns.find((column) => column.id === pickerTarget.columnId)
+    : undefined;
+  const pickerRoundForTarget = pickerTarget
+    ? board.rounds.find((round) => round.id === pickerTarget.roundId)
+    : undefined;
+
   // Feature 028: a historical view is read-only for the same reason
   // boardLocked is -- both collapse into this one flag everywhere the UI
   // gates a write, so a browsed-to previous day never has to be handled
@@ -429,6 +575,14 @@ export function AllocationWorkspace({
   // client that already holds a past day's serviceSessionId could
   // otherwise call executeBoardActionRemote directly, bypassing this.
   const readOnly = boardLocked || isHistoricalView;
+  // Table Rotation Multi-View: Active Floor Operations (add/clear row,
+  // clear column/board, reorder, pause/resume, remove server, quick add)
+  // are open to every active member, not just managers -- distinct from
+  // `isManager`, which still gates the unrelated tips-reopen control
+  // below. Server-side enforcement is the real gate (RLS/RPC, see
+  // supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql);
+  // this only controls visibility.
+  const canOperateFloor = can(user.role, "allocation:operate") && !readOnly;
 
   async function execute(action: BoardAction) {
     // Defense in depth, same principle as RLS re-checking eligibility
@@ -570,7 +724,7 @@ export function AllocationWorkspace({
           >
             <Redo2 aria-hidden="true" /> Redo
           </Button>
-          {isManager && !readOnly ? (
+          {canOperateFloor ? (
             <Button
               variant="outline"
               onClick={() => execute({ type: "add-row" })}
@@ -578,7 +732,7 @@ export function AllocationWorkspace({
               <Rows3 aria-hidden="true" /> Add row
             </Button>
           ) : null}
-          {isManager && !readOnly ? (
+          {canOperateFloor ? (
             <Button
               variant="outline"
               onClick={() => execute({ type: "clear-board" })}
@@ -587,6 +741,76 @@ export function AllocationWorkspace({
             </Button>
           ) : null}
         </div>
+      </div>
+
+      <div
+        // Table Rotation Multi-View: fixed at 5 tabs, this row is wider
+        // than a narrow phone viewport (measured ~450px vs. a 412px Pixel
+        // 7 viewport). Without overflow-x-auto here, the row instead
+        // widens the whole page (main content, not just this row) past
+        // the viewport -- a real horizontal-page-overflow regression this
+        // exact shape caused, confirmed by comparing main vs. this branch
+        // in two genuinely clean environments. `shrink-0` on each tab
+        // (below) keeps them from being squashed instead of scrolling.
+        className="border-border bg-muted/30 flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:w-fit"
+        role="tablist"
+        aria-label="Table rotation view"
+      >
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "grid"}
+          variant={activeView === "grid" ? "secondary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setActiveView("grid")}
+        >
+          <LayoutGrid aria-hidden="true" /> Grid
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "floor"}
+          variant={activeView === "floor" ? "secondary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setActiveView("floor")}
+        >
+          <MapPin aria-hidden="true" /> Floor
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "picker"}
+          variant={activeView === "picker" ? "secondary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setActiveView("picker")}
+        >
+          <Crosshair aria-hidden="true" /> Picker
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "servers"}
+          variant={activeView === "servers" ? "secondary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setActiveView("servers")}
+        >
+          <UsersRound aria-hidden="true" /> Servers
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "dashboard"}
+          variant={activeView === "dashboard" ? "secondary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setActiveView("dashboard")}
+        >
+          <LayoutDashboard aria-hidden="true" /> Dashboard
+        </Button>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -702,44 +926,46 @@ export function AllocationWorkspace({
         </Card>
       ) : (
         <>
-          <section
-            className="grid gap-3 sm:grid-cols-3"
-            aria-label="Allocation summary"
-          >
-            <Card>
-              <CardContent>
-                <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
-                  Servers on floor
-                </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {
-                    visibleColumns.filter(({ status }) => status === "active")
-                      .length
-                  }
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
-                  Next turn
-                </p>
-                <p className="mt-2 text-2xl font-semibold">
-                  {nextColumn?.name.split(" ")[0] ?? "New round"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
-                  Recorded events
-                </p>
-                <p className="mt-2 text-2xl font-semibold">{eventCount}</p>
-              </CardContent>
-            </Card>
-          </section>
+          {activeView === "dashboard" ? null : (
+            <section
+              className="grid gap-3 sm:grid-cols-3"
+              aria-label="Allocation summary"
+            >
+              <Card>
+                <CardContent>
+                  <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
+                    Servers on floor
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {
+                      visibleColumns.filter(({ status }) => status === "active")
+                        .length
+                    }
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent>
+                  <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
+                    Next turn
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {nextColumn?.name.split(" ")[0] ?? "New round"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent>
+                  <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
+                    Recorded events
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold">{eventCount}</p>
+                </CardContent>
+              </Card>
+            </section>
+          )}
 
-          {isManager && !readOnly && availableMembers.length ? (
+          {canOperateFloor && availableMembers.length ? (
             <Card className="border-primary/15">
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
@@ -750,262 +976,523 @@ export function AllocationWorkspace({
                     <p className="font-semibold">Floor team changed?</p>
                     <p className="text-muted-foreground text-xs">
                       Add a server column without rebuilding the board.
+                      {clockedInProfileIds.length
+                        ? " Clocked-in staff are listed first."
+                        : ""}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {availableMembers.map((member) => (
-                    <Button
-                      key={member.id}
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        execute({
-                          type: "add-column",
-                          column: {
-                            id: member.id,
-                            name: member.name,
-                            position: board.columns.length,
-                            status: "active",
-                          },
-                        })
-                      }
-                    >
-                      <Plus aria-hidden="true" /> {member.shortName}
-                    </Button>
-                  ))}
+                  {availableMembers.map((member) => {
+                    const clockedIn = clockedInProfileIds.includes(member.id);
+                    return (
+                      <Button
+                        key={member.id}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          execute({
+                            type: "add-column",
+                            column: {
+                              id: member.id,
+                              name: member.name,
+                              position: board.columns.length,
+                              status: "active",
+                            },
+                          })
+                        }
+                      >
+                        <Plus aria-hidden="true" /> {member.shortName}
+                        {clockedIn ? (
+                          <span
+                            className="size-1.5 rounded-full bg-emerald-300"
+                            aria-label="Clocked in"
+                          />
+                        ) : null}
+                      </Button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
           ) : null}
 
-          <Card className="overflow-hidden">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-xl">
-                  <UsersRound className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <h2 className="font-semibold">Dinner rotation</h2>
-                  <p className="text-muted-foreground text-xs">
-                    Scrollable on smaller screens · combined tables accepted
-                  </p>
-                </div>
-              </div>
-              <Badge tone="neutral">{board.rounds.length} rows</Badge>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0 pt-5">
-              <div className="border-border min-w-max border-t">
-                <div
-                  className="grid"
-                  style={{
-                    gridTemplateColumns: `72px repeat(${visibleColumns.length}, minmax(190px, 1fr))`,
-                  }}
-                >
-                  <div className="border-border bg-secondary text-muted-foreground sticky left-0 z-20 border-r p-3 text-xs font-semibold">
-                    Turn
+          {activeView === "floor" ? (
+            <FloorView
+              tables={resolvedTables}
+              activeColumns={visibleColumns}
+              team={team}
+              board={board}
+              disabled={!canOperateFloor}
+              onAssign={({ label, columnId, roundId, confirmTransfer }) =>
+                execute({
+                  type: "assign",
+                  roundId,
+                  columnId,
+                  tableLabel: label,
+                  confirmTransfer,
+                })
+              }
+              onUnassign={({ columnId, roundId }) =>
+                execute({ type: "clear-cell", roundId, columnId })
+              }
+              onTransfer={({ sourceRoundId, sourceColumnId, destColumnId }) =>
+                execute({
+                  type: "transfer",
+                  sourceRoundId,
+                  sourceColumnId,
+                  destColumnId,
+                })
+              }
+              onEndTable={({ roundId, columnId }) =>
+                execute({ type: "end-table", roundId, columnId })
+              }
+              onEndAndAssign={({ endRoundIds, columnId, tableLabel }) =>
+                execute({
+                  type: "end-and-assign",
+                  endRoundIds,
+                  columnId,
+                  tableLabel,
+                })
+              }
+            />
+          ) : activeView === "servers" ? (
+            <ServerBoardView
+              columns={visibleColumns}
+              team={team}
+              tables={resolvedTables}
+              board={board}
+              disabled={!canOperateFloor}
+              onAssign={({ label, columnId, roundId, confirmTransfer }) =>
+                execute({
+                  type: "assign",
+                  roundId,
+                  columnId,
+                  tableLabel: label,
+                  confirmTransfer,
+                })
+              }
+              onMove={(columnId, direction) =>
+                execute({ type: "move-column", columnId, direction })
+              }
+              onSetStatus={(columnId, status) =>
+                execute({ type: "set-column-status", columnId, status })
+              }
+              onClearColumn={(columnId) =>
+                execute({ type: "clear-column", columnId })
+              }
+              onTransfer={({ sourceRoundId, sourceColumnId, destColumnId }) =>
+                execute({
+                  type: "transfer",
+                  sourceRoundId,
+                  sourceColumnId,
+                  destColumnId,
+                })
+              }
+              onEndTable={({ roundId, columnId }) =>
+                execute({ type: "end-table", roundId, columnId })
+              }
+              onEndAndAssign={({ endRoundIds, columnId, tableLabel }) =>
+                execute({
+                  type: "end-and-assign",
+                  endRoundIds,
+                  columnId,
+                  tableLabel,
+                })
+              }
+              onUnassign={({ columnId, roundId }) =>
+                execute({ type: "clear-cell", roundId, columnId })
+              }
+            />
+          ) : activeView === "dashboard" ? (
+            <DashboardView
+              columns={visibleColumns}
+              board={board}
+              tables={resolvedTables}
+              nextColumn={nextColumn}
+              crossEditLog={crossEditLog}
+              onOpenGrid={() => setActiveView("grid")}
+            />
+          ) : (
+            <>
+              <Card className="overflow-hidden">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-xl">
+                      <UsersRound className="size-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h2 className="font-semibold">Dinner rotation</h2>
+                      <p className="text-muted-foreground text-xs">
+                        Scrollable on smaller screens · combined tables accepted
+                      </p>
+                    </div>
                   </div>
-                  {visibleColumns.map((column, columnIndex) => {
-                    const member = team.find(({ id }) => id === column.id);
-                    const own = column.id === user.profileId;
-                    return (
-                      <div
-                        key={column.id}
-                        className={cn(
-                          "border-border bg-secondary border-r p-3 last:border-r-0",
-                          own && "bg-primary/10",
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="size-2.5 rounded-full"
-                            style={{ backgroundColor: member?.color }}
-                          />
-                          <p className="min-w-0 flex-1 truncate text-sm font-semibold">
-                            {column.name}
-                          </p>
-                          {own ? <Badge tone="accent">You</Badge> : null}
-                        </div>
-                        <p className="text-muted-foreground mt-1 text-[11px] capitalize">
-                          {column.status}
-                        </p>
-                        {isManager && !readOnly ? (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Move ${column.name} up`}
-                              disabled={columnIndex === 0}
-                              onClick={() =>
-                                execute({
-                                  type: "move-column",
-                                  columnId: column.id,
-                                  direction: "up",
-                                })
-                              }
-                            >
-                              <ChevronUp />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Move ${column.name} down`}
-                              disabled={
-                                columnIndex === visibleColumns.length - 1
-                              }
-                              onClick={() =>
-                                execute({
-                                  type: "move-column",
-                                  columnId: column.id,
-                                  direction: "down",
-                                })
-                              }
-                            >
-                              <ChevronDown />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                execute({
-                                  type: "set-column-status",
-                                  columnId: column.id,
-                                  status:
-                                    column.status === "paused"
-                                      ? "active"
-                                      : "paused",
-                                })
-                              }
-                            >
-                              {column.status === "paused" ? (
-                                <Play />
-                              ) : (
-                                <Pause />
-                              )}
-                              {column.status === "paused" ? "Resume" : "Pause"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                execute({
-                                  type: "clear-column",
-                                  columnId: column.id,
-                                })
-                              }
-                            >
-                              <RotateCcw /> Clear
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Remove ${column.name}`}
-                              onClick={() =>
-                                execute({
-                                  type: "set-column-status",
-                                  columnId: column.id,
-                                  status: "removed",
-                                })
-                              }
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        ) : null}
+                  <Badge tone="neutral">{board.rounds.length} rows</Badge>
+                </CardHeader>
+                <CardContent className="overflow-x-auto p-0 pt-5">
+                  <div className="border-border min-w-max border-t">
+                    <div
+                      className="grid"
+                      style={{
+                        gridTemplateColumns: `72px repeat(${visibleColumns.length}, minmax(190px, 1fr))`,
+                      }}
+                    >
+                      <div className="border-border bg-secondary text-muted-foreground sticky left-0 z-20 border-r p-3 text-xs font-semibold">
+                        Turn
                       </div>
-                    );
-                  })}
-                  {board.rounds.map((round) => (
-                    <div className="contents" key={round.id}>
-                      <div className="border-border bg-card sticky left-0 z-10 flex min-h-20 flex-col items-center justify-center border-t border-r p-2">
-                        <span className="font-mono text-sm font-bold">
-                          {round.sequence}
-                        </span>
-                        {isManager && !readOnly ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="mt-1 size-8 min-h-8"
-                            aria-label={`Clear row ${round.sequence}`}
-                            onClick={() =>
-                              execute({ type: "clear-row", roundId: round.id })
-                            }
-                          >
-                            <Eraser className="size-3.5" />
-                          </Button>
-                        ) : null}
-                      </div>
-                      {visibleColumns.map((column) => {
-                        const cell = round.cells.find(
-                          ({ columnId }) => columnId === column.id,
-                        );
-                        const canWrite =
-                          column.status === "active" &&
-                          mayWriteColumn() &&
-                          !readOnly;
-                        const crossColumn = isCrossColumnEdit({
-                          profileId: user.profileId,
-                          columnId: column.id,
-                        });
+                      {visibleColumns.map((column, columnIndex) => {
+                        const member = team.find(({ id }) => id === column.id);
+                        const own = column.id === user.profileId;
                         return (
                           <div
-                            key={`${round.id}-${column.id}`}
+                            key={column.id}
                             className={cn(
-                              "border-border min-h-20 border-t border-r p-3 last:border-r-0",
-                              column.status === "paused" && "bg-muted",
+                              "border-border bg-secondary border-r p-3 last:border-r-0",
+                              own && "bg-primary/10",
                             )}
                           >
-                            <TableEntry
-                              value={cell?.tableLabel ?? null}
-                              disabled={!canWrite}
-                              onSubmit={(tableLabel) => {
-                                execute({
-                                  type: "assign",
-                                  roundId: round.id,
-                                  columnId: column.id,
-                                  tableLabel,
-                                });
-                                // Attribution is recorded for every
-                                // cross-column write, unconditionally — there
-                                // is no reason field to gate it on anymore.
-                                if (crossColumn) {
-                                  setCrossEditLog((log) => [
-                                    ...log,
-                                    {
-                                      at: new Date().toISOString(),
-                                      actorName: user.name,
-                                      columnName: column.name,
-                                    },
-                                  ]);
-                                }
-                              }}
-                              onClear={() => {
-                                execute({
-                                  type: "clear-cell",
-                                  roundId: round.id,
-                                  columnId: column.id,
-                                });
-                                if (crossColumn) {
-                                  setCrossEditLog((log) => [
-                                    ...log,
-                                    {
-                                      at: new Date().toISOString(),
-                                      actorName: user.name,
-                                      columnName: column.name,
-                                    },
-                                  ]);
-                                }
-                              }}
-                            />
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="size-2.5 rounded-full"
+                                style={{ backgroundColor: member?.color }}
+                              />
+                              <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+                                {column.name}
+                              </p>
+                              {own ? <Badge tone="accent">You</Badge> : null}
+                            </div>
+                            <p className="text-muted-foreground mt-1 text-[11px] capitalize">
+                              {column.status}
+                            </p>
+                            {canOperateFloor ? (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Move ${column.name} up`}
+                                  disabled={columnIndex === 0}
+                                  onClick={() =>
+                                    execute({
+                                      type: "move-column",
+                                      columnId: column.id,
+                                      direction: "up",
+                                    })
+                                  }
+                                >
+                                  <ChevronUp />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Move ${column.name} down`}
+                                  disabled={
+                                    columnIndex === visibleColumns.length - 1
+                                  }
+                                  onClick={() =>
+                                    execute({
+                                      type: "move-column",
+                                      columnId: column.id,
+                                      direction: "down",
+                                    })
+                                  }
+                                >
+                                  <ChevronDown />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    execute({
+                                      type: "set-column-status",
+                                      columnId: column.id,
+                                      status:
+                                        column.status === "paused"
+                                          ? "active"
+                                          : "paused",
+                                    })
+                                  }
+                                >
+                                  {column.status === "paused" ? (
+                                    <Play />
+                                  ) : (
+                                    <Pause />
+                                  )}
+                                  {column.status === "paused"
+                                    ? "Resume"
+                                    : "Pause"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    execute({
+                                      type: "clear-column",
+                                      columnId: column.id,
+                                    })
+                                  }
+                                >
+                                  <RotateCcw /> Clear
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={`Remove ${column.name}`}
+                                  onClick={() =>
+                                    execute({
+                                      type: "set-column-status",
+                                      columnId: column.id,
+                                      status: "removed",
+                                    })
+                                  }
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })}
+                      {board.rounds.map((round) => (
+                        <div className="contents" key={round.id}>
+                          <div className="border-border bg-card sticky left-0 z-10 flex min-h-20 flex-col items-center justify-center border-t border-r p-2">
+                            <span className="font-mono text-sm font-bold">
+                              {round.sequence}
+                            </span>
+                            {canOperateFloor ? (
+                              <div className="mt-1 flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 min-h-8"
+                                  aria-label={`Clear row ${round.sequence}`}
+                                  onClick={() =>
+                                    execute({
+                                      type: "clear-row",
+                                      roundId: round.id,
+                                    })
+                                  }
+                                >
+                                  <Eraser className="size-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 min-h-8"
+                                  aria-label={`Delete row ${round.sequence}`}
+                                  // Delete is structural, not content-clearing —
+                                  // only safe once the row has nothing recorded
+                                  // (clear first, then delete). See
+                                  // board_delete_row's own migration comment.
+                                  disabled={round.cells.some(
+                                    (cell) => cell.status !== "empty",
+                                  )}
+                                  onClick={() =>
+                                    execute({
+                                      type: "delete-row",
+                                      roundId: round.id,
+                                    })
+                                  }
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                          {visibleColumns.map((column) => {
+                            const cell = round.cells.find(
+                              ({ columnId }) => columnId === column.id,
+                            );
+                            const canWrite =
+                              column.status === "active" &&
+                              mayWriteColumn() &&
+                              !readOnly;
+                            const crossColumn = isCrossColumnEdit({
+                              profileId: user.profileId,
+                              columnId: column.id,
+                            });
+                            const isPickerTarget =
+                              activeView === "picker" &&
+                              pickerTarget?.roundId === round.id &&
+                              pickerTarget?.columnId === column.id;
+                            return (
+                              <div
+                                key={`${round.id}-${column.id}`}
+                                className={cn(
+                                  "border-border min-h-20 border-t border-r p-3 last:border-r-0",
+                                  column.status === "paused" && "bg-muted",
+                                  isPickerTarget &&
+                                    "ring-ring ring-2 ring-inset",
+                                )}
+                                // Picker: tapping an eligible cell selects
+                                // it as the target and immediately opens
+                                // the Table Layout popup -- no separate
+                                // "Choose table" step in between (Picker/
+                                // Server follow-up).
+                                onClick={
+                                  activeView === "picker" && canWrite
+                                    ? () => {
+                                        setPickerTarget({
+                                          roundId: round.id,
+                                          columnId: column.id,
+                                        });
+                                        setPickerMapOpen(true);
+                                      }
+                                    : undefined
+                                }
+                              >
+                                <TableEntry
+                                  value={cell?.tableLabel ?? null}
+                                  status={cell?.status ?? "empty"}
+                                  disabled={!canWrite}
+                                  onSubmit={(tableLabel) => {
+                                    execute({
+                                      type: "assign",
+                                      roundId: round.id,
+                                      columnId: column.id,
+                                      tableLabel,
+                                    });
+                                    // Attribution is recorded for every
+                                    // cross-column write, unconditionally — there
+                                    // is no reason field to gate it on anymore.
+                                    if (crossColumn) {
+                                      setCrossEditLog((log) => [
+                                        ...log,
+                                        {
+                                          at: new Date().toISOString(),
+                                          actorName: user.name,
+                                          columnName: column.name,
+                                        },
+                                      ]);
+                                    }
+                                  }}
+                                  onClear={() => {
+                                    execute({
+                                      type: "clear-cell",
+                                      roundId: round.id,
+                                      columnId: column.id,
+                                    });
+                                    if (crossColumn) {
+                                      setCrossEditLog((log) => [
+                                        ...log,
+                                        {
+                                          at: new Date().toISOString(),
+                                          actorName: user.name,
+                                          columnName: column.name,
+                                        },
+                                      ]);
+                                    }
+                                  }}
+                                  onSkipTurn={() =>
+                                    execute({
+                                      type: "skip-turn",
+                                      roundId: round.id,
+                                      columnId: column.id,
+                                    })
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                </CardContent>
+              </Card>
+              {activeView === "picker" ? (
+                // Picker/Server follow-up: clicking an eligible empty cell
+                // (above) immediately opens this popup -- there is no
+                // inline "Table picker" section rendered below the grid
+                // anymore, and no intermediate "Choose table" click. Skip
+                // Turn lives inside the popup itself, alongside the table
+                // layout, rather than as a separate always-visible button.
+                <Dialog
+                  open={pickerMapOpen && !!pickerTarget}
+                  onClose={() => {
+                    setPickerMapOpen(false);
+                    setPickerTarget(null);
+                  }}
+                  title={
+                    pickerColumnForTarget
+                      ? `Choose a table for ${pickerColumnForTarget.name}`
+                      : "Choose a table"
+                  }
+                  description={
+                    pickerRoundForTarget
+                      ? `Turn ${pickerRoundForTarget.sequence}`
+                      : undefined
+                  }
+                >
+                  <TableMap
+                    tables={resolvedTables}
+                    selectedLabel={null}
+                    disabled={!canOperateFloor}
+                    onSelectTable={(label) => {
+                      if (!pickerTarget) return;
+                      const table = resolvedTables.find(
+                        (t) => t.label === label,
+                      );
+                      if (table?.occupiedBy) {
+                        setActionError(
+                          `Table ${label} is already assigned to ${table.occupiedBy.name}. Use Floor to transfer it.`,
+                        );
+                        return;
+                      }
+                      // Picker is a rotation-cell-driven surface, not a
+                      // physical-operations one -- it never triggers
+                      // Floor's decision dialog. Assigning here always
+                      // just creates a new active row at the selected
+                      // cell, additive to whatever else this server
+                      // already holds (Upgrade 1.1 multi-table).
+                      execute({
+                        type: "assign",
+                        roundId: pickerTarget.roundId,
+                        columnId: pickerTarget.columnId,
+                        tableLabel: label,
+                      });
+                      setPickerTarget(null);
+                      setPickerMapOpen(false);
+                    }}
+                  />
+                  {canOperateFloor && pickerTarget ? (
+                    <div className="border-border flex flex-col gap-1.5 border-t pt-3">
+                      <p className="text-muted-foreground text-xs">
+                        No table this turn?
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          execute({
+                            type: "skip-turn",
+                            roundId: pickerTarget.roundId,
+                            columnId: pickerTarget.columnId,
+                          });
+                          setPickerTarget(null);
+                          setPickerMapOpen(false);
+                        }}
+                      >
+                        <SkipForward aria-hidden="true" /> Skip turn (0)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setPickerMapOpen(false);
+                          setPickerTarget(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : null}
+                </Dialog>
+              ) : null}
+            </>
+          )}
 
           {crossEditLog.length > 0 ? (
             <Card>

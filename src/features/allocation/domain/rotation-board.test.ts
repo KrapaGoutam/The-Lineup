@@ -4,6 +4,8 @@ import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
+  findEarliestEmptyRoundForColumn,
+  getActiveTablesForColumn,
   getWorkingRound,
   isCrossColumnEdit,
   mayWriteColumn,
@@ -36,9 +38,11 @@ function computeNextColumnId(board: ReturnType<typeof createRotationBoard>) {
 }
 
 describe("rotation board", () => {
-  it("opens a new empty row the moment the trailing row gets its first value, not once every column fills it", () => {
+  it("opens enough empty rows to keep a two-row trailing buffer, not once every column fills it", () => {
     let history = createBoardHistory(createRotationBoard(columns));
-    expect(history.present.rounds).toHaveLength(1);
+    // Table Rotation Multi-View: the reconciled rule keeps ~2 empty
+    // trailing rounds, not 1 -- a fresh board already has 2.
+    expect(history.present.rounds).toHaveLength(2);
     const roundId = history.present.rounds[0].id;
 
     // A single column's first value is enough -- leo hasn't gone yet.
@@ -48,23 +52,27 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "12",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
     expect(
-      history.present.rounds[1].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds
+        .slice(1)
+        .every((round) =>
+          round.cells.every((cell) => cell.tableLabel === null),
+        ),
     ).toBe(true);
 
-    // Leo completing the same row doesn't push a second extra row --
-    // the fresh buffer row (still untouched) already covers it.
+    // Leo completing the same row doesn't push a third extra row -- the
+    // two fresh buffer rows (still untouched) already cover it.
     history = executeBoardAction(history, {
       type: "assign",
       roundId,
       columnId: "leo",
       tableLabel: "14 + 15",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
   });
 
-  it("fills rows sequentially and opens a new row at each row's first value, never waiting for the row to complete", () => {
+  it("fills rows sequentially and keeps a two-row trailing buffer, never waiting for the row to complete", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const round1 = history.present.rounds[0].id;
 
@@ -74,14 +82,14 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "1",
     });
-    expect(history.present.rounds).toHaveLength(2); // row 2 opened already
+    expect(history.present.rounds).toHaveLength(3); // buffer topped back up to 2
     history = executeBoardAction(history, {
       type: "assign",
       roundId: round1,
       columnId: "leo",
       tableLabel: "2",
     });
-    expect(history.present.rounds).toHaveLength(2); // row 1 now complete, no new row yet
+    expect(history.present.rounds).toHaveLength(3); // row 1 now complete, buffer unchanged
 
     const round2 = history.present.rounds[1].id;
     history = executeBoardAction(history, {
@@ -90,14 +98,14 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "3",
     });
-    expect(history.present.rounds).toHaveLength(3); // row 3 opened on row 2's first value
+    expect(history.present.rounds).toHaveLength(4); // buffer topped up again on row 2's first value
     history = executeBoardAction(history, {
       type: "assign",
       roundId: round2,
       columnId: "leo",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(3);
+    expect(history.present.rounds).toHaveLength(4);
   });
 
   it("an uneven floor -- two columns racing far ahead while others never fill a single row -- still always gets a trailing empty row (reproduces the reported stuck-at-N-rows bug)", () => {
@@ -129,11 +137,15 @@ describe("rotation board", () => {
       });
     }
 
-    // A 4th, completely empty row must exist -- Ava and Noah having
-    // never gone must never block it.
-    expect(history.present.rounds).toHaveLength(4);
+    // Two completely empty trailing rows must exist -- Ava and Noah
+    // having never gone must never block them.
+    expect(history.present.rounds).toHaveLength(5);
     expect(
-      history.present.rounds[3].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds
+        .slice(3)
+        .every((round) =>
+          round.cells.every((cell) => cell.tableLabel === null),
+        ),
     ).toBe(true);
   });
 
@@ -150,7 +162,7 @@ describe("rotation board", () => {
       columnId: "mia",
       tableLabel: "4",
     });
-    expect(history.present.rounds).toHaveLength(2);
+    expect(history.present.rounds).toHaveLength(3);
   });
 
   it("a manager can add a row on demand, on top of the automatic buffer, and undo/redo it like any other action", () => {
@@ -184,7 +196,7 @@ describe("rotation board", () => {
     ).toBe("8");
   });
 
-  it("resets a cleared board to one fresh row", () => {
+  it("resets a cleared board to two fresh rows", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const firstRound = history.present.rounds[0].id;
     history = executeBoardAction(history, {
@@ -201,9 +213,11 @@ describe("rotation board", () => {
     });
     history = executeBoardAction(history, { type: "clear-board" });
 
-    expect(history.present.rounds).toHaveLength(1);
+    expect(history.present.rounds).toHaveLength(2);
     expect(
-      history.present.rounds[0].cells.every((cell) => cell.tableLabel === null),
+      history.present.rounds.every((round) =>
+        round.cells.every((cell) => cell.tableLabel === null),
+      ),
     ).toBe(true);
   });
 
@@ -416,10 +430,643 @@ describe("rotation board", () => {
     ).toBeNull();
   });
 
+  it("delete-row removes an empty round but refuses one with any recorded value", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const [round1, round2] = history.present.rounds;
+    const countBefore = history.present.rounds.length;
+
+    const rejected = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1.id,
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    const stillThere = executeBoardAction(rejected, {
+      type: "delete-row",
+      roundId: round1.id,
+    });
+    expect(stillThere).toBe(rejected); // no-op: round1 has a value
+
+    // Deleting round2 drops the board below its own two-row trailing
+    // buffer, so ensureTrailingRound immediately replaces it with a fresh
+    // round -- the count is unchanged, but round2's own id is gone.
+    const deleted = executeBoardAction(history, {
+      type: "delete-row",
+      roundId: round2.id,
+    });
+    expect(deleted.present.rounds).toHaveLength(countBefore);
+    expect(deleted.present.rounds.some((r) => r.id === round2.id)).toBe(false);
+
+    // Deleting a round that isn't needed to satisfy the buffer actually
+    // shrinks the board.
+    const withExtraRow = executeBoardAction(history, { type: "add-row" });
+    const extraRoundId = withExtraRow.present.rounds.at(-1)!.id;
+    const shrunk = executeBoardAction(withExtraRow, {
+      type: "delete-row",
+      roundId: extraRoundId,
+    });
+    expect(shrunk.present.rounds).toHaveLength(countBefore);
+    expect(shrunk.present.rounds.some((r) => r.id === extraRoundId)).toBe(
+      false,
+    );
+  });
+
   it("identifies a cross-column write for attribution, but never blocks it on a reason", () => {
     expect(isCrossColumnEdit({ profileId: "mia", columnId: "mia" })).toBe(
       false,
     );
     expect(isCrossColumnEdit({ profileId: "mia", columnId: "leo" })).toBe(true);
+  });
+});
+
+// Table Rotation Multi-View, Upgrade 1.1: Transfer, End Table, Unassign,
+// and Skip Turn as four distinct semantics -- see
+// docs/features/table-rotation-multi-view/TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md.
+describe("rotation board — Upgrade 1.1 lifecycle", () => {
+  it("end-table preserves the historical label and frees the cell for occupancy purposes", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId,
+      columnId: "mia",
+    });
+    const cell = history.present.rounds
+      .find(({ id }) => id === roundId)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cell.status).toBe("ended");
+    expect(cell.tableLabel).toBe("12"); // history is preserved, not deleted
+  });
+
+  it("end-table is a no-op on a cell that isn't currently active", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    const result = executeBoardAction(history, {
+      type: "end-table",
+      roundId,
+      columnId: "mia",
+    });
+    expect(result).toBe(history);
+  });
+
+  it("unassign (clear-cell) deletes an active assignment outright -- it never becomes a skip", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "clear-cell",
+      roundId,
+      columnId: "mia",
+    });
+    const cell = history.present.rounds
+      .find(({ id }) => id === roundId)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cell.status).toBe("empty");
+    expect(cell.tableLabel).toBeNull();
+  });
+
+  it("unassign also works as a correction on an ended or skipped cell", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId,
+      columnId: "mia",
+    });
+    history = executeBoardAction(history, {
+      type: "clear-cell",
+      roundId,
+      columnId: "mia",
+    });
+    const cell = history.present.rounds
+      .find(({ id }) => id === roundId)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cell.status).toBe("empty");
+  });
+
+  it("skip-turn records a semantic skip, not the literal label '0', and only targets a genuinely empty cell", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId,
+      columnId: "mia",
+    });
+    const cell = history.present.rounds
+      .find(({ id }) => id === roundId)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cell.status).toBe("skipped");
+    expect(cell.tableLabel).toBeNull();
+
+    // Refusing to overwrite anything already recorded there.
+    const rejected = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId,
+      columnId: "mia",
+    });
+    expect(rejected).toBe(history);
+  });
+
+  it("skip-turn counts as a used cell for the auto-row rule, same as any other real entry", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId,
+      columnId: "mia",
+    });
+    history = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId,
+      columnId: "leo",
+    });
+    // Both cells in round 1 are now "used" (skipped), so the trailing
+    // buffer must have topped back up to 2 fresh rows past it.
+    expect(history.present.rounds).toHaveLength(3);
+  });
+
+  it("assign refuses to overwrite an ended or skipped cell instead of silently clobbering history", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const roundId = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId,
+      columnId: "mia",
+    });
+    const rejected = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "mia",
+      tableLabel: "99",
+    });
+    expect(rejected).toBe(history);
+
+    history = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId,
+      columnId: "leo",
+    });
+    const rejectedSkip = executeBoardAction(history, {
+      type: "assign",
+      roundId,
+      columnId: "leo",
+      tableLabel: "99",
+    });
+    expect(rejectedSkip).toBe(history);
+  });
+
+  it("transfer moves the same assignment to the destination's earliest empty round, leaving no gap at the source", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "transfer",
+      sourceRoundId: round1,
+      sourceColumnId: "mia",
+      destColumnId: "leo",
+    });
+
+    const sourceCell = history.present.rounds
+      .find(({ id }) => id === round1)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(sourceCell.status).toBe("empty"); // no gap left behind
+    expect(sourceCell.tableLabel).toBeNull();
+
+    // Leo already has an empty cell in round 1 (never assigned there
+    // yet), so that's the earliest empty round for the destination.
+    const destCell = history.present.rounds
+      .find(({ id }) => id === round1)!
+      .cells.find(({ columnId }) => columnId === "leo")!;
+    expect(destCell.status).toBe("active");
+    expect(destCell.tableLabel).toBe("12");
+  });
+
+  it("transfer never overwrites the destination's ended or skipped cells -- it lands on the earliest genuinely empty round instead", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    // Leo's round 1 cell becomes ended (still not "empty" -- it's real
+    // history), so a transfer to Leo must skip past it.
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "leo",
+      tableLabel: "5",
+    });
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId: round1,
+      columnId: "leo",
+    });
+    // Leo's round 2 cell becomes skipped -- also not "empty".
+    const round2 = history.present.rounds[1].id;
+    history = executeBoardAction(history, {
+      type: "skip-turn",
+      roundId: round2,
+      columnId: "leo",
+    });
+
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "transfer",
+      sourceRoundId: round1,
+      sourceColumnId: "mia",
+      destColumnId: "leo",
+    });
+
+    // Round 1 and round 2 for leo are untouched.
+    expect(
+      history.present.rounds
+        .find(({ id }) => id === round1)!
+        .cells.find(({ columnId }) => columnId === "leo")!.status,
+    ).toBe("ended");
+    expect(
+      history.present.rounds
+        .find(({ id }) => id === round2)!
+        .cells.find(({ columnId }) => columnId === "leo")!.status,
+    ).toBe("skipped");
+    // The transfer landed on leo's first genuinely empty round instead.
+    const destRound = history.present.rounds.find((round) =>
+      round.cells.some(
+        (cell) => cell.columnId === "leo" && cell.tableLabel === "12",
+      ),
+    );
+    expect(destRound).toBeDefined();
+    expect(destRound!.id).not.toBe(round1);
+    expect(destRound!.id).not.toBe(round2);
+  });
+
+  it("reassigning a table's physical resource after ending it opens a fresh active row while the old row stays historical", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "12",
+    });
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId: round1,
+      columnId: "mia",
+    });
+    // Table 12 is free again -- a later round can assign it fresh to
+    // whoever's turn it is, without touching the old ended row.
+    const round2 = history.present.rounds[1].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "leo",
+      tableLabel: "12",
+    });
+
+    const oldRow = history.present.rounds
+      .find(({ id }) => id === round1)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(oldRow.status).toBe("ended");
+    expect(oldRow.tableLabel).toBe("12");
+
+    const newRow = history.present.rounds
+      .find(({ id }) => id === round2)!
+      .cells.find(({ columnId }) => columnId === "leo")!;
+    expect(newRow.status).toBe("active");
+    expect(newRow.tableLabel).toBe("12");
+  });
+});
+
+// Table Rotation Multi-View, Upgrade 1.1 (multi-table): a server can
+// have zero, one, or many active tables at once. The root cause of the
+// original "assigning a second table silently transfers the first"
+// bug was Floor always writing into one shared "current round" pointer
+// for every new assignment -- these tests cover the fix
+// (findEarliestEmptyRoundForColumn, used per-column instead) and the
+// new "end-and-assign" composite action.
+describe("rotation board — Upgrade 1.1 multi-table", () => {
+  it("findEarliestEmptyRoundForColumn finds each column's own next free round, not a round shared across columns", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    // Mia fills round 1; Leo never goes -- their "next free round" must
+    // differ (Mia's is round 2+, Leo's is still round 1).
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+
+    const miaNext = findEarliestEmptyRoundForColumn(history.present, "mia");
+    const leoNext = findEarliestEmptyRoundForColumn(history.present, "leo");
+    expect(miaNext?.id).not.toBe(round1);
+    expect(leoNext?.id).toBe(round1);
+  });
+
+  it("getActiveTablesForColumn lists every active table for a column across all its rounds, but not ended/skipped ones", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    const round2 = history.present.rounds[1].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "mia",
+      tableLabel: "4",
+    });
+
+    expect(getActiveTablesForColumn(history.present, "mia")).toEqual(
+      expect.arrayContaining([
+        { roundId: round1, tableLabel: "1" },
+        { roundId: round2, tableLabel: "4" },
+      ]),
+    );
+    expect(getActiveTablesForColumn(history.present, "mia")).toHaveLength(2);
+    expect(getActiveTablesForColumn(history.present, "leo")).toEqual([]);
+
+    // Ending one of them removes it from the active list -- it's history
+    // now, not a current active table.
+    history = executeBoardAction(history, {
+      type: "end-table",
+      roundId: round1,
+      columnId: "mia",
+    });
+    expect(getActiveTablesForColumn(history.present, "mia")).toEqual([
+      { roundId: round2, tableLabel: "4" },
+    ]);
+  });
+
+  it("assigning a second table to a column that already has one active table (Assign Also) never touches the first", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+
+    // This mirrors exactly what Floor's "Assign Also" does: look up the
+    // column's own earliest empty round, assign there.
+    const destRound = findEarliestEmptyRoundForColumn(history.present, "mia");
+    expect(destRound).toBeDefined();
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: destRound!.id,
+      columnId: "mia",
+      tableLabel: "3",
+    });
+
+    const activeTables = getActiveTablesForColumn(history.present, "mia");
+    expect(activeTables).toEqual(
+      expect.arrayContaining([
+        { roundId: round1, tableLabel: "1" },
+        { roundId: destRound!.id, tableLabel: "3" },
+      ]),
+    );
+    expect(activeTables).toHaveLength(2);
+  });
+
+  it("end-and-assign ends the chosen table in place and creates a new active row elsewhere, leaving the column's other active tables untouched", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    const round2 = findEarliestEmptyRoundForColumn(history.present, "mia")!.id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "mia",
+      tableLabel: "4",
+    });
+
+    // End table "1" (round1) and assign a new table "9" in one step.
+    history = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1],
+      columnId: "mia",
+      tableLabel: "9",
+    });
+
+    const endedCell = history.present.rounds
+      .find(({ id }) => id === round1)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(endedCell.status).toBe("ended");
+    expect(endedCell.tableLabel).toBe("1"); // history preserved
+
+    const untouchedCell = history.present.rounds
+      .find(({ id }) => id === round2)!
+      .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(untouchedCell.status).toBe("active");
+    expect(untouchedCell.tableLabel).toBe("4"); // Mia's other table, unaffected
+
+    const newActive = getActiveTablesForColumn(history.present, "mia").find(
+      (t) => t.tableLabel === "9",
+    );
+    expect(newActive).toBeDefined();
+    expect(newActive!.roundId).not.toBe(round1); // landed on a fresh round, not the one just ended
+  });
+
+  it("end-and-assign is a no-op if the target round isn't currently an active table for that column", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    // Mia's round1 cell is still empty -- nothing to end.
+    const result = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1],
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    expect(result).toBe(history);
+  });
+
+  it("end-and-assign is a no-op (all-or-nothing) if no rounds are selected", () => {
+    const history = createBoardHistory(createRotationBoard(columns));
+    const result = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [],
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    expect(result).toBe(history);
+  });
+
+  it("end-and-assign ends multiple selected tables at once, leaving any other active table for that column untouched", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    const round2 = findEarliestEmptyRoundForColumn(history.present, "mia")!.id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "mia",
+      tableLabel: "4",
+    });
+    const round3 = findEarliestEmptyRoundForColumn(history.present, "mia")!.id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round3,
+      columnId: "mia",
+      tableLabel: "7",
+    });
+
+    // End T1 and T4, leaving T7 active, and assign T3.
+    history = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1, round2],
+      columnId: "mia",
+      tableLabel: "3",
+    });
+
+    const cellIn = (roundId: string) =>
+      history.present.rounds
+        .find(({ id }) => id === roundId)!
+        .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cellIn(round1).status).toBe("ended");
+    expect(cellIn(round2).status).toBe("ended");
+    expect(cellIn(round3).status).toBe("active");
+    expect(cellIn(round3).tableLabel).toBe("7"); // Mia's untouched third table
+
+    const activeTables = getActiveTablesForColumn(history.present, "mia");
+    expect(activeTables).toEqual(
+      expect.arrayContaining([
+        { roundId: round3, tableLabel: "7" },
+        expect.objectContaining({ tableLabel: "3" }),
+      ]),
+    );
+    expect(activeTables).toHaveLength(2);
+  });
+
+  it("end-and-assign can end every one of a column's active tables (End All)", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    const round2 = findEarliestEmptyRoundForColumn(history.present, "mia")!.id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round2,
+      columnId: "mia",
+      tableLabel: "4",
+    });
+
+    history = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1, round2],
+      columnId: "mia",
+      tableLabel: "3",
+    });
+
+    const cellIn = (roundId: string) =>
+      history.present.rounds
+        .find(({ id }) => id === roundId)!
+        .cells.find(({ columnId }) => columnId === "mia")!;
+    expect(cellIn(round1).status).toBe("ended");
+    expect(cellIn(round2).status).toBe("ended");
+    const activeTables = getActiveTablesForColumn(history.present, "mia");
+    expect(activeTables).toHaveLength(1);
+    expect(activeTables[0].tableLabel).toBe("3");
+  });
+
+  it("end-and-assign is all-or-nothing: if any selected round is no longer active, none of them end", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    const round2 = findEarliestEmptyRoundForColumn(history.present, "mia")!.id;
+    // round2 is still empty (never assigned) -- not a valid "active table
+    // to end". Selecting it alongside the genuinely active round1 must
+    // reject the whole action, not just skip the invalid one.
+    const result = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1, round2],
+      columnId: "mia",
+      tableLabel: "3",
+    });
+    expect(result).toBe(history);
+    expect(
+      result.present.rounds
+        .find(({ id }) => id === round1)!
+        .cells.find(({ columnId }) => columnId === "mia")!.status,
+    ).toBe("active"); // untouched -- the whole action was rejected
+  });
+
+  it("undo/redo restore a multi-table board exactly (full-snapshot history, not per-action inverses, in demo mode)", () => {
+    let history = createBoardHistory(createRotationBoard(columns));
+    const round1 = history.present.rounds[0].id;
+    history = executeBoardAction(history, {
+      type: "assign",
+      roundId: round1,
+      columnId: "mia",
+      tableLabel: "1",
+    });
+    const beforeEndAndAssign = history.present;
+    history = executeBoardAction(history, {
+      type: "end-and-assign",
+      endRoundIds: [round1],
+      columnId: "mia",
+      tableLabel: "9",
+    });
+    expect(getActiveTablesForColumn(history.present, "mia")).toHaveLength(1);
+
+    const undone = undoBoard(history);
+    expect(undone.present).toEqual(beforeEndAndAssign);
+
+    const redone = redoBoard(undone);
+    expect(getActiveTablesForColumn(redone.present, "mia")).toHaveLength(1);
+    expect(getActiveTablesForColumn(redone.present, "mia")[0].tableLabel).toBe(
+      "9",
+    );
   });
 });

@@ -1,11 +1,13 @@
 import "server-only";
 
+import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
 import type {
   ColumnStatus,
   RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
+import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -39,6 +41,19 @@ export type AllocationContext = {
   // was somehow left "active" on a past date still renders read-only.
   serviceDate: string;
   isHistorical: boolean;
+  // Table Rotation Multi-View: Quick Add's clocked-in prioritization
+  // signal only -- reuses Tip Split's own fetchClockedInRoster (Feature
+  // 029) rather than a second attendance query. Never used to auto-add
+  // anyone; see allocation-workspace.tsx's availableMembers sort.
+  clockedInProfileIds: string[];
+  // Table Rotation Multi-View: the location's registered physical tables
+  // (public.dining_tables, now connected -- IMPLEMENTATION_CONTRACT.md
+  // section 3/10), for the Floor/Picker map. Empty until an organization
+  // has actually registered its floor plan -- no data is seeded by this
+  // feature (there's no stable fixture to attach it to; see
+  // IMPLEMENTATION_LOG.md). Demo mode never reads this -- it uses the
+  // static DEMO_FLOOR_LAYOUT instead.
+  physicalTables: FloorLayoutEntry[];
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -71,6 +86,35 @@ export async function getAllocationContext(
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
   const serviceDate = requestedServiceDate ?? today;
   const isHistorical = serviceDate < today;
+
+  const clockedInResult = await fetchClockedInRoster(supabase, {
+    organizationId,
+    serviceDate,
+  });
+  // Prioritization only, never a hard dependency -- an attendance-lookup
+  // failure shouldn't take down the whole board read.
+  const clockedInProfileIds = clockedInResult.ok ? clockedInResult.data : [];
+
+  const { data: tableRows, error: tableError } = await supabase
+    .from("dining_tables")
+    .select("label, position_x, position_y, active, dining_areas(name)")
+    .eq("location_id", location.id)
+    .eq("active", true);
+  if (tableError)
+    console.error("getAllocationContext: dining_tables", tableError);
+  const physicalTables: FloorLayoutEntry[] = (tableRows ?? [])
+    .filter((row) => row.position_x !== null && row.position_y !== null)
+    .map((row) => ({
+      label: row.label,
+      x: Number(row.position_x),
+      y: Number(row.position_y),
+      // No dedicated resource-type column on dining_tables -- inferred
+      // from the dining area's own name until/unless a real onboarding
+      // flow needs a first-class field for it.
+      resourceType: /bar/i.test(row.dining_areas?.[0]?.name ?? "")
+        ? "bar_seat"
+        : "table",
+    }));
 
   // Feature 028: dropped the `.eq("status", "active")` filter that used to
   // scope this to only today's session. location_id + service_date +
@@ -105,6 +149,8 @@ export async function getAllocationContext(
       canRedo: false,
       serviceDate,
       isHistorical,
+      clockedInProfileIds,
+      physicalTables,
     };
   }
 
@@ -135,7 +181,7 @@ export async function getAllocationContext(
     roundIds.length > 0
       ? supabase
           .from("table_rotation_entries")
-          .select("rotation_round_id, rotation_member_id, table_label")
+          .select("rotation_round_id, rotation_member_id, table_label, status")
           .in("rotation_round_id", roundIds)
       : Promise.resolve({ data: [], error: null }),
     supabase
@@ -179,6 +225,10 @@ export async function getAllocationContext(
       .map((entry) => ({
         columnId: memberIdToProfileId.get(entry.rotation_member_id) ?? "",
         tableLabel: entry.table_label,
+        // A row's mere existence means "active" pre-Upgrade-1.1; the DB
+        // column's values (active/ended/skipped) already match
+        // RotationCellStatus directly, no translation needed.
+        status: (entry.status ?? "active") as "active" | "ended" | "skipped",
       }))
       .filter((cell) => cell.columnId !== ""),
   }));
@@ -243,5 +293,7 @@ export async function getAllocationContext(
     canRedo,
     serviceDate,
     isHistorical,
+    clockedInProfileIds,
+    physicalTables,
   };
 }

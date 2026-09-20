@@ -19,3 +19,9 @@ design-system-reference.html
 # 023 onward actively maintains both as part of the documented workflow,
 # so they're formatted like every other checked-in doc now.)
 tasks/backlog.md
+
+# Table Rotation Multi-View: a Claude Design export copied verbatim from
+# its source repo (see docs/design/table-rotation/README.md) -- reference
+# material we don't own the authoring of, same reasoning as
+# design-system-reference.html above. Reformatting it isn't ours to do.
+docs/design/table-rotation/approved-design-export/

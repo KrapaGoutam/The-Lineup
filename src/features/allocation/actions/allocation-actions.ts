@@ -95,6 +95,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
           p_member_id: memberId,
           p_table_label: action.tableLabel,
+          p_confirm_transfer: action.confirmTransfer ?? false,
         });
         if (error) return { ok: false, error: error.message };
         revalidatePath(`/r/${input.restaurantSlug}`);
@@ -264,6 +265,136 @@ export async function executeBoardActionRemote(
         const { error } = await supabase.rpc("board_add_row", {
           p_organization_id: input.organizationId,
           p_service_session_id: sessionId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
+      case "delete-row": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const { error } = await supabase.rpc("board_delete_row", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_round_id: Number(action.roundId),
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
+      // Upgrade 1.1: moves the SAME active assignment to another server's
+      // earliest genuinely empty round -- see board_transfer's own
+      // migration comment. Distinct from "assign" + confirmTransfer,
+      // which is for resolving a true occupancy conflict, not for moving
+      // an existing assignment.
+      case "transfer": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const [sourceMemberId, destMemberId] = await Promise.all([
+          resolveMemberId(supabase, sessionId, action.sourceColumnId),
+          resolveMemberId(supabase, sessionId, action.destColumnId),
+        ]);
+        if (sourceMemberId === null || destMemberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { error } = await supabase.rpc("board_transfer", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_source_round_id: Number(action.sourceRoundId),
+          p_source_member_id: sourceMemberId,
+          p_dest_member_id: destMemberId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
+      // Upgrade 1.1: completes service. The table becomes available; the
+      // historical entry is preserved (marked ended), never deleted.
+      case "end-table": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const memberId = await resolveMemberId(
+          supabase,
+          sessionId,
+          action.columnId,
+        );
+        if (memberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { error } = await supabase.rpc("board_end_table", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_round_id: Number(action.roundId),
+          p_member_id: memberId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: sessionId } };
+      }
+
+      // Upgrade 1.1: records a turn with no table. Occupies nothing;
+      // counts as a used cell for the auto-row rule the same as any other
+      // real entry.
+      case "skip-turn": {
+        const memberId =
+          input.serviceSessionId !== null
+            ? await resolveMemberId(
+                supabase,
+                input.serviceSessionId,
+                action.columnId,
+              )
+            : null;
+        if (memberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { data, error } = await supabase.rpc("board_skip_turn", {
+          p_organization_id: input.organizationId,
+          p_location_id: input.locationId,
+          p_service_date: serviceDate,
+          p_round_id: Number(action.roundId),
+          p_member_id: memberId,
+        });
+        if (error) return { ok: false, error: error.message };
+        revalidatePath(`/r/${input.restaurantSlug}`);
+        return { ok: true, data: { serviceSessionId: data as number } };
+      }
+
+      // Upgrade 1.1 (multi-table): the Floor decision dialog's "End
+      // existing table(s) & assign" choice -- one atomic RPC (ends every
+      // selected round in place, all-or-nothing, then creates one new
+      // active row at this column's earliest genuinely empty round)
+      // rather than sequential per-round calls, so a partial failure
+      // can't end some of the old tables without ever assigning the new
+      // one. `endRoundIds` may be one, several, or every one of the
+      // column's active rounds.
+      case "end-and-assign": {
+        const sessionId = input.serviceSessionId;
+        if (sessionId === null) {
+          return { ok: false, error: "No active floor yet for today." };
+        }
+        const memberId = await resolveMemberId(
+          supabase,
+          sessionId,
+          action.columnId,
+        );
+        if (memberId === null) {
+          return { ok: false, error: "That column no longer exists." };
+        }
+        const { error } = await supabase.rpc("board_end_and_assign", {
+          p_organization_id: input.organizationId,
+          p_service_session_id: sessionId,
+          p_end_round_ids: action.endRoundIds.map(Number),
+          p_member_id: memberId,
+          p_table_label: action.tableLabel,
         });
         if (error) return { ok: false, error: error.message };
         revalidatePath(`/r/${input.restaurantSlug}`);

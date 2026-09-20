@@ -7,9 +7,18 @@ export type RotationColumn = {
   status: ColumnStatus;
 };
 
+// Table Rotation Multi-View Upgrade 1.1: a cell is one of four distinct
+// states, matching table_rotation_entries.status in real mode ("empty"
+// there means no row at all, rather than a stored value). tableLabel is
+// only ever set for "active"/"ended" -- "empty" and "skipped" always
+// carry tableLabel: null, mirroring the DB's
+// table_rotation_entries_label_status_check constraint.
+export type RotationCellStatus = "empty" | "active" | "ended" | "skipped";
+
 export type RotationCell = {
   columnId: string;
   tableLabel: string | null;
+  status: RotationCellStatus;
 };
 
 export type RotationRound = {
@@ -25,7 +34,19 @@ export type RotationBoard = {
 };
 
 export type BoardAction =
-  | { type: "assign"; roundId: string; columnId: string; tableLabel: string }
+  | {
+      type: "assign";
+      roundId: string;
+      columnId: string;
+      tableLabel: string;
+      // Table Rotation Multi-View: threaded through to board_assign's
+      // p_confirm_transfer in real mode when the caller has explicitly
+      // confirmed taking a table from its current holder (see
+      // IMPLEMENTATION_CONTRACT.md section 6). The pure reducer has no
+      // occupancy concept of its own (demo mode is single-user), so it
+      // ignores this field entirely.
+      confirmTransfer?: boolean;
+    }
   | { type: "clear-cell"; roundId: string; columnId: string }
   | { type: "add-column"; column: RotationColumn }
   | { type: "set-column-status"; columnId: string; status: ColumnStatus }
@@ -33,7 +54,38 @@ export type BoardAction =
   | { type: "clear-column"; columnId: string }
   | { type: "clear-board" }
   | { type: "move-column"; columnId: string; direction: "up" | "down" }
-  | { type: "add-row" };
+  | { type: "add-row" }
+  | { type: "delete-row"; roundId: string }
+  // Table Rotation Multi-View Upgrade 1.1: moves the SAME active
+  // assignment to another column's earliest genuinely empty cell. The
+  // source cell becomes empty (no gap left behind); the destination
+  // never overwrites an ended/skipped/active cell.
+  | {
+      type: "transfer";
+      sourceRoundId: string;
+      sourceColumnId: string;
+      destColumnId: string;
+    }
+  // Completes service: table becomes available, history stays (status
+  // becomes "ended", tableLabel is preserved, row is never removed).
+  | { type: "end-table"; roundId: string; columnId: string }
+  // Records a turn with no table. Only valid on a genuinely empty cell.
+  | { type: "skip-turn"; roundId: string; columnId: string }
+  // Table Rotation Multi-View Upgrade 1.1 (multi-table): a composite,
+  // one-event action for the Floor decision dialog's "End existing &
+  // assign" choice -- ends one of this column's active rows in place
+  // (history preserved) and creates a brand new active row for the same
+  // column at its earliest genuinely empty round, in one step. Distinct
+  // from "transfer": the ended row stays a separate historical entry,
+  // rather than the same row relocating. `endRoundIds` may name one,
+  // several, or every one of the column's active rounds -- ending zero
+  // is invalid (the caller must require at least one selection).
+  | {
+      type: "end-and-assign";
+      endRoundIds: string[];
+      columnId: string;
+      tableLabel: string;
+    };
 
 export type BoardHistory = {
   past: RotationBoard[];
@@ -58,33 +110,90 @@ function makeRound(board: RotationBoard): RotationRound {
     sequence: board.nextRoundNumber,
     cells: board.columns
       .filter((column) => column.status !== "removed")
-      .map((column) => ({ columnId: column.id, tableLabel: null })),
+      .map((column) => ({
+        columnId: column.id,
+        tableLabel: null,
+        status: "empty" as const,
+      })),
   };
 }
 
+// Table Rotation Multi-View: reconciled to ~2 trailing empty rounds (was
+// exactly 1). "Empty" = no cell in the round has a tableLabel, regardless
+// of any column's active/paused/removed status — matching the real-mode
+// rule in private.ensure_trailing_round (see
+// supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql).
+// Recomputing and topping up to a fixed target after every action is
+// mathematically equivalent to "when the last or second-to-last round
+// gets a value, restore the buffer" — deliberately not implemented as a
+// separate last-row/second-to-last-row check, to avoid two mechanisms
+// that could drift apart. Only ever adds rounds, never removes them.
+const TRAILING_EMPTY_TARGET = 2;
+
+// "Empty" mirrors the real-mode auto-row rule exactly: a round with no
+// table_rotation_entries row at all. Active, ended, and skipped cells are
+// all real rows, so all three count as "used" here -- only "empty" cells
+// (never written to, or fully unassigned back to empty) don't.
+function isRoundEmpty(round: RotationRound) {
+  return round.cells.every((cell) => cell.status === "empty");
+}
+
 function ensureTrailingRound(board: RotationBoard) {
-  if (board.rounds.length === 0) {
+  let trailingEmpty = 0;
+  for (let i = board.rounds.length - 1; i >= 0; i -= 1) {
+    if (!isRoundEmpty(board.rounds[i])) break;
+    trailingEmpty += 1;
+  }
+  while (trailingEmpty < TRAILING_EMPTY_TARGET) {
     board.rounds.push(makeRound(board));
     board.nextRoundNumber += 1;
-    return;
+    trailingEmpty += 1;
   }
-  // A fresh empty row is kept ready one row ahead of wherever anyone is
-  // actually working, the moment the trailing round gets its first
-  // value — not once every active column has filled it. That
-  // "everyone" condition was the bug: with an uneven floor (some
-  // columns racing ahead, one lagging every round), a row that always
-  // has at least one unfilled active column never counts as complete,
-  // so no new row ever appears, no matter how far ahead the fast
-  // columns get. A single value is the actual per-board signal that
-  // work has started on this row and a clean one should already exist
-  // past it — not a per-column one, and not one that waits for the
-  // slowest column on the floor.
-  const last = board.rounds.at(-1)!;
-  const hasAnyValue = last.cells.some((cell) => Boolean(cell.tableLabel));
-  if (hasAnyValue) {
-    board.rounds.push(makeRound(board));
-    board.nextRoundNumber += 1;
+}
+
+/**
+ * Table Rotation Multi-View Upgrade 1.1 (multi-table): a server can have
+ * zero, one, or many active tables at once -- there is nothing in this
+ * model that limits a column to a single active row (each round is an
+ * independent slot). Assign/Transfer/End+Assign all need "this column's
+ * next genuinely free slot," never a single shared "current round"
+ * pointer -- reusing a shared pointer across columns is exactly what
+ * caused the original bug where a second Floor assignment silently
+ * collided with (and looked like it transferred) a column's existing
+ * one. This is the same search board_transfer already used for its
+ * destination; factored out so board_transfer, the "end-and-assign"
+ * case below, and callers outside this module (Floor's assign flow) all
+ * agree on one definition of "the next free round for this column."
+ */
+export function findEarliestEmptyRoundForColumn(
+  board: RotationBoard,
+  columnId: string,
+): RotationRound | undefined {
+  return board.rounds.find((round) => {
+    const cell = round.cells.find((c) => c.columnId === columnId);
+    return cell?.status === "empty";
+  });
+}
+
+/**
+ * Every currently-active table for one column, across all rounds --
+ * what Floor needs to decide whether an assignment is unambiguous (zero
+ * active tables: assign directly) or needs the decision dialog (one or
+ * more: Assign Also / Transfer / End & Assign), and what populates the
+ * "which existing table" sub-picker when there's more than one.
+ */
+export function getActiveTablesForColumn(
+  board: RotationBoard,
+  columnId: string,
+): { roundId: string; tableLabel: string }[] {
+  const active: { roundId: string; tableLabel: string }[] = [];
+  for (const round of board.rounds) {
+    const cell = round.cells.find((c) => c.columnId === columnId);
+    if (cell?.status === "active" && cell.tableLabel) {
+      active.push({ roundId: round.id, tableLabel: cell.tableLabel });
+    }
   }
+  return active;
 }
 
 export function createRotationBoard(columns: RotationColumn[]): RotationBoard {
@@ -112,20 +221,147 @@ export function applyBoardAction(
       const existing = round.cells.find(
         ({ columnId }) => columnId === action.columnId,
       );
-      if (existing) existing.tableLabel = label;
-      else round.cells.push({ columnId: action.columnId, tableLabel: label });
+      // Upgrade 1.1: never silently overwrite an ended/skipped historical
+      // cell -- matches board_assign's new guard. Assigning in place over
+      // an already-active cell (an edit) is unchanged.
+      if (
+        existing &&
+        existing.status !== "empty" &&
+        existing.status !== "active"
+      ) {
+        return current;
+      }
+      if (existing) {
+        existing.tableLabel = label;
+        existing.status = "active";
+      } else {
+        round.cells.push({
+          columnId: action.columnId,
+          tableLabel: label,
+          status: "active",
+        });
+      }
       break;
     }
     // Feature 028: the per-cell counterpart to clear-row/clear-column,
     // open to any active member (see mayWriteColumn) unlike those two,
-    // which stay manager-only. Matches clear-row's own convention of
-    // nulling tableLabel rather than removing the cell from the array.
+    // which stay manager-only. This is Unassign: it deletes the entry
+    // (back to empty) rather than preserving it as history, and works the
+    // same way whether the cell was active, ended, or skipped (a
+    // correction tool for any historical mistake).
     case "clear-cell": {
       const round = board.rounds.find(({ id }) => id === action.roundId);
       const cell = round?.cells.find(
         ({ columnId }) => columnId === action.columnId,
       );
-      if (cell) cell.tableLabel = null;
+      if (cell) {
+        cell.tableLabel = null;
+        cell.status = "empty";
+      }
+      break;
+    }
+    case "transfer": {
+      const sourceRound = board.rounds.find(
+        ({ id }) => id === action.sourceRoundId,
+      );
+      const sourceCell = sourceRound?.cells.find(
+        ({ columnId }) => columnId === action.sourceColumnId,
+      );
+      const destColumn = board.columns.find(
+        ({ id }) => id === action.destColumnId,
+      );
+      if (
+        !sourceRound ||
+        !sourceCell ||
+        sourceCell.status !== "active" ||
+        !sourceCell.tableLabel ||
+        !destColumn ||
+        destColumn.status !== "active"
+      ) {
+        return current;
+      }
+      const label = sourceCell.tableLabel;
+      let destRound = findEarliestEmptyRoundForColumn(
+        board,
+        action.destColumnId,
+      );
+      if (!destRound) {
+        // Defensive: ensureTrailingRound always keeps a genuinely empty
+        // round available, so this should not normally happen.
+        ensureTrailingRound(board);
+        destRound = findEarliestEmptyRoundForColumn(board, action.destColumnId);
+      }
+      if (!destRound) return current;
+      const destCell = destRound.cells.find(
+        ({ columnId }) => columnId === action.destColumnId,
+      )!;
+      sourceCell.tableLabel = null;
+      sourceCell.status = "empty";
+      destCell.tableLabel = label;
+      destCell.status = "active";
+      break;
+    }
+    case "end-table": {
+      const round = board.rounds.find(({ id }) => id === action.roundId);
+      const cell = round?.cells.find(
+        ({ columnId }) => columnId === action.columnId,
+      );
+      if (!cell || cell.status !== "active") return current;
+      cell.status = "ended";
+      break;
+    }
+    case "end-and-assign": {
+      const column = board.columns.find(({ id }) => id === action.columnId);
+      const label = action.tableLabel.trim();
+      if (
+        !column ||
+        column.status !== "active" ||
+        !label ||
+        action.endRoundIds.length === 0
+      ) {
+        return current;
+      }
+      // All-or-nothing: every selected round must still hold an active
+      // row for this column, checked before ending any of them, so a
+      // stale selection (one entry already ended/reassigned elsewhere by
+      // the time this runs) can't half-apply.
+      const endCells = action.endRoundIds.map((roundId) => {
+        const round = board.rounds.find(({ id }) => id === roundId);
+        return round?.cells.find(
+          ({ columnId }) => columnId === action.columnId,
+        );
+      });
+      if (endCells.some((cell) => !cell || cell.status !== "active")) {
+        return current;
+      }
+      // The search runs before ending any endCell, so those rounds
+      // (which still hold active rows at this point) are correctly
+      // excluded -- "end and assign" always lands the new table on a
+      // genuinely different round, never reusing one just ended.
+      let destRound = findEarliestEmptyRoundForColumn(board, action.columnId);
+      if (!destRound) {
+        ensureTrailingRound(board);
+        destRound = findEarliestEmptyRoundForColumn(board, action.columnId);
+      }
+      if (!destRound) return current;
+      for (const cell of endCells) {
+        cell!.status = "ended";
+      }
+      const destCell = destRound.cells.find(
+        ({ columnId }) => columnId === action.columnId,
+      )!;
+      destCell.tableLabel = label;
+      destCell.status = "active";
+      break;
+    }
+    case "skip-turn": {
+      const round = board.rounds.find(({ id }) => id === action.roundId);
+      const cell = round?.cells.find(
+        ({ columnId }) => columnId === action.columnId,
+      );
+      if (!cell || cell.status !== "empty") return current;
+      cell.status = "skipped";
+      cell.tableLabel = null;
       break;
     }
     case "add-column":
@@ -134,7 +370,11 @@ export function applyBoardAction(
         if (
           !round.cells.some(({ columnId }) => columnId === action.column.id)
         ) {
-          round.cells.push({ columnId: action.column.id, tableLabel: null });
+          round.cells.push({
+            columnId: action.column.id,
+            tableLabel: null,
+            status: "empty",
+          });
         }
       }
       break;
@@ -149,6 +389,7 @@ export function applyBoardAction(
         round.cells = round.cells.map((cell) => ({
           ...cell,
           tableLabel: null,
+          status: "empty",
         }));
       }
       break;
@@ -158,7 +399,10 @@ export function applyBoardAction(
         const cell = round.cells.find(
           ({ columnId }) => columnId === action.columnId,
         );
-        if (cell) cell.tableLabel = null;
+        if (cell) {
+          cell.tableLabel = null;
+          cell.status = "empty";
+        }
       }
       break;
     case "clear-board":
@@ -197,6 +441,15 @@ export function applyBoardAction(
       board.rounds.push(makeRound(board));
       board.nextRoundNumber += 1;
       break;
+    case "delete-row": {
+      // Structural removal, only for a round with no recorded values —
+      // clear first, then delete, same rule as board_delete_row (real
+      // mode). Preserves history for anything ever assigned.
+      const round = board.rounds.find(({ id }) => id === action.roundId);
+      if (!round || !isRoundEmpty(round)) return current;
+      board.rounds = board.rounds.filter(({ id }) => id !== action.roundId);
+      break;
+    }
   }
   ensureTrailingRound(board);
   return board;
@@ -252,8 +505,12 @@ export function mayWriteColumn() {
 
 /**
  * The row people are actually filling in right now — as opposed to
- * `rounds.at(-1)`, which is the standing empty buffer row once one
- * exists (see `ensureTrailingRound`). Consumers that need "who's up
+ * `rounds.at(-1)`, which is one of the standing ~2 empty buffer rows once
+ * they exist (see `ensureTrailingRound`). The working round is the last
+ * round with at least one recorded value, or the first round if the
+ * board is entirely fresh. (Before the buffer grew to 2 rows, `at(-2)`
+ * was an equivalent shortcut for this; it stopped being one once a
+ * second trailing empty row could exist.) Consumers that need "who's up
  * next" (the allocation workspace's summary card, `computeNextColumnId`
  * in tests) must derive it from this, not from the literal last round,
  * or they'll compute against a row nobody has touched yet.
@@ -261,7 +518,10 @@ export function mayWriteColumn() {
 export function getWorkingRound(
   board: RotationBoard,
 ): RotationRound | undefined {
-  return board.rounds.length >= 2 ? board.rounds.at(-2) : board.rounds.at(-1);
+  for (let i = board.rounds.length - 1; i >= 0; i -= 1) {
+    if (!isRoundEmpty(board.rounds[i])) return board.rounds[i];
+  }
+  return board.rounds[0];
 }
 
 /**
