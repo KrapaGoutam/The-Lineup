@@ -6,6 +6,7 @@ import { ArrowRightLeft, LogOut, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
 import type {
@@ -111,7 +112,7 @@ export function FloorView({
         onSelectTable={selectTable}
         disabled={disabled}
       />
-      {selected ? (
+      {selected?.occupiedBy ? (
         <Card className="h-fit">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <p className="font-mono font-semibold">
@@ -132,128 +133,82 @@ export function FloorView({
             </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {!selected.occupiedBy ? (
-              <>
-                <p className="text-muted-foreground text-xs">
-                  Available — pick a server to assign it.
-                </p>
-                {assignableColumns.length ? (
-                  <div className="flex flex-col gap-1.5">
-                    {assignableColumns.map((column) => (
-                      <Button
-                        key={column.id}
-                        variant="secondary"
-                        size="sm"
-                        disabled={disabled}
-                        onClick={() => {
-                          // Ambiguous when this server already holds one
-                          // or more tables -- the shared decision hook
-                          // asks what the operator means instead of
-                          // silently guessing (that silent guess, always
-                          // overwriting into one shared round, was the
-                          // original bug). Zero active tables assigns
-                          // immediately and closes this panel itself;
-                          // one-or-more opens the decision dialog on top
-                          // of it, so leave the panel open until that
-                          // dialog closes (`onClosed: closePanel` above).
-                          const openedDialog = decision.beginAssign(
-                            selected.label,
-                            column.id,
-                            column.name,
-                          );
-                          if (!openedDialog) closePanel();
-                        }}
-                      >
-                        {column.name}
-                      </Button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-xs">
-                    No active servers to assign yet.
-                  </p>
-                )}
-              </>
+            <p className="text-sm">
+              Assigned to{" "}
+              <span
+                className="font-semibold"
+                style={{ color: selected.occupiedBy.color }}
+              >
+                {selected.occupiedBy.name}
+              </span>
+            </p>
+            {!transferring ? (
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => setTransferring(true)}
+                >
+                  <ArrowRightLeft aria-hidden="true" /> Transfer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => {
+                    onEndTable({
+                      columnId: selected.occupiedBy!.columnId,
+                      roundId: selected.occupiedBy!.roundId,
+                    });
+                    closePanel();
+                  }}
+                >
+                  <LogOut aria-hidden="true" /> End table
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => {
+                    onUnassign({
+                      columnId: selected.occupiedBy!.columnId,
+                      roundId: selected.occupiedBy!.roundId,
+                    });
+                    closePanel();
+                  }}
+                >
+                  Unassign
+                </Button>
+              </div>
             ) : (
-              <>
-                <p className="text-sm">
-                  Assigned to{" "}
-                  <span
-                    className="font-semibold"
-                    style={{ color: selected.occupiedBy.color }}
-                  >
-                    {selected.occupiedBy.name}
-                  </span>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-muted-foreground text-xs">
+                  Give this table to:
                 </p>
-                {!transferring ? (
-                  <div className="flex flex-col gap-1.5">
+                {assignableColumns
+                  .filter(
+                    (column) => column.id !== selected.occupiedBy!.columnId,
+                  )
+                  .map((column) => (
                     <Button
+                      key={column.id}
                       variant="secondary"
                       size="sm"
                       disabled={disabled}
-                      onClick={() => setTransferring(true)}
-                    >
-                      <ArrowRightLeft aria-hidden="true" /> Transfer
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={disabled}
                       onClick={() => {
-                        onEndTable({
-                          columnId: selected.occupiedBy!.columnId,
-                          roundId: selected.occupiedBy!.roundId,
+                        onTransfer({
+                          sourceRoundId: selected.occupiedBy!.roundId,
+                          sourceColumnId: selected.occupiedBy!.columnId,
+                          destColumnId: column.id,
                         });
                         closePanel();
                       }}
                     >
-                      <LogOut aria-hidden="true" /> End table
+                      {column.name}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={disabled}
-                      onClick={() => {
-                        onUnassign({
-                          columnId: selected.occupiedBy!.columnId,
-                          roundId: selected.occupiedBy!.roundId,
-                        });
-                        closePanel();
-                      }}
-                    >
-                      Unassign
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <p className="text-muted-foreground text-xs">
-                      Give this table to:
-                    </p>
-                    {assignableColumns
-                      .filter(
-                        (column) => column.id !== selected.occupiedBy!.columnId,
-                      )
-                      .map((column) => (
-                        <Button
-                          key={column.id}
-                          variant="secondary"
-                          size="sm"
-                          disabled={disabled}
-                          onClick={() => {
-                            onTransfer({
-                              sourceRoundId: selected.occupiedBy!.roundId,
-                              sourceColumnId: selected.occupiedBy!.columnId,
-                              destColumnId: column.id,
-                            });
-                            closePanel();
-                          }}
-                        >
-                          {column.name}
-                        </Button>
-                      ))}
-                  </div>
-                )}
-              </>
+                  ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -266,6 +221,53 @@ export function FloorView({
           </CardContent>
         </Card>
       )}
+
+      {/* Floor UX follow-up: an AVAILABLE table's "pick a server" flow is
+          a popup, not an always-visible section below the map -- see
+          TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md section 11. The
+          occupied-table panel above is unaffected. */}
+      <Dialog
+        open={!!selected && !selected.occupiedBy}
+        onClose={closePanel}
+        title={selected ? `Assign ${selected.label}` : ""}
+        description="Available. Select a server to assign this table to."
+      >
+        {selected && assignableColumns.length ? (
+          <div className="flex flex-col gap-1.5">
+            {assignableColumns.map((column) => (
+              <Button
+                key={column.id}
+                variant="secondary"
+                size="sm"
+                disabled={disabled}
+                onClick={() => {
+                  // The popup itself always closes on a server pick --
+                  // the shared decision hook then either assigns
+                  // immediately (zero active tables) or opens its own
+                  // dialog on top (one or more), same as Server Board's
+                  // identical popup -> decision flow.
+                  closePanel();
+                  decision.beginAssign(selected.label, column.id, column.name);
+                }}
+              >
+                {column.name}
+              </Button>
+            ))}
+            <Button variant="ghost" size="sm" onClick={closePanel}>
+              Cancel
+            </Button>
+          </div>
+        ) : selected ? (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-muted-foreground text-xs">
+              No active servers to assign yet.
+            </p>
+            <Button variant="ghost" size="sm" onClick={closePanel}>
+              Cancel
+            </Button>
+          </div>
+        ) : null}
+      </Dialog>
 
       {decision.dialog}
     </div>

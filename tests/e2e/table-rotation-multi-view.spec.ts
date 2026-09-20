@@ -49,10 +49,12 @@ test("Floor: assigning an available table shows it as occupied and appears on th
   await expect(t1).toBeVisible();
   await t1.click();
 
-  await expect(
-    page.getByText("Available — pick a server to assign it."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Ava Brooks" }).click();
+  // Floor UX follow-up: the "pick a server" flow is a popup, not an
+  // always-visible section below the map.
+  const assignDialog = page.locator("dialog[open]");
+  await expect(assignDialog).toBeVisible();
+  await expect(assignDialog.getByText("Assign T1")).toBeVisible();
+  await assignDialog.getByRole("button", { name: "Ava Brooks" }).click();
 
   // Ava already has an active table from the demo seed ("21 + 22"), so
   // this is ambiguous -- the decision dialog appears instead of an
@@ -95,6 +97,92 @@ test("Floor: a second device cannot silently double-book a table already held by
   await expect(page.getByText("Assigned to")).toBeVisible();
   await expect(page.getByRole("button", { name: "Transfer" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Unassign" })).toBeVisible();
+});
+
+// Floor UX follow-up: the available-table "pick a server" flow is a
+// popup, not an always-visible section rendered below the floor map.
+// CASE letters match
+// docs/features/table-rotation-multi-view/TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md.
+
+test("Floor: clicking an available table opens the assign popup, with no inline panel below the map (CASE A)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Floor");
+
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.getByText("Available — pick a server")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Assign T13")).toBeVisible();
+  await expect(
+    dialog.getByText("Available. Select a server to assign this table to."),
+  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Mia Chen" })).toBeVisible();
+  // No inline "pick a server" section exists outside the popup.
+  await expect(page.getByText("Available — pick a server")).toHaveCount(0);
+});
+
+test("Floor: Cancel from the assign popup makes zero state changes (CASE B)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Table T13, available" }),
+  ).toBeVisible();
+});
+
+test("Floor: selecting a server with zero active tables from the assign popup assigns directly (CASE C)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await page.getByRole("button", { name: "Zara" }).click();
+  await switchView(page, "Floor");
+
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Zara Reed" })
+    .click();
+
+  await expect(page.getByText("already has active tables")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
+  ).toBeVisible();
+});
+
+test("Floor: selecting a server with existing active tables from the assign popup opens the decision dialog (CASE D)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Floor");
+
+  // Leo Park already has an active table from the demo seed ("8").
+  await page.getByRole("button", { name: "Table T13, available" }).click();
+  await page
+    .locator("dialog[open]")
+    .getByRole("button", { name: "Leo Park" })
+    .click();
+
+  await expect(
+    page.getByText("Leo Park already has active tables"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Assign T13 also/ }),
+  ).toBeVisible();
 });
 
 test("Picker: selecting a Grid cell immediately opens the table layout popup, and choosing a table assigns it", async ({
