@@ -4,22 +4,22 @@
 **Implementation agent:** Claude Code — explicit user-approved override of
 the normal Claude-plans/Codex-implements division of labor, for this
 feature only (2026-09-19).
-**Current branch:** `feature/table-rotation-multi-view`
-**Current phase:** Implementation — COMPLETE for all 5 views, the full
-backend (occupancy integrity, permission expansion, auto-row
-reconciliation, retention), Upgrade 1.1 (Transfer/End Table/Unassign/
-Skip Turn as distinct semantics, plus a follow-up UI refinement making
-Transfer/End Floor-only), the multi-table follow-up (a server may hold
-zero, one, or many active tables; Floor's decision dialog; Picker's
-TableMap as a popup), and the "End one or more" follow-up (the decision
-dialog's End sub-step is a checkbox multi-select, not single-choice —
-see the "End one or more" section below). Locally validated:
-Vitest/pgTAP/`check`/`build`/full 3-project Playwright (231/231) all
-green. A small number of items are explicitly out of scope for this
-session (dining_tables seeding/onboarding, broader retention) — see
-"What's not done" below and `IMPLEMENTATION_LOG.md` for the full
-phase-by-phase record. **No merge to `main` has been performed or
-authorized.**
+**Current branch (as of the production parity fix):**
+`fix/table-rotation-production-upgrade`, branched from `main` after
+`feature/table-rotation-multi-view` merged (PR #46, merge commit
+`d1161c9`, explicit user approval given).
+**Current phase:** `feature/table-rotation-multi-view` itself —
+COMPLETE and MERGED to `main`: all 5 views, the full backend (occupancy
+integrity, permission expansion, auto-row reconciliation, retention),
+Upgrade 1.1, the multi-table follow-up, the "End one or more"
+follow-up, and the Floor popup/ownership-visuals follow-up (see that
+section below). Since merging, production reported a blank Floor/
+Picker/Servers layout and a missing `board_skip_turn` RPC — root-caused
+and fixed on `fix/table-rotation-production-upgrade` (PR #47); see the
+"Production parity fix" section below for current status and the two
+items still needing user action. `dining_tables` seeding, once listed
+under "What's not done," is now done in production (section below) —
+that list entry is historical.
 
 **Design reference:** `docs/design/table-rotation/` — primary HTML
 `approved-design-export/Table Rotation Multi-View v2.dc.html`
@@ -340,21 +340,69 @@ the legend reading "Mia Chen · 1 table"; at 390×844 mobile width in dark
 theme, the legend scrolled horizontally with no page-level overflow and
 the assigned tile stayed legible.
 
-**No merge to `main` has been performed or authorized.**
+This follow-up was merged to `main` as `d1161c9 Merge pull request #46
+from KrapaGoutam/feature/table-rotation-multi-view`, after explicit user
+manual-test approval ("approved") — matching this repo's existing
+merge-commit convention (every prior PR merge, never squash/rebase).
+
+## Production parity fix (2026-09-20) — status: schema/data deployed and verified; two follow-ups need user action
+
+Post-merge, production reported a blank Floor/Picker/Servers layout and
+a missing `board_skip_turn` RPC. Root-caused directly against the live
+production database (Supabase MCP, read-only first): `dining_tables`/
+`dining_areas` had zero rows for this restaurant's location, and
+production's migration history had never advanced past
+`20260909120000` — all five Table Rotation Multi-View migrations
+(including `board_skip_turn`, `board_transfer`, `board_end_table`, and
+a `board_assign` signature fix) were undeployed, not just
+`board_skip_turn`'s. Root cause of _that_: `deploy-migrations`
+(`.github/workflows/database.yml`, push-to-`main` only) has been
+silently failing since before PR #39 (`SUPABASE_ACCESS_TOKEN`
+privilege problem — a repo-owner action, not a code fix). Full
+writeup: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 12;
+implementation record: `IMPLEMENTATION_LOG.md`'s "Production parity
+fix" section.
+
+Fix branch `fix/table-rotation-production-upgrade` (from `main`), PR
+#47, CI green. Local validation: `npm run check` PASS, Vitest 397/397
+(+2), pgTAP 330/330 (+11), `npm run build` PASS, Playwright 297/297.
+
+The five already-correct pending migrations plus this fix's new
+`20260923090000_table_rotation_floor_layout_backfill.sql` were applied
+directly to production via the Supabase MCP connector (each reviewed
+for destructive statements first — none found; every referenced
+constraint/policy confirmed against the live schema before applying).
+Verified after deployment: all 16 `board_*` RPCs now match every
+frontend call exactly with correct grants; the full T1-T19/B1-B8
+layout exists for the real location with correct coordinates and
+area names; `pg_cron` confirmed available, retention job scheduled.
+
+**No merge to `main` has been performed or authorized for this fix
+branch.**
 
 ## Pending next action
 
-The Floor available-table popup + ownership visuals follow-up is
-implemented and fully validated locally, and the feature branch/PR are
-current with all three staged commits. Per the explicit instruction it
-was implemented under: **the very next step is to confirm remote CI is
-green, then launch the app locally for the user's own manual testing and
-stop** — no merge until the user explicitly approves after testing it
-themselves. Once approved: re-verify the working tree is clean, re-run
-PR CI, confirm the branch is current with `main`, then merge using this
-repo's existing convention (inspect prior merge history rather than
-assuming squash/rebase/merge), watch post-merge CI/CD and deployment,
-and report back.
+**Migration-history bookkeeping — resolved**: the user granted explicit
+permission, the six-row `version` correction was re-run and verified —
+production's migration history now matches local filenames exactly.
+
+Two items remain (neither blocks production working right now — the
+schema/data fix is already live and verified):
+
+1. **`SUPABASE_ACCESS_TOKEN` GitHub Actions secret**: still needs
+   rotation/re-scoping from an account with sufficient privileges on
+   project `ftadewtkjlaotfdvtjcv` (the-lineup) before the normal
+   `deploy-migrations` CI path works again for future migrations.
+2. **Live production smoke test**: not yet performed. This agent could
+   not independently determine the public production URL (the
+   Vercel MCP connector returned a 403 for this account scope, and the
+   deployment URL found via GitHub's deployments API redirects to
+   Vercel SSO) — the user is providing the correct URL so this can run
+   with the existing test accounts.
+
+Once those are resolved: confirm PR #47 is current with `main`, re-run
+CI, and wait for explicit user approval before merging (never
+automatic).
 
 ## Documentation created/updated this phase
 

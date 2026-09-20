@@ -168,3 +168,19 @@ only — a `getInitials(name)` pure function and a `TableMap`/`FloorView`
 rendering change, both reading data (`FloorOccupant.name`/`.color` from
 `resolveFloorTables`) that was already being returned. Confirmed
 unchanged by the full pgTAP suite (319 assertions, all still passing).
+
+## Production parity fix delta
+
+New migration:
+`20260923090000_table_rotation_floor_layout_backfill.sql`. Full spec:
+`TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 12. One new
+function, `private.seed_canonical_floor_layout(p_org_slug text)` —
+idempotent, tenant-scoped, backfills `dining_areas`/`dining_tables` for
+one specific already-onboarded restaurant. No column/table/RLS/grant
+changes to any existing object — `dining_tables`/`dining_areas`
+themselves are unchanged, only rows are inserted, via `ON CONFLICT DO
+NOTHING` against their existing unique constraints. Confirmed against
+the live production schema (not assumed) that no other data-shape gap
+existed: `dining_tables`/`dining_areas`/`section_assignments` all
+already had the exact columns/constraints Upgrade 1.1 expects, from the
+original `initial_schema` migration.

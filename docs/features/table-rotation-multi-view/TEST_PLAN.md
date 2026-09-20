@@ -386,6 +386,28 @@ Full spec: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 11.
   horizontal overflow, initials/legend readable, touch-friendly targets
   — and visually spot-checked in both `light` and `dark`.
 
+## Production parity fix
+
+Full spec: `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 12.
+
+- **`getInitials`/backfill idempotency, tenant isolation, no
+  duplication, existing-layout-not-overwritten**: `0023_table_rotation_
+floor_layout_backfill.test.sql`, 11 assertions (pgTAP).
+- **Empty-layout explicit message**: `table-map.test.tsx`, 2 tests
+  (Vitest/RTL) — zero tables renders the message and not the map; one
+  or more tables renders the map and not the message.
+- **Local vs. production distinction**: local/CI pgTAP can only prove a
+  migration is _correct_ — it always runs against a freshly, fully
+  migrated database, so it can never detect "correct locally, never
+  applied to production" (the actual root cause here). That class of
+  drift was only caught by direct production inspection (Supabase MCP,
+  read-only queries), not by any automated test in this suite, and is
+  called out explicitly rather than implied to be test-covered.
+- **Production verification** (not run through this repo's test
+  runners — see section 12.1's report for method and results):
+  migration history parity, all 16 RPC signatures + grants, floor-layout
+  row count/coordinates/area-name for the real location.
+
 ## Regression
 
 - Features 003, 009, 010, 011, 028 — all existing acceptance criteria

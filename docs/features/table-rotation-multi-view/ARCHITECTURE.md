@@ -273,3 +273,23 @@ table_rotation_entries / rotation_rounds  →  NOT deleted by this feature
                                 depends on this data remaining queryable;
                                 deferred pending product sign-off)
 ```
+
+## Production deployment (critical operational note)
+
+`.github/workflows/database.yml`'s `deploy-migrations` job (push-to-
+`main` only) is what is supposed to keep the hosted production Supabase
+project current -- `migrations-and-policies` (pull-request only) never
+touches it, only an ephemeral local instance. This job silently failed
+on every push since before PR #39 (`SUPABASE_ACCESS_TOKEN` lacking
+privileges on this project -- a token/account problem, not a migration
+or code defect), so no migration reached production for that entire
+window, confirmed directly: production's migration history stopped at
+the pre-Table-Rotation-Multi-View baseline until a production-fix pass
+applied the six pending migrations via the Supabase MCP connector's own
+migration-apply mechanism instead. **A green `CI`/Vercel deployment is
+not evidence the database is current** -- they are two independent
+deployment paths (`docs/features/table-rotation-multi-view/TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md`
+section 12 has the full incident writeup and a known follow-up: the six
+migrations applied via MCP need their
+`supabase_migrations.schema_migrations.version` values corrected to
+match their local filenames before the normal CI path is trusted again).

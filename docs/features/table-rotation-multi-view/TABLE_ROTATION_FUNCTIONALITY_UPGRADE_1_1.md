@@ -571,3 +571,85 @@ themselves (Assign Also/Transfer/End existing table(s)/Cancel, sections
 shared `TableMap`'s new tile rendering for free. No change to Grid or
 Dashboard, which have never used `TableMap` and keep their own existing
 `TableEntry`/summary rendering untouched.
+
+## 12. Production parity fix: floor layout backfill + deployment gap
+
+**Root cause, both confirmed directly against the live production
+database (read-only queries), not assumed:**
+
+- **Blank Floor/Picker/Servers**: `dining_tables`/`dining_areas` exist in
+  production since `20260905065702_initial_schema.sql` (already
+  applied) — RLS and the frontend query are both correct — but zero rows
+  were ever inserted for this restaurant's only location. No migration
+  ever seeded them, and there is no admin "configure your floor plan"
+  UI yet, so the table simply stayed empty since the location was
+  created.
+- **`board_skip_turn` missing, plus more**: production had never
+  received any of the five Table Rotation Multi-View / Upgrade 1.1
+  migrations (`20260919120000` through `20260922100000`). This wasn't
+  limited to `board_skip_turn` — `board_transfer`, `board_end_table`,
+  `board_delete_row`, and `board_end_and_assign` were entirely absent,
+  and the deployed `board_assign` was missing the `p_confirm_transfer`
+  parameter the current frontend sends, so it also failed via
+  PostgREST's exact-signature matching (every RPC call is matched by
+  its full set of named parameters — an extra or missing name is
+  "function not found," identical in kind to the reported
+  `board_skip_turn` error). Root cause: the `deploy-migrations` GitHub
+  Actions job (`.github/workflows/database.yml`) has been silently
+  failing on every push to `main` since before PR #39
+  (`docs/STATUS.md` already tracked one occurrence; this was its
+  third), due to a `SUPABASE_ACCESS_TOKEN` privilege problem requiring
+  a repo-owner action (rotate/re-scope the token) — outside any code
+  fix's reach. No migration reached production in that entire window,
+  including six real ones (one payroll migration plus all five Table
+  Rotation Multi-View migrations).
+
+### 12.1 The fix: one new migration, deployed alongside the five already-pending ones
+
+`20260923090000_table_rotation_floor_layout_backfill.sql` (new,
+section 11 already covers its content in the ownership-visuals
+context; documented here for the production-fix angle) backfills the
+canonical `DEMO_FLOOR_LAYOUT` (T1-T19 + B1-B8, identical label/position)
+for this restaurant's location — scoped by organization slug, never a
+hardcoded UUID, idempotent, and a no-op in every local/CI database. This
+migration, plus the five already-correct-but-undeployed Table Rotation
+Multi-View migrations, were applied directly to the production database
+via the Supabase MCP connector's migration-apply mechanism (Supabase's
+own tracked DDL path, not a manual ad hoc SQL paste) — the normal CI
+path (`deploy-migrations`) remains blocked pending the token rotation
+above.
+
+### 12.2 Known follow-up: migration history bookkeeping
+
+The MCP apply mechanism recorded each migration's `name` correctly
+(matching the local filename) but stamped its `version` with the
+apply-time timestamp rather than the version embedded in that filename.
+Until corrected, a future `supabase db push` (once the CI token is
+fixed) would not recognize these six migrations as already applied by
+version number and would attempt to reapply them, which would fail
+(several of the underlying `CREATE FUNCTION`/`CREATE TRIGGER`
+statements are not `OR REPLACE`, and `ALTER TABLE ... ADD COLUMN` isn't
+idempotent). The schema and data themselves are fully correct and
+verified; only `supabase_migrations.schema_migrations.version` for
+these six rows needs a metadata-only correction to match the local
+filenames' timestamps before the normal CI deployment path is used
+again. This requires either direct SQL access with elevated permission
+(blocked for this agent by its own safety classifier, correctly) or the
+repo owner's own action once they have direct database access.
+
+### 12.3 Free-tier / extension verification
+
+`pg_cron` (used by the already-pending retention migration,
+`20260919130000_board_events_retention.sql`) was confirmed available
+(`default_version` present in `pg_available_extensions`) on this exact
+production project before deployment — no free-tier blocker, no
+fallback needed; it installed and scheduled successfully.
+
+### 12.4 Explicit non-goals for this fix
+
+No RLS or grant changes were needed — both were already correct for
+`dining_tables`/`dining_areas` and for every RPC (confirmed by direct
+inspection before and after deployment). No changes to any already-
+deployed, already-correct RPC signature. No new dummy users created;
+production validation uses only the existing test/staff accounts
+already known to the user, never persisted anywhere in this repo.
