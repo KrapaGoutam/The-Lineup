@@ -1,5 +1,63 @@
 # Table Rotation Multi-View — Agent Handoff
 
+## Version Upgrade Part 1 — Audit Complete Checkpoint (2026-10-21)
+
+**Current branch:** `upgrade/table-allocation-v2-part1`
+
+**Base/latest commit:** current branch `HEAD` is the Version Upgrade Part 1 documentation commit; its parent/base is fetched `origin/main` at `3403058`
+
+**Remote push status:** Not pushed. GitHub CLI account label is expected, but its token is invalid.
+
+**Phase:** Audit, approval-gated plan, validation, and local documentation commit complete. Product implementation is not authorized.
+
+**Completed:** Git recovery, exact remote-base verification, branch creation, instruction review, frontend/database/test/deployment audit tracks, finding synthesis, `VERSION_UPGRADE_PART1_AUDIT.md`, and `VERSION_UPGRADE_PART1_PLAN.md`.
+
+**In progress:** none; stopped at the explicit implementation approval boundary.
+
+**Not started:** any product implementation, database migration, production mutation, deployment, PR, or merge.
+
+**Key findings:** 2 P0, 18 P1, 12 P2, and 2 P3 grouped findings. P0: cross-actor End fails the entry UPDATE `WITH CHECK` because `assigned_by` remains the original assigner; and the entry/member/round relationship does not structurally prove one service session, permitting a same-org historical-lock bypass through mixed IDs. High risks also include raw mutation/audit grants, unsupported Clear Cell undo, creator authorization bypass, sparse client reducers, stale login/history/midnight state, combined-table ambiguity, demo-only browser CI, and independent frontend/database deployment.
+
+**Blockers:** production schema parity cannot be independently verified. Expected Supabase project `ftadewtkjlaotfdvtjcv` is inaccessible from the active context, which exposes only unrelated JobQuest projects. GitHub CLI token returns 401. Cloud mutation and branch push remain stopped until identity is safe.
+
+**Database state:** no mutation performed. Repository migrations/tests were audited; production migration/catalog metadata remains read-only blocked by identity mismatch.
+
+**CLI account state:** Git remote is expected `KrapaGoutam/The-Lineup`; GitHub token invalid. Vercel link resolves to project `the-lineup` under team `Onepiece` and user `krapagoutam-2284`; read-only inspection unexpectedly completed device OAuth and changed local Vercel credential state, but performed no project/deployment mutation. Supabase project mismatch remains the decisive blocker.
+
+**Test status:** allocation Vitest 73/73 passed. Documentation Prettier, ESLint, and TypeScript/Next route type generation passed. Full `npm run check` stops only because the preserved pre-existing untracked `The Lineup.code-workspace` fails repository-wide formatting. Twelve allocation pgTAP files / 168 planned assertions and two allocation Playwright files / 51 tests were mapped but not rerun; local database tooling was unavailable and Playwright is structurally demo-mode.
+
+**Next exact task:** user reviews/approves the plan. If approved, begin only the authorized phase; first restore and verify project identities. Do not push, migrate, deploy, or implement while the current identity blockers remain.
+
+---
+
+## Version Upgrade Part 1 — Initial Audit Checkpoint (Historical, 2026-10-21)
+
+**Current branch:** `upgrade/table-allocation-v2-part1`
+
+**Base/latest commit:** `3403058` (`origin/main` after a fresh fetch)
+
+**Remote push status:** Not pushed; audit is in progress.
+
+**Phase:** Audit and plan only; product implementation is not authorized.
+
+**Completed:** Git recovery, exact remote-base verification, dedicated branch creation, instruction review, and audit/task initialization.
+
+**In progress:** targeted source/database/test inventory and evidence gathering.
+
+**Not started:** final synthesis, derived implementation plan, documentation validation, commit, push, and all product implementation.
+
+**Key findings so far:** Git remote is the expected `KrapaGoutam/The-Lineup`; the active GitHub CLI account label is `KrapaGoutam`, but its stored token is invalid (HTTP 401), blocking open-PR inspection and safe GitHub mutation.
+
+**Database state:** no database mutation performed; production comparison is pending and will be read-only.
+
+**CLI account state:** GitHub token invalid; Vercel and Supabase identities pending.
+
+**Test status:** no tests run yet; documentation initialization only.
+
+**Next exact task:** inventory frontend and database symbols, then map all Table Allocation RPCs, policies, view data flows, migrations, and tests into `VERSION_UPGRADE_PART1_AUDIT.md`.
+
+---
+
 **Planning agent:** Claude (Claude Code)
 **Implementation agent:** Claude Code — explicit user-approved override of
 the normal Claude-plans/Codex-implements division of labor, for this
