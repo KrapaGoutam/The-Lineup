@@ -1,12 +1,95 @@
-# Table Allocation Version Upgrade Part 1 — Implementation Plan
+# Table Rotation V2 Part 1 — Implementation Plan (living)
 
-**Status:** Proposed; waiting for explicit user approval
+**Branch:** `upgrade/table-allocation-v2-part1` · **Parent issue:** [#101](https://github.com/KrapaGoutam/The-Lineup/issues/101) · **Milestone:** Table Allocation V2 — Part 1
+**Audit:** [`VERSION_UPGRADE_PART1_AUDIT.md`](VERSION_UPGRADE_PART1_AUDIT.md) · **Acceptance:** [`PART1_ACCEPTANCE_CRITERIA.md`](PART1_ACCEPTANCE_CRITERIA.md) · **Test matrix:** [`PART1_TEST_MATRIX.md`](PART1_TEST_MATRIX.md) · **Report:** [`PART1_IMPLEMENTATION_REPORT.md`](PART1_IMPLEMENTATION_REPORT.md)
+**Baseline evidence:** `docs/testing/THE_LINEUP_DEV_VALIDATION_REPORT.md` (D-01…D-08; local/untracked — it contains DEV-only credentials)
+**Environment:** DEV only (`the-lineup-dev`, `opmujepkemwcdxxorhfd`). PROD (`ftadewtkjlaotfdvtjcv`) is out of scope and untouched.
 
-**Source:** `VERSION_UPGRADE_PART1_AUDIT.md`
+## Current status
 
-**Branch:** `upgrade/table-allocation-v2-part1`
+| Phase | Scope                             | Defects          | Status                                                |
+| ----- | --------------------------------- | ---------------- | ----------------------------------------------------- |
+| 1A    | Database integrity                | D-02             | [x] DB complete — pgTAP + real-mode PASS (see matrix) |
+| 1B    | Authorization + trusted mutations | D-01, D-08       | [x] DB complete — pgTAP + real-mode PASS              |
+| 1C    | Canonical read model              | —                | [ ] in progress                                       |
+| 1D    | Undo / Redo                       | D-05, D-06       | [x] DB complete — pgTAP + real-mode PASS              |
+| 1E    | Client / Realtime consistency     | D-03, D-04, D-07 | [ ] in progress                                       |
+| 1F    | Real-mode cross-view validation   | all              | [ ] not started                                       |
 
-**Implementation:** Not started
+A box is checked only after its exit validation passed; the evidence is in the test matrix. 1B and 1D share one migration pair because revoking direct DML (1B) requires the Undo/Redo RPCs to be trusted functions (1D).
+
+## Scope
+
+Table Rotation / Table Allocation only: Grid, Floor, Picker, Servers, Dashboard; Assign, End, Reassign, Transfer, Skip, Reorder, Add/Remove server, Clear Cell/Row/Column/Board, Undo, Redo; Realtime; cross-manager actions; session integrity; one canonical shared table state.
+
+## Non-goals
+
+No multi-organization / multi-branch / cross-organization membership, no internal attendance, no payroll expansion, no module toggles (Part 2). No visual redesign. No PROD action, no merge to `main`, no change to `organizations.created_by` authorization outside the board path (tracked in #106).
+
+## Architecture decisions
+
+1. **One physical table model.** `dining_tables` (location-scoped, `unique(location_id, label)`) is the only physical table registry. Floor layout is metadata on the same rows (`position_x/y`, area). Grid/Floor/Picker/Servers/Dashboard never own tables.
+2. **One assignment model.** `table_rotation_entries` is the logical lifecycle record (active → ended / skipped); `section_assignments` is the trigger-maintained ledger of _current physical claims_ (partial unique index: one active claim per table per session). Views are projections of those two.
+3. **One authoritative session boundary.** `service_sessions` (location + date). Every rotation row now carries/derives the same `service_session_id`, enforced by composite FKs, not by caller input.
+4. **Trusted mutation boundary.** The sixteen `board_*` RPCs keep their signatures but are `SECURITY DEFINER` (empty `search_path`), authenticate `auth.uid()`, require an _active membership_, derive the location from the session, lock the session, evaluate the historical/finalized lock against the session the target row belongs to, and write the audit event in the same transaction. Direct client DML on the rotation graph, the ledger, sessions and `board_events` is revoked.
+5. **`assigned_by` is audit metadata, never authorization.** The closer is recorded in the new `ended_by` column and the event actor.
+6. **Reassign is atomic and non-destructive.** Taking a held table (explicit `p_confirm_transfer`) ENDS the previous owner's entry (history kept) and inserts the new one in one transaction; without confirmation a held table is refused. A combined assignment (`5+6`) is only displaced as a whole. Transfer likewise ends the source and starts the destination.
+7. **Remove-server rule.** A server who owns an active table cannot be removed (End or Transfer first). Pause is allowed and leaves ownership alone. Skip never touches ownership; Reorder changes rotation order only.
+8. **Audit immutability.** `board_events` is append-only for clients; the only mutable column is `undone_at`, only inside Undo/Redo (guarded trigger + revoked grants).
+9. **Undo/Redo = logical command reversal.** Events carry full row snapshots (label, status, original assigner, timestamps) and displaced-owner lists; every command is reversible, serialized per board by the session lock.
+10. **Location seam.** `private.can_operate_board(org, location)` is the single place a future profile → organization membership → location-access model plugs in.
+
+## Database invariants (all enforced in the database)
+
+1. One physical table registry. 2. Tables are location-scoped. 3. Table-number uniqueness is per location. 4. One authoritative session per rotation row. 5. Round, member, entry, claim cannot cross sessions. 6. One active claim per table per session. 7. Any authorized member can manage assignments created by others. 8. The historical lock cannot be bypassed by supplying another session. 9. Sensitive changes are atomic. 10. `board_events` cannot be forged. 11. Audit identity derives from `auth.uid()`. 12. Removing a server cannot orphan active tables. 13. Reorder/skip never change ownership. 14. Authorization = active membership row only (board path). 15. A claim's table, session and location are one location.
+
+## Migration strategy
+
+Forward-only; no applied migration is edited. Two migrations, applied to DEV only (and registered in `supabase_migrations.schema_migrations`):
+
+- `20261023100000_table_rotation_v2_session_integrity.sql` — pre-flight (aborts on corrupt data), composite keys, `table_rotation_entries.service_session_id` + `ended_by`, `section_assignments.location_id`, session/location FKs, derive-the-session trigger, identity-lock trigger, per-board guard triggers, new index.
+- `20261023110000_table_rotation_v2_trusted_mutations.sql` — helpers, definer RPCs, retired confirm-transfer back door, append-only events, dropped write policies, revoked DML grants, exact RPC ACLs.
+
+Compatible with the currently deployed frontend (signatures unchanged). Rollback is a corrective forward migration. **Not applied to PROD.** Verified from scratch with `supabase db reset` (35 migrations) and the full pgTAP suite (25 files).
+
+## Authorization strategy
+
+Owner / general manager / shift manager / host / server (active membership) operate the board (Feature 011). Only owner / GM / SM / host may _open_ a day. Anonymous, other-organization, deactivated and non-member callers are rejected by every RPC. `has_org_role` (still used by SELECT policies) retains its creator bypass; fixing it globally is #106 and outside the board mutation path.
+
+## Canonical read model (1C)
+
+`AllocationContext` gains the server's active physical claims; a single pure derivation (`domain/board-read-model.ts`) produces table state, server summaries and dashboard statistics for all five views, and flags any divergence between Grid-derived occupancy and the authoritative claims instead of silently choosing one.
+
+## Undo / Redo strategy
+
+See architecture decision 9. Clear Board Undo removes the blank trailing rows before restoring (no duplicate `sequence`); Clear Cell is snapshot-based; reassign Undo reactivates displaced owners; legacy (pre-V2) events remain undoable.
+
+## Realtime strategy
+
+Realtime remains invalidation → authoritative refetch. The client applies the signed-in user's JWT before subscribing (never as `anon`), re-subscribes on user change, and refetches on every re-subscribe.
+
+## Testing strategy
+
+`tests/real/*.real.test.ts` (vitest, hosted DEV, real JWTs, throw-away org/location/users per run) · pgTAP (`0025` plus updated 0006/0007/0013/0014/0019/0021/0024) · Vitest domain/hook tests · Playwright (demo-mode existing suite + real-mode two-context checks).
+
+## Future compatibility
+
+Nothing here assumes one user = one organization/location, one organization = one location, every organization has Table Rotation, or globally unique table numbers (see AC-50).
+
+## Phase checklist
+
+- [x] 1A Database Integrity
+- [x] 1B Authorization + Trusted Mutations
+- [ ] 1C Canonical Read Model
+- [x] 1D Undo / Redo
+- [ ] 1E Client / Realtime Consistency
+- [ ] 1F Real-Mode Cross-View Validation
+
+---
+
+# Appendix — original approved phase detail (pre-implementation)
+
+The sections below are the original Phase 0–6 plan written before implementation. They are preserved for traceability; the status table above supersedes their "not started" markers.
 
 ## Objective and Guardrails
 
@@ -515,4 +598,4 @@ Database changes must be backward-compatible so the previous frontend remains fu
 
 Approval should specify whether it covers the complete plan or only the next phase. The recommended first implementation authorization is **Phase 0 and Phase 1 only**, followed by review of the production parity report and critical database diff before Phase 2.
 
-**Implementation status: NOT STARTED — WAITING FOR USER APPROVAL.**
+**Original implementation status (historical): not started when this appendix was written.**

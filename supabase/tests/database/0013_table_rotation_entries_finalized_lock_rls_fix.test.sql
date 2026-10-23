@@ -4,12 +4,13 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(8);
 
--- Feature 028. Behavioral test of the raw RLS layer itself (not a
--- wrapping RPC), run as a plain SERVER specifically -- not an owner or
--- manager. This is the exact case that was silently broken: the
--- finalized-lock subquery joined tip_pools, which tip_pools_select_manager
--- hides from a server entirely, making `not exists(...)` always true
--- regardless of the pool's real status for exactly this role.
+-- Feature 028 (originally a raw-RLS test), rewritten for Table Rotation V2
+-- Part 1: the finalized-day lock must hold for a plain SERVER -- a role that
+-- cannot read tip_pools at all -- through the only write path that now
+-- exists, the board_* RPCs. The lock is evaluated by the SECURITY DEFINER
+-- lock helper (and re-checked by the row-level guard trigger on every
+-- entry write), so the manager-only visibility of tip_pools can no longer
+-- neutralize it. Direct table writes are denied outright.
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, aud, role)
 values
   ('00000000-0000-0000-0000-000000028001', '028-owner@passcode.internal', 'not-a-real-hash', now(), 'authenticated', 'authenticated'),
@@ -33,11 +34,11 @@ values
 
 insert into public.service_sessions (id, organization_id, location_id, service_date, meal_period, status)
 overriding system value
-values (900001, '00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', current_date, 'service', 'active');
+values (900001, '00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', (now() at time zone 'America/Chicago')::date, 'service', 'active');
 
 insert into public.tip_pools (id, organization_id, location_id, service_date, status)
 overriding system value
-values (900001, '00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', current_date, 'draft');
+values (900001, '00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', (now() at time zone 'America/Chicago')::date, 'draft');
 
 insert into public.rotation_rounds (id, organization_id, service_session_id, sequence)
 overriding system value
@@ -48,82 +49,76 @@ overriding system value
 values (900001, '00000000-0000-0000-0000-000000028101', 900001, '00000000-0000-0000-0000-000000028002', 1);
 
 -- Confirm the server genuinely cannot read tip_pools directly -- the
--- precondition that made the original bug possible, not just a fact
--- asserted in a comment.
+-- precondition that made the original bug possible.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
 select is(
   (select count(*)::int from public.tip_pools where id = 900001),
   0,
-  'a server cannot see this org''s tip_pools row directly -- confirms the precondition for the bug this migration fixes'
+  'a server cannot see this org''s tip_pools row directly -- the precondition for the original bug'
 );
 
--- INSERT, not-finalized: succeeds.
+-- Assign, not finalized: succeeds through the RPC.
 select lives_ok(
-  $$ insert into public.table_rotation_entries (organization_id, rotation_round_id, rotation_member_id, table_label, assigned_by)
-     values ('00000000-0000-0000-0000-000000028101', 900001, 900001, '12', '00000000-0000-0000-0000-000000028002') $$,
-  'a server can insert a table entry while the day''s tip pool is still draft'
+  $$ select public.board_assign('00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', (now() at time zone 'America/Chicago')::date, 900001, 900001, '12', false) $$,
+  'a server can assign a table while the day''s tip pool is still draft'
 );
 
--- UPDATE, not-finalized: succeeds (this is the exact path
--- board_assign's upsert relies on for editing an already-assigned cell).
+-- Clear Cell, not finalized: succeeds.
 select lives_ok(
-  $$ update public.table_rotation_entries set table_label = '14'
-     where rotation_round_id = 900001 and rotation_member_id = 900001 $$,
-  'a server can update that entry while still draft'
+  $$ select public.board_clear_cell('00000000-0000-0000-0000-000000028101', 900001, 900001, 900001) $$,
+  'a server can clear that cell while still draft'
 );
 
--- DELETE, not-finalized: succeeds.
-select lives_ok(
-  $$ delete from public.table_rotation_entries where rotation_round_id = 900001 and rotation_member_id = 900001 $$,
-  'a server can delete that entry while still draft'
-);
-
--- Finalize tips for the date, seeded fresh as postgres (not the RLS-bound
--- role, so the write itself isn't the thing under test).
+-- Finalize tips for the date, seeded as postgres (clear the simulated JWT
+-- too: a context with no user is the trusted/service context).
 reset role;
+select set_config('request.jwt.claim.sub', '', true);
 update public.tip_pools
 set status = 'finalized', finalized_at = now(), finalized_by = '00000000-0000-0000-0000-000000028001'
 where id = 900001;
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
-
--- INSERT, finalized: the real bug -- must now be blocked for a server.
-select throws_ok(
-  $$ insert into public.table_rotation_entries (organization_id, rotation_round_id, rotation_member_id, table_label, assigned_by)
-     values ('00000000-0000-0000-0000-000000028101', 900001, 900001, '12', '00000000-0000-0000-0000-000000028002') $$,
-  'new row violates row-level security policy for table "table_rotation_entries"',
-  'a server is blocked from inserting once tips are finalized -- the actual bug this migration fixes'
-);
-
-reset role;
 insert into public.table_rotation_entries (organization_id, rotation_round_id, rotation_member_id, table_label, assigned_by)
 values ('00000000-0000-0000-0000-000000028101', 900001, 900001, '12', '00000000-0000-0000-0000-000000028002');
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
 
--- UPDATE, finalized: blocked.
-select results_eq(
-  $$ update public.table_rotation_entries set table_label = '99'
-     where rotation_round_id = 900001 and rotation_member_id = 900001 returning 1 $$,
-  $$ select 1 where false $$,
-  'a server''s update is blocked once tips are finalized'
+select throws_ok(
+  $$ select public.board_assign('00000000-0000-0000-0000-000000028101', '00000000-0000-0000-0000-000000028201', (now() at time zone 'America/Chicago')::date, 900001, 900001, '14', false) $$,
+  'P0001',
+  'Tips are finalized for today -- the board is locked until a manager or owner reopens it.',
+  'a server is blocked from assigning once tips are finalized'
 );
-
--- DELETE, finalized: blocked (the gap this file originally targeted).
-select results_eq(
-  $$ delete from public.table_rotation_entries where rotation_round_id = 900001 and rotation_member_id = 900001 returning 1 $$,
-  $$ select 1 where false $$,
-  'a server''s delete is blocked once tips are finalized'
+select throws_ok(
+  $$ select public.board_end_table('00000000-0000-0000-0000-000000028101', 900001, 900001, 900001) $$,
+  'P0001',
+  'Tips are finalized for today -- the board is locked until a manager or owner reopens it.',
+  'a server is blocked from ending a table once tips are finalized'
+);
+select throws_ok(
+  $$ select public.board_clear_cell('00000000-0000-0000-0000-000000028101', 900001, 900001, 900001) $$,
+  'P0001',
+  'Tips are finalized for today -- the board is locked until a manager or owner reopens it.',
+  'a server is blocked from clearing a cell once tips are finalized'
 );
 
 reset role;
 select is(
   (select count(*)::int from public.table_rotation_entries where rotation_round_id = 900001 and rotation_member_id = 900001),
   1,
-  'the entry is still there after the blocked update/delete attempts -- confirmed as postgres, not just "returned nothing"'
+  'the entry is still there after the blocked attempts -- confirmed as postgres'
 );
+
+-- And the raw table is closed to the role entirely.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
+select throws_ok(
+  $$ delete from public.table_rotation_entries where rotation_round_id = 900001 and rotation_member_id = 900001 $$,
+  '42501',
+  null,
+  'a server cannot delete a table entry directly -- writes go through the board_* RPCs'
+);
+reset role;
 
 select * from finish();
 rollback;

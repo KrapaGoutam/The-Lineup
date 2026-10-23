@@ -77,17 +77,19 @@ select ok(
   'board_redo exists'
 );
 
--- Every board_* RPC is SECURITY INVOKER, never DEFINER -- confirmed for
--- all ten in one query rather than asserting it function by function.
+-- Table Rotation V2 Part 1: every board_* RPC is the trusted mutation
+-- boundary -- SECURITY DEFINER with an empty search_path, each one doing
+-- its own membership / session / lock checks (it used to be INVOKER
+-- relying on raw-table RLS, which left a second client-facing write API).
 select is(
   (
     select count(*) from pg_proc
     where pronamespace = 'public'::regnamespace
-      and proname like 'board\_%'
-      and prosecdef = true
+      and proname like 'board_%'
+      and not (prosecdef and coalesce(proconfig, '{}') @> array['search_path=""'])
   )::integer,
   0,
-  'no board_* function is SECURITY DEFINER'
+  'every board_* function is SECURITY DEFINER with an empty search_path'
 );
 
 -- Real gaps found while verifying existing policies against this phase's
@@ -96,12 +98,12 @@ select is(
 -- made undo -- and the routine auto-open of a new round during any
 -- member's ordinary assign -- silently fail for non-managers.
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'board_events'
-      and policyname = 'board_events_update_any_member'
+      and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
   ),
-  'board_events has the any-member update policy'
+  'board_events has no client write policy (append-only; written by RPCs)'
 );
 select ok(
   not exists (
@@ -112,12 +114,12 @@ select ok(
   'the old manager-only board_events update policy is gone'
 );
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'rotation_rounds'
-      and policyname = 'rotation_rounds_write_any_member'
+      and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
   ),
-  'rotation_rounds has the any-member write policy'
+  'rotation_rounds has no client write policy (rows are written by RPCs)'
 );
 select ok(
   not exists (
@@ -170,8 +172,8 @@ select ok(
 -- wrapper -- an invoker chain doesn't inherit anything the way a
 -- SECURITY DEFINER chain would.
 select ok(
-  has_function_privilege('authenticated', 'private.get_or_create_active_session(uuid,uuid,date)', 'EXECUTE'),
-  'authenticated can execute get_or_create_active_session'
+  not has_function_privilege('authenticated', 'private.get_or_create_active_session(uuid,uuid,date)', 'EXECUTE'),
+  'authenticated cannot call get_or_create_active_session directly (the SECURITY DEFINER board_* RPCs do)'
 );
 select ok(
   has_function_privilege('authenticated', 'private.ensure_trailing_round(uuid,bigint)', 'EXECUTE'),
@@ -198,28 +200,28 @@ select ok(
   'the old single any-member write policy is gone'
 );
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'table_rotation_entries'
       and policyname = 'table_rotation_entries_insert_any_member'
   ),
-  'table_rotation_entries has the any-member insert policy'
+  'table_rotation_entries has no direct insert policy (RPC-only)'
 );
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'table_rotation_entries'
       and policyname = 'table_rotation_entries_update_any_member'
   ),
-  'table_rotation_entries has the any-member update policy'
+  'table_rotation_entries has no direct update policy (RPC-only)'
 );
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'table_rotation_entries'
       and policyname = 'table_rotation_entries_delete_any_member'
   ),
-  'table_rotation_entries has the any-member delete policy'
+  'table_rotation_entries has no direct delete policy (RPC-only)'
 );
 
 -- Real gap found cross-checking DATA_MODEL.md's RLS matrix against what

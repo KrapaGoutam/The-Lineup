@@ -4,18 +4,20 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(5);
 
--- Originally one collapsed "for all" policy; split by Feature 015 Phase C
--- into insert/update/delete (0007_allocation_board_rpcs.test.sql covers
--- the split itself and the real gap that caused it) -- this just confirms
--- the any-member write capability itself is still there in some form.
+-- Originally one collapsed "for all" policy, then split by Feature 015
+-- Phase C into insert/update/delete. Table Rotation V2 Part 1 (migration
+-- 20261023110000) retired the second, client-facing mutation API: the any-
+-- member capability now lives in the board_* RPCs (membership-checked
+-- SECURITY DEFINER), and no direct write policy remains. See
+-- 0025_table_rotation_v2_trusted_mutations.test.sql for the full contract.
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public'
       and tablename = 'table_rotation_entries'
-      and policyname = 'table_rotation_entries_insert_any_member'
+      and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
   ),
-  'the any-member insert policy exists'
+  'table_rotation_entries has no direct client write policy (RPC-only)'
 );
 select ok(
   not exists (
