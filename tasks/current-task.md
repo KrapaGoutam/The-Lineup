@@ -20,7 +20,7 @@
 
 ## Evidence (final gate)
 
-hosted-DEV RPC suite 40/40 · browser suite 15/15 · pgTAP 25 files/343 assertions · `supabase db reset` 35 migrations · Vitest 428 · demo e2e (desktop) all pass · lint/typecheck/format/build pass · build output has no PROD ref.
+hosted-DEV RPC suite 40/40 · browser suite 15/15 · pgTAP 25 files/387 assertions · `supabase db reset` 35 migrations · Vitest 428 · demo e2e (desktop) all pass · lint/typecheck/format/build pass · build output has no PROD ref.
 
 ## How to resume
 

@@ -11,7 +11,7 @@ Evidence legend: **R** = `tests/real/table-rotation-v2.db.real.test.ts` (hosted 
 | ---------------------------------------------- | --------------------------------------------- | --------------------------------------------------- |
 | Real-mode DB/RPC (hosted DEV)                  | `npm run test:real`                           | **40/40 PASS**                                      |
 | Real-mode browser (3 contexts, DEV-pinned app) | `npm run test:real:ui`                        | **15/15 PASS** (14 scenarios + extended A/B/C)      |
-| pgTAP (local Supabase, all files)              | `npx supabase test db`                        | **25 files / 343 assertions PASS** (new `0025`: 46) |
+| pgTAP (local Supabase, all files)              | `npx supabase test db`                        | **25 files / 387 assertions PASS** (new `0025`: 46) |
 | Migrations from scratch                        | `npx supabase db reset`                       | **35 migrations apply cleanly**                     |
 | Vitest                                         | `npm test`                                    | **428/428 PASS**                                    |
 | Demo-mode e2e (what CI runs)                   | `npx playwright test --project=desktop`       | **all PASS** after the date-pinning fix below       |

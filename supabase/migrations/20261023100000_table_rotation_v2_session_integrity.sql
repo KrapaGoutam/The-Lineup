@@ -41,6 +41,7 @@ declare
   v_entries_cross_session bigint;
   v_claims_cross_session bigint;
   v_claims_cross_location bigint;
+  v_stale_duplicates bigint;
 begin
   select count(*) into v_entries_cross_session
   from public.table_rotation_entries e
@@ -61,6 +62,26 @@ begin
   join public.service_sessions s on s.id = sa.service_session_id
   join public.dining_tables d on d.id = sa.dining_table_id
   where d.location_id <> s.location_id;
+
+  -- Informational only (not a blocker): ACTIVE entries sharing a table label
+  -- within one session, left behind by the pre-V2 confirm-transfer path.
+  -- They are reported, never rewritten; the app surfaces them as
+  -- claim divergences.
+  select count(*) into v_stale_duplicates
+  from (
+    select service_session_id, trim(label) as label
+    from (
+      select r.service_session_id, unnest(string_to_array(e.table_label, '+')) as label
+      from public.table_rotation_entries e
+      join public.rotation_rounds r on r.id = e.rotation_round_id
+      where e.status = 'active' and e.table_label is not null
+    ) parts
+    group by service_session_id, trim(label)
+    having count(*) > 1
+  ) dupes;
+  if v_stale_duplicates > 0 then
+    raise notice 'Table Rotation V2: % table(s) have more than one ACTIVE entry in a session (pre-V2 reassignments); left untouched.', v_stale_duplicates;
+  end if;
 
   if v_entries_cross_session > 0 or v_claims_cross_session > 0 or v_claims_cross_location > 0 then
     raise exception
@@ -89,10 +110,24 @@ alter table public.table_rotation_entries
   add column service_session_id bigint,
   add column ended_by uuid;
 
+-- The backfill only fills a new column; it must not re-run the physical
+-- occupancy sync. The previous trigger version deletes and re-inserts every
+-- active entry's claims on ANY update and raises on a conflict -- and
+-- production data can hold two ACTIVE entries for one table (the old
+-- confirm-transfer path released the previous holder's claim but left that
+-- holder's entry active), so re-syncing here could abort the migration or
+-- resurrect a claim for a stale entry. Those stale entries are surfaced at
+-- read time (findClaimDivergences), not silently rewritten here.
+alter table public.table_rotation_entries
+  disable trigger table_rotation_entries_sync_occupancy;
+
 update public.table_rotation_entries e
 set service_session_id = r.service_session_id
 from public.rotation_rounds r
 where r.id = e.rotation_round_id;
+
+alter table public.table_rotation_entries
+  enable trigger table_rotation_entries_sync_occupancy;
 
 alter table public.table_rotation_entries
   alter column service_session_id set not null;

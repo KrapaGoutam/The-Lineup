@@ -73,21 +73,33 @@ See [`PART1_TEST_MATRIX.md`](PART1_TEST_MATRIX.md).
 | ----------------------------------------------------------- | -------------------------------------------------- |
 | `npm run test:real` — hosted DEV RPC/RLS, real JWTs         | 40/40 PASS                                         |
 | `npm run test:real:ui` — three browser contexts, DEV-pinned | 15/15 PASS (incl. extended A/B/C through the Grid) |
-| `npx supabase test db` — pgTAP                              | 25 files / 343 assertions PASS                     |
+| `npx supabase test db` — pgTAP                              | 25 files / 387 assertions PASS                     |
 | `npx supabase db reset`                                     | 35 migrations apply from scratch                   |
 | `npm test` (Vitest)                                         | 428 PASS                                           |
 | `npm run lint` / `typecheck` / format                       | PASS                                               |
 
 D-04 negative control: with the previous sign-in code the same browser suite stalled for 2.7 minutes and failed the live-update scenario; with the fix all 15 pass.
 
+### Independent security review of the migrations
+
+A read-only reviewer (separate agent) examined both migrations: no cross-tenant path, no SECURITY DEFINER / search_path / ACL hazard, no way to spoof the trusted-context bypass or set the undo GUC from a client, no lock-ordering deadlock. Four real findings, all fixed in the (still unreleased) migrations and re-verified from scratch:
+
+| #   | Finding                                                                                                                                                                                                                      | Fix                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | The `service_session_id` backfill fired the old occupancy trigger, which on production data holding two ACTIVE entries for one table (the pre-V2 confirm-transfer path) could abort the migration or resurrect a stale claim | Trigger disabled around the backfill; pre-flight now reports (does not rewrite) such duplicates |
+| 2   | Undo chose its target by `created_at` (transaction start) so a writer that waited on the session lock could be undone out of order                                                                                           | Order by `id` (as Redo already did)                                                             |
+| 3   | `board_end_and_assign` accepted a paused/removed column                                                                                                                                                                      | Requires an active column, like Assign/Transfer/Skip                                            |
+| 4   | A closed same-date session produced a NULL session and a misleading error                                                                                                                                                    | Explicit error                                                                                  |
+
 ## 5. Remaining risks (real, not hidden)
 
 1. **#106** — `private.has_org_role` still ORs `organizations.created_by`; SELECT policies on every module still use it. The board _mutation_ path no longer does. Fix globally in its own change.
 2. **Picker** refuses to take a held table (by design, unchanged); S04 "Picker later assigns 15→A" converges through Grid or Floor Transfer instead.
-3. **Hosted real-mode suites are not in CI** (they need DEV credentials and PINs); they are documented release evidence. CI runs the deterministic checks and local pgTAP.
-4. **Browser coverage gaps** (DB-proven only): S09/S10 concurrency, S19 combined tables UI, S21–S24, S26 Skip UI.
-5. **Neon credential** — `NEON_DATABASE_URL` in DEV equals PROD's and was printed once in an earlier session; operator rotation task.
-6. **`docs/testing/`** holds DEV-only credentials and stays untracked; the real-mode UI suite reads local ignored files for PINs.
+3. **Pre-V2 stale active entries** — production may hold two ACTIVE entries for one table (old confirm-transfer). The migration leaves them untouched; the loader reports them as claim divergences. A one-off data review is advisable before promotion.
+4. **Hosted real-mode suites are not in CI** (they need DEV credentials and PINs); they are documented release evidence. CI runs the deterministic checks and local pgTAP.
+5. **Browser coverage gaps** (DB-proven only): S09/S10 concurrency, S19 combined tables UI, S21–S24, S26 Skip UI.
+6. **Neon credential** — `NEON_DATABASE_URL` in DEV equals PROD's and was printed once in an earlier session; operator rotation task.
+7. **`docs/testing/`** holds DEV-only credentials and stays untracked; the real-mode UI suite reads local ignored files for PINs.
 
 ## 6. Future compatibility (Part 2 not started)
 

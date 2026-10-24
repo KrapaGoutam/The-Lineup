@@ -32,7 +32,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx supabase start
+      # Only the services the migrations and pgTAP need (database + auth).
+      # Starting the full stack pulls ~13 images and intermittently fails on
+      # the public registry's anonymous pull rate limit ("toomanyrequests").
+      - run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,realtime,storage-api,postgres-meta,supavisor
       - run: npm run db:reset
       - run: npm run db:test
       - if: always()

@@ -468,6 +468,9 @@ begin
         and s.service_date = p_service_date
         and s.meal_period = 'service'
         and s.status = 'active';
+      if v_session_id is null then
+        raise exception 'Could not open the board for that date -- a closed session already exists for it.';
+      end if;
       return v_session_id;
   end;
 end;
@@ -1227,7 +1230,9 @@ begin
   end if;
 
   perform private.begin_board_write(p_organization_id, p_service_session_id);
-  perform private.member_status_in_session(p_member_id, p_service_session_id);
+  if private.member_status_in_session(p_member_id, p_service_session_id) is distinct from 'active' then
+    raise exception 'That column is not active.';
+  end if;
 
   if p_end_round_ids is null or array_length(p_end_round_ids, 1) is null then
     raise exception 'Select at least one table to end.';
@@ -1326,7 +1331,10 @@ begin
   where service_session_id = p_service_session_id
     and undone_at is null
     and event_type <> 'undo' and event_type <> 'redo'
-  order by created_at desc, id desc
+  -- id, not created_at: now() is the TRANSACTION start, so a writer that
+  -- waited on the session lock commits later with an earlier created_at.
+  -- Redo already orders by id.
+  order by id desc
   limit 1;
 
   if v_event.id is null then
