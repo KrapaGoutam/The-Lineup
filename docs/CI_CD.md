@@ -16,6 +16,12 @@ Push green, reviewable feature commits—not every file edit. Git remains the hi
 
 The generated delivery bundle may have no remote configured. In that case CI files are ready, but no push or Vercel deployment occurs until the owner adds a GitHub remote and project credentials.
 
+## Integration branch (`development`) and release
+
+Feature, fix and docs branches open a pull request into `development` (the cumulative integration branch). CI runs on the pull request; merge with a **merge commit** (no squash) once it is green. `main` is production/release only and is promoted from `development` only after explicit owner approval. Note: a push to `main` runs the `Database` workflow's `deploy-migrations` job, which links and pushes migrations to the hosted production project.
+
+Hosted real-mode suites (`npm run test:real` — RPC/RLS with real JWTs, and `npm run test:real:ui` — three signed-in browser contexts) target the `the-lineup-dev` project, need DEV credentials and synthetic PINs, and are therefore **release evidence run by the developer**, not a CI job. Both refuse to run against anything but the DEV project. CI covers the deterministic checks and the local pgTAP suite (`supabase start` + `db reset` + `db:test`).
+
 ## Required checks
 
 - dependency install from lockfile;
