@@ -111,6 +111,12 @@ select is(
 -- IMMEDIATE, not on the INSERT statement itself -- force immediate
 -- checking here to observe the same violation a real (non-deferred-
 -- transaction) client call would see.
+--
+-- Table Rotation V2 Part 1: authenticated no longer holds INSERT on
+-- rotation_members (the board_* RPCs are the only writer), so the raw
+-- constraint probe runs as the table owner. The simulated user JWT stays set
+-- so the row-level board guard still applies to it.
+reset role;
 select lives_ok(
   format(
     $sql$insert into public.rotation_members (organization_id, service_session_id, server_profile_id, position)

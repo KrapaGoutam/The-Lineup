@@ -35,6 +35,26 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 19. [x] Virtual numeric keypad on login, additive alongside the typed passcode input, tablet/phone only (Feature 013)
 20. [x] Team designations — Owner/Manager/Assistant Manager/Staff, a label over the existing role model with Manager and Assistant Manager granted identical full permissions (Feature 014)
 
+## Table Allocation V2 — Part 1 (NOW)
+
+Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. Plan and evidence: `docs/features/table-rotation-multi-view/`.
+
+| Stage   | State                                                                                                                                   |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| NOW     | Final gate: CI on the feature PR, merge into `development`                                                                              |
+| DONE    | 1A database integrity · 1B trusted mutations · 1C read model · 1D undo/redo · 1E client/realtime · 1F real-mode validation (see report) |
+| NEXT    | Reconcile PROD parity and release flow (#111, #112, #113) before any promotion to `main`                                                |
+| LATER   | Part 2 — multiple organizations/branches, per-location module availability, internal attendance (see backlog)                           |
+| BLOCKED | Production parity: expected Supabase project not reachable from this tooling context (#111)                                             |
+
+### Backlog (deferred on purpose — do not start inside Part 1)
+
+- #106 `private.has_org_role` still honors `organizations.created_by` (board mutation path already membership-only).
+- Rotate the Neon attendance credential (DEV `NEON_DATABASE_URL` equals PROD's; operator task).
+- Picker taking over a held table with explicit confirmation (today it points to Floor Transfer).
+- Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
+- Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
+
 ## Phase 5 — Pilot hardening
 
 7. Accessibility and host-stand field test

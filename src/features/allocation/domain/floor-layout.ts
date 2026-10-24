@@ -13,6 +13,12 @@
 export type FloorResourceType = "table" | "bar_seat";
 
 export type FloorLayoutEntry = {
+  /**
+   * The canonical `dining_tables.id` of this physical table. Present in real
+   * mode (every view resolves a table through this one registry); demo mode's
+   * static layout has no database row, so it is absent there.
+   */
+  diningTableId?: number;
   label: string;
   x: number;
   y: number;

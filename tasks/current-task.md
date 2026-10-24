@@ -1,32 +1,42 @@
-# Current Task: none active
+# Current Task: Table Rotation V2 — Part 1 (Table Allocation Version Upgrade)
 
-**Status:** Idle — the "Payroll UX / Timezone / PIN Keypad" mega-request
-(6 phases: attendance timezone fix, payroll bulk generation,
-Generate Payroll + ledger modal dialogs, ledger unlock, payment
-unconfirm/edit, PIN keypad hardening) is fully merged to `main` as PRs
-#35, #36, #41 (replaces #37, which GitHub auto-closed when its stacked
-base branch was deleted — see `docs/agent-handoff.md`), #38, #39, and
-#40. Full history, design decisions, and per-phase writeups live in
-`docs/agent-handoff.md` — read that first if picking up related work
-(e.g. the flagged CI credentials gap below, or Phase 9's noted
-portrait-tablet coverage gap).
+# Table Rotation V2 Part 1 — Agent Handoff
 
-**Known open item (not a code defect):** the `Database` GitHub Actions
-workflow's `deploy-migrations` job fails on push to `main` —
-`SUPABASE_ACCESS_TOKEN` lacks the privileges Supabase's API now
-requires for `supabase link`. This blocks automatic deployment of the
-payment-unconfirm migration (`20260911130000_payroll_payment_unconfirm.sql`)
-to the hosted production database. The migration itself is verified
-correct (pgTAP, a full local `db reset` replay, and the PR's own
-`migrations-and-policies` check all passed) — this needs a repo owner
-to rotate/re-scope the token (Supabase dashboard → Access Tokens) and
-update the `SUPABASE_ACCESS_TOKEN` GitHub Actions secret, then either
-re-run the `Database` workflow on `main` or push a trivial commit.
+**Branch:** `upgrade/table-allocation-v2-part1` · **Base:** `origin/main` @ `3403058` · **HEAD:** see `git log -1`
+**Docs:** `docs/features/table-rotation-multi-view/` — `VERSION_UPGRADE_PART1_PLAN.md` (status), `PART1_ACCEPTANCE_CRITERIA.md`, `PART1_TEST_MATRIX.md`, `PART1_IMPLEMENTATION_REPORT.md`. Roadmap/backlog: `docs/ROADMAP.md`.
+**GitHub:** parent #101 · milestone #2 "Table Allocation V2 — Part 1" · Project #4 · phase issues 1A #103, 1B #102/#104/#105, 1C #107, 1D #129, 1E #108, 1F #110.
+**DEV:** `opmujepkemwcdxxorhfd` · **PROD:** `ftadewtkjlaotfdvtjcv` · **PROD touched: NO** · **development merged: NO (PR #131 open; `development` was created from `origin/main` @ 3403058)** · **main merged: NO**
 
-## Next task
+## Phase checklist
 
-None assigned. When a new feature or bug request comes in, follow
-`CLAUDE.md`/`AGENTS.md`'s planning workflow: write the plan to
-`docs/features/<slug>.md`, initialize this file from
-`docs/ai/FEATURE_HANDOFF.md`, and update `docs/STATUS.md` once
-implemented.
+- [x] 1A Database integrity (D-02)
+- [x] 1B Authorization + trusted mutations (D-01, D-08)
+- [x] 1C Canonical read model
+- [x] 1D Undo / Redo (D-05, D-06)
+- [x] 1E Client / Realtime consistency (D-03, D-04, D-07)
+- [x] 1F Real-mode validation (30 scenarios + extended A/B/C)
+- [ ] CI green on the feature PR → merge (merge commit, not squash) into `development` — **PR #131 open; `application`, `browser-smoke` and Vercel pass; the `Database` job (`migrations-and-policies`) fails only at `supabase start` with the registry rate limit `toomanyrequests: Data limit exceeded` (also failed on a dependabot branch before this work; retried 3×). The same job's steps were run locally and pass (db reset 35 migrations, pgTAP 25 files / 387 assertions). Re-run the job later (`gh run rerun <id> --failed`) or add registry auth; merge only when it is green or the owner accepts the infra exception.**
+- [ ] Final `development` → `main` promotion — ONLY after explicit user approval
+
+## Evidence (final gate)
+
+hosted-DEV RPC suite 40/40 · browser suite 15/15 · pgTAP 25 files/387 assertions · `supabase db reset` 35 migrations · Vitest 428 · demo e2e (desktop) all pass · lint/typecheck/format/build pass · build output has no PROD ref.
+
+## How to resume
+
+- `NEON_DATABASE_URL=` must be blank for every DEV process.
+- Browser suite: start `NEON_DATABASE_URL= npm run dev` (DEV env), then `npm run test:real:ui`; hosted RPC suite: `npm run test:real`; local DB: Docker Desktop + `npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,realtime,storage-api,postgres-meta,supavisor`, `npx supabase test db`.
+- Demo e2e needs port 3000 free (stop any DEV dev server first, otherwise the DEV server is reused).
+- Applied DEV migrations: `20261023100000_table_rotation_v2_session_integrity`, `20261023110000_table_rotation_v2_trusted_mutations` (recorded in `supabase_migrations.schema_migrations`). Do not edit them after merge.
+
+## DO NOT
+
+Touch PROD; merge to `main`; `git add .` / `git clean` / `git reset --hard`; commit `docs/testing/` (DEV credentials) or `The Lineup.code-workspace`; start Part 2.
+
+## Remaining risks / backlog
+
+See the report §5 and `docs/ROADMAP.md` (#106, Neon rotation, Picker takeover, hosted suites in CI, Part 2).
+
+## Processes
+
+The DEV dev server and the local Supabase containers were stopped. Docker Desktop was started by the agent and left running (JobQuest containers are unrelated; do not stop them).

@@ -1,5 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// The demo attendance fixture is anchored in September 2026 (demo-data.ts)
+// and the report defaults to the CURRENT month, so these specs only held
+// while the real calendar month was September. Pin the browser clock to the
+// fixture's month so they stay deterministic (they began failing on
+// 2026-10-01, independent of any feature work).
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-23T17:00:00Z"));
+});
+
 async function signIn(page: Page, passcode: string) {
   await page.goto("/");
   // MUST wait for hydration BEFORE filling the input, otherwise React

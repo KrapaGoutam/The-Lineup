@@ -34,6 +34,17 @@ export type ActionResult<T> =
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 /**
+ * The board is served from BOTH entry routes (`/` and `/r/[restaurantSlug]`,
+ * which share one loader). Revalidating only the slug route left the root
+ * route showing the pre-mutation snapshot (FRONT-006), so both are
+ * invalidated together.
+ */
+function revalidateBoard(restaurantSlug: string) {
+  revalidatePath(`/r/${restaurantSlug}`);
+  revalidatePath("/");
+}
+
+/**
  * RotationColumn.id is a person's profile id in the pure domain model
  * (rotation-board.ts), never rotation_members.id -- see allocation-data.ts
  * for the read-side half of this mapping. Every RPC that targets an
@@ -54,6 +65,64 @@ async function resolveMemberId(
   return data?.id ?? null;
 }
 
+/**
+ * The client applies an action optimistically, including the automatic
+ * trailing row the board opens after a fill -- that row only has a local id
+ * ("round-3") until the next authoritative refresh delivers the database id.
+ * A fast follow-up action on it would otherwise send a non-numeric id. The
+ * local id's number IS the row's sequence (the database numbers trailing rows
+ * with the same max+1 rule), so resolve it to the real row server-side. A row
+ * that does not exist yet is reported honestly instead of being guessed.
+ */
+async function resolveRoundId(
+  supabase: Supabase,
+  serviceSessionId: number | null,
+  roundId: string,
+): Promise<string | null> {
+  if (/^\d+$/.test(roundId)) return roundId;
+  const sequence = /^round-(\d+)$/.exec(roundId)?.[1];
+  if (!sequence || serviceSessionId === null) return null;
+  const { data } = await supabase
+    .from("rotation_rounds")
+    .select("id")
+    .eq("service_session_id", serviceSessionId)
+    .eq("sequence", Number(sequence))
+    .maybeSingle();
+  return data ? String(data.id) : null;
+}
+
+async function withResolvedRounds(
+  supabase: Supabase,
+  serviceSessionId: number | null,
+  action: BoardAction,
+): Promise<BoardAction | null> {
+  const resolve = (id: string) =>
+    resolveRoundId(supabase, serviceSessionId, id);
+  switch (action.type) {
+    case "assign":
+    case "clear-cell":
+    case "clear-row":
+    case "delete-row":
+    case "end-table":
+    case "skip-turn": {
+      const roundId = await resolve(action.roundId);
+      return roundId === null ? null : { ...action, roundId };
+    }
+    case "transfer": {
+      const sourceRoundId = await resolve(action.sourceRoundId);
+      return sourceRoundId === null ? null : { ...action, sourceRoundId };
+    }
+    case "end-and-assign": {
+      const ids = await Promise.all(action.endRoundIds.map(resolve));
+      return ids.some((id) => id === null)
+        ? null
+        : { ...action, endRoundIds: ids as string[] };
+    }
+    default:
+      return action;
+  }
+}
+
 export type ExecuteBoardActionInput = {
   restaurantSlug: string;
   organizationId: string;
@@ -71,7 +140,18 @@ export async function executeBoardActionRemote(
   if (sessionCheck) return sessionCheck;
 
   const serviceDate = zonedWallTimeFromInstant(new Date(), input.timeZone).date;
-  const { action } = input;
+  const resolvedAction = await withResolvedRounds(
+    supabase,
+    input.serviceSessionId,
+    input.action,
+  );
+  if (!resolvedAction) {
+    return {
+      ok: false,
+      error: "That row isn't ready yet -- give it a moment and try again.",
+    };
+  }
+  const action = resolvedAction;
 
   try {
     switch (action.type) {
@@ -98,7 +178,7 @@ export async function executeBoardActionRemote(
           p_confirm_transfer: action.confirmTransfer ?? false,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: data as number } };
       }
 
@@ -126,7 +206,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -153,7 +233,7 @@ export async function executeBoardActionRemote(
         if (!memberRow) {
           return { ok: false, error: "Could not confirm the new column." };
         }
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return {
           ok: true,
           data: { serviceSessionId: memberRow.service_session_id },
@@ -180,7 +260,7 @@ export async function executeBoardActionRemote(
           p_status: action.status,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -195,7 +275,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -218,7 +298,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -232,7 +312,7 @@ export async function executeBoardActionRemote(
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -256,7 +336,7 @@ export async function executeBoardActionRemote(
           p_direction: action.direction,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -270,7 +350,7 @@ export async function executeBoardActionRemote(
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -285,7 +365,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -314,7 +394,7 @@ export async function executeBoardActionRemote(
           p_dest_member_id: destMemberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -340,7 +420,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -367,7 +447,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: data as number } };
       }
 
@@ -400,7 +480,7 @@ export async function executeBoardActionRemote(
           p_table_label: action.tableLabel,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
     }
@@ -429,7 +509,7 @@ export async function undoBoardAction(input: {
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidateBoard(input.restaurantSlug);
   return { ok: true, data: null };
 }
 
@@ -447,7 +527,7 @@ export async function redoBoardAction(input: {
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidateBoard(input.restaurantSlug);
   return { ok: true, data: null };
 }
 

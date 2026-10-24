@@ -12,11 +12,11 @@ select ok(
   'board_clear_cell exists'
 );
 select ok(
-  not (
+  (
     select prosecdef from pg_proc
     where pronamespace = 'public'::regnamespace and proname = 'board_clear_cell'
   ),
-  'board_clear_cell is SECURITY INVOKER, not DEFINER, matching every other public board_* RPC'
+  'board_clear_cell is SECURITY DEFINER -- the trusted mutation boundary, like every other public board_* RPC'
 );
 
 -- Feature 028. Two servers, neither a manager -- server_one clears an
@@ -50,11 +50,11 @@ values
 
 insert into public.service_sessions (id, organization_id, location_id, service_date, meal_period, status)
 overriding system value
-values (900002, '00000000-0000-0000-0000-000000028311', '00000000-0000-0000-0000-000000028321', current_date, 'service', 'active');
+values (900002, '00000000-0000-0000-0000-000000028311', '00000000-0000-0000-0000-000000028321', (now() at time zone 'America/Chicago')::date, 'service', 'active');
 
 insert into public.tip_pools (id, organization_id, location_id, service_date, status)
 overriding system value
-values (900002, '00000000-0000-0000-0000-000000028311', '00000000-0000-0000-0000-000000028321', current_date, 'draft');
+values (900002, '00000000-0000-0000-0000-000000028311', '00000000-0000-0000-0000-000000028321', (now() at time zone 'America/Chicago')::date, 'draft');
 
 insert into public.rotation_rounds (id, organization_id, service_session_id, sequence)
 overriding system value
@@ -93,9 +93,10 @@ select ok(
   'the clear is attributed to server_one, the true actor, not server_two whose column it was'
 );
 
--- Finalize tips, re-seed the entry, then confirm a plain server is
--- blocked -- board_clear_cell's own assert_board_not_locked call, on
--- top of the (now-fixed) RLS delete policy underneath it.
+-- Finalize tips, re-seed the entry (as the trusted context: no user JWT),
+-- then confirm a plain server is blocked -- board_clear_cell's own lock
+-- check, backed by the row-level guard trigger.
+select set_config('request.jwt.claim.sub', '', true);
 update public.tip_pools
 set status = 'finalized', finalized_at = now(), finalized_by = '00000000-0000-0000-0000-000000028301'
 where id = 900002;

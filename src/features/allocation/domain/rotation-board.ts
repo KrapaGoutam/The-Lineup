@@ -205,6 +205,79 @@ export function getActiveTablesForColumn(
   return active;
 }
 
+/**
+ * Real mode never materializes an explicit "empty" cell (a round with no
+ * table_rotation_entries row for a column simply has no cell for it), so a
+ * reducer that writes into a "genuinely empty" slot must create the cell
+ * rather than assume it exists. Dereferencing it with `!` was D-07: a
+ * Transfer to a server with no cell in the destination round crashed the
+ * whole client.
+ */
+function ensureCell(round: RotationRound, columnId: string): RotationCell {
+  let cell = round.cells.find((c) => c.columnId === columnId);
+  if (!cell) {
+    cell = { columnId, tableLabel: null, status: "empty" };
+    round.cells.push(cell);
+  }
+  return cell;
+}
+
+function labelParts(label: string | null): string[] {
+  return (label ?? "")
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The deterministic, pure counterpart of the database's atomic reassign
+ * (public.board_assign with p_confirm_transfer, via
+ * private.displace_conflicting_entries): every OTHER column's ACTIVE cell
+ * that holds a table the new label claims is ENDED (history kept). A
+ * combined assignment is only displaced as a whole -- if the holder's cell
+ * covers tables the new label does not, the reassignment is refused
+ * (returns false) exactly as the database refuses it.
+ */
+function displaceConflictingCells(
+  board: RotationBoard,
+  columnId: string,
+  label: string,
+): boolean {
+  const wanted = new Set(labelParts(label));
+  const displaced: RotationCell[] = [];
+  for (const round of board.rounds) {
+    for (const cell of round.cells) {
+      if (cell.columnId === columnId || cell.status !== "active") continue;
+      const held = labelParts(cell.tableLabel);
+      if (!held.some((part) => wanted.has(part))) continue;
+      if (!held.every((part) => wanted.has(part))) return false;
+      displaced.push(cell);
+    }
+  }
+  for (const cell of displaced) cell.status = "ended";
+  return true;
+}
+
+/**
+ * Who is up next: the first ACTIVE column, in rotation order, with no turn
+ * recorded in the working round. A skipped turn is a recorded turn (its
+ * cell has status "skipped" and no label), so "no label" must never be read
+ * as "hasn't gone yet" -- that is what left a skipped server permanently
+ * next (FRONT-003).
+ */
+export function getNextColumn(
+  board: RotationBoard,
+): RotationColumn | undefined {
+  const working = getWorkingRound(board);
+  return board.columns
+    .filter((column) => column.status === "active")
+    .sort((a, b) => a.position - b.position)
+    .find((column) => {
+      const cell = working?.cells.find((c) => c.columnId === column.id);
+      return (cell?.status ?? "empty") === "empty";
+    });
+}
+
 export function createRotationBoard(columns: RotationColumn[]): RotationBoard {
   const board: RotationBoard = {
     columns: columns.map((column) => ({ ...column })),
@@ -239,6 +312,13 @@ export function applyBoardAction(
         existing.status !== "active"
       ) {
         return current;
+      }
+      if (action.confirmTransfer) {
+        // Atomic reassign: end the previous owner(s) in the same step the
+        // new assignment lands, mirroring board_assign.
+        if (!displaceConflictingCells(board, action.columnId, label)) {
+          return current;
+        }
       }
       if (existing) {
         existing.tableLabel = label;
@@ -301,11 +381,10 @@ export function applyBoardAction(
         destRound = findEarliestEmptyRoundForColumn(board, action.destColumnId);
       }
       if (!destRound) return current;
-      const destCell = destRound.cells.find(
-        ({ columnId }) => columnId === action.destColumnId,
-      )!;
-      sourceCell.tableLabel = null;
-      sourceCell.status = "empty";
+      // The source assignment is ENDED, not erased: the Grid keeps the
+      // history and the table is simply owned by the destination now.
+      const destCell = ensureCell(destRound, action.destColumnId);
+      sourceCell.status = "ended";
       destCell.tableLabel = label;
       destCell.status = "active";
       break;
@@ -356,19 +435,17 @@ export function applyBoardAction(
       for (const cell of endCells) {
         cell!.status = "ended";
       }
-      const destCell = destRound.cells.find(
-        ({ columnId }) => columnId === action.columnId,
-      )!;
+      const destCell = ensureCell(destRound, action.columnId);
       destCell.tableLabel = label;
       destCell.status = "active";
       break;
     }
     case "skip-turn": {
       const round = board.rounds.find(({ id }) => id === action.roundId);
-      const cell = round?.cells.find(
-        ({ columnId }) => columnId === action.columnId,
-      );
-      if (!cell || cell.status !== "empty") return current;
+      if (!round) return current;
+      // A column with no cell in this round is a genuinely empty slot.
+      const cell = ensureCell(round, action.columnId);
+      if (cell.status !== "empty") return current;
       cell.status = "skipped";
       cell.tableLabel = null;
       break;
