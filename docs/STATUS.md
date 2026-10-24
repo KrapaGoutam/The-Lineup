@@ -7,6 +7,18 @@
 
 ---
 
+## 🛠 Infrastructure — DEV Preview & CI Reliability (in progress, #133)
+
+Branch `infra/dev-preview-ci-reliability` → PR into `development`. Docs: `docs/features/dev-preview-ci-reliability/`.
+
+- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; deployed-Preview browser smoke awaits the owner (Vercel Authentication).
+- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-start.mjs`).
+- **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output.
+- **INFRA-D** CI/CD + deployment docs.
+- Finding **#134**: the real-mode suite fails against production builds (Realtime), passes under `next dev`.
+
+---
+
 ## 🚦 Current Status Overview
 
 - **Active Feature:** `Payroll UX / Timezone / PIN Keypad mega-request` — all 6 phases merged to `main` (PRs #35, #36, #41, #38, #39, #40); see the dedicated section below and `docs/agent-handoff.md`. `Feature 033` (below) was the last numbered feature-spec item shipped before this.

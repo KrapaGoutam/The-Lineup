@@ -28,6 +28,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Non-production builds must never embed the production Supabase ref.
+      - run: node scripts/check-nonprod-env.mjs --scan .next
 
   browser-smoke:
     runs-on: ubuntu-latest
