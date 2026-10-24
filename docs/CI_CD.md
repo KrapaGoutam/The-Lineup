@@ -33,6 +33,10 @@ Hosted real-mode suites (`npm run test:real` — RPC/RLS with real JWTs, and `np
 - migration and pgTAP checks when `supabase/**` changes;
 - Playwright smoke against the preview for critical flows.
 
+### Recorded exception: PR #131 (registry rate limit)
+
+The `Database / migrations-and-policies` check failed four times for PR #131 at `supabase start` with `toomanyrequests: Data limit exceeded` (container-registry pull limit) before `db:reset` or `db:test` ran; the same failure hit an unrelated Dependabot branch. The owner approved merging PR #131 into `development` on independent evidence (35 migrations clean, pgTAP 25 files / 387 assertions, hosted DEV RPC/RLS 40/40, browser 15/15, Vitest 428, lint/typecheck/format/build). This exception is specific to PR #131 and is **not** a general red-CI bypass; CI stays mandatory. Follow-up: registry authentication/caching for the Database job.
+
 ## Vercel
 
 Use Vercel's Git integration for branch previews. Protect `main` so the production deployment begins only after required GitHub checks pass. If a custom pipeline is later required, pin Vercel CLI, run `vercel pull`, `vercel build`, test the prebuilt artifact, and `vercel deploy --prebuilt`.

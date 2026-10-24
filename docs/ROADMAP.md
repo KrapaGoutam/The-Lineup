@@ -35,17 +35,18 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 19. [x] Virtual numeric keypad on login, additive alongside the typed passcode input, tablet/phone only (Feature 013)
 20. [x] Team designations — Owner/Manager/Assistant Manager/Staff, a label over the existing role model with Manager and Assistant Manager granted identical full permissions (Feature 014)
 
-## Table Allocation V2 — Part 1 (NOW)
+## Table Allocation V2 — Part 1 (DONE on `development`; `main` awaits approval)
 
 Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. Plan and evidence: `docs/features/table-rotation-multi-view/`.
 
-| Stage   | State                                                                                                                                   |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| NOW     | Final gate: CI on the feature PR, merge into `development`                                                                              |
-| DONE    | 1A database integrity · 1B trusted mutations · 1C read model · 1D undo/redo · 1E client/realtime · 1F real-mode validation (see report) |
-| NEXT    | Reconcile PROD parity and release flow (#111, #112, #113) before any promotion to `main`                                                |
-| LATER   | Part 2 — multiple organizations/branches, per-location module availability, internal attendance (see backlog)                           |
-| BLOCKED | Production parity: expected Supabase project not reachable from this tooling context (#111)                                             |
+| Stage   | State                                                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DONE    | Merged into `development` (PR #131, `589b470`); issues #101–#105, #107, #108, #110, #129 closed; milestone closed                                                                     |
+| DONE    | 1A database integrity · 1B trusted mutations · 1C read model · 1D undo/redo · 1E client/realtime · 1F real-mode validation (see report)                                               |
+| NEXT    | Infrastructure: Vercel Preview/Development → Supabase DEV; Database CI container-registry reliability (#111–#113). Product: Tasks V1. Follow-up: #109 Table Allocation UX consistency |
+| PART 2  | Multi-organization / multi-location, per-location modules, internal Attendance / Clock In-Out                                                                                         |
+| PART 3  | MCP / AI integration                                                                                                                                                                  |
+| BLOCKED | Production parity: expected Supabase project not reachable from this tooling context (#111)                                                                                           |
 
 ### Backlog (deferred on purpose — do not start inside Part 1)
 
