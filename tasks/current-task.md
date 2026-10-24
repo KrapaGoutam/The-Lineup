@@ -5,7 +5,7 @@
 **Branch:** `upgrade/table-allocation-v2-part1` · **Base:** `origin/main` @ `3403058` · **HEAD:** see `git log -1`
 **Docs:** `docs/features/table-rotation-multi-view/` — `VERSION_UPGRADE_PART1_PLAN.md` (status), `PART1_ACCEPTANCE_CRITERIA.md`, `PART1_TEST_MATRIX.md`, `PART1_IMPLEMENTATION_REPORT.md`. Roadmap/backlog: `docs/ROADMAP.md`.
 **GitHub:** parent #101 · milestone #2 "Table Allocation V2 — Part 1" · Project #4 · phase issues 1A #103, 1B #102/#104/#105, 1C #107, 1D #129, 1E #108, 1F #110.
-**DEV:** `opmujepkemwcdxxorhfd` · **PROD:** `ftadewtkjlaotfdvtjcv` · **PROD touched: NO** · **development merged: see PR** · **main merged: NO**
+**DEV:** `opmujepkemwcdxxorhfd` · **PROD:** `ftadewtkjlaotfdvtjcv` · **PROD touched: NO** · **development merged: NO (PR #131 open; `development` was created from `origin/main` @ 3403058)** · **main merged: NO**
 
 ## Phase checklist
 
@@ -15,7 +15,7 @@
 - [x] 1D Undo / Redo (D-05, D-06)
 - [x] 1E Client / Realtime consistency (D-03, D-04, D-07)
 - [x] 1F Real-mode validation (30 scenarios + extended A/B/C)
-- [ ] CI green on the feature PR → merge (merge commit, not squash) into `development`
+- [ ] CI green on the feature PR → merge (merge commit, not squash) into `development` — **PR #131 open; `application`, `browser-smoke` and Vercel pass; the `Database` job (`migrations-and-policies`) fails only at `supabase start` with the registry rate limit `toomanyrequests: Data limit exceeded` (also failed on a dependabot branch before this work; retried 3×). The same job's steps were run locally and pass (db reset 35 migrations, pgTAP 25 files / 387 assertions). Re-run the job later (`gh run rerun <id> --failed`) or add registry auth; merge only when it is green or the owner accepts the infra exception.**
 - [ ] Final `development` → `main` promotion — ONLY after explicit user approval
 
 ## Evidence (final gate)
@@ -36,3 +36,7 @@ Touch PROD; merge to `main`; `git add .` / `git clean` / `git reset --hard`; com
 ## Remaining risks / backlog
 
 See the report §5 and `docs/ROADMAP.md` (#106, Neon rotation, Picker takeover, hosted suites in CI, Part 2).
+
+## Processes
+
+The DEV dev server and the local Supabase containers were stopped. Docker Desktop was started by the agent and left running (JobQuest containers are unrelated; do not stop them).
