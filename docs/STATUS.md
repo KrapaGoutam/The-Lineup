@@ -82,6 +82,10 @@ PR check passed). Needs a repo-owner action (rotate/re-scope the
 token) before the new payment-unconfirm migration reaches the hosted
 production database automatically.
 
+### Table Allocation V2 — Part 1 (branch `upgrade/table-allocation-v2-part1`, issue #101)
+
+DEV-only. Database integrity, trusted `board_*` RPC boundary, atomic reassign, full Undo/Redo, canonical read model and authenticated Realtime are implemented; defects D-01…D-08 are closed with evidence in `docs/features/table-rotation-multi-view/PART1_TEST_MATRIX.md` (hosted-DEV RPC suite 40/40, three-context browser suite 15/15, pgTAP 25 files / 343 assertions, 35 migrations from scratch, Vitest 428). Two new migrations (`20261023100000`, `20261023110000`) are applied to DEV only — **not applied to production**; release them through the normal migration flow with `#111/#113` resolved first. Remaining risks: #106 (global `has_org_role` creator bypass), Neon credential rotation, hosted suites are not in CI.
+
 ---
 
 ## 🛡️ Invariants & Rules Reference

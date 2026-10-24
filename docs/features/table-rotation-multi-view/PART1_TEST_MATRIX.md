@@ -1,89 +1,96 @@
 # Table Rotation V2 Part 1 — Test Matrix (living)
 
 **Target:** DEV only (`opmujepkemwcdxxorhfd`). **Acceptance IDs:** [`PART1_ACCEPTANCE_CRITERIA.md`](PART1_ACCEPTANCE_CRITERIA.md).
-**Status:** `PASS` · `FAIL` · `BLOCKED` · `PENDING` (not run yet — never counted as pass).
+**Status:** `PASS` · `FAIL` · `BLOCKED` · `PENDING` (not run — never counted as pass).
 
-Evidence legend: **R** = `tests/real/table-rotation-v2.db.real.test.ts` (hosted DEV, real JWT per user; run `npm run test:real`) · **P** = pgTAP `supabase/tests/database/0025_…` (+ updated 0006/0007/0013/0014/0019/0021/0024; run `npx supabase test db`) · **U** = Vitest · **B** = browser (Playwright / manual, two or more authenticated contexts).
+Evidence legend: **R** = `tests/real/table-rotation-v2.db.real.test.ts` (hosted DEV, real JWT per user; `npm run test:real`) · **B** = `tests/real/ui/*.real.spec.ts` (Playwright, three independently signed-in browser contexts against a DEV-pinned app; `npm run test:real:ui`) · **P** = pgTAP `supabase/tests/database/0025_…` (+ updated 0006/0007/0013/0014/0019/0021/0024; `npx supabase test db`) · **U** = Vitest.
 
 ## Automated suites (latest run)
 
-| Suite                                | Command                 | Result                                                                |
-| ------------------------------------ | ----------------------- | --------------------------------------------------------------------- |
-| Real-mode DB/RPC (DEV)               | `npm run test:real`     | **40/40 PASS** (final migration set, 2026-10-23)                      |
-| pgTAP (local Supabase, all 25 files) | `npx supabase test db`  | **PASS — 25 files, 343 assertions** (incl. new `0025`, 46 assertions) |
-| Migrations from scratch              | `npx supabase db reset` | **PASS — 35 migrations apply cleanly, seed runs**                     |
-| Vitest (domain/unit)                 | `npm test`              | see implementation report                                             |
+| Suite                                          | Command                                       | Result                                              |
+| ---------------------------------------------- | --------------------------------------------- | --------------------------------------------------- |
+| Real-mode DB/RPC (hosted DEV)                  | `npm run test:real`                           | **40/40 PASS**                                      |
+| Real-mode browser (3 contexts, DEV-pinned app) | `npm run test:real:ui`                        | **15/15 PASS** (14 scenarios + extended A/B/C)      |
+| pgTAP (local Supabase, all files)              | `npx supabase test db`                        | **25 files / 343 assertions PASS** (new `0025`: 46) |
+| Migrations from scratch                        | `npx supabase db reset`                       | **35 migrations apply cleanly**                     |
+| Vitest                                         | `npm test`                                    | **428/428 PASS**                                    |
+| Demo-mode e2e (what CI runs)                   | `npx playwright test --project=desktop`       | **all PASS** after the date-pinning fix below       |
+| lint · typecheck · format                      | `npm run lint` / `typecheck` / `format:check` | **PASS**                                            |
+
+Pre-existing, unrelated: four attendance/dashboard e2e specs were hard-wired to September and failed on the base commit once the calendar month changed (verified by running them against `3403058`'s `src`). They now pin the browser clock to the fixture month.
 
 ## The 30 required scenarios
 
-"DB" = database/RPC behavior proven by the real-mode suite; "UI" = the same behavior observed across the five views in a browser. A scenario is **PASS** only when every applicable level passed.
+"DB" = RPC/RLS behaviour proven by R/P. "UI" = observed in a browser (B). A scenario is PASS when every applicable level passed; where a scenario has no distinct UI surface the note says so.
 
-| #   | Scenario                                                                | View / action       | Actor           | Expected                           | Actual (DB level)                                                                                            | Auto/Manual | Evidence                                       | Status                   |
-| --- | ----------------------------------------------------------------------- | ------------------- | --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------- | ---------------------------------------------- | ------------------------ |
-| 1   | Grid assigns A→1, switch Grid→Floor→Picker→Servers                      | Grid then all views | owner           | All agree                          | Entry + claim agree (R: extended scenario)                                                                   | Auto + B    | R `Extended…`                                  | PENDING (UI)             |
-| 2   | A receives 1 and 5                                                      | Grid                | owner           | Both active                        | Both active, 2 claims                                                                                        | Auto        | R `S02`                                        | PASS (DB)                |
-| 3   | B receives 15, then A receives 15                                       | Grid reassign       | owner           | B→15 ENDED, A→15 ACTIVE            | B ended (kept), A active, one claim; unconfirmed attempt refused                                             | Auto        | R `S03`, P §3                                  | PASS (DB)                |
-| 4   | Grid 15→B, Picker later 15→A, views converge                            | Grid/Picker         | owner           | Converge                           | Same RPC path; one claim                                                                                     | Auto + B    | R `S03`                                        | PENDING (UI)             |
-| 5   | Floor assigns Table 7→B, Grid + Servers reflect                         | Floor               | owner           | Reflect                            | (Floor uses the same `board_assign`)                                                                         | B           | —                                              | PENDING (UI)             |
-| 6   | End Table 1 from Floor                                                  | Floor End           | manager         | Available/ended everywhere         | Entry ended, claim released                                                                                  | Auto + B    | R `S07`                                        | PENDING (UI)             |
-| 7   | Owner assigns Table 10; TestManager Ends it (**D-01**)                  | RPC / Floor         | owner → manager | Succeeds                           | Succeeds; `assigned_by`=owner, `ended_by`=manager, event actor=manager; also staff, End+Assign, Undo/Redo    | Auto        | R `S07` ×4, P §2                               | PASS (DB)                |
-| 8   | Transfer A→8, then 8→B (**D-07**)                                       | Floor Transfer      | manager         | No crash                           | DB: source ended, dest active, valid event, undoable ×2. Client reducer: sparse destination no longer throws | Auto        | R `S08`, U `V2 sparse boards`                  | PASS (DB, U); UI PENDING |
-| 9   | Rapid reassignment A→10, B→10, C→10                                     | Grid                | owner/manager   | Only C active                      | A,B ended; C active                                                                                          | Auto        | R `S09`                                        | PASS (DB)                |
-| 10  | Concurrent managers reassign Table 15                                   | RPC                 | two managers    | Exactly one final owner            | Exactly one active entry + one claim; others ended                                                           | Auto        | R `S10`                                        | PASS (DB)                |
-| 11  | Browser A changes Table 3, browser B receives it without refresh        | Realtime            | two sessions    | Live update                        | —                                                                                                            | B           | —                                              | PENDING (UI)             |
-| 12  | Assign Table 4 in Grid, immediately Floor                               | view switching      | owner           | Floor shows it                     | —                                                                                                            | B           | —                                              | PENDING (UI)             |
-| 13  | Owner logs out; TestServer1 logs in — no demo/stale state (**D-04**)    | login               | owner → server  | No demo roster / stale owner state | —                                                                                                            | B           | —                                              | PENDING (UI)             |
-| 14  | Clear Cell changes only the intended assignment                         | Grid                | manager         | Only that cell                     | Only m1's cell; m2's kept                                                                                    | Auto        | R `S14/S15`, P §8                              | PASS (DB)                |
-| 15  | Undo Clear Cell restores it (**D-06**)                                  | Undo                | other actor     | Restored                           | Restored exactly (status, assigner); stack not wedged; Redo clears again; ended cell restores as ended       | Auto        | R `S14/S15`, R `Clear Cell of an ENDED…`, P §8 | PASS (DB)                |
-| 16  | Clear Board ends intended active assignments                            | Grid                | manager         | Claims released                    | All entries removed, 0 claims                                                                                | Auto        | R `S16/17/18`                                  | PASS (DB)                |
-| 17  | Undo Clear Board, no duplicate round sequence (**D-05**)                | Undo                | other actor     | Restored                           | Rounds/sequences/entries/claims restored; no duplicate sequence                                              | Auto        | R `S16/17/18`, P §8                            | PASS (DB)                |
-| 18  | Redo Clear Board clears again                                           | Redo                | other actor     | Cleared                            | Cleared; Undo again stable                                                                                   | Auto        | R `S16/17/18`, P §8                            | PASS (DB)                |
-| 19  | Combined Tables 5+6                                                     | Grid/Floor          | owner           | Consistent                         | Both claimed; partial takeover refused; whole takeover displaces whole                                       | Auto + B    | R `combined tables…`                           | PASS (DB); UI PENDING    |
-| 20  | Refresh preserves authoritative state                                   | reload              | any             | Same state                         | —                                                                                                            | B           | —                                              | PENDING (UI)             |
-| 21  | New service session does not inherit previous assignments               | session rollover    | owner           | Clean day                          | Yesterday's active claim does not appear today; table reusable; history intact                               | Auto        | R `S21`                                        | PASS (DB)                |
-| 22  | Historical edit is blocked                                              | RPC                 | owner           | Rejected                           | "previous day's service"                                                                                     | Auto        | R `S22`, P §4                                  | PASS (DB)                |
-| 23  | Today's session passed against an old assignment is rejected (**D-02**) | RPC                 | owner/staff     | Rejected                           | All nine ID-bearing RPCs reject; nothing changed; also structural FK/identity checks                         | Auto        | R `S23` + structural ×3, P §4                  | PASS (DB)                |
-| 24  | Staff cannot forge/update/delete `board_events` (**D-08**)              | PostgREST           | server (+owner) | Denied                             | `42501` for insert/update/delete, even for owner; events unchanged                                           | Auto        | R `S24`, P §5                                  | PASS (DB)                |
-| 25  | Server with active tables cannot be removed                             | Remove server       | manager         | Blocked until End/Transfer         | Blocked; pause allowed; after End removal works                                                              | Auto        | R `S25`, P §7                                  | PASS (DB)                |
-| 26  | Skip does not End existing tables                                       | Skip                | owner           | Table stays                        | Table 11 stays active/claimed                                                                                | Auto        | R `S26`                                        | PASS (DB)                |
-| 27  | Reorder changes order but not ownership                                 | Reorder             | owner           | Ownership unchanged                | Positions change; claims unchanged; Undo restores order                                                      | Auto        | R `S27`, U reorder                             | PASS (DB, U)             |
-| 28  | Network reconnect rehydrates with no duplicates                         | Realtime/client     | any             | Authoritative, no duplicates       | —                                                                                                            | U + B       | —                                              | PENDING                  |
-| 29  | Back/Forward cannot overwrite newer state with stale client state       | browser nav         | any             | No stale overwrite                 | —                                                                                                            | B           | —                                              | PENDING (UI)             |
-| 30  | Rapid switching Grid/Floor/Picker/Servers/Dashboard                     | view switching      | any             | Never divergent                    | —                                                                                                            | U + B       | —                                              | PENDING (UI)             |
+| #   | Scenario                                                          | Actor            | Result                                                                                                                                                        | Evidence                   | Status                                  |
+| --- | ----------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | --------------------------------------- |
+| 1   | Assign A→1, switch Grid→Floor→Picker→Servers (→Dashboard)         | owner            | All views agree immediately; Servers "1 table"; Dashboard 1                                                                                                   | B S01/S12/S30, R extended  | **PASS** (DB + UI)                      |
+| 2   | A receives 1 and 5                                                | owner / manager  | Both active, both claimed; Servers "3 tables" with T5, T10, T11                                                                                               | R `S02`, B S02             | **PASS** (DB + UI)                      |
+| 3   | B receives 15, then A receives 15                                 | owner            | B→15 ENDED (kept), A→15 ACTIVE, one claim; unconfirmed attempt refused. Grid typing sends the confirmation                                                    | R `S03`, P §3, B extended  | **PASS** (DB + UI)                      |
+| 4   | Grid 15→B, later 15→A; views converge                             | owner            | Converges through Grid typing (extended scenario) and Floor Transfer. **Picker deliberately does not take a held table** (unchanged product rule, see report) | B extended, R              | **PASS** (with noted Picker rule)       |
+| 5   | Floor assigns Table 7→B; Grid and Servers reflect it              | manager          | Floor assigns are visible in Grid/Servers/Dashboard                                                                                                           | B S01, S11                 | **PASS** (UI)                           |
+| 6   | End Table from Floor; all views reflect available/ended           | manager          | T1 ended; Floor "available" in both browsers; Grid keeps history                                                                                              | B S07                      | **PASS** (DB + UI)                      |
+| 7   | Owner assigns; TestManager Ends it (**D-01**)                     | owner → manager  | Succeeds; `assigned_by`=owner, `ended_by`=manager, event actor=manager; also End+Assign, Undo, Redo cross-actor; in the browser the owner sees it live        | R `S07`×4, P §2, B S07     | **PASS** (DB + UI)                      |
+| 8   | Transfer A→8, then 8→B (**D-07**)                                 | manager          | No client error; source ended, destination active; Servers "2 tables"; Undo ×2 restores                                                                       | R `S08`, U sparse, B S08   | **PASS** (DB + U + UI)                  |
+| 9   | Rapid reassignment A→10, B→10, C→10                               | owner / manager  | A,B ended; only C active                                                                                                                                      | R `S09`                    | **PASS** (DB)                           |
+| 10  | Concurrent managers reassign Table 15                             | two managers     | Exactly one active entry and one claim                                                                                                                        | R `S10`                    | **PASS** (DB)                           |
+| 11  | Browser A changes Table 3; browser B sees it without refresh      | two sessions     | Fresh-loaded page still receives the update                                                                                                                   | B S11                      | **PASS** (UI)                           |
+| 12  | Assign in Grid/Floor and immediately switch                       | owner            | Next view already shows it                                                                                                                                    | B S01/S12/S30              | **PASS** (UI)                           |
+| 13  | Owner logs out; another user logs in (**D-04**)                   | owner → server   | No demo roster, no previous user's identity at any DOM mutation; real state immediately                                                                       | B S13 (+ negative control) | **PASS** (UI)                           |
+| 14  | Clear Cell changes only the intended assignment                   | manager          | Only that cell; siblings kept                                                                                                                                 | R `S14`, B S14             | **PASS** (DB + UI)                      |
+| 15  | Undo Clear Cell restores it (**D-06**)                            | manager          | Restored exactly (status, assigner); Redo clears again; second browser converges                                                                              | R, P §8, B S15             | **PASS** (DB + UI)                      |
+| 16  | Clear Board ends the intended active assignments                  | manager          | All four held tables released                                                                                                                                 | R `S16`, B S16             | **PASS** (DB + UI)                      |
+| 17  | Undo Clear Board, no duplicate round sequence (**D-05**)          | manager          | Everything restored; no duplicate sequence                                                                                                                    | R `S17`, P §8, B S17       | **PASS** (DB + UI)                      |
+| 18  | Redo Clear Board clears again                                     | manager          | Cleared; Undo again stable                                                                                                                                    | R `S18`, B S18             | **PASS** (DB + UI)                      |
+| 19  | Combined Tables 5+6                                               | owner            | Both claimed; partial takeover refused; whole takeover displaces the whole                                                                                    | R                          | **PASS** (DB; no dedicated UI scenario) |
+| 20  | Refresh preserves authoritative state                             | any              | Same state after reload (and after the extended scenario)                                                                                                     | B S20, extended            | **PASS** (UI)                           |
+| 21  | New service session does not inherit previous assignments         | owner            | Yesterday's claim not visible today; table reusable; history intact                                                                                           | R `S21`                    | **PASS** (DB)                           |
+| 22  | Historical edit blocked                                           | owner            | "previous day's service"                                                                                                                                      | R `S22`, P §4              | **PASS** (DB)                           |
+| 23  | Today's session against an old assignment rejected (**D-02**)     | owner / staff    | All nine ID-bearing RPCs reject; nothing changed; structural FK/identity checks                                                                               | R `S23`+3, P §4            | **PASS** (DB)                           |
+| 24  | Staff cannot forge/update/delete `board_events` (**D-08**)        | server (+ owner) | `42501` for insert/update/delete even for owner; events unchanged                                                                                             | R `S24`, P §5              | **PASS** (DB)                           |
+| 25  | Server with active tables cannot be removed                       | manager          | Blocked with a clear message in the Grid; pause allowed; after End removal works                                                                              | R `S25`, P §7, B S25       | **PASS** (DB + UI)                      |
+| 26  | Skip does not End existing tables                                 | owner            | Table stays active/claimed                                                                                                                                    | R `S26`, U                 | **PASS** (DB, U)                        |
+| 27  | Reorder changes order, not ownership                              | manager          | Servers order changes, claims unchanged, Undo restores                                                                                                        | R `S27`, U, B S27          | **PASS** (DB + UI)                      |
+| 28  | Network reconnect rehydrates, no duplicates                       | any              | Offline context catches up on reconnect (re-join refetch)                                                                                                     | B S28, U realtime          | **PASS** (UI + U)                       |
+| 29  | Back/Forward cannot overwrite newer state with stale client state | any              | Newer table visible after back/forward                                                                                                                        | B S29                      | **PASS** (UI)                           |
+| 30  | Rapid view switching never diverges                               | any              | 4× full cycle, state identical                                                                                                                                | B S01/S12/S30              | **PASS** (UI)                           |
 
-## Extended live service scenario (A/B/C)
+## Extended live-service scenario (A/B/C)
 
-| Step                     | Expected final           | Actual (DB)                                                         | Status                           |
-| ------------------------ | ------------------------ | ------------------------------------------------------------------- | -------------------------------- |
-| Row 1: A→1, B→15, C→16   |                          |                                                                     |                                  |
-| Row 2: 15 B→A, B→11, C→2 |                          |                                                                     |                                  |
-| Row 3: A→7               | A→1,15,7 · B→11 · C→16,2 | Active entries and claims exactly as expected; B's 15 kept as ENDED | PASS (DB) — five-view UI PENDING |
+Driven through the Grid exactly as typed, verified from a second signed-in browser.
 
-## Defect closure traceability
+| Step                   | Expected final           | Actual                                                                                                                                                        | Status                      |
+| ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Row 1 A→T1 B→T15 C→T16 |                          |                                                                                                                                                               |                             |
+| Row 2 A→T15 B→T11 C→T2 |                          | A's T15 ended B's T15 atomically                                                                                                                              |                             |
+| Row 3 A→T7             | A→1,15,7 · B→11 · C→16,2 | Floor ✔ · Picker (map popup) ✔ · Servers 3/1/2 tables ✔ · Dashboard Active tables 6 ✔ · Grid keeps B's T15 ENDED, A's T15 active ✔ · reload unchanged ✔ | **PASS** (B extended; DB R) |
 
-| Defect | Test evidence (R = real-mode, P = pgTAP, U = unit, B = browser) | Status                                 |
-| ------ | --------------------------------------------------------------- | -------------------------------------- |
-| D-01   | R `S07` ×4 · P §2                                               | PASS (DB) — UI confirmation PENDING    |
-| D-02   | R `S22`, `S23`, structural ×3, `S21` · P §4                     | PASS                                   |
-| D-03   | U `use-board-realtime` · B                                      | PENDING                                |
-| D-04   | U / B                                                           | PENDING                                |
-| D-05   | R `S16/17/18` · P §8                                            | PASS                                   |
-| D-06   | R `S14/S15` · P §8                                              | PASS                                   |
-| D-07   | U `V2 sparse boards` · R `S08` · B                              | PASS (U, DB) — UI confirmation PENDING |
-| D-08   | R `S24` · P §5                                                  | PASS                                   |
+## Defect closure
 
-## Additional real-mode checks (not numbered scenarios)
+| Defect | Evidence                                                   | Status   |
+| ------ | ---------------------------------------------------------- | -------- |
+| D-01   | R `S07`×4 · P §2 · B S07                                   | **PASS** |
+| D-02   | R `S21–S23`+structural · P §4                              | **PASS** |
+| D-03   | U `use-board-realtime` (7) · B S11                         | **PASS** |
+| D-04   | B S13 (negative control: old sign-in code fails the suite) | **PASS** |
+| D-05   | R `S16–S18` · P §8 · B S16–S18                             | **PASS** |
+| D-06   | R `S14/S15` · P §8 · B S14/S15                             | **PASS** |
+| D-07   | U `V2 sparse boards` · R `S08` · B S08                     | **PASS** |
+| D-08   | R `S24` · P §5                                             | **PASS** |
 
-| Check                                                                                 | Evidence         | Status |
-| ------------------------------------------------------------------------------------- | ---------------- | ------ |
-| Anonymous cannot execute board RPCs                                                   | R, P §6          | PASS   |
-| Other-organization member / foreign session / foreign location rejected               | R, P §6          | PASS   |
-| Deactivated member and deactivated organization creator rejected (membership-only)    | R                | PASS   |
-| Staff server cannot open the day, can join an open floor                              | R                | PASS   |
-| A previous day's board cannot be opened                                               | R                | PASS   |
-| Direct DML on entries/rounds/members/ledger/sessions denied for owner, manager, staff | R                | PASS   |
-| Finalized tips lock the board for every role; reopening unlocks it                    | R, P (0013/0014) | PASS   |
-| Table 15 active at two locations of one organization, independently                   | R                | PASS   |
-| Concurrent unconfirmed assignments: one wins, one refused, one claim                  | R                | PASS   |
-| Concurrent Undo calls are serialized                                                  | R                | PASS   |
-| Undo/Redo of Skip, Add/Delete Row, Pause, Remove, Reorder, reassign                   | R                | PASS   |
+## Additional checks
+
+| Check                                                                                   | Evidence   | Status |
+| --------------------------------------------------------------------------------------- | ---------- | ------ |
+| Anonymous cannot execute board RPCs                                                     | R, P §6    | PASS   |
+| Other-organization member / foreign session / foreign location rejected                 | R, P §6    | PASS   |
+| Deactivated member and deactivated org creator rejected (membership-only)               | R          | PASS   |
+| Staff can join an open floor but cannot open the day; a previous day can't be opened    | R          | PASS   |
+| Direct DML on entries/rounds/members/ledger/sessions denied for owner/manager/staff     | R          | PASS   |
+| Finalized tips lock every role; reopening unlocks                                       | R, P       | PASS   |
+| Table 15 active at two locations of one organization, independently                     | R          | PASS   |
+| Concurrent unconfirmed assignments: one wins, one refused, one claim                    | R          | PASS   |
+| Concurrent Undo serialized                                                              | R          | PASS   |
+| Optimistic trailing row ("round-N") resolves to the real row (no "row is not on board") | B extended | PASS   |
+| No unexpected page errors across contexts                                               | B          | PASS   |

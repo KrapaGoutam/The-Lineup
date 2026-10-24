@@ -11,10 +11,10 @@
 | ----- | --------------------------------- | ---------------- | ----------------------------------------------------- |
 | 1A    | Database integrity                | D-02             | [x] DB complete — pgTAP + real-mode PASS (see matrix) |
 | 1B    | Authorization + trusted mutations | D-01, D-08       | [x] DB complete — pgTAP + real-mode PASS              |
-| 1C    | Canonical read model              | —                | [ ] in progress                                       |
-| 1D    | Undo / Redo                       | D-05, D-06       | [x] DB complete — pgTAP + real-mode PASS              |
-| 1E    | Client / Realtime consistency     | D-03, D-04, D-07 | [ ] in progress                                       |
-| 1F    | Real-mode cross-view validation   | all              | [ ] not started                                       |
+| 1C    | Canonical read model              | —                | [x] complete — unit + browser PASS                    |
+| 1D    | Undo / Redo                       | D-05, D-06       | [x] complete — DB + browser PASS                      |
+| 1E    | Client / Realtime consistency     | D-03, D-04, D-07 | [x] complete — unit + browser PASS                    |
+| 1F    | Real-mode cross-view validation   | all              | [x] complete — 30 scenarios + extended A/B/C PASS     |
 
 A box is checked only after its exit validation passed; the evidence is in the test matrix. 1B and 1D share one migration pair because revoking direct DML (1B) requires the Undo/Redo RPCs to be trusted functions (1D).
 
@@ -80,10 +80,10 @@ Nothing here assumes one user = one organization/location, one organization = on
 
 - [x] 1A Database Integrity
 - [x] 1B Authorization + Trusted Mutations
-- [ ] 1C Canonical Read Model
+- [x] 1C Canonical Read Model
 - [x] 1D Undo / Redo
-- [ ] 1E Client / Realtime Consistency
-- [ ] 1F Real-Mode Cross-View Validation
+- [x] 1E Client / Realtime Consistency
+- [x] 1F Real-Mode Cross-View Validation
 
 ---
 
