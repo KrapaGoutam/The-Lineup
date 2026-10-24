@@ -481,23 +481,62 @@ function HoursDialog({
   );
 }
 
-export function RestaurantOperationsApp({
-  demoMode,
-  restaurantSlug,
-  initialUser = null,
-  initialScheduleContext = null,
-  initialTipsContext = null,
-  initialAllocationContext = null,
-}: {
+type RestaurantOperationsAppProps = {
   demoMode: boolean;
   restaurantSlug: string;
   initialUser?: SignedInUser | null;
   initialScheduleContext?: ScheduleContext | null;
   initialTipsContext?: TipsContext | null;
   initialAllocationContext?: AllocationContext | null;
-}) {
+};
+
+/**
+ * Table Rotation V2 Part 1 / D-04: every piece of client state below is
+ * seeded ONCE from the Server Component's props through lazy useState
+ * initializers. Before an in-place login those props are the signed-out
+ * snapshot (no contexts, and -- in the old code -- the static demo roster),
+ * so the just-authenticated person briefly saw demo servers and an
+ * all-tables-available floor until a manual reload.
+ *
+ * The authoritative identity is the server-verified `initialUser`, so the
+ * authenticated workspace is keyed by it: logging in as someone new (or
+ * out and in as someone else) discards ALL prior client state and re-seeds
+ * from the freshly fetched props, instead of patching individual fields.
+ * `epoch` covers the one case the identity alone cannot -- signing back in
+ * as the SAME person after a sign-out. Demo mode has no server identity and
+ * keeps its single, long-lived instance.
+ */
+export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
+  const [epoch, setEpoch] = useState(0);
+  const identity = props.demoMode
+    ? "demo"
+    : (props.initialUser?.profileId ?? "signed-out");
+  return (
+    <RestaurantOperationsAppInner
+      key={`${identity}:${epoch}`}
+      {...props}
+      onAuthBoundary={() => setEpoch((current) => current + 1)}
+    />
+  );
+}
+
+function RestaurantOperationsAppInner({
+  demoMode,
+  restaurantSlug,
+  initialUser = null,
+  initialScheduleContext = null,
+  initialTipsContext = null,
+  initialAllocationContext = null,
+  onAuthBoundary,
+}: RestaurantOperationsAppProps & { onAuthBoundary: () => void }) {
   const router = useRouter();
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
+  // Real mode: a successful passcode sign-in is only *pending* until the
+  // Server Component re-renders with the authenticated person's real data.
+  const [pendingAccount, setPendingAccount] = useState<SignedInUser | null>(
+    null,
+  );
+  const [signInStalled, setSignInStalled] = useState(false);
   const [tab, setTab] = useState<AppTab>("allocation");
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -515,11 +554,13 @@ export function RestaurantOperationsApp({
     DEMO_TIME_ZONE;
   const tipsServiceDate = initialTipsContext?.serviceDate ?? DEMO_ANCHOR_DATE;
 
+  // Real mode never falls back to the static demo roster (D-04): with no
+  // server context the roster is simply empty until the real one arrives.
   const [team, setTeam] = useState<TeamMember[]>(
     () =>
       initialScheduleContext?.team ??
       initialTipsContext?.team ??
-      staticDemoTeam,
+      (demoMode ? staticDemoTeam : []),
   );
   const [demoAccounts, setDemoAccounts] = useState<
     Record<string, SignedInUser>
@@ -638,10 +679,55 @@ export function RestaurantOperationsApp({
   // session's real data on the very first render, no reload needed. Not
   // needed in demo mode, which has no server-fetched context to refresh.
   function handleSignIn(account: SignedInUser) {
-    setUser(account);
-    if (!demoMode) {
-      router.refresh();
+    if (demoMode) {
+      setUser(account);
+      return;
     }
+    // Real mode: do NOT render the workspace from the pre-login snapshot.
+    // Hold on a short "signing you in" state until the server hands back
+    // the authenticated data (see RestaurantOperationsApp's keyed remount).
+    setSignInStalled(false);
+    setPendingAccount(account);
+    router.refresh();
+  }
+
+  useEffect(() => {
+    if (!pendingAccount) return;
+    if (initialUser?.profileId === pendingAccount.profileId) {
+      // Fresh server data for this exact person has arrived. If the
+      // identity key already changed we were remounted and never get here;
+      // this covers re-signing in as the same person.
+      onAuthBoundary();
+      return;
+    }
+    const timer = window.setTimeout(() => setSignInStalled(true), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [pendingAccount, initialUser, onAuthBoundary]);
+
+  if (!user && pendingAccount) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-md items-center px-4">
+        <Card className="w-full">
+          <CardContent
+            className="space-y-3 py-8 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="text-lg font-semibold">
+              Signing in as {pendingAccount.name}…
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {signInStalled
+                ? "This is taking longer than expected."
+                : "Loading your restaurant."}
+            </p>
+            {signInStalled ? (
+              <Button onClick={() => window.location.reload()}>Reload</Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      </main>
+    );
   }
 
   if (!user) {

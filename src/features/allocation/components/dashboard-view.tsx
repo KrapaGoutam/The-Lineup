@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
+import type { BoardReadModel } from "@/features/allocation/domain/board-read-model";
 import type {
   RotationBoard,
   RotationColumn,
@@ -18,25 +18,27 @@ import type { CrossEditEntry } from "@/features/allocation/data/allocation-data"
  * factored out of allocation-workspace.tsx yet) -- same data, same
  * "Turn" + server-column shape, no mutation controls, with an obvious
  * route back to the editable Grid.
+ *
+ * Table Rotation V2 Part 1 (1C): every number here comes from the shared
+ * BoardReadModel -- the same derivation Floor, Picker and Servers render --
+ * so the Dashboard can never disagree with them about who holds what.
  */
 export function DashboardView({
   columns,
   board,
-  tables,
-  nextColumn,
+  readModel,
   crossEditLog,
   onOpenGrid,
 }: {
   columns: RotationColumn[];
   board: RotationBoard;
-  tables: ResolvedFloorTable[];
-  nextColumn: RotationColumn | undefined;
+  readModel: BoardReadModel;
   crossEditLog: CrossEditEntry[];
   onOpenGrid: () => void;
 }) {
   const activeColumns = columns.filter((c) => c.status === "active");
-  const activeTables = tables.filter((t) => t.occupiedBy);
-  const availableTables = tables.filter((t) => !t.occupiedBy);
+  const { stats } = readModel;
+  const nextColumn = columns.find((c) => c.id === readModel.nextColumnId);
 
   return (
     <div className="space-y-4">
@@ -49,9 +51,7 @@ export function DashboardView({
             <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
               Servers on floor
             </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {activeColumns.length}
-            </p>
+            <p className="mt-2 text-2xl font-semibold">{stats.activeServers}</p>
           </CardContent>
         </Card>
         <Card>
@@ -69,7 +69,15 @@ export function DashboardView({
             <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
               Active tables
             </p>
-            <p className="mt-2 text-2xl font-semibold">{activeTables.length}</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {stats.occupiedTables}
+            </p>
+            {stats.unmappedActiveLabels.length > 0 ? (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Includes {stats.unmappedActiveLabels.length} not on the floor
+                map ({stats.unmappedActiveLabels.join(", ")}).
+              </p>
+            ) : null}
           </CardContent>
         </Card>
         <Card>
@@ -78,7 +86,7 @@ export function DashboardView({
               Available tables
             </p>
             <p className="mt-2 text-2xl font-semibold">
-              {availableTables.length}
+              {stats.availableTables}
             </p>
           </CardContent>
         </Card>

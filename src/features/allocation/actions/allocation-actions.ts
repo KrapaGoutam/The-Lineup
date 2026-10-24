@@ -34,6 +34,17 @@ export type ActionResult<T> =
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 /**
+ * The board is served from BOTH entry routes (`/` and `/r/[restaurantSlug]`,
+ * which share one loader). Revalidating only the slug route left the root
+ * route showing the pre-mutation snapshot (FRONT-006), so both are
+ * invalidated together.
+ */
+function revalidateBoard(restaurantSlug: string) {
+  revalidatePath(`/r/${restaurantSlug}`);
+  revalidatePath("/");
+}
+
+/**
  * RotationColumn.id is a person's profile id in the pure domain model
  * (rotation-board.ts), never rotation_members.id -- see allocation-data.ts
  * for the read-side half of this mapping. Every RPC that targets an
@@ -98,7 +109,7 @@ export async function executeBoardActionRemote(
           p_confirm_transfer: action.confirmTransfer ?? false,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: data as number } };
       }
 
@@ -126,7 +137,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -153,7 +164,7 @@ export async function executeBoardActionRemote(
         if (!memberRow) {
           return { ok: false, error: "Could not confirm the new column." };
         }
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return {
           ok: true,
           data: { serviceSessionId: memberRow.service_session_id },
@@ -180,7 +191,7 @@ export async function executeBoardActionRemote(
           p_status: action.status,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -195,7 +206,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -218,7 +229,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -232,7 +243,7 @@ export async function executeBoardActionRemote(
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -256,7 +267,7 @@ export async function executeBoardActionRemote(
           p_direction: action.direction,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -270,7 +281,7 @@ export async function executeBoardActionRemote(
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -285,7 +296,7 @@ export async function executeBoardActionRemote(
           p_round_id: Number(action.roundId),
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -314,7 +325,7 @@ export async function executeBoardActionRemote(
           p_dest_member_id: destMemberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -340,7 +351,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
 
@@ -367,7 +378,7 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: data as number } };
       }
 
@@ -400,7 +411,7 @@ export async function executeBoardActionRemote(
           p_table_label: action.tableLabel,
         });
         if (error) return { ok: false, error: error.message };
-        revalidatePath(`/r/${input.restaurantSlug}`);
+        revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: sessionId } };
       }
     }
@@ -429,7 +440,7 @@ export async function undoBoardAction(input: {
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidateBoard(input.restaurantSlug);
   return { ok: true, data: null };
 }
 
@@ -447,7 +458,7 @@ export async function redoBoardAction(input: {
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidateBoard(input.restaurantSlug);
   return { ok: true, data: null };
 }
 

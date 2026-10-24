@@ -39,6 +39,8 @@ import {
   undoBoardAction,
 } from "@/features/allocation/actions/allocation-actions";
 import { AllocationDateFilter } from "@/features/allocation/components/allocation-date-filter";
+import { buildBoardReadModel } from "@/features/allocation/domain/board-read-model";
+import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime";
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
 import { ServerBoardView } from "@/features/allocation/components/server-board-view";
@@ -47,15 +49,12 @@ import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
-import {
-  DEMO_FLOOR_LAYOUT,
-  resolveFloorTables,
-} from "@/features/allocation/domain/floor-layout";
+import { DEMO_FLOOR_LAYOUT } from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
-  getWorkingRound,
+  getNextColumn,
   isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
@@ -67,7 +66,6 @@ import {
 import { can } from "@/features/auth/domain/passcode";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
-import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const EMPTY_BOARD: RotationBoard = {
@@ -448,6 +446,9 @@ export function AllocationWorkspace({
       setServiceSessionId(initialContext?.serviceSessionId ?? null);
       setCanUndo(initialContext?.canUndo ?? false);
       setCanRedo(initialContext?.canRedo ?? false);
+      // The cached context may predate events that happened while the user
+      // was browsing history -- never trust it as current (REAL-001).
+      router.refresh();
       return;
     }
 
@@ -471,47 +472,23 @@ export function AllocationWorkspace({
   }
 
   // Realtime: every board-mutating RPC inserts a board_events row
-  // regardless of which table it actually changed, so subscribing to
-  // that one table, filtered to this session, is sufficient to learn
-  // about every kind of change -- scoped to service_session_id, not
-  // organization-wide, per the spec. Before a session exists yet (an
-  // all-empty board), subscribe to service_sessions instead, scoped to
-  // the organization, just to learn the moment one gets created.
-  useEffect(() => {
-    if (demoMode) return;
-    const supabase = createBrowserSupabaseClient();
-    const channel =
-      serviceSessionId !== null
-        ? supabase
-            .channel(`allocation-board-${serviceSessionId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "INSERT",
-                schema: "public",
-                table: "board_events",
-                filter: `service_session_id=eq.${serviceSessionId}`,
-              },
-              () => router.refresh(),
-            )
-            .subscribe()
-        : supabase
-            .channel(`allocation-session-watch-${user.organizationId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "INSERT",
-                schema: "public",
-                table: "service_sessions",
-                filter: `organization_id=eq.${user.organizationId}`,
-              },
-              () => router.refresh(),
-            )
-            .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [demoMode, serviceSessionId, user.organizationId, router]);
+  // regardless of which table it actually changed, so subscribing to that
+  // one table, filtered to this session, is sufficient to learn about every
+  // kind of change. Before a session exists yet (an all-empty board),
+  // watch service_sessions for the organization instead, just to learn the
+  // moment one gets created.
+  //
+  // D-03: the subscription is only ever created AFTER the signed-in user's
+  // JWT is applied to the Realtime socket (never as anon), is rebuilt when
+  // the person or the session changes, and refetches authoritative state
+  // on every re-subscribe -- see use-board-realtime.ts.
+  useBoardRealtime({
+    enabled: !demoMode,
+    userId: user.profileId,
+    organizationId: user.organizationId,
+    serviceSessionId,
+    onInvalidate: () => router.refresh(),
+  });
 
   // Production stability hotfix (multi-device sync, reconnect safety):
   // the Realtime subscription above only pushes events it actually
@@ -539,9 +516,11 @@ export function AllocationWorkspace({
       if (document.visibilityState === "visible") revalidateIfDue();
     }
     window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", revalidateIfDue);
     window.addEventListener("online", revalidateIfDue);
     return () => {
       window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", revalidateIfDue);
       window.removeEventListener("online", revalidateIfDue);
     };
   }, [demoMode, router]);
@@ -567,15 +546,10 @@ export function AllocationWorkspace({
       if (aClockedIn === bClockedIn) return 0;
       return aClockedIn ? -1 : 1;
     });
-  // The row people are actually filling in, not the standing empty
-  // buffer row past it (see `getWorkingRound`'s doc comment).
-  const currentRound = getWorkingRound(board);
-  const nextColumn = visibleColumns.find(
-    (column) =>
-      column.status === "active" &&
-      !currentRound?.cells.find((cell) => cell.columnId === column.id)
-        ?.tableLabel,
-  );
+  // FRONT-003: "next" is decided from cell STATUS (a skipped turn is a
+  // recorded turn with no label), by the same domain function the read
+  // model uses -- not from label presence.
+  const nextColumn = getNextColumn(board);
 
   // Table Rotation Multi-View: Floor's physical layout -- demo mode uses
   // the static approved layout (no attendance/dining_tables data exists
@@ -583,12 +557,16 @@ export function AllocationWorkspace({
   // registered in dining_tables (empty until someone has). Recomputed
   // from `board` on every render, same as the Grid, so Floor and Grid
   // always agree.
-  const resolvedTables = useMemo(() => {
+  // Table Rotation V2 Part 1 (1C): ONE read model feeds Floor, Picker,
+  // Servers and Dashboard (Grid renders `board` itself). Nothing below
+  // re-derives occupancy, counts or "who is next" on its own.
+  const readModel = useMemo(() => {
     const floorLayout = demoMode
       ? DEMO_FLOOR_LAYOUT
       : (initialContext?.physicalTables ?? []);
-    return resolveFloorTables(floorLayout, board, team);
+    return buildBoardReadModel({ board, layout: floorLayout, team });
   }, [demoMode, initialContext?.physicalTables, board, team]);
+  const resolvedTables = readModel.tables;
   // Production stability hotfix: distinguishes "this location has zero
   // registered tables" from "the tables query itself failed" -- see
   // table-map.tsx's `loadError` prop and allocation-data.ts's
@@ -717,6 +695,46 @@ export function AllocationWorkspace({
 
   return (
     <div className="space-y-4">
+      {!demoMode && initialContext?.boardLoadError && !isHistoricalView ? (
+        <div
+          role="alert"
+          className="border-destructive/30 bg-destructive/10 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm"
+        >
+          <span className="text-destructive">
+            {initialContext.boardLoadError}
+          </span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => router.refresh()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : null}
+      {!demoMode &&
+      !isHistoricalView &&
+      (initialContext?.claimDivergences.length ?? 0) > 0 ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100"
+        >
+          <span>
+            Table ownership on screen disagrees with the floor ledger for{" "}
+            {initialContext!.claimDivergences
+              .map((divergence) => `Table ${divergence.label}`)
+              .join(", ")}
+            . Refresh to resync.
+          </span>
+          <button
+            type="button"
+            className="text-xs underline"
+            onClick={() => router.refresh()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : null}
       {actionError ? (
         <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
           <span className="text-destructive">{actionError}</span>
@@ -1151,8 +1169,7 @@ export function AllocationWorkspace({
             <DashboardView
               columns={visibleColumns}
               board={board}
-              tables={resolvedTables}
-              nextColumn={nextColumn}
+              readModel={readModel}
               crossEditLog={crossEditLog}
               onOpenGrid={() => setActiveView("grid")}
             />
