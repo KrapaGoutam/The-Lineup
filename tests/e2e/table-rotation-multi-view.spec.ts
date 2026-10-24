@@ -610,6 +610,18 @@ test("Dashboard: Master Rotation preserves an ended table's history and renders 
   await signIn(page, "2468");
   await goToAllocation(page);
 
+  // Baseline: how many tables the demo seed already holds. The count now
+  // includes every held table, including seed labels that are not on the
+  // floor map (FRONT-007), so the assertion below compares against this
+  // instead of assuming the seed holds none.
+  await switchView(page, "Dashboard");
+  const baselineActive = (
+    await page
+      .getByText("Active tables", { exact: true })
+      .locator("xpath=following-sibling::p[1]")
+      .innerText()
+  ).trim();
+
   // End a table via Floor -- Grid and Picker no longer expose an End
   // control for Upgrade 1.1 (Floor is the one surface for Transfer/End;
   // see the "Grid/Picker hide Transfer and End" tests below). Dashboard
@@ -643,7 +655,7 @@ test("Dashboard: Master Rotation preserves an ended table's history and renders 
   const activeTablesValue = page
     .getByText("Active tables", { exact: true })
     .locator("xpath=following-sibling::p[1]");
-  await expect(activeTablesValue).toHaveText("0");
+  await expect(activeTablesValue).toHaveText(baselineActive);
 
   // Master Rotation: the ended entry's label survives (history), the
   // skip renders as "0", not blank.

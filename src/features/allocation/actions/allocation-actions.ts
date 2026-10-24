@@ -65,6 +65,64 @@ async function resolveMemberId(
   return data?.id ?? null;
 }
 
+/**
+ * The client applies an action optimistically, including the automatic
+ * trailing row the board opens after a fill -- that row only has a local id
+ * ("round-3") until the next authoritative refresh delivers the database id.
+ * A fast follow-up action on it would otherwise send a non-numeric id. The
+ * local id's number IS the row's sequence (the database numbers trailing rows
+ * with the same max+1 rule), so resolve it to the real row server-side. A row
+ * that does not exist yet is reported honestly instead of being guessed.
+ */
+async function resolveRoundId(
+  supabase: Supabase,
+  serviceSessionId: number | null,
+  roundId: string,
+): Promise<string | null> {
+  if (/^\d+$/.test(roundId)) return roundId;
+  const sequence = /^round-(\d+)$/.exec(roundId)?.[1];
+  if (!sequence || serviceSessionId === null) return null;
+  const { data } = await supabase
+    .from("rotation_rounds")
+    .select("id")
+    .eq("service_session_id", serviceSessionId)
+    .eq("sequence", Number(sequence))
+    .maybeSingle();
+  return data ? String(data.id) : null;
+}
+
+async function withResolvedRounds(
+  supabase: Supabase,
+  serviceSessionId: number | null,
+  action: BoardAction,
+): Promise<BoardAction | null> {
+  const resolve = (id: string) =>
+    resolveRoundId(supabase, serviceSessionId, id);
+  switch (action.type) {
+    case "assign":
+    case "clear-cell":
+    case "clear-row":
+    case "delete-row":
+    case "end-table":
+    case "skip-turn": {
+      const roundId = await resolve(action.roundId);
+      return roundId === null ? null : { ...action, roundId };
+    }
+    case "transfer": {
+      const sourceRoundId = await resolve(action.sourceRoundId);
+      return sourceRoundId === null ? null : { ...action, sourceRoundId };
+    }
+    case "end-and-assign": {
+      const ids = await Promise.all(action.endRoundIds.map(resolve));
+      return ids.some((id) => id === null)
+        ? null
+        : { ...action, endRoundIds: ids as string[] };
+    }
+    default:
+      return action;
+  }
+}
+
 export type ExecuteBoardActionInput = {
   restaurantSlug: string;
   organizationId: string;
@@ -82,7 +140,18 @@ export async function executeBoardActionRemote(
   if (sessionCheck) return sessionCheck;
 
   const serviceDate = zonedWallTimeFromInstant(new Date(), input.timeZone).date;
-  const { action } = input;
+  const resolvedAction = await withResolvedRounds(
+    supabase,
+    input.serviceSessionId,
+    input.action,
+  );
+  if (!resolvedAction) {
+    return {
+      ok: false,
+      error: "That row isn't ready yet -- give it a moment and try again.",
+    };
+  }
+  const action = resolvedAction;
 
   try {
     switch (action.type) {

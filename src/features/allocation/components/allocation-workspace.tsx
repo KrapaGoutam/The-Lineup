@@ -140,6 +140,7 @@ function buildInitialHistory() {
 // from Floor are all still fully live -- only this component's buttons
 // were removed, not the capability.
 function TableEntry({
+  cellId,
   value,
   status,
   disabled,
@@ -147,6 +148,9 @@ function TableEntry({
   onClear,
   onSkipTurn,
 }: {
+  // "<server>|<turn>" -- a stable handle for automated checks; the visible
+  // accessible name stays the shared "Table number or combined tables".
+  cellId?: string;
   value: string | null;
   status: "empty" | "active" | "ended" | "skipped";
   disabled: boolean;
@@ -268,6 +272,7 @@ function TableEntry({
       <Input
         name="table"
         aria-label="Table number or combined tables"
+        data-cell={cellId}
         placeholder={disabled ? "Not available" : "Table #"}
         disabled={disabled}
         defaultValue={value ?? ""}
@@ -1402,15 +1407,23 @@ export function AllocationWorkspace({
                                 }
                               >
                                 <TableEntry
+                                  cellId={`${column.name}|${round.sequence}`}
                                   value={cell?.tableLabel ?? null}
                                   status={cell?.status ?? "empty"}
                                   disabled={!canWrite}
                                   onSubmit={(tableLabel) => {
+                                    // Grid semantics: typing a table another
+                                    // server still holds ENDS that server's
+                                    // entry (kept as Grid history) and
+                                    // assigns it here, atomically, in one
+                                    // database transaction -- never a
+                                    // second active owner.
                                     execute({
                                       type: "assign",
                                       roundId: round.id,
                                       columnId: column.id,
                                       tableLabel,
+                                      confirmTransfer: true,
                                     });
                                     // Attribution is recorded for every
                                     // cross-column write, unconditionally — there
