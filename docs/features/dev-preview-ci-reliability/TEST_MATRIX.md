@@ -1,4 +1,4 @@
-# Test matrix — DEV Preview & CI Reliability
+PASSsuite loads/mutates real DEV Table Allocation state (15/15 under next dev) |PASSreal-mode UI suite signs in as 4 DEV users via the passcode flow (dev server 15/15; prod build setup+S01 pass) |PASSPreview NEXT_PUBLIC_DEMO_MODE=false; build is not demo. Deployed-Preview browser check BLOCKED: Vercel Authentication, no bypass secret created |PASSProduction metadata snapshot before/after is identical (names, types, ages) |PASSDevelopment scope holds the same 5 DEV vars + demo=false (vercel env ls) |PASSsame build: 0 files contain PROD ref; suite guard also asserts bundle has no PROD ref |PASSPreview env holds DEV URL/key (metadata); local Preview-env build contains DEV ref in 12 files |# Test matrix — DEV Preview & CI Reliability
 
 Result: PASS / FAIL / BLOCKED / PENDING, with evidence.
 

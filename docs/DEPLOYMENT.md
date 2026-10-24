@@ -88,23 +88,25 @@ Install CodeRabbit only if desired; `.coderabbit.yaml` is already checked in. Hu
 
 1. Import the GitHub repository in Vercel (or `vercel link` from this checkout if the project already exists — it also writes a `VERCEL_OIDC_TOKEN` line into `.env.local`, which is normal and already gitignored).
 2. Keep Framework Preset as Next.js and Build Command as `npm run build`.
-3. Environment variables — **Production and Preview are deliberately different**, not a copy of each other:
+3. Environment variables — **Production points at PROD; Preview and Development point at the `the-lineup-dev` Supabase project** (feature `dev-preview-ci-reliability`, #133). A non-production deployment must never carry the PROD project ref or the PROD Neon URL:
 
-   | Variable                               | Production      | Preview  |
-   | -------------------------------------- | --------------- | -------- |
-   | `NEXT_PUBLIC_SUPABASE_URL`             | yes             | **no**   |
-   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | yes             | **no**   |
-   | `SUPABASE_SECRET_KEY`                  | yes (Sensitive) | **no**   |
-   | `APP_PIN_PEPPER`                       | yes (Sensitive) | **no**   |
-   | `NEXT_PUBLIC_RESTAURANT_SLUG`          | yes             | optional |
-   | `NEXT_PUBLIC_DEMO_MODE`                | `false`         | `true`   |
-   | `NEON_DATABASE_URL`                    | yes (Sensitive) | **no**   |
+   | Variable                               | Production (PROD) | Preview (DEV)   | Development (DEV) |
+   | -------------------------------------- | ----------------- | --------------- | ----------------- |
+   | `NEXT_PUBLIC_SUPABASE_URL`             | yes               | DEV ref         | DEV ref           |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | yes               | DEV key         | DEV key           |
+   | `SUPABASE_SECRET_KEY`                  | yes (Sensitive)   | DEV (Sensitive) | DEV (plain)       |
+   | `APP_PIN_PEPPER`                       | yes (Sensitive)   | DEV (Sensitive) | DEV (plain)       |
+   | `NEXT_PUBLIC_RESTAURANT_SLUG`          | yes               | yes             | yes               |
+   | `NEXT_PUBLIC_DEMO_MODE`                | `false`           | `false`         | `false`           |
+   | `NEON_DATABASE_URL`                    | yes (Sensitive)   | **absent**      | **absent**        |
 
-   `NEON_DATABASE_URL` (Feature 018) follows the identical rule as the Supabase secrets above, for the identical reason: never in Preview, so a PR's preview deployment stays a fully self-contained demo build with zero external dependencies, not just zero Supabase dependency. It's also **runtime-only** — not needed in CI (`.github/workflows/ci.yml` already runs `npm run build` today with zero Supabase secrets set, and passes, because every data-layer module in this app reads its connection details from `process.env` lazily at request time, never at module load; `src/features/attendance/data/attendance-data.ts` follows the same rule).
+   Vercel does not allow Sensitive variables in the Development scope, so Development holds the DEV values as ordinary encrypted variables. Values are never written to docs or commits; set them through stdin (`... | vercel env add NAME preview --sensitive --yes`), never with `--value` on a command line.
 
-   Both entry routes (`/` and `/r/[restaurantSlug]`) already compute demo mode as `NEXT_PUBLIC_DEMO_MODE === "true" || !NEXT_PUBLIC_SUPABASE_URL || !NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — simply never adding the Supabase variables to Preview already forces it into demo mode, with `NEXT_PUBLIC_DEMO_MODE=true` set explicitly there too for clarity. This means a PR's preview deployment is always a fully-functional demo-mode app with zero chance of touching the production database, at zero extra infrastructure cost. `SUPABASE_PROJECT_ID` and `SUPABASE_ACCESS_TOKEN` do not belong in Vercel at all — they're GitHub Actions secrets only (step 4).
+   `NEON_DATABASE_URL` (Feature 018) is Production-only. DEV's local copy equals PROD's, so it must **not** be copied to Preview/Development; absent is equivalent to blank because every data-layer module reads its connection details lazily at request time (`src/features/attendance/data/attendance-data.ts`).
 
-   **If a project was set up via Vercel's "import your `.env` file" convenience prompt, check this table against reality** (`vercel env ls`) rather than assuming it — that flow can default to selecting every environment for every variable, which is exactly the split this section exists to prevent. Fixing an existing over-scoped variable: `vercel env rm <NAME> preview` removes the whole entry (there's no partial-target edit), then re-add it with `vercel env add <NAME> production --value "..." [--sensitive]` scoped correctly.
+   Demo mode is `NEXT_PUBLIC_DEMO_MODE === "true"` **or** a missing Supabase URL/key (both entry routes, `src/lib/page-data.ts`). Preview used to be a demo through absence; it is now a real DEV-backed build, so it needs real DEV sign-in. The demo-mode Playwright suite is unaffected (`playwright.config.ts` forces `true` on its own server). `SUPABASE_PROJECT_ID` and `SUPABASE_ACCESS_TOKEN` do not belong in Vercel at all — they're GitHub Actions secrets only (step 4).
+
+   **Check this table against reality** (`vercel env ls`) rather than assuming it. `NEXT_PUBLIC_*` values are inlined at build time, so a changed Preview value needs a new deployment. Rollback for a non-production variable: `vercel env rm <NAME> preview` (removes only that scope's entry). Never edit Production entries as part of a Preview/Development change.
 
 4. Do not expose `SUPABASE_SECRET_KEY` or `APP_PIN_PEPPER` to the browser — neither is `NEXT_PUBLIC_`-prefixed, so Next.js already enforces this; the table above is about which _deploy environment_ sees them, not client/server exposure.
 5. Deploy, then run the login verification below against the production URL.
