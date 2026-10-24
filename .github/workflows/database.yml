@@ -37,10 +37,11 @@ jobs:
       # The wrapper pulls images from a mirror registry (ghcr.io first, then
       # public.ecr.aws, docker.io) and retries ONLY registry/network pull
       # failures (bounded, logged as warnings). Migration, SQL and pgTAP
-      # failures are never retried. See scripts/ci/supabase-start.mjs.
-      - run: node scripts/ci/supabase-start.mjs
-      - run: npm run db:reset
-      - run: npm run db:test
+      # failures are never retried. See scripts/ci/supabase-run.mjs. db reset / test db pull
+      # images too (pg_prove), so they go through the same wrapper.
+      - run: node scripts/ci/supabase-run.mjs start
+      - run: node scripts/ci/supabase-run.mjs reset
+      - run: node scripts/ci/supabase-run.mjs test
       - if: always()
         run: npx supabase stop --no-backup
 

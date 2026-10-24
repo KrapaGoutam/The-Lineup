@@ -12,7 +12,7 @@
 Branch `infra/dev-preview-ci-reliability` → PR into `development`. Docs: `docs/features/dev-preview-ci-reliability/`.
 
 - **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; deployed-Preview browser smoke awaits the owner (Vercel Authentication).
-- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-start.mjs`).
+- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`).
 - **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output.
 - **INFRA-D** CI/CD + deployment docs.
 - Finding **#134**: the real-mode suite fails against production builds (Realtime), passes under `next dev`.

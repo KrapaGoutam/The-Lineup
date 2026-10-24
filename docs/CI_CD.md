@@ -39,7 +39,7 @@ The `Database / migrations-and-policies` check failed four times for PR #131 at 
 
 ### Database job and registry limits (INFRA-B)
 
-`supabase start` pulls images anonymously, and shared runner IPs hit registry limits (`toomanyrequests: Data limit exceeded`). `scripts/ci/supabase-start.mjs` starts the same reduced service set but pulls through `SUPABASE_INTERNAL_IMAGE_REGISTRY`: `ghcr.io`, then `public.ecr.aws`, then `docker.io` (all carry the pinned tags; `docker login` does not help because the CLI ignores stored credentials). It retries **only** output classified as a registry/network pull failure — at most 3 attempts, 15s/45s backoff, each logged as a `::warning::`. SQL, migration, pgTAP, config and unknown failures fail immediately. Nothing is skipped or `continue-on-error`; the `Database` check stays required. `deploy-migrations` runs only for pushes to `main`. Manual run: Actions → Database → Run workflow.
+`supabase start` pulls images anonymously, and shared runner IPs hit registry limits (`toomanyrequests: Data limit exceeded`). `scripts/ci/supabase-run.mjs` starts the same reduced service set but pulls through `SUPABASE_INTERNAL_IMAGE_REGISTRY`: `ghcr.io`, then `public.ecr.aws`, then `docker.io` (all carry the pinned tags; `docker login` does not help because the CLI ignores stored credentials). It retries **only** output classified as a registry/network pull failure — at most 3 attempts, 15s/45s backoff, each logged as a `::warning::`. SQL, migration, pgTAP, config and unknown failures fail immediately. Nothing is skipped or `continue-on-error`; the `Database` check stays required. `deploy-migrations` runs only for pushes to `main`. Manual run: Actions → Database → Run workflow.
 
 ### Environment guard (INFRA-C)
 
