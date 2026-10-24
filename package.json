@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:real": "vitest run --config vitest.real.config.ts",
+    "test:real:ui": "playwright test --config playwright.real.config.ts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "supabase:start": "supabase start",

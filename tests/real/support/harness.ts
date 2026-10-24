@@ -89,15 +89,19 @@ export function todayInChicago(offsetDays = 0): string {
   }).format(base);
 }
 
-function must<T>(
-  result: { data: T | null; error: { message: string } | null },
+// Untyped on purpose: the harness drives an unparameterized client and only
+// ever reads ids / labels back out of fixture inserts.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function must(
+  result: { data: any; error: { message: string } | null },
   what: string,
-): T {
+): any {
   if (result.error || result.data === null) {
     throw new Error(`${what}: ${result.error?.message ?? "no data"}`);
   }
   return result.data;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function makeUser(
   admin: SupabaseClient,
@@ -196,10 +200,15 @@ export async function createFixture(): Promise<Fixture> {
       .select("id, name"),
     "locations",
   );
-  const locA = locations.find((l) => l.name === "Harness A")!.id as string;
-  const locB = locations.find((l) => l.name === "Harness B")!.id as string;
-  const otherLoc = locations.find((l) => l.name === "Harness Other")!
-    .id as string;
+  const locA = locations.find(
+    (l: { id: string; name: string }) => l.name === "Harness A",
+  )!.id as string;
+  const locB = locations.find(
+    (l: { id: string; name: string }) => l.name === "Harness B",
+  )!.id as string;
+  const otherLoc = locations.find(
+    (l: { id: string; name: string }) => l.name === "Harness Other",
+  )!.id as string;
 
   must(
     await admin
@@ -276,7 +285,9 @@ export async function createFixture(): Promise<Fixture> {
         .select("id, label"),
       "tables",
     );
-    return new Map(rows.map((row) => [row.label as string, row.id as number]));
+    return new Map<string, number>(
+      rows.map((row: { label: string; id: number }) => [row.label, row.id]),
+    );
   };
   const tablesA = await tablesFor(org.id as string, locA);
   const tablesB = await tablesFor(org.id as string, locB);
