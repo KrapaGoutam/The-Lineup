@@ -23,8 +23,10 @@ async function signInOnCurrentPage(page: Page, passcode: string) {
 }
 
 async function navigateToTab(page: Page, name: string | RegExp) {
+  // Table Rotation and Tasks are the two primary modules, so they own the
+  // mobile dock; Tip Split now lives in the "More" sheet with the rest.
   const isDockTab =
-    name === "Tip Split" ||
+    name === "Tasks" ||
     (typeof name !== "string" && name.source.includes("Allocation"));
 
   // Ensure dashboard is loaded before checking for More button

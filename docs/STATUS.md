@@ -7,6 +7,12 @@
 
 ---
 
+## Tasks V1 (active, `feature/tasks-v1`)
+
+T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merge to `development` pending CI. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
+
+---
+
 ## 🚦 Current Status Overview
 
 - **Active Feature:** `Payroll UX / Timezone / PIN Keypad mega-request` — all 6 phases merged to `main` (PRs #35, #36, #41, #38, #39, #40); see the dedicated section below and `docs/agent-handoff.md`. `Feature 033` (below) was the last numbered feature-spec item shipped before this.

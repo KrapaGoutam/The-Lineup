@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   KeyRound,
+  ListChecks,
   LogOut,
   Menu,
   Settings2,
@@ -57,6 +58,14 @@ import {
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
+import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
+import { TasksModule } from "@/features/tasks/components/tasks-module";
+import { createDemoTasksState } from "@/features/tasks/domain/demo-tasks";
+import {
+  emptyTasksState,
+  type TasksState,
+} from "@/features/tasks/domain/task-engine";
+import type { TaskTeamMember } from "@/features/tasks/domain/task-types";
 import { renameTeamMemberAction } from "@/features/team/actions/member-actions";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
@@ -106,6 +115,7 @@ import { Label } from "./ui/label";
 type AppTab =
   | "schedule"
   | "allocation"
+  | "tasks"
   | "tips"
   | "team"
   | "attendance"
@@ -113,12 +123,11 @@ type AppTab =
   | "settings";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
-// active; secondary, plain icon+label) rather than one flat row. Schedule
-// stays primary on desktop, where there's room for it, but moves into the
-// mobile "More" sheet alongside the secondary tabs -- the fixed 3-button
-// mobile dock only has room for the two truly continuous-during-service
-// actions (Allocation, Tip Split), matching design-system-reference.html's
-// own mobile priority.
+// active; secondary, plain icon+label) rather than one flat row. Tasks V1:
+// the two primary tiers are now the daily frontline modules -- Table
+// Allocation (rotation) and Tasks. Schedule, Team, Attendance, Tip Split,
+// Payroll and Settings stay visible one tier down (and in the mobile "More"
+// sheet); the fixed 3-button mobile dock holds Allocation, Tasks and More.
 const scheduleTab = {
   id: "schedule" as const,
   label: "Schedule",
@@ -129,8 +138,9 @@ const allocationTab = {
   label: "Table Allocation",
   icon: Table2,
 };
+const tasksTab = { id: "tasks" as const, label: "Tasks", icon: ListChecks };
 const tipsTab = { id: "tips" as const, label: "Tip Split", icon: WalletCards };
-const primaryTabs = [allocationTab, tipsTab];
+const primaryTabs = [allocationTab, tasksTab];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
 // Feature 019: visible to every signed-in role -- unlike Feature 018,
@@ -152,6 +162,57 @@ const payrollTab = {
   label: "Payroll",
   icon: Banknote,
 };
+
+// Tasks demo mode: everyone who can be assigned work is a demo roster member
+// or a demo account (the managers are accounts, not roster servers).
+function toTasksTeam(
+  team: readonly TeamMember[],
+  accounts: Record<string, SignedInUser>,
+): TaskTeamMember[] {
+  const byId = new Map<string, TaskTeamMember>();
+  for (const member of team) {
+    if (member.active === false) continue;
+    byId.set(member.id, {
+      profileId: member.id,
+      name: member.name,
+      designation: member.designation,
+    });
+  }
+  for (const account of Object.values(accounts)) {
+    if (!byId.has(account.profileId)) {
+      byId.set(account.profileId, {
+        profileId: account.profileId,
+        name: account.name,
+        designation: account.designation,
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
+// Unread-notification count on the Tasks tab. The number is decorative
+// (aria-hidden) so the button keeps its plain "Tasks" name; the Tasks screen
+// itself announces the unread count on its Notifications button.
+function TasksBadge({
+  count,
+  dock = false,
+}: {
+  count: number;
+  dock?: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="tasks-unread-badge"
+      className={cn(
+        "bg-primary text-primary-foreground grid min-w-5 place-items-center rounded-full px-1 text-[11px] leading-5 font-bold",
+        dock && "absolute top-1.5 right-4",
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -625,6 +686,37 @@ function RestaurantOperationsAppInner({
   const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>(
     () => initialTipsContext?.auditLog ?? [],
   );
+  // Tasks (demo mode only): held here so the demo task list survives tab
+  // switches and sign-in as a different demo person. Real mode never reads
+  // this -- its source of truth is the database.
+  const [realTasksUnread, setRealTasksUnread] = useState(0);
+  const [demoTasksState, setDemoTasksState] = useState<TasksState>(() =>
+    demoMode
+      ? createDemoTasksState(
+          new Date(),
+          DEMO_TIME_ZONE,
+          toTasksTeam(staticDemoTeam, staticDemoAccounts),
+        )
+      : emptyTasksState(),
+  );
+
+  // Real mode: keep the Tasks tab badge fresh (mount, focus). The database
+  // is authoritative; Realtime is deliberately not involved (#134).
+  const signedInProfileId = user?.profileId ?? null;
+  useEffect(() => {
+    if (demoMode || !signedInProfileId) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const result = await getTasksUnreadCountAction({ restaurantSlug });
+      if (!cancelled && result.ok) setRealTasksUnread(result.unread);
+    };
+    void refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, [demoMode, signedInProfileId, restaurantSlug]);
 
   function registerDemoMember(input: {
     displayName: string;
@@ -743,6 +835,13 @@ function RestaurantOperationsAppInner({
   }
 
   const isManager = user.role !== "server";
+  // Unread Tasks notifications for the tab badge. Demo mode derives it from
+  // the in-memory state; real mode from the last fetch / the inbox itself.
+  const tasksUnread = demoMode
+    ? demoTasksState.notifications.filter(
+        (n) => n.recipientId === user.profileId && !n.readAt,
+      ).length
+    : realTasksUnread;
   // Feature 019: attendanceTab is now always included -- Team stays
   // manager-only. Feature 020 Phase 2: payrollTab is manager-only AND
   // real-mode-only (demo mode has no data source for it yet). Feature 021:
@@ -753,6 +852,7 @@ function RestaurantOperationsAppInner({
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
+    tipsTab,
     ...(!demoMode ? [payrollTab] : []),
   ];
   // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
@@ -1774,6 +1874,7 @@ function RestaurantOperationsAppInner({
             {primaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
+                data-nav-tier="primary"
                 onClick={() => setTab(id)}
                 aria-current={tab === id ? "page" : undefined}
                 className={cn(
@@ -1785,6 +1886,9 @@ function RestaurantOperationsAppInner({
               >
                 <Icon className="size-[18px]" aria-hidden="true" />
                 {label}
+                {id === "tasks" && tasksUnread > 0 ? (
+                  <TasksBadge count={tasksUnread} />
+                ) : null}
               </button>
             ))}
           </div>
@@ -1793,6 +1897,7 @@ function RestaurantOperationsAppInner({
             {secondaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
+                data-nav-tier="secondary"
                 onClick={() => setTab(id)}
                 aria-current={tab === id ? "page" : undefined}
                 className={cn(
@@ -1951,6 +2056,25 @@ function RestaurantOperationsAppInner({
             onSessionInvalid={forceSignOut}
           />
         ) : null}
+        {tab === "tasks" ? (
+          <TasksModule
+            restaurantSlug={restaurantSlug}
+            user={user}
+            onSessionInvalid={forceSignOut}
+            onUnreadChange={demoMode ? undefined : setRealTasksUnread}
+            demo={
+              demoMode
+                ? {
+                    state: demoTasksState,
+                    setState: setDemoTasksState,
+                    team: toTasksTeam(activeTeam, demoAccounts),
+                    timeZone,
+                    organizationId: DEMO_ORGANIZATION_ID,
+                  }
+                : null
+            }
+          />
+        ) : null}
         {tab === "tips" ? (
           <TipWorkspace
             user={user}
@@ -2012,10 +2136,10 @@ function RestaurantOperationsAppInner({
         ) : null}
       </main>
 
-      {/* Feature 021: fixed 3-button dock -- only the two continuous-
-          during-service actions plus "More", matching the reference's
-          mobile priority. Everything else (Schedule, Team, Attendance,
-          Payroll, Settings) lives in the slide-up sheet below. */}
+      {/* Feature 021 / Tasks V1: fixed 3-button dock -- the two primary
+          frontline modules (Table Allocation, Tasks) plus "More".
+          Everything else (Schedule, Team, Attendance, Tip Split, Payroll,
+          Settings) lives in the slide-up sheet below. */}
       <nav
         className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
         aria-label="Mobile navigation"
@@ -2034,17 +2158,18 @@ function RestaurantOperationsAppInner({
           Allocation
         </button>
         <button
-          onClick={() => goToTab("tips")}
-          aria-current={tab === "tips" ? "page" : undefined}
+          onClick={() => goToTab("tasks")}
+          aria-current={tab === "tasks" ? "page" : undefined}
           className={cn(
-            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "tips"
+            "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+            tab === "tasks"
               ? "bg-primary text-primary-foreground"
               : "border-border bg-surface text-foreground border",
           )}
         >
-          <WalletCards className="size-[22px]" aria-hidden="true" />
-          Tip Split
+          <ListChecks className="size-[22px]" aria-hidden="true" />
+          Tasks
+          {tasksUnread > 0 ? <TasksBadge count={tasksUnread} dock /> : null}
         </button>
         <button
           onClick={() => setShowMobileSheet(true)}
