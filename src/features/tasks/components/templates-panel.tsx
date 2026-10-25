@@ -86,6 +86,7 @@ export function TemplatesPanel({ controller, execute }: Props) {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="min-h-11"
                       onClick={() => setEditing({ kind, template })}
                     >
                       Edit
@@ -93,6 +94,7 @@ export function TemplatesPanel({ controller, execute }: Props) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="min-h-11"
                       onClick={() =>
                         void execute({
                           type: "templateSetActive",

@@ -56,7 +56,7 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 - Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
 - Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
 
-## Tasks V1 (ACTIVE — branch `feature/tasks-v1`)
+## Tasks V1 (READY TO MERGE — branch `feature/tasks-v1` → `development`)
 
 Tracking: parent #136, milestone "Tasks V1", T1–T8 = #137–#144, Project #4. Plan and evidence: `docs/features/tasks-v1/`.
 

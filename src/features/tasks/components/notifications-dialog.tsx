@@ -42,7 +42,12 @@ export function NotificationsDialog({
     >
       {unreadCount > 0 ? (
         <div>
-          <Button variant="secondary" size="sm" onClick={() => onRead(null)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="min-h-11"
+            onClick={() => onRead(null)}
+          >
             Mark all read
           </Button>
         </div>

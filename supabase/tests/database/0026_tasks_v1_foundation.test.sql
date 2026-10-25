@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(79);
+select plan(81);
 
 -- ---------------------------------------------------------------------
 -- Tasks V1 / T1 -- domain, authorization and audit boundary.
@@ -507,6 +507,16 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'private.tasks_is_assignee(uuid)', 'execute'),
   'internal assignee helper is not exposed to clients'
+);
+
+-- 12. Cascades: removing tasks may clear their audit rows (depth > 1) --------
+select lives_ok(
+  $$delete from public.tasks where organization_id = '00000000-0000-0000-0000-000000026011'$$,
+  'deleting tasks cascades through the append-only audit table'
+);
+select is(
+  (select count(*)::int from public.task_events where organization_id = '00000000-0000-0000-0000-000000026011'),
+  0, 'no orphaned audit rows remain'
 );
 
 select * from finish();

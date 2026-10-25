@@ -107,7 +107,7 @@ export function AssigneePicker({
                 >
                   <input
                     type="checkbox"
-                    className="size-5 accent-[var(--primary)]"
+                    className="size-6 accent-[var(--primary)]"
                     checked={checked}
                     onChange={() => toggle(member.profileId)}
                   />

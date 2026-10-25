@@ -9,7 +9,7 @@
 
 ## Tasks V1 (active, `feature/tasks-v1`)
 
-T1 (domain, RLS, trusted RPCs, pgTAP 26 files / 466 assertions) complete locally; T2–T8 pending. Tracking #136 / milestone "Tasks V1". Not merged; DEV/PROD untouched. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
+T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merge to `development` pending CI. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
 
 ---
 

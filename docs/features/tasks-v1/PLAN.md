@@ -1,6 +1,6 @@
 # Tasks V1 — Plan
 
-**Status:** building (T1) · **Branch:** `feature/tasks-v1` (from `development` @ `ead4e8b`) · **Tracking:** parent #136, milestone "Tasks V1", T1–T8 = #137–#144, Project #4.
+**Status:** built; ready to merge into `development` (T1–T8 complete) · **Branch:** `feature/tasks-v1` (from `development` @ `ead4e8b`) · **Tracking:** parent #136, milestone "Tasks V1", T1–T8 = #137–#144, Project #4.
 **Companion docs:** `ACCEPTANCE_CRITERIA.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_REPORT.md`. Agent handoff: `tasks/current-task.md`.
 
 ## 1. Purpose

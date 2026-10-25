@@ -107,13 +107,15 @@ export function HandoffPanel({
                 key={task.id}
                 className="border-border flex items-center gap-3 rounded-xl border p-2.5"
               >
-                <input
-                  type="checkbox"
-                  className="size-5 flex-none accent-[var(--primary)]"
-                  checked={selected.has(task.id)}
-                  onChange={() => toggle(task.id)}
-                  aria-label={`Select ${task.title}`}
-                />
+                <span className="grid size-11 flex-none place-items-center">
+                  <input
+                    type="checkbox"
+                    className="size-6 accent-[var(--primary)]"
+                    checked={selected.has(task.id)}
+                    onChange={() => toggle(task.id)}
+                    aria-label={`Select ${task.title}`}
+                  />
+                </span>
                 <button
                   type="button"
                   onClick={() => onOpen(task)}

@@ -44,20 +44,20 @@ async function resolveCaller(restaurantSlug: string) {
 function seriesArgs(i: SeriesInput) {
   return {
     p_title: i.title,
-    p_instructions: i.instructions ?? undefined,
+    p_instructions: i.instructions ?? null,
     p_category: i.category,
     p_priority: i.priority,
     p_assignment_mode: i.assignmentMode,
     p_assignee_ids: i.assigneeIds,
-    p_due_time: i.dueTime ?? undefined,
-    p_due_window: i.dueWindow ?? undefined,
+    p_due_time: i.dueTime ?? null,
+    p_due_window: i.dueWindow ?? null,
     p_frequency: i.frequency,
-    p_weekdays: i.weekdays ?? undefined,
-    p_day_of_month: i.dayOfMonth ?? undefined,
+    p_weekdays: i.weekdays ?? null,
+    p_day_of_month: i.dayOfMonth ?? null,
     p_starts_on: i.startsOn,
     p_end_type: i.endType,
-    p_ends_on: i.endsOn ?? undefined,
-    p_max_occurrences: i.maxOccurrences ?? undefined,
+    p_ends_on: i.endsOn ?? null,
+    p_max_occurrences: i.maxOccurrences ?? null,
   };
 }
 
@@ -81,16 +81,16 @@ async function runCommand(
         p_organization_id: organizationId,
         p_location_id: locationId,
         p_title: i.title,
-        p_instructions: i.instructions ?? undefined,
+        p_instructions: i.instructions ?? null,
         p_category: i.category,
         p_priority: i.priority,
         p_assignment_mode: i.assignmentMode,
         p_assignee_ids: i.assigneeIds,
         p_each_person: i.eachPerson,
-        p_start_date: i.startDate ?? undefined,
-        p_due_date: i.dueDate ?? undefined,
-        p_due_time: i.dueTime ?? undefined,
-        p_due_window: i.dueWindow ?? undefined,
+        p_start_date: i.startDate ?? null,
+        p_due_date: i.dueDate ?? null,
+        p_due_time: i.dueTime ?? null,
+        p_due_window: i.dueWindow ?? null,
       });
       return error?.message ?? null;
     }
@@ -99,13 +99,13 @@ async function runCommand(
       const { error } = await supabase.rpc("task_update", {
         p_task_id: command.taskId,
         p_title: i.title,
-        p_instructions: i.instructions ?? undefined,
+        p_instructions: i.instructions ?? null,
         p_category: i.category,
         p_priority: i.priority,
-        p_start_date: i.startDate ?? undefined,
-        p_due_date: i.dueDate ?? undefined,
-        p_due_time: i.dueTime ?? undefined,
-        p_due_window: i.dueWindow ?? undefined,
+        p_start_date: i.startDate ?? null,
+        p_due_date: i.dueDate ?? null,
+        p_due_time: i.dueTime ?? null,
+        p_due_window: i.dueWindow ?? null,
       });
       return error?.message ?? null;
     }
@@ -121,14 +121,14 @@ async function runCommand(
       const { error } = await supabase.rpc("task_set_status", {
         p_task_id: command.taskId,
         p_status: command.status,
-        p_reason: command.reason ?? undefined,
+        p_reason: command.reason ?? null,
       });
       return error?.message ?? null;
     }
     case "complete": {
       const { error } = await supabase.rpc("task_complete", {
         p_task_id: command.taskId,
-        p_note: command.note ?? undefined,
+        p_note: command.note ?? null,
       });
       return error?.message ?? null;
     }
@@ -141,13 +141,13 @@ async function runCommand(
     case "cancel": {
       const { error } = await supabase.rpc("task_cancel", {
         p_task_id: command.taskId,
-        p_reason: command.reason ?? undefined,
+        p_reason: command.reason ?? null,
       });
       return error?.message ?? null;
     }
     case "notificationsRead": {
       const { error } = await supabase.rpc("task_notifications_mark_read", {
-        p_ids: command.ids ?? undefined,
+        p_ids: command.ids ?? null,
       });
       return error?.message ?? null;
     }
@@ -178,7 +178,7 @@ async function runCommand(
       const { error } = await supabase.rpc("checklist_template_save", {
         p_organization_id: organizationId,
         p_location_id: locationId,
-        p_template_id: command.templateId ?? undefined,
+        p_template_id: command.templateId ?? null,
         p_kind: i.kind,
         p_name: i.name,
         p_days_of_week: i.daysOfWeek,

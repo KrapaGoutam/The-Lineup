@@ -74,6 +74,7 @@ export function SeriesPanel({ controller, onEdit, execute }: Props) {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-11"
                   onClick={() => onEdit(series)}
                 >
                   Edit series
@@ -81,7 +82,7 @@ export function SeriesPanel({ controller, onEdit, execute }: Props) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-destructive"
+                  className="text-destructive min-h-11"
                   onClick={() =>
                     void execute({ type: "seriesStop", ruleId: series.id })
                   }

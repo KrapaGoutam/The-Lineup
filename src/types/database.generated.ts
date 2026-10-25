@@ -325,6 +325,13 @@ export type Database = {
             referencedColumns: ["organization_id", "profile_id"];
           },
           {
+            foreignKeyName: "checklist_instances_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "checklist_instances_template_fk";
             columns: ["template_id", "organization_id", "location_id"];
             isOneToOne: false;
@@ -2414,6 +2421,20 @@ export type Database = {
             referencedColumns: ["organization_id", "profile_id"];
           },
           {
+            foreignKeyName: "task_events_instance_fk";
+            columns: ["checklist_instance_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_instances";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "task_events_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "task_events_task_fk";
             columns: ["task_id", "organization_id"];
             isOneToOne: false;
@@ -2464,10 +2485,17 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "task_notifications_checklist_instance_id_fkey";
-            columns: ["checklist_instance_id"];
+            foreignKeyName: "task_notifications_instance_fk";
+            columns: ["checklist_instance_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "checklist_instances";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "task_notifications_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
             referencedColumns: ["id"];
           },
           {
@@ -3214,6 +3242,32 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      checklist_generate_daily: {
+        Args: {
+          p_kind?: Database["public"]["Enums"]["checklist_kind"];
+          p_location_id: string;
+          p_organization_id: string;
+          p_service_date?: string;
+        };
+        Returns: string[];
+      };
+      checklist_template_save: {
+        Args: {
+          p_active: boolean;
+          p_days_of_week: number[];
+          p_items: Json;
+          p_kind: Database["public"]["Enums"]["checklist_kind"];
+          p_location_id: string;
+          p_name: string;
+          p_organization_id: string;
+          p_template_id: string;
+        };
+        Returns: string;
+      };
+      checklist_template_set_active: {
+        Args: { p_active: boolean; p_template_id: string };
+        Returns: undefined;
+      };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
         Returns: undefined;
@@ -3256,7 +3310,63 @@ export type Database = {
         };
         Returns: string[];
       };
+      task_notifications_mark_read: {
+        Args: { p_ids?: number[] };
+        Returns: number;
+      };
+      task_notifications_sweep: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: number;
+      };
+      task_recurrence_generate: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: number;
+      };
       task_reopen: { Args: { p_task_id: string }; Returns: undefined };
+      task_series_create: {
+        Args: {
+          p_assignee_ids: string[];
+          p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          p_category: string;
+          p_day_of_month: number;
+          p_due_time: string;
+          p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_end_type: Database["public"]["Enums"]["recurrence_end_type"];
+          p_ends_on: string;
+          p_frequency: Database["public"]["Enums"]["recurrence_frequency"];
+          p_instructions: string;
+          p_location_id: string;
+          p_max_occurrences: number;
+          p_organization_id: string;
+          p_priority: Database["public"]["Enums"]["task_priority"];
+          p_starts_on: string;
+          p_title: string;
+          p_weekdays: number[];
+        };
+        Returns: string;
+      };
+      task_series_stop: { Args: { p_rule_id: string }; Returns: number };
+      task_series_update: {
+        Args: {
+          p_assignee_ids: string[];
+          p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          p_category: string;
+          p_day_of_month: number;
+          p_due_time: string;
+          p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_end_type: Database["public"]["Enums"]["recurrence_end_type"];
+          p_ends_on: string;
+          p_frequency: Database["public"]["Enums"]["recurrence_frequency"];
+          p_instructions: string;
+          p_max_occurrences: number;
+          p_priority: Database["public"]["Enums"]["task_priority"];
+          p_rule_id: string;
+          p_starts_on: string;
+          p_title: string;
+          p_weekdays: number[];
+        };
+        Returns: undefined;
+      };
       task_set_status: {
         Args: {
           p_reason?: string;
