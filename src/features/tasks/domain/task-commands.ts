@@ -117,6 +117,10 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("seriesStop"), ruleId: idSchema }),
   z.object({
+    type: z.literal("notificationsRead"),
+    ids: z.array(z.number().int()).max(200).nullable(),
+  }),
+  z.object({
     type: z.literal("templateSave"),
     templateId: idSchema.nullable(),
     input: templateInputSchema,

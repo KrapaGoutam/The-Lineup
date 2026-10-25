@@ -39,11 +39,11 @@ Layers: **DB** = pgTAP (`supabase/tests/database/0026_tasks_*.test.sql`, local S
 | TASK-043 | Occurrences keep independent history; generation idempotent                  | DB      | AC-14        | PASS (DB, U, E2E)                                             |
 | TASK-044 | End by date / after N occurrences                                            | U       | AC-14        | PASS (DB, U)                                                  |
 | TASK-045 | Edit this-occurrence vs this-and-future never alters completed ones          | DB      | AC-14        | PASS (DB, U)                                                  |
-| TASK-050 | Assignment notification                                                      | DB      | AC-15        | PASS                                                          |
-| TASK-051 | Reassignment notification                                                    | DB      | AC-15        | PASS                                                          |
-| TASK-052 | Due-soon / overdue notifications (deduped)                                   | DB      | AC-15        | TODO                                                          |
-| TASK-053 | Unread count; mark read                                                      | DB, U   | AC-15        | TODO                                                          |
-| TASK-054 | Checklist available notification                                             | DB      | AC-15        | PASS (DB)                                                     |
+| TASK-050 | Assignment notification                                                      | DB      | AC-15        | PASS (DB, U, E2E)                                             |
+| TASK-051 | Reassignment notification                                                    | DB      | AC-15        | PASS (DB, U)                                                  |
+| TASK-052 | Due-soon / overdue notifications (deduped)                                   | DB      | AC-15        | PASS (DB, U)                                                  |
+| TASK-053 | Unread count; mark read                                                      | DB, U   | AC-15        | PASS (DB, U, E2E)                                             |
+| TASK-054 | Checklist available notification                                             | DB      | AC-15        | PASS (DB, U)                                                  |
 | TASK-060 | Staff cannot read audit history                                              | DB, E2E | AC-08        | PASS (DB, U, E2E staff view)                                  |
 | TASK-061 | Manager can read audit history                                               | DB, E2E | AC-08        | PASS (DB, U, E2E)                                             |
 | TASK-062 | Events are append-only (update/delete blocked)                               | DB      | AC-08        | PASS                                                          |

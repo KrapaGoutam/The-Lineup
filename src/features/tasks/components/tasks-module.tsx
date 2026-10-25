@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { Designation } from "@/features/auth/domain/passcode";
 
@@ -23,6 +23,8 @@ type Props = {
   /** Present in demo mode only; real mode reads and writes the database. */
   demo: TasksDemoBinding | null;
   onSessionInvalid?: () => void;
+  /** Lets the app shell keep its Tasks tab badge in step with the inbox. */
+  onUnreadChange?: (unread: number) => void;
 };
 
 /**
@@ -36,6 +38,7 @@ export function TasksModule({
   user,
   demo,
   onSessionInvalid,
+  onUnreadChange,
 }: Props) {
   const viewer = useMemo(
     () => ({
@@ -51,5 +54,9 @@ export function TasksModule({
     viewer,
     onSessionInvalid,
   });
+  const unread = controller.snapshot?.unreadCount;
+  useEffect(() => {
+    if (unread !== undefined) onUnreadChange?.(unread);
+  }, [unread, onUnreadChange]);
   return <TasksWorkspace controller={controller} />;
 }

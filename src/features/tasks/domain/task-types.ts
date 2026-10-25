@@ -164,6 +164,28 @@ export type RecurrenceRuleView = {
   createdBy: PersonRef | null;
 };
 
+export const NOTIFICATION_TYPES = [
+  "assigned",
+  "reassigned",
+  "due_soon",
+  "overdue",
+  "completed",
+  "checklist_available",
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+/** One in-app notification for the signed-in person. */
+export type NotificationView = {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  taskId: string | null;
+  checklistInstanceId: string | null;
+  createdAt: string;
+  readAt: string | null;
+};
+
 export type ChecklistKind = "opening" | "closing";
 
 /** One day's Opening or Closing checklist; its items are ordinary tasks. */
@@ -211,6 +233,9 @@ export type TasksSnapshot = {
   tasks: TaskView[];
   /** Opening / Closing days, newest first (bounded history window). */
   checklists: ChecklistInstanceView[];
+  /** The viewer's own notifications, newest first (bounded). */
+  notifications: NotificationView[];
+  unreadCount: number;
   /** Recurring series definitions; empty for staff. */
   series: RecurrenceRuleView[];
   /** Template definitions; empty for staff. */

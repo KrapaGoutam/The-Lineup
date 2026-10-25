@@ -433,3 +433,53 @@ test("recurring tasks create independent occurrences that keep their history (TA
   await page.getByRole("button", { name: /^Completed/ }).click();
   await expect(page.getByText("E2E daily ice check")).toBeVisible();
 });
+
+test("in-app notifications: unread badge, inbox, mark read (TASK-050/053)", async ({
+  page,
+}) => {
+  await signIn(page, "2468"); // Maya assigns a fresh task to Mia
+  await openTasks(page);
+  await page.getByRole("button", { name: /New task/ }).click();
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByLabel("Title").fill("E2E notify Mia");
+  await dialog.getByLabel("Person").selectOption({ label: "Mia Chen" });
+  await dialog.getByRole("button", { name: "Create task" }).click();
+  await expect(dialog).toBeHidden();
+
+  await signOut(page);
+  await signInOnCurrentPage(page, "1357"); // Mia
+  // The Tasks tab carries an unread count before she even opens it.
+  await expect(
+    page.locator('[data-testid="tasks-unread-badge"]:visible').first(),
+  ).toBeVisible();
+  await openTasks(page);
+
+  const bell = page.getByRole("button", {
+    name: /^Notifications, \d+ unread$/,
+  });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  const inbox = page.getByRole("dialog", { name: "Notifications" });
+  await expect(inbox.getByText("E2E notify Mia")).toBeVisible();
+  await expect(inbox.getByText("New").first()).toBeVisible();
+
+  await inbox.getByRole("button", { name: "Mark all read" }).click();
+  await expect(inbox.getByText("You're all caught up.")).toBeVisible();
+  await inbox.getByRole("button", { name: "Close" }).click();
+  await expect(
+    page.getByRole("button", { name: "Notifications", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("tasks-unread-badge")).toHaveCount(0);
+
+  // Opening a notification jumps to its task.
+  await page
+    .getByRole("button", { name: "Notifications", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Notifications" })
+    .getByText("E2E notify Mia")
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "E2E notify Mia" }),
+  ).toBeVisible();
+});

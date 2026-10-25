@@ -1,6 +1,7 @@
 import { weekdayOf } from "./recurrence";
 import {
   computeDueAt,
+  notify,
   pushEvent,
   type EngineContext,
   type InstanceRecord,
@@ -151,6 +152,18 @@ export function generateDailyChecklists(
       service_date: date,
       items: created.length,
     });
+    for (const member of ctx.team) {
+      if (member.profileId === ctx.actor.profileId) continue;
+      next = notify(next, ctx, {
+        recipientId: member.profileId,
+        type: "checklist_available",
+        taskId: null,
+        instanceId: instance.id,
+        title: `${template.kind === "opening" ? "Opening" : "Closing"} checklist is ready`,
+        body: template.name,
+        dedupeKey: `checklist:${instance.id}`,
+      });
+    }
   }
   return next;
 }

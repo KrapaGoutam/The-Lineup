@@ -17,6 +17,8 @@ import {
   DEFAULT_TASK_CATEGORIES,
   type ChecklistKind,
   type ChecklistTemplateView,
+  type NotificationType,
+  type NotificationView,
   type RecurrenceRuleView,
   isTasksManager,
   type AssignmentMode,
@@ -44,12 +46,19 @@ export type InstanceRecord = {
   serviceDate: string;
 };
 
+/** A notification plus who it is for (the read model filters by viewer). */
+export type NotificationRecord = NotificationView & {
+  recipientId: string;
+  dedupeKey: string | null;
+};
+
 export type TasksState = {
   tasks: TaskView[];
   events: TaskEventView[];
   templates: ChecklistTemplateView[];
   instances: InstanceRecord[];
   rules: RecurrenceRuleView[];
+  notifications: NotificationRecord[];
   seq: number;
 };
 
@@ -68,6 +77,7 @@ export function emptyTasksState(): TasksState {
     templates: [],
     instances: [],
     rules: [],
+    notifications: [],
     seq: 1,
   };
 }
@@ -140,6 +150,83 @@ export function validateAssignees(
   return ok(people);
 }
 
+/** Mirrors private.tasks_notify: active recipients only, deduped by key. */
+export function notify(
+  state: TasksState,
+  ctx: EngineContext,
+  input: {
+    recipientId: string;
+    type: NotificationType;
+    taskId: string | null;
+    instanceId?: string | null;
+    title: string;
+    body: string | null;
+    dedupeKey?: string | null;
+  },
+): TasksState {
+  if (!ctx.team.some((m) => m.profileId === input.recipientId)) return state;
+  const key = input.dedupeKey ?? null;
+  if (
+    key &&
+    state.notifications.some(
+      (n) => n.recipientId === input.recipientId && n.dedupeKey === key,
+    )
+  ) {
+    return state;
+  }
+  const record: NotificationRecord = {
+    id: state.seq,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    taskId: input.taskId,
+    checklistInstanceId: input.instanceId ?? null,
+    createdAt: ctx.now.toISOString(),
+    readAt: null,
+    recipientId: input.recipientId,
+    dedupeKey: key,
+  };
+  return {
+    ...state,
+    seq: state.seq + 1,
+    notifications: [...state.notifications, record],
+  };
+}
+
+/** Mirrors task_notifications_sweep: due within an hour / overdue < 3 days. */
+export function sweepNotifications(
+  state: TasksState,
+  ctx: EngineContext,
+): TasksState {
+  const now = ctx.now.getTime();
+  let next = state;
+  for (const task of state.tasks) {
+    if (
+      task.kind !== "task" ||
+      !task.dueAt ||
+      !["open", "in_progress", "blocked"].includes(task.status) ||
+      (task.assignmentMode !== "individual" &&
+        task.assignmentMode !== "multiple")
+    ) {
+      continue;
+    }
+    const due = new Date(task.dueAt).getTime();
+    if (due < now - 3 * 86_400_000 || due > now + 60 * 60_000) continue;
+    const kind = due < now ? "overdue" : "due_soon";
+    for (const person of task.assignees) {
+      next = notify(next, ctx, {
+        recipientId: person.profileId,
+        type: kind,
+        taskId: task.id,
+        title: kind === "overdue" ? "Task overdue" : "Task due soon",
+        body: task.title,
+        dedupeKey: `${kind}:${task.id}:${person.profileId}`,
+      });
+    }
+  }
+  return next;
+}
+
 export function pushEvent(
   state: TasksState,
   ctx: EngineContext,
@@ -205,12 +292,27 @@ function createOne(
     createdBy: actorRef(ctx),
     createdAt: ctx.now.toISOString(),
   };
-  const next = { ...state, tasks: [...state.tasks, task], seq: state.seq + 1 };
-  return pushEvent(next, ctx, id, "created", {
+  let next: TasksState = {
+    ...state,
+    tasks: [...state.tasks, task],
+    seq: state.seq + 1,
+  };
+  next = pushEvent(next, ctx, id, "created", {
     title: task.title,
     assignment_mode: mode,
     assignees: assignees.map((a) => a.profileId),
   });
+  for (const person of assignees) {
+    if (person.profileId === ctx.actor.profileId) continue;
+    next = notify(next, ctx, {
+      recipientId: person.profileId,
+      type: "assigned",
+      taskId: id,
+      title: "New task for you",
+      body: task.title,
+    });
+  }
+  return next;
 }
 
 /** Applies one command exactly as the corresponding RPC would. */
@@ -318,12 +420,29 @@ export function applyCommand(
         assignmentMode: command.assignmentMode,
         assignees: people.value,
       };
-      return ok(
-        pushEvent(replaceTask(state, updated), ctx, task.id, "reassigned", {
+      let reassigned = pushEvent(
+        replaceTask(state, updated),
+        ctx,
+        task.id,
+        "reassigned",
+        {
           from: { mode: task.assignmentMode, assignees: oldIds },
           to: { mode: command.assignmentMode, assignees: newIds },
-        }),
+        },
       );
+      if (task.kind === "task") {
+        for (const id of newIds) {
+          if (id === ctx.actor.profileId || oldIds.includes(id)) continue;
+          reassigned = notify(reassigned, ctx, {
+            recipientId: id,
+            type: "reassigned",
+            taskId: task.id,
+            title: "A task was assigned to you",
+            body: task.title,
+          });
+        }
+      }
+      return ok(reassigned);
     }
 
     case "setStatus": {
@@ -386,13 +505,42 @@ export function applyCommand(
         completedAt: ctx.now.toISOString(),
         completionNote: note,
       };
-      return ok(
-        pushEvent(replaceTask(state, updated), ctx, task.id, "completed", {
+      let completed = pushEvent(
+        replaceTask(state, updated),
+        ctx,
+        task.id,
+        "completed",
+        {
           on_behalf: onBehalf,
           assignees: task.assignees.map((a) => a.profileId),
           note,
-        }),
+        },
       );
+      if (task.kind === "task") {
+        if (onBehalf) {
+          for (const person of task.assignees) {
+            completed = notify(completed, ctx, {
+              recipientId: person.profileId,
+              type: "completed",
+              taskId: task.id,
+              title: "Your task was completed for you",
+              body: task.title,
+            });
+          }
+        } else if (
+          task.createdBy &&
+          task.createdBy.profileId !== ctx.actor.profileId
+        ) {
+          completed = notify(completed, ctx, {
+            recipientId: task.createdBy.profileId,
+            type: "completed",
+            taskId: task.id,
+            title: "Task completed",
+            body: task.title,
+          });
+        }
+      }
+      return ok(completed);
     }
 
     case "reopen": {
@@ -440,6 +588,20 @@ export function applyCommand(
           reason: command.reason?.trim() || null,
         }),
       );
+    }
+
+    case "notificationsRead": {
+      const readAt = ctx.now.toISOString();
+      return ok({
+        ...state,
+        notifications: state.notifications.map((n) =>
+          n.recipientId === ctx.actor.profileId &&
+          !n.readAt &&
+          (command.ids === null || command.ids.includes(n.id))
+            ? { ...n, readAt }
+            : n,
+        ),
+      });
     }
 
     case "seriesCreate": {
@@ -593,6 +755,9 @@ export function buildSnapshot(
   },
 ): TasksSnapshot {
   const manager = isTasksManager(ctx.actor.designation);
+  const mine = state.notifications.filter(
+    (n) => n.recipientId === ctx.actor.profileId,
+  );
   return {
     organizationId: ctx.organizationId,
     locationId: ctx.locationId,
@@ -613,6 +778,21 @@ export function buildSnapshot(
           .filter((t) => t.checklistInstanceId === instance.id)
           .sort((a, b) => a.sortOrder - b.sortOrder),
       })),
+    notifications: mine
+      .slice()
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 50)
+      .map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        taskId: n.taskId,
+        checklistInstanceId: n.checklistInstanceId,
+        createdAt: n.createdAt,
+        readAt: n.readAt,
+      })),
+    unreadCount: mine.filter((n) => !n.readAt).length,
     series: manager ? state.rules.filter((r) => r.active) : [],
     templates: manager ? state.templates : [],
     events: manager ? state.events : [],

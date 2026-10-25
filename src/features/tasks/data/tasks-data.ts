@@ -21,7 +21,10 @@ import {
   mapTaskRow,
   mapTemplateRow,
   TASK_ROW_COLUMNS,
+  NOTIFICATION_ROW_COLUMNS,
   SERIES_ROW_COLUMNS,
+  mapNotificationRow,
+  type NotificationRow,
   TEMPLATE_ROW_COLUMNS,
   mapSeriesRow,
   type SeriesRow,
@@ -70,6 +73,15 @@ export async function getTasksSnapshot(
       "getTasksSnapshot: checklist_generate_daily",
       generated.error,
     );
+  }
+
+  // Time-driven notifications (due soon / overdue): idempotent, best-effort.
+  const swept = await supabase.rpc("task_notifications_sweep", {
+    p_organization_id: organizationId,
+    p_location_id: location.id,
+  });
+  if (swept.error) {
+    console.error("getTasksSnapshot: task_notifications_sweep", swept.error);
   }
 
   // Keep the recurring-task horizon filled (idempotent, best-effort).
@@ -157,6 +169,24 @@ export async function getTasksSnapshot(
     templateRows = data ?? [];
   }
 
+  const [notificationResult, unreadResult] = await Promise.all([
+    supabase
+      .from("task_notifications")
+      .select(NOTIFICATION_ROW_COLUMNS)
+      .eq("recipient_profile_id", viewer.profileId)
+      .order("id", { ascending: false })
+      .limit(50)
+      .overrideTypes<NotificationRow[], { merge: false }>(),
+    supabase
+      .from("task_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_profile_id", viewer.profileId)
+      .is("read_at", null),
+  ]);
+  if (notificationResult.error) {
+    console.error("getTasksSnapshot: notifications", notificationResult.error);
+  }
+
   let seriesRows: SeriesRow[] = [];
   if (manager) {
     const { data, error } = await supabase
@@ -233,6 +263,8 @@ export async function getTasksSnapshot(
     generatedAt: now.toISOString(),
     tasks,
     checklists,
+    notifications: (notificationResult.data ?? []).map(mapNotificationRow),
+    unreadCount: unreadResult.count ?? 0,
     series: seriesRows.map((row) => mapSeriesRow(row, names)),
     templates: templateRows.map(mapTemplateRow),
     events,

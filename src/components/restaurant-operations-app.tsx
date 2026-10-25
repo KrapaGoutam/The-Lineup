@@ -58,6 +58,7 @@ import {
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
+import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
 import { TasksModule } from "@/features/tasks/components/tasks-module";
 import { createDemoTasksState } from "@/features/tasks/domain/demo-tasks";
 import {
@@ -187,6 +188,30 @@ function toTasksTeam(
     }
   }
   return [...byId.values()];
+}
+
+// Unread-notification count on the Tasks tab. The number is decorative
+// (aria-hidden) so the button keeps its plain "Tasks" name; the Tasks screen
+// itself announces the unread count on its Notifications button.
+function TasksBadge({
+  count,
+  dock = false,
+}: {
+  count: number;
+  dock?: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="tasks-unread-badge"
+      className={cn(
+        "bg-primary text-primary-foreground grid min-w-5 place-items-center rounded-full px-1 text-[11px] leading-5 font-bold",
+        dock && "absolute top-1.5 right-4",
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
 }
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -664,6 +689,7 @@ function RestaurantOperationsAppInner({
   // Tasks (demo mode only): held here so the demo task list survives tab
   // switches and sign-in as a different demo person. Real mode never reads
   // this -- its source of truth is the database.
+  const [realTasksUnread, setRealTasksUnread] = useState(0);
   const [demoTasksState, setDemoTasksState] = useState<TasksState>(() =>
     demoMode
       ? createDemoTasksState(
@@ -673,6 +699,24 @@ function RestaurantOperationsAppInner({
         )
       : emptyTasksState(),
   );
+
+  // Real mode: keep the Tasks tab badge fresh (mount, focus). The database
+  // is authoritative; Realtime is deliberately not involved (#134).
+  const signedInProfileId = user?.profileId ?? null;
+  useEffect(() => {
+    if (demoMode || !signedInProfileId) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const result = await getTasksUnreadCountAction({ restaurantSlug });
+      if (!cancelled && result.ok) setRealTasksUnread(result.unread);
+    };
+    void refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, [demoMode, signedInProfileId, restaurantSlug]);
 
   function registerDemoMember(input: {
     displayName: string;
@@ -791,6 +835,13 @@ function RestaurantOperationsAppInner({
   }
 
   const isManager = user.role !== "server";
+  // Unread Tasks notifications for the tab badge. Demo mode derives it from
+  // the in-memory state; real mode from the last fetch / the inbox itself.
+  const tasksUnread = demoMode
+    ? demoTasksState.notifications.filter(
+        (n) => n.recipientId === user.profileId && !n.readAt,
+      ).length
+    : realTasksUnread;
   // Feature 019: attendanceTab is now always included -- Team stays
   // manager-only. Feature 020 Phase 2: payrollTab is manager-only AND
   // real-mode-only (demo mode has no data source for it yet). Feature 021:
@@ -1835,6 +1886,9 @@ function RestaurantOperationsAppInner({
               >
                 <Icon className="size-[18px]" aria-hidden="true" />
                 {label}
+                {id === "tasks" && tasksUnread > 0 ? (
+                  <TasksBadge count={tasksUnread} />
+                ) : null}
               </button>
             ))}
           </div>
@@ -2007,6 +2061,7 @@ function RestaurantOperationsAppInner({
             restaurantSlug={restaurantSlug}
             user={user}
             onSessionInvalid={forceSignOut}
+            onUnreadChange={demoMode ? undefined : setRealTasksUnread}
             demo={
               demoMode
                 ? {
@@ -2106,7 +2161,7 @@ function RestaurantOperationsAppInner({
           onClick={() => goToTab("tasks")}
           aria-current={tab === "tasks" ? "page" : undefined}
           className={cn(
-            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+            "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
             tab === "tasks"
               ? "bg-primary text-primary-foreground"
               : "border-border bg-surface text-foreground border",
@@ -2114,6 +2169,7 @@ function RestaurantOperationsAppInner({
         >
           <ListChecks className="size-[22px]" aria-hidden="true" />
           Tasks
+          {tasksUnread > 0 ? <TasksBadge count={tasksUnread} dock /> : null}
         </button>
         <button
           onClick={() => setShowMobileSheet(true)}

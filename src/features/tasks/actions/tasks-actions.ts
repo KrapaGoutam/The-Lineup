@@ -145,6 +145,12 @@ async function runCommand(
       });
       return error?.message ?? null;
     }
+    case "notificationsRead": {
+      const { error } = await supabase.rpc("task_notifications_mark_read", {
+        p_ids: command.ids ?? undefined,
+      });
+      return error?.message ?? null;
+    }
     case "seriesCreate": {
       const i = command.input;
       const { error } = await supabase.rpc("task_series_create", {
@@ -269,4 +275,25 @@ export async function runTaskCommandAction(input: {
   const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
   return { ok: true, data: snapshot };
+}
+
+/**
+ * Lightweight unread count for the Tasks tab badge. Reads only the caller's
+ * own rows (RLS), so it is safe to call on every focus.
+ */
+export async function getTasksUnreadCountAction(input: {
+  restaurantSlug: string;
+}): Promise<{ ok: true; unread: number } | { ok: false }> {
+  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  if (!parsed.success) return { ok: false };
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return { ok: false };
+  const { count, error } = await supabase
+    .from("task_notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_profile_id", data.user.id)
+    .is("read_at", null);
+  if (error) return { ok: false };
+  return { ok: true, unread: count ?? 0 };
 }

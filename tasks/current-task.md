@@ -50,7 +50,7 @@ PR: none yet · PR target: `development` · development merged: NO · main merge
 
 ## Exact next step
 
-T7: migration `20261025120000_tasks_v1_notifications.sql` — `task_notifications_sweep(org, loc)` (due*soon within 60 min, overdue; deduped via dedupe_key `due:<task>:<profile>` / `overdue:<task>:<profile>`), `task_notifications_mark_read(ids|all)`; pgTAP `0029*\*`; data/action (list + unread count, bounded 50), controller badge hook, notification bell/list UI on Tasks header + unread badge on Tasks nav tab; demo engine equivalents; e2e. Then T8: regenerate DB types, apply migrations to DEV (NEON_DATABASE_URL blank), hosted real-mode suites for Tasks, full gate, responsive/a11y pass, docs, push, PR to development.
+T8: (1) regenerate `src/types/database.generated.ts` (`supabase gen types typescript --local`, keep the `__InternalSupabase` header); (2) apply the 5 Tasks migrations to DEV `opmujepkemwcdxxorhfd` (NEON_DATABASE_URL blank; DEV only, never PROD) and run a hosted real-mode smoke with TestOwner/staff (see memory `dev-supabase-access-and-pitfalls`); (3) full gate: `npm run check`, `npm test`, `npm run build` (pin DEV env, grep `.next` for the PROD ref), full e2e, `npm run db:test`; (4) responsive/a11y pass; (5) finalize docs/GitHub; (6) push `feature/tasks-v1`, open PR to `development`, require CI, merge commit. Never merge to main.
 
 ## DO NOT
 

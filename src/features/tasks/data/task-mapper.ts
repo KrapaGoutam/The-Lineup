@@ -3,6 +3,8 @@ import type {
   ChecklistKind,
   ChecklistTemplateView,
   DueWindow,
+  NotificationType,
+  NotificationView,
   PersonRef,
   RecurrenceRuleView,
   TaskEventView,
@@ -230,5 +232,32 @@ export function mapSeriesRow(
     maxOccurrences: row.max_occurrences,
     active: row.active,
     createdBy: person(row.created_by, names),
+  };
+}
+
+export type NotificationRow = {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  task_id: string | null;
+  checklist_instance_id: string | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+export const NOTIFICATION_ROW_COLUMNS =
+  "id, type, title, body, task_id, checklist_instance_id, created_at, read_at";
+
+export function mapNotificationRow(row: NotificationRow): NotificationView {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    taskId: row.task_id,
+    checklistInstanceId: row.checklist_instance_id,
+    createdAt: row.created_at,
+    readAt: row.read_at,
   };
 }

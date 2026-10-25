@@ -12,6 +12,7 @@ import {
   applyCommand,
   buildSnapshot,
   generateRecurringTasks,
+  sweepNotifications,
   type TasksState,
 } from "@/features/tasks/domain/task-engine";
 import type {
@@ -58,6 +59,7 @@ const FOCUS_REFRESH_MIN_MS = 5_000;
 function commandTaskIds(command: TaskCommand): string[] {
   if (
     command.type === "create" ||
+    command.type === "notificationsRead" ||
     command.type === "templateSave" ||
     command.type === "templateSetActive" ||
     command.type === "seriesCreate" ||
@@ -156,7 +158,9 @@ export function useTasksController({
       today,
     );
     // Same lazy, idempotent top-up as task_recurrence_generate.
-    const next = generateRecurringTasks(withChecklists, ctx, today);
+    const withSeries = generateRecurringTasks(withChecklists, ctx, today);
+    // Same idempotent due-soon / overdue sweep as task_notifications_sweep.
+    const next = sweepNotifications(withSeries, ctx);
     if (next !== demo.state) demo.setState(next);
   }, [demo, viewer, now]);
 

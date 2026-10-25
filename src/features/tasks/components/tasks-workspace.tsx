@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Bell, Plus, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import type { TasksController } from "../hooks/use-tasks-controller";
 import { AssignedView } from "./assigned-view";
 import { ChecklistView } from "./checklist-view";
 import { HandoffPanel } from "./handoff-panel";
+import { NotificationsDialog } from "./notifications-dialog";
 import { MyTasksView } from "./my-tasks-view";
 import { SeriesPanel } from "./series-panel";
 import { TaskDetailDialog } from "./task-detail-dialog";
@@ -61,6 +62,7 @@ export function TasksWorkspace({ controller }: Props) {
     series?: RecurrenceRuleView;
   } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showInbox, setShowInbox] = useState(false);
 
   const categories = snapshot?.categories ?? DEFAULT_TASK_CATEGORIES;
   const categoryName = useCallback(
@@ -130,6 +132,29 @@ export function TasksWorkspace({ controller }: Props) {
               <RefreshCw aria-hidden="true" />
             </Button>
           )}
+          {snapshot ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label={
+                snapshot.unreadCount > 0
+                  ? `Notifications, ${snapshot.unreadCount} unread`
+                  : "Notifications"
+              }
+              onClick={() => setShowInbox(true)}
+            >
+              <Bell aria-hidden="true" />
+              {snapshot.unreadCount > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 grid min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold"
+                >
+                  {snapshot.unreadCount > 99 ? "99+" : snapshot.unreadCount}
+                </span>
+              ) : null}
+            </Button>
+          ) : null}
           {manager ? (
             <Button onClick={() => setForm({})}>
               <Plus aria-hidden="true" />
@@ -276,6 +301,17 @@ export function TasksWorkspace({ controller }: Props) {
             setForm({ task });
           }}
           run={execute}
+        />
+      ) : null}
+
+      {snapshot && showInbox ? (
+        <NotificationsDialog
+          notifications={snapshot.notifications}
+          unreadCount={snapshot.unreadCount}
+          timeZone={snapshot.timeZone}
+          onClose={() => setShowInbox(false)}
+          onRead={(ids) => void execute({ type: "notificationsRead", ids })}
+          onOpenTask={(taskId) => setOpenTaskId(taskId)}
         />
       ) : null}
 
