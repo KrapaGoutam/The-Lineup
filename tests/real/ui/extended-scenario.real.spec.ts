@@ -136,6 +136,16 @@ test("A/B/C live service through the Grid; all five views agree", async () => {
       .getByText("Active tables", { exact: true })
       .locator("xpath=following-sibling::p[1]"),
   ).toHaveText("6");
+  // #109 U2: Recent activity is rendered from the real board_events rows,
+  // newest first, in plain words -- never raw payload or enum names.
+  const activity = manager.getByRole("list", { name: "Recent board activity" });
+  await expect(activity).toContainText("assigned Table T7 to TestServer1", {
+    timeout: 30_000,
+  });
+  await expect(activity).not.toContainText(/undefined|null|\{|_/);
+  expect(
+    (await activity.getByRole("listitem").first().textContent()) ?? "",
+  ).toContain("T7");
 
   await switchView(manager, "Grid");
   // Historical chronology preserved: B's old T15 is ENDED, A's T15 is ACTIVE.

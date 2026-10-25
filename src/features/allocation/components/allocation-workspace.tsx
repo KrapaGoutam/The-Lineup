@@ -43,12 +43,17 @@ import { buildBoardReadModel } from "@/features/allocation/domain/board-read-mod
 import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime";
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
+import { openPickerUnlessInnerAction } from "@/features/allocation/components/picker-cell-click";
 import { ServerBoardView } from "@/features/allocation/components/server-board-view";
 import { TableMap } from "@/features/allocation/components/table-map";
 import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
+import {
+  crossEditToActivity,
+  type BoardActivityEntry,
+} from "@/features/allocation/domain/board-activity";
 import { DEMO_FLOOR_LAYOUT } from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
@@ -132,12 +137,12 @@ function buildInitialHistory() {
 // permission gate for correcting history).
 //
 // Transfer and End Table are intentionally NOT exposed here (Grid and
-// Picker both render this component for their shared table) -- per the
-// final Upgrade 1.1 UI decision, Floor is the one surface for those two
-// actions (see floor-view.tsx). The underlying board_transfer/
-// board_end_table RPCs, the "transfer"/"end-table" BoardAction variants,
-// and this component's own onTransfer/onEndTable-shaped execute() calls
-// from Floor are all still fully live -- only this component's buttons
+// Picker both render this component for their shared table) -- they live
+// on the occupied-table surfaces: Floor's table panel and Servers' per-
+// table dialog (see floor-view.tsx, server-board-view.tsx), which act on
+// the whole logical assignment. The underlying board_transfer/
+// board_end_table RPCs and the "transfer"/"end-table" BoardAction
+// variants are all still fully live -- only this component's buttons
 // were removed, not the capability.
 function TableEntry({
   cellId,
@@ -352,6 +357,10 @@ export function AllocationWorkspace({
   const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>(
     () => initialContext?.crossEditLog ?? [],
   );
+  // #109 U2: server-read board events, presented by board-activity.ts.
+  const [recentActivity, setRecentActivity] = useState<BoardActivityEntry[]>(
+    () => initialContext?.recentActivity ?? [],
+  );
   const [serviceSessionId, setServiceSessionId] = useState<number | null>(
     () => initialContext?.serviceSessionId ?? null,
   );
@@ -414,6 +423,7 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
     setEventCount(initialContext?.eventCount ?? 0);
     setCrossEditLog(initialContext?.crossEditLog ?? []);
+    setRecentActivity(initialContext?.recentActivity ?? []);
     setServiceSessionId(initialContext?.serviceSessionId ?? null);
     setCanUndo(initialContext?.canUndo ?? false);
     setCanRedo(initialContext?.canRedo ?? false);
@@ -448,6 +458,7 @@ export function AllocationWorkspace({
       setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
       setEventCount(initialContext?.eventCount ?? 0);
       setCrossEditLog(initialContext?.crossEditLog ?? []);
+      setRecentActivity(initialContext?.recentActivity ?? []);
       setServiceSessionId(initialContext?.serviceSessionId ?? null);
       setCanUndo(initialContext?.canUndo ?? false);
       setCanRedo(initialContext?.canRedo ?? false);
@@ -471,6 +482,7 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(result.data.board));
     setEventCount(result.data.eventCount);
     setCrossEditLog(result.data.crossEditLog);
+    setRecentActivity(result.data.recentActivity);
     setServiceSessionId(result.data.serviceSessionId);
     setCanUndo(result.data.canUndo);
     setCanRedo(result.data.canRedo);
@@ -1084,6 +1096,7 @@ export function AllocationWorkspace({
           {activeView === "floor" ? (
             <FloorView
               tables={resolvedTables}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               activeColumns={visibleColumns}
               team={team}
@@ -1126,6 +1139,7 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               board={board}
               disabled={!canOperateFloor}
@@ -1175,7 +1189,10 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               board={board}
               readModel={readModel}
-              crossEditLog={crossEditLog}
+              recentActivity={
+                demoMode ? crossEditToActivity(crossEditLog) : recentActivity
+              }
+              timeZone={initialContext?.timeZone}
               onOpenGrid={() => setActiveView("grid")}
             />
           ) : (
@@ -1393,16 +1410,18 @@ export function AllocationWorkspace({
                                 // it as the target and immediately opens
                                 // the Table Layout popup -- no separate
                                 // "Choose table" step in between (Picker/
-                                // Server follow-up).
+                                // Server follow-up). #109 U1: the cell's own
+                                // buttons (Skip turn, Edit, Unassign, ...)
+                                // run their action and do NOT also open it.
                                 onClick={
                                   activeView === "picker" && canWrite
-                                    ? () => {
+                                    ? openPickerUnlessInnerAction(() => {
                                         setPickerTarget({
                                           roundId: round.id,
                                           columnId: column.id,
                                         });
                                         setPickerMapOpen(true);
-                                      }
+                                      })
                                     : undefined
                                 }
                               >

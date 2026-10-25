@@ -102,6 +102,10 @@ export type FloorOccupant = {
   // to unassign/transfer it (clear-cell, re-assign) need this to target
   // the right cell, not just the table label.
   roundId: string;
+  // #109 U3: every physical table in the SAME logical assignment as this one
+  // ("T1 + T2" -> ["T1", "T2"]), this table included. Length > 1 means a
+  // combined assignment: Transfer / End / Unassign act on all of them.
+  assignmentTables: string[];
 };
 
 export type ResolvedFloorTable = FloorLayoutEntry & {
@@ -148,7 +152,10 @@ export function resolveFloorTables(
   team: { id: string; name: string; color: string }[],
 ): ResolvedFloorTable[] {
   const memberById = new Map(team.map((member) => [member.id, member]));
-  const ownerByLabel = new Map<string, { columnId: string; roundId: string }>();
+  const ownerByLabel = new Map<
+    string,
+    { columnId: string; roundId: string; assignmentTables: string[] }
+  >();
 
   for (const round of board.rounds) {
     for (const cell of round.cells) {
@@ -156,8 +163,13 @@ export function resolveFloorTables(
       // status is optional only for callers that predate Upgrade 1.1's
       // schema; treat a missing status as active (its only prior meaning).
       if (cell.status && cell.status !== "active") continue;
-      for (const part of parseCombinedTableLabel(cell.tableLabel)) {
-        ownerByLabel.set(part, { columnId: cell.columnId, roundId: round.id });
+      const assignmentTables = parseCombinedTableLabel(cell.tableLabel);
+      for (const part of assignmentTables) {
+        ownerByLabel.set(part, {
+          columnId: cell.columnId,
+          roundId: round.id,
+          assignmentTables,
+        });
       }
     }
   }
@@ -172,6 +184,7 @@ export function resolveFloorTables(
           ? {
               columnId: owned.columnId,
               roundId: owned.roundId,
+              assignmentTables: owned.assignmentTables,
               name: member.name,
               color: member.color,
             }

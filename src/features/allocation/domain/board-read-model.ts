@@ -64,8 +64,15 @@ export type ServerSummary = {
   order: number;
   /** One entry per active assignment (a combined "5+6" is one assignment). */
   activeAssignments: { roundId: string; label: string }[];
-  /** Physical tables held, each combined part counted. */
+  /**
+   * Physical tables held, each combined part counted. This is the ONE
+   * definition of "N tables" for a server -- the Servers card, the Floor
+   * legend and (summed) the Dashboard all show it. It comes from the board's
+   * active entries, never from which tables happen to have a map position.
+   */
   activeTableLabels: string[];
+  /** The subset of `activeTableLabels` that is not on the floor map. */
+  unmappedTableLabels: string[];
   isNext: boolean;
 };
 
@@ -100,9 +107,14 @@ export function buildBoardReadModel(input: {
     .filter((column) => column.status !== "removed")
     .sort((a, b) => a.position - b.position);
 
+  const mapLabels = new Set(layout.map(({ label }) => label));
+
   const servers: ServerSummary[] = visible.map((column, index) => {
     const activeAssignments = getActiveTablesForColumn(board, column.id).map(
       ({ roundId, tableLabel }) => ({ roundId, label: tableLabel }),
+    );
+    const activeTableLabels = activeAssignments.flatMap(({ label }) =>
+      parseCombinedTableLabel(label),
     );
     return {
       columnId: column.id,
@@ -110,8 +122,9 @@ export function buildBoardReadModel(input: {
       status: column.status,
       order: index + 1,
       activeAssignments,
-      activeTableLabels: activeAssignments.flatMap(({ label }) =>
-        parseCombinedTableLabel(label),
+      activeTableLabels,
+      unmappedTableLabels: activeTableLabels.filter(
+        (label) => !mapLabels.has(label),
       ),
       isNext: column.id === next?.id,
     };
@@ -120,7 +133,6 @@ export function buildBoardReadModel(input: {
   // Every label an ACTIVE cell holds, whether or not it is on the map: the
   // dashboard must count a held table even when its row has no position yet.
   const heldLabels = new Set(servers.flatMap((s) => s.activeTableLabels));
-  const mapLabels = new Set(layout.map(({ label }) => label));
 
   return {
     tables,

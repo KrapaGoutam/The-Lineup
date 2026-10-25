@@ -1,53 +1,41 @@
-# #134 Realtime Fix — Agent Handoff
+# #109 UX Consistency — Agent Handoff
 
-Branch: `fix/table-rotation-production-realtime`
-HEAD: see `git log -1` (fix commit + docs commit on top of the base)
-Base development SHA: `93338b2` (Tasks V1 closeout merge, PR #146)
+Branch: `fix/table-allocation-ux-consistency`
+HEAD: see `git log -1` (U1-U5 commits + this validation/handoff commit on top of the base)
+Base development: `e2bbd4e` (#134 closeout merge, PR #148)
 
-Phase:
+U1: ✅ Picker inner buttons no longer open the map — `picker-cell-click.ts` (+ unit, + demo e2e that fails unfixed)
+U2: ✅ Recent activity from all 18 board_event_type values — `domain/board-activity.ts`, `AllocationContext.recentActivity`, Dashboard list (ordering created_at, id)
+U3: ✅ whole-assignment copy — `domain/assignment-scope.ts`, `assignmentTables` on FloorOccupant, Floor panel / Servers dialog / map labels / decision dialog
+U4: ✅ Servers + Floor legend counts from the read model; `ServerSummary.unmappedTableLabels`; "N not on the floor map (…)"
+U5: ✅ stale comments/status refreshed; historical reports intentionally untouched
 
-- R1 ✅ reproduce — first production run failed S07 (manager never shows `Table T1, assigned to TestServer1`); `next dev` 14/14
-- R2 ✅ root cause — see below and `docs/features/table-rotation-production-realtime/PLAN.md`
-- R3 ✅ fix — `src/features/allocation/hooks/use-board-realtime.ts` (+ tests)
-- R4 ✅ production-build validation — `next start` real UI 18/18, `next dev` 18/18
-- R5 ✅ PR #147 → `development`, CI green on `bba051c`, merge commit `50fbd02`, #134 closed, Project #4 Done
+Completed: all five items, docs in `docs/features/table-allocation-ux-consistency/` (PLAN, ACCEPTANCE_CRITERIA 15/15, TEST_MATRIX, IMPLEMENTATION_REPORT)
+In progress: PR → development, CI
+Not started: merge, #109 closure, post-merge docs closeout branch
 
-Reproduction:
+Files changed: allocation components/domain/data (see PR), tests/e2e + tests/real spec, docs/STATUS.md, docs/ROADMAP.md, multi-view README
+Uncommitted: nothing expected (untracked and never staged: `The Lineup.code-workspace`, `docs/testing/`)
+Commits: U1 f927959, U2 742e8c5, U3 29d4219, U4 261d2cc, U5 84f153e, then validation/handoff
 
-- next dev: PASS (14/14 unfixed, 18/18 fixed)
-- next build + next start: unfixed FAIL once at S07, then 6 timing-dependent passes; fixed 18/18
+Tests: Vitest 64 files / 559 tests; lint, typecheck, build pass; demo Playwright desktop + server-mobile 230/230, host-tablet allocation 50/50; hosted real UI (production build, DEV) 18/18. No pgTAP (no DB change).
+CI: pending (PR not yet opened when this was written)
 
-Root cause: in the production bundle the hook's default `createClient` is inlined into an arrow created every render; it was an effect dependency, so each `router.refresh()` (triggered by every `SUBSCRIBED`) rebuilt the subscription — a refetch/resubscribe loop with same-topic channel reuse races (supabase-js returns the still-leaving registered channel for an identical topic). Dev keeps one identity, hence "dev passes". StrictMode is NOT the cause.
+#109: open, Project #4 = In Progress, milestone "Future Product Backlog" (#5)
+Project #4: In Progress
+Milestone: Future Product Backlog (Part 1 milestone is already closed)
+PR: —
 
-Fix approach: `createClient` in a ref (not a dependency); one channel per lifecycle (SIGNED_IN + getSession no longer double-subscribe); no channel creation while a same-topic removal is pending.
+Docs: see feature directory above
 
-Files changed: `use-board-realtime.ts`, `use-board-realtime.test.ts`, new `use-board-realtime.hook.test.tsx`, `docs/features/table-rotation-production-realtime/*`, `docs/ROADMAP.md`, `docs/STATUS.md`, this file.
-Uncommitted: nothing expected after the docs commit (untracked and never to be staged: `The Lineup.code-workspace`, `docs/testing/`).
+development merged: NO
+main merged: NO
+DEV touched: YES (hosted real-mode UI suite only; synthetic data; board reset by the suite)
+PROD touched: NO
 
-Tests:
+PR #135 untouched: YES
 
-- unit: Vitest 491/491 (hook tests 13/13); lint, typecheck pass; format:check warns only on the untracked workspace file
-- browser: demo-mode Playwright is CI's `browser-smoke` job (realtime is disabled in demo mode)
-- production build: `next build` with DEV env passes; PROD ref absent from `.next`
-- real-mode: `test:real:ui` 18/18 on `next start` and on `next dev`
-- A/B/C: pass on both
-
-DEV Supabase: `opmujepkemwcdxxorhfd` (hosted real suites only; synthetic data, board reset by the suite)
-PROD Supabase: `ftadewtkjlaotfdvtjcv`
-PROD ref found: NO
-
-GitHub issue #134: milestone "Platform / CI Reliability" (#4), labels type:bug, module:table-allocation, priority:p1; Project #4 status set to In Progress when work started
-Project #4: Done · Milestone "Platform / CI Reliability" stays open (other issues remain)
-PR: #147 (`fix/table-rotation-production-realtime` → `development`), merged with a merge commit
-
-Docs updated: feature docs (PLAN, ACCEPTANCE_CRITERIA, TEST_MATRIX, IMPLEMENTATION_REPORT), ROADMAP, STATUS, this file.
-
-development merged: YES (`50fbd02`) · main merged: NO · DEV touched: YES (hosted real-mode suites) · PROD touched: NO
-
-Running processes: none (dev/start servers on :3000 stopped).
-Exact next command: none — #134 is complete.
-Exact next task: owner decides `development → main` promotion (and PROD migration deploy) and the PR #135 Preview gate; optional next engineering item is #109 (not started).
-Read first: `docs/features/table-rotation-production-realtime/PLAN.md`, `src/features/allocation/hooks/use-board-realtime.ts`.
-DO NOT: merge to `main`, touch PROD or PR #135, start #109, add Realtime to Tasks, use `git add -A`, stage `docs/testing/` or `*.code-workspace`, raise Playwright timeouts, add `NODE_ENV` branches.
-
-Local real-mode recipe (secrets never printed): pin DEV env in the process env (process env beats `.env.production.local`), blank `NEON_DATABASE_URL`, then `next build && next start` and `npx playwright test --config playwright.real.config.ts`; the suite's `assertServerIsDev` refuses a PROD-referencing bundle.
+Exact next command: `gh pr create --base development --head fix/table-allocation-ux-consistency` (if not yet open), then `gh pr checks <n> --watch`
+Exact next task: wait for CI (application, browser-smoke, Vercel; Database should not trigger), merge with a MERGE COMMIT, comment final evidence on #109, close it, Project #4 → Done, then docs closeout branch `docs/table-allocation-ux-closeout` (STATUS/ROADMAP/this file) → PR → development
+Read first: docs/features/table-allocation-ux-consistency/IMPLEMENTATION_REPORT.md
+DO NOT: merge to main, touch PROD, squash/rebase-merge, touch PR #135, `git add -A`/`git add .`, stage `docs/testing/` or `*.code-workspace`
