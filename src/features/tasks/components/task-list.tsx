@@ -9,6 +9,7 @@ type Props = {
   controller: TasksController;
   categoryName: (slug: string) => string;
   showAssignees?: boolean;
+  readOnly?: boolean;
   emptyText: string;
   onToggle: (task: TaskView) => void;
   onOpen: (task: TaskView) => void;
@@ -20,6 +21,7 @@ export function TaskList({
   controller,
   categoryName,
   showAssignees,
+  readOnly,
   emptyText,
   onToggle,
   onOpen,
@@ -47,6 +49,7 @@ export function TaskList({
           pending={controller.pendingIds.has(task.id)}
           categoryName={categoryName(task.category)}
           showAssignees={showAssignees}
+          readOnly={readOnly}
           onToggle={onToggle}
           onOpen={onOpen}
         />

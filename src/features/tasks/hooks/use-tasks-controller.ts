@@ -7,6 +7,7 @@ import {
   runTaskCommandAction,
 } from "@/features/tasks/actions/tasks-actions";
 import type { TaskCommand } from "@/features/tasks/domain/task-commands";
+import { generateDailyChecklists } from "@/features/tasks/domain/checklist-engine";
 import {
   applyCommand,
   buildSnapshot,
@@ -54,7 +55,13 @@ const CLOCK_TICK_MS = 30_000;
 const FOCUS_REFRESH_MIN_MS = 5_000;
 
 function commandTaskIds(command: TaskCommand): string[] {
-  if (command.type === "create") return [];
+  if (
+    command.type === "create" ||
+    command.type === "templateSave" ||
+    command.type === "templateSetActive"
+  ) {
+    return [];
+  }
   if (command.type === "carryForward") return command.taskIds;
   return [command.taskId];
 }
@@ -126,6 +133,20 @@ export function useTasksController({
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, [demo, refresh]);
+
+  // Demo mode: start today's checklists on first open, like the database's
+  // idempotent checklist_generate_daily does for real mode.
+  useEffect(() => {
+    if (!demo) return;
+    const today = zonedWallTimeFromInstant(now, demo.timeZone).date;
+    const next = generateDailyChecklists(
+      demo.state,
+      { actor: viewer, team: demo.team, timeZone: demo.timeZone, now },
+      today,
+      today,
+    );
+    if (next !== demo.state) demo.setState(next);
+  }, [demo, viewer, now]);
 
   const demoSnapshot = useMemo(() => {
     if (!demo) return null;

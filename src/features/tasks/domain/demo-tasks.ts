@@ -5,9 +5,14 @@ import {
   type EngineContext,
   type TasksState,
 } from "./task-engine";
+import { generateDailyChecklists } from "./checklist-engine";
 import { addDaysToDate } from "./task-rules";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
-import type { TaskTeamMember } from "./task-types";
+import type {
+  AssignmentMode,
+  ChecklistKind,
+  TaskTeamMember,
+} from "./task-types";
 
 const MANAGER_ID = "manager-maya";
 
@@ -112,6 +117,72 @@ export function createDemoTasksState(
     dueDate: today,
     dueWindow: "during_shift",
   });
+  const item = (
+    title: string,
+    assignmentMode: AssignmentMode,
+    assigneeIds: string[] = [],
+    category = "other",
+  ) => ({
+    title,
+    instructions: null,
+    category,
+    priority: "normal" as const,
+    assignmentMode,
+    assigneeIds,
+    dueWindow: null,
+    dueTime: null,
+  });
+  const template = (
+    kind: ChecklistKind,
+    name: string,
+    items: ReturnType<typeof item>[],
+  ) =>
+    run(MANAGER_ID, {
+      type: "templateSave",
+      templateId: null,
+      input: {
+        kind,
+        name,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        active: true,
+        items,
+      },
+    });
+  template("opening", "Weekday Opening", [
+    item("Unlock entrance", "anyone", [], "opening"),
+    item("Turn on TVs", "all_team", [], "opening"),
+    item("Check bathrooms", "anyone", [], "cleaning"),
+    item("Set patio", "individual", ["mia"], "opening"),
+    item("Count register", "individual", ["leo"], "opening"),
+    item("Check reservations", "individual", ["ava"], "opening"),
+  ]);
+  template("closing", "Weekday Closing", [
+    item("Turn off TVs", "anyone", [], "closing"),
+    item("Lock patio", "anyone", [], "closing"),
+    item("Close register", "individual", ["leo"], "closing"),
+    item("Clean bar station", "individual", ["mia"], "closing"),
+  ]);
+
+  // Yesterday's opening, partly done: shows "Previous days" and proves a
+  // finished day never bleeds into today's fresh checklist.
+  const yesterday = addDaysToDate(today, -1);
+  const manager2 = ctxFor(MANAGER_ID);
+  if (manager2) {
+    state = generateDailyChecklists(
+      state,
+      manager2,
+      yesterday,
+      yesterday,
+      "opening",
+    );
+    for (const title of ["Unlock entrance", "Turn on TVs", "Check bathrooms"]) {
+      const done = state.tasks.find(
+        (t) => t.title === title && t.dueDate === yesterday,
+      );
+      if (done) run("mia", { type: "complete", taskId: done.id });
+    }
+  }
+
   const restroom = state.tasks.find((t) => t.title === "Check restroom");
   if (restroom) run("mia", { type: "complete", taskId: restroom.id });
 

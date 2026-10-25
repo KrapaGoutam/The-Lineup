@@ -14,13 +14,21 @@ import {
 } from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
 import { AssignedView } from "./assigned-view";
+import { ChecklistView } from "./checklist-view";
 import { HandoffPanel } from "./handoff-panel";
 import { MyTasksView } from "./my-tasks-view";
 import { TaskDetailDialog } from "./task-detail-dialog";
 import { TaskFormDialog } from "./task-form-dialog";
+import { TemplatesPanel } from "./templates-panel";
 import { TodayView } from "./today-view";
 
-export type TasksTab = "today" | "mine" | "assigned" | "manage";
+export type TasksTab =
+  | "today"
+  | "mine"
+  | "opening"
+  | "closing"
+  | "assigned"
+  | "manage";
 
 type Props = {
   controller: TasksController;
@@ -29,6 +37,8 @@ type Props = {
 const TAB_LABELS: Record<TasksTab, string> = {
   today: "Today",
   mine: "My Tasks",
+  opening: "Opening",
+  closing: "Closing",
   assigned: "Assigned",
   manage: "Manage",
 };
@@ -73,14 +83,20 @@ export function TasksWorkspace({ controller }: Props) {
     [execute],
   );
 
-  const openTask = useMemo(
-    () => snapshot?.tasks.find((t) => t.id === openTaskId) ?? null,
-    [snapshot, openTaskId],
-  );
+  const openTask = useMemo(() => {
+    if (!snapshot || !openTaskId) return null;
+    return (
+      snapshot.tasks.find((t) => t.id === openTaskId) ??
+      snapshot.checklists
+        .flatMap((c) => c.items)
+        .find((t) => t.id === openTaskId) ??
+      null
+    );
+  }, [snapshot, openTaskId]);
 
   const tabs: TasksTab[] = manager
-    ? ["today", "mine", "assigned", "manage"]
-    : ["today", "mine"];
+    ? ["today", "mine", "opening", "closing", "assigned", "manage"]
+    : ["today", "mine", "opening", "closing"];
 
   return (
     <section aria-label="Tasks" className="space-y-5">
@@ -182,6 +198,7 @@ export function TasksWorkspace({ controller }: Props) {
               onToggle={toggle}
               onOpen={(task) => setOpenTaskId(task.id)}
               onGoToMyTasks={() => setTab("mine")}
+              onGoToChecklist={(kind) => setTab(kind)}
               onGoToAssigned={manager ? () => setTab("assigned") : undefined}
             />
           ) : null}
@@ -195,6 +212,7 @@ export function TasksWorkspace({ controller }: Props) {
           ) : null}
           {tab === "manage" && manager ? (
             <div className="space-y-5">
+              <TemplatesPanel controller={controller} execute={execute} />
               <HandoffPanel
                 controller={controller}
                 categoryName={categoryName}
@@ -202,6 +220,16 @@ export function TasksWorkspace({ controller }: Props) {
                 execute={execute}
               />
             </div>
+          ) : null}
+          {tab === "opening" || tab === "closing" ? (
+            <ChecklistView
+              kind={tab}
+              controller={controller}
+              categoryName={categoryName}
+              onToggle={toggle}
+              onOpen={(task) => setOpenTaskId(task.id)}
+              onGoToManage={() => setTab("manage")}
+            />
           ) : null}
           {tab === "mine" ? (
             <MyTasksView

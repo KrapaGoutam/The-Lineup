@@ -31,6 +31,29 @@ export const taskCreateSchema = taskFieldsSchema.extend({
 });
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 
+export const templateItemSchema = z.object({
+  title: z.string().trim().min(1, "Every item needs a title.").max(160),
+  instructions: z.string().trim().max(2000).nullable(),
+  category: z.string().trim().min(1).max(40),
+  priority: z.enum(TASK_PRIORITIES),
+  assignmentMode: z.enum(ASSIGNMENT_MODES),
+  assigneeIds: z.array(idSchema).max(50),
+  dueWindow: z.enum(DUE_WINDOWS).nullable(),
+  dueTime: timeSchema.nullable(),
+});
+
+export const templateInputSchema = z.object({
+  kind: z.enum(["opening", "closing"]),
+  name: z.string().trim().min(1, "Give the checklist a name.").max(80),
+  daysOfWeek: z
+    .array(z.number().int().min(0).max(6))
+    .min(1, "Choose at least one day.")
+    .max(7),
+  active: z.boolean(),
+  items: z.array(templateItemSchema).max(100),
+});
+export type TemplateInput = z.infer<typeof templateInputSchema>;
+
 export const taskCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create"), input: taskCreateSchema }),
   z.object({
@@ -60,6 +83,16 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("cancel"),
     taskId: idSchema,
     reason: z.string().trim().max(300).nullable().optional(),
+  }),
+  z.object({
+    type: z.literal("templateSave"),
+    templateId: idSchema.nullable(),
+    input: templateInputSchema,
+  }),
+  z.object({
+    type: z.literal("templateSetActive"),
+    templateId: idSchema,
+    active: z.boolean(),
   }),
   z.object({
     type: z.literal("carryForward"),

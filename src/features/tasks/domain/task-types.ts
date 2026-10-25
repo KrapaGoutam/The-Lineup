@@ -125,6 +125,41 @@ export type TaskTeamMember = {
   designation: Designation;
 };
 
+export type ChecklistKind = "opening" | "closing";
+
+/** One day's Opening or Closing checklist; its items are ordinary tasks. */
+export type ChecklistInstanceView = {
+  id: string;
+  kind: ChecklistKind;
+  name: string;
+  /** Location-local operational date (YYYY-MM-DD). */
+  serviceDate: string;
+  items: TaskView[];
+};
+
+export type ChecklistTemplateItemView = {
+  title: string;
+  instructions: string | null;
+  category: string;
+  priority: TaskPriority;
+  assignmentMode: AssignmentMode;
+  assigneeIds: string[];
+  dueWindow: DueWindow | null;
+  /** "HH:mm" or null. */
+  dueTime: string | null;
+};
+
+/** Reusable definition (manager-only). It is not the day's checklist. */
+export type ChecklistTemplateView = {
+  id: string;
+  kind: ChecklistKind;
+  name: string;
+  /** 0 = Sunday .. 6 = Saturday. */
+  daysOfWeek: number[];
+  active: boolean;
+  items: ChecklistTemplateItemView[];
+};
+
 /** Everything one signed-in person's Tasks screens render from. */
 export type TasksSnapshot = {
   organizationId: string;
@@ -133,8 +168,12 @@ export type TasksSnapshot = {
   /** Location-local calendar date (YYYY-MM-DD) at `generatedAt`. */
   today: string;
   generatedAt: string;
-  /** Already limited to what this viewer may see (RLS / canViewTask). */
+  /** Normal (non-checklist) tasks, already limited to what this viewer may see. */
   tasks: TaskView[];
+  /** Opening / Closing days, newest first (bounded history window). */
+  checklists: ChecklistInstanceView[];
+  /** Template definitions; empty for staff. */
+  templates: ChecklistTemplateView[];
   /** Management audit timeline; always empty for staff. */
   events: TaskEventView[];
   /** Active members for assignment pickers; empty for staff. */

@@ -257,3 +257,121 @@ test("a manager filters by person and hands off unfinished work (TASK-014)", asy
   await panel.getByRole("button", { name: /Carry forward/ }).click();
   await expect(panel.getByText("Restock server station")).toHaveCount(0);
 });
+
+async function openChecklist(page: Page, name: "Opening" | "Closing") {
+  await openTasks(page);
+  await page.getByRole("button", { name, exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: `${name} checklist` }),
+  ).toBeVisible();
+}
+
+test("opening: common and person-specific items, persisted completion (TASK-020/021/022)", async ({
+  page,
+}) => {
+  await signIn(page, "1357"); // Mia Chen
+  await openChecklist(page, "Opening");
+
+  const day = page.getByRole("article", { name: "Weekday Opening" });
+  await expect(day.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "0",
+  );
+  await expect(day.getByText("0 / 6 complete")).toBeVisible();
+
+  // Common item: anyone.
+  await day
+    .getByRole("checkbox", { name: /Mark complete: Unlock entrance/ })
+    .click();
+  // Mia's own person-specific item: allowed. Leo's: not.
+  await day.getByRole("checkbox", { name: /Mark complete: Set patio/ }).click();
+  await expect(
+    day.getByRole("checkbox", { name: /Mark complete: Count register/ }),
+  ).toBeDisabled();
+  await expect(day.getByText("2 / 6 complete")).toBeVisible();
+
+  // Leave and return: state is re-read, not remembered by the screen.
+  await page.getByRole("button", { name: "Closing", exact: true }).click();
+  await page.getByRole("button", { name: "Opening", exact: true }).click();
+  await expect(
+    page
+      .getByRole("article", { name: "Weekday Opening" })
+      .getByText("2 / 6 complete"),
+  ).toBeVisible();
+});
+
+test("opening: yesterday's checked state never appears today (TASK-025/026)", async ({
+  page,
+}) => {
+  await signIn(page, "1357");
+  await openChecklist(page, "Opening");
+
+  // Yesterday (seeded 3 / 6) is history; today starts at 0 / 6.
+  await expect(page.getByText("0 / 6 complete")).toBeVisible();
+  const history = page.getByRole("region", { name: "Previous days" });
+  await expect(history.getByText("3 / 6 · 50%")).toBeVisible();
+  await history.getByRole("button", { expanded: false }).first().click();
+  await expect(
+    history.getByRole("checkbox", { name: /Reopen: Unlock entrance/ }),
+  ).toBeDisabled(); // staff cannot rewrite history
+  await expect(
+    page
+      .getByRole("article", { name: "Weekday Opening" })
+      .getByRole("checkbox", { name: /Mark complete: Unlock entrance/ }),
+  ).toBeVisible();
+});
+
+test("a manager completes a closing item for its assignee (TASK-033)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await openChecklist(page, "Closing");
+
+  const day = page.getByRole("article", { name: "Weekday Closing" });
+  await expect(day.getByText("Still to do:")).toBeVisible();
+  await day
+    .getByRole("checkbox", { name: /Mark complete: Close register/ })
+    .click();
+  const row = day.getByRole("listitem").filter({ hasText: "Close register" });
+  await expect(row).toContainText("Completed by Maya Singh");
+  await expect(row).toContainText("Leo Park"); // assignee preserved
+});
+
+test("a manager builds a template that produces its own checklist (TASK-035)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await openTasks(page);
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+
+  await page.getByRole("button", { name: "New closing template" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Template name").fill("Bar Closing");
+  await dialog
+    .getByRole("textbox", { name: "Item 1", exact: true })
+    .fill("Wipe the bar");
+  await dialog.getByRole("button", { name: "Add item" }).click();
+  await dialog
+    .getByRole("textbox", { name: "Item 2", exact: true })
+    .fill("Restock garnish");
+  await dialog.getByRole("button", { name: "Save template" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("region", { name: "Checklist templates" }),
+  ).toContainText("Bar Closing");
+
+  // A duplicate name is rejected with a plain message.
+  await page.getByRole("button", { name: "New closing template" }).click();
+  const again = page.getByRole("dialog");
+  await again.getByLabel("Template name").fill("Bar Closing");
+  await again.getByRole("textbox", { name: "Item 1", exact: true }).fill("x");
+  await again.getByRole("button", { name: "Save template" }).click();
+  await expect(again.getByRole("alert")).toContainText("already exists");
+  await again.getByRole("button", { name: "Cancel" }).click();
+
+  // Staff-facing result appears in the Closing tab.
+  await page.getByRole("button", { name: "Closing", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "Bar Closing" }),
+  ).toBeVisible();
+});

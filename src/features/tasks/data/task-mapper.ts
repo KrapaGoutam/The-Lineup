@@ -1,5 +1,7 @@
 import type {
   AssignmentMode,
+  ChecklistKind,
+  ChecklistTemplateView,
   DueWindow,
   PersonRef,
   TaskEventView,
@@ -129,5 +131,53 @@ export function mapEventRow(
         ? (row.payload as Record<string, unknown>)
         : {},
     createdAt: row.created_at,
+  };
+}
+
+export type TemplateRow = {
+  id: string;
+  kind: ChecklistKind;
+  name: string;
+  days_of_week: number[];
+  active: boolean;
+  checklist_template_items: {
+    title: string;
+    instructions: string | null;
+    category: string;
+    priority: TaskPriority;
+    assignment_mode: AssignmentMode;
+    due_window: DueWindow | null;
+    due_time: string | null;
+    sort_order: number;
+    active: boolean;
+    checklist_template_item_assignees: { profile_id: string }[];
+  }[];
+};
+
+export const TEMPLATE_ROW_COLUMNS =
+  "id, kind, name, days_of_week, active, checklist_template_items(title, instructions, category, priority, assignment_mode, due_window, due_time, sort_order, active, checklist_template_item_assignees(profile_id))";
+
+export function mapTemplateRow(row: TemplateRow): ChecklistTemplateView {
+  return {
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    daysOfWeek: [...row.days_of_week].sort(),
+    active: row.active,
+    items: [...row.checklist_template_items]
+      .filter((item) => item.active)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((item) => ({
+        title: item.title,
+        instructions: item.instructions,
+        category: item.category,
+        priority: item.priority,
+        assignmentMode: item.assignment_mode,
+        assigneeIds: item.checklist_template_item_assignees.map(
+          (a) => a.profile_id,
+        ),
+        dueWindow: item.due_window,
+        dueTime: clock(item.due_time),
+      })),
   };
 }

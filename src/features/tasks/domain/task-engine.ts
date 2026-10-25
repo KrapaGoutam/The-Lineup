@@ -2,6 +2,7 @@ import { zonedWallTimeToInstant } from "@/lib/timezone";
 
 import type {
   CommandResult,
+  TemplateInput,
   TaskCommand,
   TaskCreateInput,
   TaskFields,
@@ -9,6 +10,8 @@ import type {
 import { addDaysToDate, canViewTask, canWorkTask } from "./task-rules";
 import {
   DEFAULT_TASK_CATEGORIES,
+  type ChecklistKind,
+  type ChecklistTemplateView,
   isTasksManager,
   type AssignmentMode,
   type PersonRef,
@@ -26,9 +29,20 @@ import {
  * supabase/migrations/20261025090000_tasks_v1_foundation.sql and its pgTAP
  * test. Real mode never runs this -- the database is authoritative.
  */
+/** A generated daily checklist; its items are rows in `tasks`. */
+export type InstanceRecord = {
+  id: string;
+  templateId: string;
+  kind: ChecklistKind;
+  name: string;
+  serviceDate: string;
+};
+
 export type TasksState = {
   tasks: TaskView[];
   events: TaskEventView[];
+  templates: ChecklistTemplateView[];
+  instances: InstanceRecord[];
   seq: number;
 };
 
@@ -41,7 +55,7 @@ export type EngineContext = {
 };
 
 export function emptyTasksState(): TasksState {
-  return { tasks: [], events: [], seq: 1 };
+  return { tasks: [], events: [], templates: [], instances: [], seq: 1 };
 }
 
 const fail = <T>(error: string): CommandResult<T> => ({ ok: false, error });
@@ -82,7 +96,7 @@ function validateFields(fields: TaskFields): string | null {
   return null;
 }
 
-function validateAssignees(
+export function validateAssignees(
   mode: AssignmentMode,
   ids: readonly string[],
   ctx: EngineContext,
@@ -112,7 +126,7 @@ function validateAssignees(
   return ok(people);
 }
 
-function pushEvent(
+export function pushEvent(
   state: TasksState,
   ctx: EngineContext,
   taskId: string | null,
@@ -414,6 +428,79 @@ export function applyCommand(
       );
     }
 
+    case "templateSave": {
+      if (!manager) return fail(MANAGER_ONLY);
+      const input: TemplateInput = command.input;
+      const items: ChecklistTemplateView["items"] = [];
+      let position = 0;
+      for (const item of input.items) {
+        position += 1;
+        if (!DEFAULT_TASK_CATEGORIES.some((c) => c.slug === item.category)) {
+          return fail(`Item ${position} has an unknown category.`);
+        }
+        const people = validateAssignees(
+          item.assignmentMode,
+          item.assigneeIds,
+          ctx,
+        );
+        if (!people.ok) return people;
+        items.push({
+          ...item,
+          instructions: item.instructions?.trim() || null,
+          assigneeIds: people.value.map((p) => p.profileId),
+        });
+      }
+      const name = input.name.trim();
+      const existing = command.templateId
+        ? state.templates.find((t) => t.id === command.templateId)
+        : undefined;
+      if (command.templateId && !existing) {
+        return fail("That checklist does not exist.");
+      }
+      if (existing && existing.kind !== input.kind) {
+        return fail("A checklist cannot change between opening and closing.");
+      }
+      const clash = state.templates.some(
+        (t) =>
+          t.kind === input.kind &&
+          t.name.toLowerCase() === name.toLowerCase() &&
+          t.id !== command.templateId,
+      );
+      if (clash) {
+        return fail(
+          `A ${input.kind} checklist named "${name}" already exists.`,
+        );
+      }
+      const template: ChecklistTemplateView = {
+        id: existing?.id ?? `tpl-${state.seq}`,
+        kind: input.kind,
+        name,
+        daysOfWeek: [...new Set(input.daysOfWeek)].sort(),
+        active: input.active,
+        items,
+      };
+      return ok({
+        ...state,
+        seq: existing ? state.seq : state.seq + 1,
+        templates: existing
+          ? state.templates.map((t) => (t.id === existing.id ? template : t))
+          : [...state.templates, template],
+      });
+    }
+
+    case "templateSetActive": {
+      if (!manager) return fail(MANAGER_ONLY);
+      if (!state.templates.some((t) => t.id === command.templateId)) {
+        return fail(MANAGER_ONLY);
+      }
+      return ok({
+        ...state,
+        templates: state.templates.map((t) =>
+          t.id === command.templateId ? { ...t, active: command.active } : t,
+        ),
+      });
+    }
+
     case "carryForward": {
       if (!manager) return fail(MANAGER_ONLY);
       let next = state;
@@ -469,7 +556,21 @@ export function buildSnapshot(
     timeZone: ctx.timeZone,
     today: ctx.today,
     generatedAt: ctx.now.toISOString(),
-    tasks: state.tasks.filter((t) => canViewTask(ctx.actor, t)),
+    tasks: state.tasks.filter(
+      (t) => t.kind === "task" && canViewTask(ctx.actor, t),
+    ),
+    checklists: [...state.instances]
+      .sort((a, b) => b.serviceDate.localeCompare(a.serviceDate))
+      .map((instance) => ({
+        id: instance.id,
+        kind: instance.kind,
+        name: instance.name,
+        serviceDate: instance.serviceDate,
+        items: state.tasks
+          .filter((t) => t.checklistInstanceId === instance.id)
+          .sort((a, b) => a.sortOrder - b.sortOrder),
+      })),
+    templates: manager ? state.templates : [],
     events: manager ? state.events : [],
     team: manager ? [...ctx.team] : [],
     categories: DEFAULT_TASK_CATEGORIES.map((c) => ({ ...c })),

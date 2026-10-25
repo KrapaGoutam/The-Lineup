@@ -32,6 +32,8 @@ type Props = {
   categoryName: string;
   /** Show who the task is assigned to (management views). */
   showAssignees?: boolean;
+  /** History view: the checkbox is informational only. */
+  readOnly?: boolean;
   onToggle: (task: TaskView) => void;
   onOpen: (task: TaskView) => void;
 };
@@ -65,13 +67,14 @@ export function TaskRow({
   pending,
   categoryName,
   showAssignees = false,
+  readOnly = false,
   onToggle,
   onOpen,
 }: Props) {
   const done = task.status === "completed";
   const cancelled = task.status === "cancelled";
   const overdue = isOverdue(task, now);
-  const toggleable = canToggleTask(task, viewer);
+  const toggleable = !readOnly && canToggleTask(task, viewer);
   const verb = done ? "Reopen" : "Mark complete";
 
   return (
@@ -156,7 +159,7 @@ export function TaskRow({
               {PRIORITY_LABELS[task.priority]}
             </Badge>
           ) : null}
-          {task.kind !== "task" || task.assignmentMode !== "individual" ? (
+          {task.kind === "task" && task.assignmentMode !== "individual" ? (
             <Badge>
               <Users className="size-3.5" aria-hidden="true" />
               {taskTypeLabel(task)}

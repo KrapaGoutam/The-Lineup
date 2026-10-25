@@ -9,8 +9,13 @@ import {
   sortTasks,
   summarizeToday,
   taskBucket,
+  taskProgress,
 } from "../domain/task-rules";
-import { isTasksManager, type TaskView } from "../domain/task-types";
+import {
+  isTasksManager,
+  type ChecklistKind,
+  type TaskView,
+} from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
 import { TaskList } from "./task-list";
 
@@ -21,6 +26,7 @@ type Props = {
   onOpen: (task: TaskView) => void;
   onGoToMyTasks: () => void;
   onGoToAssigned?: () => void;
+  onGoToChecklist: (kind: ChecklistKind) => void;
 };
 
 function SummaryCard({
@@ -83,6 +89,7 @@ export function TodayView({
   onOpen,
   onGoToMyTasks,
   onGoToAssigned,
+  onGoToChecklist,
 }: Props) {
   const snapshot = controller.snapshot;
   const manager = isTasksManager(controller.viewer.designation);
@@ -113,6 +120,25 @@ export function TodayView({
 
   if (!snapshot || !summary) return null;
 
+  const checklistCard = (kind: ChecklistKind, title: string) => {
+    const instances = snapshot.checklists.filter(
+      (c) => c.kind === kind && c.serviceDate === snapshot.today,
+    );
+    const progress = taskProgress(instances.flatMap((c) => c.items));
+    return (
+      <SummaryCard
+        title={title}
+        headline={
+          instances.length === 0
+            ? "Not scheduled"
+            : `${progress.done} / ${progress.total} completed`
+        }
+        detail={instances.length === 0 ? undefined : `${progress.percent}%`}
+        onClick={() => onGoToChecklist(kind)}
+      />
+    );
+  };
+
   return (
     <section aria-label="Today" className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -127,6 +153,8 @@ export function TodayView({
           tone={summary.myOverdue > 0 ? "danger" : undefined}
           onClick={onGoToMyTasks}
         />
+        {checklistCard("opening", "Opening")}
+        {checklistCard("closing", "Closing")}
         {manager ? (
           <SummaryCard
             title="Team tasks"

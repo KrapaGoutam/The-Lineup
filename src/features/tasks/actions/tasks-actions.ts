@@ -123,6 +123,36 @@ async function runCommand(
       });
       return error?.message ?? null;
     }
+    case "templateSave": {
+      const i = command.input;
+      const { error } = await supabase.rpc("checklist_template_save", {
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+        p_template_id: command.templateId ?? undefined,
+        p_kind: i.kind,
+        p_name: i.name,
+        p_days_of_week: i.daysOfWeek,
+        p_active: i.active,
+        p_items: i.items.map((item) => ({
+          title: item.title,
+          instructions: item.instructions,
+          category: item.category,
+          priority: item.priority,
+          assignment_mode: item.assignmentMode,
+          assignee_ids: item.assigneeIds,
+          due_window: item.dueWindow,
+          due_time: item.dueTime,
+        })),
+      });
+      return error?.message ?? null;
+    }
+    case "templateSetActive": {
+      const { error } = await supabase.rpc("checklist_template_set_active", {
+        p_template_id: command.templateId,
+        p_active: command.active,
+      });
+      return error?.message ?? null;
+    }
     case "carryForward": {
       const { error } = await supabase.rpc("task_carry_forward", {
         p_task_ids: command.taskIds,

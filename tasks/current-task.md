@@ -11,6 +11,7 @@
 - [x] **T1 Domain / DB / permissions** — migration `20261025090000_tasks_v1_foundation.sql`, pgTAP `0026_tasks_v1_foundation.test.sql` (79 assertions), regenerated `src/types/database.generated.ts`. Independent schema/RLS review done; fixes applied (see report).
 - [x] **T2 Navigation + Today + My Tasks** — Tasks primary tab (Tips moved secondary, mobile dock Allocation/Tasks/More), `src/features/tasks/{domain,data,actions,hooks,components}`, demo engine, create/edit/reassign/cancel/detail dialogs, e2e `tests/e2e/tasks.spec.ts`
 - [x] **T3 Assigned** — `assigned-view.tsx`, `handoff-panel.tsx`, Manage tab (manager+); e2e manager flows
+- [x] **T4 Opening + T5 Closing** — migration `20261025100000_tasks_v1_checklists.sql`, pgTAP 0027 (40 assertions), `checklist-engine.ts`, `checklist-view.tsx`, `templates-panel.tsx`, `template-dialog.tsx`, Today cards, e2e
 
 ## Architecture decisions (details in PLAN.md)
 
@@ -49,7 +50,7 @@ PR: none yet · PR target: `development` · development merged: NO · main merge
 
 ## Exact next step
 
-T4: new migration `20261025100000_tasks_v1_checklists.sql` (template save RPCs, `checklist_generate_daily`, checklist progress/ history reads, notify checklist*available) + pgTAP `0027*\*`; then Opening UI (templates CRUD in Manage, Opening tab with Today/Previous days), demo engine support, e2e. T5 reuses the same engine for Closing.
+T6: migration `20261025110000_tasks_v1_recurrence.sql` — `task_series_create/update/stop` + idempotent `task_recurrence_generate` (14-day horizon, unique (rule, occurrence*date)), pgTAP `0028*\*`; pure `recurrence.ts` (occurrence dates for daily/weekdays/weekly/selected weekdays/monthly + end rules) shared by demo engine and UI preview; recurrence section in task form + Manage "Recurring tasks"; e2e. Then T7 notifications (sweep RPC, mark read, badge), T8 validation.
 
 ## DO NOT
 

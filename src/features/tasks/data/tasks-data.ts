@@ -4,9 +4,11 @@ import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
+import { addDaysToDate } from "../domain/task-rules";
 
 import {
   DEFAULT_TASK_CATEGORIES,
+  type ChecklistInstanceView,
   isTasksManager,
   type TaskEventView,
   type TaskView,
@@ -17,7 +19,10 @@ import {
   collectProfileIds,
   mapEventRow,
   mapTaskRow,
+  mapTemplateRow,
   TASK_ROW_COLUMNS,
+  TEMPLATE_ROW_COLUMNS,
+  type TemplateRow,
   type TaskEventRow,
   type TaskRow,
 } from "./task-mapper";
@@ -26,6 +31,9 @@ import {
 const FINISHED_WINDOW_DAYS = 14;
 const MAX_TASKS = 500;
 const MAX_EVENTS = 400;
+// Bounded checklist history: staff see the last week, managers the last month.
+const STAFF_HISTORY_DAYS = 7;
+const MANAGER_HISTORY_DAYS = 30;
 
 /**
  * The authoritative Tasks read model for one signed-in person. Everything is
@@ -47,6 +55,24 @@ export async function getTasksSnapshot(
     now.getTime() - FINISHED_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
   const manager = isTasksManager(viewer.designation);
+
+  // Start today's checklists if nobody has yet. Idempotent and best-effort:
+  // the snapshot below is still correct (just without a new day) if it fails.
+  const generated = await supabase.rpc("checklist_generate_daily", {
+    p_organization_id: organizationId,
+    p_location_id: location.id,
+  });
+  if (generated.error) {
+    console.error(
+      "getTasksSnapshot: checklist_generate_daily",
+      generated.error,
+    );
+  }
+
+  const historyFrom = addDaysToDate(
+    today,
+    -(manager ? MANAGER_HISTORY_DAYS : STAFF_HISTORY_DAYS),
+  );
 
   const [tasksResult, categoriesResult, roster] = await Promise.all([
     supabase
@@ -72,15 +98,61 @@ export async function getTasksSnapshot(
   }
   const rows = tasksResult.data ?? [];
 
+  const instanceResult = await supabase
+    .from("checklist_instances")
+    .select("id, kind, name, service_date")
+    .eq("organization_id", organizationId)
+    .eq("location_id", location.id)
+    .gte("service_date", historyFrom)
+    .order("service_date", { ascending: false })
+    .order("name", { ascending: true })
+    .limit(200);
+  if (instanceResult.error) {
+    console.error("getTasksSnapshot: instances", instanceResult.error);
+  }
+  const instanceRows = instanceResult.data ?? [];
+  let itemRows: TaskRow[] = [];
+  if (instanceRows.length > 0) {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select(TASK_ROW_COLUMNS)
+      .eq("organization_id", organizationId)
+      .in(
+        "checklist_instance_id",
+        instanceRows.map((row) => row.id),
+      )
+      .order("sort_order", { ascending: true })
+      .limit(2000)
+      .overrideTypes<TaskRow[], { merge: false }>();
+    if (error) console.error("getTasksSnapshot: checklist items", error);
+    itemRows = data ?? [];
+  }
+
+  let templateRows: TemplateRow[] = [];
+  if (manager) {
+    const { data, error } = await supabase
+      .from("checklist_templates")
+      .select(TEMPLATE_ROW_COLUMNS)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
+      .order("kind", { ascending: true })
+      .order("name", { ascending: true })
+      .overrideTypes<TemplateRow[], { merge: false }>();
+    if (error) console.error("getTasksSnapshot: templates", error);
+    templateRows = data ?? [];
+  }
+
   let eventRows: TaskEventRow[] = [];
-  if (manager && rows.length > 0) {
+  if (manager && rows.length + itemRows.length > 0) {
     const { data, error } = await supabase
       .from("task_events")
       .select("id, task_id, event_type, actor_profile_id, payload, created_at")
       .eq("organization_id", organizationId)
       .in(
         "task_id",
-        rows.map((row) => row.id),
+        [...rows, ...itemRows.filter((r) => r.checklist_instance_id)]
+          .slice(0, 800)
+          .map((row) => row.id),
       )
       .order("id", { ascending: false })
       .limit(MAX_EVENTS)
@@ -89,7 +161,7 @@ export async function getTasksSnapshot(
     eventRows = data ?? [];
   }
 
-  const profileIds = collectProfileIds(rows, eventRows);
+  const profileIds = collectProfileIds([...rows, ...itemRows], eventRows);
   const names = new Map<string, string>();
   if (profileIds.length > 0) {
     const { data } = await supabase
@@ -101,6 +173,20 @@ export async function getTasksSnapshot(
   }
 
   const tasks: TaskView[] = rows.map((row) => mapTaskRow(row, names));
+  const itemsByInstance = new Map<string, TaskView[]>();
+  for (const row of itemRows) {
+    if (!row.checklist_instance_id) continue;
+    const list = itemsByInstance.get(row.checklist_instance_id) ?? [];
+    list.push(mapTaskRow(row, names));
+    itemsByInstance.set(row.checklist_instance_id, list);
+  }
+  const checklists: ChecklistInstanceView[] = instanceRows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    serviceDate: row.service_date,
+    items: itemsByInstance.get(row.id) ?? [],
+  }));
   const events: TaskEventView[] = eventRows.map((row) =>
     mapEventRow(row, names),
   );
@@ -112,6 +198,8 @@ export async function getTasksSnapshot(
     today,
     generatedAt: now.toISOString(),
     tasks,
+    checklists,
+    templates: templateRows.map(mapTemplateRow),
     events,
     team: roster
       .filter((member) => member.active !== false)
