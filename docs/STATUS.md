@@ -7,9 +7,9 @@
 
 ---
 
-## #109 Table Allocation UX consistency follow-up (in progress on `fix/table-allocation-ux-consistency`)
+## #109 Table Allocation UX consistency follow-up (merged into `development`)
 
-Five residual UX items after Part 1, no migration, no schema change, DEV/PROD untouched: U1 Picker inner buttons no longer also open the map (FRONT-005); U2 Dashboard "Recent activity" renders all 18 supported board events through one presenter with a safe fallback (FRONT-008); U3 combined assignments ("T1 + T2") say that Transfer / End / Unassign act on the whole assignment, beside the action; U4 Servers (and the Floor legend) count authoritative held tables including ones not on the floor map, using the shared read model (FRONT-007 residual); U5 stale comments/status text refreshed (DOC-001). Behavior of the actions is unchanged. See `docs/features/table-allocation-ux-consistency/` and `tasks/current-task.md`.
+Five residual UX items after Part 1, no migration, no schema change, DEV/PROD untouched: U1 Picker inner buttons no longer also open the map (FRONT-005); U2 Dashboard "Recent activity" renders all 18 supported board events through one presenter with a safe fallback (FRONT-008); U3 combined assignments ("T1 + T2") say that Transfer / End / Unassign act on the whole assignment, beside the action; U4 Servers (and the Floor legend) count authoritative held tables including ones not on the floor map, using the shared read model (FRONT-007 residual); U5 stale comments/status text refreshed (DOC-001). Behavior of the actions is unchanged. Merged via PR #149 (merge commit `a34af14`; application, browser-smoke and Vercel green, `Database` not triggered — no DB paths); #109 closed, `main` not merged, PROD untouched. Evidence: Vitest 559, demo Playwright 230/230 (desktop + server-mobile), hosted real UI on a production build 18/18. See `docs/features/table-allocation-ux-consistency/` and `tasks/current-task.md`.
 
 ---
 

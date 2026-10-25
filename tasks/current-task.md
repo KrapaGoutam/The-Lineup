@@ -11,31 +11,31 @@ U4: ✅ Servers + Floor legend counts from the read model; `ServerSummary.unmapp
 U5: ✅ stale comments/status refreshed; historical reports intentionally untouched
 
 Completed: all five items, docs in `docs/features/table-allocation-ux-consistency/` (PLAN, ACCEPTANCE_CRITERIA 15/15, TEST_MATRIX, IMPLEMENTATION_REPORT)
-In progress: PR → development, CI
-Not started: merge, #109 closure, post-merge docs closeout branch
+In progress: nothing
+Not started: PR #135 reconciliation (do not start without the owner's instruction)
 
 Files changed: allocation components/domain/data (see PR), tests/e2e + tests/real spec, docs/STATUS.md, docs/ROADMAP.md, multi-view README
 Uncommitted: nothing expected (untracked and never staged: `The Lineup.code-workspace`, `docs/testing/`)
 Commits: U1 f927959, U2 742e8c5, U3 29d4219, U4 261d2cc, U5 84f153e, then validation/handoff
 
 Tests: Vitest 64 files / 559 tests; lint, typecheck, build pass; demo Playwright desktop + server-mobile 230/230, host-tablet allocation 50/50; hosted real UI (production build, DEV) 18/18. No pgTAP (no DB change).
-CI: pending (PR not yet opened when this was written)
+CI: PR #149 — application, browser-smoke, Vercel green; Database not triggered
 
-#109: open, Project #4 = In Progress, milestone "Future Product Backlog" (#5)
-Project #4: In Progress
+#109: closed (completed), final evidence commented
+Project #4: Done
 Milestone: Future Product Backlog (Part 1 milestone is already closed)
-PR: —
+PR: #149 (merge commit a34af143ee11641dc3af4d5ffda0d989df4918f8)
 
 Docs: see feature directory above
 
-development merged: NO
+development merged: YES
 main merged: NO
 DEV touched: YES (hosted real-mode UI suite only; synthetic data; board reset by the suite)
 PROD touched: NO
 
 PR #135 untouched: YES
 
-Exact next command: `gh pr create --base development --head fix/table-allocation-ux-consistency` (if not yet open), then `gh pr checks <n> --watch`
-Exact next task: wait for CI (application, browser-smoke, Vercel; Database should not trigger), merge with a MERGE COMMIT, comment final evidence on #109, close it, Project #4 → Done, then docs closeout branch `docs/table-allocation-ux-closeout` (STATUS/ROADMAP/this file) → PR → development
+Exact next command: none for #109. After the owner's go-ahead: PR #135 sync with latest development.
+Exact next task: none for #109 (closeout PR for these docs is the last step)
 Read first: docs/features/table-allocation-ux-consistency/IMPLEMENTATION_REPORT.md
 DO NOT: merge to main, touch PROD, squash/rebase-merge, touch PR #135, `git add -A`/`git add .`, stage `docs/testing/` or `*.code-workspace`
