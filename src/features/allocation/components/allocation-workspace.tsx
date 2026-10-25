@@ -43,6 +43,7 @@ import { buildBoardReadModel } from "@/features/allocation/domain/board-read-mod
 import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime";
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
+import { openPickerUnlessInnerAction } from "@/features/allocation/components/picker-cell-click";
 import { ServerBoardView } from "@/features/allocation/components/server-board-view";
 import { TableMap } from "@/features/allocation/components/table-map";
 import type {
@@ -1393,16 +1394,18 @@ export function AllocationWorkspace({
                                 // it as the target and immediately opens
                                 // the Table Layout popup -- no separate
                                 // "Choose table" step in between (Picker/
-                                // Server follow-up).
+                                // Server follow-up). #109 U1: the cell's own
+                                // buttons (Skip turn, Edit, Unassign, ...)
+                                // run their action and do NOT also open it.
                                 onClick={
                                   activeView === "picker" && canWrite
-                                    ? () => {
+                                    ? openPickerUnlessInnerAction(() => {
                                         setPickerTarget({
                                           roundId: round.id,
                                           columnId: column.id,
                                         });
                                         setPickerMapOpen(true);
-                                      }
+                                      })
                                     : undefined
                                 }
                               >

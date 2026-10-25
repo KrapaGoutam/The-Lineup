@@ -398,6 +398,40 @@ test("Picker: selecting a Grid cell immediately opens the table layout popup, an
   await expect(page.getByText("Table T7")).toBeVisible();
 });
 
+// #109 U1 (FRONT-005): a cell's own buttons run their action and never also
+// open the map. Keyboard activation takes the same path as a pointer click.
+test("Picker: a cell's inner buttons act without opening the table layout popup (pointer and keyboard)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+  await switchView(page, "Picker");
+
+  // Pointer: Edit on an already-assigned cell (row 1 holds Table 12).
+  await page.getByRole("button", { name: "Edit table 12" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(
+    page.getByLabel("Table number or combined tables").first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel edit" }).click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+
+  // Keyboard: Skip turn on an empty cell (row 3).
+  const row3 = page.locator("div.contents", {
+    has: page.getByRole("button", { name: "Clear row 3" }),
+  });
+  await row3.getByRole("button", { name: "Skip turn" }).first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(
+    row3.getByRole("status", { name: "Skip turn" }).first(),
+  ).toBeVisible();
+
+  // The cell body still opens the map (the intended parent behavior).
+  await row3.getByPlaceholder("Table #").first().click();
+  await expect(page.locator("dialog[open]")).toBeVisible();
+});
+
 test("Servers: + Table opens the shared table layout as a popup, already scoped to that server", async ({
   page,
 }) => {
