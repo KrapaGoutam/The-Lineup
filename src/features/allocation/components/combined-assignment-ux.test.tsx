@@ -3,10 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { RotationBoard } from "@/features/allocation/domain/rotation-board";
-import {
-  resolveFloorTables,
-  type FloorLayoutEntry,
-} from "@/features/allocation/domain/floor-layout";
+import { buildBoardReadModel } from "@/features/allocation/domain/board-read-model";
+import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
 import type { TeamMember } from "@/lib/demo-data";
 
 import { FloorView } from "./floor-view";
@@ -58,7 +56,8 @@ const board: RotationBoard = {
   ],
   nextRoundNumber: 2,
 };
-const tables = resolveFloorTables(layout, board, team);
+const readModel = buildBoardReadModel({ board, layout, team });
+const tables = readModel.tables;
 
 const noop = vi.fn();
 
@@ -66,6 +65,7 @@ function renderFloor() {
   render(
     <FloorView
       tables={tables}
+      servers={readModel.servers}
       activeColumns={columns}
       team={team}
       board={board}
@@ -167,6 +167,7 @@ describe("Servers: whole-assignment copy", () => {
         columns={columns}
         team={team}
         tables={tables}
+        servers={readModel.servers}
         board={board}
         disabled={false}
         onAssign={noop}

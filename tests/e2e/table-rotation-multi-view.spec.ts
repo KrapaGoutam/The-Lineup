@@ -432,6 +432,55 @@ test("Picker: a cell's inner buttons act without opening the table layout popup 
   await expect(page.locator("dialog[open]")).toBeVisible();
 });
 
+// #109 U2/U3/U4: a combined assignment explains its whole-assignment scope
+// on Floor and Servers, an off-map table is counted on the Servers card, and
+// the Dashboard agrees and lists recent activity as a proper list.
+test("Allocation UX consistency: combined scope copy, off-map counts and recent activity agree across views", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await goToAllocation(page);
+
+  const row3 = page.locator("div.contents", {
+    has: page.getByRole("button", { name: "Clear row 3" }),
+  });
+  // Row 3: Mia gets a combined pair on the map, Leo a table that is not.
+  await row3.getByPlaceholder("Table #").nth(0).fill("T4 + T5");
+  await row3.getByRole("button", { name: "Add table" }).nth(0).click();
+  await row3.getByPlaceholder("Table #").first().fill("99");
+  await row3.getByRole("button", { name: "Add table" }).first().click();
+
+  // Floor: the combined pair is identified and its actions say "whole".
+  await switchView(page, "Floor");
+  await page
+    .getByRole("button", { name: /^Table T4, assigned to .*combined with T5/ })
+    .click();
+  await expect(page.getByText("T4 + T5 are one assignment.")).toBeVisible();
+  await expect(
+    page.getByText("Ending this assignment releases both tables."),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Transfer moves the entire assignment (T4 + T5)."),
+  ).toBeVisible();
+
+  // Servers: the off-map table is counted and called out; the combined pair
+  // is labelled as one assignment.
+  await switchView(page, "Servers");
+  await expect(page.getByText("T4 + T5 · one assignment")).toBeVisible();
+  // (The demo seed's own tables are also off the demo map, so the list holds
+  // more than 99.)
+  await expect(
+    page.getByText(/not on the floor map \(.*99.*\)/).first(),
+  ).toBeVisible();
+
+  // Dashboard agrees about the off-map table and lists recent activity.
+  await switchView(page, "Dashboard");
+  await expect(page.getByText(/not on the floor map \(.*99.*\)/)).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Recent board activity" }),
+  ).toBeVisible();
+});
+
 test("Servers: + Table opens the shared table layout as a popup, already scoped to that server", async ({
   page,
 }) => {

@@ -1096,6 +1096,7 @@ export function AllocationWorkspace({
           {activeView === "floor" ? (
             <FloorView
               tables={resolvedTables}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               activeColumns={visibleColumns}
               team={team}
@@ -1138,6 +1139,7 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               board={board}
               disabled={!canOperateFloor}

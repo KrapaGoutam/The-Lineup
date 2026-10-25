@@ -44,3 +44,27 @@ In progress. U1 done; U2-U5 pending.
   - Assign-decision dialog (Transfer an existing table / End existing table(s)): combined entries
     note that they are replaced / released as a whole.
 - No new confirmation was added to any action.
+
+## U4 -- Servers counts include authoritative off-map claims (done)
+
+- Defect: the Servers card counted `tables.filter(occupiedBy.columnId === column.id)`, i.e. only
+  tables with a position on the floor map, so a server that held an unpositioned table showed one
+  fewer than the Dashboard and the Grid. Its table pills were also built from map tiles, so an
+  off-map table could not be reached from Servers at all.
+- Source of truth: `buildBoardReadModel` -- the board's active entries, the same derivation the
+  Dashboard totals use. Nothing is read from map position, DOM nodes or rendered markers.
+  `ServerSummary` gains `unmappedTableLabels` (the held labels with no map row), computed centrally.
+- Count semantics (decision, reused from Part 1, not new): "N tables" = PHYSICAL tables, every
+  combined part counted. `T1 + T2` is one assignment but two tables. This is
+  `ServerSummary.activeTableLabels.length`; the per-server numbers sum to the Dashboard's
+  "Active tables" (`stats.occupiedTables`), asserted in a test. The Servers card additionally says
+  "T1 + T2 · one assignment" so the two readings are never confused.
+- Visibility (reuses the Dashboard's existing wording, no new concept): the card shows
+  "N not on the floor map (labels)", the pill is warning-toned AND its accessible name ends
+  ", not on the floor map" (not colour-only), and the pill is actionable (Transfer / End / Unassign).
+- Same defect, same fix, Floor legend: its per-server "N tables" also counted map tiles; it now reads
+  the read model's count (`FloorView` takes `servers`). Grid renders the board and was already
+  correct; Picker renders the Grid plus the map.
+- Demo mode note: the demo seed's labels ("12", "8", "21 + 22") are not on the demo floor map
+  (`DEMO_FLOOR_LAYOUT` uses T-labels), so demo Servers cards now truthfully show them as
+  "not on the floor map". Real mode shows what each location actually registered.

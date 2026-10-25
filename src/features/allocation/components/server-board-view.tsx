@@ -27,13 +27,59 @@ import {
   getAssignmentScope,
   otherTablesInAssignment,
 } from "@/features/allocation/domain/assignment-scope";
-import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
+import type { ServerSummary } from "@/features/allocation/domain/board-read-model";
+import {
+  parseCombinedTableLabel,
+  type ResolvedFloorTable,
+} from "@/features/allocation/domain/floor-layout";
 import {
   type ColumnStatus,
   type RotationBoard,
   type RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
 import type { TeamMember } from "@/lib/demo-data";
+
+/** One table a server holds, as the Servers card shows and acts on it. */
+type HeldTable = {
+  label: string;
+  roundId: string;
+  /** Every table in the same logical assignment, this one included. */
+  assignmentTables: string[];
+  /** Held, but not on the floor map (so no tile exists for it). */
+  offMap: boolean;
+};
+
+/**
+ * #109 U4: a server's tables come from the shared read model (their active
+ * board entries), NOT from which tables have a map position -- a held table
+ * with no map row is still the server's table and is still actionable here.
+ */
+function heldTables(summary: ServerSummary | undefined): HeldTable[] {
+  if (!summary) return [];
+  const offMap = new Set(summary.unmappedTableLabels);
+  return summary.activeAssignments.flatMap(({ roundId, label }) => {
+    const assignmentTables = parseCombinedTableLabel(label);
+    return assignmentTables.map((part) => ({
+      label: part,
+      roundId,
+      assignmentTables,
+      offMap: offMap.has(part),
+    }));
+  });
+}
+
+/** ", combined with T2" for a table that shares an assignment, else "". */
+function combinedClause(table: HeldTable): string {
+  const others = otherTablesInAssignment(table.assignmentTables, table.label);
+  return others.length ? `, combined with ${others.join(" + ")}` : "";
+}
+
+/** One scope per combined assignment (it shows once, not once per table). */
+function combinedAssignments(summary: ServerSummary | undefined) {
+  return (summary?.activeAssignments ?? [])
+    .map(({ label }) => getAssignmentScope(label))
+    .filter((scope) => scope.combined);
+}
 
 /**
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 16,
@@ -58,35 +104,11 @@ import type { TeamMember } from "@/lib/demo-data";
  * the tapped round -- a server holding T1/T3/T8 and tapping T3 never
  * touches T1 or T8.
  */
-/** ", combined with T2" for a table that shares an assignment, else "". */
-function combinedClause(table: ResolvedFloorTable): string {
-  if (!table.occupiedBy) return "";
-  const others = otherTablesInAssignment(
-    table.occupiedBy.assignmentTables,
-    table.label,
-  );
-  return others.length ? `, combined with ${others.join(" + ")}` : "";
-}
-
-/** One scope per combined assignment among these tables (a combined
- *  assignment shows once, not once per physical table). */
-function combinedAssignments(tables: ResolvedFloorTable[]) {
-  const seen = new Set<string>();
-  const scopes: ReturnType<typeof getAssignmentScope>[] = [];
-  for (const table of tables) {
-    const roundId = table.occupiedBy?.roundId;
-    if (!roundId || seen.has(roundId)) continue;
-    seen.add(roundId);
-    const scope = getAssignmentScope(table.occupiedBy!.assignmentTables);
-    if (scope.combined) scopes.push(scope);
-  }
-  return scopes;
-}
-
 export function ServerBoardView({
   columns,
   team,
   tables,
+  servers,
   tablesLoadError = false,
   board,
   disabled,
@@ -102,6 +124,8 @@ export function ServerBoardView({
   columns: RotationColumn[];
   team: TeamMember[];
   tables: ResolvedFloorTable[];
+  /** Per-server summaries from the shared read model (counts + held tables). */
+  servers: ServerSummary[];
   tablesLoadError?: boolean;
   board: RotationBoard;
   disabled: boolean;
@@ -176,9 +200,9 @@ export function ServerBoardView({
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {columns.map((column, index) => {
         const member = team.find(({ id }) => id === column.id);
-        const assignedTables = tables.filter(
-          (table) => table.occupiedBy?.columnId === column.id,
-        );
+        const summary = servers.find(({ columnId }) => columnId === column.id);
+        const assignedTables = heldTables(summary);
+        const offMapTables = assignedTables.filter(({ offMap }) => offMap);
         const paused = column.status === "paused";
         return (
           <Card
@@ -199,6 +223,12 @@ export function ServerBoardView({
                     {column.status} · #{index + 1} · {assignedTables.length}{" "}
                     table{assignedTables.length === 1 ? "" : "s"}
                   </p>
+                  {offMapTables.length ? (
+                    <p className="text-muted-foreground text-[11px]">
+                      {offMapTables.length} not on the floor map (
+                      {offMapTables.map(({ label }) => label).join(", ")})
+                    </p>
+                  ) : null}
                 </div>
               </div>
               {paused ? <Badge tone="neutral">Paused</Badge> : null}
@@ -211,18 +241,20 @@ export function ServerBoardView({
                       key={table.label}
                       type="button"
                       disabled={disabled}
-                      aria-label={`Table ${table.label}, assigned to ${column.name}${combinedClause(table)} -- open table actions`}
+                      aria-label={`Table ${table.label}, assigned to ${column.name}${combinedClause(table)}${table.offMap ? ", not on the floor map" : ""} -- open table actions`}
                       onClick={() =>
                         setActiveTableAction({
-                          roundId: table.occupiedBy!.roundId,
+                          roundId: table.roundId,
                           columnId: column.id,
                           tableLabel: table.label,
-                          assignmentTables: table.occupiedBy!.assignmentTables,
+                          assignmentTables: table.assignmentTables,
                         })
                       }
                       className="rounded-full p-0.5 disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <Badge tone="success">{table.label}</Badge>
+                      <Badge tone={table.offMap ? "warning" : "success"}>
+                        {table.label}
+                      </Badge>
                     </button>
                   ))}
                 </div>
@@ -231,7 +263,7 @@ export function ServerBoardView({
                   No tables assigned.
                 </p>
               )}
-              {combinedAssignments(assignedTables).map((scope) => (
+              {combinedAssignments(summary).map((scope) => (
                 <p
                   key={scope.label}
                   className="text-muted-foreground text-[11px]"

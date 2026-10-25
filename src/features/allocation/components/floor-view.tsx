@@ -18,6 +18,7 @@ import type {
   RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
 import { getAssignmentScope } from "@/features/allocation/domain/assignment-scope";
+import type { ServerSummary } from "@/features/allocation/domain/board-read-model";
 import {
   getInitials,
   type ResolvedFloorTable,
@@ -102,6 +103,7 @@ function FloorLegend({
  */
 export function FloorView({
   tables,
+  servers,
   tablesLoadError = false,
   activeColumns,
   team,
@@ -114,6 +116,8 @@ export function FloorView({
   onEndAndAssign,
 }: {
   tables: ResolvedFloorTable[];
+  /** Per-server summaries from the shared read model (legend counts). */
+  servers: ServerSummary[];
   tablesLoadError?: boolean;
   activeColumns: RotationColumn[];
   team: TeamMember[];
@@ -192,9 +196,11 @@ export function FloorView({
       name: column.name,
       initials: getInitials(column.name),
       color: member?.color ?? "var(--muted-foreground)",
-      activeTableCount: tables.filter(
-        (table) => table.occupiedBy?.columnId === column.id,
-      ).length,
+      // #109 U4: the read model's count (includes held tables that are not on
+      // the floor map), not a count of map tiles.
+      activeTableCount:
+        servers.find(({ columnId }) => columnId === column.id)
+          ?.activeTableLabels.length ?? 0,
     };
   });
 
