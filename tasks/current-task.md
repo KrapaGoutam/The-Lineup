@@ -58,16 +58,13 @@ Uncommitted: none expected (only the untracked `The Lineup.code-workspace` and `
 
 ## State flags
 
-PR: `feature/tasks-v1 → development` · development merged: NO (until CI green + review) · main merged: NO · DEV touched: YES (migrations + hosted suites, cleaned) · PROD touched: NO · Running processes: local Supabase stack (Docker); no dev server.
+Branch: `docs/tasks-v1-closeout` (docs-only, from `development` @ `4c393d3`) · feature HEAD `c036cf2` · PR #145 MERGED (merge commit `4c393d3`) · browser-smoke PASS (re-run once after a cancelled job) · Database PASS · application PASS · Vercel PASS · development HEAD `4c393d3` (+ this closeout once merged)
+Issues: #136–#144 closed; deferrals only in `tasks/backlog.md` · Project #4: Tasks items Done · Milestone "Tasks V1": closed
+development merged: YES · main merged: NO · DEV touched: YES (migrations + hosted suites, cleaned) · PROD touched: NO · PROD migrations: NO
 
-## Exact next command / task
+## Exact next action
 
-1. CI on PR #145 (2026-10-25): `application` ✔ · `browser-smoke` ✔ · Vercel ✔ · `Database` ✘ ×2 (runs 40172808040) at `supabase start` with `toomanyrequests` — external registry limit, db:reset/db:test never ran in CI. **Waiting for the owner**: re-run later / add registry auth, or explicitly accept the exception (as for PR #131). Re-check with `gh pr checks 145`. If `Database` fails at `supabase start` with `toomanyrequests`, that is the known registry limit (PR #135 fix is parked): record it accurately, do not weaken the job, and report to the owner.
-2. If green: merge with a **merge commit** (`gh pr merge --merge`), verify `origin/development` contains Tasks V1 and `origin/main` does not.
-3. Post-merge: update #136/#144, Project #4, milestone, docs; close milestone only when everything in scope is closed; any doc commit goes on a `docs/tasks-v1-closeout` branch → PR to `development`.
-4. STOP. Do not merge `development → main`; #134 blocks production promotion.
-
-Read first: `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md`.
+Merge the docs-only closeout PR (merge commit) after CI. Then STOP: `development → main` only on explicit owner approval, and #134 must be resolved first (a push to `main` runs `deploy-migrations` against PROD, which would apply the Tasks migrations). Next product work: #109, then Part 2.
 
 ## DO NOT
 

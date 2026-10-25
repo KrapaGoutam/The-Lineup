@@ -21,7 +21,7 @@ Tracking: parent #136, milestone "Tasks V1", T1–T8 = #137–#144, Project #4.
 | T4 Opening / T5 Closing          | done  | `ec7052a` | pgTAP 0027 (40); one engine; day isolation proven in DB/unit/browser |
 | T6 Recurrence                    | done  | `a984914` | pgTAP 0028 (31)                                                      |
 | T7 Notifications                 | done  | `09a3bbb` | pgTAP 0029 (14)                                                      |
-| T8 Validation / release gate     | done  | see PR    | hosted DEV suites 12 + 3; full gate (section 5)                      |
+| T8 Validation / release gate     | done  | `13b7318` | hosted DEV suites 12 + 3; full gate (section 5)                      |
 
 ## 3. Final schema
 
@@ -55,17 +55,17 @@ RPCs: `task_create/update/assign/set_status/complete/reopen/cancel/carry_forward
 
 ## 5. Evidence
 
-| Check                                                                                                         | Result       |
-| ------------------------------------------------------------------------------------------------------------- | ------------ |
-| `supabase db reset` (local, 39 migrations) + pgTAP (29 files / 553 assertions; Tasks 0026–0029 = 166)         | PASS         |
-| Independent read-only schema/RLS review (sub-agent); findings fixed                                           | PASS         |
-| Vitest (56 files / 482 tests: Tasks domain, engine, notifications, component)                                 | PASS         |
-| `npm run format:check` · `lint` · `typecheck`                                                                 | PASS         |
-| `npm run build` with every variable pinned to DEV; `.next` has 0 PROD refs                                    | PASS         |
-| Playwright demo suite, all specs × desktop / host-tablet / server-mobile                                      | PASS 339/339 |
-| Hosted DEV RPC/RLS suite `tests/real/tasks-v1.db.real.test.ts`                                                | PASS 12/12   |
-| Hosted DEV browser suite `tests/real/ui/tasks.real.spec.ts` (manager + staff contexts, real passcode sign-in) | PASS 3/3     |
-| GitHub Actions on the PR (application, browser-smoke, Database, Vercel)                                       | see PR       |
+| Check                                                                                                         | Result                                                                                        |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `supabase db reset` (local, 39 migrations) + pgTAP (29 files / 553 assertions; Tasks 0026–0029 = 166)         | PASS                                                                                          |
+| Independent read-only schema/RLS review (sub-agent); findings fixed                                           | PASS                                                                                          |
+| Vitest (56 files / 482 tests: Tasks domain, engine, notifications, component)                                 | PASS                                                                                          |
+| `npm run format:check` · `lint` · `typecheck`                                                                 | PASS                                                                                          |
+| `npm run build` with every variable pinned to DEV; `.next` has 0 PROD refs                                    | PASS                                                                                          |
+| Playwright demo suite, all specs × desktop / host-tablet / server-mobile                                      | PASS 339/339                                                                                  |
+| Hosted DEV RPC/RLS suite `tests/real/tasks-v1.db.real.test.ts`                                                | PASS 12/12                                                                                    |
+| Hosted DEV browser suite `tests/real/ui/tasks.real.spec.ts` (manager + staff contexts, real passcode sign-in) | PASS 3/3                                                                                      |
+| GitHub Actions on PR #145 at `c036cf2` (application, browser-smoke, Database, Vercel)                         | PASS (browser-smoke re-run once after a cancelled runner job; Database passed on its own run) |
 
 A real defect was found only by the hosted suites and fixed: PostgREST requires every RPC argument to be present, so the Server Action now sends explicit `null`s (omitted arguments → `PGRST202`).
 
@@ -78,3 +78,7 @@ Custom recurrence intervals · per-organization custom categories · "Everyone o
 - Lazy generation (checklists, recurrence, sweeps) runs when a member opens Tasks; if nobody opens Tasks, nothing is generated until someone does (idempotent catch-up, no data loss).
 - The Database CI job on `development` still lacks the PR #135 registry fix; the known `toomanyrequests` failure at `supabase start`, if it recurs, is documented and not worked around.
 - The demo-mode engine duplicates the RPC rules in TypeScript; parity is enforced by parallel pgTAP / Vitest / e2e scenarios, not shared code.
+
+## 8. Merge record
+
+PR #145 merged into `development` with a merge commit (`4c393d3`); `origin/main` does not contain it and no `main` workflow ran. Issues #136–#144 and milestone "Tasks V1" are closed; Project #4 items are Done. Deferrals remain in `tasks/backlog.md`. The earlier Database `toomanyrequests` failures on this PR were external registry limits; the Database job later passed without any exception.
