@@ -1,0 +1,41 @@
+# Tasks V1 — Implementation Report
+
+Living document; updated at each phase checkpoint. Plan: `PLAN.md`. Criteria: `ACCEPTANCE_CRITERIA.md`. Scenarios: `TEST_MATRIX.md`.
+
+## 1. Environment & safety
+
+- Branch `feature/tasks-v1` from `development` @ `ead4e8b`. PR #135 is not present and was not touched.
+- DEV Supabase `opmujepkemwcdxxorhfd` only. PROD `ftadewtkjlaotfdvtjcv` untouched; no Tasks migration applied to PROD. `NEON_DATABASE_URL` blank for every DEV process.
+
+## 2. Phase log
+
+| Phase                        | State        | Commit      | Notes                                                                                           |
+| ---------------------------- | ------------ | ----------- | ----------------------------------------------------------------------------------------------- |
+| Tracking + docs scaffold     | done         | —           | Milestone "Tasks V1" (#6), parent #136, T1–T8 #137–#144 linked as sub-issues, all in Project #4 |
+| T1 Domain / DB / permissions | done (local) | see git log | pgTAP 26 files / 466 assertions pass; independent schema/RLS review applied                     |
+| T2 … T8                      | not started  |             |                                                                                                 |
+
+## 3. Final schema
+
+Migration `20261025090000_tasks_v1_foundation.sql` (T1). Tables: `task_categories`, `tasks`, `task_assignments`, `task_events`, `task_notifications`, `task_recurrence_rules`, `task_recurrence_assignees`, `checklist_templates`, `checklist_template_items`, `checklist_template_item_assignees`, `checklist_instances`. RPCs: `task_create`, `task_update`, `task_assign`, `task_set_status`, `task_complete`, `task_reopen`, `task_cancel`, `task_carry_forward`. Later phases add checklist, recurrence and notification RPCs in their own migrations.
+
+**T1 independent review (read-only sub-agent) — findings and disposition**
+
+| Finding                                                                                  | Disposition                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `template_item_id ON DELETE SET NULL` blocked by the immutability trigger                | fixed (trigger allows the null transition)                          |
+| Reads bypassed the `tasks_can_access_location` seam                                      | fixed (tasks, instances, templates, rules policies)                 |
+| Any worker could reopen any completion                                                   | fixed (manager or original completer only)                          |
+| `template_item_id` without an instance; instance kind vs task kind                       | fixed (CHECK + trigger)                                             |
+| Composite tenant FKs for event/notification instance links; org-delete cascades          | fixed                                                               |
+| `task_carry_forward` lock order; TRUNCATE guard; unneeded EXECUTE on `tasks_is_assignee` | fixed                                                               |
+| Window-only (no date) tasks never overdue                                                | accepted: no due date means never overdue; documented               |
+| Hard-deleting a member who created tasks is blocked by actor FKs                         | accepted: members are deactivated, never hard-deleted (Feature 017) |
+
+## 4. Deferrals
+
+_None recorded yet. Planned deferrals: custom recurrence intervals, per-organization categories, "Everyone on shift" assignment, automatic shift handoff, optional manager verification, per-assignee completion for shared tasks, push/email/SMS._
+
+## 5. Evidence
+
+_Filled per phase._

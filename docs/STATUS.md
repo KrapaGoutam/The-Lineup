@@ -7,6 +7,12 @@
 
 ---
 
+## Tasks V1 (active, `feature/tasks-v1`)
+
+T1 (domain, RLS, trusted RPCs, pgTAP 26 files / 466 assertions) complete locally; T2–T8 pending. Tracking #136 / milestone "Tasks V1". Not merged; DEV/PROD untouched. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
+
+---
+
 ## 🚦 Current Status Overview
 
 - **Active Feature:** `Payroll UX / Timezone / PIN Keypad mega-request` — all 6 phases merged to `main` (PRs #35, #36, #41, #38, #39, #40); see the dedicated section below and `docs/agent-handoff.md`. `Feature 033` (below) was the last numbered feature-spec item shipped before this.

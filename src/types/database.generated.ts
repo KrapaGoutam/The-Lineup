@@ -282,6 +282,217 @@ export type Database = {
           },
         ];
       };
+      checklist_instances: {
+        Row: {
+          generated_at: string;
+          generated_by: string | null;
+          id: string;
+          kind: Database["public"]["Enums"]["checklist_kind"];
+          location_id: string;
+          name: string;
+          organization_id: string;
+          service_date: string;
+          template_id: string;
+        };
+        Insert: {
+          generated_at?: string;
+          generated_by?: string | null;
+          id?: string;
+          kind: Database["public"]["Enums"]["checklist_kind"];
+          location_id: string;
+          name: string;
+          organization_id: string;
+          service_date: string;
+          template_id: string;
+        };
+        Update: {
+          generated_at?: string;
+          generated_by?: string | null;
+          id?: string;
+          kind?: Database["public"]["Enums"]["checklist_kind"];
+          location_id?: string;
+          name?: string;
+          organization_id?: string;
+          service_date?: string;
+          template_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checklist_instances_generator_fk";
+            columns: ["organization_id", "generated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "checklist_instances_template_fk";
+            columns: ["template_id", "organization_id", "location_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_templates";
+            referencedColumns: ["id", "organization_id", "location_id"];
+          },
+        ];
+      };
+      checklist_template_item_assignees: {
+        Row: {
+          item_id: string;
+          organization_id: string;
+          profile_id: string;
+        };
+        Insert: {
+          item_id: string;
+          organization_id: string;
+          profile_id: string;
+        };
+        Update: {
+          item_id?: string;
+          organization_id?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_item_assignees_item_fk";
+            columns: ["item_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_template_items";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "checklist_template_item_assignees_member_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
+      checklist_template_items: {
+        Row: {
+          active: boolean;
+          assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          category: string;
+          created_at: string;
+          due_time: string | null;
+          due_window: Database["public"]["Enums"]["task_due_window"] | null;
+          id: string;
+          instructions: string | null;
+          organization_id: string;
+          priority: Database["public"]["Enums"]["task_priority"];
+          sort_order: number;
+          template_id: string;
+          title: string;
+        };
+        Insert: {
+          active?: boolean;
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          category?: string;
+          created_at?: string;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          id?: string;
+          instructions?: string | null;
+          organization_id: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          sort_order?: number;
+          template_id: string;
+          title: string;
+        };
+        Update: {
+          active?: boolean;
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          category?: string;
+          created_at?: string;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          id?: string;
+          instructions?: string | null;
+          organization_id?: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          sort_order?: number;
+          template_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_category_fkey";
+            columns: ["category"];
+            isOneToOne: false;
+            referencedRelation: "task_categories";
+            referencedColumns: ["slug"];
+          },
+          {
+            foreignKeyName: "checklist_template_items_template_fk";
+            columns: ["template_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_templates";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      checklist_templates: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          created_by: string;
+          days_of_week: number[];
+          id: string;
+          kind: Database["public"]["Enums"]["checklist_kind"];
+          location_id: string;
+          name: string;
+          organization_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          created_by: string;
+          days_of_week?: number[];
+          id?: string;
+          kind: Database["public"]["Enums"]["checklist_kind"];
+          location_id: string;
+          name: string;
+          organization_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          created_by?: string;
+          days_of_week?: number[];
+          id?: string;
+          kind?: Database["public"]["Enums"]["checklist_kind"];
+          location_id?: string;
+          name?: string;
+          organization_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checklist_templates_creator_fk";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "checklist_templates_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "checklist_templates_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       dining_areas: {
         Row: {
           area_order: number;
@@ -1510,28 +1721,40 @@ export type Database = {
           created_at: string;
           dining_table_id: number;
           id: number;
+          location_id: string;
           locked: boolean;
           organization_id: string;
+          released_at: string | null;
+          rotation_member_id: number | null;
           server_profile_id: string | null;
           service_session_id: number;
+          table_rotation_entry_id: number | null;
         };
         Insert: {
           created_at?: string;
           dining_table_id: number;
           id?: never;
+          location_id: string;
           locked?: boolean;
           organization_id: string;
+          released_at?: string | null;
+          rotation_member_id?: number | null;
           server_profile_id?: string | null;
           service_session_id: number;
+          table_rotation_entry_id?: number | null;
         };
         Update: {
           created_at?: string;
           dining_table_id?: number;
           id?: never;
+          location_id?: string;
           locked?: boolean;
           organization_id?: string;
+          released_at?: string | null;
+          rotation_member_id?: number | null;
           server_profile_id?: string | null;
           service_session_id?: number;
+          table_rotation_entry_id?: number | null;
         };
         Relationships: [
           {
@@ -1542,11 +1765,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "section_assignments_entry_fk";
+            columns: ["table_rotation_entry_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "table_rotation_entries";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "section_assignments_entry_session_fk";
+            columns: ["table_rotation_entry_id", "service_session_id"];
+            isOneToOne: false;
+            referencedRelation: "table_rotation_entries";
+            referencedColumns: ["id", "service_session_id"];
+          },
+          {
+            foreignKeyName: "section_assignments_member_session_fk";
+            columns: ["rotation_member_id", "service_session_id"];
+            isOneToOne: false;
+            referencedRelation: "rotation_members";
+            referencedColumns: ["id", "service_session_id"];
+          },
+          {
             foreignKeyName: "section_assignments_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "section_assignments_rotation_member_fk";
+            columns: ["rotation_member_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "rotation_members";
+            referencedColumns: ["id", "organization_id"];
           },
           {
             foreignKeyName: "section_assignments_server_fk";
@@ -1570,11 +1821,25 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "section_assignments_session_location_fk";
+            columns: ["service_session_id", "location_id"];
+            isOneToOne: false;
+            referencedRelation: "service_sessions";
+            referencedColumns: ["id", "location_id"];
+          },
+          {
             foreignKeyName: "section_assignments_session_tenant_fk";
             columns: ["service_session_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "service_sessions";
             referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "section_assignments_table_location_fk";
+            columns: ["dining_table_id", "location_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_tables";
+            referencedColumns: ["id", "location_id"];
           },
           {
             foreignKeyName: "section_assignments_table_tenant_fk";
@@ -1957,31 +2222,57 @@ export type Database = {
         Row: {
           assigned_at: string;
           assigned_by: string;
+          ended_at: string | null;
+          ended_by: string | null;
           id: number;
           organization_id: string;
           rotation_member_id: number;
           rotation_round_id: number;
-          table_label: string;
+          service_session_id: number;
+          status: string;
+          table_label: string | null;
         };
         Insert: {
           assigned_at?: string;
           assigned_by: string;
+          ended_at?: string | null;
+          ended_by?: string | null;
           id?: never;
           organization_id: string;
           rotation_member_id: number;
           rotation_round_id: number;
-          table_label: string;
+          service_session_id: number;
+          status?: string;
+          table_label?: string | null;
         };
         Update: {
           assigned_at?: string;
           assigned_by?: string;
+          ended_at?: string | null;
+          ended_by?: string | null;
           id?: never;
           organization_id?: string;
           rotation_member_id?: number;
           rotation_round_id?: number;
-          table_label?: string;
+          service_session_id?: number;
+          status?: string;
+          table_label?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "table_rotation_entries_ended_by_fk";
+            columns: ["organization_id", "ended_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "table_rotation_entries_member_session_fk";
+            columns: ["rotation_member_id", "service_session_id"];
+            isOneToOne: false;
+            referencedRelation: "rotation_members";
+            referencedColumns: ["id", "service_session_id"];
+          },
           {
             foreignKeyName: "table_rotation_entries_organization_id_assigned_by_fkey";
             columns: ["organization_id", "assigned_by"];
@@ -2009,6 +2300,512 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "rotation_rounds";
             referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "table_rotation_entries_round_session_fk";
+            columns: ["rotation_round_id", "service_session_id"];
+            isOneToOne: false;
+            referencedRelation: "rotation_rounds";
+            referencedColumns: ["id", "service_session_id"];
+          },
+        ];
+      };
+      task_assignments: {
+        Row: {
+          assigned_at: string;
+          assigned_by: string;
+          organization_id: string;
+          profile_id: string;
+          task_id: string;
+        };
+        Insert: {
+          assigned_at?: string;
+          assigned_by: string;
+          organization_id: string;
+          profile_id: string;
+          task_id: string;
+        };
+        Update: {
+          assigned_at?: string;
+          assigned_by?: string;
+          organization_id?: string;
+          profile_id?: string;
+          task_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_assignments_assigner_fk";
+            columns: ["organization_id", "assigned_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_assignments_member_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_assignments_task_fk";
+            columns: ["task_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      task_categories: {
+        Row: {
+          name: string;
+          slug: string;
+          sort_order: number;
+        };
+        Insert: {
+          name: string;
+          slug: string;
+          sort_order?: number;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      task_events: {
+        Row: {
+          actor_profile_id: string | null;
+          checklist_instance_id: string | null;
+          created_at: string;
+          event_type: Database["public"]["Enums"]["task_event_type"];
+          id: number;
+          organization_id: string;
+          payload: Json;
+          task_id: string | null;
+        };
+        Insert: {
+          actor_profile_id?: string | null;
+          checklist_instance_id?: string | null;
+          created_at?: string;
+          event_type: Database["public"]["Enums"]["task_event_type"];
+          id?: never;
+          organization_id: string;
+          payload?: Json;
+          task_id?: string | null;
+        };
+        Update: {
+          actor_profile_id?: string | null;
+          checklist_instance_id?: string | null;
+          created_at?: string;
+          event_type?: Database["public"]["Enums"]["task_event_type"];
+          id?: never;
+          organization_id?: string;
+          payload?: Json;
+          task_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_events_actor_fk";
+            columns: ["organization_id", "actor_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_events_task_fk";
+            columns: ["task_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      task_notifications: {
+        Row: {
+          body: string | null;
+          checklist_instance_id: string | null;
+          created_at: string;
+          dedupe_key: string | null;
+          id: number;
+          organization_id: string;
+          read_at: string | null;
+          recipient_profile_id: string;
+          task_id: string | null;
+          title: string;
+          type: Database["public"]["Enums"]["task_notification_type"];
+        };
+        Insert: {
+          body?: string | null;
+          checklist_instance_id?: string | null;
+          created_at?: string;
+          dedupe_key?: string | null;
+          id?: never;
+          organization_id: string;
+          read_at?: string | null;
+          recipient_profile_id: string;
+          task_id?: string | null;
+          title: string;
+          type: Database["public"]["Enums"]["task_notification_type"];
+        };
+        Update: {
+          body?: string | null;
+          checklist_instance_id?: string | null;
+          created_at?: string;
+          dedupe_key?: string | null;
+          id?: never;
+          organization_id?: string;
+          read_at?: string | null;
+          recipient_profile_id?: string;
+          task_id?: string | null;
+          title?: string;
+          type?: Database["public"]["Enums"]["task_notification_type"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_notifications_checklist_instance_id_fkey";
+            columns: ["checklist_instance_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_instances";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_notifications_recipient_fk";
+            columns: ["organization_id", "recipient_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_notifications_task_fk";
+            columns: ["task_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      task_recurrence_assignees: {
+        Row: {
+          organization_id: string;
+          profile_id: string;
+          rule_id: string;
+        };
+        Insert: {
+          organization_id: string;
+          profile_id: string;
+          rule_id: string;
+        };
+        Update: {
+          organization_id?: string;
+          profile_id?: string;
+          rule_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_recurrence_assignees_member_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_recurrence_assignees_rule_fk";
+            columns: ["rule_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "task_recurrence_rules";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      task_recurrence_rules: {
+        Row: {
+          active: boolean;
+          assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          category: string;
+          created_at: string;
+          created_by: string;
+          day_of_month: number | null;
+          due_time: string | null;
+          due_window: Database["public"]["Enums"]["task_due_window"] | null;
+          end_type: Database["public"]["Enums"]["recurrence_end_type"];
+          ends_on: string | null;
+          frequency: Database["public"]["Enums"]["recurrence_frequency"];
+          id: string;
+          instructions: string | null;
+          location_id: string;
+          max_occurrences: number | null;
+          organization_id: string;
+          priority: Database["public"]["Enums"]["task_priority"];
+          starts_on: string;
+          title: string;
+          updated_at: string;
+          updated_by: string | null;
+          weekdays: number[] | null;
+        };
+        Insert: {
+          active?: boolean;
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          category?: string;
+          created_at?: string;
+          created_by: string;
+          day_of_month?: number | null;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          end_type?: Database["public"]["Enums"]["recurrence_end_type"];
+          ends_on?: string | null;
+          frequency: Database["public"]["Enums"]["recurrence_frequency"];
+          id?: string;
+          instructions?: string | null;
+          location_id: string;
+          max_occurrences?: number | null;
+          organization_id: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          starts_on: string;
+          title: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          weekdays?: number[] | null;
+        };
+        Update: {
+          active?: boolean;
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          category?: string;
+          created_at?: string;
+          created_by?: string;
+          day_of_month?: number | null;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          end_type?: Database["public"]["Enums"]["recurrence_end_type"];
+          ends_on?: string | null;
+          frequency?: Database["public"]["Enums"]["recurrence_frequency"];
+          id?: string;
+          instructions?: string | null;
+          location_id?: string;
+          max_occurrences?: number | null;
+          organization_id?: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          starts_on?: string;
+          title?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          weekdays?: number[] | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_recurrence_rules_category_fkey";
+            columns: ["category"];
+            isOneToOne: false;
+            referencedRelation: "task_categories";
+            referencedColumns: ["slug"];
+          },
+          {
+            foreignKeyName: "task_recurrence_rules_creator_fk";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "task_recurrence_rules_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "task_recurrence_rules_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tasks: {
+        Row: {
+          assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          blocked_reason: string | null;
+          cancel_reason: string | null;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          category: string;
+          checklist_instance_id: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+          completion_note: string | null;
+          created_at: string;
+          created_by: string;
+          due_at: string | null;
+          due_date: string | null;
+          due_time: string | null;
+          due_window: Database["public"]["Enums"]["task_due_window"] | null;
+          group_id: string | null;
+          id: string;
+          instructions: string | null;
+          kind: Database["public"]["Enums"]["task_kind"];
+          location_id: string;
+          occurrence_date: string | null;
+          organization_id: string;
+          priority: Database["public"]["Enums"]["task_priority"];
+          recurrence_rule_id: string | null;
+          sort_order: number;
+          start_date: string | null;
+          started_at: string | null;
+          started_by: string | null;
+          status: Database["public"]["Enums"]["task_status"];
+          template_item_id: string | null;
+          title: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          blocked_reason?: string | null;
+          cancel_reason?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          category?: string;
+          checklist_instance_id?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          completion_note?: string | null;
+          created_at?: string;
+          created_by: string;
+          due_at?: string | null;
+          due_date?: string | null;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          group_id?: string | null;
+          id?: string;
+          instructions?: string | null;
+          kind?: Database["public"]["Enums"]["task_kind"];
+          location_id: string;
+          occurrence_date?: string | null;
+          organization_id: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          recurrence_rule_id?: string | null;
+          sort_order?: number;
+          start_date?: string | null;
+          started_at?: string | null;
+          started_by?: string | null;
+          status?: Database["public"]["Enums"]["task_status"];
+          template_item_id?: string | null;
+          title: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
+          blocked_reason?: string | null;
+          cancel_reason?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          category?: string;
+          checklist_instance_id?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          completion_note?: string | null;
+          created_at?: string;
+          created_by?: string;
+          due_at?: string | null;
+          due_date?: string | null;
+          due_time?: string | null;
+          due_window?: Database["public"]["Enums"]["task_due_window"] | null;
+          group_id?: string | null;
+          id?: string;
+          instructions?: string | null;
+          kind?: Database["public"]["Enums"]["task_kind"];
+          location_id?: string;
+          occurrence_date?: string | null;
+          organization_id?: string;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          recurrence_rule_id?: string | null;
+          sort_order?: number;
+          start_date?: string | null;
+          started_at?: string | null;
+          started_by?: string | null;
+          status?: Database["public"]["Enums"]["task_status"];
+          template_item_id?: string | null;
+          title?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tasks_canceller_fk";
+            columns: ["organization_id", "cancelled_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "tasks_category_fkey";
+            columns: ["category"];
+            isOneToOne: false;
+            referencedRelation: "task_categories";
+            referencedColumns: ["slug"];
+          },
+          {
+            foreignKeyName: "tasks_completer_fk";
+            columns: ["organization_id", "completed_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "tasks_creator_fk";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "tasks_instance_fk";
+            columns: [
+              "checklist_instance_id",
+              "organization_id",
+              "location_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "checklist_instances";
+            referencedColumns: ["id", "organization_id", "location_id"];
+          },
+          {
+            foreignKeyName: "tasks_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "tasks_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_recurrence_fk";
+            columns: ["recurrence_rule_id", "organization_id", "location_id"];
+            isOneToOne: false;
+            referencedRelation: "task_recurrence_rules";
+            referencedColumns: ["id", "organization_id", "location_id"];
+          },
+          {
+            foreignKeyName: "tasks_starter_fk";
+            columns: ["organization_id", "started_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "tasks_template_item_id_fkey";
+            columns: ["template_item_id"];
+            isOneToOne: false;
+            referencedRelation: "checklist_template_items";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2294,7 +3091,6 @@ export type Database = {
         Args: {
           p_location_id: string;
           p_organization_id: string;
-          p_position: number;
           p_server_profile_id: string;
           p_service_date: string;
         };
@@ -2306,6 +3102,7 @@ export type Database = {
       };
       board_assign: {
         Args: {
+          p_confirm_transfer?: boolean;
           p_location_id: string;
           p_member_id: number;
           p_organization_id: string;
@@ -2344,6 +3141,33 @@ export type Database = {
         };
         Returns: undefined;
       };
+      board_delete_row: {
+        Args: {
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
+      board_end_and_assign: {
+        Args: {
+          p_end_round_ids: number[];
+          p_member_id: number;
+          p_organization_id: string;
+          p_service_session_id: number;
+          p_table_label: string;
+        };
+        Returns: number;
+      };
+      board_end_table: {
+        Args: {
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_session_id: number;
+        };
+        Returns: undefined;
+      };
       board_move_column: {
         Args: {
           p_direction: string;
@@ -2366,12 +3190,97 @@ export type Database = {
         };
         Returns: undefined;
       };
+      board_skip_turn: {
+        Args: {
+          p_location_id: string;
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_date: string;
+        };
+        Returns: number;
+      };
+      board_transfer: {
+        Args: {
+          p_dest_member_id: number;
+          p_organization_id: string;
+          p_service_session_id: number;
+          p_source_member_id: number;
+          p_source_round_id: number;
+        };
+        Returns: number;
+      };
       board_undo: {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
+        Returns: undefined;
+      };
+      task_assign: {
+        Args: {
+          p_assignee_ids: string[];
+          p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          p_task_id: string;
+        };
+        Returns: undefined;
+      };
+      task_cancel: {
+        Args: { p_reason?: string; p_task_id: string };
+        Returns: undefined;
+      };
+      task_carry_forward: {
+        Args: { p_new_due_date: string; p_task_ids: string[] };
+        Returns: number;
+      };
+      task_complete: {
+        Args: { p_note?: string; p_task_id: string };
+        Returns: undefined;
+      };
+      task_create: {
+        Args: {
+          p_assignee_ids: string[];
+          p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
+          p_category: string;
+          p_due_date: string;
+          p_due_time: string;
+          p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_each_person: boolean;
+          p_instructions: string;
+          p_location_id: string;
+          p_organization_id: string;
+          p_priority: Database["public"]["Enums"]["task_priority"];
+          p_start_date: string;
+          p_title: string;
+        };
+        Returns: string[];
+      };
+      task_reopen: { Args: { p_task_id: string }; Returns: undefined };
+      task_set_status: {
+        Args: {
+          p_reason?: string;
+          p_status: Database["public"]["Enums"]["task_status"];
+          p_task_id: string;
+        };
+        Returns: undefined;
+      };
+      task_update: {
+        Args: {
+          p_category: string;
+          p_due_date: string;
+          p_due_time: string;
+          p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_instructions: string;
+          p_priority: Database["public"]["Enums"]["task_priority"];
+          p_start_date: string;
+          p_task_id: string;
+          p_title: string;
+        };
+        Returns: undefined;
+      };
+      unconfirm_payroll_payment: {
+        Args: { p_payment_id: number; p_reason: string };
         Returns: undefined;
       };
     };
@@ -2396,13 +3305,63 @@ export type Database = {
         | "redo"
         | "move_column"
         | "add_row"
-        | "clear_cell";
+        | "clear_cell"
+        | "delete_row"
+        | "transfer"
+        | "end"
+        | "skip"
+        | "end_and_assign";
+      checklist_kind: "opening" | "closing";
+      recurrence_end_type: "never" | "on_date" | "after_count";
+      recurrence_frequency:
+        | "daily"
+        | "weekdays"
+        | "weekly"
+        | "selected_weekdays"
+        | "monthly";
       request_status: "pending" | "approved" | "declined" | "cancelled";
       rotation_status: "active" | "paused" | "closing" | "unavailable";
       schedule_status: "draft" | "published" | "archived";
       seating_status: "seated" | "closed" | "cancelled" | "transferred";
       service_status: "planned" | "active" | "closed";
       shift_kind: "morning" | "evening" | "full_day";
+      task_assignment_mode: "individual" | "multiple" | "all_team" | "anyone";
+      task_due_window:
+        | "before_opening"
+        | "during_shift"
+        | "before_dinner"
+        | "closing"
+        | "end_of_night";
+      task_event_type:
+        | "created"
+        | "assigned"
+        | "reassigned"
+        | "edited"
+        | "started"
+        | "blocked"
+        | "unblocked"
+        | "completed"
+        | "reopened"
+        | "cancelled"
+        | "carried_forward"
+        | "recurrence_created"
+        | "recurrence_changed"
+        | "checklist_generated";
+      task_kind: "task" | "opening" | "closing";
+      task_notification_type:
+        | "assigned"
+        | "reassigned"
+        | "due_soon"
+        | "overdue"
+        | "completed"
+        | "checklist_available";
+      task_priority: "normal" | "high" | "urgent";
+      task_status:
+        | "open"
+        | "in_progress"
+        | "blocked"
+        | "completed"
+        | "cancelled";
       tip_pool_status: "draft" | "finalized";
     };
     CompositeTypes: {
@@ -2553,6 +3512,20 @@ export const Constants = {
         "move_column",
         "add_row",
         "clear_cell",
+        "delete_row",
+        "transfer",
+        "end",
+        "skip",
+        "end_and_assign",
+      ],
+      checklist_kind: ["opening", "closing"],
+      recurrence_end_type: ["never", "on_date", "after_count"],
+      recurrence_frequency: [
+        "daily",
+        "weekdays",
+        "weekly",
+        "selected_weekdays",
+        "monthly",
       ],
       request_status: ["pending", "approved", "declined", "cancelled"],
       rotation_status: ["active", "paused", "closing", "unavailable"],
@@ -2560,6 +3533,41 @@ export const Constants = {
       seating_status: ["seated", "closed", "cancelled", "transferred"],
       service_status: ["planned", "active", "closed"],
       shift_kind: ["morning", "evening", "full_day"],
+      task_assignment_mode: ["individual", "multiple", "all_team", "anyone"],
+      task_due_window: [
+        "before_opening",
+        "during_shift",
+        "before_dinner",
+        "closing",
+        "end_of_night",
+      ],
+      task_event_type: [
+        "created",
+        "assigned",
+        "reassigned",
+        "edited",
+        "started",
+        "blocked",
+        "unblocked",
+        "completed",
+        "reopened",
+        "cancelled",
+        "carried_forward",
+        "recurrence_created",
+        "recurrence_changed",
+        "checklist_generated",
+      ],
+      task_kind: ["task", "opening", "closing"],
+      task_notification_type: [
+        "assigned",
+        "reassigned",
+        "due_soon",
+        "overdue",
+        "completed",
+        "checklist_available",
+      ],
+      task_priority: ["normal", "high", "urgent"],
+      task_status: ["open", "in_progress", "blocked", "completed", "cancelled"],
       tip_pool_status: ["draft", "finalized"],
     },
   },
