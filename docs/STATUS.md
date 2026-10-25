@@ -7,6 +7,12 @@
 
 ---
 
+## #134 production-build Table Rotation Realtime (fix on `fix/table-rotation-production-realtime`)
+
+Root cause: the production bundle inlines the hook's default `createClient`, so the Realtime effect's dependency changed every render → resubscribe on every `router.refresh()` (refetch loop, same-topic channel reuse races). `next dev` kept a stable identity and masked it. Fix is client-only (`use-board-realtime.ts`): stable client ref, one channel per lifecycle, no join while a same-topic removal is pending. Evidence on DEV Supabase: production build + `next start` real-mode UI 18/18, `next dev` 18/18, Vitest 491/491, lint/typecheck pass; PROD untouched. See `docs/features/table-rotation-production-realtime/` and `tasks/current-task.md`.
+
+---
+
 ## Tasks V1 (merged into `development`)
 
 T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merged into `development` via PR #145 (merge commit `4c393d3`) with application, browser-smoke, Database and Vercel green on `c036cf2`; `main` not merged, PROD untouched, #134 still blocks `development → main`. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
