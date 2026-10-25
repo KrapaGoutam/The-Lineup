@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   KeyRound,
+  ListChecks,
   LogOut,
   Menu,
   Settings2,
@@ -57,6 +58,13 @@ import {
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
+import { TasksModule } from "@/features/tasks/components/tasks-module";
+import { createDemoTasksState } from "@/features/tasks/domain/demo-tasks";
+import {
+  emptyTasksState,
+  type TasksState,
+} from "@/features/tasks/domain/task-engine";
+import type { TaskTeamMember } from "@/features/tasks/domain/task-types";
 import { renameTeamMemberAction } from "@/features/team/actions/member-actions";
 import { updateTeamDesignationAction } from "@/features/team/actions/team-actions";
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
@@ -106,6 +114,7 @@ import { Label } from "./ui/label";
 type AppTab =
   | "schedule"
   | "allocation"
+  | "tasks"
   | "tips"
   | "team"
   | "attendance"
@@ -113,12 +122,11 @@ type AppTab =
   | "settings";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
-// active; secondary, plain icon+label) rather than one flat row. Schedule
-// stays primary on desktop, where there's room for it, but moves into the
-// mobile "More" sheet alongside the secondary tabs -- the fixed 3-button
-// mobile dock only has room for the two truly continuous-during-service
-// actions (Allocation, Tip Split), matching design-system-reference.html's
-// own mobile priority.
+// active; secondary, plain icon+label) rather than one flat row. Tasks V1:
+// the two primary tiers are now the daily frontline modules -- Table
+// Allocation (rotation) and Tasks. Schedule, Team, Attendance, Tip Split,
+// Payroll and Settings stay visible one tier down (and in the mobile "More"
+// sheet); the fixed 3-button mobile dock holds Allocation, Tasks and More.
 const scheduleTab = {
   id: "schedule" as const,
   label: "Schedule",
@@ -129,8 +137,9 @@ const allocationTab = {
   label: "Table Allocation",
   icon: Table2,
 };
+const tasksTab = { id: "tasks" as const, label: "Tasks", icon: ListChecks };
 const tipsTab = { id: "tips" as const, label: "Tip Split", icon: WalletCards };
-const primaryTabs = [allocationTab, tipsTab];
+const primaryTabs = [allocationTab, tasksTab];
 
 const teamTab = { id: "team" as const, label: "Team", icon: Users };
 // Feature 019: visible to every signed-in role -- unlike Feature 018,
@@ -152,6 +161,33 @@ const payrollTab = {
   label: "Payroll",
   icon: Banknote,
 };
+
+// Tasks demo mode: everyone who can be assigned work is a demo roster member
+// or a demo account (the managers are accounts, not roster servers).
+function toTasksTeam(
+  team: readonly TeamMember[],
+  accounts: Record<string, SignedInUser>,
+): TaskTeamMember[] {
+  const byId = new Map<string, TaskTeamMember>();
+  for (const member of team) {
+    if (member.active === false) continue;
+    byId.set(member.id, {
+      profileId: member.id,
+      name: member.name,
+      designation: member.designation,
+    });
+  }
+  for (const account of Object.values(accounts)) {
+    if (!byId.has(account.profileId)) {
+      byId.set(account.profileId, {
+        profileId: account.profileId,
+        name: account.name,
+        designation: account.designation,
+      });
+    }
+  }
+  return [...byId.values()];
+}
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -625,6 +661,18 @@ function RestaurantOperationsAppInner({
   const [tipsAuditLog, setTipsAuditLog] = useState<TipsAuditEntry[]>(
     () => initialTipsContext?.auditLog ?? [],
   );
+  // Tasks (demo mode only): held here so the demo task list survives tab
+  // switches and sign-in as a different demo person. Real mode never reads
+  // this -- its source of truth is the database.
+  const [demoTasksState, setDemoTasksState] = useState<TasksState>(() =>
+    demoMode
+      ? createDemoTasksState(
+          new Date(),
+          DEMO_TIME_ZONE,
+          toTasksTeam(staticDemoTeam, staticDemoAccounts),
+        )
+      : emptyTasksState(),
+  );
 
   function registerDemoMember(input: {
     displayName: string;
@@ -753,6 +801,7 @@ function RestaurantOperationsAppInner({
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
+    tipsTab,
     ...(!demoMode ? [payrollTab] : []),
   ];
   // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
@@ -1774,6 +1823,7 @@ function RestaurantOperationsAppInner({
             {primaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
+                data-nav-tier="primary"
                 onClick={() => setTab(id)}
                 aria-current={tab === id ? "page" : undefined}
                 className={cn(
@@ -1793,6 +1843,7 @@ function RestaurantOperationsAppInner({
             {secondaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
+                data-nav-tier="secondary"
                 onClick={() => setTab(id)}
                 aria-current={tab === id ? "page" : undefined}
                 className={cn(
@@ -1951,6 +2002,24 @@ function RestaurantOperationsAppInner({
             onSessionInvalid={forceSignOut}
           />
         ) : null}
+        {tab === "tasks" ? (
+          <TasksModule
+            restaurantSlug={restaurantSlug}
+            user={user}
+            onSessionInvalid={forceSignOut}
+            demo={
+              demoMode
+                ? {
+                    state: demoTasksState,
+                    setState: setDemoTasksState,
+                    team: toTasksTeam(activeTeam, demoAccounts),
+                    timeZone,
+                    organizationId: DEMO_ORGANIZATION_ID,
+                  }
+                : null
+            }
+          />
+        ) : null}
         {tab === "tips" ? (
           <TipWorkspace
             user={user}
@@ -2012,10 +2081,10 @@ function RestaurantOperationsAppInner({
         ) : null}
       </main>
 
-      {/* Feature 021: fixed 3-button dock -- only the two continuous-
-          during-service actions plus "More", matching the reference's
-          mobile priority. Everything else (Schedule, Team, Attendance,
-          Payroll, Settings) lives in the slide-up sheet below. */}
+      {/* Feature 021 / Tasks V1: fixed 3-button dock -- the two primary
+          frontline modules (Table Allocation, Tasks) plus "More".
+          Everything else (Schedule, Team, Attendance, Tip Split, Payroll,
+          Settings) lives in the slide-up sheet below. */}
       <nav
         className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
         aria-label="Mobile navigation"
@@ -2034,17 +2103,17 @@ function RestaurantOperationsAppInner({
           Allocation
         </button>
         <button
-          onClick={() => goToTab("tips")}
-          aria-current={tab === "tips" ? "page" : undefined}
+          onClick={() => goToTab("tasks")}
+          aria-current={tab === "tasks" ? "page" : undefined}
           className={cn(
             "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "tips"
+            tab === "tasks"
               ? "bg-primary text-primary-foreground"
               : "border-border bg-surface text-foreground border",
           )}
         >
-          <WalletCards className="size-[22px]" aria-hidden="true" />
-          Tip Split
+          <ListChecks className="size-[22px]" aria-hidden="true" />
+          Tasks
         </button>
         <button
           onClick={() => setShowMobileSheet(true)}

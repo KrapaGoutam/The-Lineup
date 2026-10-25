@@ -9,8 +9,8 @@
 - [x] Tracking: milestone, parent #136, children T1 #137 · T2 #138 · T3 #139 · T4 #140 · T5 #141 · T6 #142 · T7 #143 · T8 #144 (linked as sub-issues)
 - [x] Docs scaffold (PLAN / AC / TEST_MATRIX / REPORT)
 - [x] **T1 Domain / DB / permissions** — migration `20261025090000_tasks_v1_foundation.sql`, pgTAP `0026_tasks_v1_foundation.test.sql` (79 assertions), regenerated `src/types/database.generated.ts`. Independent schema/RLS review done; fixes applied (see report).
-- [ ] T2 Navigation + Today + My Tasks — **IN PROGRESS** (pure domain `src/features/tasks/domain/task-types.ts`, `task-rules.ts` written, no tests yet)
-- [ ] T3 Assigned · [ ] T4 Opening · [ ] T5 Closing · [ ] T6 Recurrence · [ ] T7 Notifications · [ ] T8 Validation / PR
+- [x] **T2 Navigation + Today + My Tasks** — Tasks primary tab (Tips moved secondary, mobile dock Allocation/Tasks/More), `src/features/tasks/{domain,data,actions,hooks,components}`, demo engine, create/edit/reassign/cancel/detail dialogs, e2e `tests/e2e/tasks.spec.ts`
+- [ ] T3 Assigned (**NEXT**: Assigned view with filters, per-person progress, handoff list; dialogs already exist) · [ ] T4 Opening · [ ] T5 Closing · [ ] T6 Recurrence · [ ] T7 Notifications · [ ] T8 Validation / PR
 
 ## Architecture decisions (details in PLAN.md)
 
@@ -49,7 +49,7 @@ PR: none yet · PR target: `development` · development merged: NO · main merge
 
 ## Exact next step
 
-T2: write unit tests for `task-rules.ts`; build `task-engine.ts` (demo command engine) + `tasks-data.ts` / `tasks-actions.ts` (snapshot + `runTaskCommandAction`), then `TasksWorkspace` (Today, My Tasks), shell nav change (Tasks primary, Tips secondary, mobile dock Allocation/Tasks/More), then update docs/GitHub (#138) and commit.
+T3: add `assigned-view.tsx` (+ Manage handoff list) to `tasks-workspace.tsx` (tabs `assigned`, `manage` for manager+), wire Today "Team tasks" card via `onGoToAssigned`, e2e: manager completes on behalf (assignee unchanged), reassign, cancel, history visible/hidden, carry-forward. Then update docs/GitHub #139 and commit.
 
 ## DO NOT
 

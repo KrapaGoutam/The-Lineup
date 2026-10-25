@@ -9,11 +9,12 @@ Living document; updated at each phase checkpoint. Plan: `PLAN.md`. Criteria: `A
 
 ## 2. Phase log
 
-| Phase                        | State        | Commit      | Notes                                                                                           |
-| ---------------------------- | ------------ | ----------- | ----------------------------------------------------------------------------------------------- |
-| Tracking + docs scaffold     | done         | —           | Milestone "Tasks V1" (#6), parent #136, T1–T8 #137–#144 linked as sub-issues, all in Project #4 |
-| T1 Domain / DB / permissions | done (local) | see git log | pgTAP 26 files / 466 assertions pass; independent schema/RLS review applied                     |
-| T2 … T8                      | not started  |             |                                                                                                 |
+| Phase                            | State        | Commit      | Notes                                                                                                                                                               |
+| -------------------------------- | ------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tracking + docs scaffold         | done         | —           | Milestone "Tasks V1" (#6), parent #136, T1–T8 #137–#144 linked as sub-issues, all in Project #4                                                                     |
+| T1 Domain / DB / permissions     | done (local) | see git log | pgTAP 26 files / 466 assertions pass; independent schema/RLS review applied                                                                                         |
+| T2 Navigation + Today + My Tasks | done         | see git log | Vitest 453+ pass; e2e tasks.spec 12/12 (3 viewports); dashboard/tips e2e 78/78; manager dialogs (create/edit/reassign/cancel/history) shipped here and reused by T3 |
+| T3 … T8                          | not started  |             |                                                                                                                                                                     |
 
 ## 3. Final schema
 

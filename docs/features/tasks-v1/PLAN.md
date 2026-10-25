@@ -28,7 +28,7 @@ Authorization uses **active membership rows only** (`private.tasks_is_manager` /
 
 ## 4. Task lifecycle
 
-`OPEN → IN_PROGRESS ↔ BLOCKED → COMPLETED`, and `CANCELLED` from any non-terminal state. A completed task can be _reopened_ (un-checked) by an eligible actor and returns to `OPEN`. `OVERDUE` is **derived, never stored**: `due_at < now()` and status ∈ {open, in_progress, blocked}. `due_at` is computed by a trigger in the location's time zone: `due_date + due_time`; a date-only or window-only task is due at the _end_ of its due date (next local midnight); no due date → never overdue.
+`OPEN → IN_PROGRESS ↔ BLOCKED → COMPLETED`, and `CANCELLED` from any non-terminal state. A completed task can be _reopened_ (un-checked) by an eligible actor and returns to `OPEN`. `OVERDUE` is **derived, never stored**: `due_at < now()` and status ∈ {open, in*progress, blocked}. `due_at` is computed by a trigger in the location's time zone: `due_date + due_time`; a date-only or window-only task is due at the \_end* of its due date (next local midnight); no due date → never overdue.
 
 ## 5. Assignment semantics
 
