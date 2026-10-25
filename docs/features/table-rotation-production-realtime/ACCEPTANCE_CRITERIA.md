@@ -10,5 +10,5 @@
 - [x] `next dev` still 18/18.
 - [x] Reconnect/rejoin convergence preserved (refetch on every `SUBSCRIBED`; S28 offline→online; unit test).
 - [x] No token/PIN logging; temporary instrumentation removed before commit.
-- [ ] CI green on the exact PR head (application, browser-smoke, Database, Vercel).
-- [ ] Merged by merge commit into `development`; `main` untouched; #134 closed with evidence.
+- [x] CI green on the exact PR head `bba051c` (application, browser-smoke, Vercel; the Database workflow was not triggered — no database paths changed).
+- [x] Merged by merge commit `50fbd02` (PR #147) into `development`; `main` untouched; #134 closed with evidence.
