@@ -12,6 +12,9 @@
 - [x] **T2 Navigation + Today + My Tasks** — Tasks primary tab (Tips moved secondary, mobile dock Allocation/Tasks/More), `src/features/tasks/{domain,data,actions,hooks,components}`, demo engine, create/edit/reassign/cancel/detail dialogs, e2e `tests/e2e/tasks.spec.ts`
 - [x] **T3 Assigned** — `assigned-view.tsx`, `handoff-panel.tsx`, Manage tab (manager+); e2e manager flows
 - [x] **T4 Opening + T5 Closing** — migration `20261025100000_tasks_v1_checklists.sql`, pgTAP 0027 (40 assertions), `checklist-engine.ts`, `checklist-view.tsx`, `templates-panel.tsx`, `template-dialog.tsx`, Today cards, e2e
+- [x] **T6 Recurrence** — migration `20261025110000_tasks_v1_recurrence.sql`, pgTAP 0028 (31), `recurrence.ts`, engine, series form/panel, e2e
+- [x] **T7 Notifications** — migration `20261025120000_tasks_v1_notifications.sql`, pgTAP 0029 (14), inbox + tab badge, e2e
+- [ ] **T8 Validation / DEV real-mode / full gate / PR** — IN PROGRESS
 
 ## Architecture decisions (details in PLAN.md)
 
