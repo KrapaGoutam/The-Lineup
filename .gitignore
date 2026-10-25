@@ -50,3 +50,7 @@ next-env.d.ts
 
 # bootstrap-owner.mjs output -- a real credential, never committed
 .bootstrap-owner-passcode.local.txt
+
+# local DEV validation evidence and editor workspace -- never committed (public repo)
+/docs/testing/
+*.code-workspace
