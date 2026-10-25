@@ -13,12 +13,14 @@ import {
   type TaskView,
 } from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
+import { AssignedView } from "./assigned-view";
+import { HandoffPanel } from "./handoff-panel";
 import { MyTasksView } from "./my-tasks-view";
 import { TaskDetailDialog } from "./task-detail-dialog";
 import { TaskFormDialog } from "./task-form-dialog";
 import { TodayView } from "./today-view";
 
-export type TasksTab = "today" | "mine";
+export type TasksTab = "today" | "mine" | "assigned" | "manage";
 
 type Props = {
   controller: TasksController;
@@ -27,6 +29,8 @@ type Props = {
 const TAB_LABELS: Record<TasksTab, string> = {
   today: "Today",
   mine: "My Tasks",
+  assigned: "Assigned",
+  manage: "Manage",
 };
 
 /**
@@ -74,7 +78,9 @@ export function TasksWorkspace({ controller }: Props) {
     [snapshot, openTaskId],
   );
 
-  const tabs: TasksTab[] = ["today", "mine"];
+  const tabs: TasksTab[] = manager
+    ? ["today", "mine", "assigned", "manage"]
+    : ["today", "mine"];
 
   return (
     <section aria-label="Tasks" className="space-y-5">
@@ -176,7 +182,26 @@ export function TasksWorkspace({ controller }: Props) {
               onToggle={toggle}
               onOpen={(task) => setOpenTaskId(task.id)}
               onGoToMyTasks={() => setTab("mine")}
+              onGoToAssigned={manager ? () => setTab("assigned") : undefined}
             />
+          ) : null}
+          {tab === "assigned" && manager ? (
+            <AssignedView
+              controller={controller}
+              categoryName={categoryName}
+              onToggle={toggle}
+              onOpen={(task) => setOpenTaskId(task.id)}
+            />
+          ) : null}
+          {tab === "manage" && manager ? (
+            <div className="space-y-5">
+              <HandoffPanel
+                controller={controller}
+                categoryName={categoryName}
+                onOpen={(task) => setOpenTaskId(task.id)}
+                execute={execute}
+              />
+            </div>
           ) : null}
           {tab === "mine" ? (
             <MyTasksView

@@ -10,7 +10,7 @@
 - [x] Docs scaffold (PLAN / AC / TEST_MATRIX / REPORT)
 - [x] **T1 Domain / DB / permissions** — migration `20261025090000_tasks_v1_foundation.sql`, pgTAP `0026_tasks_v1_foundation.test.sql` (79 assertions), regenerated `src/types/database.generated.ts`. Independent schema/RLS review done; fixes applied (see report).
 - [x] **T2 Navigation + Today + My Tasks** — Tasks primary tab (Tips moved secondary, mobile dock Allocation/Tasks/More), `src/features/tasks/{domain,data,actions,hooks,components}`, demo engine, create/edit/reassign/cancel/detail dialogs, e2e `tests/e2e/tasks.spec.ts`
-- [ ] T3 Assigned (**NEXT**: Assigned view with filters, per-person progress, handoff list; dialogs already exist) · [ ] T4 Opening · [ ] T5 Closing · [ ] T6 Recurrence · [ ] T7 Notifications · [ ] T8 Validation / PR
+- [x] **T3 Assigned** — `assigned-view.tsx`, `handoff-panel.tsx`, Manage tab (manager+); e2e manager flows
 
 ## Architecture decisions (details in PLAN.md)
 
@@ -49,7 +49,7 @@ PR: none yet · PR target: `development` · development merged: NO · main merge
 
 ## Exact next step
 
-T3: add `assigned-view.tsx` (+ Manage handoff list) to `tasks-workspace.tsx` (tabs `assigned`, `manage` for manager+), wire Today "Team tasks" card via `onGoToAssigned`, e2e: manager completes on behalf (assignee unchanged), reassign, cancel, history visible/hidden, carry-forward. Then update docs/GitHub #139 and commit.
+T4: new migration `20261025100000_tasks_v1_checklists.sql` (template save RPCs, `checklist_generate_daily`, checklist progress/ history reads, notify checklist*available) + pgTAP `0027*\*`; then Opening UI (templates CRUD in Manage, Opening tab with Today/Previous days), demo engine support, e2e. T5 reuses the same engine for Closing.
 
 ## DO NOT
 

@@ -150,3 +150,110 @@ test("a stale-looking list reconciles after navigating away and back (TASK-084)"
     page.getByRole("checkbox", { name: /Reopen: Refill ice bins/ }),
   ).toHaveAttribute("aria-checked", "true");
 });
+
+async function openAssigned(page: Page) {
+  await openTasks(page);
+  await page.getByRole("button", { name: "Assigned", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Assigned tasks" }),
+  ).toBeVisible();
+}
+
+test("staff never get the Assigned or Manage sections (TASK-002)", async ({
+  page,
+}) => {
+  await signIn(page, "1357");
+  await openTasks(page);
+  await expect(
+    page.getByRole("button", { name: "Assigned", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Manage", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("a manager completes on behalf and the assignee is preserved (TASK-006)", async ({
+  page,
+}) => {
+  await signIn(page, "2468"); // Maya Singh
+  await openAssigned(page);
+
+  await page
+    .getByRole("checkbox", { name: /Mark complete: Refill ice bins/ })
+    .click();
+  const done = page.getByRole("checkbox", {
+    name: /Reopen: Refill ice bins/,
+  });
+  await expect(done).toHaveAttribute("aria-checked", "true");
+
+  await page
+    .getByRole("button", { name: /Refill ice bins/ })
+    .last()
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Mia Chen").first()).toBeVisible(); // still assigned
+  await expect(dialog.getByText(/Maya Singh/).first()).toBeVisible(); // completed by
+  const history = dialog.getByRole("region", { name: "Task history" }); // TASK-061
+  await expect(history).toContainText("Completed on behalf of the assignee");
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  // The employee sees who actually completed it, but no timeline.
+  await signOut(page);
+  await signInOnCurrentPage(page, "1357");
+  await openTasks(page);
+  await page.getByRole("button", { name: "My Tasks", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Completed", exact: false })
+    .first()
+    .click();
+  await expect(page.getByText("Completed by Maya Singh")).toBeVisible();
+});
+
+test("a manager reassigns and cancels a task (TASK-008)", async ({ page }) => {
+  await signIn(page, "2468");
+  await openAssigned(page);
+
+  await page.getByRole("button", { name: /Clean patio heaters/ }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Reassign…" }).click();
+  await dialog.getByLabel("Person").selectOption({ label: "Ava Brooks" });
+  await dialog.getByRole("button", { name: "Save assignment" }).click();
+  await expect(dialog.getByText("Ava Brooks").first()).toBeVisible();
+  await expect(
+    dialog.getByRole("region", { name: "Task history" }),
+  ).toContainText("Reassigned");
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: /Clean patio heaters/ }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Cancel task…" }).click();
+  await dialog
+    .getByRole("button", { name: "Cancel task", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Clean patio heaters/ }),
+  ).toHaveCount(0);
+});
+
+test("a manager filters by person and hands off unfinished work (TASK-014)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await openAssigned(page);
+
+  await page
+    .locator("label", { hasText: /^Person/ })
+    .locator("select")
+    .selectOption({ label: "Ava Brooks" });
+  await expect(page.getByText("Restock server station")).toBeVisible();
+  await expect(page.getByText("Refill ice bins")).toHaveCount(0);
+  await expect(page.getByLabel("Progress by person, or progress")).toHaveCount(
+    0,
+  );
+
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Unfinished work" });
+  await panel.getByLabel("Select Restock server station").check();
+  await panel.getByRole("button", { name: /Carry forward/ }).click();
+  await expect(panel.getByText("Restock server station")).toHaveCount(0);
+});
