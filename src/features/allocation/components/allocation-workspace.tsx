@@ -50,6 +50,10 @@ import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
+import {
+  crossEditToActivity,
+  type BoardActivityEntry,
+} from "@/features/allocation/domain/board-activity";
 import { DEMO_FLOOR_LAYOUT } from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
@@ -353,6 +357,10 @@ export function AllocationWorkspace({
   const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>(
     () => initialContext?.crossEditLog ?? [],
   );
+  // #109 U2: server-read board events, presented by board-activity.ts.
+  const [recentActivity, setRecentActivity] = useState<BoardActivityEntry[]>(
+    () => initialContext?.recentActivity ?? [],
+  );
   const [serviceSessionId, setServiceSessionId] = useState<number | null>(
     () => initialContext?.serviceSessionId ?? null,
   );
@@ -415,6 +423,7 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
     setEventCount(initialContext?.eventCount ?? 0);
     setCrossEditLog(initialContext?.crossEditLog ?? []);
+    setRecentActivity(initialContext?.recentActivity ?? []);
     setServiceSessionId(initialContext?.serviceSessionId ?? null);
     setCanUndo(initialContext?.canUndo ?? false);
     setCanRedo(initialContext?.canRedo ?? false);
@@ -449,6 +458,7 @@ export function AllocationWorkspace({
       setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
       setEventCount(initialContext?.eventCount ?? 0);
       setCrossEditLog(initialContext?.crossEditLog ?? []);
+      setRecentActivity(initialContext?.recentActivity ?? []);
       setServiceSessionId(initialContext?.serviceSessionId ?? null);
       setCanUndo(initialContext?.canUndo ?? false);
       setCanRedo(initialContext?.canRedo ?? false);
@@ -472,6 +482,7 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(result.data.board));
     setEventCount(result.data.eventCount);
     setCrossEditLog(result.data.crossEditLog);
+    setRecentActivity(result.data.recentActivity);
     setServiceSessionId(result.data.serviceSessionId);
     setCanUndo(result.data.canUndo);
     setCanRedo(result.data.canRedo);
@@ -1176,7 +1187,10 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               board={board}
               readModel={readModel}
-              crossEditLog={crossEditLog}
+              recentActivity={
+                demoMode ? crossEditToActivity(crossEditLog) : recentActivity
+              }
+              timeZone={initialContext?.timeZone}
               onOpenGrid={() => setActiveView("grid")}
             />
           ) : (
