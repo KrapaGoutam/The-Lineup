@@ -84,8 +84,10 @@ function FloorLegend({
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 14,
  * extended by Upgrade 1.1 and its multi-table follow-up. Tap available
  * table -> pick a server. Tap an occupied table -> Transfer, End Table,
- * or Unassign, acting on that one selected table only (never any other
- * table the same server might also hold).
+ * or Unassign, acting on that table's one logical assignment only (never
+ * any other assignment the same server might also hold). A combined
+ * assignment ("T1 + T2") is one assignment, so those actions apply to all
+ * of its tables, and the panel says so (#109 U3).
  *
  * A server can have zero, one, or many active tables at once -- nothing
  * in the domain model limits a column to one. Picking a server for an

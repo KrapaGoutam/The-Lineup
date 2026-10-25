@@ -137,12 +137,12 @@ function buildInitialHistory() {
 // permission gate for correcting history).
 //
 // Transfer and End Table are intentionally NOT exposed here (Grid and
-// Picker both render this component for their shared table) -- per the
-// final Upgrade 1.1 UI decision, Floor is the one surface for those two
-// actions (see floor-view.tsx). The underlying board_transfer/
-// board_end_table RPCs, the "transfer"/"end-table" BoardAction variants,
-// and this component's own onTransfer/onEndTable-shaped execute() calls
-// from Floor are all still fully live -- only this component's buttons
+// Picker both render this component for their shared table) -- they live
+// on the occupied-table surfaces: Floor's table panel and Servers' per-
+// table dialog (see floor-view.tsx, server-board-view.tsx), which act on
+// the whole logical assignment. The underlying board_transfer/
+// board_end_table RPCs and the "transfer"/"end-table" BoardAction
+// variants are all still fully live -- only this component's buttons
 // were removed, not the capability.
 function TableEntry({
   cellId,

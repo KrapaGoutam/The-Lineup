@@ -68,3 +68,39 @@ In progress. U1 done; U2-U5 pending.
 - Demo mode note: the demo seed's labels ("12", "8", "21 + 22") are not on the demo floor map
   (`DEMO_FLOOR_LAYOUT` uses T-labels), so demo Servers cards now truthfully show them as
   "not on the floor map". Real mode shows what each location actually registered.
+
+## U5 -- Stale comments / status text, DOC-001 (done)
+
+Scope kept to Table Allocation, #109, the current roadmap/status and current test counts.
+
+Updated (living / current-state text that was false):
+
+- `allocation-workspace.tsx` comment: said Floor is the one surface for Transfer / End. Servers'
+  per-table dialog also offers them (Picker/Server follow-up); now says so and notes whole-assignment.
+- `floor-view.tsx` / `server-board-view.tsx` headers: said the actions act on "that one selected
+  table"; they act on that table's logical assignment (whole combined assignment).
+- `table-map.tsx` header: said the repo has no Dialog primitive yet; Picker and Servers use the
+  shared `Dialog`.
+- `docs/STATUS.md` health gate (45 files / 359 tests / 153 e2e / 18 pgTAP files, 228 assertions,
+  dated Sept 11) -> measured current: 64 files / 559 tests, 345 demo e2e tests (3 projects),
+  29 pgTAP files / 553 planned assertions; plus a #109 section.
+- `docs/ROADMAP.md`: #109 moved from FOLLOW-UP to ACTIVE.
+- `docs/features/table-rotation-multi-view/README.md`: "Transfer and End are Floor-only" ->
+  Floor panel and Servers dialog; whole-assignment note.
+- GitHub #109 body: removed "PR #131, not yet merged"; reconciled status + the five-item checklist.
+
+Deliberately NOT edited (historical evidence of a past state, not a claim about now):
+`IMPLEMENTATION_LOG.md`, `PART1_*`, `VERSION_UPGRADE_PART1_AUDIT.md`, the Part 1
+`AGENT_HANDOFF.md`, `TEST_PLAN.md` baselines ("359/359", "228"), `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md`,
+and the e2e test titles that say "Floor-only" about Grid/Picker hiding the buttons (still true of
+Grid and Picker). `docs/CI_CD.md`'s PR #131 registry-limit exception is a recorded historical
+exception and stays.
+
+## Known gaps / follow-up candidates (not fixed here, by scope)
+
+- Picker: the cell body itself has no keyboard route to open the map (only pointer/touch); keyboard
+  users can still reach every inner control. A dedicated "Choose table" button per cell would fix
+  it; that is new UI, not the propagation boundary U1 covers.
+- Demo mode only: the demo seed labels ("12", "21 + 22") are not on `DEMO_FLOOR_LAYOUT`, so demo
+  Servers cards show them as "not on the floor map". The data is the demo's, the note is truthful.
+- No partial release of a combined assignment (explicitly out of scope; would need a data model).

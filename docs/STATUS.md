@@ -1,9 +1,15 @@
 # Project Status & Milestone Tracker
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** September 11, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (45/45 files, 359/359 tests passing) | `npm run test:e2e` (full suite, 153/153 passing across desktop/host-tablet/server-mobile) | `npm run db:test` (18/18 pgTAP files, 228 assertions)  
+**Last Updated:** October 25, 2026  
+**Health Gate:** `npm run check` (Passing) | `npm test` (64/64 files, 559/559 tests passing) | `npm run test:e2e` (demo suite, 345 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (29 pgTAP files, 553 assertions; executed by the CI `Database` job)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
+
+---
+
+## #109 Table Allocation UX consistency follow-up (in progress on `fix/table-allocation-ux-consistency`)
+
+Five residual UX items after Part 1, no migration, no schema change, DEV/PROD untouched: U1 Picker inner buttons no longer also open the map (FRONT-005); U2 Dashboard "Recent activity" renders all 18 supported board events through one presenter with a safe fallback (FRONT-008); U3 combined assignments ("T1 + T2") say that Transfer / End / Unassign act on the whole assignment, beside the action; U4 Servers (and the Floor legend) count authoritative held tables including ones not on the floor map, using the shared read model (FRONT-007 residual); U5 stale comments/status text refreshed (DOC-001). Behavior of the actions is unchanged. See `docs/features/table-allocation-ux-consistency/` and `tasks/current-task.md`.
 
 ---
 

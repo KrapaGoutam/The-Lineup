@@ -22,10 +22,10 @@ import { cn } from "@/lib/utils";
  * This uses a plain relative container with absolutely percentage-
  * positioned native <button> elements instead -- same data-driven,
  * fully responsive outcome, but with correct keyboard/focus/accessible-
- * name semantics for free, which raw SVG shapes would have to hand-roll
- * (this repo has no Dialog/Popover primitive yet either, so table detail
- * is surfaced by the caller via `selectedLabel`, not a floating panel
- * anchored to the SVG node).
+ * name semantics for free, which raw SVG shapes would have to hand-roll.
+ * Table detail is surfaced by the caller (Floor's side panel via
+ * `selectedLabel`; Picker and Servers open this map inside the shared
+ * `Dialog`), not a floating panel anchored to a map node.
  */
 // #109 U3: a combined assignment is announced on each of its tables. Appended
 // after the existing "assigned to <server>" text so the leading part of the

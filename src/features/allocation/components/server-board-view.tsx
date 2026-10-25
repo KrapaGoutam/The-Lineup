@@ -101,8 +101,11 @@ function combinedAssignments(summary: ServerSummary | undefined) {
  * Each already-assigned table badge is itself a button: tapping it opens
  * a small dialog scoped to *that one table* (Transfer / End table /
  * Unassign), mirroring Floor's occupied-table panel but acting only on
- * the tapped round -- a server holding T1/T3/T8 and tapping T3 never
- * touches T1 or T8.
+ * the tapped assignment -- a server holding T1/T3/T8 and tapping T3 never
+ * touches T1 or T8. A combined assignment ("T1 + T2") is one assignment,
+ * so tapping either table acts on both, and the dialog says so (#109 U3).
+ * Counts and pills come from the shared read model, so a held table that
+ * is not on the floor map still shows and is still actionable (#109 U4).
  */
 export function ServerBoardView({
   columns,
