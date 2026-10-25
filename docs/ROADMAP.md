@@ -56,18 +56,19 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 - Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
 - Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
 
-## Tasks V1 (READY TO MERGE — branch `feature/tasks-v1` → `development`)
+## Tasks V1 (DONE on `development`; `main` awaits approval)
 
-Tracking: parent #136, milestone "Tasks V1", T1–T8 = #137–#144, Project #4. Plan and evidence: `docs/features/tasks-v1/`.
+Tracking: parent #136 (closed), milestone "Tasks V1" (closed), T1–T8 = #137–#144 (closed), Project #4 Done. Merged via PR #145 (merge commit `4c393d3`). Plan and evidence: `docs/features/tasks-v1/`.
 
-| Stage              | State                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| ACTIVE             | Tasks V1 — T2 (T1 domain/DB/permissions done on branch)                         |
-| PARKED             | PR #135 DEV Preview / CI reliability — owner Preview smoke gate                 |
-| P1 RELEASE BLOCKER | #134 production-build Table Rotation Realtime (before any `development → main`) |
-| NEXT               | #109 Table Allocation UX consistency, or next approved feature                  |
-| PART 2             | Multi-organization / branches / per-location modules / internal Attendance      |
-| PART 3             | MCP / AI integration                                                            |
+| Stage           | State                                                                                                                                                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DONE            | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1                                                                                                                                                                             |
+| PARKED          | 🟡 PR #135 — owner Preview manual gate                                                                                                                                                                                |
+| RELEASE BLOCKER | 🔴 #134 — production-build Table Rotation Realtime (before any `development → main`)                                                                                                                                  |
+| FOLLOW-UP       | ⬜ #109 — Table Allocation UX consistency                                                                                                                                                                             |
+| PART 2          | ⬜ multi-org / multi-location / module configuration / internal attendance                                                                                                                                            |
+| PART 3          | ⬜ MCP / AI integration                                                                                                                                                                                               |
+| TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`) |
 
 ## Phase 5 — Pilot hardening
 

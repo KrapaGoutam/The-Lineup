@@ -55,3 +55,5 @@ Layers: **DB** = pgTAP (`supabase/tests/database/0026_tasks_*.test.sql`, local S
 | TASK-082 | Table Rotation + Tasks remain primary                                        | U, E2E  | AC-01        | PASS (E2E all viewports)                                                             |
 | TASK-083 | Mutation failure reverts optimistic state; server truth wins                 | U       | AC-21        | PASS (U: use-tasks-controller.test; server result replaces state, failure refetches) |
 | TASK-084 | Reload / refocus reconciles stale state (no Realtime)                        | E2E     | AC-21        | PASS (U focus refetch; hosted DEV UI reload/refetch; E2E re-mount)                   |
+
+All scenarios above are PASS as of the merge of PR #145 (`4c393d3`); hosted-DEV scenarios ran against `opmujepkemwcdxxorhfd` only.
