@@ -1,7 +1,7 @@
 # Tasks V1 — Current Task / Agent Handoff
 
 Branch: `feature/tasks-v1`
-HEAD: see `git log -1` (final T8 commit; PR open → `development`)
+HEAD: see `git log -1` · PR #145 `feature/tasks-v1` → `development` (OPEN, not merged)
 Base development SHA: `ead4e8b` (merge of PR #132)
 
 Parent GitHub issue: #136 · Milestone: "Tasks V1" (#6) · Project #4: parent + T1–T8 (Module=Platform, Work Type=Feature, Priority=P1)
@@ -62,7 +62,7 @@ PR: `feature/tasks-v1 → development` · development merged: NO (until CI green
 
 ## Exact next command / task
 
-1. `gh pr view --json statusCheckRollup` — wait for `application`, `browser-smoke`, `Database`, Vercel. If `Database` fails at `supabase start` with `toomanyrequests`, that is the known registry limit (PR #135 fix is parked): record it accurately, do not weaken the job, and report to the owner.
+1. CI on PR #145 (2026-10-25): `application` ✔ · `browser-smoke` ✔ · Vercel ✔ · `Database` ✘ ×2 (runs 40172808040) at `supabase start` with `toomanyrequests` — external registry limit, db:reset/db:test never ran in CI. **Waiting for the owner**: re-run later / add registry auth, or explicitly accept the exception (as for PR #131). Re-check with `gh pr checks 145`. If `Database` fails at `supabase start` with `toomanyrequests`, that is the known registry limit (PR #135 fix is parked): record it accurately, do not weaken the job, and report to the owner.
 2. If green: merge with a **merge commit** (`gh pr merge --merge`), verify `origin/development` contains Tasks V1 and `origin/main` does not.
 3. Post-merge: update #136/#144, Project #4, milestone, docs; close milestone only when everything in scope is closed; any doc commit goes on a `docs/tasks-v1-closeout` branch → PR to `development`.
 4. STOP. Do not merge `development → main`; #134 blocks production promotion.
