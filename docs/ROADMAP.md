@@ -56,19 +56,19 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 - Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
 - Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
 
-## Tasks V1 (DONE on `development`; `main` awaits approval)
+## Tasks V1 + #134 (DONE on `development`; `main` awaits approval)
 
 Tracking: parent #136 (closed), milestone "Tasks V1" (closed), T1–T8 = #137–#144 (closed), Project #4 Done. Merged via PR #145 (merge commit `4c393d3`). Plan and evidence: `docs/features/tasks-v1/`.
 
-| Stage              | State                                                                                                                                                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DONE               | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1                                                                                                                                                                                                                             |
-| PARKED             | 🟡 PR #135 — owner Preview manual gate                                                                                                                                                                                                                                |
-| ACTIVE (fix on PR) | 🔴 #134 — production-build Table Rotation Realtime: root cause = unstable `createClient` effect dependency in the production bundle; fix + evidence in `docs/features/table-rotation-production-realtime/`. Blocks `development → main` until merged to `development` |
-| FOLLOW-UP          | ⬜ #109 — Table Allocation UX consistency                                                                                                                                                                                                                             |
-| PART 2             | ⬜ multi-org / multi-location / module configuration / internal attendance                                                                                                                                                                                            |
-| PART 3             | ⬜ MCP / AI integration                                                                                                                                                                                                                                               |
-| TASKS DEFERRALS    | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`)                                                 |
+| Stage           | State                                                                                                                                                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DONE            | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1 · ✅ #134 production-build Realtime fix (PR #147, merge commit `50fbd02`)                                                                                                   |
+| PARKED          | 🟡 PR #135 — owner Preview manual gate                                                                                                                                                                                |
+| ACTIVE          | — (none; next gate is the owner's `development → main` decision)                                                                                                                                                      |
+| FOLLOW-UP       | ⬜ #109 — Table Allocation UX consistency                                                                                                                                                                             |
+| PART 2          | ⬜ multi-org / multi-location / module configuration / internal attendance                                                                                                                                            |
+| PART 3          | ⬜ MCP / AI integration                                                                                                                                                                                               |
+| TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`) |
 
 ## Phase 5 — Pilot hardening
 

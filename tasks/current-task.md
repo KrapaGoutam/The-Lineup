@@ -10,7 +10,7 @@ Phase:
 - R2 ✅ root cause — see below and `docs/features/table-rotation-production-realtime/PLAN.md`
 - R3 ✅ fix — `src/features/allocation/hooks/use-board-realtime.ts` (+ tests)
 - R4 ✅ production-build validation — `next start` real UI 18/18, `next dev` 18/18
-- R5 🟡 PR → `development`, CI, merge commit, closeout (see the PR for live state)
+- R5 ✅ PR #147 → `development`, CI green on `bba051c`, merge commit `50fbd02`, #134 closed, Project #4 Done
 
 Reproduction:
 
@@ -37,16 +37,16 @@ PROD Supabase: `ftadewtkjlaotfdvtjcv`
 PROD ref found: NO
 
 GitHub issue #134: milestone "Platform / CI Reliability" (#4), labels type:bug, module:table-allocation, priority:p1; Project #4 status set to In Progress when work started
-Project #4 / Milestone: update to Done / leave milestone open unless #134 was the last item
-PR: see GitHub (`fix/table-rotation-production-realtime` → `development`)
+Project #4: Done · Milestone "Platform / CI Reliability" stays open (other issues remain)
+PR: #147 (`fix/table-rotation-production-realtime` → `development`), merged with a merge commit
 
 Docs updated: feature docs (PLAN, ACCEPTANCE_CRITERIA, TEST_MATRIX, IMPLEMENTATION_REPORT), ROADMAP, STATUS, this file.
 
-development merged: see PR · main merged: NO · DEV touched: YES (hosted real-mode suites) · PROD touched: NO
+development merged: YES (`50fbd02`) · main merged: NO · DEV touched: YES (hosted real-mode suites) · PROD touched: NO
 
 Running processes: none (dev/start servers on :3000 stopped).
-Exact next command: `gh pr checks <PR> --repo KrapaGoutam/The-Lineup`
-Exact next task: wait for CI on the exact PR head, merge with a merge commit, close #134 with evidence, move Project #4 item to Done, then post-merge docs via `docs/table-rotation-realtime-closeout` if wording changes.
+Exact next command: none — #134 is complete.
+Exact next task: owner decides `development → main` promotion (and PROD migration deploy) and the PR #135 Preview gate; optional next engineering item is #109 (not started).
 Read first: `docs/features/table-rotation-production-realtime/PLAN.md`, `src/features/allocation/hooks/use-board-realtime.ts`.
 DO NOT: merge to `main`, touch PROD or PR #135, start #109, add Realtime to Tasks, use `git add -A`, stage `docs/testing/` or `*.code-workspace`, raise Playwright timeouts, add `NODE_ENV` branches.
 

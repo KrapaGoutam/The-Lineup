@@ -1,6 +1,6 @@
 # #134 — Implementation report
 
-Status: fix implemented and validated locally; PR / CI / merge state is recorded in the PR and `tasks/current-task.md`.
+Status: **merged into `development`** via PR #147 (merge commit `50fbd02`); #134 closed; Project #4 Done. `main` and PROD untouched.
 
 ## Summary
 

@@ -32,7 +32,7 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] Optional manager verification (`pending_verification`) for cash count / temperature log / security closing.
 - [ ] Per-assignee completion for shared tasks.
 - [ ] Push / email / SMS notification channels.
-- [ ] Realtime as an invalidation-only signal (after #134).
+- [ ] Realtime as an invalidation-only signal (re-evaluate; #134 is fixed and merged to `development`).
 - [ ] Hosted real-mode Tasks suites (`tests/real/tasks-v1.db.real.test.ts`, `tests/real/ui/tasks.real.spec.ts`) in a protected CI job with DEV secrets.
 
 ## Carried over (unchanged by Tasks V1)
