@@ -16,6 +16,14 @@ Completed: audit, plan, issue #133, Vercel Preview/Development env, wrapper `scr
 In progress: none.
 Not started: owner smoke on the deployed Preview URL; merge; post-merge doc status.
 
+## Current State & Next Step
+
+- Local-evidence guard added (`.gitignore` docs/testing/ + \*.code-workspace; `scripts/check-tracked-local-paths.mjs` runs first in CI `application`). CI on `3ec9590`: application, browser-smoke, migrations-and-policies, Vercel all PASS.
+- OWNER-VERIFIED MANUAL GATE REQUIRED: Preview smoke (login, Table Allocation, Schedule, Team; DEV-backed, not demo) behind Vercel Authentication. Not performed by the agent; no bypass created. Do not invent a PASS.
+- Exact next action: once the owner confirms the smoke, confirm checks are green on the PR #135 head, `gh pr merge 135 --merge` (merge commit, not squash), verify development has it and main does not, close out #133 / Project #4 / docs via branch `docs/dev-preview-ci-closeout`, THEN start #134 on `fix/table-rotation-production-realtime` from fresh development.
+- Work Package B (#134) NOT started. DO NOT start Tasks V1; DO NOT merge to main; DO NOT touch PROD.
+- Incident: `docs/testing/` was briefly public (commit 2eaf6d0, history rewritten). Now ignored and CI-guarded. User reports no PINs/keys/passwords; no credential rotation indicated.
+
 Files changed: `.github/workflows/{ci,database}.yml`, `package.json`, `vitest.config.ts`, `scripts/ci/supabase-run.{mjs,test.ts}`, `scripts/check-nonprod-env.{mjs,test.ts}`, `docs/{CI_CD,DEPLOYMENT,STATUS,ROADMAP}.md`, `docs/features/dev-preview-ci-reliability/*`, `tasks/current-task.md`.
 Uncommitted files: none tracked. Untracked and must stay uncommitted: `docs/testing/` (DEV validation report + evidence), `The Lineup.code-workspace`.
 Commits created: plan docs; Vercel mapping docs; Database CI hardening; env guard + docs; wrapper extended to reset/test; handoff.
