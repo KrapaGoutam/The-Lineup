@@ -1,6 +1,6 @@
 # Implementation report -- #109 UX Consistency
 
-In progress. U1 done; U2-U5 pending.
+U1-U5 complete on `fix/table-allocation-ux-consistency`. No migration, no schema change. PROD and `main` untouched; DEV used read/write only by the hosted real-mode UI suite (synthetic data).
 
 ## U2 -- Recent activity from the complete event model (done)
 

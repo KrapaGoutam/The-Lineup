@@ -14,6 +14,6 @@ Status: [ ] open, [x] met (evidence in TEST_MATRIX.md).
 - [x] UX109-10 reconciliation state visible where useful
 - [x] UX109-11 stale current comments removed
 - [x] UX109-12 historical docs not falsified
-- [ ] UX109-13 responsive behavior passes
-- [ ] UX109-14 accessibility checks pass
-- [ ] UX109-15 #134 regression remains green
+- [x] UX109-13 responsive behavior passes
+- [x] UX109-14 accessibility checks pass
+- [x] UX109-15 #134 regression remains green
