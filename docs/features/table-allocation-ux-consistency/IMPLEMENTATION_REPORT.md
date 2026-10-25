@@ -21,3 +21,26 @@ In progress. U1 done; U2-U5 pending.
   actor, copy, an "(undone)" text marker and the location-time-zone wall-clock time. Demo mode (no
   `board_events`) feeds the same shape from the cross-edit log.
 - The Grid's separate "Cross-column edits" attribution card is intentionally unchanged.
+
+## U3 -- Whole-assignment explanatory UX (done)
+
+- Behavior is unchanged. A combined assignment ("T1 + T2") stays ONE logical assignment; Transfer,
+  End and Unassign still act on all of it. No partial-release model, no new data, no extra clicks.
+- Data: `resolveFloorTables` (the one derivation behind Floor / Picker / Servers) now gives each
+  occupant `assignmentTables` -- every physical table in the same assignment -- so no view parses
+  labels on its own.
+- Copy lives in one module, `domain/assignment-scope.ts` (`getAssignmentScope`), for floor staff:
+  "T1 + T2 are one assignment." / "Transfer moves the entire assignment (T1 + T2)." /
+  "Ending this assignment releases both tables." / "Unassign removes the entire assignment
+  (T1 + T2)." (`all N tables` for 3+). No database terms. A single table gets `null` for every
+  note, so ordinary actions keep their concise UI.
+- Where it shows (next to the action being chosen, not a banner):
+  - Floor occupied-table panel: "Combined" badge + summary, a one-line note under each of
+    Transfer / End table / Unassign (tied with `aria-describedby`; button names unchanged), and the
+    transfer step reads "Give T1 + T2 to:".
+  - Servers table dialog: same, plus each server card lists "T1 + T2 · one assignment".
+  - Picker / Servers / Floor map tiles: accessible name gains ", combined with T2" after the
+    unchanged "assigned to <server>" text.
+  - Assign-decision dialog (Transfer an existing table / End existing table(s)): combined entries
+    note that they are replaced / released as a whole.
+- No new confirmation was added to any action.

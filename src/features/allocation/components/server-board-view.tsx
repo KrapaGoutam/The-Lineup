@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowRightLeft,
   ChevronDown,
@@ -17,8 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  ActionNote,
+  AssignmentSummary,
+} from "@/features/allocation/components/assignment-scope-note";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
+import {
+  getAssignmentScope,
+  otherTablesInAssignment,
+} from "@/features/allocation/domain/assignment-scope";
 import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
 import {
   type ColumnStatus,
@@ -50,6 +58,31 @@ import type { TeamMember } from "@/lib/demo-data";
  * the tapped round -- a server holding T1/T3/T8 and tapping T3 never
  * touches T1 or T8.
  */
+/** ", combined with T2" for a table that shares an assignment, else "". */
+function combinedClause(table: ResolvedFloorTable): string {
+  if (!table.occupiedBy) return "";
+  const others = otherTablesInAssignment(
+    table.occupiedBy.assignmentTables,
+    table.label,
+  );
+  return others.length ? `, combined with ${others.join(" + ")}` : "";
+}
+
+/** One scope per combined assignment among these tables (a combined
+ *  assignment shows once, not once per physical table). */
+function combinedAssignments(tables: ResolvedFloorTable[]) {
+  const seen = new Set<string>();
+  const scopes: ReturnType<typeof getAssignmentScope>[] = [];
+  for (const table of tables) {
+    const roundId = table.occupiedBy?.roundId;
+    if (!roundId || seen.has(roundId)) continue;
+    seen.add(roundId);
+    const scope = getAssignmentScope(table.occupiedBy!.assignmentTables);
+    if (scope.combined) scopes.push(scope);
+  }
+  return scopes;
+}
+
 export function ServerBoardView({
   columns,
   team,
@@ -105,8 +138,15 @@ export function ServerBoardView({
     roundId: string;
     columnId: string;
     tableLabel: string;
+    // #109 U3: every physical table in this table's logical assignment.
+    assignmentTables: string[];
   } | null>(null);
   const [transferringActiveTable, setTransferringActiveTable] = useState(false);
+
+  const noteId = useId();
+  const actionScope = getAssignmentScope(
+    activeTableAction?.assignmentTables ?? [],
+  );
 
   const decision = useTableAssignmentDecision({
     board,
@@ -171,12 +211,13 @@ export function ServerBoardView({
                       key={table.label}
                       type="button"
                       disabled={disabled}
-                      aria-label={`Table ${table.label}, assigned to ${column.name} -- open table actions`}
+                      aria-label={`Table ${table.label}, assigned to ${column.name}${combinedClause(table)} -- open table actions`}
                       onClick={() =>
                         setActiveTableAction({
                           roundId: table.occupiedBy!.roundId,
                           columnId: column.id,
                           tableLabel: table.label,
+                          assignmentTables: table.occupiedBy!.assignmentTables,
                         })
                       }
                       className="rounded-full p-0.5 disabled:pointer-events-none disabled:opacity-50"
@@ -190,6 +231,17 @@ export function ServerBoardView({
                   No tables assigned.
                 </p>
               )}
+              {combinedAssignments(assignedTables).map((scope) => (
+                <p
+                  key={scope.label}
+                  className="text-muted-foreground text-[11px]"
+                >
+                  <span className="text-foreground font-medium">
+                    {scope.label}
+                  </span>{" "}
+                  · one assignment
+                </p>
+              ))}
 
               <div className="flex flex-wrap gap-1.5">
                 <Button
@@ -297,18 +349,29 @@ export function ServerBoardView({
       >
         {activeTableAction && !transferringActiveTable ? (
           <div className="flex flex-col gap-1.5">
+            <AssignmentSummary id={`${noteId}-summary`} scope={actionScope} />
             <Button
               variant="secondary"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.transferNote ? `${noteId}-transfer` : undefined
+              }
               onClick={() => setTransferringActiveTable(true)}
             >
               <ArrowRightLeft aria-hidden="true" /> Transfer
             </Button>
+            <ActionNote
+              id={`${noteId}-transfer`}
+              text={actionScope.transferNote}
+            />
             <Button
               variant="outline"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.endNote ? `${noteId}-end` : undefined
+              }
               onClick={() => {
                 onEndTable({
                   roundId: activeTableAction.roundId,
@@ -319,10 +382,14 @@ export function ServerBoardView({
             >
               <LogOut aria-hidden="true" /> End table
             </Button>
+            <ActionNote id={`${noteId}-end`} text={actionScope.endNote} />
             <Button
               variant="outline"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.unassignNote ? `${noteId}-unassign` : undefined
+              }
               onClick={() => {
                 onUnassign({
                   columnId: activeTableAction.columnId,
@@ -333,13 +400,26 @@ export function ServerBoardView({
             >
               Unassign
             </Button>
+            <ActionNote
+              id={`${noteId}-unassign`}
+              text={actionScope.unassignNote}
+            />
             <Button variant="ghost" size="sm" onClick={closeTableAction}>
               Cancel
             </Button>
           </div>
         ) : activeTableAction ? (
           <div className="flex flex-col gap-1.5">
-            <p className="text-muted-foreground text-xs">Give this table to:</p>
+            <p className="text-muted-foreground text-xs">
+              {actionScope.combined
+                ? `Give ${actionScope.label} to:`
+                : "Give this table to:"}
+            </p>
+            {actionScope.transferNote ? (
+              <p className="text-muted-foreground -mt-0.5 text-[11px]">
+                {actionScope.transferNote}
+              </p>
+            ) : null}
             {assignableColumns
               .filter((column) => column.id !== activeTableAction.columnId)
               .map((column) => (
