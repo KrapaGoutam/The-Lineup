@@ -1,3 +1,4 @@
+import { weekdayOf } from "./recurrence";
 import {
   computeDueAt,
   pushEvent,
@@ -15,11 +16,7 @@ import type {
   TaskView,
 } from "./task-types";
 
-/** 0 = Sunday .. 6 = Saturday for a YYYY-MM-DD calendar date. */
-export function weekdayOf(date: string): number {
-  const [y, m, d] = date.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-}
+export { weekdayOf };
 
 export function templateAppliesOn(
   template: Pick<ChecklistTemplateView, "daysOfWeek" | "active">,

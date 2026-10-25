@@ -33,12 +33,12 @@ Layers: **DB** = pgTAP (`supabase/tests/database/0026_tasks_*.test.sql`, local S
 | TASK-033 | Closing manager override                                                     | DB      | AC-12        | PASS (DB, U, E2E)                                             |
 | TASK-034 | Closing next-day isolation                                                   | DB, E2E | AC-10        | PASS (DB, U — same engine/tests as TASK-025)                  |
 | TASK-035 | Staff cannot create/edit templates                                           | DB      | AC-05        | PASS (DB, E2E)                                                |
-| TASK-040 | Recurring daily occurrences                                                  | DB, U   | AC-14        | TODO                                                          |
-| TASK-041 | Recurring weekly                                                             | DB, U   | AC-14        | TODO                                                          |
-| TASK-042 | Selected weekdays / weekdays / monthly                                       | DB, U   | AC-14        | TODO                                                          |
-| TASK-043 | Occurrences keep independent history; generation idempotent                  | DB      | AC-14        | TODO                                                          |
-| TASK-044 | End by date / after N occurrences                                            | U       | AC-14        | TODO                                                          |
-| TASK-045 | Edit this-occurrence vs this-and-future never alters completed ones          | DB      | AC-14        | TODO                                                          |
+| TASK-040 | Recurring daily occurrences                                                  | DB, U   | AC-14        | PASS (DB, U, E2E)                                             |
+| TASK-041 | Recurring weekly                                                             | DB, U   | AC-14        | PASS (DB, U)                                                  |
+| TASK-042 | Selected weekdays / weekdays / monthly                                       | DB, U   | AC-14        | PASS (DB, U)                                                  |
+| TASK-043 | Occurrences keep independent history; generation idempotent                  | DB      | AC-14        | PASS (DB, U, E2E)                                             |
+| TASK-044 | End by date / after N occurrences                                            | U       | AC-14        | PASS (DB, U)                                                  |
+| TASK-045 | Edit this-occurrence vs this-and-future never alters completed ones          | DB      | AC-14        | PASS (DB, U)                                                  |
 | TASK-050 | Assignment notification                                                      | DB      | AC-15        | PASS                                                          |
 | TASK-051 | Reassignment notification                                                    | DB      | AC-15        | PASS                                                          |
 | TASK-052 | Due-soon / overdue notifications (deduped)                                   | DB      | AC-15        | TODO                                                          |

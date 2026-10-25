@@ -11,6 +11,7 @@ import { generateDailyChecklists } from "@/features/tasks/domain/checklist-engin
 import {
   applyCommand,
   buildSnapshot,
+  generateRecurringTasks,
   type TasksState,
 } from "@/features/tasks/domain/task-engine";
 import type {
@@ -58,7 +59,10 @@ function commandTaskIds(command: TaskCommand): string[] {
   if (
     command.type === "create" ||
     command.type === "templateSave" ||
-    command.type === "templateSetActive"
+    command.type === "templateSetActive" ||
+    command.type === "seriesCreate" ||
+    command.type === "seriesUpdate" ||
+    command.type === "seriesStop"
   ) {
     return [];
   }
@@ -139,12 +143,20 @@ export function useTasksController({
   useEffect(() => {
     if (!demo) return;
     const today = zonedWallTimeFromInstant(now, demo.timeZone).date;
-    const next = generateDailyChecklists(
+    const ctx = {
+      actor: viewer,
+      team: demo.team,
+      timeZone: demo.timeZone,
+      now,
+    };
+    const withChecklists = generateDailyChecklists(
       demo.state,
-      { actor: viewer, team: demo.team, timeZone: demo.timeZone, now },
+      ctx,
       today,
       today,
     );
+    // Same lazy, idempotent top-up as task_recurrence_generate.
+    const next = generateRecurringTasks(withChecklists, ctx, today);
     if (next !== demo.state) demo.setState(next);
   }, [demo, viewer, now]);
 

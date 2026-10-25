@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { formatBusinessDateTime } from "@/lib/date-time";
 
 import type { TaskCommand } from "../domain/task-commands";
+import { recurrenceSummary } from "../domain/recurrence";
 import {
   PRIORITY_LABELS,
   STATUS_LABELS,
@@ -21,6 +22,7 @@ import {
 import {
   isTasksManager,
   type AssignmentMode,
+  type RecurrenceRuleView,
   type TaskEventView,
   type TaskTeamMember,
   type TaskView,
@@ -40,7 +42,9 @@ type Props = {
   events: readonly TaskEventView[];
   team: readonly TaskTeamMember[];
   onClose: () => void;
+  series?: RecurrenceRuleView;
   onEdit: (task: TaskView) => void;
+  onEditSeries?: (series: RecurrenceRuleView) => void;
   run: (command: TaskCommand) => Promise<TaskRunResult>;
 };
 
@@ -126,7 +130,9 @@ export function TaskDetailDialog({
   events,
   team,
   onClose,
+  series,
   onEdit,
+  onEditSeries,
   run,
 }: Props) {
   const manager = isTasksManager(viewer.designation);
@@ -203,6 +209,12 @@ export function TaskDetailDialog({
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         <dt className="text-muted-foreground">Due</dt>
         <dd>{dueText(task, today)}</dd>
+        {series ? (
+          <>
+            <dt className="text-muted-foreground">Repeats</dt>
+            <dd>{recurrenceSummary(series)}</dd>
+          </>
+        ) : null}
         <dt className="text-muted-foreground">Assigned to</dt>
         <dd>{assignedTo}</dd>
         {task.status === "blocked" && task.blockedReason ? (
@@ -366,8 +378,13 @@ export function TaskDetailDialog({
       {manager && active && panel === null ? (
         <div className="border-border flex flex-wrap gap-2 border-t pt-3">
           <Button variant="outline" onClick={() => onEdit(task)}>
-            Edit
+            {series ? "Edit this occurrence" : "Edit"}
           </Button>
+          {series && onEditSeries ? (
+            <Button variant="outline" onClick={() => onEditSeries(series)}>
+              Edit series…
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => setPanel("reassign")}>
             Reassign…
           </Button>

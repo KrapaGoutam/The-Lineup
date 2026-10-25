@@ -125,6 +125,45 @@ export type TaskTeamMember = {
   designation: Designation;
 };
 
+export const RECURRENCE_FREQUENCIES = [
+  "daily",
+  "weekdays",
+  "weekly",
+  "selected_weekdays",
+  "monthly",
+] as const;
+export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
+
+export const RECURRENCE_END_TYPES = [
+  "never",
+  "on_date",
+  "after_count",
+] as const;
+export type RecurrenceEndType = (typeof RECURRENCE_END_TYPES)[number];
+
+/** A recurring series definition (manager-only). Occurrences are normal tasks. */
+export type RecurrenceRuleView = {
+  id: string;
+  title: string;
+  instructions: string | null;
+  category: string;
+  priority: TaskPriority;
+  assignmentMode: AssignmentMode;
+  assigneeIds: string[];
+  dueTime: string | null;
+  dueWindow: DueWindow | null;
+  frequency: RecurrenceFrequency;
+  /** 0 = Sunday .. 6 = Saturday (weekly / selected weekdays). */
+  weekdays: number[] | null;
+  dayOfMonth: number | null;
+  startsOn: string;
+  endType: RecurrenceEndType;
+  endsOn: string | null;
+  maxOccurrences: number | null;
+  active: boolean;
+  createdBy: PersonRef | null;
+};
+
 export type ChecklistKind = "opening" | "closing";
 
 /** One day's Opening or Closing checklist; its items are ordinary tasks. */
@@ -172,6 +211,8 @@ export type TasksSnapshot = {
   tasks: TaskView[];
   /** Opening / Closing days, newest first (bounded history window). */
   checklists: ChecklistInstanceView[];
+  /** Recurring series definitions; empty for staff. */
+  series: RecurrenceRuleView[];
   /** Template definitions; empty for staff. */
   templates: ChecklistTemplateView[];
   /** Management audit timeline; always empty for staff. */

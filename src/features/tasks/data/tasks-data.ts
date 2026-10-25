@@ -21,7 +21,10 @@ import {
   mapTaskRow,
   mapTemplateRow,
   TASK_ROW_COLUMNS,
+  SERIES_ROW_COLUMNS,
   TEMPLATE_ROW_COLUMNS,
+  mapSeriesRow,
+  type SeriesRow,
   type TemplateRow,
   type TaskEventRow,
   type TaskRow,
@@ -66,6 +69,18 @@ export async function getTasksSnapshot(
     console.error(
       "getTasksSnapshot: checklist_generate_daily",
       generated.error,
+    );
+  }
+
+  // Keep the recurring-task horizon filled (idempotent, best-effort).
+  const recurring = await supabase.rpc("task_recurrence_generate", {
+    p_organization_id: organizationId,
+    p_location_id: location.id,
+  });
+  if (recurring.error) {
+    console.error(
+      "getTasksSnapshot: task_recurrence_generate",
+      recurring.error,
     );
   }
 
@@ -142,6 +157,20 @@ export async function getTasksSnapshot(
     templateRows = data ?? [];
   }
 
+  let seriesRows: SeriesRow[] = [];
+  if (manager) {
+    const { data, error } = await supabase
+      .from("task_recurrence_rules")
+      .select(SERIES_ROW_COLUMNS)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
+      .eq("active", true)
+      .order("created_at", { ascending: true })
+      .overrideTypes<SeriesRow[], { merge: false }>();
+    if (error) console.error("getTasksSnapshot: series", error);
+    seriesRows = data ?? [];
+  }
+
   let eventRows: TaskEventRow[] = [];
   if (manager && rows.length + itemRows.length > 0) {
     const { data, error } = await supabase
@@ -161,7 +190,12 @@ export async function getTasksSnapshot(
     eventRows = data ?? [];
   }
 
-  const profileIds = collectProfileIds([...rows, ...itemRows], eventRows);
+  const profileIds = [
+    ...new Set([
+      ...collectProfileIds([...rows, ...itemRows], eventRows),
+      ...seriesRows.map((row) => row.created_by),
+    ]),
+  ];
   const names = new Map<string, string>();
   if (profileIds.length > 0) {
     const { data } = await supabase
@@ -199,6 +233,7 @@ export async function getTasksSnapshot(
     generatedAt: now.toISOString(),
     tasks,
     checklists,
+    series: seriesRows.map((row) => mapSeriesRow(row, names)),
     templates: templateRows.map(mapTemplateRow),
     events,
     team: roster

@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { ASSIGNMENT_MODES, DUE_WINDOWS, TASK_PRIORITIES } from "./task-types";
+import {
+  ASSIGNMENT_MODES,
+  DUE_WINDOWS,
+  RECURRENCE_END_TYPES,
+  RECURRENCE_FREQUENCIES,
+  TASK_PRIORITIES,
+} from "./task-types";
 
 /**
  * The write vocabulary of Tasks. One discriminated union shared by the
@@ -54,6 +60,25 @@ export const templateInputSchema = z.object({
 });
 export type TemplateInput = z.infer<typeof templateInputSchema>;
 
+export const seriesInputSchema = z.object({
+  title: z.string().trim().min(1, "Give the task a title.").max(160),
+  instructions: z.string().trim().max(2000).nullable(),
+  category: z.string().trim().min(1).max(40),
+  priority: z.enum(TASK_PRIORITIES),
+  assignmentMode: z.enum(ASSIGNMENT_MODES),
+  assigneeIds: z.array(idSchema).max(50),
+  dueTime: timeSchema.nullable(),
+  dueWindow: z.enum(DUE_WINDOWS).nullable(),
+  frequency: z.enum(RECURRENCE_FREQUENCIES),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).nullable(),
+  dayOfMonth: z.number().int().min(1).max(31).nullable(),
+  startsOn: dateSchema,
+  endType: z.enum(RECURRENCE_END_TYPES),
+  endsOn: dateSchema.nullable(),
+  maxOccurrences: z.number().int().min(1).max(1000).nullable(),
+});
+export type SeriesInput = z.infer<typeof seriesInputSchema>;
+
 export const taskCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create"), input: taskCreateSchema }),
   z.object({
@@ -84,6 +109,13 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
     taskId: idSchema,
     reason: z.string().trim().max(300).nullable().optional(),
   }),
+  z.object({ type: z.literal("seriesCreate"), input: seriesInputSchema }),
+  z.object({
+    type: z.literal("seriesUpdate"),
+    ruleId: idSchema,
+    input: seriesInputSchema,
+  }),
+  z.object({ type: z.literal("seriesStop"), ruleId: idSchema }),
   z.object({
     type: z.literal("templateSave"),
     templateId: idSchema.nullable(),

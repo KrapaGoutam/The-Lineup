@@ -6,6 +6,7 @@ import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
 import {
   taskCommandSchema,
+  type SeriesInput,
   type TaskCommand,
 } from "@/features/tasks/domain/task-commands";
 import type { TasksSnapshot } from "@/features/tasks/domain/task-types";
@@ -36,6 +37,27 @@ async function resolveCaller(restaurantSlug: string) {
       name: user.name,
       designation: user.designation,
     },
+  };
+}
+
+/** SeriesInput -> the shared argument list of task_series_create / _update. */
+function seriesArgs(i: SeriesInput) {
+  return {
+    p_title: i.title,
+    p_instructions: i.instructions ?? undefined,
+    p_category: i.category,
+    p_priority: i.priority,
+    p_assignment_mode: i.assignmentMode,
+    p_assignee_ids: i.assigneeIds,
+    p_due_time: i.dueTime ?? undefined,
+    p_due_window: i.dueWindow ?? undefined,
+    p_frequency: i.frequency,
+    p_weekdays: i.weekdays ?? undefined,
+    p_day_of_month: i.dayOfMonth ?? undefined,
+    p_starts_on: i.startsOn,
+    p_end_type: i.endType,
+    p_ends_on: i.endsOn ?? undefined,
+    p_max_occurrences: i.maxOccurrences ?? undefined,
   };
 }
 
@@ -120,6 +142,28 @@ async function runCommand(
       const { error } = await supabase.rpc("task_cancel", {
         p_task_id: command.taskId,
         p_reason: command.reason ?? undefined,
+      });
+      return error?.message ?? null;
+    }
+    case "seriesCreate": {
+      const i = command.input;
+      const { error } = await supabase.rpc("task_series_create", {
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+        ...seriesArgs(i),
+      });
+      return error?.message ?? null;
+    }
+    case "seriesUpdate": {
+      const { error } = await supabase.rpc("task_series_update", {
+        p_rule_id: command.ruleId,
+        ...seriesArgs(command.input),
+      });
+      return error?.message ?? null;
+    }
+    case "seriesStop": {
+      const { error } = await supabase.rpc("task_series_stop", {
+        p_rule_id: command.ruleId,
       });
       return error?.message ?? null;
     }

@@ -10,6 +10,7 @@ import type { TaskCommand } from "../domain/task-commands";
 import {
   DEFAULT_TASK_CATEGORIES,
   isTasksManager,
+  type RecurrenceRuleView,
   type TaskView,
 } from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
@@ -17,6 +18,7 @@ import { AssignedView } from "./assigned-view";
 import { ChecklistView } from "./checklist-view";
 import { HandoffPanel } from "./handoff-panel";
 import { MyTasksView } from "./my-tasks-view";
+import { SeriesPanel } from "./series-panel";
 import { TaskDetailDialog } from "./task-detail-dialog";
 import { TaskFormDialog } from "./task-form-dialog";
 import { TemplatesPanel } from "./templates-panel";
@@ -54,7 +56,10 @@ export function TasksWorkspace({ controller }: Props) {
   const manager = isTasksManager(viewer.designation);
   const [tab, setTab] = useState<TasksTab>("today");
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [form, setForm] = useState<{ task?: TaskView } | null>(null);
+  const [form, setForm] = useState<{
+    task?: TaskView;
+    series?: RecurrenceRuleView;
+  } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const categories = snapshot?.categories ?? DEFAULT_TASK_CATEGORIES;
@@ -212,6 +217,11 @@ export function TasksWorkspace({ controller }: Props) {
           ) : null}
           {tab === "manage" && manager ? (
             <div className="space-y-5">
+              <SeriesPanel
+                controller={controller}
+                execute={execute}
+                onEdit={(series) => setForm({ series })}
+              />
               <TemplatesPanel controller={controller} execute={execute} />
               <HandoffPanel
                 controller={controller}
@@ -252,6 +262,13 @@ export function TasksWorkspace({ controller }: Props) {
           timeZone={snapshot.timeZone}
           categoryName={categoryName(openTask.category)}
           events={snapshot.events}
+          series={snapshot.series.find(
+            (r) => r.id === openTask.recurrenceRuleId,
+          )}
+          onEditSeries={(series) => {
+            setOpenTaskId(null);
+            setForm({ series });
+          }}
           team={snapshot.team}
           onClose={() => setOpenTaskId(null)}
           onEdit={(task) => {
@@ -264,8 +281,9 @@ export function TasksWorkspace({ controller }: Props) {
 
       {snapshot && form ? (
         <TaskFormDialog
-          key={form.task?.id ?? "new"}
+          key={form.task?.id ?? form.series?.id ?? "new"}
           task={form.task}
+          series={form.series}
           team={snapshot.team}
           categories={snapshot.categories}
           today={snapshot.today}

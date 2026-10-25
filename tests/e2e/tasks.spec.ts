@@ -375,3 +375,61 @@ test("a manager builds a template that produces its own checklist (TASK-035)", a
     page.getByRole("article", { name: "Bar Closing" }),
   ).toBeVisible();
 });
+
+test("recurring tasks create independent occurrences that keep their history (TASK-040/043)", async ({
+  page,
+}) => {
+  await signIn(page, "2468");
+  await openTasks(page);
+
+  await page.getByRole("button", { name: /New task/ }).click();
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByLabel("Title").fill("E2E daily ice check");
+  await dialog.getByLabel("Person").selectOption({ label: "Mia Chen" });
+  await dialog.getByLabel("Repeats").selectOption("daily");
+  await dialog.getByRole("button", { name: "Create task" }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  const series = page.getByRole("region", { name: "Recurring tasks" });
+  await expect(series).toContainText("E2E daily ice check");
+  await expect(series).toContainText("Every day");
+
+  // The assignee sees today's occurrence and the upcoming ones separately.
+  await signOut(page);
+  await signInOnCurrentPage(page, "1357");
+  await openTasks(page);
+  await page.getByRole("button", { name: "My Tasks", exact: true }).click();
+  await page
+    .getByRole("checkbox", { name: /Mark complete: E2E daily ice check/ })
+    .click();
+  await expect(
+    page.getByRole("checkbox", { name: /Reopen: E2E daily ice check/ }),
+  ).toHaveAttribute("aria-checked", "true");
+
+  await page.getByRole("button", { name: /^Upcoming/ }).click();
+  const tomorrow = page
+    .getByRole("checkbox", { name: /Mark complete: E2E daily ice check/ })
+    .first();
+  await expect(tomorrow).toHaveAttribute("aria-checked", "false");
+
+  // Ending the series removes untouched future work, keeps what was done.
+  await signOut(page);
+  await signInOnCurrentPage(page, "2468");
+  await openTasks(page);
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  await page.getByRole("button", { name: "Stop series" }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Recurring tasks" })
+      .getByText("E2E daily ice check"),
+  ).toHaveCount(0);
+  await signOut(page);
+  await signInOnCurrentPage(page, "1357");
+  await openTasks(page);
+  await page.getByRole("button", { name: "My Tasks", exact: true }).click();
+  await page.getByRole("button", { name: /^Upcoming/ }).click();
+  await expect(page.getByText("E2E daily ice check")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Completed/ }).click();
+  await expect(page.getByText("E2E daily ice check")).toBeVisible();
+});

@@ -50,7 +50,7 @@ PR: none yet · PR target: `development` · development merged: NO · main merge
 
 ## Exact next step
 
-T6: migration `20261025110000_tasks_v1_recurrence.sql` — `task_series_create/update/stop` + idempotent `task_recurrence_generate` (14-day horizon, unique (rule, occurrence*date)), pgTAP `0028*\*`; pure `recurrence.ts` (occurrence dates for daily/weekdays/weekly/selected weekdays/monthly + end rules) shared by demo engine and UI preview; recurrence section in task form + Manage "Recurring tasks"; e2e. Then T7 notifications (sweep RPC, mark read, badge), T8 validation.
+T7: migration `20261025120000_tasks_v1_notifications.sql` — `task_notifications_sweep(org, loc)` (due*soon within 60 min, overdue; deduped via dedupe_key `due:<task>:<profile>` / `overdue:<task>:<profile>`), `task_notifications_mark_read(ids|all)`; pgTAP `0029*\*`; data/action (list + unread count, bounded 50), controller badge hook, notification bell/list UI on Tasks header + unread badge on Tasks nav tab; demo engine equivalents; e2e. Then T8: regenerate DB types, apply migrations to DEV (NEON_DATABASE_URL blank), hosted real-mode suites for Tasks, full gate, responsive/a11y pass, docs, push, PR to development.
 
 ## DO NOT
 

@@ -4,6 +4,7 @@ import type {
   ChecklistTemplateView,
   DueWindow,
   PersonRef,
+  RecurrenceRuleView,
   TaskEventView,
   TaskKind,
   TaskPriority,
@@ -179,5 +180,55 @@ export function mapTemplateRow(row: TemplateRow): ChecklistTemplateView {
         dueWindow: item.due_window,
         dueTime: clock(item.due_time),
       })),
+  };
+}
+
+export type SeriesRow = {
+  id: string;
+  title: string;
+  instructions: string | null;
+  category: string;
+  priority: TaskPriority;
+  assignment_mode: AssignmentMode;
+  due_time: string | null;
+  due_window: DueWindow | null;
+  frequency: RecurrenceRuleView["frequency"];
+  weekdays: number[] | null;
+  day_of_month: number | null;
+  starts_on: string;
+  end_type: RecurrenceRuleView["endType"];
+  ends_on: string | null;
+  max_occurrences: number | null;
+  active: boolean;
+  created_by: string;
+  task_recurrence_assignees: { profile_id: string }[];
+};
+
+export const SERIES_ROW_COLUMNS =
+  "id, title, instructions, category, priority, assignment_mode, due_time, due_window, frequency, weekdays, day_of_month, starts_on, end_type, ends_on, max_occurrences, active, created_by, task_recurrence_assignees(profile_id)";
+
+export function mapSeriesRow(
+  row: SeriesRow,
+  names: ReadonlyMap<string, string>,
+): RecurrenceRuleView {
+  return {
+    id: row.id,
+    title: row.title,
+    instructions: row.instructions,
+    category: row.category,
+    priority: row.priority,
+    assignmentMode: row.assignment_mode,
+    assigneeIds: row.task_recurrence_assignees.map((a) => a.profile_id),
+    dueTime: clock(row.due_time),
+    dueWindow: row.due_window,
+    frequency: row.frequency,
+    weekdays: row.weekdays ? [...row.weekdays].sort() : null,
+    dayOfMonth: row.day_of_month,
+    startsOn: row.starts_on,
+    endType: row.end_type,
+    endsOn: row.ends_on,
+    maxOccurrences: row.max_occurrences,
+    active: row.active,
+    createdBy: person(row.created_by, names),
   };
 }

@@ -1,7 +1,12 @@
-import { zonedWallTimeToInstant } from "@/lib/timezone";
+import {
+  zonedWallTimeFromInstant,
+  zonedWallTimeToInstant,
+} from "@/lib/timezone";
 
+import { occurrenceDates, weekdayOf } from "./recurrence";
 import type {
   CommandResult,
+  SeriesInput,
   TemplateInput,
   TaskCommand,
   TaskCreateInput,
@@ -12,6 +17,7 @@ import {
   DEFAULT_TASK_CATEGORIES,
   type ChecklistKind,
   type ChecklistTemplateView,
+  type RecurrenceRuleView,
   isTasksManager,
   type AssignmentMode,
   type PersonRef,
@@ -43,6 +49,7 @@ export type TasksState = {
   events: TaskEventView[];
   templates: ChecklistTemplateView[];
   instances: InstanceRecord[];
+  rules: RecurrenceRuleView[];
   seq: number;
 };
 
@@ -55,7 +62,14 @@ export type EngineContext = {
 };
 
 export function emptyTasksState(): TasksState {
-  return { tasks: [], events: [], templates: [], instances: [], seq: 1 };
+  return {
+    tasks: [],
+    events: [],
+    templates: [],
+    instances: [],
+    rules: [],
+    seq: 1,
+  };
 }
 
 const fail = <T>(error: string): CommandResult<T> => ({ ok: false, error });
@@ -428,6 +442,35 @@ export function applyCommand(
       );
     }
 
+    case "seriesCreate": {
+      if (!manager) return fail(MANAGER_ONLY);
+      const built = buildRule(state, command.input, ctx, null);
+      if (!built.ok) return built;
+      const rule = built.value;
+      const next: TasksState = {
+        ...state,
+        seq: state.seq + 1,
+        rules: [...state.rules, rule],
+      };
+      return ok(materializeRule(next, rule, ctx, todayOf(ctx)));
+    }
+
+    case "seriesUpdate": {
+      if (!manager) return fail(MANAGER_ONLY);
+      const existing = state.rules.find((r) => r.id === command.ruleId);
+      if (!existing) return fail(MANAGER_ONLY);
+      const built = buildRule(state, command.input, ctx, existing);
+      if (!built.ok) return built;
+      return ok(applySeriesUpdate(state, built.value, ctx));
+    }
+
+    case "seriesStop": {
+      if (!manager) return fail(MANAGER_ONLY);
+      const existing = state.rules.find((r) => r.id === command.ruleId);
+      if (!existing) return fail(MANAGER_ONLY);
+      return ok(stopSeries(state, existing, ctx));
+    }
+
     case "templateSave": {
       if (!manager) return fail(MANAGER_ONLY);
       const input: TemplateInput = command.input;
@@ -570,9 +613,272 @@ export function buildSnapshot(
           .filter((t) => t.checklistInstanceId === instance.id)
           .sort((a, b) => a.sortOrder - b.sortOrder),
       })),
+    series: manager ? state.rules.filter((r) => r.active) : [],
     templates: manager ? state.templates : [],
     events: manager ? state.events : [],
     team: manager ? [...ctx.team] : [],
     categories: DEFAULT_TASK_CATEGORIES.map((c) => ({ ...c })),
   };
+}
+
+// ---------------------------------------------------------------------
+// Recurrence (mirrors supabase/migrations/20261025110000_tasks_v1_recurrence.sql)
+// ---------------------------------------------------------------------
+const HORIZON_DAYS = 14;
+
+function todayOf(ctx: EngineContext): string {
+  return zonedWallTimeFromInstant(ctx.now, ctx.timeZone).date;
+}
+
+function buildRule(
+  state: TasksState,
+  input: SeriesInput,
+  ctx: EngineContext,
+  existing: RecurrenceRuleView | null,
+): CommandResult<RecurrenceRuleView> {
+  if (!input.title.trim()) {
+    return fail("Give the task a title (up to 160 characters).");
+  }
+  if (!DEFAULT_TASK_CATEGORIES.some((c) => c.slug === input.category)) {
+    return fail("Unknown task category.");
+  }
+  const people = validateAssignees(
+    input.assignmentMode,
+    input.assigneeIds,
+    ctx,
+  );
+  if (!people.ok) return people;
+
+  let weekdays: number[] | null = null;
+  let dayOfMonth: number | null = null;
+  if (input.frequency === "weekly") weekdays = [weekdayOf(input.startsOn)];
+  if (input.frequency === "selected_weekdays") {
+    if (!input.weekdays || input.weekdays.length === 0) {
+      return fail("Choose at least one weekday.");
+    }
+    weekdays = [...new Set(input.weekdays)].sort();
+  }
+  if (input.frequency === "monthly") {
+    dayOfMonth = input.dayOfMonth ?? Number(input.startsOn.slice(8, 10));
+  }
+  if (
+    input.endType === "on_date" &&
+    (!input.endsOn || input.endsOn < input.startsOn)
+  ) {
+    return fail("The end date cannot be before the start date.");
+  }
+  if (input.endType === "after_count" && !input.maxOccurrences) {
+    return fail("Choose how many times it repeats (1 to 1000).");
+  }
+  return ok({
+    id: existing?.id ?? `rule-${state.seq}`,
+    title: input.title.trim(),
+    instructions: input.instructions?.trim() || null,
+    category: input.category,
+    priority: input.priority,
+    assignmentMode: input.assignmentMode,
+    assigneeIds: people.value.map((p) => p.profileId),
+    dueTime: input.dueTime,
+    dueWindow: input.dueWindow,
+    frequency: input.frequency,
+    weekdays,
+    dayOfMonth,
+    startsOn: input.startsOn,
+    endType: input.endType,
+    endsOn: input.endType === "on_date" ? input.endsOn : null,
+    maxOccurrences:
+      input.endType === "after_count" ? input.maxOccurrences : null,
+    active: true,
+    createdBy: existing?.createdBy ?? actorRef(ctx),
+  });
+}
+
+function resolveSeriesAssignment(
+  rule: RecurrenceRuleView,
+  ctx: EngineContext,
+): { mode: AssignmentMode; assignees: PersonRef[] } {
+  const known = new Map(ctx.team.map((m) => [m.profileId, m.name]));
+  const active = rule.assigneeIds.filter((id) => known.has(id)).sort();
+  let mode = rule.assignmentMode;
+  let ids = active;
+  if (mode === "all_team" || mode === "anyone") {
+    ids = [];
+  } else if (mode === "individual" && ids.length !== 1) {
+    mode = "anyone";
+    ids = [];
+  } else if (mode === "multiple") {
+    if (ids.length === 1) mode = "individual";
+    else if (ids.length === 0) mode = "anyone";
+  }
+  return {
+    mode,
+    assignees: ids.map((id) => ({
+      profileId: id,
+      name: known.get(id) ?? "Team member",
+    })),
+  };
+}
+
+/** Creates any missing occurrences of one rule through today + 14 days. */
+export function materializeRule(
+  state: TasksState,
+  rule: RecurrenceRuleView,
+  ctx: EngineContext,
+  today: string,
+): TasksState {
+  if (!rule.active) return state;
+  const { mode, assignees } = resolveSeriesAssignment(rule, ctx);
+  const from = rule.startsOn > today ? rule.startsOn : today;
+  const dates = occurrenceDates(rule, from, addDaysToDate(today, HORIZON_DAYS));
+  let next = state;
+  for (const date of dates) {
+    const exists = next.tasks.some(
+      (t) => t.recurrenceRuleId === rule.id && t.dueDate === date,
+    );
+    if (exists) continue;
+    const id = `task-${next.seq}`;
+    const task: TaskView = {
+      id,
+      kind: "task",
+      title: rule.title,
+      instructions: rule.instructions,
+      category: rule.category,
+      priority: rule.priority,
+      status: "open",
+      assignmentMode: mode,
+      assignees,
+      startDate: null,
+      dueDate: date,
+      dueTime: rule.dueTime,
+      dueWindow: rule.dueWindow,
+      dueAt: computeDueAt(
+        { dueDate: date, dueTime: rule.dueTime },
+        ctx.timeZone,
+      ),
+      blockedReason: null,
+      completedBy: null,
+      completedAt: null,
+      completionNote: null,
+      cancelledAt: null,
+      groupId: null,
+      recurrenceRuleId: rule.id,
+      checklistInstanceId: null,
+      sortOrder: 0,
+      createdBy: rule.createdBy,
+      createdAt: ctx.now.toISOString(),
+    };
+    next = { ...next, seq: next.seq + 1, tasks: [...next.tasks, task] };
+    next = pushEvent(next, ctx, id, "created", {
+      title: task.title,
+      assignment_mode: mode,
+      assignees: assignees.map((a) => a.profileId),
+      recurrence_rule_id: rule.id,
+    });
+  }
+  return next;
+}
+
+/** Lazy materialization for every active series (idempotent). */
+export function generateRecurringTasks(
+  state: TasksState,
+  ctx: EngineContext,
+  today: string,
+): TasksState {
+  let next = state;
+  for (const rule of state.rules) {
+    next = materializeRule(next, rule, ctx, today);
+  }
+  return next;
+}
+
+function untouchedFuture(state: TasksState, ruleId: string, today: string) {
+  return state.tasks.filter(
+    (t) =>
+      t.recurrenceRuleId === ruleId &&
+      t.dueDate !== null &&
+      t.dueDate >= today &&
+      t.status === "open",
+  );
+}
+
+function applySeriesUpdate(
+  state: TasksState,
+  rule: RecurrenceRuleView,
+  ctx: EngineContext,
+): TasksState {
+  const today = todayOf(ctx);
+  let next: TasksState = {
+    ...state,
+    rules: state.rules.map((r) => (r.id === rule.id ? rule : r)),
+  };
+  const { mode, assignees } = resolveSeriesAssignment(rule, ctx);
+  for (const task of untouchedFuture(state, rule.id, today)) {
+    const date = task.dueDate!;
+    if (!occurrenceDates(rule, today, date).includes(date)) {
+      const cancelled: TaskView = {
+        ...task,
+        status: "cancelled",
+        cancelledAt: ctx.now.toISOString(),
+      };
+      next = pushEvent(
+        replaceTask(next, cancelled),
+        ctx,
+        task.id,
+        "cancelled",
+        {
+          from: task.status,
+          reason: "Series changed",
+          rule_id: rule.id,
+        },
+      );
+    } else {
+      const updated: TaskView = {
+        ...task,
+        title: rule.title,
+        instructions: rule.instructions,
+        category: rule.category,
+        priority: rule.priority,
+        dueTime: rule.dueTime,
+        dueWindow: rule.dueWindow,
+        dueAt: computeDueAt(
+          { dueDate: date, dueTime: rule.dueTime },
+          ctx.timeZone,
+        ),
+        assignmentMode: mode,
+        assignees,
+      };
+      next = pushEvent(replaceTask(next, updated), ctx, task.id, "edited", {
+        scope: "this_and_future",
+        rule_id: rule.id,
+      });
+    }
+  }
+  return materializeRule(next, rule, ctx, today);
+}
+
+function stopSeries(
+  state: TasksState,
+  rule: RecurrenceRuleView,
+  ctx: EngineContext,
+): TasksState {
+  const today = todayOf(ctx);
+  let next: TasksState = {
+    ...state,
+    rules: state.rules.map((r) =>
+      r.id === rule.id ? { ...r, active: false } : r,
+    ),
+  };
+  for (const task of untouchedFuture(state, rule.id, today)) {
+    const cancelled: TaskView = {
+      ...task,
+      status: "cancelled",
+      cancelledAt: ctx.now.toISOString(),
+    };
+    next = pushEvent(replaceTask(next, cancelled), ctx, task.id, "cancelled", {
+      from: task.status,
+      reason: "Series ended",
+      rule_id: rule.id,
+    });
+  }
+  return next;
 }
