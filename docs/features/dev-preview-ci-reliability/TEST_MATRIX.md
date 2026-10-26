@@ -4,10 +4,10 @@ Result: PASS / FAIL / BLOCKED / PENDING, with evidence.
 
 | ID     | Check                                            | Result  | Evidence                                                                                             |
 | ------ | ------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------- |
-| ENV-01 | Preview uses DEV Supabase                        | PENDING |                                                                                                      |
-| ENV-02 | Preview contains no PROD Supabase ref            | PENDING |                                                                                                      |
-| ENV-03 | Development uses DEV Supabase                    | PENDING |                                                                                                      |
-| ENV-04 | Production environment unchanged                 | PENDING |                                                                                                      |
+| ENV-01 | Preview uses DEV Supabase                        | PASS    | 2026-10-25 in-process check of pulled Preview env: URL = DEV ref                                     |
+| ENV-02 | Preview contains no PROD Supabase ref            | PASS    | pulled Preview env has no PROD ref; local DEV-pinned build: 0 PROD-ref files in .next                |
+| ENV-03 | Development uses DEV Supabase                    | PASS    | 2026-10-25 pulled Development env: DEV ref, no PROD ref, no Neon                                     |
+| ENV-04 | Production environment unchanged                 | PASS    | Production entries 49-50 days old; PROD ref, demo false, Neon present                                |
 | ENV-05 | Demo mode no longer masks real DEV Preview       | PENDING |                                                                                                      |
 | ENV-06 | Login works against DEV                          | PENDING |                                                                                                      |
 | ENV-07 | Table Allocation reads DEV                       | PENDING |                                                                                                      |

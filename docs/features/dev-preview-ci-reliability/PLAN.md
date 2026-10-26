@@ -1,6 +1,6 @@
 # Infrastructure — DEV Preview & CI Reliability
 
-**Tracking:** parent issue #133 · milestone "Platform / CI Reliability" · Project #4 · branch `infra/dev-preview-ci-reliability` (from `development` @ `ead4e8b`).
+**Tracking:** parent issue #133 · milestone "Platform / CI Reliability" · Project #4 · branch `infra/dev-preview-ci-reliability` (from `development` @ `ead4e8b`; reconciled with `development` @ `56bacb6` on 2026-10-25).
 **Status:** see `IMPLEMENTATION_REPORT.md` (kept current per sub-feature).
 **Refs:** DEV `opmujepkemwcdxxorhfd` · PROD `ftadewtkjlaotfdvtjcv`. PROD is never touched by this feature.
 
