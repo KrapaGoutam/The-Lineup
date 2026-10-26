@@ -1,66 +1,56 @@
-# Canonical Table Input Resolution — Handoff
+# Canonical Table Input Resolution — Final Handoff
 
-Branch: `fix/table-input-canonical-resolution`
-HEAD: see `git log -1` (feature commit `faeca66` + closeout docs/tests commit)
-Base development: `23e38a9` (PR #135 merge commit)
+Feature: Canonical Numeric Table Input Resolution
 
-PR #135: MERGED into `development` with a merge commit `23e38a9` (head `1234ada`, exact-head CI green, owner Preview smoke PASS per the owner)
-#133: CLOSED, Project #4 Done (milestone "Platform / CI Reliability" stays open: 12 other open issues)
-#153: CLOSED, Project #4 Done
-Owner smoke: PASS (owner statement); new contract correction tracked separately
+Issue: #157 CLOSED
+Implementation PR: #158 MERGED
+PR head: caef5aa3a96722d39fcf586282b2eb375457dcc6
+Merge commit: f8fa191b66b363a344bc51fc9a75dc045e7fb082
+Docs closeout: PR #159 (docs-only, `docs/canonical-input-closeout`) -> development, merge commit after CI
 
-Issue: #157 `[Bug] Resolve numeric Grid table input to registered physical tables` (type:bug, module:table-allocation, priority:p1)
-Project #4: #157 In Progress -> Done after merge
-Milestone: Table Allocation V2 — Part 2
+Phases: R0 ✅ R1 ✅ R2 ✅ R3 ✅ R4 ✅ R5 ✅ R6 ✅ R7 ✅
 
-Current phase: R7 (PR / exact-head CI / merge commit into development). R0–R6 done.
-R0 ✅ R1 ✅ R2 ✅ R3 ✅ R4 ✅ R5 ✅ R6 ✅ R7 ⬜ (PR opened, waiting for CI)
+Resolution:
+1 -> T1 when T1 registered
+T1 -> T1
+99 -> free text when T99 absent
+01 -> T01 only if T01 exists; never collapse to T1
+combined labels resolved per component
 
-Resolver contract:
-Exact label: registered active label (trimmed, case-sensitive, same location) wins
-Numeric shorthand: digits-only and no exact match -> `T` + digits if registered
-Free-text fallback: trimmed text, no claim, off-map
-Leading zeros: not collapsed (`01` -> `T01` or free text, never `T1`)
-Combined labels: every part resolved, joined with " + ", duplicates collapsed
+Migration: 20261026120000
+DEV migration: APPLIED
+PROD migration: NOT APPLIED
 
-DB changes: private helpers `resolve_table_input`, `canonical_label_parts`, `canonical_table_label`; replaced `sync_table_occupancy`, `displace_conflicting_entries`, `board_assign`, `board_end_and_assign`
-Migration: `supabase/migrations/20261026120000_table_input_canonical_resolution.sql`
-DEV applied: YES (Management API, ref opmujepkemwcdxxorhfd hard-checked, recorded in schema_migrations)
+Tests:
+pgTAP: 31 files / 646 assertions
+Vitest: 74 files / 715 tests
+Demo Playwright: 507 passed
+Hosted DEV DB: 78 passed
+Hosted DEV UI: 30 passed
+Build: PASS
+Lint: PASS
+Typecheck: PASS
+Format: PASS
+Exact-head CI (application, browser-smoke, Database, Vercel): PASS; deploy-migrations skipped
 
-board_assign: canonicalizes first (after auth/session), then all logic on the canonical label
-occupancy trigger: same resolver
-conflict detection: canonical on both sides; detail label / assignment_label canonical
-same-server: canonical PT409 same_server
-End + Assign: unchanged atomicity (single call), canonical label
-Transfer: unchanged (`board_transfer`)
+XM-024 (transient / non-reproduced observation): failed once in the first of three full hosted UI runs; passed in the next two full runs, an isolated rerun and exact-head CI. No product defect found.
 
-Grid / Floor / Picker / Servers / Dashboard: client mirror `domain/table-input.ts` wired in `allocation-workspace.tsx` (`execute`) and `table-claim.tsx` (`canonicalize`); read model unchanged (renders canonical stored labels)
+Pre-existing DEV old-contract rows: active synthetic labels `1` and `2` (today's DEV board) — not modified.
 
-Tests (final gate, actual):
-pgTAP: 31 files / 646 assertions PASS (0031 new = 58; 0030 §3 changed deliberately)
-Vitest: 74 files / 715 tests PASS
-cross-view matrix: 51 scenarios (domain 52 tests) PASS; XM-011/012/013 rewritten + XM-014..019 added (input-form axis `typed`)
-Playwright demo: 507 PASS (desktop + host-tablet + server-mobile)
-hosted DB: 78 PASS (tasks-v1 12, table-input-canonical 16, conflicts 10, rotation-v2 40)
-hosted UI (production build, DEV): 30 PASS (one transient XM-024 failure in the first full run; passed in the next two full runs and an isolated rerun)
-multi-user: stale-browser shorthand test CR-UI + rewritten XM-011 PASS
-build: PASS (pinned to DEV, PROD ref in 0 files)
-lint / typecheck / format: PASS
-CI: pending on the PR
+GitHub:
+#157: Closed, Project #4 Done, milestone "Table Allocation V2 — Part 2"
+#153, #133: Closed, Done
+PR #158: merged (merge commit)
 
-Commits: faeca66 feat (resolver + client + matrix + tests); closeout commit (docs, real-suite fixes)
-Uncommitted: nothing expected (never stage `docs/testing/`, `The Lineup.code-workspace`)
+Roadmap: updated (DONE incl. #157; PLANNED #154, #155; NEXT release-readiness audit)
+Backlog: #154 planned, #155 planned, release-readiness audit queued
 
-development merged: NO (until PR merge)
+development merged: YES
 main merged: NO
-DEV touched: YES (migration + hosted suites with synthetic data)
+DEV touched: YES
 PROD touched: NO
 PROD migrations: NO
 
-Running processes: local Supabase (docker) only; no `next start`
+NEXT PHASE: Release-readiness audit (includes the read-only numeric-label query in docs/features/table-input-canonical-resolution/PLAN.md, per real location; owner decides on development -> main)
 
-Exact next command: `gh pr checks <PR>` then, when exact-head CI is green, `gh pr merge <PR> --merge --match-head-commit <head>`
-Exact next action: wait for exact-head CI (application, browser-smoke, Database, Vercel; deploy-migrations skipped), merge with a MERGE COMMIT into `development`, then set #157 Done in Project #4, close the issue, update docs/STATUS.md wording from "branch" to "merged", STOP
-Read first: docs/features/table-input-canonical-resolution/IMPLEMENTATION_REPORT.md
-Release-readiness (before any PROD deploy, owner approval only): run the read-only query in PLAN.md per real location
-DO NOT: merge to main, touch PROD, squash/rebase-merge, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`, add an alias table, rewrite history rows, widen grants, start #154 or #155 here
+DO NOT: merge development -> main, deploy Production, apply PROD migrations, begin #154, begin #155, `git add -A`, stage `docs/testing/` or `*.code-workspace`
