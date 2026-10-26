@@ -51,7 +51,7 @@ export function OffMapTables({
           tables above.
         </p>
       </div>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="grid gap-1.5 sm:grid-cols-2">
         {tables.map((table) => {
           const occupied = Boolean(table.occupiedBy);
           return (
