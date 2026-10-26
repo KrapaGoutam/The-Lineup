@@ -962,7 +962,8 @@ test("Floor: End Existing & Assign (one existing table) ends it as history and a
   // History preserved -- Grid/Dashboard keep the ended T1 entry.
   await switchView(page, "Grid");
   await expect(page.getByText("Table T1")).toBeVisible();
-  await expect(page.getByText("Ended")).toBeVisible();
+  // exact: the header countdown reads "Day ended" outside service hours.
+  await expect(page.getByText("Ended", { exact: true })).toBeVisible();
 });
 
 test("Floor: End existing table(s) & assign shows a multi-select when the server has multiple active tables, and only the checked ones end", async ({
@@ -1556,7 +1557,7 @@ test("Floor: End existing table(s) can end several selected tables, leaving the 
   await switchView(page, "Grid");
   await expect(page.getByText("Table T1")).toBeVisible();
   await expect(page.getByText("Table T4")).toBeVisible();
-  await expect(page.getByText("Ended")).toHaveCount(2);
+  await expect(page.getByText("Ended", { exact: true })).toHaveCount(2);
 });
 
 test("Floor: End existing table(s) 'Select all' ends every active table before assigning the new one (CASE C)", async ({
