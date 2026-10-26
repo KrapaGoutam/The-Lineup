@@ -235,6 +235,12 @@ test("a manager reassigns and cancels a task (TASK-008)", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+/** Calendar-day arithmetic on a YYYY-MM-DD string (no clock, no timezone). */
+function addOneDay(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
 test("a manager filters by person and hands off unfinished work (TASK-014)", async ({
   page,
 }) => {
@@ -254,6 +260,14 @@ test("a manager filters by person and hands off unfinished work (TASK-014)", asy
   await page.getByRole("button", { name: "Manage", exact: true }).click();
   const panel = page.getByRole("region", { name: "Unfinished work" });
   await panel.getByLabel("Select Restock server station").check();
+  // Carry to a date that is always in the future. The default target (today)
+  // keeps the task's 16:00 due time, so after 16:00 restaurant-local it would
+  // be overdue again and stay listed. The date input's `min` is the app's own
+  // restaurant-local today, so no runner/UTC date or extra timezone logic.
+  const newDueDate = panel.getByLabel("New due date");
+  const restaurantToday = await newDueDate.getAttribute("min");
+  expect(restaurantToday).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await newDueDate.fill(addOneDay(restaurantToday as string));
   await panel.getByRole("button", { name: /Carry forward/ }).click();
   await expect(panel.getByText("Restock server station")).toHaveCount(0);
 });
