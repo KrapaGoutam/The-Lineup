@@ -18,6 +18,7 @@ import {
   Table2,
   Users,
   WalletCards,
+  Wine,
   X,
 } from "lucide-react";
 
@@ -59,6 +60,9 @@ import {
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
 import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
+import { InventoryModule } from "@/features/bar-inventory/components/inventory-module";
+import { buildDemoCatalog } from "@/features/bar-inventory/domain/demo-catalog";
+import type { CatalogState } from "@/features/bar-inventory/domain/inventory-types";
 import { TasksModule } from "@/features/tasks/components/tasks-module";
 import { createDemoTasksState } from "@/features/tasks/domain/demo-tasks";
 import {
@@ -119,6 +123,7 @@ type AppTab =
   | "tips"
   | "team"
   | "attendance"
+  | "barInventory"
   | "payroll"
   | "settings";
 
@@ -152,6 +157,14 @@ const attendanceTab = {
   id: "attendance" as const,
   label: "Attendance",
   icon: CalendarSearch,
+};
+// Bar Inventory V1: management roles only (owner decision D1), secondary
+// tier, reachable under "More" on mobile. The primary tabs and the 3-button
+// dock are deliberately untouched.
+const barInventoryTab = {
+  id: "barInventory" as const,
+  label: "Bar Inventory",
+  icon: Wine,
 };
 // Feature 020 Phase 2: manager/owner-only, real mode only -- gated exactly
 // like Team was before Feature 019, plus !demoMode, since this phase has
@@ -690,6 +703,13 @@ function RestaurantOperationsAppInner({
   // switches and sign-in as a different demo person. Real mode never reads
   // this -- its source of truth is the database.
   const [realTasksUnread, setRealTasksUnread] = useState(0);
+  // Bar Inventory (demo mode only): the in-memory catalog, held here so it
+  // survives tab switches. Real mode reads and writes the database.
+  const [demoCatalog, setDemoCatalog] = useState<CatalogState>(() =>
+    demoMode
+      ? buildDemoCatalog()
+      : { vendors: [], categories: [], subcategories: [], products: [] },
+  );
   const [demoTasksState, setDemoTasksState] = useState<TasksState>(() =>
     demoMode
       ? createDemoTasksState(
@@ -852,6 +872,7 @@ function RestaurantOperationsAppInner({
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
+    ...(isManager ? [barInventoryTab] : []),
     tipsTab,
     ...(!demoMode ? [payrollTab] : []),
   ];
@@ -2072,6 +2093,16 @@ function RestaurantOperationsAppInner({
                     organizationId: DEMO_ORGANIZATION_ID,
                   }
                 : null
+            }
+          />
+        ) : null}
+        {tab === "barInventory" && isManager ? (
+          <InventoryModule
+            restaurantSlug={restaurantSlug}
+            user={user}
+            onSessionInvalid={forceSignOut}
+            demo={
+              demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null
             }
           />
         ) : null}

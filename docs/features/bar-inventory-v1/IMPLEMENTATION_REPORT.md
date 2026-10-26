@@ -71,3 +71,59 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+---
+
+## BI-1 — Organization-level catalog (vendors, categories, subcategories, products)
+
+Branch `feature/bar-inventory-bi1-catalog` → PR into `development`. Migration `20261026170000_bar_inventory_catalog.sql` (**DEV applied, PROD not**).
+
+### Delivered
+
+| Layer    | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database | `inventory_vendors / categories / subcategories / products / change_log`; generated matching keys (`name_key`, `size_key`, `sku_key`, `unit_key`); identity + SKU partial unique indexes (active rows only); composite tenant FKs; `inventory_is_manager`, `inventory_can_access_location`, `inventory_begin`; SELECT-only RLS (management only); append-only change log; immutable system vendor `Unassigned` (created lazily by `inventory_bootstrap`); 13 `inventory_*` RPCs with `version` / `PT409 stale` and `23505 duplicate` (detail names the existing row) |
+| Domain   | `keys.ts` (proven against `keys-vectors.json`), `catalog-commands.ts` (zod), `catalog-engine.ts` (pure twin of the RPCs, powers demo mode), `demo-catalog.ts`                                                                                                                                                                                                                                                                                                                                                                                                        |
+| App      | `getCatalogSnapshotAction` / `runCatalogCommandAction` (zod → `requireLiveSession` → manager check → RPC with explicit nulls), paged loader, `useCatalogController` (focus refresh, stale → refetch), Manage view (Products · Vendors · Categories, Show archived), dialogs incl. inline "New vendor…" and the stale "Save over their change" flow, nav registration (secondary tier / More, managers only)                                                                                                                                                          |
+| Tests    | pgTAP 0033 (107) + 0034 generated key vectors (48); Vitest +65; hosted DEV DB 15; hosted DEV UI 3; demo Playwright 15 (3 projects)                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+### Design decisions
+
+1. **Lazy system vendor** instead of a trigger on `organizations`: no change to a core table, nothing seeded into PROD by the migration. `inventory_bootstrap` (called by the snapshot loader) and the vendor RPCs create it; the name key `unassigned` is reserved.
+2. **Generated key columns** (not triggers): the database computes the authoritative keys; a client cannot supply one (`428C9`). The TS mirror is proven against the same vectors as SQL (generator `scripts/bar-inventory/generate-pgtap-vectors.mjs`; a Vitest test fails if the committed SQL drifts).
+3. **No-op re-submits**: an identical update returns the current version with no write and no log row.
+4. **Foreign keys are `NO ACTION`, not `RESTRICT`**, so an organization delete (tenant teardown) can cascade vendors and products in one statement while a direct vendor delete with products still fails (`23503`, proven).
+5. **Product stock creation moves to BI-2** (the stock table does not exist yet); BI-2 re-creates `inventory_product_create` to add the stock row and backfills.
+
+### Known interim state (intentional, closed by later phases)
+
+- **Column filters / sorting / global search on the Manage tables** are not in BI-1. The owner requirement (type-appropriate filter on every column) is delivered by the BI-3 table kit and then applied to Products, Vendors, Categories (TEST_MATRIX BI-FLT-009). `development` is not released, so this interim state never reaches Production.
+- Dashboard and Inventory tabs are informational placeholders until BI-3/BI-4.
+- Product form has no counts/levels yet (BI-2/BI-3).
+
+### Defects found and fixed while testing
+
+- Page-level horizontal overflow on mobile (412 px): the `sr-only` actions header inside the scrolling table container was absolutely positioned and escaped it. Fixed with a `relative` scroll container; the e2e asserts no page-level horizontal scroll on all three projects.
+- A pgTAP assertion expectation (SKU key keeps punctuation: `TIT750` ≠ `TIT-750`) was wrong, the code was right; corrected the test.
+
+### Gates (exact numbers)
+
+| Gate                             | Result                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| format (changed paths), lint     | PASS                                                                                      |
+| typecheck                        | PASS                                                                                      |
+| Vitest                           | 910/910 (78 files)                                                                        |
+| pgTAP (local scratch DB)         | 0033: 107/107 · 0034: 48/48                                                               |
+| Hosted DEV DB (real JWTs)        | 15/15 (`tests/real/bar-inventory-catalog.db.real.test.ts`)                                |
+| Hosted DEV UI (dev server → DEV) | 3/3 (`tests/real/ui/bar-inventory.real.spec.ts`), incl. real stale-conflict UX and reload |
+| Demo Playwright, new spec        | 15/15 (desktop, host-tablet, server-mobile)                                               |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (migration 20261026170000; hosted suites use their own synthetic org / tagged rows, cleaned up; the append-only change log and system vendor remain in the DEV org by design)
+PROD touched: NO
+PROD migrations: NO
+```
