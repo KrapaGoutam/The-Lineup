@@ -40,11 +40,21 @@ export type Step = (
       choose: "transfer" | "end-assign" | "cancel";
     }
   | {
+      /** Blocked: the server holds the table in the same or a LATER turn. */
       do: "same-server";
       via: Origin;
       who: Role;
       table: string;
       typed?: string;
+    }
+  | {
+      /** #166: the server holds the table only in EARLIER turns. */
+      do: "repeat";
+      via: Origin;
+      who: Role;
+      table: string;
+      typed?: string;
+      choose: "end-previous" | "cancel";
     }
   | { do: "end"; via: "floor" | "servers"; table: string }
   | { do: "transfer"; via: "floor" | "servers"; table: string; to: Role }
@@ -114,12 +124,51 @@ export const SCENARIOS: Scenario[] = [
     },
   })),
 
-  // ---- same-server duplicate ---------------------------------------------------
+  // ---- same-server, NOT a later turn (blocked) ----------------------------------
+  //  Unassigning T5 opens an empty turn BEFORE the one holding T6, so the
+  //  server's next free turn is earlier than its T6: not a later turn.
   ...perOrigin("XM-020-same-server", (origin) => ({
-    title: "the same server asking for its own table is a no-op",
+    title:
+      "a table the server holds in a later turn is blocked, nothing changes",
+    steps: [
+      held("A", "T5"),
+      held("A", "T6"),
+      { do: "unassign", via: "grid", table: "T5" },
+      { do: "same-server", via: origin, who: "A", table: "T6" },
+    ],
+    expect: {
+      owners: { T5: null, T6: "A" },
+      active: { A: ["T6"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  })),
+
+  // ---- same-server repeat on a later turn (#166) ---------------------------------
+  ...perOrigin("XM-070-repeat-end-previous", (origin) => ({
+    title: "same server, later turn -> End Previous + Assign",
     steps: [
       held("A", "T6"),
-      { do: "same-server", via: origin, who: "A", table: "T6" },
+      {
+        do: "repeat",
+        via: origin,
+        who: "A",
+        table: "T6",
+        choose: "end-previous",
+      },
+    ],
+    expect: {
+      owners: { T6: "A" },
+      active: { A: ["T6"] },
+      ended: { A: ["T6"] },
+      activeDelta: 1,
+    },
+  })),
+  ...perOrigin("XM-071-repeat-cancel", (origin) => ({
+    title: "same server, later turn -> Cancel changes nothing",
+    steps: [
+      held("A", "T6"),
+      { do: "repeat", via: origin, who: "A", table: "T6", choose: "cancel" },
     ],
     expect: {
       owners: { T6: "A" },
@@ -129,6 +178,79 @@ export const SCENARIOS: Scenario[] = [
       next: "B",
     },
   })),
+  ...perOrigin("XM-072-repeat-combined", (origin) => ({
+    title:
+      "same server, combined T4 + T5 -> End Previous ends the WHOLE assignment, then assigns only T4",
+    steps: [
+      { do: "assign", via: "grid", who: "A", table: "T4 + T5" },
+      {
+        do: "repeat",
+        via: origin,
+        who: "A",
+        table: "T4",
+        choose: "end-previous",
+      },
+    ],
+    expect: {
+      owners: { T4: "A", T5: null },
+      active: { A: ["T4"] },
+      ended: { A: ["T4 + T5"] },
+      activeDelta: 1,
+    },
+  })),
+  {
+    id: "XM-073-repeat-shorthand",
+    title:
+      'the same server typing "3" for its own T3 on a later turn repeats T3',
+    steps: [
+      held("A", "T3"),
+      {
+        do: "repeat",
+        via: "grid",
+        who: "A",
+        table: "T3",
+        typed: "3",
+        choose: "end-previous",
+      },
+    ],
+    expect: {
+      owners: { T3: "A" },
+      active: { A: ["T3"] },
+      ended: { A: ["T3"] },
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-074-repeat-undo-redo",
+    title:
+      "End Previous + Assign, Undo restores the previous lifecycle, Redo re-applies",
+    steps: [
+      held("A", "T6"),
+      {
+        do: "repeat",
+        via: "floor",
+        who: "A",
+        table: "T6",
+        choose: "end-previous",
+      },
+      {
+        do: "undo",
+        then: {
+          owners: { T6: "A" },
+          active: { A: ["T6"] },
+          ended: {},
+          activeDelta: 1,
+        },
+      },
+      { do: "redo" },
+    ],
+    expect: {
+      owners: { T6: "A" },
+      active: { A: ["T6"] },
+      ended: { A: ["T6"] },
+      activeDelta: 1,
+    },
+  },
 
   // ---- occupied by another server ------------------------------------------------
   ...perOrigin("XM-021-transfer", (origin) => ({
@@ -485,13 +607,16 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: "XM-016-shorthand-same-server",
-    title: 'the same server typing "3" for its own T3 is a no-op',
+    title:
+      'the same server typing "3" for a T3 it holds in a later turn is blocked',
     steps: [
+      held("A", "T2"),
       held("A", "T3"),
+      { do: "unassign", via: "grid", table: "T2" },
       { do: "same-server", via: "grid", who: "A", table: "T3", typed: "3" },
     ],
     expect: {
-      owners: { T3: "A" },
+      owners: { T2: null, T3: "A" },
       active: { A: ["T3"] },
       ended: {},
       activeDelta: 1,

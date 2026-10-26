@@ -7,6 +7,12 @@
 
 ---
 
+## Same-server repeat table (#166 — PR #167 into `development`)
+
+A server who already holds an active table and reaches a **later rotation turn** that is given the same physical table no longer hits the "already assigned" dead end. The **database** decides by turn (board cell, ordered by `rotation_rounds.sequence`): same cell = idempotent retry (no-op); held only in earlier turns = `PT409 same_server_repeat` → dialog **End Previous + Assign / Cancel**, confirmed atomically by `board_end_previous_and_assign` (previous entry ended and kept as history, one active claim, Undo/Redo unchanged); held in the same-or-later turn = still blocked. Cross-server Transfer / End + Assign unchanged; combined assignments end as one lifecycle unit. Migration `20261026150000` (forward-only; **DEV applied, PROD not**). Docs and evidence: `docs/features/same-server-repeat-table/`.
+
+---
+
 ## Release-readiness audit — `development` → `main` (#160, 2026-10-26): NO-GO
 
 Read-only audit of `4ec6fe3` (68 commits ahead of `main` `3403058`, 8 new migrations). Code and database surface found release-quality (no security blocker, PROD pre-flight clean, numeric-label impact inert), but the **Production delivery path is not ready**: `deploy-migrations` failed on the last four `main` pushes (#111), PROD history lacks `20260911130000` (#161, so payroll _Unconfirm_ is broken in Production today and `db push` would reject the set), and nothing orders migrations before the Vercel deploy (#113). Conditions C1–C8, recovery plan and smoke list: `docs/releases/release-readiness-2026-10/`. development → main was **not** performed; PROD was read-only.

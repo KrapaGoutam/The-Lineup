@@ -3141,6 +3141,19 @@ export type Database = {
         };
         Returns: number;
       };
+      board_end_previous_and_assign: {
+        Args: {
+          p_confirm_transfer?: boolean;
+          p_end_whole_assignment?: boolean;
+          p_location_id: string;
+          p_member_id: number;
+          p_organization_id: string;
+          p_round_id: number;
+          p_service_date: string;
+          p_table_label: string;
+        };
+        Returns: number;
+      };
       board_clear_board: {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;

@@ -173,7 +173,10 @@ async function conflictFromError(
       profileByMember.set(row.id, row.server_profile_id);
   }
   return {
-    kind: detail.kind === "same_server" ? "same_server" : "held",
+    kind:
+      detail.kind === "same_server" || detail.kind === "same_server_repeat"
+        ? detail.kind
+        : "held",
     label: detail.label ?? "",
     holders: holders.flatMap((h) => {
       const columnId = profileByMember.get(h.member_id ?? -1);
@@ -235,16 +238,21 @@ export async function executeBoardActionRemote(
         if (memberId === null) {
           return { ok: false, error: "That column no longer exists." };
         }
-        const { data, error } = await supabase.rpc("board_assign", {
-          p_organization_id: input.organizationId,
-          p_location_id: input.locationId,
-          p_service_date: serviceDate,
-          p_round_id: Number(action.roundId),
-          p_member_id: memberId,
-          p_table_label: action.tableLabel,
-          p_confirm_transfer: action.confirmTransfer ?? false,
-          p_end_whole_assignment: action.endWholeAssignment ?? false,
-        });
+        // Same-server repeat (#166): the explicit confirmation is its own
+        // trusted RPC; every other assign keeps going through board_assign.
+        const { data, error } = await supabase.rpc(
+          action.endPrevious ? "board_end_previous_and_assign" : "board_assign",
+          {
+            p_organization_id: input.organizationId,
+            p_location_id: input.locationId,
+            p_service_date: serviceDate,
+            p_round_id: Number(action.roundId),
+            p_member_id: memberId,
+            p_table_label: action.tableLabel,
+            p_confirm_transfer: action.confirmTransfer ?? false,
+            p_end_whole_assignment: action.endWholeAssignment ?? false,
+          },
+        );
         if (error) {
           const conflict = await conflictFromError(
             supabase,

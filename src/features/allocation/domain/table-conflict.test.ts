@@ -5,6 +5,7 @@ import {
   classifyTableClaim,
   describeHeldConflict,
   describeSameServer,
+  describeSameServerRepeat,
   listTables,
   verdictFromServerConflict,
 } from "./table-conflict";
@@ -69,12 +70,79 @@ describe("classifyTableClaim", () => {
     });
   });
 
-  it("the same server asking again is a same-server duplicate, never a transfer to self", () => {
+  it("the same server asking again on a LATER turn is a repeat, never a transfer to self", () => {
     const board = boardWith([{ round: "r1", columnId: "a", label: "T6" }]);
-    expect(classifyTableClaim(board, { label: "T6", columnId: "a" })).toEqual({
-      kind: "same-server",
+    expect(
+      classifyTableClaim(board, {
+        label: "T6",
+        columnId: "a",
+        targetRoundId: "r2",
+      }),
+    ).toEqual({
+      kind: "same-server-repeat",
       tables: ["T6"],
+      previous: [
+        {
+          columnId: "a",
+          roundId: "r1",
+          assignmentLabel: "T6",
+          assignmentTables: ["T6"],
+        },
+      ],
     });
+  });
+
+  it("without a chosen cell the repeat targets the server's earliest empty turn", () => {
+    const board = boardWith([{ round: "r1", columnId: "a", label: "T6" }]);
+    board.rounds.push({ id: "r2", sequence: 2, cells: [] });
+    expect(classifyTableClaim(board, { label: "T6", columnId: "a" }).kind).toBe(
+      "same-server-repeat",
+    );
+  });
+
+  it("a table held in the SAME or a LATER turn is blocked, not a repeat", () => {
+    const board = boardWith([
+      { round: "r1", columnId: "b", label: "T1" },
+      { round: "r2", columnId: "a", label: "T6" },
+    ]);
+    // r1 is a's empty earlier turn; its T6 sits in the later r2.
+    expect(
+      classifyTableClaim(board, {
+        label: "T6",
+        columnId: "a",
+        targetRoundId: "r1",
+      }),
+    ).toEqual({ kind: "same-server", tables: ["T6"] });
+  });
+
+  it("a repeat of one part of a combined assignment names the WHOLE previous assignment", () => {
+    const board = boardWith([{ round: "r1", columnId: "a", label: "T2 + T3" }]);
+    expect(
+      classifyTableClaim(board, {
+        label: "T2",
+        columnId: "a",
+        targetRoundId: "r2",
+      }),
+    ).toMatchObject({
+      kind: "same-server-repeat",
+      tables: ["T2"],
+      previous: [
+        { assignmentLabel: "T2 + T3", assignmentTables: ["T2", "T3"] },
+      ],
+    });
+  });
+
+  it("an ended previous assignment is history, not a repeat", () => {
+    const board = boardWith([
+      { round: "r1", columnId: "a", label: "T6", status: "ended" },
+    ]);
+    expect(
+      classifyTableClaim(board, {
+        label: "T6",
+        columnId: "a",
+        targetRoundId: "r2",
+      }).kind,
+    ).toBe("free");
   });
 
   it("the cell being edited does not conflict with itself", () => {
@@ -161,6 +229,32 @@ describe("server-reported conflicts (stale client)", () => {
     expect(fromServer).toEqual(live);
   });
 
+  it("a same_server_repeat report becomes the repeat verdict with the previous assignment", () => {
+    expect(
+      verdictFromServerConflict(
+        {
+          kind: "same_server_repeat",
+          label: "T2",
+          holders: [
+            { columnId: "a", roundId: "7", assignmentLabel: "T2 + T3" },
+          ],
+        },
+        "T2",
+      ),
+    ).toEqual({
+      kind: "same-server-repeat",
+      tables: ["T2"],
+      previous: [
+        {
+          columnId: "a",
+          roundId: "7",
+          assignmentLabel: "T2 + T3",
+          assignmentTables: ["T2", "T3"],
+        },
+      ],
+    });
+  });
+
   it("a same_server report becomes the no-op notice", () => {
     expect(
       verdictFromServerConflict(
@@ -212,6 +306,48 @@ describe("conflict copy", () => {
   it("no transfer option when transfer is not valid", () => {
     const copy = held("T6", "T6 + T8");
     expect(copy.transferLabel).toBeNull();
+  });
+
+  it("repeat dialog copy: single table, and the combined whole-assignment warning", () => {
+    const single = describeSameServerRepeat(
+      {
+        kind: "same-server-repeat",
+        tables: ["T2"],
+        previous: [
+          {
+            columnId: "a",
+            roundId: "r1",
+            assignmentLabel: "T2",
+            assignmentTables: ["T2"],
+          },
+        ],
+      },
+      { wantedLabel: "T2", serverName: "Sidhu" },
+    );
+    expect(single.description).toBe(
+      "T2 is already assigned to Sidhu. End Sidhu's previous T2 assignment and assign T2 to Sidhu for this turn?",
+    );
+    expect(single.endPreviousLabel).toBe("End Previous + Assign");
+
+    const combined = describeSameServerRepeat(
+      {
+        kind: "same-server-repeat",
+        tables: ["T2"],
+        previous: [
+          {
+            columnId: "a",
+            roundId: "r1",
+            assignmentLabel: "T2 + T3",
+            assignmentTables: ["T2", "T3"],
+          },
+        ],
+      },
+      { wantedLabel: "T2", serverName: "Sidhu" },
+    );
+    expect(combined.description).toContain("combined assignment T2 + T3");
+    expect(combined.description).toContain(
+      "ends the entire T2 + T3 assignment (T3 will be released too)",
+    );
   });
 
   it("same-server message and table lists", () => {
