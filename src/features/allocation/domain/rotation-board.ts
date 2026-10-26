@@ -46,6 +46,12 @@ export type BoardAction =
       // occupancy concept of its own (demo mode is single-user), so it
       // ignores this field entirely.
       confirmTransfer?: boolean;
+      // Cross-view integrity (X2): with confirmTransfer, End the holder's
+      // WHOLE assignment even when it covers tables the new label does not
+      // ("T6 + T7" held, "T6" wanted -> both released). Without it a wider
+      // combined holder is refused, as before. Mirrors board_assign's
+      // p_end_whole_assignment.
+      endWholeAssignment?: boolean;
     }
   | { type: "clear-cell"; roundId: string; columnId: string }
   | { type: "add-column"; column: RotationColumn }
@@ -242,6 +248,7 @@ function displaceConflictingCells(
   board: RotationBoard,
   columnId: string,
   label: string,
+  endWhole = false,
 ): boolean {
   const wanted = new Set(labelParts(label));
   const displaced: RotationCell[] = [];
@@ -250,7 +257,7 @@ function displaceConflictingCells(
       if (cell.columnId === columnId || cell.status !== "active") continue;
       const held = labelParts(cell.tableLabel);
       if (!held.some((part) => wanted.has(part))) continue;
-      if (!held.every((part) => wanted.has(part))) return false;
+      if (!endWhole && !held.every((part) => wanted.has(part))) return false;
       displaced.push(cell);
     }
   }
@@ -313,10 +320,30 @@ export function applyBoardAction(
       ) {
         return current;
       }
+      // Cross-view integrity (X2): a server never holds the same physical
+      // table twice. Another cell of THIS column already holding one of the
+      // tables is a no-op here, exactly as board_assign refuses it.
+      const wantedParts = new Set(labelParts(label));
+      for (const other of board.rounds) {
+        for (const cell of other.cells) {
+          if (cell.columnId !== action.columnId || cell.status !== "active")
+            continue;
+          if (other.id === round.id) continue;
+          if (labelParts(cell.tableLabel).some((part) => wantedParts.has(part)))
+            return current;
+        }
+      }
       if (action.confirmTransfer) {
         // Atomic reassign: end the previous owner(s) in the same step the
         // new assignment lands, mirroring board_assign.
-        if (!displaceConflictingCells(board, action.columnId, label)) {
+        if (
+          !displaceConflictingCells(
+            board,
+            action.columnId,
+            label,
+            action.endWholeAssignment ?? false,
+          )
+        ) {
           return current;
         }
       }

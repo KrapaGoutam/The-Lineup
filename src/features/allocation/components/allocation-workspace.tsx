@@ -44,8 +44,10 @@ import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
 import { openPickerUnlessInnerAction } from "@/features/allocation/components/picker-cell-click";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { ServerBoardView } from "@/features/allocation/components/server-board-view";
 import { TableMap } from "@/features/allocation/components/table-map";
+import { useTableClaim } from "@/features/allocation/components/table-claim";
 import type {
   AllocationContext,
   CrossEditEntry,
@@ -54,7 +56,10 @@ import {
   crossEditToActivity,
   type BoardActivityEntry,
 } from "@/features/allocation/domain/board-activity";
-import { DEMO_FLOOR_LAYOUT } from "@/features/allocation/domain/floor-layout";
+import {
+  DEMO_FLOOR_LAYOUT,
+  parseCombinedTableLabel,
+} from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
   createRotationBoard,
@@ -148,6 +153,7 @@ function TableEntry({
   cellId,
   value,
   status,
+  offMap = false,
   disabled,
   onSubmit,
   onClear,
@@ -158,6 +164,11 @@ function TableEntry({
   cellId?: string;
   value: string | null;
   status: "empty" | "active" | "ended" | "skipped";
+  // Cross-view integrity (X1): at least one of the cell's tables has no
+  // position on the floor map (an unpositioned or free-text table, e.g. "1").
+  // It is still a real entry; the badge only says it will not appear as a
+  // tile on Floor/Picker.
+  offMap?: boolean;
   disabled: boolean;
   onSubmit: (value: string) => void;
   onClear: () => void;
@@ -222,7 +233,7 @@ function TableEntry({
             Table {value}
           </span>
           <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
-            Ended
+            Ended{offMap ? " · Off-map" : ""}
           </span>
         </span>
         {!disabled ? (
@@ -248,6 +259,7 @@ function TableEntry({
             className="size-2 flex-none rounded-full bg-emerald-300"
             aria-label="Recorded"
           />
+          {offMap ? <Badge tone="warning">Off-map</Badge> : null}
         </span>
         {!disabled ? (
           <div className="flex items-center gap-1">
@@ -371,6 +383,8 @@ export function AllocationWorkspace({
     () => initialContext?.canRedo ?? false,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  // Neutral, non-error message (e.g. "T6 is already assigned to TestOwner.").
+  const [notice, setNotice] = useState<string | null>(null);
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
   // Table Rotation Multi-View: local UI state, not synced -- Undo/Redo
@@ -581,8 +595,22 @@ export function AllocationWorkspace({
     const floorLayout = demoMode
       ? DEMO_FLOOR_LAYOUT
       : (initialContext?.physicalTables ?? []);
-    return buildBoardReadModel({ board, layout: floorLayout, team });
-  }, [demoMode, initialContext?.physicalTables, board, team]);
+    return buildBoardReadModel({
+      board,
+      layout: floorLayout,
+      // Every registered table incl. unpositioned ones (off-map), so they are
+      // represented instead of dropped. Demo mode: the static layout is the
+      // whole registry.
+      registry: demoMode ? undefined : initialContext?.registeredTables,
+      team,
+    });
+  }, [
+    demoMode,
+    initialContext?.physicalTables,
+    initialContext?.registeredTables,
+    board,
+    team,
+  ]);
   const resolvedTables = readModel.tables;
   // Production stability hotfix: distinguishes "this location has zero
   // registered tables" from "the tables query itself failed" -- see
@@ -652,10 +680,71 @@ export function AllocationWorkspace({
         onSessionInvalid();
         return;
       }
+      // Stale client: the database says the table is held. Show the same
+      // decision a fresh client would have, and pull the authoritative state.
+      if (result.conflict && action.type === "assign") {
+        claim.presentServerConflict(
+          {
+            label: action.tableLabel,
+            columnId: action.columnId,
+            roundId: action.roundId,
+          },
+          result.conflict,
+        );
+        router.refresh();
+        return;
+      }
       setActionError(result.error);
       return;
     }
     setServiceSessionId(result.data.serviceSessionId);
+  }
+
+  // Cross-view integrity (X2): ONE occupied-table flow for every assignment
+  // origin (Grid, Floor, Picker, Servers). See table-claim.tsx.
+  const claim = useTableClaim({
+    board,
+    disabled: !canOperateFloor,
+    onAssign: ({
+      label,
+      columnId,
+      roundId,
+      confirmTransfer,
+      endWholeAssignment,
+    }) => {
+      execute({
+        type: "assign",
+        roundId,
+        columnId,
+        tableLabel: label,
+        confirmTransfer,
+        endWholeAssignment,
+      });
+      logCrossEdit(columnId);
+    },
+    onTransfer: ({ sourceRoundId, sourceColumnId, destColumnId }) =>
+      execute({
+        type: "transfer",
+        sourceRoundId,
+        sourceColumnId,
+        destColumnId,
+      }),
+    onNotice: setNotice,
+  });
+
+  // Attribution for every cross-column write (kept for the demo activity feed;
+  // real mode reads events).
+  function logCrossEdit(columnId: string) {
+    if (!isCrossColumnEdit({ profileId: user.profileId, columnId })) return;
+    const column = board.columns.find(({ id }) => id === columnId);
+    setCrossEditLog((log) => [
+      ...log,
+      {
+        at: new Date().toISOString(),
+        actorName: user.name,
+        columnName: column?.name ?? "",
+      },
+    ]);
   }
 
   async function undo() {
@@ -708,7 +797,42 @@ export function AllocationWorkspace({
     setShowReopenForm(false);
   }
 
+  // A Grid cell is "off-map" when any of its tables has no position on the
+  // floor map. Not judged while the map has no tables at all (not configured
+  // yet, or the query failed) -- then nothing is meaningfully off the map.
+  const mappedLabels = new Set(readModel.tables.map(({ label }) => label));
+  function isOffMap(label: string) {
+    if (mappedLabels.size === 0 || physicalTablesLoadError) return false;
+    return parseCombinedTableLabel(label).some(
+      (part) => !mappedLabels.has(part),
+    );
+  }
+
   const lastTipsAuditEntry = tipsAuditLog.at(-1);
+
+  // Picker: a map tile or an off-map row was chosen for the selected cell.
+  // Picker is a rotation-cell-driven surface, not a physical-operations one --
+  // it never triggers Floor's "server already has tables" dialog; assigning
+  // here creates a new active row at the selected cell, additive to whatever
+  // else this server already holds (Upgrade 1.1 multi-table). A table that is
+  // not free goes through the shared occupied-table flow instead.
+  function pickTable(label: string) {
+    if (!pickerTarget) return;
+    const request = {
+      label,
+      columnId: pickerTarget.columnId,
+      roundId: pickerTarget.roundId,
+    };
+    setPickerTarget(null);
+    setPickerMapOpen(false);
+    if (claim.intercept(request)) return;
+    execute({
+      type: "assign",
+      roundId: request.roundId,
+      columnId: request.columnId,
+      tableLabel: label,
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -749,6 +873,21 @@ export function AllocationWorkspace({
             onClick={() => router.refresh()}
           >
             Refresh
+          </button>
+        </div>
+      ) : null}
+      {notice ? (
+        <div
+          role="status"
+          className="border-border bg-muted/40 flex items-center justify-between rounded-xl border px-4 py-2 text-sm"
+        >
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setNotice(null)}
+          >
+            Dismiss
           </button>
         </div>
       ) : null}
@@ -1096,6 +1235,8 @@ export function AllocationWorkspace({
           {activeView === "floor" ? (
             <FloorView
               tables={resolvedTables}
+              offMapTables={readModel.offMapTables}
+              intercept={claim.intercept}
               servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               activeColumns={visibleColumns}
@@ -1139,6 +1280,8 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
+              offMapTables={readModel.offMapTables}
+              intercept={claim.intercept}
               servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               board={board}
@@ -1429,34 +1572,33 @@ export function AllocationWorkspace({
                                   cellId={`${column.name}|${round.sequence}`}
                                   value={cell?.tableLabel ?? null}
                                   status={cell?.status ?? "empty"}
+                                  offMap={isOffMap(cell?.tableLabel ?? "")}
                                   disabled={!canWrite}
                                   onSubmit={(tableLabel) => {
-                                    // Grid semantics: typing a table another
-                                    // server still holds ENDS that server's
-                                    // entry (kept as Grid history) and
-                                    // assigns it here, atomically, in one
-                                    // database transaction -- never a
-                                    // second active owner.
+                                    // Cross-view integrity (X2): typing a table
+                                    // another server holds no longer silently
+                                    // takes it. The shared occupied-table flow
+                                    // asks Transfer / End + Assign / Cancel; a
+                                    // free table assigns directly.
+                                    if (
+                                      claim.intercept({
+                                        label: tableLabel.trim(),
+                                        columnId: column.id,
+                                        roundId: round.id,
+                                      })
+                                    ) {
+                                      return;
+                                    }
                                     execute({
                                       type: "assign",
                                       roundId: round.id,
                                       columnId: column.id,
                                       tableLabel,
-                                      confirmTransfer: true,
                                     });
                                     // Attribution is recorded for every
                                     // cross-column write, unconditionally — there
                                     // is no reason field to gate it on anymore.
-                                    if (crossColumn) {
-                                      setCrossEditLog((log) => [
-                                        ...log,
-                                        {
-                                          at: new Date().toISOString(),
-                                          actorName: user.name,
-                                          columnName: column.name,
-                                        },
-                                      ]);
-                                    }
+                                    if (crossColumn) logCrossEdit(column.id);
                                   }}
                                   onClear={() => {
                                     execute({
@@ -1521,32 +1663,13 @@ export function AllocationWorkspace({
                     loadError={physicalTablesLoadError}
                     selectedLabel={null}
                     disabled={!canOperateFloor}
-                    onSelectTable={(label) => {
-                      if (!pickerTarget) return;
-                      const table = resolvedTables.find(
-                        (t) => t.label === label,
-                      );
-                      if (table?.occupiedBy) {
-                        setActionError(
-                          `Table ${label} is already assigned to ${table.occupiedBy.name}. Use Floor to transfer it.`,
-                        );
-                        return;
-                      }
-                      // Picker is a rotation-cell-driven surface, not a
-                      // physical-operations one -- it never triggers
-                      // Floor's decision dialog. Assigning here always
-                      // just creates a new active row at the selected
-                      // cell, additive to whatever else this server
-                      // already holds (Upgrade 1.1 multi-table).
-                      execute({
-                        type: "assign",
-                        roundId: pickerTarget.roundId,
-                        columnId: pickerTarget.columnId,
-                        tableLabel: label,
-                      });
-                      setPickerTarget(null);
-                      setPickerMapOpen(false);
-                    }}
+                    onSelectTable={pickTable}
+                  />
+                  <OffMapTables
+                    tables={readModel.offMapTables}
+                    disabled={!canOperateFloor}
+                    heading="Off-map / unpositioned tables"
+                    onSelectTable={pickTable}
                   />
                   {canOperateFloor && pickerTarget ? (
                     <div className="border-border flex flex-col gap-1.5 border-t pt-3">
@@ -1614,6 +1737,8 @@ export function AllocationWorkspace({
           ) : null}
         </>
       )}
+
+      {claim.dialog}
 
       <p className="text-muted-foreground text-xs">
         Undo and redo restore the previous board state. In Supabase mode the
