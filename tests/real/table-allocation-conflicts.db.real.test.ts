@@ -105,7 +105,8 @@ describe("XM-022 End + Assign (one atomic call)", () => {
     // Refused without the flag (existing safety).
     const refused = await board.assign(fx.manager, m2, "4", { confirm: true });
     expect(refused.error?.message).toMatch(/combined assignment/i);
-    expect(sorted((await board.activeByMember()).get(m1))).toEqual(["4+5"]);
+    // #157: the stored label is canonical ("4+5" is stored as "4 + 5").
+    expect(sorted((await board.activeByMember()).get(m1))).toEqual(["4 + 5"]);
 
     ok(
       await board.assign(fx.manager, m2, "4", {

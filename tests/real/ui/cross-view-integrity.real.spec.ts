@@ -442,6 +442,7 @@ test('CR-UI stale browser typing "2": the database resolves it to T2, answers wi
   expect(entries.data ?? []).toHaveLength(0);
 
   await chooseConflict(stale, "end-assign");
+  await switchView(stale, "Floor");
   await expectOwner(stale, "T2", S2);
   await expectOwner(owner, "T2", S2); // live on the other context
   await expectEndedHistory(owner, S1, "T2");
