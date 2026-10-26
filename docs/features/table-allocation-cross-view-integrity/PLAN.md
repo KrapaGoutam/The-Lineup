@@ -8,15 +8,15 @@ Not a redesign. A correctness/consistency phase across Grid, Floor, Picker, Serv
 
 ## Phases (all on one branch, logical commits)
 
-| Phase | Scope                                                                    |
-| ----- | ------------------------------------------------------------------------ |
-| X0    | Repo/domain audit + planning/tracking (this file)                        |
-| X1    | Canonical identity + off-map representation in all five views            |
-| X2    | Occupied-table conflict resolver (one domain contract, one dialog)       |
-| X3    | Servers ended / session-history consistency                              |
-| X4    | Parameterized automated cross-view matrix                                |
-| X5    | Real-mode (hosted DEV, production build) concurrency / reconnect / date  |
-| X6    | PR #135 reintegration + final Preview preparation                        |
+| Phase | Scope                                                                   |
+| ----- | ----------------------------------------------------------------------- |
+| X0    | Repo/domain audit + planning/tracking (this file)                       |
+| X1    | Canonical identity + off-map representation in all five views           |
+| X2    | Occupied-table conflict resolver (one domain contract, one dialog)      |
+| X3    | Servers ended / session-history consistency                             |
+| X4    | Parameterized automated cross-view matrix                               |
+| X5    | Real-mode (hosted DEV, production build) concurrency / reconnect / date |
+| X6    | PR #135 reintegration + final Preview preparation                       |
 
 ## X0 audit findings (evidence, no secrets)
 
@@ -40,12 +40,12 @@ Identity model (documented decision): `dining_tables` is unique per `(location_i
 
 ### Current occupied-table behaviour (the defect)
 
-| Origin  | Table held by another server today                                              |
-| ------- | ------------------------------------------------------------------------------- |
+| Origin  | Table held by another server today                                                 |
+| ------- | ---------------------------------------------------------------------------------- |
 | Grid    | `assign` with `confirmTransfer: true` — **silently ends** the other server's entry |
-| Picker  | error banner "…Use Floor to transfer it."                                       |
-| Servers | inline error "…already assigned to X."                                           |
-| Floor   | occupied tile opens a panel: Transfer / End / Unassign (no End + Assign)        |
+| Picker  | error banner "…Use Floor to transfer it."                                          |
+| Servers | inline error "…already assigned to X."                                             |
+| Floor   | occupied tile opens a panel: Transfer / End / Unassign (no End + Assign)           |
 
 DB: `private.displace_conflicting_entries` refuses to end a combined holder wider than the wanted label; matches only registered tables (so unregistered labels can be double-held); a stale non-confirm `assign` fails with a generic P0001 string.
 

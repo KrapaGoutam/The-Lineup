@@ -1,11 +1,15 @@
 # Project Status & Milestone Tracker
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** October 25, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (64/64 files, 559/559 tests passing) | `npm run test:e2e` (demo suite, 345 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (29 pgTAP files, 553 assertions; executed by the CI `Database` job)  
+**Last Updated:** October 26, 2026  
+**Health Gate:** `npm run check` (Passing) | `npm test` (70/70 files, 663/663 tests passing) | `npm run test:e2e` (demo suite, 489 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (30 pgTAP files, 588 assertions; executed by the CI `Database` job)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
+
+## Table Allocation cross-view integrity & conflict actions (#153 — release blocker; branch `fix/table-allocation-cross-view-integrity`)
+
+Found by the owner's smoke of the final DEV Preview. Identity proven from DEV: the owner's "Table 1" has **no `dining_tables` row** (a free-text board label), distinct from the registered `T1` (id 19) — never aliased. Fixed on one branch: **X1** off-map tables (registered-unpositioned or free-text) represented in Grid (badge), Floor (rail), Picker (section), Servers (chips) and Dashboard totals; **X2** one occupied-table flow (Transfer / End + Assign / Cancel, same-server notice, whole combined assignment) for Grid/Floor/Picker/Servers, server-authoritative via `board_assign` PT409 + `p_end_whole_assignment` (migration `20261026090000`, forward-only, applied to DEV only); **X3** Servers keep ended tables as struck-through session history; **X4** 45-scenario cross-view matrix (domain + Playwright on desktop/tablet/mobile); **X5** hosted production-build two-context validation. PR #135 untouched until this merges to `development`. See `docs/features/table-allocation-cross-view-integrity/`.
 
 ## #109 Table Allocation UX consistency follow-up (merged into `development`)
 
