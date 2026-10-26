@@ -7,6 +7,12 @@
 
 ---
 
+## Release-readiness audit — `development` → `main` (#160, 2026-10-26): NO-GO
+
+Read-only audit of `4ec6fe3` (68 commits ahead of `main` `3403058`, 8 new migrations). Code and database surface found release-quality (no security blocker, PROD pre-flight clean, numeric-label impact inert), but the **Production delivery path is not ready**: `deploy-migrations` failed on the last four `main` pushes (#111), PROD history lacks `20260911130000` (#161, so payroll _Unconfirm_ is broken in Production today and `db push` would reject the set), and nothing orders migrations before the Vercel deploy (#113). Conditions C1–C8, recovery plan and smoke list: `docs/releases/release-readiness-2026-10/`. development → main was **not** performed; PROD was read-only.
+
+---
+
 ## 🛠 Infrastructure — DEV Preview & CI Reliability (#133 Done — PR #135 merged into `development`, merge commit `23e38a9`)
 
 Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`, merged with a merge commit on 2026-10-26 after exact-head CI (application, browser-smoke, Database, Vercel pass; `deploy-migrations` skipped) and the owner's final Preview smoke (PASS). `main` and PROD untouched. Docs: `docs/features/dev-preview-ci-reliability/`.
