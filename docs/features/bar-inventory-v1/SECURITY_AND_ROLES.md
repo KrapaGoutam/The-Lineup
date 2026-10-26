@@ -1,6 +1,6 @@
 # Bar Inventory V1 — Security and roles
 
-Planning only. Conventions are those of Tasks V1 and Table Allocation V2 (audited): membership-only role helpers, SELECT-only grants, writes through `SECURITY DEFINER` RPCs with an empty `search_path`, actor from `auth.uid()`.
+Status: D1 locked in BI-0 (management roles only; staff none). Conventions are those of Tasks V1 and Table Allocation V2 (audited): membership-only role helpers, SELECT-only grants, writes through `SECURITY DEFINER` RPCs with an empty `search_path`, actor from `auth.uid()`.
 
 ## 1. Role model
 
@@ -9,7 +9,7 @@ Planning only. Conventions are those of Tasks V1 and Table Allocation V2 (audite
 | Owner             | `owner`                       | Full                  |
 | Manager           | `general_manager`             | Full                  |
 | Assistant Manager | `shift_manager`               | Full                  |
-| Staff             | `host`, `server`              | **None** (default D1) |
+| Staff             | `host`, `server`              | **None** (D1, locked) |
 
 "Full" = view inventory, edit quantities, manage products/vendors/categories/subcategories, import, export, view history and analytics. The management set is exactly `array['owner','general_manager','shift_manager']::public.app_role[]` (the existing `tasks_is_manager` set). Owner / Manager / Assistant Manager are **identical** for this module (consistent with Feature 014: designation is a label over the same permissions); owner-only actions are not introduced.
 

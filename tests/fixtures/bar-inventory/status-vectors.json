@@ -1,0 +1,466 @@
+{
+  "$comment": "Bar Inventory V1 golden vectors (BI-0). Consumed by the TypeScript domain mirror (BI-2) and the pgTAP generator for inventory_stock_status (BI-2). total = round(on_hand + backup, 2). effective_warning = warning ?? (cutoff == null ? null : cutoff + max(1, ceil(cutoff * 0.25))). status: archived > no_cutoff (cutoff null) > critical (total <= cutoff) > low (total <= effective_warning) > healthy. suggested_order applies to critical and low only: max(0, par - total); par null => suggested_order null and order_needed true.",
+  "rules": {
+    "decimals": 2,
+    "warningFallbackRatio": 0.25,
+    "warningFallbackMinStep": 1
+  },
+  "vectors": [
+    {
+      "id": "worked-example",
+      "note": "PRD worked example: on hand 2 + backup 1, cutoff 4, warning 6, par 12",
+      "input": {
+        "on_hand": 2,
+        "backup": 1,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 3,
+        "effective_warning": 6,
+        "status": "critical",
+        "suggested_order": 9,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "boundary-total-equals-cutoff",
+      "note": "total == cutoff is critical (<=)",
+      "input": {
+        "on_hand": 3,
+        "backup": 1,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 4,
+        "effective_warning": 6,
+        "status": "critical",
+        "suggested_order": 8,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "boundary-cutoff-plus-cent",
+      "note": "one cent above cutoff is low",
+      "input": {
+        "on_hand": 4,
+        "backup": 0.01,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 4.01,
+        "effective_warning": 6,
+        "status": "low",
+        "suggested_order": 7.99,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "boundary-total-equals-warning",
+      "note": "total == warning is still low (<=)",
+      "input": {
+        "on_hand": 5,
+        "backup": 1,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 6,
+        "effective_warning": 6,
+        "status": "low",
+        "suggested_order": 6,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "boundary-warning-plus-cent",
+      "note": "one cent above warning is healthy; healthy has no suggestion",
+      "input": {
+        "on_hand": 6,
+        "backup": 0.01,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 6.01,
+        "effective_warning": 6,
+        "status": "healthy",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "warning-equals-cutoff",
+      "note": "warning == cutoff leaves no low band",
+      "input": {
+        "on_hand": 4.01,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": 4,
+        "par": 10,
+        "archived": false
+      },
+      "expected": {
+        "total": 4.01,
+        "effective_warning": 4,
+        "status": "healthy",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "no-cutoff",
+      "note": "no cutoff configured: neutral status, no suggestion",
+      "input": {
+        "on_hand": 5,
+        "backup": 0,
+        "cutoff": null,
+        "warning": null,
+        "par": null,
+        "archived": false
+      },
+      "expected": {
+        "total": 5,
+        "effective_warning": null,
+        "status": "no_cutoff",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "no-cutoff-with-warning-and-par",
+      "note": "a warning without a cutoff does not create a status; effective warning is the explicit value",
+      "input": {
+        "on_hand": 1,
+        "backup": 0,
+        "cutoff": null,
+        "warning": 8,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 1,
+        "effective_warning": 8,
+        "status": "no_cutoff",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "no-cutoff-zero-stock",
+      "note": "zero stock without a cutoff is still no_cutoff, not critical",
+      "input": {
+        "on_hand": 0,
+        "backup": 0,
+        "cutoff": null,
+        "warning": null,
+        "par": null,
+        "archived": false
+      },
+      "expected": {
+        "total": 0,
+        "effective_warning": null,
+        "status": "no_cutoff",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-4",
+      "note": "cutoff 4 -> warning 5; total 5 is low",
+      "input": {
+        "on_hand": 5,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": null,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 5,
+        "effective_warning": 5,
+        "status": "low",
+        "suggested_order": 7,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-20",
+      "note": "cutoff 20 -> warning 25",
+      "input": {
+        "on_hand": 25,
+        "backup": 0,
+        "cutoff": 20,
+        "warning": null,
+        "par": 40,
+        "archived": false
+      },
+      "expected": {
+        "total": 25,
+        "effective_warning": 25,
+        "status": "low",
+        "suggested_order": 15,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-1",
+      "note": "cutoff 1 -> ceil(0.25)=1 -> warning 2",
+      "input": {
+        "on_hand": 2,
+        "backup": 0,
+        "cutoff": 1,
+        "warning": null,
+        "par": 6,
+        "archived": false
+      },
+      "expected": {
+        "total": 2,
+        "effective_warning": 2,
+        "status": "low",
+        "suggested_order": 4,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-6",
+      "note": "cutoff 6 -> ceil(1.5)=2 -> warning 8",
+      "input": {
+        "on_hand": 8,
+        "backup": 0,
+        "cutoff": 6,
+        "warning": null,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 8,
+        "effective_warning": 8,
+        "status": "low",
+        "suggested_order": 4,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-8",
+      "note": "cutoff 8 -> exactly 2 -> warning 10",
+      "input": {
+        "on_hand": 10.01,
+        "backup": 0,
+        "cutoff": 8,
+        "warning": null,
+        "par": 12,
+        "archived": false
+      },
+      "expected": {
+        "total": 10.01,
+        "effective_warning": 10,
+        "status": "healthy",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-0-empty",
+      "note": "cutoff 0 -> warning 1; zero stock is critical (0 <= 0)",
+      "input": {
+        "on_hand": 0,
+        "backup": 0,
+        "cutoff": 0,
+        "warning": null,
+        "par": 6,
+        "archived": false
+      },
+      "expected": {
+        "total": 0,
+        "effective_warning": 1,
+        "status": "critical",
+        "suggested_order": 6,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-cutoff-0-one",
+      "note": "cutoff 0 -> warning 1; total 1 is low",
+      "input": {
+        "on_hand": 1,
+        "backup": 0,
+        "cutoff": 0,
+        "warning": null,
+        "par": 6,
+        "archived": false
+      },
+      "expected": {
+        "total": 1,
+        "effective_warning": 1,
+        "status": "low",
+        "suggested_order": 5,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "fallback-fractional-cutoff",
+      "note": "cutoff 0.5 -> max(1, ceil(0.125)=1) -> warning 1.5",
+      "input": {
+        "on_hand": 1.5,
+        "backup": 0,
+        "cutoff": 0.5,
+        "warning": null,
+        "par": 4,
+        "archived": false
+      },
+      "expected": {
+        "total": 1.5,
+        "effective_warning": 1.5,
+        "status": "low",
+        "suggested_order": 2.5,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "par-missing-critical",
+      "note": "no par: 'Order needed', no invented quantity",
+      "input": {
+        "on_hand": 1,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": null,
+        "par": null,
+        "archived": false
+      },
+      "expected": {
+        "total": 1,
+        "effective_warning": 5,
+        "status": "critical",
+        "suggested_order": null,
+        "order_needed": true
+      }
+    },
+    {
+      "id": "par-missing-low",
+      "note": "no par on a low item",
+      "input": {
+        "on_hand": 5,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": null,
+        "par": null,
+        "archived": false
+      },
+      "expected": {
+        "total": 5,
+        "effective_warning": 5,
+        "status": "low",
+        "suggested_order": null,
+        "order_needed": true
+      }
+    },
+    {
+      "id": "par-below-total",
+      "note": "par below total never produces a negative suggestion",
+      "input": {
+        "on_hand": 3,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 2,
+        "archived": false
+      },
+      "expected": {
+        "total": 3,
+        "effective_warning": 6,
+        "status": "critical",
+        "suggested_order": 0,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "par-zero",
+      "note": "par 0 is a configured par (suggestion 0), not missing",
+      "input": {
+        "on_hand": 3,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 0,
+        "archived": false
+      },
+      "expected": {
+        "total": 3,
+        "effective_warning": 6,
+        "status": "critical",
+        "suggested_order": 0,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "half-keg",
+      "note": "decimals: half a keg on hand",
+      "input": {
+        "on_hand": 0.5,
+        "backup": 0,
+        "cutoff": 1,
+        "warning": null,
+        "par": 3,
+        "archived": false
+      },
+      "expected": {
+        "total": 0.5,
+        "effective_warning": 2,
+        "status": "critical",
+        "suggested_order": 2.5,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "float-trap-0.1-plus-0.2",
+      "note": "0.1 + 0.2 must equal 0.3 (2-decimal rounding) so it is critical against cutoff 0.3; IEEE addition would give 0.30000000000000004",
+      "input": {
+        "on_hand": 0.1,
+        "backup": 0.2,
+        "cutoff": 0.3,
+        "warning": 1,
+        "par": 2,
+        "archived": false
+      },
+      "expected": {
+        "total": 0.3,
+        "effective_warning": 1,
+        "status": "critical",
+        "suggested_order": 1.7,
+        "order_needed": false
+      }
+    },
+    {
+      "id": "archived-excluded",
+      "note": "archived products are excluded from status, KPIs and recommendations",
+      "input": {
+        "on_hand": 0,
+        "backup": 0,
+        "cutoff": 4,
+        "warning": 6,
+        "par": 12,
+        "archived": true
+      },
+      "expected": {
+        "total": 0,
+        "effective_warning": 6,
+        "status": "archived",
+        "suggested_order": null,
+        "order_needed": false
+      }
+    }
+  ]
+}

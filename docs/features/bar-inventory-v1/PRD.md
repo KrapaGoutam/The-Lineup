@@ -1,6 +1,6 @@
 # Bar Inventory V1 — Product Requirements
 
-Status: **PLAN — awaiting owner review. No application code, no migration.** Tracking: issue #168 "[Feature] Bar Inventory V1 — stock, ordering, history and analytics" (label `module:bar-inventory`, milestone "Future Product Backlog"), Project #4. Roadmap position **#2**.
+Status: **BI-0 COMPLETE — owner decisions D1–D8 LOCKED (2026-10-26). Implementation proceeds BI-1 → BI-11.** Tracking: issue #168 "[Feature] Bar Inventory V1 — stock, ordering, history and analytics" (label `module:bar-inventory`, milestone "Future Product Backlog"), Project #4. Roadmap position **#2**.
 
 Companion documents: `DATA_MODEL.md` · `UI_UX_PLAN.md` · `IMPORT_EXPORT_SPEC.md` · `ANALYTICS_SPEC.md` · `SECURITY_AND_ROLES.md` · `ACCEPTANCE_CRITERIA.md` · `TEST_STRATEGY.md` · `IMPLEMENTATION_PLAN.md`.
 
@@ -93,15 +93,23 @@ Secondary tier (see `UI_UX_PLAN.md` §1): desktop nav **Primary** — Table Allo
 - **Tasks / notifications:** critical stock → create a Task or notify managers. Needs owner approval and the Tasks notification scope (#154) settled first.
 - **Staff read-only access**, multi-location switching, saved filter views, barcode scanning, POS-driven depletion, cost tracking.
 
-## 10. Owner decisions needed before BI-0 (recommended defaults in bold)
+## 10. Owner decisions — LOCKED (2026-10-26, recorded in BI-0)
 
-| #   | Decision                                                                    | Options                                                                                 |
-| --- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| D1  | Staff access in V1                                                          | **none** · read-only                                                                    |
-| D2  | Vendor required, with explicit "Unassigned"                                 | **required + system "Unassigned" vendor** · allow null vendor                           |
-| D3  | Is a negative **Stock Count** variance counted as consumption in analytics? | **yes, default on, toggleable** · only explicit "Usage" events                          |
-| D4  | Blank cell in an import **update** row                                      | **leave unchanged** · set to zero                                                       |
-| D5  | Catalog scope                                                               | **organization-level products + location-level stock** · everything location-level      |
-| D6  | XLSX library                                                                | decided in BI-0 after a dependency/security review (no XLSX library is installed today) |
-| D7  | Realtime for stock                                                          | **notify → refetch (existing pattern)** · none in V1                                    |
-| D8  | Unit types                                                                  | **curated list + "other"** · fully free text                                            |
+| #   | Decision              | Locked outcome                                                                                                                                                                                                                                                                 |
+| --- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Staff access in V1    | Owner, Manager, Assistant Manager only. Normal staff: **no access** (module hidden, route refused, RLS/RPC deny `42501`).                                                                                                                                                      |
+| D2  | Vendors               | Vendor is **required** and is a structured entity (never repeated free text). Explicit system vendor **Unassigned** for an unknown vendor. Create manually or during import; rename; deactivate/reactivate; **never hard-delete a vendor that has history**.                   |
+| D3  | Stock Count analytics | A negative change from a genuine **Stock Count** is **Observed Depletion** (may contribute to movement analytics; never called a confirmed sale). Explicit **Usage** is **Confirmed Usage**. Correction, Transfer In/Out, Delivery/Restock **never** count as consumption.     |
+| D4  | Import blanks         | Blank cell = **leave the existing value unchanged**. Zero requires an explicit `0`. A blank is never read as zero.                                                                                                                                                             |
+| D5  | Catalog scope         | **Organization-level** catalog (vendors, categories, subcategories, product definitions) + **location-level** stock (on hand, backup, cutoff, warning, par, adjustments, history). Designed for future multi-location.                                                         |
+| D6  | XLSX library          | XLSX is **required**. Chosen in BI-0 after the dependency review: **`read-excel-file@9.3.12` (import) + `write-excel-file@4.1.1` (export)**, server-side only, behind our own bounded pre-flight guard. Evidence in `IMPORT_EXPORT_SPEC.md` §1. Installed in BI-8, not before. |
+| D7  | Realtime              | **Database = truth; Realtime event = invalidation; client = refetch** the canonical inventory. Quantities are never synchronized from client event payloads.                                                                                                                   |
+| D8  | Unit types            | Curated units **Bottle, Can, Pack, Case, Keg** plus **Other** (custom display label, ≤ 40 chars). Not unrestricted free text. Extending the list is a one-line constant + check-constraint change.                                                                             |
+
+### Consequences recorded by BI-0 (spec deltas)
+
+- **Terminology (D3):** analytics use _Confirmed Usage_ (reason `usage`) and _Observed Depletion_ (negative `stock_count`); the combined series is labelled "Movement (usage + observed depletion)". The draft toggle "Include count variance as usage" becomes **"Include observed depletion"** (default on); it affects only the combined movement series, never the separate Observed Depletion series.
+- **Warning fallback:** calculated **at read time** in the `inventory_stock_status` view and the TypeScript mirror; **never normalized onto the row** (a stored fallback would go stale when the cutoff changes and would duplicate the explicit value). The `warning` column holds only an explicit entry.
+- **Units (D8):** `inventory_products.unit_type` is a text column with a check constraint (`bottle|can|pack|case|keg|other`) plus `unit_label text null` (required iff `other`); the identity `unit_key` is the type, or `other:<nameKey(label)>`.
+- **Import template minimum** (confirmed, no extra required columns): `Vendor, Name, On Hand, Backup, Cutoff Limit`; `Unit` defaults to **Bottle** on create with an "assumed value" marker in the preview.
+- **Cutoff on manual create** stays optional (blank → "No cutoff set").

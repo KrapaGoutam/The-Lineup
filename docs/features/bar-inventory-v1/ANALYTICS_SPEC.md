@@ -1,27 +1,27 @@
 # Bar Inventory V1 — Analytics specification
 
-Planning only. All rules below are testable pure functions (`src/features/bar-inventory/domain/analytics.ts`) fed from the adjustment ledger; the database never stores derived analytics in V1.
+Status: owner decision D3 locked in BI-0 (terminology below is normative). All rules below are testable pure functions (`src/features/bar-inventory/domain/analytics.ts`) fed from the adjustment ledger; the database never stores derived analytics in V1.
 
 ## 1. Principle: only the right events count as consumption
 
 The ledger (`inventory_adjustments`) records every quantity change with a **reason**. Analytics classify each row by reason, because `-2 Usage` and `-2 Correction` mean different things.
 
-| Reason             | Direction | Counts as…                                        | In "depletion" (movement)                                    |
-| ------------------ | --------- | ------------------------------------------------- | ------------------------------------------------------------ |
-| Usage              | −         | Consumption                                       | **Yes**                                                      |
-| Stock Count (−)    | −         | Count variance = implied consumption (owner D3)   | **Yes by default**, toggle "Include count variance as usage" |
-| Breakage           | −         | Shrink (loss)                                     | Separate series; optional include                            |
-| Comp               | −         | Shrink (giveaway)                                 | Separate series; optional include                            |
-| Transfer Out       | −         | Moved elsewhere — not consumed                    | No                                                           |
-| Correction (−/+)   | ±         | Data fix                                          | **Never**                                                    |
-| Stock Count (+)    | +         | Count gain (found stock) — a variance, not inflow | No (shown as variance)                                       |
-| Delivery / Restock | +         | Inflow                                            | No (counts as restock)                                       |
-| Transfer In        | +         | Inflow from elsewhere                             | No                                                           |
-| Other              | ±         | Unclassified                                      | No (listed under "Other")                                    |
+| Reason             | Direction | Counts as…                                                             | In "depletion" (movement)                               |
+| ------------------ | --------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| Usage              | −         | **Confirmed Usage**                                                    | **Yes**                                                 |
+| Stock Count (−)    | −         | **Observed Depletion** (count variance; never called a confirmed sale) | **Yes by default**, toggle "Include observed depletion" |
+| Breakage           | −         | Shrink (loss)                                                          | Separate series; optional include                       |
+| Comp               | −         | Shrink (giveaway)                                                      | Separate series; optional include                       |
+| Transfer Out       | −         | Moved elsewhere — not consumed                                         | No                                                      |
+| Correction (−/+)   | ±         | Data fix                                                               | **Never**                                               |
+| Stock Count (+)    | +         | Count gain (found stock) — a variance, not inflow                      | No (shown as variance)                                  |
+| Delivery / Restock | +         | Inflow                                                                 | No (counts as restock)                                  |
+| Transfer In        | +         | Inflow from elsewhere                                                  | No                                                      |
+| Other              | ±         | Unclassified                                                           | No (listed under "Other")                               |
 
 Delta used = the change in **total available** (on hand + backup). A move between on-hand and backup (e.g., −2 on hand, +2 backup) has total delta 0 and is neither depletion nor restock; it is recorded and shown in history but ignored by analytics.
 
-**Rationale for D3.** Most bars do not log each pour. They count periodically. Without treating a negative count variance as consumption, a bar that only counts weekly would show zero movement. The toggle keeps the owner in control; default ON.
+**Rationale for D3 (locked).** Most bars do not log each pour. They count periodically. Without counting a negative count variance as _Observed Depletion_, a bar that only counts weekly would show zero movement. Observed Depletion and Confirmed Usage are always shown as **separate series**; the combined "Movement" series adds them, and the toggle "Include observed depletion" (default on) only changes that combined series. Observed Depletion is never labelled sales or confirmed usage. Correction, Transfer In/Out and Delivery/Restock never count as consumption.
 
 ## 2. Windows and data sufficiency
 
@@ -51,13 +51,15 @@ An item has **enough history** when its window contains ≥ 3 depletion events *
 ## 4. Estimated days to cutoff
 
 ```
+if cutoff is null                → "No cutoff set"
 if total ≤ cutoff                → "At or below cutoff"
-if not enough history            → "Not enough history yet"
+if not enough history            → "Not enough history"
 rate_fast = max(rate_7d, rate_30d); rate_slow = min(rate_7d, rate_30d)
 if rate_fast = 0                 → "No recent movement"
 days_low  = (total − cutoff) / rate_fast
 days_high = (total − cutoff) / max(rate_slow, ε)
-display   = whole days: "4–5 days" (floor(low)–ceil(high)); equal ends → "about 4 days"; high > 30 → "30+ days"
+display   = whole days: "4–5 days" (floor(low)–ceil(high)); equal ends → "about 3 days";
+            low ≥ 30 → "30+ days"; low < 30 < high → "12–30+ days" (open upper end)
 ```
 
 Never a decimal. A range reflects that recent and long-run rates differ. The estimate sorts the Dashboard "running out soonest" list; it does **not** change status colours (status is purely stock vs. thresholds).
