@@ -1,59 +1,38 @@
-# Current Task: DEV Preview & CI Reliability (INFRA-A..D)
-
-# DEV Preview / CI Reliability — Agent Handoff
+# PR #135 Reconciliation — Agent Handoff
 
 Branch: `infra/dev-preview-ci-reliability`
-HEAD: see `git log -1` (last: "docs(infra): handoff and final matrix" on top of `be8e6e8`)
-Base development HEAD: `ead4e8b` (PR #132)
+HEAD: see `git log -1` (merge of `origin/development` into the branch, then validation/docs commits)
+Old PR head: `1030dde`
+Base development HEAD: `56bacb6` (PR #150; includes Table Rotation V2 Part 1, Tasks V1, #134, #109)
+Main HEAD (untouched): `3403058`
 
-Current sub-feature: all implemented; waiting on owner merge decision.
-INFRA-A: ✅ Vercel env applied; deployed-Preview browser smoke is an owner step (Vercel Authentication, no bypass secret created)
-INFRA-B: ✅ CI green on PR #135 (Database job passed via ghcr.io)
-INFRA-C: ✅ `scripts/check-nonprod-env.mjs`, `npm run check:env`, CI scan of `.next`
-INFRA-D: 🟡 docs updated; final "merged" status update after the PR merges
+Merge from development completed: YES (plain merge, no rebase, no force-push)
+Conflicts: `docs/ROADMAP.md`, `docs/STATUS.md`, `tasks/current-task.md` (docs only; workflows, `.gitignore`, `package.json`, scripts and `vitest.config.ts` auto-merged cleanly and were re-inspected)
+Resolved files: ROADMAP (development's Tasks/#134/#109 table + #133 infra section, PR #135 shown ACTIVE not Done), STATUS (development's sections kept; infra section rewritten, stale "#134 unresolved" removed), this file (replaced; the older #109 and original infra handoffs are in git history)
 
-Completed: audit, plan, issue #133, Vercel Preview/Development env, wrapper `scripts/ci/supabase-run.mjs` (start|reset|test), guard, docs, PR #135, CI green.
-In progress: none.
-Not started: owner smoke on the deployed Preview URL; merge; post-merge doc status.
+INFRA-A: 🟡 Vercel env routing in place (Preview/Development → DEV); deployed-Preview smoke awaits the owner
+INFRA-B: 🟡 wrapper in Database workflow (start/reset/test); exact-head CI pending (see below)
+INFRA-C: 🟡 env guard + tracked-local-paths guard in `application` job
+INFRA-D: 🟡 docs reconciled; GitHub tracking updated; final "merged" wording after merge
 
-## Current State & Next Step
+Environment: see `docs/features/dev-preview-ci-reliability/IMPLEMENTATION_REPORT.md` (read-only Vercel inspection, names/scopes only)
+Production vars changed: NO
 
-- Local-evidence guard added (`.gitignore` docs/testing/ + \*.code-workspace; `scripts/check-tracked-local-paths.mjs` runs first in CI `application`). CI on `3ec9590`: application, browser-smoke, migrations-and-policies, Vercel all PASS.
-- OWNER-VERIFIED MANUAL GATE REQUIRED: Preview smoke (login, Table Allocation, Schedule, Team; DEV-backed, not demo) behind Vercel Authentication. Not performed by the agent; no bypass created. Do not invent a PASS.
-- Exact next action: once the owner confirms the smoke, confirm checks are green on the PR #135 head, `gh pr merge 135 --merge` (merge commit, not squash), verify development has it and main does not, close out #133 / Project #4 / docs via branch `docs/dev-preview-ci-closeout`, THEN start #134 on `fix/table-rotation-production-realtime` from fresh development.
-- Work Package B (#134) NOT started. DO NOT start Tasks V1; DO NOT merge to main; DO NOT touch PROD.
-- Incident: `docs/testing/` was briefly public (commit 2eaf6d0, history rewritten). Now ignored and CI-guarded. User reports no PINs/keys/passwords; no credential rotation indicated.
+CI (exact head): see the PR #135 checks — record results here before finishing.
 
-Files changed: `.github/workflows/{ci,database}.yml`, `package.json`, `vitest.config.ts`, `scripts/ci/supabase-run.{mjs,test.ts}`, `scripts/check-nonprod-env.{mjs,test.ts}`, `docs/{CI_CD,DEPLOYMENT,STATUS,ROADMAP}.md`, `docs/features/dev-preview-ci-reliability/*`, `tasks/current-task.md`.
-Uncommitted files: none tracked. Untracked and must stay uncommitted: `docs/testing/` (DEV validation report + evidence), `The Lineup.code-workspace`.
-Commits created: plan docs; Vercel mapping docs; Database CI hardening; env guard + docs; wrapper extended to reset/test; handoff.
+Owner Preview gate: REQUIRED (Vercel Authentication on; no bypass created; agent cannot sign in)
+Owner smoke list: Preview opens · login page · synthetic DEV user sign-in · Table Allocation · Tasks · Schedule · Team · data clearly DEV-backed · no Production data
 
-Vercel Preview state: DEV URL/publishable key, DEV secret key + pepper (Sensitive), slug, `NEXT_PUBLIC_DEMO_MODE=false`; no Neon.
-Vercel Development state: same DEV values (non-sensitive, Vercel rule), demo=false; no Neon.
-Vercel Production state: unchanged (metadata diff identical).
-DEV Supabase ref: opmujepkemwcdxxorhfd
-PROD Supabase ref: ftadewtkjlaotfdvtjcv
-Production variables changed: NO
-
-Database CI state: PASS on PR #135 (run 40106511748)
-Workflow/run: `Database / migrations-and-policies`; first run failed at `db:test` (pg_prove pulled from ECR) -> fixed by routing reset/test through the wrapper.
-Failure classification: registry-transient (`toomanyrequests`) — correctly classified; the retry path itself is only unit-tested, not yet exercised in CI.
-Tests reached: start, reset (35 migrations), pgTAP. Tests passed: 25 files / 387 assertions. Tests blocked: none.
-
-GitHub issues updated: #133 (parent), #134 (new bug: Realtime in production builds)
-Project #4 state: #133 In Progress -> Review; #134 Backlog
-Milestone: Platform / CI Reliability
-PR: #135 -> development (merge commit only)
-
-Local docs updated: STATUS, ROADMAP, CI_CD, DEPLOYMENT, feature docs.
+PR #135: open, not merged · #133: open / Review · Project #4: Review · Milestone: Platform / CI Reliability (stays open)
 
 development merged: NO
 main merged: NO
-DEV touched: YES (read-only config use; real-mode suite creates and deletes its own synthetic org)
+DEV touched: NO (read-only checks only)
 PROD touched: NO
 
-Running processes: none.
-Exact next action: owner opens the Preview URL of PR #135, signs in with a synthetic DEV user, checks Table Allocation / Schedule / Team; then merge PR #135 with a **merge commit**; then update docs (INFRA-D final) and close #133.
-Read first: `docs/features/dev-preview-ci-reliability/IMPLEMENTATION_REPORT.md`
-Run first: `gh pr checks 135`
-DO NOT: touch PROD or Production Vercel variables; merge to `main`; commit `docs/testing/`; use `git add -A` / `git add .` (it swept `docs/testing/` into a commit once — it was removed from the branch with a lease-guarded force push); start Tasks V1; fix #134 inside this PR.
+## Current State & Next Step
+
+- Reconciliation merge is committed and pushed; waiting on exact-head CI and the new Preview deployment, then the owner smoke.
+- Exact next action: when the owner reports `Preview owner smoke PASS`, re-check the PR head and CI, then `gh pr merge 135 --merge` (merge commit, not squash/rebase). Then verify development contains the PR and main does not, close out #133 / Project #4, and open `docs/dev-preview-ci-final-closeout` from latest development for final wording.
+- Next separate task after merge: Release Readiness Review (do NOT merge `development → main` automatically).
+- DO NOT: merge to main, touch PROD, change Production Vercel variables, disable Vercel protection or create a bypass secret, copy PROD Neon into DEV/Preview, force-push, squash/rebase-merge, start Part 2, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`.

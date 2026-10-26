@@ -1,21 +1,39 @@
 # Project Status & Milestone Tracker
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** September 11, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (45/45 files, 359/359 tests passing) | `npm run test:e2e` (full suite, 153/153 passing across desktop/host-tablet/server-mobile) | `npm run db:test` (18/18 pgTAP files, 228 assertions)  
+**Last Updated:** October 25, 2026  
+**Health Gate:** `npm run check` (Passing) | `npm test` (64/64 files, 559/559 tests passing) | `npm run test:e2e` (demo suite, 345 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (29 pgTAP files, 553 assertions; executed by the CI `Database` job)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
 
-## 🛠 Infrastructure — DEV Preview & CI Reliability (in progress, #133)
+## 🛠 Infrastructure — DEV Preview & CI Reliability (PR #135 open, #133 in review)
 
-Branch `infra/dev-preview-ci-reliability` → PR into `development`. Docs: `docs/features/dev-preview-ci-reliability/`.
+Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`; reconciled with `development` (Tasks V1, #134 and #109 included). Docs: `docs/features/dev-preview-ci-reliability/`. **Not merged; not Done until merged.**
 
-- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; deployed-Preview browser smoke awaits the owner (Vercel Authentication).
-- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`).
-- **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output.
+- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; the deployed-Preview browser smoke awaits the owner (Vercel Authentication). The smoke now also covers Tasks.
+- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`); `deploy-migrations` runs only on a push to `main`.
+- **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output; `scripts/check-tracked-local-paths.mjs` keeps local evidence out of git.
 - **INFRA-D** CI/CD + deployment docs.
-- Finding **#134**: the real-mode suite fails against production builds (Realtime), passes under `next dev`.
+- Original finding **#134** (the real-mode suite failed against production builds because of a Realtime resubscribe loop) is **resolved and merged** into `development` (PR #147, `50fbd02`; production-build real-mode suite 18/18). It no longer qualifies PR #135.
+
+---
+
+## #109 Table Allocation UX consistency follow-up (merged into `development`)
+
+Five residual UX items after Part 1, no migration, no schema change, DEV/PROD untouched: U1 Picker inner buttons no longer also open the map (FRONT-005); U2 Dashboard "Recent activity" renders all 18 supported board events through one presenter with a safe fallback (FRONT-008); U3 combined assignments ("T1 + T2") say that Transfer / End / Unassign act on the whole assignment, beside the action; U4 Servers (and the Floor legend) count authoritative held tables including ones not on the floor map, using the shared read model (FRONT-007 residual); U5 stale comments/status text refreshed (DOC-001). Behavior of the actions is unchanged. Merged via PR #149 (merge commit `a34af14`; application, browser-smoke and Vercel green, `Database` not triggered — no DB paths); #109 closed, `main` not merged, PROD untouched. Evidence: Vitest 559, demo Playwright 230/230 (desktop + server-mobile), hosted real UI on a production build 18/18. See `docs/features/table-allocation-ux-consistency/` and `tasks/current-task.md`.
+
+---
+
+## #134 production-build Table Rotation Realtime (merged into `development`)
+
+Root cause: the production bundle inlines the hook's default `createClient`, so the Realtime effect's dependency changed every render → resubscribe on every `router.refresh()` (refetch loop, same-topic channel reuse races). `next dev` kept a stable identity and masked it. Fix is client-only (`use-board-realtime.ts`): stable client ref, one channel per lifecycle, no join while a same-topic removal is pending. Evidence on DEV Supabase: production build + `next start` real-mode UI 18/18, `next dev` 18/18, Vitest 491/491, lint/typecheck pass; PROD untouched. Merged via PR #147 (merge commit `50fbd02`; application, browser-smoke, Vercel green on `bba051c`; Database workflow not triggered, no DB paths changed); #134 closed, `main` not merged. See `docs/features/table-rotation-production-realtime/` and `tasks/current-task.md`.
+
+---
+
+## Tasks V1 (merged into `development`)
+
+T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merged into `development` via PR #145 (merge commit `4c393d3`) with application, browser-smoke, Database and Vercel green on `c036cf2`; `main` not merged, PROD untouched (#134, which blocked `development → main` at the time, was fixed afterwards — see the #134 section above). See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
 
 ---
 

@@ -20,3 +20,21 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] Audit bundle size and dynamic import splitting for heavier settings dialogs.
 - [ ] Add Playwright E2E test covering the newly implemented Feature 021 mobile dock navigation.
 - [ ] Review Supabase RLS index usage with EXPLAIN ANALYZE on high-frequency tables.
+
+---
+
+## Tasks V1 deferrals (open — see docs/features/tasks-v1/IMPLEMENTATION_REPORT.md §6)
+
+- [ ] Custom recurrence intervals (every N days/weeks).
+- [ ] Per-organization custom task categories.
+- [ ] "Everyone on shift" assignment (couples to Schedule).
+- [ ] Automatic shift handoff (V1 is manual carry-forward / reassign / cancel).
+- [ ] Optional manager verification (`pending_verification`) for cash count / temperature log / security closing.
+- [ ] Per-assignee completion for shared tasks.
+- [ ] Push / email / SMS notification channels.
+- [ ] Realtime as an invalidation-only signal (re-evaluate; #134 is fixed and merged to `development`).
+- [ ] Hosted real-mode Tasks suites (`tests/real/tasks-v1.db.real.test.ts`, `tests/real/ui/tasks.real.spec.ts`) in a protected CI job with DEV secrets.
+
+## Carried over (unchanged by Tasks V1)
+
+- #106 `private.has_org_role` creator bypass · #109 Table Allocation UX consistency · #134 production-build Realtime (**release blocker for `development → main`**) · PR #135 protected-Preview manual smoke · Neon credential rotation · production stale duplicate active-entry review.

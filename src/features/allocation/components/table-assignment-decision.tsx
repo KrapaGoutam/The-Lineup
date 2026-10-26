@@ -4,11 +4,27 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { getAssignmentScope } from "@/features/allocation/domain/assignment-scope";
 import {
   findEarliestEmptyRoundForColumn,
   getActiveTablesForColumn,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+
+/** " (both tables released)" for a combined assignment, else nothing. */
+function scopeSuffix(assignmentLabel: string, verb: string) {
+  const scope = getAssignmentScope(assignmentLabel);
+  if (!scope.combined) return null;
+  const every =
+    scope.tables.length === 2
+      ? "both tables"
+      : `all ${scope.tables.length} tables`;
+  return (
+    <span className="text-muted-foreground ml-1 text-[11px]">
+      ({every} {verb})
+    </span>
+  );
+}
 
 type PendingAssign = {
   label: string;
@@ -201,6 +217,13 @@ export function useTableAssignmentDecision({
           <p className="text-muted-foreground text-xs">
             Which table should be replaced by {pendingAssign.label}?
           </p>
+          {pendingAssign.activeTables.some(
+            (t) => getAssignmentScope(t.tableLabel).combined,
+          ) ? (
+            <p className="text-muted-foreground -mt-0.5 text-[11px]">
+              A combined assignment is replaced as a whole.
+            </p>
+          ) : null}
           {pendingAssign.activeTables.map((table) => (
             <Button
               key={table.roundId}
@@ -218,6 +241,7 @@ export function useTableAssignmentDecision({
               }}
             >
               {table.tableLabel} → {pendingAssign.label}
+              {scopeSuffix(table.tableLabel, "replaced")}
             </Button>
           ))}
           <Button
@@ -236,6 +260,13 @@ export function useTableAssignmentDecision({
             Select one or more tables to end before assigning{" "}
             {pendingAssign.label}.
           </p>
+          {pendingAssign.activeTables.some(
+            (t) => getAssignmentScope(t.tableLabel).combined,
+          ) ? (
+            <p className="text-muted-foreground -mt-0.5 text-[11px]">
+              Ending a combined assignment releases all of its tables.
+            </p>
+          ) : null}
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground text-xs">
               {selectedEndRoundIds.size} of {pendingAssign.activeTables.length}{" "}
@@ -271,6 +302,7 @@ export function useTableAssignmentDecision({
                   onChange={() => toggleEndRoundId(table.roundId)}
                 />
                 {table.tableLabel}
+                {scopeSuffix(table.tableLabel, "released")}
               </label>
             ))}
           </div>

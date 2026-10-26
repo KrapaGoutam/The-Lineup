@@ -39,14 +39,14 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 
 Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. Plan and evidence: `docs/features/table-rotation-multi-view/`.
 
-| Stage   | State                                                                                                                                                                                 |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DONE    | Merged into `development` (PR #131, `589b470`); issues #101–#105, #107, #108, #110, #129 closed; milestone closed                                                                     |
-| DONE    | 1A database integrity · 1B trusted mutations · 1C read model · 1D undo/redo · 1E client/realtime · 1F real-mode validation (see report)                                               |
-| NEXT    | Infrastructure: Vercel Preview/Development → Supabase DEV; Database CI container-registry reliability (#111–#113). Product: Tasks V1. Follow-up: #109 Table Allocation UX consistency |
-| PART 2  | Multi-organization / multi-location, per-location modules, internal Attendance / Clock In-Out                                                                                         |
-| PART 3  | MCP / AI integration                                                                                                                                                                  |
-| BLOCKED | Production parity: expected Supabase project not reachable from this tooling context (#111)                                                                                           |
+| Stage   | State                                                                                                                                                        |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DONE    | Merged into `development` (PR #131, `589b470`); issues #101–#105, #107, #108, #110, #129 closed; milestone closed                                            |
+| DONE    | 1A database integrity · 1B trusted mutations · 1C read model · 1D undo/redo · 1E client/realtime · 1F real-mode validation (see report)                      |
+| DONE    | Since Part 1: Tasks V1, #134 production-build Realtime fix, #109 Table Allocation UX consistency (below). Infrastructure (#111–#113) is PR #135 — still open |
+| PART 2  | Multi-organization / multi-location, per-location modules, internal Attendance / Clock In-Out                                                                |
+| PART 3  | MCP / AI integration                                                                                                                                         |
+| BLOCKED | Production parity: expected Supabase project not reachable from this tooling context (#111)                                                                  |
 
 ### Backlog (deferred on purpose — do not start inside Part 1)
 
@@ -56,18 +56,25 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 - Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
 - Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
 
-## Infrastructure — DEV Preview & CI Reliability (NOW)
+## Tasks V1, #134, #109 (DONE on `development`; `main` awaits approval)
 
-Tracking: parent #133, milestone "Platform / CI Reliability", Project #4. Plan and evidence: `docs/features/dev-preview-ci-reliability/`.
+Tracking: Tasks parent #136 (closed), milestone "Tasks V1" (closed), T1–T8 = #137–#144 (closed), Project #4 Done. Merged via PR #145 (merge commit `4c393d3`). Plan and evidence: `docs/features/tasks-v1/`.
 
-| Stage     | State                                                                                                                   |
-| --------- | ----------------------------------------------------------------------------------------------------------------------- |
-| DONE      | Table Rotation V2 Part 1 (on `development`)                                                                             |
-| NOW       | DEV Preview / CI Reliability — INFRA-A Preview/Dev → DEV · INFRA-B Database CI registry · INFRA-C guards · INFRA-D docs |
-| NEXT      | Tasks V1                                                                                                                |
-| FOLLOW-UP | #109 Table Allocation UX consistency · #134 production-build Realtime regression                                        |
-| PART 2    | Multi-organization / multi-location, module enablement, internal attendance                                             |
-| PART 3    | MCP / AI integration                                                                                                    |
+| Stage           | State                                                                                                                                                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DONE            | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1 · ✅ #134 production-build Realtime fix (PR #147, merge commit `50fbd02`) · ✅ #109 Table Allocation UX consistency (PR #149, merge commit `a34af14`)                       |
+| TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`) |
+
+## Infrastructure — DEV Preview & CI Reliability (ACTIVE / RELEASE PREP)
+
+Tracking: parent #133, milestone "Platform / CI Reliability", Project #4, PR #135 (open, not merged). Plan and evidence: `docs/features/dev-preview-ci-reliability/`. PR #135 is **not Done until merged**: it is reconciled with `development` and waits on the owner's manual Preview smoke gate.
+
+| Stage  | State                                                                                                                                       |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| ACTIVE | 🟡 PR #135 DEV Preview / CI Reliability — INFRA-A Preview/Dev → DEV · INFRA-B Database CI registry · INFRA-C guards · INFRA-D docs/tracking |
+| NEXT   | ⬜ Release-readiness review (separate step; then the owner decides `development → main`)                                                    |
+| PART 2 | ⬜ multi-org · multi-location / branches · module configuration · internal attendance                                                       |
+| PART 3 | ⬜ MCP / AI integration                                                                                                                     |
 
 ## Phase 5 — Pilot hardening
 

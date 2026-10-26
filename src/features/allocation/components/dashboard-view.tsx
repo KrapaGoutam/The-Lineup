@@ -8,7 +8,7 @@ import type {
   RotationBoard,
   RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
-import type { CrossEditEntry } from "@/features/allocation/data/allocation-data";
+import type { BoardActivityEntry } from "@/features/allocation/domain/board-activity";
 
 /**
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md sections 17-18.
@@ -22,18 +22,39 @@ import type { CrossEditEntry } from "@/features/allocation/data/allocation-data"
  * Table Rotation V2 Part 1 (1C): every number here comes from the shared
  * BoardReadModel -- the same derivation Floor, Picker and Servers render --
  * so the Dashboard can never disagree with them about who holds what.
+ *
+ * #109 U2: "Recent activity" renders the complete board event model through
+ * the one presenter in domain/board-activity.ts (not just cross-column edits).
  */
+
+function formatActivityTime(at: string, timeZone?: string): string | null {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+    }).format(date);
+  } catch {
+    return null;
+  }
+}
+
 export function DashboardView({
   columns,
   board,
   readModel,
-  crossEditLog,
+  recentActivity,
+  timeZone,
   onOpenGrid,
 }: {
   columns: RotationColumn[];
   board: RotationBoard;
   readModel: BoardReadModel;
-  crossEditLog: CrossEditEntry[];
+  recentActivity: BoardActivityEntry[];
+  /** The location's IANA time zone, so times read as the floor's wall clock. */
+  timeZone?: string;
   onOpenGrid: () => void;
 }) {
   const activeColumns = columns.filter((c) => c.status === "active");
@@ -123,22 +144,29 @@ export function DashboardView({
             <h2 className="text-sm font-semibold">Recent activity</h2>
           </CardHeader>
           <CardContent className="space-y-1.5 text-xs">
-            {crossEditLog.length ? (
-              crossEditLog
-                .slice(-5)
-                .reverse()
-                .map((entry, index) => (
-                  <p key={index} className="text-muted-foreground">
-                    <span className="text-foreground font-medium">
-                      {entry.actorName}
-                    </span>{" "}
-                    edited {entry.columnName}&apos;s column
-                  </p>
-                ))
+            {recentActivity.length ? (
+              <ul className="space-y-1.5" aria-label="Recent board activity">
+                {recentActivity.map((entry) => {
+                  const time = formatActivityTime(entry.at, timeZone);
+                  return (
+                    <li key={entry.id} className="text-muted-foreground">
+                      <span className="text-foreground font-medium">
+                        {entry.actorName}
+                      </span>{" "}
+                      {entry.summary}
+                      {entry.undone ? " (undone)" : ""}
+                      {time ? (
+                        <>
+                          {" "}
+                          <time dateTime={entry.at}>· {time}</time>
+                        </>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
-              <p className="text-muted-foreground">
-                No recent cross-column edits.
-              </p>
+              <p className="text-muted-foreground">No recent activity yet.</p>
             )}
           </CardContent>
         </Card>

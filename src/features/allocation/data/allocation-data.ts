@@ -5,6 +5,10 @@ import {
   type ClaimDivergence,
   type PhysicalClaim,
 } from "@/features/allocation/domain/board-read-model";
+import {
+  buildRecentActivity,
+  type BoardActivityEntry,
+} from "@/features/allocation/domain/board-activity";
 import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
 import type {
   ColumnStatus,
@@ -35,6 +39,9 @@ export type AllocationContext = {
   team: TeamMember[];
   board: RotationBoard;
   crossEditLog: CrossEditEntry[];
+  // #109 U2: the newest board events, rendered from the complete supported
+  // event model (Dashboard "Recent activity"), newest first.
+  recentActivity: BoardActivityEntry[];
   eventCount: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -216,6 +223,7 @@ export async function getAllocationContext(
       team,
       board: EMPTY_BOARD,
       crossEditLog: [],
+      recentActivity: [],
       eventCount: 0,
       canUndo: false,
       canRedo: false,
@@ -265,9 +273,13 @@ export async function getAllocationContext(
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from("board_events")
-      .select("event_type, actor_profile_id, payload, created_at, undone_at")
+      .select(
+        "id, event_type, actor_profile_id, payload, created_at, undone_at",
+      )
       .eq("service_session_id", session.id)
-      .order("created_at", { ascending: true }),
+      // id breaks created_at ties so the order is the write order, always.
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
     supabase
       .from("section_assignments")
       .select(
@@ -368,6 +380,18 @@ export async function getAllocationContext(
     })
     .filter((entry): entry is CrossEditEntry => entry !== null);
 
+  const roundSequenceById = new Map(
+    (roundRows ?? []).map((round) => [round.id, round.sequence]),
+  );
+  const recentActivity = buildRecentActivity(eventRows ?? [], {
+    actorName: (profileId) => nameByProfileId.get(profileId),
+    memberName: (memberId) => {
+      const profileId = memberIdToProfileId.get(memberId);
+      return profileId ? nameByProfileId.get(profileId) : undefined;
+    },
+    roundSequence: (roundId) => roundSequenceById.get(roundId),
+  });
+
   // Mirrors board_undo/board_redo's own target-selection logic exactly
   // (see the migration) so the buttons are disabled precisely when the
   // RPC would otherwise reject with "Nothing to undo/redo" -- computed
@@ -395,6 +419,7 @@ export async function getAllocationContext(
     team,
     board,
     crossEditLog,
+    recentActivity,
     eventCount: (eventRows ?? []).length,
     canUndo,
     canRedo,

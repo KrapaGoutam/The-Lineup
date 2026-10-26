@@ -12,6 +12,10 @@ type AuthCallback = (
 /** A minimal fake of the slice of supabase-js the lifecycle touches. */
 function fakeClient(options: { session: { access_token: string } | null }) {
   const calls: string[] = [];
+  // When set, removeChannel stays pending until `finishRemoval()` -- the real
+  // client's leave handshake is async and the dying channel stays registered.
+  let holdRemoval = false;
+  const heldRemovals: (() => void)[] = [];
   let authCallback: AuthCallback = () => {};
   let statusCallback: (status: string) => void = () => {};
   let onChange: () => void = () => {};
@@ -66,6 +70,9 @@ function fakeClient(options: { session: { access_token: string } | null }) {
     }),
     removeChannel: vi.fn(async () => {
       calls.push("removeChannel");
+      if (holdRemoval) {
+        await new Promise<void>((resolve) => heldRemovals.push(resolve));
+      }
     }),
   };
 
@@ -77,6 +84,13 @@ function fakeClient(options: { session: { access_token: string } | null }) {
       authCallback(event, session),
     emitStatus: (status: string) => statusCallback(status),
     emitChange: () => onChange(),
+    holdRemovals: () => {
+      holdRemoval = true;
+    },
+    finishRemovals: () => {
+      holdRemoval = false;
+      heldRemovals.splice(0).forEach((resolve) => resolve());
+    },
   };
 }
 
@@ -179,12 +193,71 @@ describe("startBoardRealtime (D-03 authenticated lifecycle)", () => {
     // A later sign-in (new person) re-subscribes with the new JWT...
     fake.emitAuth("SIGNED_IN", { access_token: "jwt-user-2" });
     expect(fake.client.realtime.setAuth).toHaveBeenLastCalledWith("jwt-user-2");
+    await flush();
     expect(fake.client.channel).toHaveBeenCalledTimes(2);
 
     // ...and cleanup (React unmount / dependency change) removes it.
     stop();
     expect(fake.client.removeChannel).toHaveBeenCalledTimes(2);
     expect(fake.calls).toContain("unsubscribe-auth");
+  });
+
+  it("creates ONE channel when SIGNED_IN and the initial getSession both ask to subscribe", async () => {
+    // On a fresh load the auth listener's SIGNED_IN can land before
+    // getSession resolves; each used to tear down and re-create the same
+    // topic (three phx_join frames for one topic in the #134 trace).
+    const fake = fakeClient({ session: { access_token: "jwt-1" } });
+    startBoardRealtime(
+      fake.client,
+      { organizationId: "org", serviceSessionId: 7 },
+      vi.fn(),
+    );
+    fake.emitAuth("SIGNED_IN", { access_token: "jwt-1" });
+    await flush();
+    fake.emitAuth("SIGNED_IN", { access_token: "jwt-1b" });
+    fake.emitAuth("INITIAL_SESSION", { access_token: "jwt-1b" });
+    await flush();
+
+    expect(fake.client.channel).toHaveBeenCalledTimes(1);
+    expect(fake.client.removeChannel).not.toHaveBeenCalled();
+    // The newest JWT still reaches the socket.
+    expect(fake.client.realtime.setAuth).toHaveBeenLastCalledWith("jwt-1b");
+  });
+
+  it("does not re-create a topic while the previous channel for it is still being removed", async () => {
+    // supabase-js returns the registered (leaving) channel for an identical
+    // topic, so a rebuild must wait for the removal to finish.
+    const fake = fakeClient({ session: { access_token: "jwt-1" } });
+    const target = { organizationId: "org", serviceSessionId: 7 };
+    const stopFirst = startBoardRealtime(fake.client, target, vi.fn());
+    await flush();
+    expect(fake.client.channel).toHaveBeenCalledTimes(1);
+
+    fake.holdRemovals();
+    stopFirst();
+    startBoardRealtime(fake.client, target, vi.fn());
+    await flush();
+    expect(fake.client.channel).toHaveBeenCalledTimes(1); // still waiting
+
+    fake.finishRemovals();
+    await flush();
+    expect(fake.client.channel).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not join after a sign-out that happened while waiting for a removal", async () => {
+    const fake = fakeClient({ session: { access_token: "jwt-1" } });
+    const target = { organizationId: "org", serviceSessionId: 7 };
+    const stopFirst = startBoardRealtime(fake.client, target, vi.fn());
+    await flush();
+
+    fake.holdRemovals();
+    stopFirst();
+    startBoardRealtime(fake.client, target, vi.fn());
+    await flush();
+    fake.emitAuth("SIGNED_OUT", null);
+    fake.finishRemovals();
+    await flush();
+    expect(fake.client.channel).toHaveBeenCalledTimes(1);
   });
 
   it("does nothing if cleaned up before the session resolves", async () => {

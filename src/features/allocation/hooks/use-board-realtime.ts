@@ -17,7 +17,8 @@ import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/clie
  * Only a channel created after an in-place login happened to work.
  *
  * Correct lifecycle, implemented here and unit-tested in
- * use-board-realtime.test.ts:
+ * use-board-realtime.test.ts (+ use-board-realtime.hook.test.tsx for the
+ * React binding):
  *
  *   1. resolve the session  (supabase.auth.getSession)
  *   2. no session            -> do NOT subscribe (never as anon)
@@ -27,7 +28,14 @@ import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/clie
  *                             session exists)
  *   5. keep the JWT fresh    (setAuth on TOKEN_REFRESHED)
  *   6. sign-out / user change / session change -> remove the channel
- *   7. every (re)subscribe   -> `onInvalidate` (events missed before the
+ *   7. one channel per lifecycle -- a second subscribe request (the
+ *                             auth listener's SIGNED_IN and the initial
+ *                             getSession both fire on load) only refreshes
+ *                             the JWT, and a channel is never created while
+ *                             a previous channel with the same topic is
+ *                             still being removed (supabase-js hands back
+ *                             the dying instance for an identical topic)
+ *   8. every (re)subscribe   -> `onInvalidate` (events missed before the
  *                             join, or while disconnected, are recovered
  *                             by an authoritative refetch -- Realtime is
  *                             an invalidation signal, never the source of
@@ -38,6 +46,12 @@ export type BoardRealtimeTarget = {
   serviceSessionId: number | null;
 };
 
+// supabase-js keeps a channel registered under its topic until the async
+// leave completes, and `channel(topic)` returns that registered instance.
+// Removals are therefore tracked per client so a rebuild of the same topic
+// waits for the previous channel to be fully gone.
+const pendingRemovals = new WeakMap<SupabaseClient, Promise<unknown>>();
+
 export function startBoardRealtime(
   supabase: SupabaseClient,
   target: BoardRealtimeTarget,
@@ -45,18 +59,43 @@ export function startBoardRealtime(
 ): () => void {
   let cancelled = false;
   let channel: ReturnType<SupabaseClient["channel"]> | null = null;
+  // True while the signed-in person wants a channel; false after sign-out.
+  let wantsChannel = false;
+  let waitingForRemoval = false;
 
   const teardownChannel = () => {
-    if (channel) {
-      void supabase.removeChannel(channel);
-      channel = null;
-    }
+    if (!channel) return;
+    const removal = supabase.removeChannel(channel).catch(() => undefined);
+    const tracked: Promise<unknown> = Promise.all([
+      pendingRemovals.get(supabase),
+      removal,
+    ]).finally(() => {
+      if (pendingRemovals.get(supabase) === tracked) {
+        pendingRemovals.delete(supabase);
+      }
+    });
+    pendingRemovals.set(supabase, tracked);
+    channel = null;
   };
 
   const subscribe = (accessToken: string) => {
     supabase.realtime.setAuth(accessToken);
-    teardownChannel();
+    wantsChannel = true;
+    if (channel || waitingForRemoval) return;
 
+    const pending = pendingRemovals.get(supabase);
+    if (!pending) {
+      join();
+      return;
+    }
+    waitingForRemoval = true;
+    void pending.then(() => {
+      waitingForRemoval = false;
+      if (!cancelled && wantsChannel && !channel) join();
+    });
+  };
+
+  const join = () => {
     const config =
       target.serviceSessionId !== null
         ? {
@@ -100,13 +139,13 @@ export function startBoardRealtime(
     (event, session) => {
       if (cancelled) return;
       if (event === "SIGNED_OUT") {
+        wantsChannel = false;
         teardownChannel();
       } else if (
         (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") &&
         session
       ) {
-        if (channel) supabase.realtime.setAuth(session.access_token);
-        else subscribe(session.access_token);
+        subscribe(session.access_token);
       }
     },
   );
@@ -143,14 +182,25 @@ export function useBoardRealtime({
     invalidateRef.current = onInvalidate;
   }, [onInvalidate]);
 
+  // Held in a ref, never an effect dependency: a production bundle inlines
+  // the default `createClient` into this parameter list, giving it a new
+  // identity on every render. As a dependency that rebuilt the subscription
+  // on every render -- and every (re)join refetches, which re-renders: a
+  // refetch/resubscribe loop that left the channel dead at the moment
+  // another device's change arrived (#134).
+  const createClientRef = useRef(createClient);
+  useEffect(() => {
+    createClientRef.current = createClient;
+  }, [createClient]);
+
   useEffect(() => {
     if (!enabled) return;
     return startBoardRealtime(
-      createClient(),
+      createClientRef.current(),
       { organizationId, serviceSessionId },
       () => invalidateRef.current(),
     );
     // userId is a dependency on purpose: a different person means a
     // different JWT, so the channel must be rebuilt from scratch.
-  }, [enabled, userId, organizationId, serviceSessionId, createClient]);
+  }, [enabled, userId, organizationId, serviceSessionId]);
 }

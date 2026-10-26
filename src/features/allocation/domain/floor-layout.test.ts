@@ -50,6 +50,7 @@ describe("floor layout", () => {
     expect(resolved.find((t) => t.label === "T1")?.occupiedBy).toEqual({
       columnId: "leo",
       roundId: "round-2",
+      assignmentTables: ["T1"],
       name: "Leo",
       color: "var(--server-two)",
     });

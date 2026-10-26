@@ -86,10 +86,12 @@ record. Additive only — no rebuild, no new tables (reuses
 `table_rotation_entries` with a `status` column), no permission-model
 changes.
 
-**Final UI decision**: Transfer and End Table are Floor-only controls.
-Grid and Picker expose Assign/Edit, Unassign, and Skip Turn, but not
-Transfer or End — Floor is the one surface for the full occupied-table
-action set. This is a UI-only choice: `board_transfer`/`board_end_table`
+**Final UI decision**: Transfer and End Table are occupied-table
+controls: Floor's table panel and (since the Picker/Server follow-up)
+Servers' per-table dialog. Grid and Picker expose Assign/Edit, Unassign,
+and Skip Turn, but not Transfer or End. On a combined assignment
+("T1 + T2") these actions apply to the whole assignment and the UI says
+so (#109 U3). This is a UI-only choice: `board_transfer`/`board_end_table`
 and their domain-layer equivalents remain fully implemented and tested,
 just not wired to a Grid/Picker control. See
 `TABLE_ROTATION_FUNCTIONALITY_UPGRADE_1_1.md` section 7.
