@@ -50,7 +50,13 @@ test("Table Allocation and Tasks are the primary modules; the rest stay reachabl
       0,
     );
     await dock.getByRole("button", { name: "More" }).click();
-    for (const label of ["Schedule", "Team", "Attendance", "Tip Split"]) {
+    for (const label of [
+      "Schedule",
+      "Team",
+      "Attendance",
+      "Bar Inventory",
+      "Tip Split",
+    ]) {
       await expect(
         page.getByRole("dialog", { name: "More" }).getByRole("button", {
           name: label,
@@ -61,7 +67,13 @@ test("Table Allocation and Tasks are the primary modules; the rest stay reachabl
     const primary = page.locator('[data-nav-tier="primary"]');
     await expect(primary).toHaveText([/Table Allocation/, /Tasks/]);
     const secondary = page.locator('[data-nav-tier="secondary"]');
-    for (const label of ["Schedule", "Team", "Attendance", "Tip Split"]) {
+    for (const label of [
+      "Schedule",
+      "Team",
+      "Attendance",
+      "Bar Inventory",
+      "Tip Split",
+    ]) {
       await expect(secondary.filter({ hasText: label })).toBeVisible();
     }
     await expect(
