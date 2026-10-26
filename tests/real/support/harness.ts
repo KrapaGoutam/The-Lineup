@@ -80,7 +80,14 @@ export type Fixture = {
   teardown: () => Promise<void>;
 };
 
-export const TABLE_LABELS = Array.from({ length: 20 }, (_, i) => String(i + 1));
+// 1..20 are tables registered with NUMERIC labels (exact label wins, #157).
+// T31..T33 are T-prefixed tables: typing "31" must resolve to T31.
+export const TABLE_LABELS = [
+  ...Array.from({ length: 20 }, (_, i) => String(i + 1)),
+  "T31",
+  "T32",
+  "T33",
+];
 
 export function todayInChicago(offsetDays = 0): string {
   const base = new Date(Date.now() + offsetDays * 86_400_000);

@@ -125,12 +125,14 @@ async function requestAssign(
   origin: Origin,
   role: Role,
   label: string,
+  // Input-form axis (#157): only Grid is typed, so only Grid honours it.
+  typed?: string,
 ) {
   const name = NAMES[role];
   if (origin === "grid") {
     await switchView(page, "Grid");
     const input = firstEmptyInput(page, role);
-    await input.fill(label);
+    await input.fill(typed ?? label);
     await input.press("Enter");
     return;
   }
@@ -176,7 +178,7 @@ async function requestAssign(
 export async function runStep(page: Page, step: Step) {
   switch (step.do) {
     case "assign": {
-      await requestAssign(page, step.via, step.who, step.table);
+      await requestAssign(page, step.via, step.who, step.table, step.typed);
       if (step.via === "floor" || step.via === "servers") {
         await pickServerAndFinish(page, step.table, step.who);
       }
@@ -184,7 +186,7 @@ export async function runStep(page: Page, step: Step) {
       return;
     }
     case "same-server": {
-      await requestAssign(page, step.via, step.who, step.table);
+      await requestAssign(page, step.via, step.who, step.table, step.typed);
       await expect(
         page.getByText(`is already assigned to ${NAMES[step.who]}.`),
       ).toBeVisible();
@@ -192,7 +194,7 @@ export async function runStep(page: Page, step: Step) {
       return;
     }
     case "conflict": {
-      await requestAssign(page, step.via, step.who, step.table);
+      await requestAssign(page, step.via, step.who, step.table, step.typed);
       await chooseInConflictDialog(page, step.choose);
       return;
     }

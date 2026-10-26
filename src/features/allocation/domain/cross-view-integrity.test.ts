@@ -51,8 +51,13 @@ function boardWith(
   };
 }
 
-describe("table identity (X1)", () => {
-  it('"1" is an unregistered label with no id; "T1" is the registered table (id 19)', () => {
+// #157: these tests pin how a STORED board label resolves for display (exact,
+// no normalization). Typed input is canonicalized BEFORE it is stored ("1" ->
+// "T1" when T1 is registered -- see table-input.test.ts and the shorthand
+// matrix scenarios), so a stored free-text "1" is a legacy / unregistered
+// label only.
+describe("table identity of a stored label (X1)", () => {
+  it('a stored "1" is an unregistered label with no id; "T1" is the registered table (id 19)', () => {
     const one = resolveTableIdentity("1", { layout, registry });
     const t1 = resolveTableIdentity("T1", { layout, registry });
     expect(one).toMatchObject({
@@ -90,7 +95,7 @@ describe("table identity (X1)", () => {
 });
 
 describe("off-map representation (X1)", () => {
-  it('the owner\'s case: Ann holds "1" and T6; Bea holds T2; T1 stays available', () => {
+  it('a legacy stored free-text "1" is off-map: Ann holds "1" and T6; Bea holds T2; T1 stays available', () => {
     const board = boardWith([
       [
         { columnId: "a", label: "1", status: "active" },

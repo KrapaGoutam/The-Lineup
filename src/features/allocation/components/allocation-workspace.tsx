@@ -73,6 +73,7 @@ import {
   type BoardHistory,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+import { canonicalizeTableLabel } from "@/features/allocation/domain/table-input";
 import { can } from "@/features/auth/domain/passcode";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
@@ -165,7 +166,7 @@ function TableEntry({
   value: string | null;
   status: "empty" | "active" | "ended" | "skipped";
   // Cross-view integrity (X1): at least one of the cell's tables has no
-  // position on the floor map (an unpositioned or free-text table, e.g. "1").
+  // position on the floor map (an unpositioned or free-text table, e.g. "Patio A").
   // It is still a real entry; the badge only says it will not appear as a
   // tile on Floor/Picker.
   offMap?: boolean;
@@ -648,11 +649,26 @@ export function AllocationWorkspace({
   // this only controls visibility.
   const canOperateFloor = can(user.role, "allocation:operate") && !readOnly;
 
-  async function execute(action: BoardAction) {
+  // Canonical table input (#157): "1" is "T1" when T1 is registered. The
+  // database re-resolves every label itself (board_assign is the authority);
+  // this mirror only lets the Grid, the dialog and the optimistic state show
+  // the canonical table at once and keeps demo mode (no database) honest.
+  const tableRegistry = demoMode
+    ? DEMO_FLOOR_LAYOUT
+    : (initialContext?.registeredTables ?? []);
+  const canonicalLabel = (label: string) =>
+    canonicalizeTableLabel(label, tableRegistry) || label;
+
+  async function execute(rawAction: BoardAction) {
     // Defense in depth, same principle as RLS re-checking eligibility
     // server-side: the freeze banner disables the UI, but the mutation path
     // itself refuses too, in case a control somehow slips through disabled.
     if (readOnly) return;
+
+    const action: BoardAction =
+      rawAction.type === "assign" || rawAction.type === "end-and-assign"
+        ? { ...rawAction, tableLabel: canonicalLabel(rawAction.tableLabel) }
+        : rawAction;
 
     // Applied immediately in both modes -- demo mode has nothing else;
     // real mode gets the same instant feedback while the write is still
@@ -705,6 +721,7 @@ export function AllocationWorkspace({
   const claim = useTableClaim({
     board,
     disabled: !canOperateFloor,
+    canonicalize: canonicalLabel,
     onAssign: ({
       label,
       columnId,

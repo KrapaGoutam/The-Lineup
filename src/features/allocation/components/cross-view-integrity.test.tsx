@@ -44,6 +44,8 @@ const registry: RegistryTable[] = [
   { diningTableId: 77, label: "P1", x: null, y: null, resourceType: "table" },
 ];
 
+// (#157: typed "1" now resolves to the registered T1; "1" below stands for a
+// legacy stored free-text label, which still renders exactly as stored.)
 // Ann holds the free-text "1" and T6; Bea ended T2's history entry... (T2 is
 // not registered here, so it is also a free-text history label).
 const board: RotationBoard = {

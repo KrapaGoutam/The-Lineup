@@ -1,54 +1,66 @@
-# PR #135 Reconciliation — Agent Handoff
+# Canonical Table Input Resolution — Handoff
 
-Current task: PR #135 (DEV Preview / CI Reliability) is reconciled with `development` three times (latest: the #153 cross-view fix); waiting on exact-head CI and the owner Preview smoke.
+Branch: `fix/table-input-canonical-resolution`
+HEAD: see `git log -1` (feature commit `faeca66` + closeout docs/tests commit)
+Base development: `23e38a9` (PR #135 merge commit)
 
-## TASK-014 fix (separate from PR #135)
+PR #135: MERGED into `development` with a merge commit `23e38a9` (head `1234ada`, exact-head CI green, owner Preview smoke PASS per the owner)
+#133: CLOSED, Project #4 Done (milestone "Platform / CI Reliability" stays open: 12 other open issues)
+#153: CLOSED, Project #4 Done
+Owner smoke: PASS (owner statement); new contract correction tracked separately
 
-- Status: DONE and merged into `development`.
-- Issue: #151 (closed, Project #4 Done). Fix branch: `fix/tasks-handoff-time-dependent-e2e`. Fix PR: #152. Fix merge commit: `63fdbe0`.
-- Root cause: TASK-014 carried the overdue demo task (due yesterday 16:00) to the panel's default target, today. The product keeps the 16:00 due time, so after 16:00 restaurant-local it is overdue again and stays listed. The product is correct; the test had a wall-clock-dependent expectation.
-- Second wall-clock dependency found by the same CI run: `getByText("Ended")` also matched the header countdown "Day ended" outside service hours (two Floor end-existing tests in `table-rotation-multi-view.spec.ts`). Fixed with `{ exact: true }`.
-- Fix: test-only. TASK-014 carries to restaurant-today + 1 (taken from the "New due date" input's own `min`, plus one calendar day). Reproduced before the fix on unchanged development at 23:15 CDT (expected 0, received 1); passed after at 23:16 CDT; PR #152 CI (application, browser-smoke, Vercel) green at ~23:35 CDT. No product code changed.
+Issue: #157 `[Bug] Resolve numeric Grid table input to registered physical tables` (type:bug, module:table-allocation, priority:p1)
+Project #4: #157 In Progress -> Done after merge
+Milestone: Table Allocation V2 — Part 2
 
-## PR #135 state
+Current phase: R7 (PR / exact-head CI / merge commit into development). R0–R6 done.
+R0 ✅ R1 ✅ R2 ✅ R3 ✅ R4 ✅ R5 ✅ R6 ✅ R7 ⬜ (PR opened, waiting for CI)
 
-Branch: `infra/dev-preview-ci-reliability`
-HEAD: see `git log -1` (second merge of `origin/development` at `63fdbe0`, then this handoff commit)
-Previous heads: `1030dde` (original), `9a71cf5` (first reconciliation; its Preview and browser-smoke are NOT the final gate)
-Development head: `63fdbe0`. Main head (untouched): `3403058`.
-Merges from development: `1d03050` (at `56bacb6`) and the TASK-014 merge (at `63fdbe0`). Plain merges, no rebase, no force-push.
+Resolver contract:
+Exact label: registered active label (trimmed, case-sensitive, same location) wins
+Numeric shorthand: digits-only and no exact match -> `T` + digits if registered
+Free-text fallback: trimmed text, no claim, off-map
+Leading zeros: not collapsed (`01` -> `T01` or free text, never `T1`)
+Combined labels: every part resolved, joined with " + ", duplicates collapsed
 
-INFRA-A: 🟡 Preview/Development → DEV verified read-only (demo=false, no Neon, no PROD ref); Production → PROD, unchanged; Preview smoke awaits the owner
-INFRA-B: ✅ Database CI via `scripts/ci/supabase-run.mjs` (start/reset/test); `deploy-migrations` only on push to `main`
-INFRA-C: ✅ `check-nonprod-env` + `check-tracked-local-paths` in the `application` job
-INFRA-D: 🟡 docs/tracking current; final "merged" wording after the PR merges
+DB changes: private helpers `resolve_table_input`, `canonical_label_parts`, `canonical_table_label`; replaced `sync_table_occupancy`, `displace_conflicting_entries`, `board_assign`, `board_end_and_assign`
+Migration: `supabase/migrations/20261026120000_table_input_canonical_resolution.sql`
+DEV applied: YES (Management API, ref opmujepkemwcdxxorhfd hard-checked, recorded in schema_migrations)
 
-Environment: Preview → DEV · Development → DEV · Production → PROD · PROD ref in non-prod: none · Production vars changed: NO
+board_assign: canonicalizes first (after auth/session), then all logic on the canonical label
+occupancy trigger: same resolver
+conflict detection: canonical on both sides; detail label / assignment_label canonical
+same-server: canonical PT409 same_server
+End + Assign: unchanged atomicity (single call), canonical label
+Transfer: unchanged (`board_transfer`)
 
-CI on the final head: see PR #135 checks (results are recorded in the PR comment and final report). Expected: application, browser-smoke, Database, Vercel pass; deploy-migrations skipped.
+Grid / Floor / Picker / Servers / Dashboard: client mirror `domain/table-input.ts` wired in `allocation-workspace.tsx` (`execute`) and `table-claim.tsx` (`canonicalize`); read model unchanged (renders canonical stored labels)
 
-Owner Preview gate: REQUIRED (Vercel Authentication on; no bypass; the smoke must use the Preview built from the FINAL PR head).
-Owner smoke list: Preview opens · login page · synthetic DEV user sign-in · Table Allocation · Tasks · Schedule · Team · data clearly DEV-backed · no Production data
+Tests (final gate, actual):
+pgTAP: 31 files / 646 assertions PASS (0031 new = 58; 0030 §3 changed deliberately)
+Vitest: 74 files / 715 tests PASS
+cross-view matrix: 51 scenarios (domain 52 tests) PASS; XM-011/012/013 rewritten + XM-014..019 added (input-form axis `typed`)
+Playwright demo: 507 PASS (desktop + host-tablet + server-mobile)
+hosted DB: 78 PASS (tasks-v1 12, table-input-canonical 16, conflicts 10, rotation-v2 40)
+hosted UI (production build, DEV): 30 PASS (one transient XM-024 failure in the first full run; passed in the next two full runs and an isolated rerun)
+multi-user: stale-browser shorthand test CR-UI + rewritten XM-011 PASS
+build: PASS (pinned to DEV, PROD ref in 0 files)
+lint / typecheck / format: PASS
+CI: pending on the PR
 
-PR #135: open, not merged · #133: open / Review · Project #4: Review · Milestone: Platform / CI Reliability (stays open)
+Commits: faeca66 feat (resolver + client + matrix + tests); closeout commit (docs, real-suite fixes)
+Uncommitted: nothing expected (never stage `docs/testing/`, `The Lineup.code-workspace`)
 
-development merged (PR #135): NO (PR #152 merged into development)
+development merged: NO (until PR merge)
 main merged: NO
-DEV touched: NO (read-only)
+DEV touched: YES (migration + hosted suites with synthetic data)
 PROD touched: NO
+PROD migrations: NO
 
-## Current State & Next Step
+Running processes: local Supabase (docker) only; no `next start`
 
-- Exact next action: on the owner's explicit `Preview owner smoke PASS`, re-check the PR head and CI, then `gh pr merge 135 --merge` (merge commit). Then verify development contains the PR and main does not, close #133 / Project #4, and open `docs/dev-preview-ci-final-closeout` from latest development for the final wording.
-- Next separate task after merge: Release Readiness Review (do NOT merge `development → main` automatically).
-- DO NOT: merge to main, touch PROD, change Production Vercel variables, disable Vercel protection or create a bypass, copy PROD Neon into DEV/Preview, force-push, squash/rebase-merge, start Part 2, wait for a "good time of day" to get green CI, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`.
-
-## Cross-View Integrity (#153) — MERGED into development
-
-PR #156, merge commit `aaf11f0` (exact-head CI green: application, browser-smoke, Database, Vercel; deploy-migrations skipped). Branch `fix/table-allocation-cross-view-integrity`. Report/evidence: `docs/features/table-allocation-cross-view-integrity/IMPLEMENTATION_REPORT.md`.
-
-- Identity: the owner's "Table 1" has no `dining_tables` row (free-text label); `T1` is id 19 — never aliased. Off-map = registered-unpositioned or free-text, shown in all five views.
-- One shared occupied-table flow (Transfer / End + Assign / Cancel; same-server notice); atomic via `board_assign(..., p_end_whole_assignment)`; stale clients get PT409.
-- Migration `20261026090000_table_allocation_conflict_resolution.sql` applied to DEV only (recorded); PROD untouched.
-- Tests: Vitest 663, demo Playwright 489 (45-scenario matrix x 3 viewports), pgTAP 588, hosted DB 50, hosted production-build UI 29.
-- X6 (this branch): `development` merged into `infra/dev-preview-ci-reliability` (plain merge, no rebase, no force-push). Needs exact-head CI + a NEW Preview + the owner's final smoke (see owner smoke list above, plus: off-map labelling, occupied-table dialog once, Servers ended history).
+Exact next command: `gh pr checks <PR>` then, when exact-head CI is green, `gh pr merge <PR> --merge --match-head-commit <head>`
+Exact next action: wait for exact-head CI (application, browser-smoke, Database, Vercel; deploy-migrations skipped), merge with a MERGE COMMIT into `development`, then set #157 Done in Project #4, close the issue, update docs/STATUS.md wording from "branch" to "merged", STOP
+Read first: docs/features/table-input-canonical-resolution/IMPLEMENTATION_REPORT.md
+Release-readiness (before any PROD deploy, owner approval only): run the read-only query in PLAN.md per real location
+DO NOT: merge to main, touch PROD, squash/rebase-merge, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`, add an alias table, rewrite history rows, widen grants, start #154 or #155 here

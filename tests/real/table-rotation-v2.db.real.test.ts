@@ -676,9 +676,10 @@ describe("1A single active owner + atomic reassignment", () => {
       await board.assign(fx.owner, m2, "5", { confirm: true }),
       /combined assignment/i,
     );
-    expect((await board.activeByMember()).get(m1)).toEqual(["5+6"]);
+    // #157: stored canonically as "5 + 6" whatever spacing was typed.
+    expect((await board.activeByMember()).get(m1)).toEqual(["5 + 6"]);
     ok(await board.assign(fx.owner, m2, "5+6", { confirm: true }));
-    expect((await board.activeByMember()).get(m2)).toEqual(["5+6"]);
+    expect((await board.activeByMember()).get(m2)).toEqual(["5 + 6"]);
     expect((await board.activeByMember()).get(m1)).toBeUndefined();
   });
 

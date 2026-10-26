@@ -2,20 +2,26 @@
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
 **Last Updated:** October 26, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (70/70 files, 663/663 tests passing) | `npm run test:e2e` (demo suite, 489 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (30 pgTAP files, 588 assertions; executed by the CI `Database` job)  
+**Health Gate:** `npm run check` (Passing) | `npm test` (74/74 files, 715/715 tests passing) | `npm run test:e2e` (demo suite, 507 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (31 pgTAP files, 646 assertions; executed by the CI `Database` job)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
 
-## 🛠 Infrastructure — DEV Preview & CI Reliability (PR #135 open, #133 in review)
+## 🛠 Infrastructure — DEV Preview & CI Reliability (#133 Done — PR #135 merged into `development`, merge commit `23e38a9`)
 
-Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`; reconciled with `development` (Tasks V1, #134 and #109 included). Docs: `docs/features/dev-preview-ci-reliability/`. **Not merged; not Done until merged.**
+Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`, merged with a merge commit on 2026-10-26 after exact-head CI (application, browser-smoke, Database, Vercel pass; `deploy-migrations` skipped) and the owner's final Preview smoke (PASS). `main` and PROD untouched. Docs: `docs/features/dev-preview-ci-reliability/`.
 
-- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; the deployed-Preview browser smoke awaits the owner (Vercel Authentication). The smoke now also covers Tasks.
+- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; the owner's deployed-Preview browser smoke passed.
 - **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`); `deploy-migrations` runs only on a push to `main`.
 - **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output; `scripts/check-tracked-local-paths.mjs` keeps local evidence out of git.
 - **INFRA-D** CI/CD + deployment docs.
 - Original finding **#134** (the real-mode suite failed against production builds because of a Realtime resubscribe loop) is **resolved and merged** into `development` (PR #147, `50fbd02`; production-build real-mode suite 18/18). It no longer qualifies PR #135.
+
+---
+
+## Canonical numeric table input resolution (#157 — branch `fix/table-input-canonical-resolution`)
+
+Owner testing clarified the contract that #153 had set the other way: **typing `1` where the location has a registered `T1` is `T1`**, exactly like choosing `T1` from Floor or Picker. Resolved **server-authoritatively**: one private DB resolver (`private.resolve_table_input`: exact registered label → digits-only `T` + digits → trimmed free text; leading zeros never collapsed; same location only) is reused by `board_assign`, `board_end_and_assign`, displacement and the occupancy trigger, so a stale or different client cannot create a second `1` identity. Combined labels resolve per part (`1 + 2` → `T1 + T2`). Conflicts, same-server, End + Assign, Transfer, Undo/Redo and Recent Activity all operate on the canonical `T1` and its `dining_table_id`. No alias table, no history rewrite, no RLS widening. Migration `20261026120000` (forward-only; **DEV applied, PROD not**). Docs and evidence: `docs/features/table-input-canonical-resolution/`.
 
 ---
 
