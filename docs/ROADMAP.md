@@ -52,7 +52,7 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 
 - #106 `private.has_org_role` still honors `organizations.created_by` (board mutation path already membership-only).
 - Rotate the Neon attendance credential (DEV `NEON_DATABASE_URL` equals PROD's; operator task).
-- Picker taking over a held table with explicit confirmation (today it points to Floor Transfer).
+- ~~Picker taking over a held table with explicit confirmation~~ — done in #153: every assignment origin shares one Transfer / End + Assign / Cancel dialog.
 - Hosted real-mode suites (`npm run test:real`, `test:real:ui`) in a protected CI job with DEV secrets.
 - Part 2: user → organization membership → location access; per-location module toggles (Table Rotation, Tips); Attendance = External / Internal The Lineup / Disabled with Clock In/Out.
 
@@ -60,10 +60,14 @@ Tracking: parent #101, milestone "Table Allocation V2 — Part 1", Project #4. P
 
 Tracking: Tasks parent #136 (closed), milestone "Tasks V1" (closed), T1–T8 = #137–#144 (closed), Project #4 Done. Merged via PR #145 (merge commit `4c393d3`). Plan and evidence: `docs/features/tasks-v1/`.
 
-| Stage           | State                                                                                                                                                                                                                 |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DONE            | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1 · ✅ #134 production-build Realtime fix (PR #147, merge commit `50fbd02`) · ✅ #109 Table Allocation UX consistency (PR #149, merge commit `a34af14`)                       |
-| TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`) |
+| Stage           | State                                                                                                                                                                                                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DONE            | ✅ Table Rotation V2 Part 1 · ✅ Tasks V1 · ✅ #134 production-build Realtime fix (PR #147, merge commit `50fbd02`) · ✅ #109 Table Allocation UX consistency (PR #149, merge commit `a34af14`) · ✅ #153 Table Allocation cross-view integrity & conflict actions (PR #156, merge commit `aaf11f0`) |
+| PARKED          | 🟡 PR #135 — owner Preview manual gate (re-smoke on a NEW Preview built from the final PR head, after #153)                                                                                                                                                                                          |
+| FOLLOW-UP       | ⬜ Tasks notification scope (#154) · ⬜ Tips V2 — Corrections, History & Analytics (#155) · then release-readiness audit; `main` = owner approval only                                                                                                                                               |
+| PART 2          | ⬜ multi-org / multi-location / module configuration / internal attendance                                                                                                                                                                                                                           |
+| PART 3          | ⬜ MCP / AI integration                                                                                                                                                                                                                                                                              |
+| TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`)                                                                                |
 
 ## Infrastructure — DEV Preview & CI Reliability (ACTIVE / RELEASE PREP)
 

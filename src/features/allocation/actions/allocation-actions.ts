@@ -8,6 +8,7 @@ import {
   type AllocationContext,
 } from "@/features/allocation/data/allocation-data";
 import type { BoardAction } from "@/features/allocation/domain/rotation-board";
+import type { TableConflictInfo } from "@/features/allocation/domain/table-conflict";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -29,6 +30,11 @@ export type ActionResult<T> =
       error: string;
       // Feature 017: see requireLiveSession's doc comment.
       sessionInvalid?: true;
+      // Cross-view integrity (X2): the database refused an assign because the
+      // table is already held (PT409). Carries who holds it so the client can
+      // open the same Transfer / End + Assign / Cancel decision it would have
+      // shown with fresh state.
+      conflict?: TableConflictInfo;
     };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -123,6 +129,67 @@ async function withResolvedRounds(
   }
 }
 
+/**
+ * board_assign raises PT409 (HTTP 409) with a JSON `detail` when the table is
+ * already held (see 20261026090000_table_allocation_conflict_resolution.sql).
+ * The detail holds ids and labels only; member ids are mapped to profile ids
+ * here (RotationColumn.id is a profile id) and never trusted from the client.
+ */
+async function conflictFromError(
+  supabase: Supabase,
+  serviceSessionId: number | null,
+  error: { code?: string; details?: string | null },
+): Promise<TableConflictInfo | undefined> {
+  if (error.code !== "PT409" || !error.details) return undefined;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(error.details);
+  } catch {
+    return undefined;
+  }
+  const detail = raw as {
+    kind?: string;
+    label?: string;
+    holders?: {
+      member_id?: number;
+      round_id?: number;
+      assignment_label?: string;
+    }[];
+  };
+  const holders = detail.holders ?? [];
+  const profileByMember = new Map<number, string>();
+  if (serviceSessionId !== null && holders.length > 0) {
+    const { data } = await supabase
+      .from("rotation_members")
+      .select("id, server_profile_id")
+      .eq("service_session_id", serviceSessionId)
+      .in(
+        "id",
+        holders.flatMap((h) =>
+          typeof h.member_id === "number" ? [h.member_id] : [],
+        ),
+      );
+    for (const row of data ?? [])
+      profileByMember.set(row.id, row.server_profile_id);
+  }
+  return {
+    kind: detail.kind === "same_server" ? "same_server" : "held",
+    label: detail.label ?? "",
+    holders: holders.flatMap((h) => {
+      const columnId = profileByMember.get(h.member_id ?? -1);
+      return columnId && h.round_id !== undefined
+        ? [
+            {
+              columnId,
+              roundId: String(h.round_id),
+              assignmentLabel: h.assignment_label ?? "",
+            },
+          ]
+        : [];
+    }),
+  };
+}
+
 export type ExecuteBoardActionInput = {
   restaurantSlug: string;
   organizationId: string;
@@ -176,8 +243,18 @@ export async function executeBoardActionRemote(
           p_member_id: memberId,
           p_table_label: action.tableLabel,
           p_confirm_transfer: action.confirmTransfer ?? false,
+          p_end_whole_assignment: action.endWholeAssignment ?? false,
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) {
+          const conflict = await conflictFromError(
+            supabase,
+            input.serviceSessionId,
+            error,
+          );
+          return conflict
+            ? { ok: false, error: error.message, conflict }
+            : { ok: false, error: error.message };
+        }
         revalidateBoard(input.restaurantSlug);
         return { ok: true, data: { serviceSessionId: data as number } };
       }

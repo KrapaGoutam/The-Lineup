@@ -11,6 +11,7 @@ import {
   ActionNote,
   AssignmentSummary,
 } from "@/features/allocation/components/assignment-scope-note";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
 import type {
@@ -18,7 +19,10 @@ import type {
   RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
 import { getAssignmentScope } from "@/features/allocation/domain/assignment-scope";
-import type { ServerSummary } from "@/features/allocation/domain/board-read-model";
+import type {
+  OffMapTable,
+  ServerSummary,
+} from "@/features/allocation/domain/board-read-model";
 import {
   getInitials,
   type ResolvedFloorTable,
@@ -105,6 +109,7 @@ function FloorLegend({
  */
 export function FloorView({
   tables,
+  offMapTables = [],
   servers,
   tablesLoadError = false,
   activeColumns,
@@ -116,8 +121,11 @@ export function FloorView({
   onTransfer,
   onEndTable,
   onEndAndAssign,
+  intercept,
 }: {
   tables: ResolvedFloorTable[];
+  /** Tables with no map position (shown in the Off-map rail, never on the map). */
+  offMapTables?: OffMapTable[];
   /** Per-server summaries from the shared read model (legend counts). */
   servers: ServerSummary[];
   tablesLoadError?: boolean;
@@ -143,11 +151,19 @@ export function FloorView({
     columnId: string;
     tableLabel: string;
   }) => void;
+  /** Shared occupied-table flow (see table-claim.tsx). */
+  intercept?: (request: { label: string; columnId: string }) => boolean;
 }) {
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
+  // Cross-view integrity (X2): assigning an OCCUPIED table to a (possibly
+  // different) server. Goes through the same shared Transfer / End + Assign /
+  // Cancel dialog as every other assignment origin.
+  const [assigningOccupied, setAssigningOccupied] = useState(false);
 
-  const selected = tables.find((table) => table.label === selectedLabel);
+  const selected =
+    tables.find((table) => table.label === selectedLabel) ??
+    offMapTables.find((table) => table.label === selectedLabel);
   // #109 U3: what Transfer / End / Unassign touch for the selected table. A
   // combined assignment is acted on as a whole; copy says so beside the
   // buttons (single tables get no extra copy).
@@ -159,10 +175,12 @@ export function FloorView({
   function closePanel() {
     setSelectedLabel(null);
     setTransferring(false);
+    setAssigningOccupied(false);
   }
 
   function selectTable(label: string) {
     setTransferring(false);
+    setAssigningOccupied(false);
     setSelectedLabel((current) => (current === label ? null : label));
   }
 
@@ -179,6 +197,7 @@ export function FloorView({
     onAssign,
     onEndAndAssign,
     onClosed: closePanel,
+    intercept,
   });
 
   const assignableColumns = activeColumns.filter(
@@ -210,13 +229,21 @@ export function FloorView({
     <div className="flex flex-col gap-3">
       <FloorLegend entries={legendEntries} />
       <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-        <TableMap
-          tables={tables}
-          loadError={tablesLoadError}
-          selectedLabel={selectedLabel}
-          onSelectTable={selectTable}
-          disabled={disabled}
-        />
+        <div className="flex flex-col gap-3">
+          <TableMap
+            tables={tables}
+            loadError={tablesLoadError}
+            selectedLabel={selectedLabel}
+            onSelectTable={selectTable}
+            disabled={disabled}
+          />
+          <OffMapTables
+            tables={offMapTables}
+            selectedLabel={selectedLabel}
+            onSelectTable={selectTable}
+            disabled={disabled}
+          />
+        </div>
         {selected?.occupiedBy ? (
           <Card className="h-fit">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -248,7 +275,35 @@ export function FloorView({
                 </span>
               </p>
               <AssignmentSummary id={`${noteId}-summary`} scope={scope} />
-              {!transferring ? (
+              {assigningOccupied ? (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-muted-foreground text-xs">
+                    Assign {selected.label} to:
+                  </p>
+                  {assignableColumns.map((column) => (
+                    <Button
+                      key={column.id}
+                      variant="secondary"
+                      size="sm"
+                      disabled={disabled}
+                      onClick={() => {
+                        const label = selected.label;
+                        closePanel();
+                        decision.beginAssign(label, column.id, column.name);
+                      }}
+                    >
+                      {column.name}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAssigningOccupied(false)}
+                  >
+                    Back
+                  </Button>
+                </div>
+              ) : !transferring ? (
                 <div className="flex flex-col gap-1.5">
                   <Button
                     variant="secondary"
@@ -265,6 +320,14 @@ export function FloorView({
                     id={`${noteId}-transfer`}
                     text={scope.transferNote}
                   />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => setAssigningOccupied(true)}
+                  >
+                    Assign to another server…
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

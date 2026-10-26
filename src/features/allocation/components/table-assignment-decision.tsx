@@ -53,9 +53,16 @@ export function useTableAssignmentDecision({
   onAssign,
   onEndAndAssign,
   onClosed,
+  intercept,
 }: {
   board: RotationBoard;
   disabled: boolean;
+  // Cross-view integrity (X2): asked first, before this hook looks at what
+  // the server already holds. Returns true when the table is NOT free
+  // (held by someone else, or already this server's) and the shared
+  // occupied-table flow (see table-claim.tsx) took over -- this hook then
+  // does nothing. Omitted -> no occupancy check (legacy callers/tests).
+  intercept?: (request: { label: string; columnId: string }) => boolean;
   onAssign: (input: {
     label: string;
     columnId: string;
@@ -121,6 +128,7 @@ export function useTableAssignmentDecision({
     columnId: string,
     columnName: string,
   ): boolean {
+    if (intercept?.({ label, columnId })) return false;
     const activeTables = getActiveTablesForColumn(board, columnId);
     if (activeTables.length === 0) {
       assignToColumn(label, columnId);

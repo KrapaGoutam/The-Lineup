@@ -8,6 +8,8 @@ This backlog holds upcoming feature specifications and technical debt items queu
 
 | Item | Area | Priority | Spec Link | Description |
 | :--- | :--- | :--- | :--- | :--- |
+| **Tasks notification scope** | Tasks | Medium | #154 | Limit the notification inbox to Opening and Closing operational work; settle ready/assigned/due/overdue semantics first. |
+| **Tips V2 — Corrections, History & Analytics** | Tips | Medium | #155 | Edit/void saved tips with audit, history and day/week/month/custom analytics. No Finalize Day. |
 | **Realtime Floor Sync** | Floor / Realtime | High | TBD | Add Supabase Realtime broadcast for multi-tablet table allocation updates. |
 | **Shift Notes & Logbook** | Management | Medium | TBD | Manager-to-manager digital shift notes and shift-change handover. |
 | **Section Layout Editor** | Settings | Medium | TBD | Drag-and-drop table and section customizer for floor plans. |

@@ -21,13 +21,17 @@ import {
   ActionNote,
   AssignmentSummary,
 } from "@/features/allocation/components/assignment-scope-note";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
 import {
   getAssignmentScope,
   otherTablesInAssignment,
 } from "@/features/allocation/domain/assignment-scope";
-import type { ServerSummary } from "@/features/allocation/domain/board-read-model";
+import type {
+  OffMapTable,
+  ServerSummary,
+} from "@/features/allocation/domain/board-read-model";
 import {
   parseCombinedTableLabel,
   type ResolvedFloorTable,
@@ -111,10 +115,12 @@ export function ServerBoardView({
   columns,
   team,
   tables,
+  offMapTables = [],
   servers,
   tablesLoadError = false,
   board,
   disabled,
+  intercept,
   onAssign,
   onMove,
   onSetStatus,
@@ -127,6 +133,10 @@ export function ServerBoardView({
   columns: RotationColumn[];
   team: TeamMember[];
   tables: ResolvedFloorTable[];
+  /** Tables with no map position (listed under the map in the chooser). */
+  offMapTables?: OffMapTable[];
+  /** Shared occupied-table flow (see table-claim.tsx). */
+  intercept?: (request: { label: string; columnId: string }) => boolean;
   /** Per-server summaries from the shared read model (counts + held tables). */
   servers: ServerSummary[];
   tablesLoadError?: boolean;
@@ -157,7 +167,6 @@ export function ServerBoardView({
   const [mapOpenForColumnId, setMapOpenForColumnId] = useState<string | null>(
     null,
   );
-  const [mapError, setMapError] = useState<string | null>(null);
   // Scoped to one already-assigned table at a time -- Transfer/End
   // Table/Unassign here only ever act on this one roundId, never any
   // other table the same server might also hold.
@@ -180,11 +189,19 @@ export function ServerBoardView({
     disabled,
     onAssign,
     onEndAndAssign,
+    intercept,
   });
 
   function closeMap() {
     setMapOpenForColumnId(null);
-    setMapError(null);
+  }
+
+  // Map tile or off-map row: both run the same shared occupied-table flow
+  // (inside decision.beginAssign) -- an occupied table is never an error here.
+  function chooseTable(label: string) {
+    if (!mapOpenColumn) return;
+    setMapOpenForColumnId(null);
+    decision.beginAssign(label, mapOpenColumn.id, mapOpenColumn.name);
   }
 
   function closeTableAction() {
@@ -257,6 +274,11 @@ export function ServerBoardView({
                     >
                       <Badge tone={table.offMap ? "warning" : "success"}>
                         {table.label}
+                        {table.offMap ? (
+                          <span className="ml-1 text-[10px] font-normal opacity-80">
+                            off-map
+                          </span>
+                        ) : null}
                       </Badge>
                     </button>
                   ))}
@@ -266,6 +288,41 @@ export function ServerBoardView({
                   No tables assigned.
                 </p>
               )}
+              {summary?.sessionHistory.some(
+                ({ status }) => status === "ended",
+              ) ? (
+                <div
+                  className="border-border border-t pt-2"
+                  role="group"
+                  aria-label={`${column.name} session history`}
+                >
+                  <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.08em] uppercase">
+                    Session history
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {summary.sessionHistory.map((entry) => (
+                      <li
+                        key={`${entry.roundId}-${entry.label}`}
+                        className="flex items-baseline gap-1.5 text-xs"
+                      >
+                        <span
+                          className={
+                            entry.status === "ended"
+                              ? "text-muted-foreground font-mono line-through decoration-2"
+                              : "font-mono font-semibold"
+                          }
+                        >
+                          {entry.label}
+                        </span>
+                        <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
+                          {entry.status === "ended" ? "Ended" : "Active"}
+                          {entry.offMap ? " · off-map" : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {combinedAssignments(summary).map((scope) => (
                 <p
                   key={scope.label}
@@ -354,25 +411,13 @@ export function ServerBoardView({
           loadError={tablesLoadError}
           selectedLabel={null}
           disabled={disabled}
-          onSelectTable={(label) => {
-            if (!mapOpenColumn) return;
-            const table = tables.find((t) => t.label === label);
-            if (table?.occupiedBy) {
-              setMapError(
-                `Table ${label} is already assigned to ${table.occupiedBy.name}.`,
-              );
-              return;
-            }
-            setMapOpenForColumnId(null);
-            setMapError(null);
-            decision.beginAssign(label, mapOpenColumn.id, mapOpenColumn.name);
-          }}
+          onSelectTable={chooseTable}
         />
-        {mapError ? (
-          <p className="text-destructive text-xs" aria-live="polite">
-            {mapError}
-          </p>
-        ) : null}
+        <OffMapTables
+          tables={offMapTables}
+          disabled={disabled}
+          onSelectTable={chooseTable}
+        />
       </Dialog>
 
       {decision.dialog}

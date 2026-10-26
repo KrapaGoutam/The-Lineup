@@ -9,7 +9,10 @@ import {
   buildRecentActivity,
   type BoardActivityEntry,
 } from "@/features/allocation/domain/board-activity";
-import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
+import type {
+  FloorLayoutEntry,
+  RegistryTable,
+} from "@/features/allocation/domain/floor-layout";
 import type {
   ColumnStatus,
   RotationBoard,
@@ -66,6 +69,12 @@ export type AllocationContext = {
   // IMPLEMENTATION_LOG.md). Demo mode never reads this -- it uses the
   // static DEMO_FLOOR_LAYOUT instead.
   physicalTables: FloorLayoutEntry[];
+  // Cross-view integrity (X1): EVERY active registered table, including the
+  // ones with no map position (position_x/y null). `physicalTables` above is
+  // the drawable subset; this is the registry the read model resolves table
+  // identity against so an unpositioned table is represented (off-map)
+  // instead of silently dropped.
+  registeredTables: RegistryTable[];
   // Production stability hotfix: true only when the dining_tables query
   // itself failed (network/PostgREST/RLS error, already console.error'd
   // above) -- distinct from a legitimate zero rows result. Lets the
@@ -170,6 +179,15 @@ export async function getAllocationContext(
   if (tableError)
     console.error("getAllocationContext: dining_tables", tableError);
   const physicalTablesQueryFailed = tableError !== null;
+  const registeredTables: RegistryTable[] = (tableRows ?? []).map((row) => ({
+    diningTableId: row.id as number,
+    label: row.label,
+    x: row.position_x === null ? null : Number(row.position_x),
+    y: row.position_y === null ? null : Number(row.position_y),
+    resourceType: /bar/i.test(diningAreaName(row.dining_areas) ?? "")
+      ? "bar_seat"
+      : "table",
+  }));
   const physicalTables: FloorLayoutEntry[] = (tableRows ?? [])
     .filter((row) => row.position_x !== null && row.position_y !== null)
     .map((row) => ({
@@ -231,6 +249,7 @@ export async function getAllocationContext(
       isHistorical,
       clockedInProfileIds,
       physicalTables,
+      registeredTables,
       physicalTablesQueryFailed,
       claims: [],
       claimDivergences: [],
@@ -427,6 +446,7 @@ export async function getAllocationContext(
     isHistorical,
     clockedInProfileIds,
     physicalTables,
+    registeredTables,
     physicalTablesQueryFailed,
     claims,
     claimDivergences,

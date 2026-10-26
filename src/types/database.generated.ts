@@ -3131,6 +3131,7 @@ export type Database = {
       board_assign: {
         Args: {
           p_confirm_transfer?: boolean;
+          p_end_whole_assignment?: boolean;
           p_location_id: string;
           p_member_id: number;
           p_organization_id: string;

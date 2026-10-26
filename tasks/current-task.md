@@ -1,6 +1,6 @@
 # PR #135 Reconciliation — Agent Handoff
 
-Current task: PR #135 (DEV Preview / CI Reliability) is reconciled with `development` twice; waiting on exact-head CI and the owner Preview smoke.
+Current task: PR #135 (DEV Preview / CI Reliability) is reconciled with `development` three times (latest: the #153 cross-view fix); waiting on exact-head CI and the owner Preview smoke.
 
 ## TASK-014 fix (separate from PR #135)
 
@@ -42,3 +42,13 @@ PROD touched: NO
 - Exact next action: on the owner's explicit `Preview owner smoke PASS`, re-check the PR head and CI, then `gh pr merge 135 --merge` (merge commit). Then verify development contains the PR and main does not, close #133 / Project #4, and open `docs/dev-preview-ci-final-closeout` from latest development for the final wording.
 - Next separate task after merge: Release Readiness Review (do NOT merge `development → main` automatically).
 - DO NOT: merge to main, touch PROD, change Production Vercel variables, disable Vercel protection or create a bypass, copy PROD Neon into DEV/Preview, force-push, squash/rebase-merge, start Part 2, wait for a "good time of day" to get green CI, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`.
+
+## Cross-View Integrity (#153) — MERGED into development
+
+PR #156, merge commit `aaf11f0` (exact-head CI green: application, browser-smoke, Database, Vercel; deploy-migrations skipped). Branch `fix/table-allocation-cross-view-integrity`. Report/evidence: `docs/features/table-allocation-cross-view-integrity/IMPLEMENTATION_REPORT.md`.
+
+- Identity: the owner's "Table 1" has no `dining_tables` row (free-text label); `T1` is id 19 — never aliased. Off-map = registered-unpositioned or free-text, shown in all five views.
+- One shared occupied-table flow (Transfer / End + Assign / Cancel; same-server notice); atomic via `board_assign(..., p_end_whole_assignment)`; stale clients get PT409.
+- Migration `20261026090000_table_allocation_conflict_resolution.sql` applied to DEV only (recorded); PROD untouched.
+- Tests: Vitest 663, demo Playwright 489 (45-scenario matrix x 3 viewports), pgTAP 588, hosted DB 50, hosted production-build UI 29.
+- X6 (this branch): `development` merged into `infra/dev-preview-ci-reliability` (plain merge, no rebase, no force-push). Needs exact-head CI + a NEW Preview + the owner's final smoke (see owner smoke list above, plus: off-map labelling, occupied-table dialog once, Servers ended history).
