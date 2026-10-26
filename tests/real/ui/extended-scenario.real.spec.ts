@@ -80,8 +80,14 @@ test("A/B/C live service through the Grid; all five views agree", async () => {
   await gridAssign(owner, "TestHost", 1, "T16");
   await expect(owner.locator('input[data-cell="TestServer1|2"]')).toBeVisible();
 
-  // Row 2: A takes T15 from B (End B + Assign A), B -> T11, C -> T2.
+  // Row 2: A takes T15 from B (End + Assign, chosen in the dialog), B -> T11, C -> T2.
   await gridAssign(owner, "TestServer1", 2, "T15");
+  // Cross-view integrity (X2): a table another server still holds is no longer
+  // taken silently -- the shared dialog asks, and End + Assign ends B's entry.
+  await owner
+    .locator("dialog[open]")
+    .getByRole("button", { name: /^End .*assign/ })
+    .click();
   await gridAssign(owner, "TestServer2", 2, "T11");
   await gridAssign(owner, "TestHost", 2, "T2");
   // Row 3

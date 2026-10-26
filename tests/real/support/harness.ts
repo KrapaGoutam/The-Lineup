@@ -379,7 +379,7 @@ export async function createFixture(): Promise<Fixture> {
 
 export type Rpc = {
   data: unknown;
-  error: { message: string; code?: string } | null;
+  error: { message: string; code?: string; details?: string } | null;
 };
 
 export class Board {
@@ -487,7 +487,11 @@ export class Board {
     as: TestUser,
     memberId: number,
     label: string,
-    options: { confirm?: boolean; roundId?: number } = {},
+    options: {
+      confirm?: boolean;
+      endWhole?: boolean;
+      roundId?: number;
+    } = {},
   ): Promise<Rpc> {
     const roundId = options.roundId ?? (await this.freeRound(memberId));
     return (await as.client.rpc("board_assign", {
@@ -498,6 +502,8 @@ export class Board {
       p_member_id: memberId,
       p_table_label: label,
       p_confirm_transfer: options.confirm ?? false,
+      // PostgREST needs every named argument.
+      p_end_whole_assignment: options.endWhole ?? false,
     })) as Rpc;
   }
 
