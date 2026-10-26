@@ -7,7 +7,11 @@
 
 ---
 
-## Bar Inventory V1 — PLANNED (#168; docs only)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 done)
+
+**BI-0 (decisions, XLSX library review, golden vectors, test matrix) complete.** Owner decisions D1–D8 locked; XLSX = `read-excel-file@9.3.12` + `write-excel-file@4.1.1` behind our bounded zip guard (installed in BI-8). Evidence: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md`. Next: BI-1 (catalog). No application code or migration yet; `development → main` is not part of this cycle.
+
+Original planning summary:
 
 Planning documents merged to `development` for owner review: `docs/features/bar-inventory-v1/` (PRD, DATA_MODEL, UI_UX_PLAN, IMPORT_EXPORT_SPEC, ANALYTICS_SPEC, SECURITY_AND_ROLES, ACCEPTANCE_CRITERIA, TEST_STRATEGY, IMPLEMENTATION_PLAN). Secondary-tier module (More on mobile), management roles only (recommended), three views (Dashboard · Inventory · Manage), org-level catalog + location-level stock, immutable adjustment ledger, CSV/XLSX import with preview, type-appropriate filters on every table, vendor-grouped Order Soon, reason-aware analytics. **No application code, no migration; nothing implemented.** Roadmap order: #166 (done) → Bar Inventory → Tasks Today management visibility (#169, tracked only) → Tips V2 (#155).
 

@@ -1,6 +1,6 @@
 # Bar Inventory V1 — Data model (proposal)
 
-Planning only: **no schema is created by this document.** It follows the repository conventions found in the audit (Tasks V1 foundation migration): plural snake_case tables with a module prefix; `organization_id` (+ `location_id`) on every row with tenant-safe composite foreign keys; append-only event tables; RLS enabled with **SELECT-only grants** to `authenticated`; every write through `SECURITY DEFINER` RPCs with `set search_path = ''`; actor always `auth.uid()`, never a parameter; plain-language error messages with `42501` (permission) / `22023` (validation) / `PT409` (concurrency conflict).
+Status: **decisions D1–D8 locked in BI-0; schema is created from BI-1 onward.** It follows the repository conventions found in the audit (Tasks V1 foundation migration): plural snake_case tables with a module prefix; `organization_id` (+ `location_id`) on every row with tenant-safe composite foreign keys; append-only event tables; RLS enabled with **SELECT-only grants** to `authenticated`; every write through `SECURITY DEFINER` RPCs with `set search_path = ''`; actor always `auth.uid()`, never a parameter; plain-language error messages with `42501` (permission) / `22023` (validation) / `PT409` (concurrency conflict).
 
 ## 1. Scope boundary (organization vs location)
 
@@ -9,7 +9,7 @@ Planning only: **no schema is created by this document.** It follows the reposit
 | **Organization** | vendors, categories, subcategories, **products** (the catalog)                 | A vendor, a category list and "Tito's 750 mL" mean the same thing at every location                |
 | **Location**     | **stock** (on hand, backup, cutoff, warning, par), adjustments, import batches | Quantities and thresholds differ per bar. Tomorrow's second location adds stock rows, not products |
 
-V1 ships one location (`getPrimaryLocation`), but every RPC takes `p_location_id` and every location-bound row carries `location_id`, exactly as Tasks does, so the future change touches only the access seam (`private.inventory_can_access_location`) and the client's primary-location helper. (Owner decision D5; alternative is everything location-level — simpler, but duplicates the catalog on a second location.)
+V1 ships one location (`getPrimaryLocation`), but every RPC takes `p_location_id` and every location-bound row carries `location_id`, exactly as Tasks does, so the future change touches only the access seam (`private.inventory_can_access_location`) and the client's primary-location helper. (Owner decision D5, locked.)
 
 Import identity (owner brief: _location + vendor + name + size + unit_) is satisfied: the **catalog key** is `(organization, vendor, name, size, unit)`; the stock row it points at is `(product, location)`. An import for a location creates a missing stock row for an existing catalog product, or creates the product and its stock row.
 
@@ -28,7 +28,7 @@ Subcategories: `id, organization_id, category_id, name, name_key, active, …`; 
 
 ### `inventory_products`
 
-`id uuid pk`, `organization_id`, `vendor_id` (not null, restrict), `name`, `name_key`, `category_id null`, `subcategory_id null`, `size text null`, `size_key text`, `unit_type text` (curated list + `other`), `unit_key text`, `sku text null`, `sku_key text null`, `notes text null`, `active boolean`, `archived_at`, `created_by`, `created_at`, `updated_at`, `version int`.
+`id uuid pk`, `organization_id`, `vendor_id` (not null, restrict), `name`, `name_key`, `category_id null`, `subcategory_id null`, `size text null`, `size_key text`, `unit_type text not null` (check: `bottle|can|pack|case|keg|other`, D8), `unit_label text null` (required iff `other`, ≤ 40 chars; null otherwise), `unit_key text` (= type, or `other:<nameKey(label)>`), `sku text null`, `sku_key text null`, `notes text null`, `active boolean`, `archived_at`, `created_by`, `created_at`, `updated_at`, `version int`.
 
 - Composite FK `(category_id, subcategory_id)` → subcategories(category_id, id) guarantees the subcategory belongs to the product's category.
 - **Identity** unique index: `(organization_id, vendor_id, name_key, size_key, unit_key)` **where active** (an archived product does not block re-creating the same product; reactivation checks the key first).
@@ -39,7 +39,7 @@ Subcategories: `id, organization_id, category_id, name, name_key, active, …`; 
 
 PK `(product_id, location_id)`; `organization_id`; `on_hand numeric(12,2) not null default 0 check ≥ 0`; `backup numeric(12,2) not null default 0 check ≥ 0`; **`total numeric(13,2) generated always as (on_hand + backup) stored`** (permitted "generated" value — avoids drift and lets the database sort/filter/aggregate without recomputation); `cutoff numeric(12,2) null`; `warning numeric(12,2) null`; `par numeric(12,2) null`; checks `warning ≥ cutoff` when both set, `par ≥ 0`; `version int not null default 1` (optimistic concurrency); `updated_at`, `updated_by`; `last_adjusted_at`.
 
-- Status is **not stored**. A security-invoker view `inventory_stock_status` computes `effective_warning`, `status` and `suggested_order_qty` from the §5 rules in `PRD.md`, so SQL consumers (export, Order Soon, counts) and the TypeScript mirror are checked against the same test vectors (`TEST_STRATEGY.md` §3).
+- Status is **not stored** and the **warning fallback is never normalized onto the row** (decided in BI-0): the `warning` column holds only an explicit entry; `effective_warning` is computed at read time. A security-invoker view `inventory_stock_status` computes `effective_warning`, `status` and `suggested_order_qty` from the §5 rules in `PRD.md`, so SQL consumers (export, Order Soon, counts) and the TypeScript mirror are checked against the same test vectors (`TEST_STRATEGY.md` §3).
 - Index for the Dashboard: `(location_id, organization_id)` plus a partial index on `(location_id, total)` for non-archived rows.
 
 ### `inventory_adjustments` (append-only quantity ledger)
@@ -97,7 +97,7 @@ One transaction under advisory/row locks: create missing vendors/categories/subc
 
 RLS enabled on every table. `revoke all … from public, anon, authenticated; grant select … to authenticated;` — **no client INSERT/UPDATE/DELETE policies or grants**. SELECT policies: `private.inventory_is_manager(organization_id) and private.inventory_can_access_location(organization_id, location_id)` (organization-level tables omit the location clause). `(select auth.uid())` wrapped everywhere. Helpers use the **membership-only** pattern (`has_board_role`-style, no `organizations.created_by` bypass, see #106). Detail in `SECURITY_AND_ROLES.md`.
 
-## 8. Realtime (owner decision D7)
+## 8. Realtime (owner decision D7, locked: database = truth, event = invalidation, client = refetch)
 
 Add `inventory_stock` and `inventory_adjustments` to the Realtime publication as **notifications only**; clients invalidate and refetch through the normal loaders — the Table Allocation architecture (database truth → notification → refetch). No logic in Realtime. If owner declines, managers refresh manually in V1.
 

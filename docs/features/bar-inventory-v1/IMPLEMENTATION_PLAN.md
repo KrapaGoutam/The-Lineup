@@ -1,6 +1,8 @@
 # Bar Inventory V1 — Implementation plan
 
-**Planning only — nothing here is executed.** Implementation starts only after the owner reviews this plan and answers the decisions in `PRD.md` §10 (D1–D8).
+**Status:** BI-0 complete (decisions D1–D8 locked, XLSX library chosen, vectors + test matrix committed). Build phases BI-1 → BI-10 proceed one branch/PR per phase into `development`; evidence per phase in `IMPLEMENTATION_REPORT.md`.
+
+**Cycle scope note (owner brief 2026-10-26):** in this cycle **BI-11 is the final integration gate** (full suite once, release-readiness input). The Production release described in the BI-11 row below is a **separate future task** that needs explicit owner authorization and #111/#113; `development → main` is never part of this cycle.
 
 Tracking: GitHub issue #168 "[Feature] Bar Inventory V1 — stock, ordering, history and analytics" (labels `type:feature`, `module:bar-inventory`, `priority:p1`; Project #4; milestone "Future Product Backlog"). Branch convention per phase: `feature/bar-inventory-<phase>` → PR → `development` (merge commit). Never `main`, never PROD in a feature PR.
 
@@ -68,4 +70,4 @@ Acceptance criteria for the phase ticked with evidence; all gates green on the e
 
 ## Next action
 
-Owner reviews `PRD.md`, `DATA_MODEL.md`, `UI_UX_PLAN.md`, `IMPORT_EXPORT_SPEC.md`, `ANALYTICS_SPEC.md`, `SECURITY_AND_ROLES.md` and answers D1–D8. Then BI-0 begins.
+BI-1 (catalog foundation) follows BI-0.

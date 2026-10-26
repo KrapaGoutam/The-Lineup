@@ -1,54 +1,55 @@
-# Current task — Next development cycle (handoff)
+# Current task — Bar Inventory V1 build, then Tasks V1.1 (handoff)
 
 ## Current State & Next Step
 
-Current cycle: **next development cycle after the 2026-10-26 Production release**. Owner roadmap order: 1 Table Allocation same-server repeat (DONE) → 2 Bar Inventory V1 (PLANNED) → 3 Tasks Today management visibility (tracked) → 4 Tips V2 (#155).
+Cycle: **implementation after the 2026-10-26 Production release.** Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP (Tips V2 #155 is next; not in this task).
 
-Current branch: `docs/bar-inventory-v1-planning` (docs/tracking only, from `origin/development` `a9a1edf`)
-HEAD: see `git log -1` / the planning docs PR
+Current branch: `feature/bar-inventory-bi0-foundation` (from `origin/development` `656ec86`)
+**Exact next action:** merge the BI-0 PR into `development` (merge commit, exact-head CI green), then branch `feature/bar-inventory-bi1-catalog` from the updated `development` and start BI-1 (org-level catalog schema, helpers, RLS, CRUD RPCs, Manage UI, nav registration). Plan: `docs/features/bar-inventory-v1/IMPLEMENTATION_PLAN.md`. Evidence log: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md`.
 
-**Exact next action:** the owner reviews `docs/features/bar-inventory-v1/` and answers decisions D1–D8 (`PRD.md` §10). Then BI-0 (decisions + XLSX library review). **Do NOT begin Bar Inventory, Tasks Today or Tips V2 implementation; do NOT merge `development → main`.**
+Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
-## Part 1 — Table Allocation bug (DONE)
+## Rules for every phase
 
-- Table Allocation bug issue: #166 (closed; type:bug, module:table-allocation, priority:p1, Project #4 Done, milestone "Table Allocation V2 — Part 2")
-- Root cause: `board_assign` refused any second active entry of a table for the same server (`same_server`) with no notion of turn.
-- Turn identity: board cell `(rotation_round_id, rotation_member_id)`, ordered by `rotation_rounds.sequence`; decided in the database.
-- Same-turn behavior: identical re-submit of the same cell = idempotent no-op; held in same-or-later turn = blocked (`same_server`), no mutation.
-- Later-turn behavior: `PT409 same_server_repeat`; dialog End Previous + Assign / Cancel; confirm = `board_end_previous_and_assign` (atomic; previous entry ended, kept as history; `repeat: true` event; Undo/Redo functions unchanged).
-- Migration: `20261026150000_table_allocation_same_server_repeat.sql` (DEV applied, PROD not).
-- Tests: Vitest 746/746; pgTAP 0032 75/75 (+ existing suites pass; CI Database job green); demo Playwright 549/549 (3 projects); hosted DEV DB 92/92; hosted DEV UI 13/13 + 15/15.
-- PR: #167 → `development`, CI green on exact head `505a76a` (application, browser-smoke, migrations-and-policies)
-- development merge: **YES**, merge commit `a9a1edf`
+`feature/*` · `fix/*` · `docs/*` branch → targeted validation → PR → exact-head CI → **merge commit** → `development`. Never commit to `development`/`main`. **No `development → main`** in this task. Migrations DEV only; PROD never touched. `git add` explicit paths only (never `-A`; `docs/testing/` and `*.code-workspace` stay untracked). Do not mix Bar Inventory and Tasks code on one branch. Tips V2 is NOT implemented here.
 
-## Part 2 — Bar Inventory V1 (planning only)
+## Bar Inventory phases
 
-- Bar Inventory issue: #168 (type:feature, module:bar-inventory (new label, follows `module:*` convention), priority:p1, milestone "Future Product Backlog", Project #4 status Planned; Project "Module" field has no Bar Inventory option and was not altered)
-- Planning branch: `docs/bar-inventory-v1-planning`
-- Planning docs: `docs/features/bar-inventory-v1/` (PRD, DATA_MODEL, UI_UX_PLAN, IMPORT_EXPORT_SPEC, ANALYTICS_SPEC, SECURITY_AND_ROLES, ACCEPTANCE_CRITERIA, TEST_STRATEGY, IMPLEMENTATION_PLAN)
-- Role decision: recommended management roles only (Owner / Manager / Assistant Manager = `owner`, `general_manager`, `shift_manager`); staff none in V1 (owner decision D1)
-- Schema proposal: org-level vendors/categories/subcategories/products + location-level `inventory_stock`, immutable `inventory_adjustments`, `inventory_change_log`, server-staged `inventory_import_batches/rows`
-- Import/export: CSV + XLSX (library decision D6 in BI-0; none installed today), preview before mutation, vendor matching, injection-safe export
-- Filters: type-appropriate per column, chips, Clear all, URL state, sort presets
-- Analytics: reason-aware ledger rules, days-to-cutoff range, movers, vendor demand
-- Implementation phases: BI-0 … BI-11 (release blocked on #111/#113)
+- [x] **BI-0** decisions locked · XLSX library review (D6) · golden vectors (`tests/fixtures/bar-inventory/`) · `TEST_MATRIX.md` (107 scenarios) · `IMPLEMENTATION_REPORT.md` — PR pending
+- [ ] **BI-1** org-level catalog: vendors / categories / subcategories / products, keys, change log, helpers, RLS, CRUD RPCs, Manage UI, nav registration (secondary tier, More on mobile)
+- [ ] **BI-2** `inventory_stock`, status view, immutable `inventory_adjustments`, `inventory_stock_adjust`, `inventory_stock_set_levels`, optimistic concurrency
+- [ ] **BI-3** table kit + filters + Inventory view (desktop/tablet/mobile)
+- [ ] **BI-4** Dashboard (KPIs)
+- [ ] **BI-5** Order Soon by vendor + recommendation export
+- [ ] **BI-6** History / versioning
+- [ ] **BI-7** Analytics
+- [ ] **BI-8** CSV/XLSX import & export
+- [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
+- [ ] **BI-10** hosted DEV validation
+- [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
 
-## Part 3 — Tasks enhancement
+## Tasks V1.1 phases (after Bar Inventory)
 
-Tasks Today management visibility issue: #169 (type:feature, module:tasks, priority:p2, milestone "Future Product Backlog"). PLANNED ONLY.
+Scope in the owner brief: default landing = Tasks → Today (deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized; staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 min in the location time zone, deduplicated per recipient/stage/service date, suppressed when complete. Issues #169, #154 (no duplicates). Phases T-0 → T-6 are defined when group A completes.
 
-## Part 4 — Tips V2
+- [ ] T-0 … T-6 (not started)
 
-#155 stays open, untouched; fourth in the roadmap.
-
-## Safety
+## Safety ledger (this cycle so far)
 
 ```
-development merged: YES (PR #167, a9a1edf); planning docs PR pending/merged per the PR
+development merged: BI-0 PR pending (YES once merged)
 main merged: NO
-DEV touched: YES (migration 20261026150000; hosted suites use their own synthetic org)
+DEV touched: NO (BI-0 is docs + fixtures)
 PROD touched: NO
 PROD migrations: NO
 ```
 
-DO NOT: `git add -A`, stage `docs/testing/` or `*.code-workspace`, commit directly to `main`/`development`, start Bar Inventory / Tasks / Tips implementation.
+## GitHub
+
+#168 Bar Inventory V1 (open) · #169 Tasks Today management visibility (open) · #154 Tasks notification narrowing (open) · #155 Tips V2 (open, untouched) · #111 deploy-migrations (open, blocked) · #113 migration/app sequencing (open) · #164 deferred Production checks (open). Verified live 2026-10-26.
+
+## Notes for the next agent
+
+- The `docs/production-release-2026-10-26` branch holds an unmerged docs commit (`a4a8106`: release PASS handoff/STATUS). It is not on `development`; do not assume its content is present.
+- XLSX library installs happen in BI-8 only. The pre-flight zip guard (bounded `fflate` streaming inflate) is specified in `IMPORT_EXPORT_SPEC.md` §1 and was prototyped in BI-0 (scratch, not committed).
+- Shared vectors are the contract between SQL and TypeScript: never "fix" a mismatch by editing a vector without an owner-visible reason.

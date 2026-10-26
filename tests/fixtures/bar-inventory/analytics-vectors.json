@@ -1,0 +1,354 @@
+{
+  "$comment": "Bar Inventory V1 analytics golden vectors (BI-0; owner decision D3). Consumed by src/features/bar-inventory/domain/analytics.ts (BI-7). Movement uses the change in TOTAL available (on_hand + backup). Confirmed Usage = reason 'usage' (negative total delta). Observed Depletion = negative total delta from reason 'stock_count' (a count variance; never called a confirmed sale). Correction, Transfer In/Out, Delivery/Restock never count as consumption. Breakage and Comp are shrink (separate series).",
+  "classification": [
+    {
+      "reason": "usage",
+      "sign": "-",
+      "kind": "confirmed_usage",
+      "inMovement": true
+    },
+    {
+      "reason": "stock_count",
+      "sign": "-",
+      "kind": "observed_depletion",
+      "inMovement": true
+    },
+    {
+      "reason": "stock_count",
+      "sign": "+",
+      "kind": "count_gain",
+      "inMovement": false
+    },
+    {
+      "reason": "delivery_restock",
+      "sign": "+",
+      "kind": "restock",
+      "inMovement": false
+    },
+    {
+      "reason": "transfer_in",
+      "sign": "+",
+      "kind": "transfer_in",
+      "inMovement": false
+    },
+    {
+      "reason": "transfer_out",
+      "sign": "-",
+      "kind": "transfer_out",
+      "inMovement": false
+    },
+    {
+      "reason": "correction",
+      "sign": "-",
+      "kind": "correction",
+      "inMovement": false
+    },
+    {
+      "reason": "correction",
+      "sign": "+",
+      "kind": "correction",
+      "inMovement": false
+    },
+    {
+      "reason": "breakage",
+      "sign": "-",
+      "kind": "shrink",
+      "inMovement": false
+    },
+    { "reason": "comp", "sign": "-", "kind": "shrink", "inMovement": false },
+    { "reason": "other", "sign": "-", "kind": "other", "inMovement": false },
+    { "reason": "other", "sign": "+", "kind": "other", "inMovement": false }
+  ],
+  "depletion": [
+    {
+      "id": "usage-vs-correction",
+      "events": [
+        { "reason": "usage", "delta_on_hand": -2, "delta_backup": 0 },
+        { "reason": "correction", "delta_on_hand": -2, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 2,
+        "observed_depletion": 0,
+        "movement": 2
+      }
+    },
+    {
+      "id": "count-variance-is-observed-depletion",
+      "events": [
+        { "reason": "stock_count", "delta_on_hand": -3, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 3,
+        "movement": 3
+      }
+    },
+    {
+      "id": "count-variance-excluded-when-toggled-off",
+      "options": { "includeObservedDepletion": false },
+      "events": [
+        { "reason": "stock_count", "delta_on_hand": -3, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 3,
+        "movement": 0
+      }
+    },
+    {
+      "id": "delivery-is-restock",
+      "events": [
+        { "reason": "delivery_restock", "delta_on_hand": 4, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 0,
+        "movement": 0,
+        "restocked_quantity": 4,
+        "restock_count": 1
+      }
+    },
+    {
+      "id": "move-between-on-hand-and-backup",
+      "events": [
+        { "reason": "stock_count", "delta_on_hand": -2, "delta_backup": 2 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 0,
+        "movement": 0
+      }
+    },
+    {
+      "id": "transfer-out-and-breakage-not-consumption",
+      "events": [
+        { "reason": "transfer_out", "delta_on_hand": -5, "delta_backup": 0 },
+        { "reason": "breakage", "delta_on_hand": -1, "delta_backup": 0 },
+        { "reason": "comp", "delta_on_hand": -1, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 0,
+        "movement": 0,
+        "shrink": 2
+      }
+    },
+    {
+      "id": "count-gain-is-not-restock",
+      "events": [
+        { "reason": "stock_count", "delta_on_hand": 3, "delta_backup": 0 }
+      ],
+      "expected": {
+        "confirmed_usage": 0,
+        "observed_depletion": 0,
+        "movement": 0,
+        "restocked_quantity": 0,
+        "count_gain": 3
+      }
+    }
+  ],
+  "rates": [
+    {
+      "id": "thirty-day-rate",
+      "window_days": 30,
+      "movement_total": 12,
+      "depletion_events": 6,
+      "item_age_days": 40,
+      "expected": { "enoughHistory": true, "perDay": 0.4, "perWeek": 2.8 }
+    },
+    {
+      "id": "too-few-events",
+      "window_days": 30,
+      "movement_total": 12,
+      "depletion_events": 2,
+      "item_age_days": 40,
+      "expected": { "enoughHistory": false, "perDay": null, "perWeek": null }
+    },
+    {
+      "id": "item-too-new",
+      "window_days": 30,
+      "movement_total": 12,
+      "depletion_events": 6,
+      "item_age_days": 13,
+      "expected": { "enoughHistory": false, "perDay": null, "perWeek": null }
+    },
+    {
+      "id": "item-age-boundary",
+      "window_days": 30,
+      "movement_total": 12,
+      "depletion_events": 3,
+      "item_age_days": 14,
+      "expected": { "enoughHistory": true, "perDay": 0.4, "perWeek": 2.8 }
+    }
+  ],
+  "daysToCutoff": [
+    {
+      "id": "range",
+      "total": 20,
+      "cutoff": 8,
+      "rate_7d": 1.0,
+      "rate_30d": 0.5,
+      "enoughHistory": true,
+      "expected": "12–24 days"
+    },
+    {
+      "id": "at-cutoff",
+      "total": 8,
+      "cutoff": 8,
+      "rate_7d": 1.0,
+      "rate_30d": 0.5,
+      "enoughHistory": true,
+      "expected": "At or below cutoff"
+    },
+    {
+      "id": "below-cutoff",
+      "total": 6,
+      "cutoff": 8,
+      "rate_7d": 1.0,
+      "rate_30d": 0.5,
+      "enoughHistory": false,
+      "expected": "At or below cutoff"
+    },
+    {
+      "id": "no-history",
+      "total": 20,
+      "cutoff": 8,
+      "rate_7d": null,
+      "rate_30d": null,
+      "enoughHistory": false,
+      "expected": "Not enough history"
+    },
+    {
+      "id": "no-movement",
+      "total": 20,
+      "cutoff": 8,
+      "rate_7d": 0,
+      "rate_30d": 0,
+      "enoughHistory": true,
+      "expected": "No recent movement"
+    },
+    {
+      "id": "whole-days-never-decimals",
+      "total": 17,
+      "cutoff": 8,
+      "rate_7d": 2,
+      "rate_30d": 2,
+      "enoughHistory": true,
+      "expected": "4–5 days"
+    },
+    {
+      "id": "equal-ends",
+      "total": 17,
+      "cutoff": 8,
+      "rate_7d": 3,
+      "rate_30d": 3,
+      "enoughHistory": true,
+      "expected": "about 3 days"
+    },
+    {
+      "id": "thirty-plus",
+      "total": 100,
+      "cutoff": 8,
+      "rate_7d": 1,
+      "rate_30d": 0.5,
+      "enoughHistory": true,
+      "expected": "30+ days"
+    },
+    {
+      "id": "low-end-known-high-end-open",
+      "total": 20,
+      "cutoff": 8,
+      "rate_7d": 1,
+      "rate_30d": 0.2,
+      "enoughHistory": true,
+      "expected": "12–30+ days"
+    },
+    {
+      "id": "no-cutoff",
+      "total": 20,
+      "cutoff": null,
+      "rate_7d": 1,
+      "rate_30d": 0.5,
+      "enoughHistory": true,
+      "expected": "No cutoff set"
+    }
+  ],
+  "cutoffCrossings": [
+    {
+      "id": "chronic-two-crossings",
+      "$comment": "A crossing is a ledger row whose status_after is critical while the previous row's status_after was not critical. cutoff_at_time is stored per row, so later cutoff edits never rewrite history.",
+      "rows": [
+        {
+          "date": "2026-10-01",
+          "status_after": "healthy",
+          "cutoff_at_time": 10
+        },
+        {
+          "date": "2026-10-05",
+          "status_after": "critical",
+          "cutoff_at_time": 10
+        },
+        {
+          "date": "2026-10-06",
+          "status_after": "critical",
+          "cutoff_at_time": 10
+        },
+        {
+          "date": "2026-10-10",
+          "status_after": "healthy",
+          "cutoff_at_time": 10
+        },
+        {
+          "date": "2026-10-20",
+          "status_after": "critical",
+          "cutoff_at_time": 6
+        }
+      ],
+      "window_days": 30,
+      "expected": { "crossings": 2, "chronic": true }
+    },
+    {
+      "id": "stays-critical-is-one-crossing",
+      "rows": [
+        {
+          "date": "2026-10-05",
+          "status_after": "critical",
+          "cutoff_at_time": 10,
+          "previous_status": "low"
+        },
+        {
+          "date": "2026-10-06",
+          "status_after": "critical",
+          "cutoff_at_time": 10
+        },
+        {
+          "date": "2026-10-07",
+          "status_after": "critical",
+          "cutoff_at_time": 10
+        }
+      ],
+      "window_days": 30,
+      "expected": { "crossings": 1, "chronic": false }
+    }
+  ],
+  "localDay": [
+    {
+      "id": "late-evening-belongs-to-local-service-date",
+      "timezone": "America/New_York",
+      "event_at_utc": "2026-10-27T03:30:00Z",
+      "expected_local_date": "2026-10-26"
+    },
+    {
+      "id": "dst-fall-back-day",
+      "timezone": "America/New_York",
+      "event_at_utc": "2026-11-01T05:30:00Z",
+      "expected_local_date": "2026-11-01"
+    },
+    {
+      "id": "dst-fall-back-late",
+      "timezone": "America/New_York",
+      "event_at_utc": "2026-11-02T04:30:00Z",
+      "expected_local_date": "2026-11-01"
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+{
+  "$comment": "Bar Inventory V1 normalization-key vectors (BI-0). One SQL function and one TypeScript mirror (BI-1) are both proven against this file. Keys are used for matching and uniqueness only; the display value is the first-entered, trimmed text. A name key that normalizes to the empty string is rejected (22023).",
+  "rules": {
+    "nameKey": "NFKD-normalize, drop combining marks, lowercase, keep letters and digits only (everything else removed)",
+    "sizeKey": "lowercase, remove whitespace; a leading number has trailing zeros and a trailing '.' stripped; null/blank -> empty string; NO unit conversion",
+    "skuKey": "trim, remove all whitespace, uppercase; punctuation kept; blank -> null",
+    "unitKey": "curated types: unit_type itself; 'other': 'other:' + nameKey(label); 'other' requires a non-empty label"
+  },
+  "nameKey": [
+    { "input": "Del Papa", "expected": "delpapa" },
+    { "input": "DelPapa", "expected": "delpapa" },
+    { "input": "del papa", "expected": "delpapa" },
+    { "input": "DEL PAPA", "expected": "delpapa" },
+    { "input": "  Del   Papa  ", "expected": "delpapa" },
+    { "input": "Tito's", "expected": "titos" },
+    { "input": "Tito’s", "expected": "titos" },
+    { "input": "Faust Dist.", "expected": "faustdist" },
+    { "input": "A&B Beverage", "expected": "abbeverage" },
+    { "input": "Café Rouge", "expected": "caferouge" },
+    { "input": "Ｆａｕｓｔ", "expected": "faust" },
+    { "input": "Fuast", "expected": "fuast" },
+    { "input": "7-Up", "expected": "7up" },
+    { "input": "---", "expected": null, "reason": "empty after normalization" },
+    { "input": "   ", "expected": null, "reason": "blank" },
+    { "input": "", "expected": null, "reason": "blank" }
+  ],
+  "sameVendor": [
+    ["Del Papa", "DelPapa", "del papa", "DEL PAPA", "  Del   Papa "],
+    ["Tito's", "Titos", "TITO’S"]
+  ],
+  "nearMissVendor": [
+    { "input": "Fuast", "suggest": "Faust", "maxEditDistance": 2 },
+    { "input": "Del Pappa", "suggest": "Del Papa", "maxEditDistance": 2 }
+  ],
+  "sizeKey": [
+    { "input": "750 mL", "expected": "750ml" },
+    { "input": "750ml", "expected": "750ml" },
+    { "input": "750 ML", "expected": "750ml" },
+    { "input": "1.75 L", "expected": "1.75l" },
+    { "input": "1.750 L", "expected": "1.75l" },
+    { "input": "1.0 L", "expected": "1l" },
+    { "input": "1 L", "expected": "1l" },
+    {
+      "input": "1000 mL",
+      "expected": "1000ml",
+      "reason": "no unit conversion: 1l and 1000ml are different keys"
+    },
+    { "input": "12 oz", "expected": "12oz" },
+    { "input": "50 L", "expected": "50l" },
+    { "input": "Large", "expected": "large" },
+    { "input": "  ", "expected": "" },
+    { "input": null, "expected": "" }
+  ],
+  "skuKey": [
+    { "input": "ab-123", "expected": "AB-123" },
+    { "input": " AB-123 ", "expected": "AB-123" },
+    { "input": "ab 123", "expected": "AB123" },
+    { "input": "", "expected": null },
+    { "input": null, "expected": null }
+  ],
+  "units": {
+    "curated": ["bottle", "can", "pack", "case", "keg"],
+    "other": "other",
+    "labelMaxLength": 40
+  },
+  "unitKey": [
+    { "type": "bottle", "label": null, "expected": "bottle" },
+    { "type": "keg", "label": null, "expected": "keg" },
+    { "type": "other", "label": "Growler", "expected": "other:growler" },
+    { "type": "other", "label": " 6-Pack ", "expected": "other:6pack" },
+    {
+      "type": "other",
+      "label": "",
+      "expected": null,
+      "reason": "other needs a label"
+    },
+    {
+      "type": "other",
+      "label": null,
+      "expected": null,
+      "reason": "other needs a label"
+    },
+    {
+      "type": "barrel",
+      "label": null,
+      "expected": null,
+      "reason": "not a curated unit"
+    },
+    {
+      "type": "bottle",
+      "label": "ignored",
+      "expected": "bottle",
+      "reason": "label is only meaningful for 'other'"
+    }
+  ],
+  "identity": {
+    "$comment": "Catalog identity = (organization, vendor, nameKey, sizeKey, unitKey). SKU is a stronger match key when present and unique.",
+    "same": [
+      [
+        {
+          "vendor": "Faust",
+          "name": "Tito's Handmade Vodka",
+          "size": "750 mL",
+          "unit": "bottle"
+        },
+        {
+          "vendor": "FAUST",
+          "name": "titos handmade vodka",
+          "size": "750ml",
+          "unit": "bottle"
+        }
+      ]
+    ],
+    "different": [
+      [
+        {
+          "vendor": "Faust",
+          "name": "Tito's Handmade Vodka",
+          "size": "750 mL",
+          "unit": "bottle"
+        },
+        {
+          "vendor": "Faust",
+          "name": "Tito's Handmade Vodka",
+          "size": "1.75 L",
+          "unit": "bottle"
+        }
+      ],
+      [
+        {
+          "vendor": "Faust",
+          "name": "Tito's Handmade Vodka",
+          "size": "750 mL",
+          "unit": "bottle"
+        },
+        {
+          "vendor": "Del Papa",
+          "name": "Tito's Handmade Vodka",
+          "size": "750 mL",
+          "unit": "bottle"
+        }
+      ],
+      [
+        {
+          "vendor": "Faust",
+          "name": "Modelo Especial",
+          "size": "12 oz",
+          "unit": "can"
+        },
+        {
+          "vendor": "Faust",
+          "name": "Modelo Especial",
+          "size": "12 oz",
+          "unit": "case"
+        }
+      ]
+    ]
+  }
+}
