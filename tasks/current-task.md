@@ -4,8 +4,8 @@
 
 Cycle: **implementation after the 2026-10-26 Production release.** Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP (Tips V2 #155 is next; not in this task).
 
-Current branch: `feature/bar-inventory-bi1-catalog` (from `origin/development` `92a5ae4`, BI-0 merged via PR #171)
-**Exact next action:** open the BI-1 PR into `development`, get exact-head CI green (application, browser-smoke, Database), merge with a merge commit; then branch `feature/bar-inventory-bi2-stock-ledger` and start BI-2 (`inventory_stock`, status view, immutable `inventory_adjustments`, `inventory_stock_adjust`, `inventory_stock_set_levels`; re-create `inventory_product_create` to also create the stock row + backfill). Plan: `docs/features/bar-inventory-v1/IMPLEMENTATION_PLAN.md`. Evidence log: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md`.
+Current branch: `feature/bar-inventory-bi2-stock-ledger` (from `origin/development` `92024d3`; BI-0 #171 and BI-1 #172 merged)
+**Exact next action:** BI-2 PR is open: wait for exact-head CI (application, browser-smoke, Database), merge with a merge commit; then branch `feature/bar-inventory-bi3-table-kit` and build the table kit (DataTable, column filters x4 types, chips, sort presets, Tabs/Sheet/Skeleton/EmptyState/StatusBadge) + Inventory view (desktop/tablet/mobile cards, inline edit + reason popover, stale-cell UX); apply the filters to the BI-1 Manage tables. Owner decision pending: delete 26 leaked synthetic "V2 Harness" orgs from DEV (see report §BI-2).
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -17,7 +17,7 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 - [x] **BI-0** decisions locked · XLSX library review (D6) · golden vectors · `TEST_MATRIX.md` (107 scenarios) · `IMPLEMENTATION_REPORT.md` — merged (PR #171, `92a5ae4`)
 - [x] **BI-1** org-level catalog (migration `20261026170000`, DEV applied), 13 RPCs, Manage UI, nav registration — code complete, PR pending (evidence: report §BI-1). Interim: column filters land in BI-3.
-- [ ] **BI-2** `inventory_stock`, status view, immutable `inventory_adjustments`, `inventory_stock_adjust`, `inventory_stock_set_levels`, optimistic concurrency
+- [x] **BI-2** `inventory_stock`, status view, immutable `inventory_adjustments`, `inventory_stock_adjust` / `_set_levels`, optimistic concurrency, 3 FK-cascade fixes — code complete, PR pending (report §BI-2)
 - [ ] **BI-3** table kit + filters + Inventory view (desktop/tablet/mobile)
 - [ ] **BI-4** Dashboard (KPIs)
 - [ ] **BI-5** Order Soon by vendor + recommendation export

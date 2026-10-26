@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(107);
+select plan(108);
 
 -- ---------------------------------------------------------------------
 -- Bar Inventory V1 / BI-1 -- catalog, authorization and audit boundary.
@@ -124,7 +124,7 @@ select ok(
 
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-   where n.nspname = 'public' and p.proname like 'inventory\_%'
+   where n.nspname = 'public' and p.proname like 'inventory_%' and p.proname not like 'inventory_stock_%'
      and has_function_privilege('authenticated', p.oid, 'execute')
      and not has_function_privilege('anon', p.oid, 'execute')),
   13, 'BI-SEC-003 all 13 catalog RPCs are executable by authenticated and not anon'
@@ -596,6 +596,9 @@ select is(
 reset role;
 
 -- 7. Table constraints (as the table owner) ----------------------------
+-- Foreign keys are DEFERRABLE INITIALLY DEFERRED (tenant-teardown cascades);
+-- check them immediately so each violation is reported where it happens.
+set constraints all immediate;
 select throws_ok(
   format($$insert into public.inventory_products (organization_id, vendor_id, name, subcategory_id, unit_type, created_by)
     values ('00000000-0000-0000-0000-000000033011', %L, 'Bad sub', %L, 'bottle', '00000000-0000-0000-0000-000000033002')$$,
@@ -674,10 +677,21 @@ select ok(
 reset role;
 
 -- 9. Tenant teardown still works (cascade from the organization) ----------
+set constraints all deferred;
 delete from public.organizations where id = '00000000-0000-0000-0000-000000033012';
 select is(
   (select count(*)::int from public.inventory_vendors where organization_id = '00000000-0000-0000-0000-000000033012'),
   0, 'BI-SEC-005 deleting an organization cascades its catalog away'
+);
+
+-- The organization WITH categories / subcategories / products / ledger-style history
+-- also tears down completely (deferred checks run at the end of the statement).
+delete from public.organizations where id = '00000000-0000-0000-0000-000000033011';
+set constraints all immediate;
+select is(
+  (select count(*)::int from public.inventory_subcategories where organization_id = '00000000-0000-0000-0000-000000033011')
+  + (select count(*)::int from public.inventory_products where organization_id = '00000000-0000-0000-0000-000000033011'),
+  0, 'BI-SEC-005 an organization with subcategories and products tears down completely'
 );
 
 select * from finish();

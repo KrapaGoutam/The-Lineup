@@ -344,6 +344,11 @@ export async function createFixture(): Promise<Fixture> {
     await admin.from("tip_pools").delete().in("organization_id", orgIds);
     await admin.from("dining_tables").delete().in("organization_id", orgIds);
     await admin.from("dining_areas").delete().in("organization_id", orgIds);
+    // Tenant data with append-only history (Bar Inventory ledger / change log)
+    // clears only by cascade from the organization, and holds actor FKs to
+    // memberships, so remove the organizations (cascade) before memberships.
+    // Everything above that blocks an organization delete is already gone.
+    await admin.from("organizations").delete().in("id", orgIds);
     await admin.from("memberships").delete().in("organization_id", orgIds);
     await admin.from("locations").delete().in("organization_id", orgIds);
     await admin.from("organizations").delete().in("id", orgIds);
