@@ -20,6 +20,8 @@
     "test:e2e": "playwright test",
     "supabase:start": "supabase start",
     "supabase:status": "supabase status",
+    "check:local-paths": "node scripts/check-tracked-local-paths.mjs",
+    "check:env": "node scripts/check-nonprod-env.mjs --env-file .env.development.local",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
     "db:types": "supabase gen types typescript --linked > src/types/database.generated.ts"

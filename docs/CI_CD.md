@@ -35,9 +35,19 @@ Hosted real-mode suites (`npm run test:real` — RPC/RLS with real JWTs, and `np
 
 ### Recorded exception: PR #131 (registry rate limit)
 
-The `Database / migrations-and-policies` check failed four times for PR #131 at `supabase start` with `toomanyrequests: Data limit exceeded` (container-registry pull limit) before `db:reset` or `db:test` ran; the same failure hit an unrelated Dependabot branch. The owner approved merging PR #131 into `development` on independent evidence (35 migrations clean, pgTAP 25 files / 387 assertions, hosted DEV RPC/RLS 40/40, browser 15/15, Vitest 428, lint/typecheck/format/build). This exception is specific to PR #131 and is **not** a general red-CI bypass; CI stays mandatory. Follow-up: registry authentication/caching for the Database job.
+The `Database / migrations-and-policies` check failed four times for PR #131 at `supabase start` with `toomanyrequests: Data limit exceeded` (container-registry pull limit) before `db:reset` or `db:test` ran; the same failure hit an unrelated Dependabot branch. The owner approved merging PR #131 into `development` on independent evidence (35 migrations clean, pgTAP 25 files / 387 assertions, hosted DEV RPC/RLS 40/40, browser 15/15, Vitest 428, lint/typecheck/format/build). This exception is specific to PR #131 and is **not** a general red-CI bypass; CI stays mandatory. Follow-up delivered by INFRA-B (next section).
+
+### Database job and registry limits (INFRA-B)
+
+`supabase start` pulls images anonymously, and shared runner IPs hit registry limits (`toomanyrequests: Data limit exceeded`). `scripts/ci/supabase-run.mjs` starts the same reduced service set but pulls through `SUPABASE_INTERNAL_IMAGE_REGISTRY`: `ghcr.io`, then `public.ecr.aws`, then `docker.io` (all carry the pinned tags; `docker login` does not help because the CLI ignores stored credentials). It retries **only** output classified as a registry/network pull failure — at most 3 attempts, 15s/45s backoff, each logged as a `::warning::`. SQL, migration, pgTAP, config and unknown failures fail immediately. Nothing is skipped or `continue-on-error`; the `Database` check stays required. `deploy-migrations` runs only for pushes to `main`. Manual run: Actions → Database → Run workflow.
+
+### Environment guard (INFRA-C)
+
+`node scripts/check-nonprod-env.mjs [--env-file F] [--scan DIR]` fails if non-production configuration or build output references the PROD Supabase ref (or an unknown Supabase URL). `npm run check:env` checks `.env.development.local`; CI scans the `.next` output after the build. The hosted real-mode suites keep their own refusal to run against anything but DEV.
 
 ## Vercel
+
+**Preview and Development deployments use the DEV Supabase project** (`opmujepkemwcdxxorhfd`); only Production uses PROD. The variable-by-variable mapping is in `docs/DEPLOYMENT.md` §5. Preview is a real-mode build, not a demo, so sign in with a synthetic DEV user; never commit credentials.
 
 Use Vercel's Git integration for branch previews. Protect `main` so the production deployment begins only after required GitHub checks pass. If a custom pipeline is later required, pin Vercel CLI, run `vercel pull`, `vercel build`, test the prebuilt artifact, and `vercel deploy --prebuilt`.
 

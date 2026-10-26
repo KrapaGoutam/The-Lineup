@@ -23,11 +23,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: node scripts/check-tracked-local-paths.mjs
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Non-production builds must never embed the production Supabase ref.
+      - run: node scripts/check-nonprod-env.mjs --scan .next
 
   browser-smoke:
     runs-on: ubuntu-latest

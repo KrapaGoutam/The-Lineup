@@ -1,60 +1,54 @@
-# Cross-View Integrity — Agent Handoff
+# PR #135 Reconciliation — Agent Handoff
 
-Branch: `fix/table-allocation-cross-view-integrity`
-HEAD: see `git log -1`
-Base development: `63fdbe0` (PR #152 merge)
+Current task: PR #135 (DEV Preview / CI Reliability) is reconciled with `development` three times (latest: the #153 cross-view fix); waiting on exact-head CI and the owner Preview smoke.
 
-X0: ✅ audit + tracking (#153 parent; #154 Tasks notification follow-up and #155 Tips V2 are planning-only; Project #4; milestone "Table Allocation V2 — Part 2"; #133 status comment posted)
-X1: ✅ canonical identity + off-map in all five views
-X2: ✅ shared occupied-table resolver + migration `20261026090000` (applied to DEV only)
-X3: ✅ Servers session history (ended stays struck through)
-X4: ✅ 45-scenario shared matrix (domain + Playwright desktop/tablet/mobile)
-X5: ✅ hosted DEV, production build: 10 DB + 11 UI tests; PROD ref absent from bundle
-X6: ⬜ after merge to `development`: merge into `infra/dev-preview-ci-reliability`, exact-head CI, new Preview, owner smoke
+## TASK-014 fix (separate from PR #135)
 
-Canonical identity findings:
-Table "1": NO `dining_tables` row — free-text board label, no ledger claim (DEV probe 2026-10-26)
-T1: `dining_tables.id` 19 (DEV), registered, mapped at (8,72) — distinct from "1". Never alias.
+- Status: DONE and merged into `development`.
+- Issue: #151 (closed, Project #4 Done). Fix branch: `fix/tasks-handoff-time-dependent-e2e`. Fix PR: #152. Fix merge commit: `63fdbe0`.
+- Root cause: TASK-014 carried the overdue demo task (due yesterday 16:00) to the panel's default target, today. The product keeps the 16:00 due time, so after 16:00 restaurant-local it is overdue again and stays listed. The product is correct; the test had a wall-clock-dependent expectation.
+- Second wall-clock dependency found by the same CI run: `getByText("Ended")` also matched the header countdown "Day ended" outside service hours (two Floor end-existing tests in `table-rotation-multi-view.spec.ts`). Fixed with `{ exact: true }`.
+- Fix: test-only. TASK-014 carries to restaurant-today + 1 (taken from the "New due date" input's own `min`, plus one calendar day). Reproduced before the fix on unchanged development at 23:15 CDT (expected 0, received 1); passed after at 23:16 CDT; PR #152 CI (application, browser-smoke, Vercel) green at ~23:35 CDT. No product code changed.
 
-Off-map contract: registered-unpositioned OR unregistered held label; Grid badge, Floor rail, Picker section, Servers chip, Dashboard totals
-Conflict contract: `classifyTableClaim` + `useTableClaim` dialog (Transfer / End + Assign / Cancel); same-server = notice
-Transfer: existing `board_transfer`, moves the whole holder assignment
-End + Assign: `board_assign(..., p_confirm_transfer, p_end_whole_assignment)`, one atomic call, `assign` event with `displaced`
-Combined assignment: acts on the whole assignment; no partial release
-Ended-history contract: `ServerSummary.sessionHistory`; ended counts 0 toward active
-Stale path: DB raises PT409 with JSON detail; server action returns `conflict`; same dialog opens
+## PR #135 state
 
-Files changed: see PR (allocation domain/components/actions/data, testing/, tests/e2e, tests/real, supabase migration + pgTAP 0030, docs)
-Migrations: `supabase/migrations/20261026090000_table_allocation_conflict_resolution.sql` (forward-only; DEV applied + recorded; PROD NOT applied)
-Commits: X0 docs, feat (X1-X3), domain/component matrix tests, Playwright matrix, hosted suites, docs closeout
-Uncommitted: nothing expected (never stage `docs/testing/`, `The Lineup.code-workspace`)
+Branch: `infra/dev-preview-ci-reliability`
+HEAD: see `git log -1` (second merge of `origin/development` at `63fdbe0`, then this handoff commit)
+Previous heads: `1030dde` (original), `9a71cf5` (first reconciliation; its Preview and browser-smoke are NOT the final gate)
+Development head: `63fdbe0`. Main head (untouched): `3403058`.
+Merges from development: `1d03050` (at `56bacb6`) and the TASK-014 merge (at `63fdbe0`). Plain merges, no rebase, no force-push.
 
-Tests (final gate 2026-10-26):
-domain/component: Vitest 70 files / 663 tests PASS
-Playwright matrix: demo suite 489 PASS (desktop + host-tablet + server-mobile), matrix = 45 scenarios x 3
-real-mode: hosted DB 50 PASS (40 existing + 10 new); hosted UI on production build 29 PASS (18 existing + 11 new)
-production build: PASS (pinned to DEV values, 0 files reference the PROD ref)
-DB: pgTAP 30 files / 588 assertions PASS (local Supabase)
-lint / typecheck / format: PASS (format only flags the untracked workspace file)
-CI: not yet run (PR not opened at time of writing)
+INFRA-A: 🟡 Preview/Development → DEV verified read-only (demo=false, no Neon, no PROD ref); Production → PROD, unchanged; Preview smoke awaits the owner
+INFRA-B: ✅ Database CI via `scripts/ci/supabase-run.mjs` (start/reset/test); `deploy-migrations` only on push to `main`
+INFRA-C: ✅ `check-nonprod-env` + `check-tracked-local-paths` in the `application` job
+INFRA-D: 🟡 docs/tracking current; final "merged" wording after the PR merges
 
-GitHub issue: #153 (one parent is enough; no child issues)
-Project #4: #153 In Progress; #154/#155 Backlog
-Milestone: Table Allocation V2 — Part 2
+Environment: Preview → DEV · Development → DEV · Production → PROD · PROD ref in non-prod: none · Production vars changed: NO
 
-PR: open `fix/table-allocation-cross-view-integrity -> development` next
-PR #135 status: parked, untouched; infra green, awaiting application fix + final owner Preview smoke
+CI on the final head: see PR #135 checks (results are recorded in the PR comment and final report). Expected: application, browser-smoke, Database, Vercel pass; deploy-migrations skipped.
 
-Docs updated: PLAN, ACCEPTANCE_CRITERIA, TEST_MATRIX, IMPLEMENTATION_REPORT, docs/STATUS.md, docs/ROADMAP.md
-Backlog updated: tasks/backlog.md (#154, #155)
+Owner Preview gate: REQUIRED (Vercel Authentication on; no bypass; the smoke must use the Preview built from the FINAL PR head).
+Owner smoke list: Preview opens · login page · synthetic DEV user sign-in · Table Allocation · Tasks · Schedule · Team · data clearly DEV-backed · no Production data
 
-development merged: NO
+PR #135: open, not merged · #133: open / Review · Project #4: Review · Milestone: Platform / CI Reliability (stays open)
+
+development merged (PR #135): NO (PR #152 merged into development)
 main merged: NO
-DEV touched: YES (migration applied; hosted suites with synthetic data; boards reset by the suites)
+DEV touched: NO (read-only)
 PROD touched: NO
 
-Running processes: none (production `next start` on :3000 was stopped)
-Exact next command: `git push -u origin fix/table-allocation-cross-view-integrity` then `gh pr create --base development`
-Exact next action: open the PR, wait for exact-head CI (application, browser-smoke, Database, Vercel), merge with a MERGE COMMIT, then X6
-Read first: docs/features/table-allocation-cross-view-integrity/IMPLEMENTATION_REPORT.md
-DO NOT: merge to main, touch PROD, squash/rebase-merge, touch PR #135 before this lands on development, `git add -A`/`git add .`, stage `docs/testing/` or `*.code-workspace`, map "1" to "T1"
+## Current State & Next Step
+
+- Exact next action: on the owner's explicit `Preview owner smoke PASS`, re-check the PR head and CI, then `gh pr merge 135 --merge` (merge commit). Then verify development contains the PR and main does not, close #133 / Project #4, and open `docs/dev-preview-ci-final-closeout` from latest development for the final wording.
+- Next separate task after merge: Release Readiness Review (do NOT merge `development → main` automatically).
+- DO NOT: merge to main, touch PROD, change Production Vercel variables, disable Vercel protection or create a bypass, copy PROD Neon into DEV/Preview, force-push, squash/rebase-merge, start Part 2, wait for a "good time of day" to get green CI, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`.
+
+## Cross-View Integrity (#153) — MERGED into development
+
+PR #156, merge commit `aaf11f0` (exact-head CI green: application, browser-smoke, Database, Vercel; deploy-migrations skipped). Branch `fix/table-allocation-cross-view-integrity`. Report/evidence: `docs/features/table-allocation-cross-view-integrity/IMPLEMENTATION_REPORT.md`.
+
+- Identity: the owner's "Table 1" has no `dining_tables` row (free-text label); `T1` is id 19 — never aliased. Off-map = registered-unpositioned or free-text, shown in all five views.
+- One shared occupied-table flow (Transfer / End + Assign / Cancel; same-server notice); atomic via `board_assign(..., p_end_whole_assignment)`; stale clients get PT409.
+- Migration `20261026090000_table_allocation_conflict_resolution.sql` applied to DEV only (recorded); PROD untouched.
+- Tests: Vitest 663, demo Playwright 489 (45-scenario matrix x 3 viewports), pgTAP 588, hosted DB 50, hosted production-build UI 29.
+- X6 (this branch): `development` merged into `infra/dev-preview-ci-reliability` (plain merge, no rebase, no force-push). Needs exact-head CI + a NEW Preview + the owner's final smoke (see owner smoke list above, plus: off-map labelling, occupied-table dialog once, Servers ended history).

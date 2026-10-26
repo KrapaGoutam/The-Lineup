@@ -7,9 +7,21 @@
 
 ---
 
-## Table Allocation cross-view integrity & conflict actions (#153 — release blocker; branch `fix/table-allocation-cross-view-integrity`)
+## 🛠 Infrastructure — DEV Preview & CI Reliability (PR #135 open, #133 in review)
 
-Found by the owner's smoke of the final DEV Preview. Identity proven from DEV: the owner's "Table 1" has **no `dining_tables` row** (a free-text board label), distinct from the registered `T1` (id 19) — never aliased. Fixed on one branch: **X1** off-map tables (registered-unpositioned or free-text) represented in Grid (badge), Floor (rail), Picker (section), Servers (chips) and Dashboard totals; **X2** one occupied-table flow (Transfer / End + Assign / Cancel, same-server notice, whole combined assignment) for Grid/Floor/Picker/Servers, server-authoritative via `board_assign` PT409 + `p_end_whole_assignment` (migration `20261026090000`, forward-only, applied to DEV only); **X3** Servers keep ended tables as struck-through session history; **X4** 45-scenario cross-view matrix (domain + Playwright on desktop/tablet/mobile); **X5** hosted production-build two-context validation. PR #135 untouched until this merges to `development`. See `docs/features/table-allocation-cross-view-integrity/`.
+Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`; reconciled with `development` (Tasks V1, #134 and #109 included). Docs: `docs/features/dev-preview-ci-reliability/`. **Not merged; not Done until merged.**
+
+- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; the deployed-Preview browser smoke awaits the owner (Vercel Authentication). The smoke now also covers Tasks.
+- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`); `deploy-migrations` runs only on a push to `main`.
+- **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output; `scripts/check-tracked-local-paths.mjs` keeps local evidence out of git.
+- **INFRA-D** CI/CD + deployment docs.
+- Original finding **#134** (the real-mode suite failed against production builds because of a Realtime resubscribe loop) is **resolved and merged** into `development` (PR #147, `50fbd02`; production-build real-mode suite 18/18). It no longer qualifies PR #135.
+
+---
+
+## Table Allocation cross-view integrity & conflict actions (#153 — merged into `development`, PR #156, merge commit `aaf11f0`)
+
+Found by the owner's smoke of the final DEV Preview. Identity proven from DEV: the owner's "Table 1" has **no `dining_tables` row** (a free-text board label), distinct from the registered `T1` (id 19) — never aliased. Fixed on one branch: **X1** off-map tables (registered-unpositioned or free-text) represented in Grid (badge), Floor (rail), Picker (section), Servers (chips) and Dashboard totals; **X2** one occupied-table flow (Transfer / End + Assign / Cancel, same-server notice, whole combined assignment) for Grid/Floor/Picker/Servers, server-authoritative via `board_assign` PT409 + `p_end_whole_assignment` (migration `20261026090000`, forward-only, applied to DEV only); **X3** Servers keep ended tables as struck-through session history; **X4** 45-scenario cross-view matrix (domain + Playwright on desktop/tablet/mobile); **X5** hosted production-build two-context validation. PR #135 was untouched until this merged; it is now reconciled with `development` and waits for a final Preview smoke. See `docs/features/table-allocation-cross-view-integrity/`.
 
 ## #109 Table Allocation UX consistency follow-up (merged into `development`)
 
@@ -25,7 +37,7 @@ Root cause: the production bundle inlines the hook's default `createClient`, so 
 
 ## Tasks V1 (merged into `development`)
 
-T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merged into `development` via PR #145 (merge commit `4c393d3`) with application, browser-smoke, Database and Vercel green on `c036cf2`; `main` not merged, PROD untouched, #134 still blocks `development → main`. See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
+T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merged into `development` via PR #145 (merge commit `4c393d3`) with application, browser-smoke, Database and Vercel green on `c036cf2`; `main` not merged, PROD untouched (#134, which blocked `development → main` at the time, was fixed afterwards — see the #134 section above). See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
 
 ---
 
