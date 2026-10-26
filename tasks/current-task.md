@@ -1,49 +1,51 @@
-# Release Readiness Audit — Handoff
+# Current task — Next development cycle (handoff)
 
-Branch: `docs/release-readiness-audit` (docs only, from `origin/development`)
-HEAD: see PR (docs commit on top of `4ec6fe3`)
-main: `3403058`
-development: `4ec6fe3` (PR #159 merge — the previously "pending" detail is resolved: #158 and #159 are both merged)
-merge-base: `3403058` (development is 68 commits ahead, 0 behind)
+## Current State & Next Step
 
-Release issue: #160 (open) — https://github.com/KrapaGoutam/The-Lineup/issues/160
-Blocker issue: #161 (new) — PROD missing migration `20260911130000`
-Project #4: #160 In Progress, #161 Blocked
-Milestone: "Platform / CI Reliability"
+Current cycle: **next development cycle after the 2026-10-26 Production release**. Owner roadmap order: 1 Table Allocation same-server repeat → 2 Bar Inventory V1 → 3 Tasks Today management visibility → 4 Tips V2 (#155).
 
-Development-only commits: 68 (13 first-parent merges: #131 #132 #145–#150 #152 #156 #135 #158 #159)
-Pending migrations (9 for PROD): `20260911130000` (skipped on PROD, on `main`) + `20261023100000`, `20261023110000`, `20261025090000`, `20261025100000`, `20261025110000`, `20261025120000`, `20261026090000`, `20261026120000`
-DEV migration head: `20261026120000` (41 == 41 files)
-PROD migration head: `20260923100000` (32 rows vs 33 files on main)
+Current branch: `fix/table-allocation-same-server-repeat`
+HEAD: see `git log -1` (PR #167)
 
-Numeric-label PROD probe (read-only, equivalent form because PROD has no `service_session_id` yet): 968 rows / 32 PAST service dates would resolve to `T<n>`; 0 on today's service day (no session today). Inert (past days are read-only; history not rewritten). Re-run immediately before release.
-Open P0/P1 blockers: no P0. Blockers: #111 (deploy-migrations auth), #113 (release skew), #161 (new). Follow-ups: #112, #106.
+**Exact next action:** wait for exact-head CI on PR #167, merge with a **merge commit** into `development` (never squash/rebase), then start `docs/bar-inventory-v1-planning` from the new `origin/development` (planning docs + Bar Inventory / Tasks Today issues + roadmap; no application code).
 
-Vercel:
-Production branch: `main` (deployed `3403058`, aliases the-lineup-dusky.vercel.app …)
-Preview target: DEV Supabase (`opmujepkemwcdxxorhfd`); `development` Preview READY on `4ec6fe3`
-Production Supabase target: PROD (`ftadewtkjlaotfdvtjcv`)
-DEV Supabase target: Preview + Development scopes only
-Attendance: `NEON_DATABASE_URL` is Production-only (Preview "unavailable" is expected); not exercised
+## Part 1 — Table Allocation bug
 
-Security: no blocker (all 80 definer fns `search_path=''`, none anon-executable, private helpers revoked, rotation tables SELECT-only after release, RLS on all tables, 0 `user_metadata` policies). Advisors: 34 expected WARNs on DEV (the new RPCs).
-CI/CD: `deploy-migrations` = push to `main` touching `supabase/migrations/**`; it FAILED on the last 4 main pushes; no branch protection on main/development; no CI on `development` pushes.
-Migration safety: all forward-only/additive; V2 pre-flight on PROD data = zeros (will not abort). One in-place edit of two DEV-applied migrations (`96ee4af`) found and reconciled (DEV carries the edited bodies; PROD never applied them).
-Data compatibility: no backfill of labels; only `service_session_id` / `location_id` backfills (structural); 1,029 active entries all on past days; 0 combined labels; one free-text `O`.
-Rollback/corrective plan: forward corrective migrations; Vercel promote for app-only; migrations-FIRST ordering (old app works on new schema) — see `docs/releases/release-readiness-2026-10/RELEASE_PLAN.md`.
+- Table Allocation bug issue: #166 (type:bug, module:table-allocation, priority:p1, Project #4, milestone "Table Allocation V2 — Part 2")
+- Root cause: `board_assign` refused any second active entry of a table for the same server (`same_server`) with no notion of turn.
+- Turn identity: board cell `(rotation_round_id, rotation_member_id)`, ordered by `rotation_rounds.sequence`; decided in the database.
+- Same-turn behavior: identical re-submit of the same cell = idempotent no-op; held in same-or-later turn = blocked (`same_server`), no mutation.
+- Later-turn behavior: `PT409 same_server_repeat`; dialog End Previous + Assign / Cancel; confirm = `board_end_previous_and_assign` (atomic; previous entry ended, kept as history; `repeat: true` event; Undo/Redo functions unchanged).
+- Migration: `20261026150000_table_allocation_same_server_repeat.sql` (DEV applied, PROD not).
+- Tests: Vitest 746/746; pgTAP 0032 75/75 (+ existing suites pass); demo Playwright 549/549 (3 projects); hosted DEV DB 92/92; hosted DEV UI 13/13 + 15/15.
+- PR: #167 → `development`
+- CI: pending at the time of writing
+- development merge: NO (pending CI)
 
-Release decision: **NO-GO** (Recommendation: RELEASE BLOCKED)
+## Part 2 — Bar Inventory V1 (planning only)
 
-Conditions to clear (C1–C8, see `GO_NO_GO.md`): C1 PROD migration route proven/approved (#111); C2 apply `20260911130000` then the 8 in order (#161); C3 migrations BEFORE merge to main (#113); C4 confirm PROD backup/PITR; C5 re-run numeric probe and release outside service hours; C6 release PR exact-head CI green; C7 owner accepts #106/#154/#155/Tip Split nav move; C8 post-deploy smoke incl. Attendance.
+- Bar Inventory issue: not yet created (after the bug merge)
+- Planning branch: `docs/bar-inventory-v1-planning` (not yet created); drafts exist untracked in `docs/features/bar-inventory-v1/`
+- Role decision: recommended management roles only (Owner / Manager / Assistant Manager = `owner`, `general_manager`, `shift_manager`); staff none in V1 (owner decision D1)
+- Schema proposal: `docs/features/bar-inventory-v1/DATA_MODEL.md`
+- Import/export, filters, analytics, phases: see that folder
 
-development merged: YES (docs PR into `development`)
+## Part 3 — Tasks enhancement
+
+Tasks Today management visibility issue: not yet created (search found no equivalent). PLANNED ONLY.
+
+## Part 4 — Tips V2
+
+#155 stays open, untouched; fourth in the roadmap.
+
+## Safety
+
+```
+development merged: NO (pending PR #167)
 main merged: NO
-DEV touched: read-only SELECTs
-PROD touched: READ-ONLY ONLY (SELECTs + advisors GET)
+DEV touched: YES (migration 20261026150000; hosted suites use their own synthetic org)
+PROD touched: NO
 PROD migrations: NO
+```
 
-Audit documents: `docs/releases/release-readiness-2026-10/` — RELEASE_INVENTORY, MIGRATION_AUDIT, SECURITY_AUDIT, CI_CD_AUDIT, PROD_CONFIGURATION_AUDIT, RELEASE_PLAN, GO_NO_GO.
-
-Exact next action: owner reviews `GO_NO_GO.md` and decides how to clear C1–C4 (token repair vs approved manual apply) in a SEPARATE task; then re-run the release-readiness check on the same-day PROD state. Optionally open a separate fix branch for the release-pipeline gap (#113) and branch protection.
-
-DO NOT: merge development -> main, deploy Production, apply PROD migrations (including `20260911130000`), change Vercel/Supabase secrets, begin #154, begin #155, `git add -A`, stage `docs/testing/` or `*.code-workspace`
+DO NOT: `git add -A`, stage `docs/testing/` or `*.code-workspace`, commit directly to `main`/`development`, start Bar Inventory / Tasks / Tips implementation.
