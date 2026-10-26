@@ -68,6 +68,19 @@ Tracking: Tasks parent #136 (closed), milestone "Tasks V1" (closed), T1–T8 = #
 | PART 3          | ⬜ MCP / AI integration                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | TASKS DEFERRALS | custom recurrence intervals, per-org categories, everyone-on-shift, automatic shift handoff, manager verification, per-assignee completion, push/email/SMS, Realtime invalidation after #134 (see `tasks/backlog.md`)                                                                                                                                                                                                                                                           |
 
+## Next development cycle (owner order, set 2026-10-26)
+
+Production release **complete** (PR #163, `main` `d08eb4e`). Everything below is on `development`; nothing here is released.
+
+| #   | Item                                                                                                                                                               | State                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| 1   | **Table Allocation — same-server repeat-table lifecycle** (#166, PR #167, merge commit `a9a1edf`; plan/evidence `docs/features/same-server-repeat-table/`)         | ✅ merged into `development` (DEV migration `20261026150000`; PROD not touched)         |
+| 2   | **Bar Inventory V1** (#168) — Dashboard · Inventory · Manage, vendors, CSV/XLSX import/export, column filters, history, analytics, vendor ordering recommendations | 📋 **PLANNED — awaiting owner review** (`docs/features/bar-inventory-v1/`); not started |
+| 3   | **Tasks Today — management staff visibility** (#169) — All Staff / My Tasks / per person, staff name on each task                                                  | 📋 planned, tracked only                                                                |
+| 4   | **Tips V2** (#155) — corrections, history, analytics                                                                                                               | 📋 planned (unchanged)                                                                  |
+
+Infrastructure follow-ups (independent of the product order): #111 `deploy-migrations` · #113 migration/app sequencing · #164 deferred Production smoke checks. Bar Inventory's **release phase is blocked on #111/#113**; its build phases are not.
+
 ## Infrastructure — DEV Preview & CI Reliability (ACTIVE / RELEASE PREP)
 
 Tracking: parent #133, milestone "Platform / CI Reliability", Project #4, PR #135 (open, not merged). Plan and evidence: `docs/features/dev-preview-ci-reliability/`. PR #135 is **not Done until merged**: it is reconciled with `development` and waits on the owner's manual Preview smoke gate.
