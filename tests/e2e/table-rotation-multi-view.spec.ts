@@ -1,10 +1,19 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function signIn(page: Page, passcode: string) {
   await page.goto("/");
   await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill(passcode);
   await expect(accountButton(page)).toBeVisible({ timeout: 60000 });
+}
+
+// A Servers card's ACTIVE table chip. Ended tables remain on the card under
+// "Session history" (struck through), so card.getByText("T3") no longer means
+// "currently active".
+function activeChip(card: Locator, label: string) {
+  return card.getByRole("button", {
+    name: new RegExp(`^Table ${label}, assigned to`),
+  });
 }
 
 function accountButton(page: Page) {
@@ -54,7 +63,9 @@ test("Floor: assigning an available table shows it as occupied and appears on th
   const assignDialog = page.locator("dialog[open]");
   await expect(assignDialog).toBeVisible();
   await expect(assignDialog.getByText("Assign T1")).toBeVisible();
-  await assignDialog.getByRole("button", { name: "Ava Brooks" }).click();
+  await assignDialog
+    .getByRole("button", { name: "Ava Brooks", exact: true })
+    .click();
 
   // Ava already has an active table from the demo seed ("21 + 22"), so
   // this is ambiguous -- the decision dialog appears instead of an
@@ -81,7 +92,7 @@ test("Floor: a second device cannot silently double-book a table already held by
   await switchView(page, "Floor");
 
   await page.getByRole("button", { name: "Table T4, available" }).click();
-  await page.getByRole("button", { name: "Mia Chen" }).click();
+  await page.getByRole("button", { name: "Mia Chen", exact: true }).click();
   // Mia already has active tables from the demo seed -- Assign Also.
   await page.getByRole("button", { name: /Assign T4 also/ }).click();
   await expect(
@@ -122,7 +133,9 @@ test("Floor: clicking an available table opens the assign popup, with no inline 
   await expect(
     dialog.getByText("Available. Select a server to assign this table to."),
   ).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Mia Chen" })).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Mia Chen", exact: true }),
+  ).toBeVisible();
   // No inline "pick a server" section exists outside the popup.
   await expect(page.getByText("Available — pick a server")).toHaveCount(0);
 });
@@ -154,7 +167,7 @@ test("Floor: selecting a server with zero active tables from the assign popup as
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Zara Reed" })
+    .getByRole("button", { name: "Zara Reed", exact: true })
     .click();
 
   await expect(page.getByText("already has active tables")).toHaveCount(0);
@@ -174,7 +187,7 @@ test("Floor: selecting a server with existing active tables from the assign popu
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Leo Park" })
+    .getByRole("button", { name: "Leo Park", exact: true })
     .click();
 
   await expect(
@@ -205,7 +218,7 @@ test("Floor: an assigned table shows the server's initials, and the legend shows
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Zara Reed" })
+    .getByRole("button", { name: "Zara Reed", exact: true })
     .click();
 
   const tile = page.getByRole("button", {
@@ -233,7 +246,7 @@ test("Floor: Ending an assigned table immediately removes initials/accent and re
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Zara Reed" })
+    .getByRole("button", { name: "Zara Reed", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
@@ -266,7 +279,7 @@ test("Floor: Unassigning an assigned table immediately removes initials/accent a
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Zara Reed" })
+    .getByRole("button", { name: "Zara Reed", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
@@ -300,7 +313,7 @@ test("Floor: Transfer replaces the assigned table's initials/accent immediately,
   await page.getByRole("button", { name: "Table T13, available" }).click();
   await page
     .locator("dialog[open]")
-    .getByRole("button", { name: "Zara Reed" })
+    .getByRole("button", { name: "Zara Reed", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Table T13, assigned to Zara Reed" }),
@@ -310,7 +323,7 @@ test("Floor: Transfer replaces the assigned table's initials/accent immediately,
     .getByRole("button", { name: "Table T13, assigned to Zara Reed" })
     .click();
   await page.getByRole("button", { name: "Transfer" }).click();
-  await page.getByRole("button", { name: "Sam Ellis" }).click();
+  await page.getByRole("button", { name: "Sam Ellis", exact: true }).click();
 
   const tile = page.getByRole("button", {
     name: "Table T13, assigned to Sam Ellis",
@@ -343,7 +356,9 @@ test("Floor: multiple tables assigned to the same server all show matching initi
       .getByRole("button", { name: `Table ${label}, available` })
       .click();
     const dialog = page.locator("dialog[open]");
-    await dialog.getByRole("button", { name: "Zara Reed" }).click();
+    await dialog
+      .getByRole("button", { name: "Zara Reed", exact: true })
+      .click();
     if (label !== "T1") {
       await page
         .getByRole("button", { name: new RegExp(`Assign ${label} also`) })
@@ -488,8 +503,8 @@ test("Servers: + Table opens the shared table layout as a popup, already scoped 
   await goToAllocation(page);
   await switchView(page, "Servers");
 
-  await expect(page.getByText("Mia Chen")).toBeVisible();
-  await expect(page.getByText("Leo Park")).toBeVisible();
+  await expect(page.getByText("Mia Chen", { exact: true })).toBeVisible();
+  await expect(page.getByText("Leo Park", { exact: true })).toBeVisible();
 
   const leoCard = page.getByRole("group", { name: "Leo Park server card" });
   await leoCard.getByRole("button", { name: "Table", exact: true }).click();
@@ -506,7 +521,7 @@ test("Servers: + Table opens the shared table layout as a popup, already scoped 
     page.getByText("Leo Park already has active tables"),
   ).toBeVisible();
   await page.getByRole("button", { name: /Assign T9 also/ }).click();
-  await expect(leoCard.getByText("T9")).toBeVisible();
+  await expect(activeChip(leoCard, "T9")).toBeVisible();
 
   await switchView(page, "Grid");
   await expect(page.getByText("Table T9")).toBeVisible();
@@ -626,7 +641,7 @@ test("Floor: assign, transfer (moves the assignment, leaves no stale text behind
   // the demo seed ("4"), so the decision dialog appears; Assign Also
   // keeps it and adds T2 as a second active table.
   await page.getByRole("button", { name: "Table T2, available" }).click();
-  await page.getByRole("button", { name: "Noah Diaz" }).click();
+  await page.getByRole("button", { name: "Noah Diaz", exact: true }).click();
   await expect(
     page.getByText("Noah Diaz already has active tables"),
   ).toBeVisible();
@@ -641,7 +656,7 @@ test("Floor: assign, transfer (moves the assignment, leaves no stale text behind
     .getByRole("button", { name: "Table T2, assigned to Noah Diaz" })
     .click();
   await page.getByRole("button", { name: "Transfer" }).click();
-  await page.getByRole("button", { name: "Leo Park" }).click();
+  await page.getByRole("button", { name: "Leo Park", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Table T2, assigned to Leo Park" }),
   ).toBeVisible();
@@ -650,11 +665,21 @@ test("Floor: assign, transfer (moves the assignment, leaves no stale text behind
   // does -- proving the source cell was vacated, not just left stale.
   await switchView(page, "Servers");
   await expect(
-    page.getByRole("group", { name: "Leo Park server card" }).getByText("T2"),
+    activeChip(page.getByRole("group", { name: "Leo Park server card" }), "T2"),
   ).toBeVisible();
   await expect(
-    page.getByRole("group", { name: "Noah Diaz server card" }).getByText("T2"),
+    activeChip(
+      page.getByRole("group", { name: "Noah Diaz server card" }),
+      "T2",
+    ),
   ).toHaveCount(0);
+  // The transfer ENDED Noah's entry: it stays in his session history,
+  // struck through, and is not an active table.
+  await expect(
+    page
+      .getByRole("group", { name: "Noah Diaz session history" })
+      .getByText("T2"),
+  ).toBeVisible();
 
   // 3. End the table -- it becomes available again.
   await switchView(page, "Floor");
@@ -669,7 +694,7 @@ test("Floor: assign, transfer (moves the assignment, leaves no stale text behind
   // 4. Reassign the same freed physical table to a different server --
   // Ava also already has an active table from the seed ("21 + 22").
   await page.getByRole("button", { name: "Table T2, available" }).click();
-  await page.getByRole("button", { name: "Ava Brooks" }).click();
+  await page.getByRole("button", { name: "Ava Brooks", exact: true }).click();
   await page.getByRole("button", { name: /Assign T2 also/ }).click();
   await expect(
     page.getByRole("button", { name: "Table T2, assigned to Ava Brooks" }),
@@ -711,7 +736,7 @@ test("Dashboard: Master Rotation preserves an ended table's history and renders 
   // must keep showing "T15" (struck through), not blank it out.
   await switchView(page, "Floor");
   await page.getByRole("button", { name: "Table T15, available" }).click();
-  await page.getByRole("button", { name: "Mia Chen" }).click();
+  await page.getByRole("button", { name: "Mia Chen", exact: true }).click();
   // Mia already has active tables from the demo seed -- Assign Also.
   await page.getByRole("button", { name: /Assign T15 also/ }).click();
   await expect(
@@ -1160,8 +1185,8 @@ test("Servers: a server can show multiple simultaneously active tables", async (
 
   await switchView(page, "Servers");
   const noahCard = page.getByRole("group", { name: "Noah Diaz server card" });
-  await expect(noahCard.getByText("T1")).toBeVisible();
-  await expect(noahCard.getByText("T3")).toBeVisible();
+  await expect(activeChip(noahCard, "T1")).toBeVisible();
+  await expect(activeChip(noahCard, "T3")).toBeVisible();
 });
 
 // Table Rotation Multi-View, Picker/Server follow-up: Server Board's
@@ -1185,7 +1210,7 @@ test("Servers: a server with zero active tables is assigned directly -- no decis
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
 
   await expect(page.getByText("already has active tables")).toHaveCount(0);
-  await expect(zaraCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(zaraCard, "T1")).toBeVisible();
 });
 
 test("Servers: a server with an existing active table opens the decision dialog with all four choices", async ({
@@ -1232,7 +1257,7 @@ test("Servers: Cancel in the decision dialog makes zero state changes", async ({
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await expect(page.getByText("already has active tables")).toHaveCount(0);
-  await expect(leoCard.getByText("T2")).toHaveCount(0);
+  await expect(activeChip(leoCard, "T2")).toHaveCount(0);
   await switchView(page, "Floor");
   await expect(
     page.getByRole("button", { name: "Table T2, available" }),
@@ -1252,7 +1277,7 @@ test("Servers: Assign Also keeps every existing active table and adds the new on
   await dialog.getByRole("button", { name: "Table T2, available" }).click();
   await page.getByRole("button", { name: /Assign T2 also/ }).click();
 
-  await expect(leoCard.getByText("T2")).toBeVisible();
+  await expect(activeChip(leoCard, "T2")).toBeVisible();
   await switchView(page, "Floor");
   await expect(
     page.getByRole("button", { name: "Table T2, assigned to Leo Park" }),
@@ -1274,13 +1299,13 @@ test("Servers: Transfer prompts for which table when the server has multiple act
   await samCard.getByRole("button", { name: "Table", exact: true }).click();
   let dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
-  await expect(samCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(samCard, "T1")).toBeVisible();
 
   await samCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T4, available" }).click();
   await page.getByRole("button", { name: /Assign T4 also/ }).click();
-  await expect(samCard.getByText("T4")).toBeVisible();
+  await expect(activeChip(samCard, "T4")).toBeVisible();
 
   // Sam now holds two real active tables -- transferring must ask which
   // one T3 should replace, not assume oldest/newest/first/last.
@@ -1295,9 +1320,9 @@ test("Servers: Transfer prompts for which table when the server has multiple act
   ).toBeVisible();
   await page.getByRole("button", { name: "T1 → T3" }).click();
 
-  await expect(samCard.getByText("T3")).toBeVisible();
-  await expect(samCard.getByText("T4")).toBeVisible();
-  await expect(samCard.getByText("T1")).toHaveCount(0);
+  await expect(activeChip(samCard, "T3")).toBeVisible();
+  await expect(activeChip(samCard, "T4")).toBeVisible();
+  await expect(activeChip(samCard, "T1")).toHaveCount(0);
 });
 
 test("Servers: End existing table(s) can end several selected tables, leaving the rest active", async ({
@@ -1313,19 +1338,19 @@ test("Servers: End existing table(s) can end several selected tables, leaving th
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   let dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
-  await expect(ivyCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(ivyCard, "T1")).toBeVisible();
 
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T4, available" }).click();
   await page.getByRole("button", { name: /Assign T4 also/ }).click();
-  await expect(ivyCard.getByText("T4")).toBeVisible();
+  await expect(activeChip(ivyCard, "T4")).toBeVisible();
 
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T7, available" }).click();
   await page.getByRole("button", { name: /Assign T7 also/ }).click();
-  await expect(ivyCard.getByText("T7")).toBeVisible();
+  await expect(activeChip(ivyCard, "T7")).toBeVisible();
 
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
@@ -1342,10 +1367,10 @@ test("Servers: End existing table(s) can end several selected tables, leaving th
   }
   await page.getByRole("button", { name: /^End 2 Tables & Assign T3/ }).click();
 
-  await expect(ivyCard.getByText("T3")).toBeVisible();
-  await expect(ivyCard.getByText("T7")).toBeVisible();
-  await expect(ivyCard.getByText("T1")).toHaveCount(0);
-  await expect(ivyCard.getByText("T4")).toHaveCount(0);
+  await expect(activeChip(ivyCard, "T3")).toBeVisible();
+  await expect(activeChip(ivyCard, "T7")).toBeVisible();
+  await expect(activeChip(ivyCard, "T1")).toHaveCount(0);
+  await expect(activeChip(ivyCard, "T4")).toHaveCount(0);
 
   await switchView(page, "Floor");
   await expect(
@@ -1369,13 +1394,13 @@ test("Servers: End existing table(s) 'Select all' ends every active table before
   await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
   let dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
-  await expect(zaraCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(zaraCard, "T1")).toBeVisible();
 
   await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T4, available" }).click();
   await page.getByRole("button", { name: /Assign T4 also/ }).click();
-  await expect(zaraCard.getByText("T4")).toBeVisible();
+  await expect(activeChip(zaraCard, "T4")).toBeVisible();
 
   await zaraCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
@@ -1387,9 +1412,9 @@ test("Servers: End existing table(s) 'Select all' ends every active table before
   await expect(page.getByText("2 of 2 selected")).toBeVisible();
   await page.getByRole("button", { name: /^End 2 Tables & Assign T3/ }).click();
 
-  await expect(zaraCard.getByText("T3")).toBeVisible();
-  await expect(zaraCard.getByText("T1")).toHaveCount(0);
-  await expect(zaraCard.getByText("T4")).toHaveCount(0);
+  await expect(activeChip(zaraCard, "T3")).toBeVisible();
+  await expect(activeChip(zaraCard, "T1")).toHaveCount(0);
+  await expect(activeChip(zaraCard, "T4")).toHaveCount(0);
 });
 
 test("Servers: closing the table layout popup without selecting makes zero state changes", async ({
@@ -1425,13 +1450,13 @@ test("Servers: closing the End existing table(s) multi-select makes zero state c
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   let dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
-  await expect(ivyCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(ivyCard, "T1")).toBeVisible();
 
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T4, available" }).click();
   await page.getByRole("button", { name: /Assign T4 also/ }).click();
-  await expect(ivyCard.getByText("T4")).toBeVisible();
+  await expect(activeChip(ivyCard, "T4")).toBeVisible();
 
   await ivyCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
@@ -1450,9 +1475,9 @@ test("Servers: closing the End existing table(s) multi-select makes zero state c
     .click();
   await expect(page.locator("dialog[open]")).toHaveCount(0);
 
-  await expect(ivyCard.getByText("T1")).toBeVisible();
-  await expect(ivyCard.getByText("T4")).toBeVisible();
-  await expect(ivyCard.getByText("T3")).toHaveCount(0);
+  await expect(activeChip(ivyCard, "T1")).toBeVisible();
+  await expect(activeChip(ivyCard, "T4")).toBeVisible();
+  await expect(activeChip(ivyCard, "T3")).toHaveCount(0);
 });
 
 test("Servers: tapping one active table's badge scopes Transfer/End/Unassign to that table only", async ({
@@ -1468,13 +1493,13 @@ test("Servers: tapping one active table's badge scopes Transfer/End/Unassign to 
   await samCard.getByRole("button", { name: "Table", exact: true }).click();
   let dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T1, available" }).click();
-  await expect(samCard.getByText("T1")).toBeVisible();
+  await expect(activeChip(samCard, "T1")).toBeVisible();
 
   await samCard.getByRole("button", { name: "Table", exact: true }).click();
   dialog = page.locator("dialog[open]");
   await dialog.getByRole("button", { name: "Table T8, available" }).click();
   await page.getByRole("button", { name: /Assign T8 also/ }).click();
-  await expect(samCard.getByText("T8")).toBeVisible();
+  await expect(activeChip(samCard, "T8")).toBeVisible();
 
   // Tap T1's badge specifically -- End here must only end T1, T8 stays.
   await samCard
@@ -1482,8 +1507,8 @@ test("Servers: tapping one active table's badge scopes Transfer/End/Unassign to 
     .click();
   await page.getByRole("button", { name: "End table" }).click();
 
-  await expect(samCard.getByText("T1")).toHaveCount(0);
-  await expect(samCard.getByText("T8")).toBeVisible();
+  await expect(activeChip(samCard, "T1")).toHaveCount(0);
+  await expect(activeChip(samCard, "T8")).toBeVisible();
 
   await switchView(page, "Floor");
   await expect(
@@ -1512,7 +1537,7 @@ test("Floor: End existing table(s) can end several selected tables, leaving the 
       .click();
     await page.getByRole("button", { name: "Zara Reed", exact: true }).click();
     if (label === "T1") {
-      await page.getByRole("button", { name: "Zara Reed" }).last().click();
+      // (first table: assigned immediately, no decision dialog)
     } else {
       await page
         .getByRole("button", { name: new RegExp(`Assign ${label} also`) })
@@ -1570,7 +1595,7 @@ test("Floor: End existing table(s) 'Select all' ends every active table before a
 
   await page.getByRole("button", { name: "Table T1, available" }).click();
   await page.getByRole("button", { name: "Sam Ellis", exact: true }).click();
-  await page.getByRole("button", { name: "Sam Ellis" }).last().click();
+  // (first table: assigned immediately, no decision dialog)
   await expect(
     page.getByRole("button", { name: "Table T1, assigned to Sam Ellis" }),
   ).toBeVisible();
@@ -1603,9 +1628,9 @@ test("Floor: End existing table(s) 'Select all' ends every active table before a
 
   await switchView(page, "Servers");
   const samCard = page.getByRole("group", { name: "Sam Ellis server card" });
-  await expect(samCard.getByText("T3")).toBeVisible();
-  await expect(samCard.getByText("T1")).toHaveCount(0);
-  await expect(samCard.getByText("T4")).toHaveCount(0);
+  await expect(activeChip(samCard, "T3")).toBeVisible();
+  await expect(activeChip(samCard, "T1")).toHaveCount(0);
+  await expect(activeChip(samCard, "T4")).toHaveCount(0);
 });
 
 test("Floor: closing the End existing table(s) multi-select makes zero state changes (CASE D)", async ({
@@ -1668,7 +1693,7 @@ test("Floor: Undo/Redo restore a multi-table End safely", async ({ page }) => {
 
   await page.getByRole("button", { name: "Table T1, available" }).click();
   await page.getByRole("button", { name: "Zara Reed", exact: true }).click();
-  await page.getByRole("button", { name: "Zara Reed" }).last().click();
+  // (first table: assigned immediately, no decision dialog)
   await expect(
     page.getByRole("button", { name: "Table T1, assigned to Zara Reed" }),
   ).toBeVisible();
