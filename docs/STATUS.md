@@ -7,6 +7,12 @@
 
 ---
 
+## Bar Inventory V1 — PLANNED (#168; docs only)
+
+Planning documents merged to `development` for owner review: `docs/features/bar-inventory-v1/` (PRD, DATA_MODEL, UI_UX_PLAN, IMPORT_EXPORT_SPEC, ANALYTICS_SPEC, SECURITY_AND_ROLES, ACCEPTANCE_CRITERIA, TEST_STRATEGY, IMPLEMENTATION_PLAN). Secondary-tier module (More on mobile), management roles only (recommended), three views (Dashboard · Inventory · Manage), org-level catalog + location-level stock, immutable adjustment ledger, CSV/XLSX import with preview, type-appropriate filters on every table, vendor-grouped Order Soon, reason-aware analytics. **No application code, no migration; nothing implemented.** Roadmap order: #166 (done) → Bar Inventory → Tasks Today management visibility (#169, tracked only) → Tips V2 (#155).
+
+---
+
 ## Same-server repeat table (#166 — PR #167 into `development`)
 
 A server who already holds an active table and reaches a **later rotation turn** that is given the same physical table no longer hits the "already assigned" dead end. The **database** decides by turn (board cell, ordered by `rotation_rounds.sequence`): same cell = idempotent retry (no-op); held only in earlier turns = `PT409 same_server_repeat` → dialog **End Previous + Assign / Cancel**, confirmed atomically by `board_end_previous_and_assign` (previous entry ended and kept as history, one active claim, Undo/Redo unchanged); held in the same-or-later turn = still blocked. Cross-server Transfer / End + Assign unchanged; combined assignments end as one lifecycle unit. Migration `20261026150000` (forward-only; **DEV applied, PROD not**). Docs and evidence: `docs/features/same-server-repeat-table/`.
