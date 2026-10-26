@@ -22,16 +22,30 @@
 export type Role = "A" | "B" | "C";
 export type Origin = "grid" | "floor" | "picker" | "servers";
 
+/**
+ * Input-form axis (#157). `table` is always the CANONICAL identity the scenario
+ * asserts on. `typed` (Grid only -- the one origin where the operator types) is
+ * what the operator actually enters: omitted = the canonical label itself,
+ * "1" = numeric shorthand for T1, "99" = free-text fallback (no T99). The
+ * expectation is identical whichever form is typed.
+ */
 export type Step = (
-  | { do: "assign"; via: Origin; who: Role; table: string }
+  | { do: "assign"; via: Origin; who: Role; table: string; typed?: string }
   | {
       do: "conflict";
       via: Origin;
       who: Role;
       table: string;
+      typed?: string;
       choose: "transfer" | "end-assign" | "cancel";
     }
-  | { do: "same-server"; via: Origin; who: Role; table: string }
+  | {
+      do: "same-server";
+      via: Origin;
+      who: Role;
+      table: string;
+      typed?: string;
+    }
   | { do: "end"; via: "floor" | "servers"; table: string }
   | { do: "transfer"; via: "floor" | "servers"; table: string; to: Role }
   | { do: "unassign"; via: "grid" | "floor" | "servers"; table: string }
@@ -365,61 +379,198 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 
-  // ---- off-map: "1" is NOT "T1" -------------------------------------------------------------------------
+  // ---- input-form axis (#157): numeric shorthand is the registered table --------------------------
+  //  Typed in Grid, "1" is T1: one physical identity, never a second free-text "1".
   {
-    id: "XM-011-offmap-distinct-from-T1",
-    title: 'free-text "1" and mapped T1 are different tables',
+    id: "XM-011-shorthand-is-registered-table",
+    title:
+      'typing "1" assigns the registered T1 (a later "T1" collides with it)',
     steps: [
-      { do: "assign", via: "grid", who: "A", table: "1" },
-      {
-        do: "assign",
-        via: "grid",
-        who: "B",
-        table: "T1",
-        then: {
-          owners: { "1": "A", T1: "B" },
-          active: { A: ["1"], B: ["T1"] },
-          ended: {},
-          activeDelta: 2,
-        },
-      },
-    ],
-    expect: {
-      owners: { "1": "A", T1: "B" },
-      active: { A: ["1"], B: ["T1"] },
-      ended: {},
-      activeDelta: 2,
-    },
-  },
-  {
-    id: "XM-012-offmap-held-never-marks-T1",
-    title: 'an off-map "1" held by A leaves mapped T1 available',
-    steps: [{ do: "assign", via: "grid", who: "A", table: "1" }],
-    expect: {
-      owners: { "1": "A", T1: null },
-      active: { A: ["1"] },
-      ended: {},
-      activeDelta: 1,
-    },
-  },
-  {
-    id: "XM-013-offmap-conflict-end-assign",
-    title: "an off-map table is guarded like any other: End + Assign",
-    steps: [
-      { do: "assign", via: "grid", who: "A", table: "1" },
+      { do: "assign", via: "grid", who: "A", table: "T1", typed: "1" },
       {
         do: "conflict",
         via: "grid",
         who: "B",
-        table: "1",
+        table: "T1",
+        choose: "cancel",
+        then: {
+          owners: { T1: "A" },
+          active: { A: ["T1"] },
+          ended: {},
+          activeDelta: 1,
+        },
+      },
+    ],
+    expect: {
+      owners: { T1: "A" },
+      active: { A: ["T1"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-012-free-text-fallback",
+    title: 'typing "99" with no T99 stays off-map free text and never marks T1',
+    steps: [{ do: "assign", via: "grid", who: "A", table: "99" }],
+    expect: {
+      owners: { "99": "A", T1: null },
+      active: { A: ["99"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-013-shorthand-conflict-end-assign",
+    title:
+      'shorthand "1" against a held T1: End + Assign (same dialog as Picker)',
+    steps: [
+      held("A", "T1"),
+      {
+        do: "conflict",
+        via: "grid",
+        who: "B",
+        table: "T1",
+        typed: "1",
         choose: "end-assign",
       },
     ],
     expect: {
-      owners: { "1": "B", T1: null },
-      active: { B: ["1"] },
-      ended: { A: ["1"] },
+      owners: { T1: "B" },
+      active: { B: ["T1"] },
+      ended: { A: ["T1"] },
       activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-014-shorthand-conflict-transfer",
+    title: 'shorthand "2" against a held T2: Transfer moves the assignment',
+    steps: [
+      held("A", "T2"),
+      {
+        do: "conflict",
+        via: "grid",
+        who: "B",
+        table: "T2",
+        typed: "2",
+        choose: "transfer",
+      },
+    ],
+    expect: {
+      owners: { T2: "B" },
+      active: { B: ["T2"] },
+      ended: { A: ["T2"] },
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-015-shorthand-conflict-cancel",
+    title: 'shorthand "6" against a held T6: Cancel changes nothing',
+    steps: [
+      held("A", "T6"),
+      {
+        do: "conflict",
+        via: "grid",
+        who: "B",
+        table: "T6",
+        typed: "6",
+        choose: "cancel",
+      },
+    ],
+    expect: {
+      owners: { T6: "A" },
+      active: { A: ["T6"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-016-shorthand-same-server",
+    title: 'the same server typing "3" for its own T3 is a no-op',
+    steps: [
+      held("A", "T3"),
+      { do: "same-server", via: "grid", who: "A", table: "T3", typed: "3" },
+    ],
+    expect: {
+      owners: { T3: "A" },
+      active: { A: ["T3"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-017-shorthand-undo-redo",
+    title: 'typing "1" then Undo frees T1 and Redo re-assigns the canonical T1',
+    steps: [
+      { do: "assign", via: "grid", who: "A", table: "T1", typed: "1" },
+      {
+        do: "undo",
+        then: {
+          owners: { T1: null },
+          active: {},
+          ended: {},
+          activeDelta: 0,
+        },
+      },
+      { do: "redo" },
+    ],
+    expect: {
+      owners: { T1: "A" },
+      active: { A: ["T1"] },
+      ended: {},
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-018-shorthand-combined",
+    title:
+      'typing "1 + 2" assigns T1 + T2; shorthand "2" then End + Assign ends the whole assignment',
+    steps: [
+      {
+        do: "assign",
+        via: "grid",
+        who: "A",
+        table: "T1 + T2",
+        typed: "1 + 2",
+        then: {
+          owners: { T1: "A", T2: "A" },
+          active: { A: ["T1", "T2"] },
+          ended: {},
+          activeDelta: 2,
+        },
+      },
+      {
+        do: "conflict",
+        via: "grid",
+        who: "B",
+        table: "T2",
+        typed: "2",
+        choose: "end-assign",
+      },
+    ],
+    expect: {
+      owners: { T1: null, T2: "B" },
+      active: { B: ["T2"] },
+      ended: { A: ["T1 + T2"] },
+      activeDelta: 1,
+    },
+  },
+  {
+    id: "XM-019-shorthand-mixed-label",
+    title: 'typing "3 + 99" is T3 (physical) plus the free-text 99',
+    steps: [
+      {
+        do: "assign",
+        via: "grid",
+        who: "A",
+        table: "T3 + 99",
+        typed: "3 + 99",
+      },
+    ],
+    expect: {
+      owners: { T3: "A", "99": "A" },
+      active: { A: ["T3", "99"] },
+      ended: {},
+      activeDelta: 2,
     },
   },
 ];

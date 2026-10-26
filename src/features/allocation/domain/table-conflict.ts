@@ -7,9 +7,11 @@ import type { RotationBoard } from "@/features/allocation/domain/rotation-board"
  * through `classifyTableClaim` and open the same dialog; none of them has its
  * own copy of the rule. (Dashboard is read-only.)
  *
- * Identity is the label exactly as the board stores it -- no trimming beyond
- * the combined-label split, no case folding, no "T"/"Table" prefix handling.
- * "1" and "T1" never conflict.
+ * Identity is the CANONICAL label the board stores. Typed shorthand is resolved
+ * before it gets here (domain/table-input.ts mirrors the database resolver:
+ * "1" -> "T1" when T1 is registered), so callers pass the canonical label; this
+ * module itself does no trimming beyond the combined-label split, no case
+ * folding and no "T"/"Table" prefix handling.
  *
  * A combined assignment ("T6 + T7") is ONE logical assignment: a holder is
  * the whole assignment, and Transfer / End + Assign act on all of it. Releasing

@@ -46,12 +46,20 @@ type Pending = ClaimRequest & { verdict: Held };
 export function useTableClaim({
   board,
   disabled,
+  canonicalize = (label) => label,
   onAssign,
   onTransfer,
   onNotice,
 }: {
   board: RotationBoard;
   disabled: boolean;
+  /**
+   * Resolve typed shorthand to the canonical table label ("1" -> "T1" when T1
+   * is registered; see domain/table-input.ts). The claim is classified, shown
+   * and assigned on the canonical label, exactly as the database will store
+   * it. The database re-resolves regardless.
+   */
+  canonicalize?: (label: string) => string;
   /** The caller's trusted assign (workspace `execute({ type: "assign" })`). */
   onAssign: (input: {
     label: string;
@@ -87,7 +95,8 @@ export function useTableClaim({
    * handled here (notice shown or dialog opened) and the caller must stop;
    * false when the table is free and the caller should assign normally.
    */
-  function intercept(request: ClaimRequest): boolean {
+  function intercept(rawRequest: ClaimRequest): boolean {
+    const request = { ...rawRequest, label: canonicalize(rawRequest.label) };
     return present(
       request,
       classifyTableClaim(board, {
@@ -100,9 +109,10 @@ export function useTableClaim({
 
   /** Stale-client path: the database said the table is held (PT409). */
   function presentServerConflict(
-    request: ClaimRequest,
+    rawRequest: ClaimRequest,
     info: TableConflictInfo,
   ) {
+    const request = { ...rawRequest, label: canonicalize(rawRequest.label) };
     present(request, verdictFromServerConflict(info, request.label));
   }
 

@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 /**
  * Cross-view integrity (X1): tables that have no position on the floor map.
  * They are real (a registered row with no coordinates, or a free-text board
- * label such as the Grid's "1"), so Floor and Picker list them here instead of
+ * label such as "Patio A"), so Floor and Picker list them here instead of
  * pretending they do not exist -- and never at made-up coordinates. Selecting
  * one behaves exactly like selecting a map tile (the caller supplies the same
  * handler), so the owner can act on them where permitted.
  *
- * Identity is the label exactly as stored: "1" here is not "T1" on the map.
+ * Identity is the label exactly as stored. Numeric shorthand never lands here as a duplicate: "1" is stored as the registered "T1" (canonical input resolution), so what remains is genuinely free text or unpositioned.
  */
 function combinedClause(table: OffMapTable): string {
   if (!table.occupiedBy) return "";

@@ -287,51 +287,93 @@ test("XM-024 stale client double-claim: the server answers with the conflict, ne
   await staleContext.close();
 });
 
-test('XM-011 an off-map table ("1") is accounted for in every view, is not T1, and survives a refresh', async () => {
+test('XM-011 typing "1" assigns the registered T1 in every view (no off-map "1"); "99" with no T99 stays off-map; both survive a refresh', async () => {
+  // ---- numeric shorthand -> canonical T1 ---------------------------------
+  const before = await dashboardActiveTables(owner);
   await switchView(owner, "Grid");
   const input = owner.locator(`input[data-cell^="${S2}|"]`).first();
   await input.fill("1");
   await input.press("Enter");
   await expect(
-    owner.getByRole("button", { name: "Edit table 1" }),
+    owner.getByRole("button", { name: "Edit table T1" }),
+  ).toBeVisible();
+  await expect(owner.getByRole("button", { name: "Edit table 1" })).toHaveCount(
+    0,
+  );
+
+  await switchView(owner, "Floor");
+  await expectOwner(owner, "T1", S2);
+  await expect(
+    owner.getByRole("region", { name: "Off-map tables" }),
+  ).toHaveCount(0);
+  await switchView(manager, "Floor");
+  await expectOwner(manager, "T1", S2); // live, no refresh
+
+  await switchView(owner, "Picker");
+  await owner.locator(`input[data-cell^="${S1}|"]`).first().click();
+  await expect(
+    dialog(owner).getByRole("button", {
+      name: `Table T1, assigned to ${S2}`,
+    }),
+  ).toBeVisible();
+  await expect(
+    dialog(owner).getByRole("region", {
+      name: "Off-map / unpositioned tables",
+    }),
+  ).toHaveCount(0);
+  await dialog(owner).getByRole("button", { name: "Cancel" }).click();
+
+  const s2 = await serversCard(owner, S2);
+  await expect(s2.getByRole("button", { name: /^Table T1, / })).toBeVisible();
+  await expect(s2.getByRole("button", { name: /^Table 1, / })).toHaveCount(0);
+  expect(await dashboardActiveTables(owner)).toBe(before + 1);
+  await expect(
+    owner.getByText(/Includes \d+ not on the floor map/),
+  ).toHaveCount(0);
+
+  // ---- free-text fallback: no T99 exists ---------------------------------
+  await switchView(owner, "Grid");
+  const input99 = owner.locator(`input[data-cell^="${S1}|"]`).first();
+  await input99.fill("99");
+  await input99.press("Enter");
+  await expect(
+    owner.getByRole("button", { name: "Edit table 99" }),
   ).toBeVisible();
   await expect(owner.getByText("Off-map").first()).toBeVisible();
 
   await switchView(owner, "Floor");
   const rail = owner.getByRole("region", { name: "Off-map tables" });
   await expect(
-    rail.getByRole("button", { name: `Table 1, assigned to ${S2}, off-map` }),
+    rail.getByRole("button", { name: `Table 99, assigned to ${S1}, off-map` }),
   ).toBeVisible();
-  await expectAvailable(owner, "T1"); // "1" never marks T1
+  await expectOwner(owner, "T1", S2); // "99" never marks a mapped table
   await switchView(manager, "Floor");
   await expect(
     manager
       .getByRole("region", { name: "Off-map tables" })
-      .getByRole("button", { name: `Table 1, assigned to ${S2}, off-map` }),
+      .getByRole("button", { name: `Table 99, assigned to ${S1}, off-map` }),
   ).toBeVisible({ timeout: 30_000 });
 
   await switchView(owner, "Picker");
-  await owner.locator(`input[data-cell^="${S1}|"]`).first().click();
+  await owner.locator(`input[data-cell^="${S2}|"]`).first().click();
   await expect(
     dialog(owner)
       .getByRole("region", { name: "Off-map / unpositioned tables" })
-      .getByRole("button", { name: /^Table 1, assigned to/ }),
-  ).toBeVisible();
-  await expect(
-    dialog(owner).getByRole("button", { name: "Table T1, available" }),
+      .getByRole("button", { name: /^Table 99, assigned to/ }),
   ).toBeVisible();
   await dialog(owner).getByRole("button", { name: "Cancel" }).click();
 
-  const s2 = await serversCard(owner, S2);
+  const s1 = await serversCard(owner, S1);
   await expect(
-    s2.getByRole("button", {
-      name: /^Table 1, assigned to .*not on the floor map/,
+    s1.getByRole("button", {
+      name: /^Table 99, assigned to .*not on the floor map/,
     }),
   ).toBeVisible();
   await switchView(owner, "Dashboard");
   await expect(
     owner.getByText(/Includes \d+ not on the floor map/),
   ).toBeVisible();
+  expect(await dashboardActiveTables(owner)).toBe(before + 2);
 
   // XM-072 refresh: active, ended, off-map and ownership all survive a reload.
   await owner.reload();
@@ -340,13 +382,76 @@ test('XM-011 an off-map table ("1") is accounted for in every view, is not T1, a
   await switchView(owner, "Floor");
   await expectOwner(owner, "T6", S1);
   await expectOwner(owner, "T7", S2);
+  await expectOwner(owner, "T1", S2);
   await expect(
     owner
       .getByRole("region", { name: "Off-map tables" })
-      .getByRole("button", { name: `Table 1, assigned to ${S2}, off-map` }),
+      .getByRole("button", { name: `Table 99, assigned to ${S1}, off-map` }),
   ).toBeVisible();
   await expectEndedHistory(owner, S1, "T7");
   await expectEndedHistory(owner, S2, "T6");
+});
+
+test('CR-UI stale browser typing "2": the database resolves it to T2, answers with the conflict dialog, and End + Assign converges both contexts', async ({
+  browser,
+}) => {
+  // A manager page whose Realtime socket never connects: it learns nothing the
+  // owner does until it asks the server.
+  const staleContext = await browser.newContext();
+  contexts.push(staleContext);
+  const stale = await staleContext.newPage();
+  track(stale, "stale-shorthand");
+  await stale.routeWebSocket(/realtime\/v1\/websocket/, () => {
+    /* never connect: the page stays stale */
+  });
+  await signIn(stale, PINS.TestManager);
+  await goToAllocation(stale);
+  await switchView(stale, "Floor");
+  await expectAvailable(stale, "T2");
+
+  // The owner (live) takes T2 for S1.
+  await switchView(owner, "Floor");
+  await floorAssign(owner, "T2", S1);
+  await expectOwner(owner, "T2", S1);
+  await expect(tile(stale, "T2")).toHaveAccessibleName(/available/);
+
+  // The stale manager types the SHORTHAND "2" for S2 in the Grid.
+  await switchView(stale, "Grid");
+  const typed = stale.locator(`input[data-cell^="${S2}|"]`).first();
+  await typed.fill("2");
+  await typed.press("Enter");
+  await expect(
+    dialog(stale).getByText(`T2 is currently assigned to ${S1}.`, {
+      exact: false,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  // No free-text "2" exists anywhere: nothing was written by the refused call.
+  const { admin, locationId } = await devLocation();
+  const sessions = await admin
+    .from("service_sessions")
+    .select("id")
+    .eq("location_id", locationId)
+    .order("service_date", { ascending: false })
+    .limit(1);
+  const entries = await admin
+    .from("table_rotation_entries")
+    .select("table_label, status")
+    .eq("service_session_id", sessions.data![0].id as number)
+    .eq("table_label", "2");
+  expect(entries.data ?? []).toHaveLength(0);
+
+  await chooseConflict(stale, "end-assign");
+  await expectOwner(stale, "T2", S2);
+  await expectOwner(owner, "T2", S2); // live on the other context
+  await expectEndedHistory(owner, S1, "T2");
+  const after = await admin
+    .from("table_rotation_entries")
+    .select("table_label")
+    .eq("service_session_id", sessions.data![0].id as number)
+    .eq("table_label", "2");
+  expect(after.data ?? []).toHaveLength(0);
+  await staleContext.close();
 });
 
 test("permission parity: a server-role user resolves a conflict from Servers exactly like a manager", async () => {

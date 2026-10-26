@@ -10,8 +10,9 @@ select plan(35);
 -- whole-assignment End + Assign through public.board_assign.
 --
 -- Cast: owner, outsider (another organization), servers Ann and Bea.
--- Tables T1..T5 are registered; "9" and "1" are free-text board labels with
--- no dining_tables row (the owner's "Table 1" case).
+-- Tables T1..T5 are registered; "9" is a free-text board label with no
+-- dining_tables row. (#157 supersedes the original "1 is a free-text label"
+-- contract: "1" now resolves to the registered T1 -- see 0031.)
 -- ---------------------------------------------------------------------
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, aud, role)
 values
@@ -115,7 +116,7 @@ select is(
 select isnt(
   private.label_parts('1'),
   private.label_parts('T1'),
-  '"1" and "T1" are different labels (no prefix or normalization)'
+  'label_parts is purely textual (no prefix or normalization); "1" -> T1 is private.resolve_table_input''s job (0031)'
 );
 
 -- ---------------------------------------------------------------------
@@ -153,20 +154,22 @@ select is(
 );
 
 -- ---------------------------------------------------------------------
--- 3. "1" is not "T1": a free-text label takes no ledger claim and never
---    collides with the registered table.
+-- 3. "1" IS "T1" (#157, replaces the original distinct-labels contract):
+--    the shorthand resolves to the registered table, so it collides with it.
 -- ---------------------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000030001', true);
-select lives_ok(
+select throws_ok(
   $$ select public.board_assign('00000000-0000-0000-0000-000000030011'::uuid, '00000000-0000-0000-0000-000000030021'::uuid, (now() at time zone 'America/Chicago')::date, 900041, 900042, '1', false, false) $$,
-  'Bea can take the free-text label "1" while Ann holds T1'
+  'PT409',
+  'Table T1 is already assigned to another active server on this board.',
+  'Bea cannot take "1" while Ann holds T1: it resolves to the same table'
 );
 reset role;
 select is(
-  (select count(*)::int from public.section_assignments where rotation_member_id = 900042 and released_at is null),
+  (select count(*)::int from public.table_rotation_entries where rotation_member_id = 900042),
   0,
-  '"1" has no physical claim (it is not a registered table)'
+  'no separate free-text "1" entry was created'
 );
 select is(
   (select rotation_member_id from public.section_assignments where dining_table_id = 900041 and released_at is null),

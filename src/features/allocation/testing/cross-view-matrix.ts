@@ -39,6 +39,7 @@ import {
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
 import { classifyTableClaim } from "@/features/allocation/domain/table-conflict";
+import { canonicalizeTableLabel } from "@/features/allocation/domain/table-input";
 import type {
   Role,
   Step,
@@ -99,6 +100,28 @@ export function newDomainBoard(world: DomainWorld = DOMAIN_WORLD) {
   );
 }
 
+/**
+ * The label the board stores for a step: what the operator typed (input-form
+ * axis, #157) run through the same canonical resolution the workspace and the
+ * database apply. A scenario that claims `typed` resolves to `table` is held
+ * to it, so the matrix cannot drift from the resolver.
+ */
+function canonicalInput(
+  step: { table: string; typed?: string },
+  world: DomainWorld,
+): string {
+  const label = canonicalizeTableLabel(
+    step.typed ?? step.table,
+    world.registry,
+  );
+  if (step.typed !== undefined && label !== step.table) {
+    throw new Error(
+      `typed "${step.typed}" resolves to "${label}", scenario says "${step.table}"`,
+    );
+  }
+  return label;
+}
+
 function holderCell(board: RotationBoard, table: string) {
   for (const round of board.rounds) {
     for (const cell of round.cells) {
@@ -132,25 +155,26 @@ export function applyDomainStep(
     case "redo":
       return redoBoard(history);
     case "assign": {
+      const label = canonicalInput(step, world);
       const round = findEarliestEmptyRoundForColumn(board, col(step.who));
       if (!round) throw new Error("no empty round");
       const verdict = classifyTableClaim(board, {
-        label: step.table,
+        label,
         columnId: col(step.who),
         targetRoundId: round.id,
       });
       if (verdict.kind !== "free")
-        throw new Error(`${step.table} is not free (${verdict.kind})`);
+        throw new Error(`${label} is not free (${verdict.kind})`);
       return executeBoardAction(history, {
         type: "assign",
         roundId: round.id,
         columnId: col(step.who),
-        tableLabel: step.table,
+        tableLabel: label,
       });
     }
     case "same-server": {
       const verdict = classifyTableClaim(board, {
-        label: step.table,
+        label: canonicalInput(step, world),
         columnId: col(step.who),
       });
       if (verdict.kind !== "same-server")
@@ -158,9 +182,10 @@ export function applyDomainStep(
       return history;
     }
     case "conflict": {
+      const label = canonicalInput(step, world);
       const round = findEarliestEmptyRoundForColumn(board, col(step.who));
       const verdict = classifyTableClaim(board, {
-        label: step.table,
+        label,
         columnId: col(step.who),
         targetRoundId: round?.id,
       });
@@ -182,7 +207,7 @@ export function applyDomainStep(
         type: "assign",
         roundId: round.id,
         columnId: col(step.who),
-        tableLabel: step.table,
+        tableLabel: label,
         confirmTransfer: true,
         endWholeAssignment: true,
       });
