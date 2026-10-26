@@ -1,41 +1,59 @@
-# #109 UX Consistency — Agent Handoff
+# Cross-View Integrity — Agent Handoff
 
-Branch: `fix/table-allocation-ux-consistency`
-HEAD: see `git log -1` (U1-U5 commits + this validation/handoff commit on top of the base)
-Base development: `e2bbd4e` (#134 closeout merge, PR #148)
+Branch: `fix/table-allocation-cross-view-integrity`
+HEAD: see `git log -1`
+Base development: `63fdbe0` (PR #152 merge)
 
-U1: ✅ Picker inner buttons no longer open the map — `picker-cell-click.ts` (+ unit, + demo e2e that fails unfixed)
-U2: ✅ Recent activity from all 18 board_event_type values — `domain/board-activity.ts`, `AllocationContext.recentActivity`, Dashboard list (ordering created_at, id)
-U3: ✅ whole-assignment copy — `domain/assignment-scope.ts`, `assignmentTables` on FloorOccupant, Floor panel / Servers dialog / map labels / decision dialog
-U4: ✅ Servers + Floor legend counts from the read model; `ServerSummary.unmappedTableLabels`; "N not on the floor map (…)"
-U5: ✅ stale comments/status refreshed; historical reports intentionally untouched
+X0: ✅ audit + tracking (#153 parent, #154 Tasks notification follow-up, #155 Tips V2 planning; Project #4; milestone "Table Allocation V2 — Part 2"; #133 status comment posted)
+X1: ⬜ canonical identity + off-map representation
+X2: ⬜ occupied-table conflict resolver (+ migration `20261026090000_*`)
+X3: ⬜ Servers ended/session-history
+X4: ⬜ parameterized cross-view matrix
+X5: ⬜ real-mode concurrency / reconnect / service-date
+X6: ⬜ PR #135 reintegration
 
-Completed: all five items, docs in `docs/features/table-allocation-ux-consistency/` (PLAN, ACCEPTANCE_CRITERIA 15/15, TEST_MATRIX, IMPLEMENTATION_REPORT)
-In progress: nothing
-Not started: PR #135 reconciliation (do not start without the owner's instruction)
+Canonical identity findings:
+Table "1": NO `dining_tables` row — free-text board label, no ledger claim (DEV probe 2026-10-26)
+T1: `dining_tables.id` 19 (DEV), registered, mapped at (8,72) — distinct from "1"
 
-Files changed: allocation components/domain/data (see PR), tests/e2e + tests/real spec, docs/STATUS.md, docs/ROADMAP.md, multi-view README
-Uncommitted: nothing expected (untracked and never staged: `The Lineup.code-workspace`, `docs/testing/`)
-Commits: U1 f927959, U2 742e8c5, U3 29d4219, U4 261d2cc, U5 84f153e, then validation/handoff
+Off-map contract: registered-unpositioned OR unregistered held label; shown in all five views (see PLAN.md)
+Conflict contract: shared `classifyTableClaim` + one dialog; Transfer / End + Assign / Cancel; same-server = notice
+Transfer: existing `board_transfer`, moves the whole holder assignment
+End + Assign: `board_assign(p_confirm_transfer, p_end_whole_assignment)` single atomic call, `assign` event with `displaced`
+Combined assignment: acts on the whole assignment; no partial release
+Ended-history contract: `ServerSummary.sessionHistory`; active count excludes ended
 
-Tests: Vitest 64 files / 559 tests; lint, typecheck, build pass; demo Playwright desktop + server-mobile 230/230, host-tablet allocation 50/50; hosted real UI (production build, DEV) 18/18. No pgTAP (no DB change).
-CI: PR #149 — application, browser-smoke, Vercel green; Database not triggered
+Files changed: docs only so far (docs/features/table-allocation-cross-view-integrity/*)
+Migrations: none yet (planned `20261026090000_table_allocation_conflict_resolution.sql`)
+Commits: see git log
+Uncommitted: nothing expected (never stage `docs/testing/`, `*.code-workspace`)
 
-#109: closed (completed), final evidence commented
-Project #4: Done
-Milestone: Future Product Backlog (Part 1 milestone is already closed)
-PR: #149 (merge commit a34af143ee11641dc3af4d5ffda0d989df4918f8)
+Tests: not run yet
+domain: -
+component: -
+Playwright matrix: -
+real-mode: -
+production build: -
+DB: local Supabase Docker stack is running (pgTAP possible)
+CI: -
 
-Docs: see feature directory above
+GitHub issue: #153 (children not created; one parent is enough)
+Project #4: #153 In Progress; #154/#155 Backlog
+Milestone: Table Allocation V2 — Part 2
 
-development merged: YES
+PR: not opened
+PR #135 status: parked, untouched; infra green, awaiting application fix + final owner Preview smoke
+
+Docs updated: PLAN, ACCEPTANCE_CRITERIA, TEST_MATRIX, IMPLEMENTATION_REPORT (X0)
+Backlog updated: see tasks/backlog.md
+
+development merged: NO
 main merged: NO
-DEV touched: YES (hosted real-mode UI suite only; synthetic data; board reset by the suite)
+DEV touched: YES (read-only identity probe)
 PROD touched: NO
 
-PR #135 untouched: YES
-
-Exact next command: none for #109. After the owner's go-ahead: PR #135 sync with latest development.
-Exact next task: none for #109 (closeout PR for these docs is the last step)
-Read first: docs/features/table-allocation-ux-consistency/IMPLEMENTATION_REPORT.md
-DO NOT: merge to main, touch PROD, squash/rebase-merge, touch PR #135, `git add -A`/`git add .`, stage `docs/testing/` or `*.code-workspace`
+Running processes: none
+Exact next command: `git status -sb` then continue X1 (see PLAN.md)
+Exact next action: implement `domain/table-identity` + off-map read model (X1)
+Read first: docs/features/table-allocation-cross-view-integrity/PLAN.md
+DO NOT: merge to main, touch PROD, squash/rebase-merge, touch PR #135 before this lands, `git add -A`/`git add .`, stage `docs/testing/` or `*.code-workspace`, map "1" to "T1"
