@@ -13,8 +13,8 @@ Issue: #157 `[Bug] Resolve numeric Grid table input to registered physical table
 Project #4: #157 In Progress -> Done after merge
 Milestone: Table Allocation V2 — Part 2
 
-Current phase: R7 (PR / exact-head CI / merge commit into development). R0–R6 done.
-R0 ✅ R1 ✅ R2 ✅ R3 ✅ R4 ✅ R5 ✅ R6 ✅ R7 ⬜ (PR opened, waiting for CI)
+Current phase: DONE. R0–R7 complete; PR #158 merged into development (merge commit f8fa191, head caef5aa, exact-head CI green).
+R0 ✅ R1 ✅ R2 ✅ R3 ✅ R4 ✅ R5 ✅ R6 ✅ R7 ✅
 
 Resolver contract:
 Exact label: registered active label (trimmed, case-sensitive, same location) wins
@@ -46,12 +46,12 @@ hosted UI (production build, DEV): 30 PASS (one transient XM-024 failure in the 
 multi-user: stale-browser shorthand test CR-UI + rewritten XM-011 PASS
 build: PASS (pinned to DEV, PROD ref in 0 files)
 lint / typecheck / format: PASS
-CI: pending on the PR
+CI: PASS on exact head caef5aa (application, browser-smoke, Database, Vercel; deploy-migrations skipped)
 
 Commits: faeca66 feat (resolver + client + matrix + tests); closeout commit (docs, real-suite fixes)
 Uncommitted: nothing expected (never stage `docs/testing/`, `The Lineup.code-workspace`)
 
-development merged: NO (until PR merge)
+development merged: YES (f8fa191)
 main merged: NO
 DEV touched: YES (migration + hosted suites with synthetic data)
 PROD touched: NO
@@ -59,8 +59,8 @@ PROD migrations: NO
 
 Running processes: local Supabase (docker) only; no `next start`
 
-Exact next command: `gh pr checks <PR>` then, when exact-head CI is green, `gh pr merge <PR> --merge --match-head-commit <head>`
-Exact next action: wait for exact-head CI (application, browser-smoke, Database, Vercel; deploy-migrations skipped), merge with a MERGE COMMIT into `development`, then set #157 Done in Project #4, close the issue, update docs/STATUS.md wording from "branch" to "merged", STOP
+Exact next command: none
+Exact next action: STOP. Owner sanity test (type 1 in the Grid, Floor shows T1 occupied). Next planned work: #154, #155, release-readiness audit (owner approval for main)
 Read first: docs/features/table-input-canonical-resolution/IMPLEMENTATION_REPORT.md
 Release-readiness (before any PROD deploy, owner approval only): run the read-only query in PLAN.md per real location
 DO NOT: merge to main, touch PROD, squash/rebase-merge, `git add -A` / `git add .`, stage `docs/testing/` or `*.code-workspace`, add an alias table, rewrite history rows, widen grants, start #154 or #155 here

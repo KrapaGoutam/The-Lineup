@@ -19,7 +19,7 @@ Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`, merged
 
 ---
 
-## Canonical numeric table input resolution (#157 — branch `fix/table-input-canonical-resolution`)
+## Canonical numeric table input resolution (#157 — merged into `development`, PR #158, merge commit `f8fa191`)
 
 Owner testing clarified the contract that #153 had set the other way: **typing `1` where the location has a registered `T1` is `T1`**, exactly like choosing `T1` from Floor or Picker. Resolved **server-authoritatively**: one private DB resolver (`private.resolve_table_input`: exact registered label → digits-only `T` + digits → trimmed free text; leading zeros never collapsed; same location only) is reused by `board_assign`, `board_end_and_assign`, displacement and the occupancy trigger, so a stale or different client cannot create a second `1` identity. Combined labels resolve per part (`1 + 2` → `T1 + T2`). Conflicts, same-server, End + Assign, Transfer, Undo/Redo and Recent Activity all operate on the canonical `T1` and its `dining_table_id`. No alias table, no history rewrite, no RLS widening. Migration `20261026120000` (forward-only; **DEV applied, PROD not**). Docs and evidence: `docs/features/table-input-canonical-resolution/`.
 
