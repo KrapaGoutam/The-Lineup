@@ -39,23 +39,32 @@ import {
   undoBoardAction,
 } from "@/features/allocation/actions/allocation-actions";
 import { AllocationDateFilter } from "@/features/allocation/components/allocation-date-filter";
+import { buildBoardReadModel } from "@/features/allocation/domain/board-read-model";
+import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime";
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
+import { openPickerUnlessInnerAction } from "@/features/allocation/components/picker-cell-click";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { ServerBoardView } from "@/features/allocation/components/server-board-view";
 import { TableMap } from "@/features/allocation/components/table-map";
+import { useTableClaim } from "@/features/allocation/components/table-claim";
 import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
 import {
+  crossEditToActivity,
+  type BoardActivityEntry,
+} from "@/features/allocation/domain/board-activity";
+import {
   DEMO_FLOOR_LAYOUT,
-  resolveFloorTables,
+  parseCombinedTableLabel,
 } from "@/features/allocation/domain/floor-layout";
 import {
   createBoardHistory,
   createRotationBoard,
   executeBoardAction,
-  getWorkingRound,
+  getNextColumn,
   isCrossColumnEdit,
   mayWriteColumn,
   redoBoard,
@@ -64,10 +73,10 @@ import {
   type BoardHistory,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+import { canonicalizeTableLabel } from "@/features/allocation/domain/table-input";
 import { can } from "@/features/auth/domain/passcode";
 import type { TipsAuditEntry } from "@/features/tips/domain/tips-status";
 import { team as seedTeam, type TeamMember } from "@/lib/demo-data";
-import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const EMPTY_BOARD: RotationBoard = {
@@ -134,23 +143,33 @@ function buildInitialHistory() {
 // permission gate for correcting history).
 //
 // Transfer and End Table are intentionally NOT exposed here (Grid and
-// Picker both render this component for their shared table) -- per the
-// final Upgrade 1.1 UI decision, Floor is the one surface for those two
-// actions (see floor-view.tsx). The underlying board_transfer/
-// board_end_table RPCs, the "transfer"/"end-table" BoardAction variants,
-// and this component's own onTransfer/onEndTable-shaped execute() calls
-// from Floor are all still fully live -- only this component's buttons
+// Picker both render this component for their shared table) -- they live
+// on the occupied-table surfaces: Floor's table panel and Servers' per-
+// table dialog (see floor-view.tsx, server-board-view.tsx), which act on
+// the whole logical assignment. The underlying board_transfer/
+// board_end_table RPCs and the "transfer"/"end-table" BoardAction
+// variants are all still fully live -- only this component's buttons
 // were removed, not the capability.
 function TableEntry({
+  cellId,
   value,
   status,
+  offMap = false,
   disabled,
   onSubmit,
   onClear,
   onSkipTurn,
 }: {
+  // "<server>|<turn>" -- a stable handle for automated checks; the visible
+  // accessible name stays the shared "Table number or combined tables".
+  cellId?: string;
   value: string | null;
   status: "empty" | "active" | "ended" | "skipped";
+  // Cross-view integrity (X1): at least one of the cell's tables has no
+  // position on the floor map (an unpositioned or free-text table, e.g. "Patio A").
+  // It is still a real entry; the badge only says it will not appear as a
+  // tile on Floor/Picker.
+  offMap?: boolean;
   disabled: boolean;
   onSubmit: (value: string) => void;
   onClear: () => void;
@@ -215,7 +234,7 @@ function TableEntry({
             Table {value}
           </span>
           <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
-            Ended
+            Ended{offMap ? " · Off-map" : ""}
           </span>
         </span>
         {!disabled ? (
@@ -241,6 +260,7 @@ function TableEntry({
             className="size-2 flex-none rounded-full bg-emerald-300"
             aria-label="Recorded"
           />
+          {offMap ? <Badge tone="warning">Off-map</Badge> : null}
         </span>
         {!disabled ? (
           <div className="flex items-center gap-1">
@@ -270,6 +290,7 @@ function TableEntry({
       <Input
         name="table"
         aria-label="Table number or combined tables"
+        data-cell={cellId}
         placeholder={disabled ? "Not available" : "Table #"}
         disabled={disabled}
         defaultValue={value ?? ""}
@@ -349,6 +370,10 @@ export function AllocationWorkspace({
   const [crossEditLog, setCrossEditLog] = useState<CrossEditEntry[]>(
     () => initialContext?.crossEditLog ?? [],
   );
+  // #109 U2: server-read board events, presented by board-activity.ts.
+  const [recentActivity, setRecentActivity] = useState<BoardActivityEntry[]>(
+    () => initialContext?.recentActivity ?? [],
+  );
   const [serviceSessionId, setServiceSessionId] = useState<number | null>(
     () => initialContext?.serviceSessionId ?? null,
   );
@@ -359,6 +384,8 @@ export function AllocationWorkspace({
     () => initialContext?.canRedo ?? false,
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  // Neutral, non-error message (e.g. "T6 is already assigned to TestOwner.").
+  const [notice, setNotice] = useState<string | null>(null);
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
   // Table Rotation Multi-View: local UI state, not synced -- Undo/Redo
@@ -411,6 +438,7 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
     setEventCount(initialContext?.eventCount ?? 0);
     setCrossEditLog(initialContext?.crossEditLog ?? []);
+    setRecentActivity(initialContext?.recentActivity ?? []);
     setServiceSessionId(initialContext?.serviceSessionId ?? null);
     setCanUndo(initialContext?.canUndo ?? false);
     setCanRedo(initialContext?.canRedo ?? false);
@@ -445,9 +473,13 @@ export function AllocationWorkspace({
       setHistory(createBoardHistory(initialContext?.board ?? EMPTY_BOARD));
       setEventCount(initialContext?.eventCount ?? 0);
       setCrossEditLog(initialContext?.crossEditLog ?? []);
+      setRecentActivity(initialContext?.recentActivity ?? []);
       setServiceSessionId(initialContext?.serviceSessionId ?? null);
       setCanUndo(initialContext?.canUndo ?? false);
       setCanRedo(initialContext?.canRedo ?? false);
+      // The cached context may predate events that happened while the user
+      // was browsing history -- never trust it as current (REAL-001).
+      router.refresh();
       return;
     }
 
@@ -465,53 +497,30 @@ export function AllocationWorkspace({
     setHistory(createBoardHistory(result.data.board));
     setEventCount(result.data.eventCount);
     setCrossEditLog(result.data.crossEditLog);
+    setRecentActivity(result.data.recentActivity);
     setServiceSessionId(result.data.serviceSessionId);
     setCanUndo(result.data.canUndo);
     setCanRedo(result.data.canRedo);
   }
 
   // Realtime: every board-mutating RPC inserts a board_events row
-  // regardless of which table it actually changed, so subscribing to
-  // that one table, filtered to this session, is sufficient to learn
-  // about every kind of change -- scoped to service_session_id, not
-  // organization-wide, per the spec. Before a session exists yet (an
-  // all-empty board), subscribe to service_sessions instead, scoped to
-  // the organization, just to learn the moment one gets created.
-  useEffect(() => {
-    if (demoMode) return;
-    const supabase = createBrowserSupabaseClient();
-    const channel =
-      serviceSessionId !== null
-        ? supabase
-            .channel(`allocation-board-${serviceSessionId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "INSERT",
-                schema: "public",
-                table: "board_events",
-                filter: `service_session_id=eq.${serviceSessionId}`,
-              },
-              () => router.refresh(),
-            )
-            .subscribe()
-        : supabase
-            .channel(`allocation-session-watch-${user.organizationId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "INSERT",
-                schema: "public",
-                table: "service_sessions",
-                filter: `organization_id=eq.${user.organizationId}`,
-              },
-              () => router.refresh(),
-            )
-            .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [demoMode, serviceSessionId, user.organizationId, router]);
+  // regardless of which table it actually changed, so subscribing to that
+  // one table, filtered to this session, is sufficient to learn about every
+  // kind of change. Before a session exists yet (an all-empty board),
+  // watch service_sessions for the organization instead, just to learn the
+  // moment one gets created.
+  //
+  // D-03: the subscription is only ever created AFTER the signed-in user's
+  // JWT is applied to the Realtime socket (never as anon), is rebuilt when
+  // the person or the session changes, and refetches authoritative state
+  // on every re-subscribe -- see use-board-realtime.ts.
+  useBoardRealtime({
+    enabled: !demoMode,
+    userId: user.profileId,
+    organizationId: user.organizationId,
+    serviceSessionId,
+    onInvalidate: () => router.refresh(),
+  });
 
   // Production stability hotfix (multi-device sync, reconnect safety):
   // the Realtime subscription above only pushes events it actually
@@ -539,9 +548,11 @@ export function AllocationWorkspace({
       if (document.visibilityState === "visible") revalidateIfDue();
     }
     window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", revalidateIfDue);
     window.addEventListener("online", revalidateIfDue);
     return () => {
       window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", revalidateIfDue);
       window.removeEventListener("online", revalidateIfDue);
     };
   }, [demoMode, router]);
@@ -567,15 +578,10 @@ export function AllocationWorkspace({
       if (aClockedIn === bClockedIn) return 0;
       return aClockedIn ? -1 : 1;
     });
-  // The row people are actually filling in, not the standing empty
-  // buffer row past it (see `getWorkingRound`'s doc comment).
-  const currentRound = getWorkingRound(board);
-  const nextColumn = visibleColumns.find(
-    (column) =>
-      column.status === "active" &&
-      !currentRound?.cells.find((cell) => cell.columnId === column.id)
-        ?.tableLabel,
-  );
+  // FRONT-003: "next" is decided from cell STATUS (a skipped turn is a
+  // recorded turn with no label), by the same domain function the read
+  // model uses -- not from label presence.
+  const nextColumn = getNextColumn(board);
 
   // Table Rotation Multi-View: Floor's physical layout -- demo mode uses
   // the static approved layout (no attendance/dining_tables data exists
@@ -583,12 +589,30 @@ export function AllocationWorkspace({
   // registered in dining_tables (empty until someone has). Recomputed
   // from `board` on every render, same as the Grid, so Floor and Grid
   // always agree.
-  const resolvedTables = useMemo(() => {
+  // Table Rotation V2 Part 1 (1C): ONE read model feeds Floor, Picker,
+  // Servers and Dashboard (Grid renders `board` itself). Nothing below
+  // re-derives occupancy, counts or "who is next" on its own.
+  const readModel = useMemo(() => {
     const floorLayout = demoMode
       ? DEMO_FLOOR_LAYOUT
       : (initialContext?.physicalTables ?? []);
-    return resolveFloorTables(floorLayout, board, team);
-  }, [demoMode, initialContext?.physicalTables, board, team]);
+    return buildBoardReadModel({
+      board,
+      layout: floorLayout,
+      // Every registered table incl. unpositioned ones (off-map), so they are
+      // represented instead of dropped. Demo mode: the static layout is the
+      // whole registry.
+      registry: demoMode ? undefined : initialContext?.registeredTables,
+      team,
+    });
+  }, [
+    demoMode,
+    initialContext?.physicalTables,
+    initialContext?.registeredTables,
+    board,
+    team,
+  ]);
+  const resolvedTables = readModel.tables;
   // Production stability hotfix: distinguishes "this location has zero
   // registered tables" from "the tables query itself failed" -- see
   // table-map.tsx's `loadError` prop and allocation-data.ts's
@@ -625,11 +649,26 @@ export function AllocationWorkspace({
   // this only controls visibility.
   const canOperateFloor = can(user.role, "allocation:operate") && !readOnly;
 
-  async function execute(action: BoardAction) {
+  // Canonical table input (#157): "1" is "T1" when T1 is registered. The
+  // database re-resolves every label itself (board_assign is the authority);
+  // this mirror only lets the Grid, the dialog and the optimistic state show
+  // the canonical table at once and keeps demo mode (no database) honest.
+  const tableRegistry = demoMode
+    ? DEMO_FLOOR_LAYOUT
+    : (initialContext?.registeredTables ?? []);
+  const canonicalLabel = (label: string) =>
+    canonicalizeTableLabel(label, tableRegistry) || label;
+
+  async function execute(rawAction: BoardAction) {
     // Defense in depth, same principle as RLS re-checking eligibility
     // server-side: the freeze banner disables the UI, but the mutation path
     // itself refuses too, in case a control somehow slips through disabled.
     if (readOnly) return;
+
+    const action: BoardAction =
+      rawAction.type === "assign" || rawAction.type === "end-and-assign"
+        ? { ...rawAction, tableLabel: canonicalLabel(rawAction.tableLabel) }
+        : rawAction;
 
     // Applied immediately in both modes -- demo mode has nothing else;
     // real mode gets the same instant feedback while the write is still
@@ -657,10 +696,72 @@ export function AllocationWorkspace({
         onSessionInvalid();
         return;
       }
+      // Stale client: the database says the table is held. Show the same
+      // decision a fresh client would have, and pull the authoritative state.
+      if (result.conflict && action.type === "assign") {
+        claim.presentServerConflict(
+          {
+            label: action.tableLabel,
+            columnId: action.columnId,
+            roundId: action.roundId,
+          },
+          result.conflict,
+        );
+        router.refresh();
+        return;
+      }
       setActionError(result.error);
       return;
     }
     setServiceSessionId(result.data.serviceSessionId);
+  }
+
+  // Cross-view integrity (X2): ONE occupied-table flow for every assignment
+  // origin (Grid, Floor, Picker, Servers). See table-claim.tsx.
+  const claim = useTableClaim({
+    board,
+    disabled: !canOperateFloor,
+    canonicalize: canonicalLabel,
+    onAssign: ({
+      label,
+      columnId,
+      roundId,
+      confirmTransfer,
+      endWholeAssignment,
+    }) => {
+      execute({
+        type: "assign",
+        roundId,
+        columnId,
+        tableLabel: label,
+        confirmTransfer,
+        endWholeAssignment,
+      });
+      logCrossEdit(columnId);
+    },
+    onTransfer: ({ sourceRoundId, sourceColumnId, destColumnId }) =>
+      execute({
+        type: "transfer",
+        sourceRoundId,
+        sourceColumnId,
+        destColumnId,
+      }),
+    onNotice: setNotice,
+  });
+
+  // Attribution for every cross-column write (kept for the demo activity feed;
+  // real mode reads events).
+  function logCrossEdit(columnId: string) {
+    if (!isCrossColumnEdit({ profileId: user.profileId, columnId })) return;
+    const column = board.columns.find(({ id }) => id === columnId);
+    setCrossEditLog((log) => [
+      ...log,
+      {
+        at: new Date().toISOString(),
+        actorName: user.name,
+        columnName: column?.name ?? "",
+      },
+    ]);
   }
 
   async function undo() {
@@ -713,10 +814,100 @@ export function AllocationWorkspace({
     setShowReopenForm(false);
   }
 
+  // A Grid cell is "off-map" when any of its tables has no position on the
+  // floor map. Not judged while the map has no tables at all (not configured
+  // yet, or the query failed) -- then nothing is meaningfully off the map.
+  const mappedLabels = new Set(readModel.tables.map(({ label }) => label));
+  function isOffMap(label: string) {
+    if (mappedLabels.size === 0 || physicalTablesLoadError) return false;
+    return parseCombinedTableLabel(label).some(
+      (part) => !mappedLabels.has(part),
+    );
+  }
+
   const lastTipsAuditEntry = tipsAuditLog.at(-1);
+
+  // Picker: a map tile or an off-map row was chosen for the selected cell.
+  // Picker is a rotation-cell-driven surface, not a physical-operations one --
+  // it never triggers Floor's "server already has tables" dialog; assigning
+  // here creates a new active row at the selected cell, additive to whatever
+  // else this server already holds (Upgrade 1.1 multi-table). A table that is
+  // not free goes through the shared occupied-table flow instead.
+  function pickTable(label: string) {
+    if (!pickerTarget) return;
+    const request = {
+      label,
+      columnId: pickerTarget.columnId,
+      roundId: pickerTarget.roundId,
+    };
+    setPickerTarget(null);
+    setPickerMapOpen(false);
+    if (claim.intercept(request)) return;
+    execute({
+      type: "assign",
+      roundId: request.roundId,
+      columnId: request.columnId,
+      tableLabel: label,
+    });
+  }
 
   return (
     <div className="space-y-4">
+      {!demoMode && initialContext?.boardLoadError && !isHistoricalView ? (
+        <div
+          role="alert"
+          className="border-destructive/30 bg-destructive/10 flex items-center justify-between gap-3 rounded-xl border px-4 py-2 text-sm"
+        >
+          <span className="text-destructive">
+            {initialContext.boardLoadError}
+          </span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => router.refresh()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : null}
+      {!demoMode &&
+      !isHistoricalView &&
+      (initialContext?.claimDivergences.length ?? 0) > 0 ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100"
+        >
+          <span>
+            Table ownership on screen disagrees with the floor ledger for{" "}
+            {initialContext!.claimDivergences
+              .map((divergence) => `Table ${divergence.label}`)
+              .join(", ")}
+            . Refresh to resync.
+          </span>
+          <button
+            type="button"
+            className="text-xs underline"
+            onClick={() => router.refresh()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : null}
+      {notice ? (
+        <div
+          role="status"
+          className="border-border bg-muted/40 flex items-center justify-between rounded-xl border px-4 py-2 text-sm"
+        >
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {actionError ? (
         <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
           <span className="text-destructive">{actionError}</span>
@@ -1061,6 +1252,9 @@ export function AllocationWorkspace({
           {activeView === "floor" ? (
             <FloorView
               tables={resolvedTables}
+              offMapTables={readModel.offMapTables}
+              intercept={claim.intercept}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               activeColumns={visibleColumns}
               team={team}
@@ -1103,6 +1297,9 @@ export function AllocationWorkspace({
               columns={visibleColumns}
               team={team}
               tables={resolvedTables}
+              offMapTables={readModel.offMapTables}
+              intercept={claim.intercept}
+              servers={readModel.servers}
               tablesLoadError={physicalTablesLoadError}
               board={board}
               disabled={!canOperateFloor}
@@ -1151,9 +1348,11 @@ export function AllocationWorkspace({
             <DashboardView
               columns={visibleColumns}
               board={board}
-              tables={resolvedTables}
-              nextColumn={nextColumn}
-              crossEditLog={crossEditLog}
+              readModel={readModel}
+              recentActivity={
+                demoMode ? crossEditToActivity(crossEditLog) : recentActivity
+              }
+              timeZone={initialContext?.timeZone}
               onOpenGrid={() => setActiveView("grid")}
             />
           ) : (
@@ -1371,24 +1570,42 @@ export function AllocationWorkspace({
                                 // it as the target and immediately opens
                                 // the Table Layout popup -- no separate
                                 // "Choose table" step in between (Picker/
-                                // Server follow-up).
+                                // Server follow-up). #109 U1: the cell's own
+                                // buttons (Skip turn, Edit, Unassign, ...)
+                                // run their action and do NOT also open it.
                                 onClick={
                                   activeView === "picker" && canWrite
-                                    ? () => {
+                                    ? openPickerUnlessInnerAction(() => {
                                         setPickerTarget({
                                           roundId: round.id,
                                           columnId: column.id,
                                         });
                                         setPickerMapOpen(true);
-                                      }
+                                      })
                                     : undefined
                                 }
                               >
                                 <TableEntry
+                                  cellId={`${column.name}|${round.sequence}`}
                                   value={cell?.tableLabel ?? null}
                                   status={cell?.status ?? "empty"}
+                                  offMap={isOffMap(cell?.tableLabel ?? "")}
                                   disabled={!canWrite}
                                   onSubmit={(tableLabel) => {
+                                    // Cross-view integrity (X2): typing a table
+                                    // another server holds no longer silently
+                                    // takes it. The shared occupied-table flow
+                                    // asks Transfer / End + Assign / Cancel; a
+                                    // free table assigns directly.
+                                    if (
+                                      claim.intercept({
+                                        label: tableLabel.trim(),
+                                        columnId: column.id,
+                                        roundId: round.id,
+                                      })
+                                    ) {
+                                      return;
+                                    }
                                     execute({
                                       type: "assign",
                                       roundId: round.id,
@@ -1398,16 +1615,7 @@ export function AllocationWorkspace({
                                     // Attribution is recorded for every
                                     // cross-column write, unconditionally — there
                                     // is no reason field to gate it on anymore.
-                                    if (crossColumn) {
-                                      setCrossEditLog((log) => [
-                                        ...log,
-                                        {
-                                          at: new Date().toISOString(),
-                                          actorName: user.name,
-                                          columnName: column.name,
-                                        },
-                                      ]);
-                                    }
+                                    if (crossColumn) logCrossEdit(column.id);
                                   }}
                                   onClear={() => {
                                     execute({
@@ -1472,32 +1680,13 @@ export function AllocationWorkspace({
                     loadError={physicalTablesLoadError}
                     selectedLabel={null}
                     disabled={!canOperateFloor}
-                    onSelectTable={(label) => {
-                      if (!pickerTarget) return;
-                      const table = resolvedTables.find(
-                        (t) => t.label === label,
-                      );
-                      if (table?.occupiedBy) {
-                        setActionError(
-                          `Table ${label} is already assigned to ${table.occupiedBy.name}. Use Floor to transfer it.`,
-                        );
-                        return;
-                      }
-                      // Picker is a rotation-cell-driven surface, not a
-                      // physical-operations one -- it never triggers
-                      // Floor's decision dialog. Assigning here always
-                      // just creates a new active row at the selected
-                      // cell, additive to whatever else this server
-                      // already holds (Upgrade 1.1 multi-table).
-                      execute({
-                        type: "assign",
-                        roundId: pickerTarget.roundId,
-                        columnId: pickerTarget.columnId,
-                        tableLabel: label,
-                      });
-                      setPickerTarget(null);
-                      setPickerMapOpen(false);
-                    }}
+                    onSelectTable={pickTable}
+                  />
+                  <OffMapTables
+                    tables={readModel.offMapTables}
+                    disabled={!canOperateFloor}
+                    heading="Off-map / unpositioned tables"
+                    onSelectTable={pickTable}
                   />
                   {canOperateFloor && pickerTarget ? (
                     <div className="border-border flex flex-col gap-1.5 border-t pt-3">
@@ -1565,6 +1754,8 @@ export function AllocationWorkspace({
           ) : null}
         </>
       )}
+
+      {claim.dialog}
 
       <p className="text-muted-foreground text-xs">
         Undo and redo restore the previous board state. In Supabase mode the

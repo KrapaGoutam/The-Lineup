@@ -1,9 +1,55 @@
 # Project Status & Milestone Tracker
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** September 11, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (45/45 files, 359/359 tests passing) | `npm run test:e2e` (full suite, 153/153 passing across desktop/host-tablet/server-mobile) | `npm run db:test` (18/18 pgTAP files, 228 assertions)  
+**Last Updated:** October 26, 2026  
+**Health Gate:** `npm run check` (Passing) | `npm test` (74/74 files, 715/715 tests passing) | `npm run test:e2e` (demo suite, 507 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (31 pgTAP files, 646 assertions; executed by the CI `Database` job)  
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
+
+---
+
+## Release-readiness audit — `development` → `main` (#160, 2026-10-26): NO-GO
+
+Read-only audit of `4ec6fe3` (68 commits ahead of `main` `3403058`, 8 new migrations). Code and database surface found release-quality (no security blocker, PROD pre-flight clean, numeric-label impact inert), but the **Production delivery path is not ready**: `deploy-migrations` failed on the last four `main` pushes (#111), PROD history lacks `20260911130000` (#161, so payroll _Unconfirm_ is broken in Production today and `db push` would reject the set), and nothing orders migrations before the Vercel deploy (#113). Conditions C1–C8, recovery plan and smoke list: `docs/releases/release-readiness-2026-10/`. development → main was **not** performed; PROD was read-only.
+
+---
+
+## 🛠 Infrastructure — DEV Preview & CI Reliability (#133 Done — PR #135 merged into `development`, merge commit `23e38a9`)
+
+Branch `infra/dev-preview-ci-reliability` → PR #135 into `development`, merged with a merge commit on 2026-10-26 after exact-head CI (application, browser-smoke, Database, Vercel pass; `deploy-migrations` skipped) and the owner's final Preview smoke (PASS). `main` and PROD untouched. Docs: `docs/features/dev-preview-ci-reliability/`.
+
+- **INFRA-A** Vercel Preview/Development → Supabase DEV (Production unchanged). Applied; the owner's deployed-Preview browser smoke passed.
+- **INFRA-B** Database CI: mirror-registry pulls + bounded, classified retry (`scripts/ci/supabase-run.mjs`); `deploy-migrations` runs only on a push to `main`.
+- **INFRA-C** `scripts/check-nonprod-env.mjs` rejects the PROD ref in non-production config and build output; `scripts/check-tracked-local-paths.mjs` keeps local evidence out of git.
+- **INFRA-D** CI/CD + deployment docs.
+- Original finding **#134** (the real-mode suite failed against production builds because of a Realtime resubscribe loop) is **resolved and merged** into `development` (PR #147, `50fbd02`; production-build real-mode suite 18/18). It no longer qualifies PR #135.
+
+---
+
+## Canonical numeric table input resolution (#157 — merged into `development`, PR #158, merge commit `f8fa191`)
+
+Owner testing clarified the contract that #153 had set the other way: **typing `1` where the location has a registered `T1` is `T1`**, exactly like choosing `T1` from Floor or Picker. Resolved **server-authoritatively**: one private DB resolver (`private.resolve_table_input`: exact registered label → digits-only `T` + digits → trimmed free text; leading zeros never collapsed; same location only) is reused by `board_assign`, `board_end_and_assign`, displacement and the occupancy trigger, so a stale or different client cannot create a second `1` identity. Combined labels resolve per part (`1 + 2` → `T1 + T2`). Conflicts, same-server, End + Assign, Transfer, Undo/Redo and Recent Activity all operate on the canonical `T1` and its `dining_table_id`. No alias table, no history rewrite, no RLS widening. Migration `20261026120000` (forward-only; **DEV applied, PROD not**). Docs and evidence: `docs/features/table-input-canonical-resolution/`.
+
+---
+
+## Table Allocation cross-view integrity & conflict actions (#153 — merged into `development`, PR #156, merge commit `aaf11f0`)
+
+Found by the owner's smoke of the final DEV Preview. Identity proven from DEV: the owner's "Table 1" has **no `dining_tables` row** (a free-text board label), distinct from the registered `T1` (id 19) — never aliased. Fixed on one branch: **X1** off-map tables (registered-unpositioned or free-text) represented in Grid (badge), Floor (rail), Picker (section), Servers (chips) and Dashboard totals; **X2** one occupied-table flow (Transfer / End + Assign / Cancel, same-server notice, whole combined assignment) for Grid/Floor/Picker/Servers, server-authoritative via `board_assign` PT409 + `p_end_whole_assignment` (migration `20261026090000`, forward-only, applied to DEV only); **X3** Servers keep ended tables as struck-through session history; **X4** 45-scenario cross-view matrix (domain + Playwright on desktop/tablet/mobile); **X5** hosted production-build two-context validation. PR #135 was untouched until this merged; it is now reconciled with `development` and waits for a final Preview smoke. See `docs/features/table-allocation-cross-view-integrity/`.
+
+## #109 Table Allocation UX consistency follow-up (merged into `development`)
+
+Five residual UX items after Part 1, no migration, no schema change, DEV/PROD untouched: U1 Picker inner buttons no longer also open the map (FRONT-005); U2 Dashboard "Recent activity" renders all 18 supported board events through one presenter with a safe fallback (FRONT-008); U3 combined assignments ("T1 + T2") say that Transfer / End / Unassign act on the whole assignment, beside the action; U4 Servers (and the Floor legend) count authoritative held tables including ones not on the floor map, using the shared read model (FRONT-007 residual); U5 stale comments/status text refreshed (DOC-001). Behavior of the actions is unchanged. Merged via PR #149 (merge commit `a34af14`; application, browser-smoke and Vercel green, `Database` not triggered — no DB paths); #109 closed, `main` not merged, PROD untouched. Evidence: Vitest 559, demo Playwright 230/230 (desktop + server-mobile), hosted real UI on a production build 18/18. See `docs/features/table-allocation-ux-consistency/` and `tasks/current-task.md`.
+
+---
+
+## #134 production-build Table Rotation Realtime (merged into `development`)
+
+Root cause: the production bundle inlines the hook's default `createClient`, so the Realtime effect's dependency changed every render → resubscribe on every `router.refresh()` (refetch loop, same-topic channel reuse races). `next dev` kept a stable identity and masked it. Fix is client-only (`use-board-realtime.ts`): stable client ref, one channel per lifecycle, no join while a same-topic removal is pending. Evidence on DEV Supabase: production build + `next start` real-mode UI 18/18, `next dev` 18/18, Vitest 491/491, lint/typecheck pass; PROD untouched. Merged via PR #147 (merge commit `50fbd02`; application, browser-smoke, Vercel green on `bba051c`; Database workflow not triggered, no DB paths changed); #134 closed, `main` not merged. See `docs/features/table-rotation-production-realtime/` and `tasks/current-task.md`.
+
+---
+
+## Tasks V1 (merged into `development`)
+
+T1–T8 complete on the branch: pgTAP 29 files / 553 assertions, Vitest 482, Playwright demo 339/339, hosted DEV suites 12/12 + 3/3, build/lint/typecheck/format pass. Tracking #136 / milestone "Tasks V1". Migrations applied to DEV only; PROD untouched; merged into `development` via PR #145 (merge commit `4c393d3`) with application, browser-smoke, Database and Vercel green on `c036cf2`; `main` not merged, PROD untouched (#134, which blocked `development → main` at the time, was fixed afterwards — see the #134 section above). See `docs/features/tasks-v1/IMPLEMENTATION_REPORT.md` and `tasks/current-task.md`.
 
 ---
 
@@ -81,6 +127,10 @@ credentials/permissions problem in CI, not a migration or code defect
 PR check passed). Needs a repo-owner action (rotate/re-scope the
 token) before the new payment-unconfirm migration reaches the hosted
 production database automatically.
+
+### Table Allocation V2 — Part 1 (issue #101) — merged to `development` (PR #131, `589b470`); NOT in `main`
+
+DEV-only. Merged to `development` with an owner-approved CI exception for PR #131 only: the `Database` check failed 4× at `supabase start` with registry `toomanyrequests: Data limit exceeded` before `db:reset`/`db:test` ran (not a general red-CI bypass). Promotion to `main` needs explicit approval. Database integrity, trusted `board_*` RPC boundary, atomic reassign, full Undo/Redo, canonical read model and authenticated Realtime are implemented; defects D-01…D-08 are closed with evidence in `docs/features/table-rotation-multi-view/PART1_TEST_MATRIX.md` (hosted-DEV RPC suite 40/40, three-context browser suite 15/15, pgTAP 25 files / 387 assertions, 35 migrations from scratch, Vitest 428). Two new migrations (`20261023100000`, `20261023110000`) are applied to DEV only — **not applied to production**; release them through the normal migration flow with `#111/#113` resolved first. Remaining risks: #106 (global `has_org_role` creator bypass), Neon credential rotation, hosted suites are not in CI.
 
 ---
 

@@ -23,8 +23,10 @@ async function signInOnCurrentPage(page: Page, passcode: string) {
 }
 
 async function navigateToTab(page: Page, name: string | RegExp) {
+  // Table Rotation and Tasks are the two primary modules, so they own the
+  // mobile dock; Tip Split now lives in the "More" sheet with the rest.
   const isDockTab =
-    name === "Tip Split" ||
+    name === "Tasks" ||
     (typeof name !== "string" && name.source.includes("Allocation"));
 
   // Ensure dashboard is loaded before checking for More button
@@ -305,6 +307,9 @@ test("an unlinked server can open Attendance without seeing anyone else's data",
 test("a manager can link attendance and the server then sees only that record", async ({
   page,
 }) => {
+  // The demo attendance fixture lives in September 2026; pin the clock so
+  // this does not depend on the real calendar month.
+  await page.clock.setFixedTime(new Date("2026-09-23T17:00:00Z"));
   await signIn(page, "2468");
   await navigateToTab(page, "Team");
   await page

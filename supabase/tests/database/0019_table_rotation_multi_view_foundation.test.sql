@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(16);
 
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, aud, role)
 values
@@ -132,6 +132,13 @@ select is(
   1,
   'the transfer released server one''s claim rather than leaving two active claims'
 );
+-- Table Rotation V2 Part 1: a confirmed takeover ENDS the previous owner's
+-- entry (history kept) instead of leaving it "active" with a dead claim.
+select is(
+  (select status from public.table_rotation_entries where rotation_round_id = 900006 and rotation_member_id = 900006),
+  'ended',
+  'server one''s displaced entry is ENDED (kept as history), not left active'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029003', true);
@@ -146,6 +153,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029002', true);
+-- Server one's old cell is now an ended history row; clear it before reusing the cell.
+select public.board_clear_cell('00000000-0000-0000-0000-000000029011'::uuid, 900006, 900006, 900006);
 select public.board_assign('00000000-0000-0000-0000-000000029011'::uuid, '00000000-0000-0000-0000-000000029021'::uuid, current_date + 1, 900006, 900006, 'T1 + T2');
 reset role;
 

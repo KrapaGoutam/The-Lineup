@@ -266,9 +266,9 @@ select public.board_transfer('00000000-0000-0000-0000-000000021011'::uuid, 90001
 reset role;
 
 select is(
-  (select count(*)::int from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900017),
-  0,
-  'Transfer leaves no gap at the source -- the source entry is gone entirely, not emptied in place'
+  (select status from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900017),
+  'ended',
+  'Transfer ENDS the source entry (kept as history) -- table identity moves, the record is not erased'
 );
 select is(
   (select status from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900018),
@@ -309,9 +309,9 @@ select public.board_redo('00000000-0000-0000-0000-000000021011'::uuid, 900017);
 reset role;
 
 select is(
-  (select count(*)::int from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900017),
-  0,
-  'redoing Transfer removes the source entry again'
+  (select status from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900017),
+  'ended',
+  'redoing Transfer ends the source entry again'
 );
 select is(
   (select table_label from public.table_rotation_entries where rotation_round_id = 900017 and rotation_member_id = 900018),
@@ -329,7 +329,9 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002
 select public.board_end_table('00000000-0000-0000-0000-000000021011'::uuid, 900017, 900017, 900018);
 select id as round2_id from public.rotation_rounds where service_session_id = 900017 and sequence = 2 \gset
 select public.board_skip_turn('00000000-0000-0000-0000-000000021011'::uuid, '00000000-0000-0000-0000-000000021021'::uuid, current_date + 2, :round2_id, 900018);
--- Ann assigns a fresh table and transfers it to Bea.
+-- Ann's round-1 cell now holds an ended history row (Transfer keeps it); clear
+-- it, then Ann assigns a fresh table and transfers it to Bea.
+select public.board_clear_cell('00000000-0000-0000-0000-000000021011'::uuid, 900017, 900017, 900017);
 select public.board_assign('00000000-0000-0000-0000-000000021011'::uuid, '00000000-0000-0000-0000-000000021021'::uuid, current_date + 2, 900017, 900017, 'T2');
 select public.board_transfer('00000000-0000-0000-0000-000000021011'::uuid, 900017, 900017, 900017, 900018);
 reset role;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowRightLeft,
   ChevronDown,
@@ -17,15 +17,73 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  ActionNote,
+  AssignmentSummary,
+} from "@/features/allocation/components/assignment-scope-note";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
-import type { ResolvedFloorTable } from "@/features/allocation/domain/floor-layout";
+import {
+  getAssignmentScope,
+  otherTablesInAssignment,
+} from "@/features/allocation/domain/assignment-scope";
+import type {
+  OffMapTable,
+  ServerSummary,
+} from "@/features/allocation/domain/board-read-model";
+import {
+  parseCombinedTableLabel,
+  type ResolvedFloorTable,
+} from "@/features/allocation/domain/floor-layout";
 import {
   type ColumnStatus,
   type RotationBoard,
   type RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
 import type { TeamMember } from "@/lib/demo-data";
+
+/** One table a server holds, as the Servers card shows and acts on it. */
+type HeldTable = {
+  label: string;
+  roundId: string;
+  /** Every table in the same logical assignment, this one included. */
+  assignmentTables: string[];
+  /** Held, but not on the floor map (so no tile exists for it). */
+  offMap: boolean;
+};
+
+/**
+ * #109 U4: a server's tables come from the shared read model (their active
+ * board entries), NOT from which tables have a map position -- a held table
+ * with no map row is still the server's table and is still actionable here.
+ */
+function heldTables(summary: ServerSummary | undefined): HeldTable[] {
+  if (!summary) return [];
+  const offMap = new Set(summary.unmappedTableLabels);
+  return summary.activeAssignments.flatMap(({ roundId, label }) => {
+    const assignmentTables = parseCombinedTableLabel(label);
+    return assignmentTables.map((part) => ({
+      label: part,
+      roundId,
+      assignmentTables,
+      offMap: offMap.has(part),
+    }));
+  });
+}
+
+/** ", combined with T2" for a table that shares an assignment, else "". */
+function combinedClause(table: HeldTable): string {
+  const others = otherTablesInAssignment(table.assignmentTables, table.label);
+  return others.length ? `, combined with ${others.join(" + ")}` : "";
+}
+
+/** One scope per combined assignment (it shows once, not once per table). */
+function combinedAssignments(summary: ServerSummary | undefined) {
+  return (summary?.activeAssignments ?? [])
+    .map(({ label }) => getAssignmentScope(label))
+    .filter((scope) => scope.combined);
+}
 
 /**
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 16,
@@ -47,16 +105,22 @@ import type { TeamMember } from "@/lib/demo-data";
  * Each already-assigned table badge is itself a button: tapping it opens
  * a small dialog scoped to *that one table* (Transfer / End table /
  * Unassign), mirroring Floor's occupied-table panel but acting only on
- * the tapped round -- a server holding T1/T3/T8 and tapping T3 never
- * touches T1 or T8.
+ * the tapped assignment -- a server holding T1/T3/T8 and tapping T3 never
+ * touches T1 or T8. A combined assignment ("T1 + T2") is one assignment,
+ * so tapping either table acts on both, and the dialog says so (#109 U3).
+ * Counts and pills come from the shared read model, so a held table that
+ * is not on the floor map still shows and is still actionable (#109 U4).
  */
 export function ServerBoardView({
   columns,
   team,
   tables,
+  offMapTables = [],
+  servers,
   tablesLoadError = false,
   board,
   disabled,
+  intercept,
   onAssign,
   onMove,
   onSetStatus,
@@ -69,6 +133,12 @@ export function ServerBoardView({
   columns: RotationColumn[];
   team: TeamMember[];
   tables: ResolvedFloorTable[];
+  /** Tables with no map position (listed under the map in the chooser). */
+  offMapTables?: OffMapTable[];
+  /** Shared occupied-table flow (see table-claim.tsx). */
+  intercept?: (request: { label: string; columnId: string }) => boolean;
+  /** Per-server summaries from the shared read model (counts + held tables). */
+  servers: ServerSummary[];
   tablesLoadError?: boolean;
   board: RotationBoard;
   disabled: boolean;
@@ -97,7 +167,6 @@ export function ServerBoardView({
   const [mapOpenForColumnId, setMapOpenForColumnId] = useState<string | null>(
     null,
   );
-  const [mapError, setMapError] = useState<string | null>(null);
   // Scoped to one already-assigned table at a time -- Transfer/End
   // Table/Unassign here only ever act on this one roundId, never any
   // other table the same server might also hold.
@@ -105,19 +174,34 @@ export function ServerBoardView({
     roundId: string;
     columnId: string;
     tableLabel: string;
+    // #109 U3: every physical table in this table's logical assignment.
+    assignmentTables: string[];
   } | null>(null);
   const [transferringActiveTable, setTransferringActiveTable] = useState(false);
+
+  const noteId = useId();
+  const actionScope = getAssignmentScope(
+    activeTableAction?.assignmentTables ?? [],
+  );
 
   const decision = useTableAssignmentDecision({
     board,
     disabled,
     onAssign,
     onEndAndAssign,
+    intercept,
   });
 
   function closeMap() {
     setMapOpenForColumnId(null);
-    setMapError(null);
+  }
+
+  // Map tile or off-map row: both run the same shared occupied-table flow
+  // (inside decision.beginAssign) -- an occupied table is never an error here.
+  function chooseTable(label: string) {
+    if (!mapOpenColumn) return;
+    setMapOpenForColumnId(null);
+    decision.beginAssign(label, mapOpenColumn.id, mapOpenColumn.name);
   }
 
   function closeTableAction() {
@@ -136,9 +220,9 @@ export function ServerBoardView({
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {columns.map((column, index) => {
         const member = team.find(({ id }) => id === column.id);
-        const assignedTables = tables.filter(
-          (table) => table.occupiedBy?.columnId === column.id,
-        );
+        const summary = servers.find(({ columnId }) => columnId === column.id);
+        const assignedTables = heldTables(summary);
+        const offMapTables = assignedTables.filter(({ offMap }) => offMap);
         const paused = column.status === "paused";
         return (
           <Card
@@ -159,6 +243,12 @@ export function ServerBoardView({
                     {column.status} · #{index + 1} · {assignedTables.length}{" "}
                     table{assignedTables.length === 1 ? "" : "s"}
                   </p>
+                  {offMapTables.length ? (
+                    <p className="text-muted-foreground text-[11px]">
+                      {offMapTables.length} not on the floor map (
+                      {offMapTables.map(({ label }) => label).join(", ")})
+                    </p>
+                  ) : null}
                 </div>
               </div>
               {paused ? <Badge tone="neutral">Paused</Badge> : null}
@@ -171,17 +261,25 @@ export function ServerBoardView({
                       key={table.label}
                       type="button"
                       disabled={disabled}
-                      aria-label={`Table ${table.label}, assigned to ${column.name} -- open table actions`}
+                      aria-label={`Table ${table.label}, assigned to ${column.name}${combinedClause(table)}${table.offMap ? ", not on the floor map" : ""} -- open table actions`}
                       onClick={() =>
                         setActiveTableAction({
-                          roundId: table.occupiedBy!.roundId,
+                          roundId: table.roundId,
                           columnId: column.id,
                           tableLabel: table.label,
+                          assignmentTables: table.assignmentTables,
                         })
                       }
                       className="rounded-full p-0.5 disabled:pointer-events-none disabled:opacity-50"
                     >
-                      <Badge tone="success">{table.label}</Badge>
+                      <Badge tone={table.offMap ? "warning" : "success"}>
+                        {table.label}
+                        {table.offMap ? (
+                          <span className="ml-1 text-[10px] font-normal opacity-80">
+                            off-map
+                          </span>
+                        ) : null}
+                      </Badge>
                     </button>
                   ))}
                 </div>
@@ -190,6 +288,52 @@ export function ServerBoardView({
                   No tables assigned.
                 </p>
               )}
+              {summary?.sessionHistory.some(
+                ({ status }) => status === "ended",
+              ) ? (
+                <div
+                  className="border-border border-t pt-2"
+                  role="group"
+                  aria-label={`${column.name} session history`}
+                >
+                  <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.08em] uppercase">
+                    Session history
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {summary.sessionHistory.map((entry) => (
+                      <li
+                        key={`${entry.roundId}-${entry.label}`}
+                        className="flex items-baseline gap-1.5 text-xs"
+                      >
+                        <span
+                          className={
+                            entry.status === "ended"
+                              ? "text-muted-foreground font-mono line-through decoration-2"
+                              : "font-mono font-semibold"
+                          }
+                        >
+                          {entry.label}
+                        </span>
+                        <span className="text-muted-foreground text-[10px] tracking-[0.08em] uppercase">
+                          {entry.status === "ended" ? "Ended" : "Active"}
+                          {entry.offMap ? " · off-map" : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {combinedAssignments(summary).map((scope) => (
+                <p
+                  key={scope.label}
+                  className="text-muted-foreground text-[11px]"
+                >
+                  <span className="text-foreground font-medium">
+                    {scope.label}
+                  </span>{" "}
+                  · one assignment
+                </p>
+              ))}
 
               <div className="flex flex-wrap gap-1.5">
                 <Button
@@ -267,25 +411,13 @@ export function ServerBoardView({
           loadError={tablesLoadError}
           selectedLabel={null}
           disabled={disabled}
-          onSelectTable={(label) => {
-            if (!mapOpenColumn) return;
-            const table = tables.find((t) => t.label === label);
-            if (table?.occupiedBy) {
-              setMapError(
-                `Table ${label} is already assigned to ${table.occupiedBy.name}.`,
-              );
-              return;
-            }
-            setMapOpenForColumnId(null);
-            setMapError(null);
-            decision.beginAssign(label, mapOpenColumn.id, mapOpenColumn.name);
-          }}
+          onSelectTable={chooseTable}
         />
-        {mapError ? (
-          <p className="text-destructive text-xs" aria-live="polite">
-            {mapError}
-          </p>
-        ) : null}
+        <OffMapTables
+          tables={offMapTables}
+          disabled={disabled}
+          onSelectTable={chooseTable}
+        />
       </Dialog>
 
       {decision.dialog}
@@ -297,18 +429,29 @@ export function ServerBoardView({
       >
         {activeTableAction && !transferringActiveTable ? (
           <div className="flex flex-col gap-1.5">
+            <AssignmentSummary id={`${noteId}-summary`} scope={actionScope} />
             <Button
               variant="secondary"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.transferNote ? `${noteId}-transfer` : undefined
+              }
               onClick={() => setTransferringActiveTable(true)}
             >
               <ArrowRightLeft aria-hidden="true" /> Transfer
             </Button>
+            <ActionNote
+              id={`${noteId}-transfer`}
+              text={actionScope.transferNote}
+            />
             <Button
               variant="outline"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.endNote ? `${noteId}-end` : undefined
+              }
               onClick={() => {
                 onEndTable({
                   roundId: activeTableAction.roundId,
@@ -319,10 +462,14 @@ export function ServerBoardView({
             >
               <LogOut aria-hidden="true" /> End table
             </Button>
+            <ActionNote id={`${noteId}-end`} text={actionScope.endNote} />
             <Button
               variant="outline"
               size="sm"
               disabled={disabled}
+              aria-describedby={
+                actionScope.unassignNote ? `${noteId}-unassign` : undefined
+              }
               onClick={() => {
                 onUnassign({
                   columnId: activeTableAction.columnId,
@@ -333,13 +480,26 @@ export function ServerBoardView({
             >
               Unassign
             </Button>
+            <ActionNote
+              id={`${noteId}-unassign`}
+              text={actionScope.unassignNote}
+            />
             <Button variant="ghost" size="sm" onClick={closeTableAction}>
               Cancel
             </Button>
           </div>
         ) : activeTableAction ? (
           <div className="flex flex-col gap-1.5">
-            <p className="text-muted-foreground text-xs">Give this table to:</p>
+            <p className="text-muted-foreground text-xs">
+              {actionScope.combined
+                ? `Give ${actionScope.label} to:`
+                : "Give this table to:"}
+            </p>
+            {actionScope.transferNote ? (
+              <p className="text-muted-foreground -mt-0.5 text-[11px]">
+                {actionScope.transferNote}
+              </p>
+            ) : null}
             {assignableColumns
               .filter((column) => column.id !== activeTableAction.columnId)
               .map((column) => (

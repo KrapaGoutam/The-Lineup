@@ -6,6 +6,7 @@ import {
   executeBoardAction,
   findEarliestEmptyRoundForColumn,
   getActiveTablesForColumn,
+  getNextColumn,
   getWorkingRound,
   isCrossColumnEdit,
   mayWriteColumn,
@@ -639,7 +640,7 @@ describe("rotation board — Upgrade 1.1 lifecycle", () => {
     expect(rejectedSkip).toBe(history);
   });
 
-  it("transfer moves the same assignment to the destination's earliest empty round, leaving no gap at the source", () => {
+  it("transfer moves the same assignment to the destination's earliest empty round and keeps the source as ended history", () => {
     let history = createBoardHistory(createRotationBoard(columns));
     const round1 = history.present.rounds[0].id;
     history = executeBoardAction(history, {
@@ -658,8 +659,10 @@ describe("rotation board — Upgrade 1.1 lifecycle", () => {
     const sourceCell = history.present.rounds
       .find(({ id }) => id === round1)!
       .cells.find(({ columnId }) => columnId === "mia")!;
-    expect(sourceCell.status).toBe("empty"); // no gap left behind
-    expect(sourceCell.tableLabel).toBeNull();
+    // The source assignment is ENDED, not erased -- Grid keeps the history
+    // (matches board_transfer, which ends the source entry).
+    expect(sourceCell.status).toBe("ended");
+    expect(sourceCell.tableLabel).toBe("12");
 
     // Leo already has an empty cell in round 1 (never assigned there
     // yet), so that's the earliest empty round for the destination.
@@ -1088,5 +1091,184 @@ describe("rotation board — Upgrade 1.1 multi-table", () => {
     expect(getActiveTablesForColumn(redone.present, "mia")[0].tableLabel).toBe(
       "9",
     );
+  });
+});
+
+// Table Rotation V2 Part 1 (Phases 1D/1E): the pure reducer mirrors the
+// database's atomic reassign and Transfer, and is total over the sparse
+// boards real mode produces (a round with no entry for a column simply has no
+// cell for it).
+describe("rotation board — V2 sparse boards, transfer and reassign", () => {
+  const trio = [
+    { id: "a", name: "A", position: 0, status: "active" as const },
+    { id: "b", name: "B", position: 1, status: "active" as const },
+    { id: "c", name: "C", position: 2, status: "active" as const },
+  ];
+
+  // Real mode never materializes empty cells: build a board where only the
+  // cells that have an entry exist.
+  function sparseBoard(
+    entries: {
+      round: number;
+      column: string;
+      label: string | null;
+      status: "active" | "ended" | "skipped";
+    }[],
+  ): RotationBoard {
+    const rounds = [1, 2, 3, 4].map((sequence) => ({
+      id: `r${sequence}`,
+      sequence,
+      cells: entries
+        .filter((entry) => entry.round === sequence)
+        .map((entry) => ({
+          columnId: entry.column,
+          tableLabel: entry.label,
+          status: entry.status,
+        })),
+    }));
+    return { columns: trio, rounds, nextRoundNumber: 5 };
+  }
+
+  it("D-07: transferring to a column with no cell in the destination round does not crash", () => {
+    const board = sparseBoard([
+      { round: 1, column: "a", label: "8", status: "active" },
+    ]);
+    expect(() =>
+      executeBoardAction(createBoardHistory(board), {
+        type: "transfer",
+        sourceRoundId: "r1",
+        sourceColumnId: "a",
+        destColumnId: "b",
+      }),
+    ).not.toThrow();
+    const history = executeBoardAction(createBoardHistory(board), {
+      type: "transfer",
+      sourceRoundId: "r1",
+      sourceColumnId: "a",
+      destColumnId: "b",
+    });
+    const cells = history.present.rounds[0].cells;
+    expect(cells.find((c) => c.columnId === "a")).toMatchObject({
+      status: "ended",
+      tableLabel: "8",
+    });
+    expect(cells.find((c) => c.columnId === "b")).toMatchObject({
+      status: "active",
+      tableLabel: "8",
+    });
+  });
+
+  it("end-and-assign and skip-turn also work when the target column has no cell yet", () => {
+    const board = sparseBoard([
+      { round: 1, column: "a", label: "8", status: "active" },
+    ]);
+    const skipped = executeBoardAction(createBoardHistory(board), {
+      type: "skip-turn",
+      roundId: "r1",
+      columnId: "b",
+    });
+    expect(
+      skipped.present.rounds[0].cells.find((c) => c.columnId === "b"),
+    ).toMatchObject({ status: "skipped", tableLabel: null });
+
+    const reassigned = executeBoardAction(createBoardHistory(board), {
+      type: "end-and-assign",
+      endRoundIds: ["r1"],
+      columnId: "a",
+      tableLabel: "9",
+    });
+    expect(reassigned.present).not.toBe(board);
+    expect(
+      reassigned.present.rounds
+        .flatMap((round) => round.cells)
+        .filter((cell) => cell.columnId === "a")
+        .map((cell) => `${cell.tableLabel}:${cell.status}`)
+        .sort(),
+    ).toEqual(["8:ended", "9:active"]);
+  });
+
+  it("confirmed assign ends the previous owner's cell and leaves the taker's other tables alone", () => {
+    const board = sparseBoard([
+      { round: 1, column: "a", label: "1", status: "active" },
+      { round: 1, column: "b", label: "15", status: "active" },
+      { round: 1, column: "c", label: "16", status: "active" },
+    ]);
+    const history = executeBoardAction(createBoardHistory(board), {
+      type: "assign",
+      roundId: "r2",
+      columnId: "a",
+      tableLabel: "15",
+      confirmTransfer: true,
+    });
+    const status = (round: string, column: string) =>
+      history.present.rounds
+        .find(({ id }) => id === round)!
+        .cells.find(({ columnId }) => columnId === column)?.status;
+    expect(status("r1", "b")).toBe("ended"); // B's 15 kept as history
+    expect(status("r2", "a")).toBe("active"); // A now holds 15 ...
+    expect(status("r1", "a")).toBe("active"); // ... and still holds 1
+    expect(status("r1", "c")).toBe("active"); // C untouched
+  });
+
+  it("an unconfirmed assign never displaces anyone (the database refuses it)", () => {
+    const board = sparseBoard([
+      { round: 1, column: "b", label: "15", status: "active" },
+    ]);
+    const history = executeBoardAction(createBoardHistory(board), {
+      type: "assign",
+      roundId: "r2",
+      columnId: "a",
+      tableLabel: "15",
+    });
+    expect(
+      history.present.rounds[0].cells.find((c) => c.columnId === "b")?.status,
+    ).toBe("active");
+  });
+
+  it("a combined assignment is only displaced as a whole", () => {
+    const board = sparseBoard([
+      { round: 1, column: "b", label: "5 + 6", status: "active" },
+    ]);
+    const partial = executeBoardAction(createBoardHistory(board), {
+      type: "assign",
+      roundId: "r2",
+      columnId: "a",
+      tableLabel: "5",
+      confirmTransfer: true,
+    });
+    expect(partial.present).toEqual(board); // refused: unchanged
+    const whole = executeBoardAction(createBoardHistory(board), {
+      type: "assign",
+      roundId: "r2",
+      columnId: "a",
+      tableLabel: "5+6",
+      confirmTransfer: true,
+    });
+    expect(
+      whole.present.rounds[0].cells.find((c) => c.columnId === "b")?.status,
+    ).toBe("ended");
+  });
+
+  it("FRONT-003: a skipped server is not 'next' just because its skipped cell has no label", () => {
+    const board = sparseBoard([
+      { round: 1, column: "a", label: "1", status: "active" },
+      { round: 1, column: "b", label: null, status: "skipped" },
+    ]);
+    expect(getNextColumn(board)?.id).toBe("c");
+    const noneYet = sparseBoard([]);
+    expect(getNextColumn(noneYet)?.id).toBe("a");
+  });
+
+  it("reordering columns changes who is next but never any assignment", () => {
+    const board = sparseBoard([
+      { round: 1, column: "a", label: "1", status: "active" },
+    ]);
+    const moved = executeBoardAction(createBoardHistory(board), {
+      type: "move-column",
+      columnId: "c",
+      direction: "up",
+    });
+    expect(moved.present.rounds).toEqual(board.rounds);
+    expect(getNextColumn(moved.present)?.id).toBe("c");
   });
 });

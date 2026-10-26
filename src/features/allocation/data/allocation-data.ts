@@ -1,6 +1,18 @@
 import "server-only";
 
-import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
+import {
+  findClaimDivergences,
+  type ClaimDivergence,
+  type PhysicalClaim,
+} from "@/features/allocation/domain/board-read-model";
+import {
+  buildRecentActivity,
+  type BoardActivityEntry,
+} from "@/features/allocation/domain/board-activity";
+import type {
+  FloorLayoutEntry,
+  RegistryTable,
+} from "@/features/allocation/domain/floor-layout";
 import type {
   ColumnStatus,
   RotationBoard,
@@ -30,6 +42,9 @@ export type AllocationContext = {
   team: TeamMember[];
   board: RotationBoard;
   crossEditLog: CrossEditEntry[];
+  // #109 U2: the newest board events, rendered from the complete supported
+  // event model (Dashboard "Recent activity"), newest first.
+  recentActivity: BoardActivityEntry[];
   eventCount: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -54,6 +69,12 @@ export type AllocationContext = {
   // IMPLEMENTATION_LOG.md). Demo mode never reads this -- it uses the
   // static DEMO_FLOOR_LAYOUT instead.
   physicalTables: FloorLayoutEntry[];
+  // Cross-view integrity (X1): EVERY active registered table, including the
+  // ones with no map position (position_x/y null). `physicalTables` above is
+  // the drawable subset; this is the registry the read model resolves table
+  // identity against so an unpositioned table is represented (off-map)
+  // instead of silently dropped.
+  registeredTables: RegistryTable[];
   // Production stability hotfix: true only when the dining_tables query
   // itself failed (network/PostgREST/RLS error, already console.error'd
   // above) -- distinct from a legitimate zero rows result. Lets the
@@ -61,6 +82,18 @@ export type AllocationContext = {
   // of incorrectly claiming "no tables are configured" for what's
   // actually a query failure (see table-map.tsx).
   physicalTablesQueryFailed: boolean;
+  // Table Rotation V2 Part 1 (1C): the authoritative physical ledger -- the
+  // ACTIVE rows of public.section_assignments for this session, read in the
+  // same snapshot as the board. Grid history comes from `board` (entries);
+  // current physical ownership is what these claims say.
+  claims: PhysicalClaim[];
+  // Disagreements between the board-derived occupancy and `claims`. Empty
+  // when consistent; surfaced to the user instead of silently picking a side.
+  claimDivergences: ClaimDivergence[];
+  // DATA-004: set when any segment of the board read failed (members, rounds,
+  // entries, events, claims). A failed read must never render as a plausible
+  // empty board -- the workspace shows an error state instead.
+  boardLoadError: string | null;
 };
 
 // The demo model's 3-value ColumnStatus collapses the DB's 4-value
@@ -100,7 +133,7 @@ const EMPTY_BOARD: RotationBoard = {
 // constant (not an inline string) so a regression test can assert the
 // relationship stays explicitly qualified.
 export const DINING_TABLES_SELECT =
-  "label, position_x, position_y, active, dining_areas!dining_tables_dining_area_id_fkey(name)";
+  "id, label, position_x, position_y, active, dining_areas!dining_tables_dining_area_id_fkey(name)";
 
 // A many-to-one PostgREST embed (many dining_tables -> one dining_areas)
 // resolves to a single object at runtime, never an array -- see the
@@ -146,9 +179,19 @@ export async function getAllocationContext(
   if (tableError)
     console.error("getAllocationContext: dining_tables", tableError);
   const physicalTablesQueryFailed = tableError !== null;
+  const registeredTables: RegistryTable[] = (tableRows ?? []).map((row) => ({
+    diningTableId: row.id as number,
+    label: row.label,
+    x: row.position_x === null ? null : Number(row.position_x),
+    y: row.position_y === null ? null : Number(row.position_y),
+    resourceType: /bar/i.test(diningAreaName(row.dining_areas) ?? "")
+      ? "bar_seat"
+      : "table",
+  }));
   const physicalTables: FloorLayoutEntry[] = (tableRows ?? [])
     .filter((row) => row.position_x !== null && row.position_y !== null)
     .map((row) => ({
+      diningTableId: row.id as number,
       label: row.label,
       x: Number(row.position_x),
       y: Number(row.position_y),
@@ -198,6 +241,7 @@ export async function getAllocationContext(
       team,
       board: EMPTY_BOARD,
       crossEditLog: [],
+      recentActivity: [],
       eventCount: 0,
       canUndo: false,
       canRedo: false,
@@ -205,7 +249,13 @@ export async function getAllocationContext(
       isHistorical,
       clockedInProfileIds,
       physicalTables,
+      registeredTables,
       physicalTablesQueryFailed,
+      claims: [],
+      claimDivergences: [],
+      boardLoadError: sessionError
+        ? "We couldn't load today's board. Refresh to try again."
+        : null,
     };
   }
 
@@ -232,6 +282,7 @@ export async function getAllocationContext(
   const [
     { data: entryRows, error: entryError },
     { data: eventRows, error: eventError },
+    { data: claimRows, error: claimError },
   ] = await Promise.all([
     roundIds.length > 0
       ? supabase
@@ -241,14 +292,31 @@ export async function getAllocationContext(
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from("board_events")
-      .select("event_type, actor_profile_id, payload, created_at, undone_at")
+      .select(
+        "id, event_type, actor_profile_id, payload, created_at, undone_at",
+      )
       .eq("service_session_id", session.id)
-      .order("created_at", { ascending: true }),
+      // id breaks created_at ties so the order is the write order, always.
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
+    supabase
+      .from("section_assignments")
+      .select(
+        "dining_table_id, server_profile_id, rotation_member_id, table_rotation_entry_id, dining_tables!section_assignments_dining_table_id_fkey(label)",
+      )
+      .eq("service_session_id", session.id)
+      .is("released_at", null),
   ]);
   if (entryError)
     console.error("getAllocationContext: table_rotation_entries", entryError);
   if (eventError)
     console.error("getAllocationContext: board_events", eventError);
+  if (claimError)
+    console.error("getAllocationContext: section_assignments", claimError);
+  const boardLoadError =
+    memberError || roundError || entryError || eventError || claimError
+      ? "Part of today's board couldn't be loaded, so what you see may be incomplete. Refresh to try again."
+      : null;
 
   // RotationColumn.id is a person's profile id in the pure domain model
   // (isCrossColumnEdit compares it directly against the signed-in user's
@@ -294,6 +362,21 @@ export async function getAllocationContext(
     nextRoundNumber: (roundRows?.at(-1)?.sequence ?? 0) + 1,
   };
 
+  const claims: PhysicalClaim[] = (claimRows ?? []).map((row) => ({
+    diningTableId: row.dining_table_id,
+    label: claimLabel(row.dining_tables),
+    serverProfileId: row.server_profile_id,
+    rotationMemberId: row.rotation_member_id,
+    entryId: row.table_rotation_entry_id,
+  }));
+  const registeredLabels = (tableRows ?? []).map((row) => row.label);
+  // Only meaningful when both halves loaded; a failed read is reported via
+  // boardLoadError instead of being mistaken for a divergence.
+  const claimDivergences =
+    claimError || tableError || entryError
+      ? []
+      : findClaimDivergences({ board, registeredLabels, claims });
+
   // The demo model only ever logs a cross-column edit for the "assign"
   // action (see allocation-workspace.tsx's TableEntry onSubmit) -- every
   // other action type is manager-only already, so this stays scoped to
@@ -315,6 +398,18 @@ export async function getAllocationContext(
       };
     })
     .filter((entry): entry is CrossEditEntry => entry !== null);
+
+  const roundSequenceById = new Map(
+    (roundRows ?? []).map((round) => [round.id, round.sequence]),
+  );
+  const recentActivity = buildRecentActivity(eventRows ?? [], {
+    actorName: (profileId) => nameByProfileId.get(profileId),
+    memberName: (memberId) => {
+      const profileId = memberIdToProfileId.get(memberId);
+      return profileId ? nameByProfileId.get(profileId) : undefined;
+    },
+    roundSequence: (roundId) => roundSequenceById.get(roundId),
+  });
 
   // Mirrors board_undo/board_redo's own target-selection logic exactly
   // (see the migration) so the buttons are disabled precisely when the
@@ -343,6 +438,7 @@ export async function getAllocationContext(
     team,
     board,
     crossEditLog,
+    recentActivity,
     eventCount: (eventRows ?? []).length,
     canUndo,
     canRedo,
@@ -350,6 +446,18 @@ export async function getAllocationContext(
     isHistorical,
     clockedInProfileIds,
     physicalTables,
+    registeredTables,
     physicalTablesQueryFailed,
+    claims,
+    claimDivergences,
+    boardLoadError,
   };
+}
+
+// A many-to-one PostgREST embed arrives as an object (see diningAreaName).
+function claimLabel(
+  embed: { label: string } | { label: string }[] | null,
+): string {
+  if (!embed) return "";
+  return Array.isArray(embed) ? (embed[0]?.label ?? "") : embed.label;
 }

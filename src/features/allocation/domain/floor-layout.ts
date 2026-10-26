@@ -13,9 +13,30 @@
 export type FloorResourceType = "table" | "bar_seat";
 
 export type FloorLayoutEntry = {
+  /**
+   * The canonical `dining_tables.id` of this physical table. Present in real
+   * mode (every view resolves a table through this one registry); demo mode's
+   * static layout has no database row, so it is absent there.
+   */
+  diningTableId?: number;
   label: string;
   x: number;
   y: number;
+  resourceType: FloorResourceType;
+};
+
+/**
+ * One active row of the location's `dining_tables` registry, whether or not
+ * it has a position on the floor map. `x`/`y` are null for an unpositioned
+ * ("off-map") table: it is still a real physical table (it has an id, the
+ * ledger can hold a claim on it), it just has nowhere to draw. Demo mode's
+ * static layout has no database rows, so `diningTableId` is absent there.
+ */
+export type RegistryTable = {
+  diningTableId?: number;
+  label: string;
+  x: number | null;
+  y: number | null;
   resourceType: FloorResourceType;
 };
 
@@ -96,6 +117,10 @@ export type FloorOccupant = {
   // to unassign/transfer it (clear-cell, re-assign) need this to target
   // the right cell, not just the table label.
   roundId: string;
+  // #109 U3: every physical table in the SAME logical assignment as this one
+  // ("T1 + T2" -> ["T1", "T2"]), this table included. Length > 1 means a
+  // combined assignment: Transfer / End / Unassign act on all of them.
+  assignmentTables: string[];
 };
 
 export type ResolvedFloorTable = FloorLayoutEntry & {
@@ -103,32 +128,29 @@ export type ResolvedFloorTable = FloorLayoutEntry & {
 };
 
 /**
- * Client-side occupancy derivation for the Floor/Picker map, shared by
- * demo and real mode: for each physical table label, the column whose
- * *current* (already-clears-applied) cell most recently recorded that
- * label, scanning rounds in sequence order so a later round's value wins
- * over an earlier one for the same label -- a reasonable "who has it
- * right now" read without a second server round-trip.
+ * For each physical table label, the column whose *current* (already-clears-
+ * applied) ACTIVE cell most recently recorded that label, scanning rounds in
+ * sequence order so a later round's value wins over an earlier one for the
+ * same label.
  *
- * This is a display convenience only. The actual double-booking
- * guarantee is enforced authoritatively, transactionally, at write time
- * by the private.sync_table_occupancy trigger (see
- * supabase/migrations/20260919120000_table_rotation_multi_view_foundation.sql)
- * against public.section_assignments, independent of what this function
- * shows -- two different labels can occasionally look inconsistent here
- * for a moment (e.g. immediately after a clear, before the client
- * refreshes) without ever meaning the underlying data was actually
- * double-booked.
+ * Identity here is the label EXACTLY as the board stored it -- the registry
+ * is unique per (location, label), so within one location an exact label is
+ * one physical table. There is no trimming beyond the combined-label split,
+ * no case folding and no "T"/"Table" prefix handling: `1` and `T1` are
+ * different tables (or, for `1`, no registered table at all).
+ *
+ * This is a display convenience only. The actual double-booking guarantee is
+ * enforced authoritatively, transactionally, at write time by the database
+ * (private.sync_table_occupancy against public.section_assignments, and the
+ * explicit conflict check in public.board_assign), independent of what this
+ * function shows.
  *
  * Upgrade 1.1: only a cell whose status is "active" ever counts as
  * occupying a physical table. An "ended" cell keeps its tableLabel for
  * history but the table itself is available again; a "skipped" cell has
- * no tableLabel at all. This is also what makes reassigning a
- * just-ended table's physical resource work correctly -- the new active
- * row wins here, and the old ended row simply never contributes.
+ * no tableLabel at all.
  */
-export function resolveFloorTables(
-  layout: FloorLayoutEntry[],
+export function resolveOccupancyByLabel(
   board: {
     rounds: {
       id: string;
@@ -140,9 +162,9 @@ export function resolveFloorTables(
     }[];
   },
   team: { id: string; name: string; color: string }[],
-): ResolvedFloorTable[] {
+): Map<string, FloorOccupant> {
   const memberById = new Map(team.map((member) => [member.id, member]));
-  const ownerByLabel = new Map<string, { columnId: string; roundId: string }>();
+  const out = new Map<string, FloorOccupant>();
 
   for (const round of board.rounds) {
     for (const cell of round.cells) {
@@ -150,26 +172,36 @@ export function resolveFloorTables(
       // status is optional only for callers that predate Upgrade 1.1's
       // schema; treat a missing status as active (its only prior meaning).
       if (cell.status && cell.status !== "active") continue;
-      for (const part of parseCombinedTableLabel(cell.tableLabel)) {
-        ownerByLabel.set(part, { columnId: cell.columnId, roundId: round.id });
+      const member = memberById.get(cell.columnId);
+      if (!member) continue;
+      const assignmentTables = parseCombinedTableLabel(cell.tableLabel);
+      for (const part of assignmentTables) {
+        out.set(part, {
+          columnId: cell.columnId,
+          roundId: round.id,
+          assignmentTables,
+          name: member.name,
+          color: member.color,
+        });
       }
     }
   }
+  return out;
+}
 
-  return layout.map((entry) => {
-    const owned = ownerByLabel.get(entry.label);
-    const member = owned ? memberById.get(owned.columnId) : undefined;
-    return {
-      ...entry,
-      occupiedBy:
-        owned && member
-          ? {
-              columnId: owned.columnId,
-              roundId: owned.roundId,
-              name: member.name,
-              color: member.color,
-            }
-          : null,
-    };
-  });
+/**
+ * Client-side occupancy derivation for the Floor/Picker map, shared by demo
+ * and real mode. See `resolveOccupancyByLabel` for the identity and
+ * ownership rules.
+ */
+export function resolveFloorTables(
+  layout: FloorLayoutEntry[],
+  board: Parameters<typeof resolveOccupancyByLabel>[0],
+  team: { id: string; name: string; color: string }[],
+): ResolvedFloorTable[] {
+  const occupancy = resolveOccupancyByLabel(board, team);
+  return layout.map((entry) => ({
+    ...entry,
+    occupiedBy: occupancy.get(entry.label) ?? null,
+  }));
 }

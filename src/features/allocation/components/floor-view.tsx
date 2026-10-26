@@ -1,18 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ArrowRightLeft, LogOut, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  ActionNote,
+  AssignmentSummary,
+} from "@/features/allocation/components/assignment-scope-note";
+import { OffMapTables } from "@/features/allocation/components/off-map-tables";
 import { TableMap } from "@/features/allocation/components/table-map";
 import { useTableAssignmentDecision } from "@/features/allocation/components/table-assignment-decision";
 import type {
   RotationBoard,
   RotationColumn,
 } from "@/features/allocation/domain/rotation-board";
+import { getAssignmentScope } from "@/features/allocation/domain/assignment-scope";
+import type {
+  OffMapTable,
+  ServerSummary,
+} from "@/features/allocation/domain/board-read-model";
 import {
   getInitials,
   type ResolvedFloorTable,
@@ -78,8 +88,10 @@ function FloorLegend({
  * Table Rotation Multi-View, IMPLEMENTATION_CONTRACT.md section 14,
  * extended by Upgrade 1.1 and its multi-table follow-up. Tap available
  * table -> pick a server. Tap an occupied table -> Transfer, End Table,
- * or Unassign, acting on that one selected table only (never any other
- * table the same server might also hold).
+ * or Unassign, acting on that table's one logical assignment only (never
+ * any other assignment the same server might also hold). A combined
+ * assignment ("T1 + T2") is one assignment, so those actions apply to all
+ * of its tables, and the panel says so (#109 U3).
  *
  * A server can have zero, one, or many active tables at once -- nothing
  * in the domain model limits a column to one. Picking a server for an
@@ -97,6 +109,8 @@ function FloorLegend({
  */
 export function FloorView({
   tables,
+  offMapTables = [],
+  servers,
   tablesLoadError = false,
   activeColumns,
   team,
@@ -107,8 +121,13 @@ export function FloorView({
   onTransfer,
   onEndTable,
   onEndAndAssign,
+  intercept,
 }: {
   tables: ResolvedFloorTable[];
+  /** Tables with no map position (shown in the Off-map rail, never on the map). */
+  offMapTables?: OffMapTable[];
+  /** Per-server summaries from the shared read model (legend counts). */
+  servers: ServerSummary[];
   tablesLoadError?: boolean;
   activeColumns: RotationColumn[];
   team: TeamMember[];
@@ -132,19 +151,36 @@ export function FloorView({
     columnId: string;
     tableLabel: string;
   }) => void;
+  /** Shared occupied-table flow (see table-claim.tsx). */
+  intercept?: (request: { label: string; columnId: string }) => boolean;
 }) {
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
+  // Cross-view integrity (X2): assigning an OCCUPIED table to a (possibly
+  // different) server. Goes through the same shared Transfer / End + Assign /
+  // Cancel dialog as every other assignment origin.
+  const [assigningOccupied, setAssigningOccupied] = useState(false);
 
-  const selected = tables.find((table) => table.label === selectedLabel);
+  const selected =
+    tables.find((table) => table.label === selectedLabel) ??
+    offMapTables.find((table) => table.label === selectedLabel);
+  // #109 U3: what Transfer / End / Unassign touch for the selected table. A
+  // combined assignment is acted on as a whole; copy says so beside the
+  // buttons (single tables get no extra copy).
+  const noteId = useId();
+  const scope = getAssignmentScope(
+    selected?.occupiedBy?.assignmentTables ?? [],
+  );
 
   function closePanel() {
     setSelectedLabel(null);
     setTransferring(false);
+    setAssigningOccupied(false);
   }
 
   function selectTable(label: string) {
     setTransferring(false);
+    setAssigningOccupied(false);
     setSelectedLabel((current) => (current === label ? null : label));
   }
 
@@ -161,6 +197,7 @@ export function FloorView({
     onAssign,
     onEndAndAssign,
     onClosed: closePanel,
+    intercept,
   });
 
   const assignableColumns = activeColumns.filter(
@@ -180,9 +217,11 @@ export function FloorView({
       name: column.name,
       initials: getInitials(column.name),
       color: member?.color ?? "var(--muted-foreground)",
-      activeTableCount: tables.filter(
-        (table) => table.occupiedBy?.columnId === column.id,
-      ).length,
+      // #109 U4: the read model's count (includes held tables that are not on
+      // the floor map), not a count of map tiles.
+      activeTableCount:
+        servers.find(({ columnId }) => columnId === column.id)
+          ?.activeTableLabels.length ?? 0,
     };
   });
 
@@ -190,13 +229,21 @@ export function FloorView({
     <div className="flex flex-col gap-3">
       <FloorLegend entries={legendEntries} />
       <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-        <TableMap
-          tables={tables}
-          loadError={tablesLoadError}
-          selectedLabel={selectedLabel}
-          onSelectTable={selectTable}
-          disabled={disabled}
-        />
+        <div className="flex flex-col gap-3">
+          <TableMap
+            tables={tables}
+            loadError={tablesLoadError}
+            selectedLabel={selectedLabel}
+            onSelectTable={selectTable}
+            disabled={disabled}
+          />
+          <OffMapTables
+            tables={offMapTables}
+            selectedLabel={selectedLabel}
+            onSelectTable={selectTable}
+            disabled={disabled}
+          />
+        </div>
         {selected?.occupiedBy ? (
           <Card className="h-fit">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -227,20 +274,67 @@ export function FloorView({
                   {selected.occupiedBy.name}
                 </span>
               </p>
-              {!transferring ? (
+              <AssignmentSummary id={`${noteId}-summary`} scope={scope} />
+              {assigningOccupied ? (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-muted-foreground text-xs">
+                    Assign {selected.label} to:
+                  </p>
+                  {assignableColumns.map((column) => (
+                    <Button
+                      key={column.id}
+                      variant="secondary"
+                      size="sm"
+                      disabled={disabled}
+                      onClick={() => {
+                        const label = selected.label;
+                        closePanel();
+                        decision.beginAssign(label, column.id, column.name);
+                      }}
+                    >
+                      {column.name}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAssigningOccupied(false)}
+                  >
+                    Back
+                  </Button>
+                </div>
+              ) : !transferring ? (
                 <div className="flex flex-col gap-1.5">
                   <Button
                     variant="secondary"
                     size="sm"
                     disabled={disabled}
+                    aria-describedby={
+                      scope.transferNote ? `${noteId}-transfer` : undefined
+                    }
                     onClick={() => setTransferring(true)}
                   >
                     <ArrowRightLeft aria-hidden="true" /> Transfer
+                  </Button>
+                  <ActionNote
+                    id={`${noteId}-transfer`}
+                    text={scope.transferNote}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => setAssigningOccupied(true)}
+                  >
+                    Assign to another server…
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    aria-describedby={
+                      scope.endNote ? `${noteId}-end` : undefined
+                    }
                     onClick={() => {
                       onEndTable({
                         columnId: selected.occupiedBy!.columnId,
@@ -251,10 +345,14 @@ export function FloorView({
                   >
                     <LogOut aria-hidden="true" /> End table
                   </Button>
+                  <ActionNote id={`${noteId}-end`} text={scope.endNote} />
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    aria-describedby={
+                      scope.unassignNote ? `${noteId}-unassign` : undefined
+                    }
                     onClick={() => {
                       onUnassign({
                         columnId: selected.occupiedBy!.columnId,
@@ -265,12 +363,23 @@ export function FloorView({
                   >
                     Unassign
                   </Button>
+                  <ActionNote
+                    id={`${noteId}-unassign`}
+                    text={scope.unassignNote}
+                  />
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   <p className="text-muted-foreground text-xs">
-                    Give this table to:
+                    {scope.combined
+                      ? `Give ${scope.label} to:`
+                      : "Give this table to:"}
                   </p>
+                  {scope.transferNote ? (
+                    <p className="text-muted-foreground -mt-0.5 text-[11px]">
+                      {scope.transferNote}
+                    </p>
+                  ) : null}
                   {assignableColumns
                     .filter(
                       (column) => column.id !== selected.occupiedBy!.columnId,

@@ -4,11 +4,27 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { getAssignmentScope } from "@/features/allocation/domain/assignment-scope";
 import {
   findEarliestEmptyRoundForColumn,
   getActiveTablesForColumn,
   type RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
+
+/** " (both tables released)" for a combined assignment, else nothing. */
+function scopeSuffix(assignmentLabel: string, verb: string) {
+  const scope = getAssignmentScope(assignmentLabel);
+  if (!scope.combined) return null;
+  const every =
+    scope.tables.length === 2
+      ? "both tables"
+      : `all ${scope.tables.length} tables`;
+  return (
+    <span className="text-muted-foreground ml-1 text-[11px]">
+      ({every} {verb})
+    </span>
+  );
+}
 
 type PendingAssign = {
   label: string;
@@ -37,9 +53,16 @@ export function useTableAssignmentDecision({
   onAssign,
   onEndAndAssign,
   onClosed,
+  intercept,
 }: {
   board: RotationBoard;
   disabled: boolean;
+  // Cross-view integrity (X2): asked first, before this hook looks at what
+  // the server already holds. Returns true when the table is NOT free
+  // (held by someone else, or already this server's) and the shared
+  // occupied-table flow (see table-claim.tsx) took over -- this hook then
+  // does nothing. Omitted -> no occupancy check (legacy callers/tests).
+  intercept?: (request: { label: string; columnId: string }) => boolean;
   onAssign: (input: {
     label: string;
     columnId: string;
@@ -105,6 +128,7 @@ export function useTableAssignmentDecision({
     columnId: string,
     columnName: string,
   ): boolean {
+    if (intercept?.({ label, columnId })) return false;
     const activeTables = getActiveTablesForColumn(board, columnId);
     if (activeTables.length === 0) {
       assignToColumn(label, columnId);
@@ -201,6 +225,13 @@ export function useTableAssignmentDecision({
           <p className="text-muted-foreground text-xs">
             Which table should be replaced by {pendingAssign.label}?
           </p>
+          {pendingAssign.activeTables.some(
+            (t) => getAssignmentScope(t.tableLabel).combined,
+          ) ? (
+            <p className="text-muted-foreground -mt-0.5 text-[11px]">
+              A combined assignment is replaced as a whole.
+            </p>
+          ) : null}
           {pendingAssign.activeTables.map((table) => (
             <Button
               key={table.roundId}
@@ -218,6 +249,7 @@ export function useTableAssignmentDecision({
               }}
             >
               {table.tableLabel} → {pendingAssign.label}
+              {scopeSuffix(table.tableLabel, "replaced")}
             </Button>
           ))}
           <Button
@@ -236,6 +268,13 @@ export function useTableAssignmentDecision({
             Select one or more tables to end before assigning{" "}
             {pendingAssign.label}.
           </p>
+          {pendingAssign.activeTables.some(
+            (t) => getAssignmentScope(t.tableLabel).combined,
+          ) ? (
+            <p className="text-muted-foreground -mt-0.5 text-[11px]">
+              Ending a combined assignment releases all of its tables.
+            </p>
+          ) : null}
           <div className="flex items-center justify-between">
             <p className="text-muted-foreground text-xs">
               {selectedEndRoundIds.size} of {pendingAssign.activeTables.length}{" "}
@@ -271,6 +310,7 @@ export function useTableAssignmentDecision({
                   onChange={() => toggleEndRoundId(table.roundId)}
                 />
                 {table.tableLabel}
+                {scopeSuffix(table.tableLabel, "released")}
               </label>
             ))}
           </div>
