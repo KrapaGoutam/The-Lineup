@@ -704,6 +704,7 @@ export function AllocationWorkspace({
             label: action.tableLabel,
             columnId: action.columnId,
             roundId: action.roundId,
+            endPrevious: action.endPrevious ?? false,
           },
           result.conflict,
         );
@@ -728,6 +729,7 @@ export function AllocationWorkspace({
       roundId,
       confirmTransfer,
       endWholeAssignment,
+      endPrevious,
     }) => {
       execute({
         type: "assign",
@@ -736,6 +738,7 @@ export function AllocationWorkspace({
         tableLabel: label,
         confirmTransfer,
         endWholeAssignment,
+        endPrevious,
       });
       logCrossEdit(columnId);
     },

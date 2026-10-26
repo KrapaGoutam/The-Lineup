@@ -224,16 +224,163 @@ test("XM-022 occupied table -> End + Assign (typed in the Grid): old assignment 
   ).toHaveCount(1);
 });
 
-test("same-server duplicate: a message, no mutation", async () => {
+test("SS-002 same-server repeat (Grid, later turn): the dialog opens, Cancel changes nothing, End Previous + Assign ends the old T6 lifecycle and starts a new one; live and after a reload", async () => {
+  const endedCount = (page: Page) =>
+    page
+      .getByRole("group", { name: `${S1} session history` })
+      .locator("li", { hasText: "Ended" });
+
   await switchView(owner, "Grid");
-  const input = owner.locator(`input[data-cell^="${S1}|"]`).first();
+  let input = owner.locator(`input[data-cell^="${S1}|"]`).first();
   await input.fill("T6");
   await input.press("Enter");
   await expect(
-    owner.getByText(`T6 is already assigned to ${S1}.`),
+    dialog(owner).getByText(`T6 is already assigned to ${S1}.`, {
+      exact: false,
+    }),
   ).toBeVisible();
+  // Ownership is not changing: no Transfer is offered.
+  await expect(
+    dialog(owner).getByRole("button", { name: /^Transfer/ }),
+  ).toHaveCount(0);
+
+  // Cancel: no mutation, no lifecycle event, counts preserved.
+  await dialog(owner).getByRole("button", { name: "Cancel" }).click();
   await expect(dialog(owner)).toHaveCount(0);
   expect(await dashboardActiveTables(owner)).toBe(1);
+  await switchView(owner, "Servers");
+  await expect(endedCount(owner)).toHaveCount(1);
+
+  // Confirm: the previous lifecycle ends (history kept), a new one begins.
+  await switchView(owner, "Grid");
+  input = owner.locator(`input[data-cell^="${S1}|"]`).first();
+  await input.fill("T6");
+  await input.press("Enter");
+  await dialog(owner)
+    .getByRole("button", { name: "End Previous + Assign" })
+    .click();
+  await expect(dialog(owner)).toHaveCount(0);
+
+  const assertConverged = async (page: Page) => {
+    await switchView(page, "Floor");
+    await expectOwner(page, "T6", S1);
+    const card = await serversCard(page, S1);
+    await expect(card.getByRole("button", { name: /^Table T6, / })).toHaveCount(
+      1,
+    );
+    await expect(endedCount(page)).toHaveCount(2);
+    expect(await dashboardActiveTables(page)).toBe(1);
+  };
+  await assertConverged(owner);
+  await switchView(manager, "Floor");
+  await expectOwner(manager, "T6", S1); // live, no refresh
+
+  // Reload persistence.
+  await owner.reload();
+  await owner.waitForSelector('body[data-hydrated="true"]');
+  await goToAllocation(owner);
+  await assertConverged(owner);
+});
+
+test("SS-008 stale browser: the database decides a same-server repeat on a later turn (dialog from the server's PT409), Cancel then End Previous + Assign converge both contexts", async ({
+  browser,
+}) => {
+  // The live owner gives S2 T9; a stale manager (no Realtime) loads and
+  // believes S2 holds T9 and T8 is free.
+  await switchView(owner, "Floor");
+  await floorAssign(owner, "T9", S2);
+  await expectOwner(owner, "T9", S2);
+
+  const staleContext = await browser.newContext();
+  contexts.push(staleContext);
+  const stale = await staleContext.newPage();
+  track(stale, "stale-repeat");
+  await stale.routeWebSocket(/realtime\/v1\/websocket/, () => {
+    /* never connect: the page stays stale */
+  });
+  await signIn(stale, PINS.TestManager);
+  await goToAllocation(stale);
+  await switchView(stale, "Floor");
+  await expectOwner(stale, "T9", S2);
+  await expectAvailable(stale, "T8");
+
+  // The live owner moves on: unassigns T9, then types T8 into the freed turn.
+  // Each step waits for settled state, so the two clients can only disagree
+  // about what the freed turn holds -- never about which turn is S2's next.
+  const { admin, locationId } = await devLocation();
+  const sessions = await admin
+    .from("service_sessions")
+    .select("id")
+    .eq("location_id", locationId)
+    .order("service_date", { ascending: false })
+    .limit(1);
+  const sessionId = sessions.data![0].id as number;
+  const entriesOf = async (label: string) =>
+    (
+      await admin
+        .from("table_rotation_entries")
+        .select("status")
+        .eq("service_session_id", sessionId)
+        .eq("table_label", label)
+    ).data ?? [];
+
+  await switchView(owner, "Grid");
+  await owner.getByRole("button", { name: "Unassign table T9" }).click();
+  await expect(
+    owner.getByRole("button", { name: "Edit table T9" }),
+  ).toHaveCount(0);
+  await expect.poll(async () => (await entriesOf("T9")).length).toBe(0);
+  const live = owner.locator(`input[data-cell^="${S2}|"]`).first();
+  await live.fill("T8");
+  await live.press("Enter");
+  await expect
+    .poll(async () => (await entriesOf("T8")).map((e) => e.status))
+    .toEqual(["active"]);
+  await switchView(owner, "Floor");
+  await expectOwner(owner, "T8", S2);
+  await expect(tile(stale, "T8")).toHaveAccessibleName(/available/);
+
+  // The stale manager types T8 for S2 into what ITS board says is S2's next
+  // turn -- a later turn than the one now holding T8. The database answers.
+  await switchView(stale, "Grid");
+  let typed = stale.locator(`input[data-cell^="${S2}|"]`).first();
+  await typed.fill("T8");
+  await typed.press("Enter");
+  await expect(
+    dialog(stale).getByText(`T8 is already assigned to ${S2}.`, {
+      exact: false,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await dialog(stale).getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog(stale)).toHaveCount(0);
+
+  // Cancel wrote nothing: exactly one active T8 on the board.
+  expect((await entriesOf("T8")).map((e) => e.status)).toEqual(["active"]);
+
+  // Confirm (the page was refreshed to the truth by the refused call).
+  await switchView(stale, "Grid");
+  typed = stale.locator(`input[data-cell^="${S2}|"]`).first();
+  await typed.fill("T8");
+  await typed.press("Enter");
+  await dialog(stale)
+    .getByRole("button", { name: "End Previous + Assign" })
+    .click();
+  await expect(dialog(stale)).toHaveCount(0);
+
+  await switchView(stale, "Floor");
+  await expectOwner(stale, "T8", S2);
+  await expectOwner(owner, "T8", S2); // live on the other context
+  await expect
+    .poll(async () => (await entriesOf("T8")).map((e) => e.status).sort())
+    .toEqual(["active", "ended"]);
+  await expectEndedHistory(owner, S2, "T8");
+
+  // Leave the board as the next scenarios expect it: S2 holds nothing active.
+  await switchView(owner, "Grid");
+  await owner.getByRole("button", { name: "Unassign table T8" }).click();
+  await switchView(owner, "Floor");
+  await expectAvailable(owner, "T8");
+  await staleContext.close();
 });
 
 test("XM-024 stale client double-claim: the server answers with the conflict, never a second active T7", async ({

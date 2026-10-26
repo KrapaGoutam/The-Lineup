@@ -118,6 +118,23 @@ describe("board event presenter", () => {
     );
   });
 
+  it("166 a same-server repeat says the table was assigned again for that turn", () => {
+    const entry = presentBoardEvent(
+      row("assign", {
+        member_id: 1,
+        round_id: 10,
+        table_label: "T2",
+        displaced: [{ round_id: 9, member_id: 1 }],
+        repeat: true,
+      }),
+      lookup,
+    );
+    expect(entry.summary).toMatch(
+      /^assigned Table T2 to Mia again( for turn \d+)?, ending the previous assignment$/,
+    );
+    expect(entry.summary).not.toMatch(JUNK);
+  });
+
   it("109-013 marks an event that was later undone, in text", () => {
     const entry = presentBoardEvent(
       row(

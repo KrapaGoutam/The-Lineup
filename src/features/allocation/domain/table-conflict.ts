@@ -1,5 +1,8 @@
 import { parseCombinedTableLabel } from "@/features/allocation/domain/floor-layout";
-import type { RotationBoard } from "@/features/allocation/domain/rotation-board";
+import {
+  findEarliestEmptyRoundForColumn,
+  type RotationBoard,
+} from "@/features/allocation/domain/rotation-board";
 
 /**
  * Cross-view integrity (X2) -- the ONE decision for "this server is asking for
@@ -12,6 +15,15 @@ import type { RotationBoard } from "@/features/allocation/domain/rotation-board"
  * "1" -> "T1" when T1 is registered), so callers pass the canonical label; this
  * module itself does no trimming beyond the combined-label split, no case
  * folding and no "T"/"Table" prefix handling.
+ *
+ * Same server asking again (#166). The turn is the board cell (round x
+ * server); rounds are ordered by `sequence`. A table this server holds only in
+ * EARLIER turns than the cell being written is a legitimate later turn:
+ * `same-server-repeat`, which offers End Previous + Assign. One held in the
+ * same or a LATER turn stays `same-server` (blocked, no mutation). The cell's
+ * own entry is never a conflict, so an identical retry is simply "free". The
+ * database makes the same decision independently; this only avoids the round
+ * trip.
  *
  * A combined assignment ("T6 + T7") is ONE logical assignment: a holder is
  * the whole assignment, and Transfer / End + Assign act on all of it. Releasing
@@ -33,9 +45,23 @@ export type ClaimHolder = {
 export type ClaimVerdict =
   | { kind: "free" }
   | {
-      /** The asking server already holds (some of) these tables. */
+      /**
+       * The asking server already holds (some of) these tables in the same or
+       * a later turn: blocked, nothing to confirm.
+       */
       kind: "same-server";
       tables: string[];
+    }
+  | {
+      /**
+       * The asking server holds (some of) these tables only in earlier turns:
+       * a legitimate later turn. End Previous + Assign / Cancel.
+       */
+      kind: "same-server-repeat";
+      /** The wanted tables this server already holds. */
+      tables: string[];
+      /** The server's previous assignments (whole), oldest turn first. */
+      previous: ClaimHolder[];
     }
   | {
       kind: "held";
@@ -68,7 +94,15 @@ export function classifyTableClaim(
   if (wanted.length === 0) return { kind: "free" };
   const wantedSet = new Set(wanted);
 
+  const targetRound = input.targetRoundId
+    ? board.rounds.find(({ id }) => id === input.targetRoundId)
+    : findEarliestEmptyRoundForColumn(board, input.columnId);
+  // A target the local board cannot place (a stale id) is treated as a later
+  // turn; the database is the authority either way.
+  const targetSequence = targetRound?.sequence ?? Number.POSITIVE_INFINITY;
+
   const sameServer = new Set<string>();
+  const previous: { holder: ClaimHolder; sequence: number }[] = [];
   const contested = new Set<string>();
   const holders: ClaimHolder[] = [];
 
@@ -82,6 +116,15 @@ export function classifyTableClaim(
       if (overlap.length === 0) continue;
       if (cell.columnId === input.columnId) {
         for (const part of overlap) sameServer.add(part);
+        previous.push({
+          holder: {
+            columnId: cell.columnId,
+            roundId: round.id,
+            assignmentLabel: cell.tableLabel,
+            assignmentTables: held,
+          },
+          sequence: round.sequence,
+        });
         continue;
       }
       for (const part of overlap) contested.add(part);
@@ -95,10 +138,17 @@ export function classifyTableClaim(
   }
 
   if (sameServer.size > 0) {
-    return {
-      kind: "same-server",
-      tables: wanted.filter((t) => sameServer.has(t)),
-    };
+    const tables = wanted.filter((t) => sameServer.has(t));
+    if (previous.every(({ sequence }) => sequence < targetSequence)) {
+      return {
+        kind: "same-server-repeat",
+        tables,
+        previous: previous
+          .sort((a, b) => a.sequence - b.sequence)
+          .map(({ holder }) => holder),
+      };
+    }
+    return { kind: "same-server", tables };
   }
   if (holders.length === 0) return { kind: "free" };
   return {
@@ -118,7 +168,7 @@ export function classifyTableClaim(
  * before this reaches the client.
  */
 export type TableConflictInfo = {
-  kind: "held" | "same_server";
+  kind: "held" | "same_server" | "same_server_repeat";
   label: string;
   holders: {
     columnId: string;
@@ -133,6 +183,15 @@ export function verdictFromServerConflict(
   wantedLabel: string,
 ): ClaimVerdict {
   const wanted = parseCombinedTableLabel(wantedLabel);
+  if (info.kind === "same_server_repeat") {
+    const previous: ClaimHolder[] = info.holders.map((holder) => ({
+      columnId: holder.columnId,
+      roundId: holder.roundId,
+      assignmentLabel: holder.assignmentLabel,
+      assignmentTables: parseCombinedTableLabel(holder.assignmentLabel),
+    }));
+    return { kind: "same-server-repeat", tables: wanted, previous };
+  }
   if (info.kind === "same_server" || info.holders.length === 0) {
     return { kind: "same-server", tables: wanted };
   }
@@ -213,4 +272,54 @@ export function describeHeldConflict(
 /** One-line message for a same-server duplicate (no mutation happens). */
 export function describeSameServer(tables: string[], serverName: string) {
   return `${listTables(tables)} ${tables.length === 1 ? "is" : "are"} already assigned to ${serverName}.`;
+}
+
+/** The same-server repeat dialog's wording, in floor-staff language. */
+export type SameServerRepeatCopy = {
+  title: string;
+  description: string;
+  endPreviousLabel: string;
+};
+
+function possessive(name: string): string {
+  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+}
+
+export function describeSameServerRepeat(
+  verdict: Extract<ClaimVerdict, { kind: "same-server-repeat" }>,
+  input: { wantedLabel: string; serverName: string },
+): SameServerRepeatCopy {
+  const { serverName, wantedLabel } = input;
+  const held = listTables(verdict.tables);
+  const wantedTables = new Set(parseCombinedTableLabel(wantedLabel));
+  // Combined assignments are one lifecycle unit: ending the previous one
+  // releases every table in it, not only the one being asked for again.
+  const previousTables = [
+    ...new Set(verdict.previous.flatMap((p) => p.assignmentTables)),
+  ];
+  const alsoReleased = previousTables.filter((t) => !wantedTables.has(t));
+  const combined = verdict.previous.some((p) => p.assignmentTables.length > 1);
+  if (combined) {
+    const assignment = verdict.previous
+      .map((p) => p.assignmentTables.join(" + "))
+      .join(" and ");
+    return {
+      title: "Table already assigned",
+      description:
+        `${held} is already assigned to ${serverName} as part of the combined assignment ${assignment}. ` +
+        `End Previous + Assign ends the entire ${assignment} assignment` +
+        (alsoReleased.length > 0
+          ? ` (${listTables(alsoReleased)} will be released too)`
+          : "") +
+        `, then assigns ${wantedLabel} to ${serverName} for this turn.`,
+      endPreviousLabel: "End Previous + Assign",
+    };
+  }
+  return {
+    title: "Table already assigned",
+    description:
+      `${held} is already assigned to ${serverName}. ` +
+      `End ${possessive(serverName)} previous ${held} assignment and assign ${wantedLabel} to ${serverName} for this turn?`,
+    endPreviousLabel: "End Previous + Assign",
+  };
 }

@@ -118,6 +118,23 @@ async function chooseInConflictDialog(
   await expect(dialog(page)).toHaveCount(0);
 }
 
+async function chooseInRepeatDialog(
+  page: Page,
+  role: Role,
+  choose: "end-previous" | "cancel",
+) {
+  const d = dialog(page);
+  await expect(
+    d.getByText(`is already assigned to ${NAMES[role]}`),
+  ).toBeVisible();
+  if (choose === "end-previous") {
+    await d.getByRole("button", { name: "End Previous + Assign" }).click();
+  } else {
+    await d.getByRole("button", { name: "Cancel" }).click();
+  }
+  await expect(dialog(page)).toHaveCount(0);
+}
+
 /** Start an assignment of `label` for `role` from `origin`, up to the point the
  *  shared resolver (or a plain assign) takes over. */
 async function requestAssign(
@@ -191,6 +208,11 @@ export async function runStep(page: Page, step: Step) {
         page.getByText(`is already assigned to ${NAMES[step.who]}.`),
       ).toBeVisible();
       await expect(dialog(page)).toHaveCount(0);
+      return;
+    }
+    case "repeat": {
+      await requestAssign(page, step.via, step.who, step.table, step.typed);
+      await chooseInRepeatDialog(page, step.who, step.choose);
       return;
     }
     case "conflict": {
