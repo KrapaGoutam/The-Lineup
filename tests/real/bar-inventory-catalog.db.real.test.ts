@@ -71,8 +71,8 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fx) return;
   // Inventory rows hold actor FKs to memberships and the change log is
-  // append-only (clears only by cascade): remove the tenants first.
-  await fx.admin.from("organizations").delete().in("id", [org, fx.otherOrgId]);
+  // append-only: the harness teardown removes the organizations (cascade)
+  // before it deletes memberships.
   await fx.teardown();
 });
 

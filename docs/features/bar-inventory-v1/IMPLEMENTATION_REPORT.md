@@ -127,3 +127,57 @@ DEV touched: YES (migration 20261026170000; hosted suites use their own syntheti
 PROD touched: NO
 PROD migrations: NO
 ```
+
+---
+
+## BI-2 — Stock, immutable adjustment ledger, status view
+
+Branch `feature/bar-inventory-bi2-stock-ledger` → PR into `development`. Migrations (all **DEV applied, PROD not**): `20261026180000_bar_inventory_stock_ledger.sql`, `20261026190000_bar_inventory_actor_fk_deferrable.sql`, `20261026190100_bar_inventory_fk_deferrable_cascade.sql`, `20261026190200_bar_inventory_subcategory_org_cascade.sql`.
+
+### Delivered
+
+| Layer    | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database | `inventory_stock` (location-level; generated `total`; versioned; cutoff / warning / par with `warning >= cutoff`), immutable `inventory_adjustments` (previous values read from the locked row; generated deltas; frozen `status_after` and `cutoff_at_time`; nine reasons; `source` derived from the reason), `inventory_stock_status` security-invoker view (effective warning, status, suggested order, "order needed"), `inventory_stock_adjust` (`set` with expected version / `delta`, identical request = no-op) and `inventory_stock_set_levels` (versioned, change-logged), a trigger that seeds a stock row for every location of a new product, RLS (management + location access, SELECT only) |
+| Domain   | `stock-rules.ts`: integer-cent mirror of the status rules, reasons and labels, proven against `status-vectors.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Tests    | pgTAP 0035 (67) + generated 0036 (25, one product per golden vector asserted THROUGH the view); Vitest +37; hosted DEV DB 13 incl. real-JWT races                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+### Design decisions
+
+1. **Identical request is a no-op before the version is consulted**: a double submit carries the old version, so checking the version first would turn a harmless retry into a spurious conflict. Different values with a stale version → `PT409 stale` (detail carries the current counts and who changed them).
+2. **No previous-value parameter exists** on the RPC; the proof is a pgTAP assertion on the function's argument names.
+3. **Quantities are validated, never rounded**: more than two decimals, negatives (set mode), > 9,999,999,999.99 → `22023`. SQL stores `numeric(12,2)`; TypeScript uses integer cents. The `0.1 + 0.2` vector proves the boundary is exact on both sides.
+4. **Status is not stored**; `status_after` is frozen per ledger row so later cutoff edits cannot rewrite crossings (ANALYTICS_SPEC §3).
+5. **Deleting a product cascades its stock and ledger** (service-role maintenance only; there is no client delete path) — the Tasks convention for append-only history.
+
+### Defects found by the hosted suites and fixed here (all three were latent since BI-1)
+
+Deleting an organization (tenant teardown; no client path) could not complete once the tenant had inventory data:
+
+- actor / location / parent foreign keys were checked before a deeper cascade (product → stock → ledger) had removed the referencing rows → made **DEFERRABLE INITIALLY DEFERRED** (`…190000`, `…190100`), protection unchanged (a still-referenced row fails at commit);
+- `inventory_subcategories` had **no foreign key to `organizations`**, so its rows could never cascade away → added (`…190200`);
+- the hosted harness teardown now removes organizations (cascade) before memberships (`tests/real/support/harness.ts`); the pgTAP suites run the checks immediately where a violation must be reported at the statement and prove an org with categories, subcategories and products tears down completely.
+
+### Open item for the owner (DEV hygiene)
+
+Before these fixes, my hosted test runs leaked **26 synthetic "V2 Harness …" organizations** (and their "V2H owner / manager / outsider" users, with a few products and ledger rows) into the DEV project. All were created today by this build's own suites. The auto-mode permission layer refused a scripted cleanup (unverifiable deletion scope), so nothing was deleted. They are harmless but should be removed; with an explicit go-ahead I will delete exactly those ids (listed by a read-only query) using the verified cleanup script. New runs no longer leak (count verified stable).
+
+### Gates (exact numbers)
+
+| Gate                                      | Result                                                          |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| pgTAP (local scratch DB)                  | 0033: 108/108 · 0034: 48/48 · 0035: 67/67 · 0036: 25/25         |
+| Hosted DEV DB (real JWTs)                 | 28/28 (catalog 15 + stock 13); no leaked fixtures after the fix |
+| Hosted DEV UI (BI-1 spec, new migrations) | 3/3                                                             |
+| format / lint / typecheck                 | PASS                                                            |
+| Vitest                                    | 948/948 (79 files)                                              |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (4 migrations; hosted suites with synthetic orgs; 26 leaked synthetic orgs remain pending owner go-ahead)
+PROD touched: NO
+PROD migrations: NO
+```
