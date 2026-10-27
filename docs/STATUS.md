@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-3 merged, BI-4 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-4 merged, BI-5 PR open)
+
+**BI-5 (Order soon grouped by vendor with per-vendor counts and suggested totals; CSV recommendations export re-applied server-side from the filter string; formula-safe CSV writer) is code complete; PR into `development` pending CI.** Report §BI-5. Vitest 1031/1031; Playwright all Bar Inventory 70 (+2 skips). Next: BI-6 (History).
 
 **BI-4 (Dashboard: six KPI tiles with drill-down to Inventory, filterable Order soon and Recently changed, honest placeholders for analytics-dependent insights) is code complete; PR into `development` pending CI.** Report §BI-4. Vitest 1013/1013; Playwright Dashboard + module 30, Inventory + Manage 31 (+2 skips). Next: BI-5 (Order soon grouped by vendor).
 

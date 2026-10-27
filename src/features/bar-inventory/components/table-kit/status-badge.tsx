@@ -8,15 +8,9 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 
-import type { StockStatus } from "../../domain/stock-rules";
+import { STATUS_LABEL, type StockStatus } from "../../domain/stock-rules";
 
-export const STATUS_LABEL: Record<StockStatus, string> = {
-  critical: "Critical",
-  low: "Low",
-  healthy: "Healthy",
-  no_cutoff: "No cutoff",
-  archived: "Archived",
-};
+export { STATUS_LABEL };
 
 const TONE = {
   critical: "danger",

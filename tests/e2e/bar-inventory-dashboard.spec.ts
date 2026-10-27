@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test, type Page } from "@playwright/test";
 
 // Bar Inventory V1 / BI-4: the Dashboard (six tiles, Order soon, Recently
@@ -39,6 +41,14 @@ const tab = (page: Page, name: string) =>
 /** Item names in a Dashboard section, in the table or the phone card list. */
 async function namesIn(page: Page, section: string): Promise<string[]> {
   const region = page.getByRole("region", { name: section });
+  if (section === "Order soon") {
+    // Vendor groups: one item row per product, in group order.
+    return region
+      .getByTestId("order-item")
+      .evaluateAll((els) =>
+        els.map((el) => el.getAttribute("data-name") ?? ""),
+      );
+  }
   const list = region.getByRole("list", { name: `${section} list` });
   if (await list.isVisible()) {
     return list
@@ -56,8 +66,8 @@ async function namesIn(page: Page, section: string): Promise<string[]> {
           (row) =>
             row.querySelectorAll("td")[nameColumn]?.textContent?.trim() ?? "",
         ),
-      // Order soon: Vendor, Name … · Recently changed: Name, Vendor …
-      section === "Order soon" ? 1 : 0,
+      // Recently changed: Name, Vendor …
+      0,
     );
 }
 
@@ -128,7 +138,9 @@ test("Order soon lists only Critical and Low, most urgent first, with the sugges
   ]);
   const region = page.getByRole("region", { name: "Order soon" });
   // Tito's: Par 12 - Total 3 = 9 (the same figure the Inventory view shows).
-  await expect(region).toContainText("9");
+  await expect(
+    region.getByTestId("order-item").filter({ hasText: "Tito's Handmade" }),
+  ).toContainText("Order 9");
   await expect(region.getByText("Healthy", { exact: true })).toHaveCount(0);
 
   // The shared table kit: global search adds to the filters.
@@ -210,4 +222,85 @@ test("the movement insights say what they need instead of showing invented numbe
   await expect(insights).toContainText("Fastest moving");
   await expect(insights).toContainText("Frequently hitting cutoff");
   await expect(insights).toContainText("once Analytics is available");
+});
+
+const orderRegion = (page: Page) =>
+  page.getByRole("region", { name: "Order soon" });
+
+test("Order soon is grouped by vendor with counts and a suggested total; groups collapse (BI-DASH-002)", async ({
+  page,
+}) => {
+  await signIn(page);
+  await openBarInventory(page);
+  const groups = orderRegion(page).getByTestId("order-group");
+  await expect(groups).toHaveCount(2);
+  // Most Critical items first: Faust (1 critical) before Del Papa (1 low).
+  await expect(groups.nth(0)).toHaveAttribute("data-vendor", "Faust");
+  await expect(groups.nth(1)).toHaveAttribute("data-vendor", "Del Papa");
+  await expect(groups.nth(0)).toContainText(
+    "1 needs attention · 1 critical · 0 low",
+  );
+  await expect(groups.nth(0)).toContainText("suggested total 9");
+  await expect(groups.nth(1)).toContainText(
+    "1 needs attention · 0 critical · 1 low",
+  );
+
+  const toggle = groups.nth(0).getByRole("button", { name: /Faust/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(groups.nth(0).getByTestId("order-item")).toHaveCount(0);
+  await toggle.click();
+  await expect(groups.nth(0).getByTestId("order-item")).toHaveCount(1);
+  await noPageHorizontalScroll(page);
+});
+
+test("the column filters work on the grouped view at every width", async ({
+  page,
+}) => {
+  await signIn(page);
+  await openBarInventory(page);
+  const region = orderRegion(page);
+  await region.getByRole("button", { name: /^Filters/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Filters" });
+  await sheet
+    .getByRole("group", { name: "Vendor options" })
+    .getByRole("checkbox", { name: /Del Papa/ })
+    .check();
+  await sheet.getByRole("button", { name: /^Show \d+ rows?$/ }).click();
+  expect(await namesIn(page, "Order soon")).toEqual(["Modelo Especial"]);
+  await expect(region.getByTestId("order-group")).toHaveCount(1);
+  await region.getByRole("button", { name: "Clear all (1)" }).click();
+  expect(await namesIn(page, "Order soon")).toHaveLength(2);
+});
+
+test("exporting recommendations downloads what is shown, and only that (BI-DASH-004)", async ({
+  page,
+}) => {
+  await signIn(page);
+  await openBarInventory(page);
+  const region = orderRegion(page);
+
+  const all = page.waitForEvent("download");
+  await region.getByRole("button", { name: "Export recommendations" }).click();
+  const full = await all;
+  expect(full.suggestedFilename()).toMatch(
+    /^bar-inventory_.+_order-recommendations_\d{4}-\d{2}-\d{2}\.csv$/,
+  );
+  const fullText = await readFile((await full.path()) as string, "utf8");
+  expect(fullText).toContain("Faust,Tito's Handmade Vodka");
+  expect(fullText).toContain("Del Papa,Modelo Especial");
+  expect(fullText).not.toContain("Casamigos");
+
+  await region
+    .getByRole("searchbox", { name: "Search Order soon" })
+    .fill("modelo");
+  const filtered = page.waitForEvent("download");
+  await region.getByRole("button", { name: "Export recommendations" }).click();
+  const filteredText = await readFile(
+    (await (await filtered).path()) as string,
+    "utf8",
+  );
+  expect(filteredText).toContain("Del Papa,Modelo Especial");
+  expect(filteredText).not.toContain("Tito's");
 });

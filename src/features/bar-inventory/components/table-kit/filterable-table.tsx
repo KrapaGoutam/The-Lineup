@@ -72,6 +72,12 @@ type Props<Row> = {
   sortPresets?: SortPreset[];
   /** Phone layout: one card per row instead of the table. */
   renderCard?: (row: Row) => ReactNode;
+  /**
+   * Replaces the table and card list with a custom body (e.g. vendor groups)
+   * for the rows that pass the filters. Every filter control stays: the
+   * Filters sheet is then offered at every width, as there is no header row.
+   */
+  renderGroups?: (rows: Row[]) => ReactNode;
   /** Trailing actions cell for each row. */
   rowActions?: (row: Row) => ReactNode;
   emptyMessage: string;
@@ -271,6 +277,7 @@ export function FilterableTable<Row>({
   defaultSort = [],
   sortPresets = [],
   renderCard,
+  renderGroups,
   rowActions,
   emptyMessage,
   emptyAction,
@@ -443,7 +450,7 @@ export function FilterableTable<Row>({
         />
         <Button
           variant="secondary"
-          className="md:hidden"
+          className={renderGroups ? undefined : "md:hidden"}
           onClick={() => setSheetOpen(true)}
         >
           <SlidersHorizontal aria-hidden="true" /> Filters
@@ -472,7 +479,12 @@ export function FilterableTable<Row>({
             ))}
           </Select>
         ) : null}
-        <span className="relative hidden md:inline-flex">
+        <span
+          className={cn(
+            "relative",
+            renderGroups ? "hidden" : "hidden md:inline-flex",
+          )}
+        >
           <button
             ref={chooserButton}
             type="button"
@@ -564,7 +576,8 @@ export function FilterableTable<Row>({
         <EmptyState message={emptyMessage}>{emptyAction}</EmptyState>
       ) : (
         <>
-          {renderCard && visible.length > 0 ? (
+          {renderGroups && visible.length > 0 ? renderGroups(visible) : null}
+          {!renderGroups && renderCard && visible.length > 0 ? (
             <ul
               className="flex flex-col gap-2 md:hidden"
               aria-label={`${label} list`}
@@ -574,52 +587,55 @@ export function FilterableTable<Row>({
               ))}
             </ul>
           ) : null}
-          <div
-            className={cn(
-              "border-border relative w-full max-w-full min-w-0 overflow-x-auto rounded-xl border",
-              renderCard && "hidden md:block",
-            )}
-          >
-            <table
-              aria-label={label}
-              className="w-full min-w-[44rem] border-collapse"
+          {renderGroups ? null : (
+            <div
+              className={cn(
+                "border-border relative w-full max-w-full min-w-0 overflow-x-auto rounded-xl border",
+                renderCard && "hidden md:block",
+              )}
             >
-              <thead className="bg-muted/40">
-                <tr>
-                  {shownColumns.map(header)}
-                  {rowActions ? (
-                    <th scope="col" className="px-2 py-1">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody>
-                {/* The header (and its filter controls) stays when nothing matches. */}
-                {visible.map((row) => (
-                  <tr key={getRowId(row)} className="border-border border-t">
-                    {shownColumns.map((column) => (
-                      <td
-                        key={column.id}
-                        className={cn(
-                          "px-2 py-1.5 align-middle text-sm",
-                          column.align === "right" && "text-right tabular-nums",
-                          column.tabletHidden && "hidden lg:table-cell",
-                        )}
-                      >
-                        {column.render(row)}
-                      </td>
-                    ))}
+              <table
+                aria-label={label}
+                className="w-full min-w-[44rem] border-collapse"
+              >
+                <thead className="bg-muted/40">
+                  <tr>
+                    {shownColumns.map(header)}
                     {rowActions ? (
-                      <td className="px-2 py-1.5 whitespace-nowrap">
-                        {rowActions(row)}
-                      </td>
+                      <th scope="col" className="px-2 py-1">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     ) : null}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {/* The header (and its filter controls) stays when nothing matches. */}
+                  {visible.map((row) => (
+                    <tr key={getRowId(row)} className="border-border border-t">
+                      {shownColumns.map((column) => (
+                        <td
+                          key={column.id}
+                          className={cn(
+                            "px-2 py-1.5 align-middle text-sm",
+                            column.align === "right" &&
+                              "text-right tabular-nums",
+                            column.tabletHidden && "hidden lg:table-cell",
+                          )}
+                        >
+                          {column.render(row)}
+                        </td>
+                      ))}
+                      {rowActions ? (
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          {rowActions(row)}
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {visible.length === 0 ? (
             <EmptyState message="No items match these filters.">
               <Button variant="secondary" onClick={clearAll}>

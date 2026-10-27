@@ -24,12 +24,12 @@ import {
 } from "../domain/dashboard";
 import {
   buildInventoryRows,
-  suggestedOrderText,
   type InventoryRow,
 } from "../domain/inventory-rows";
 import type { CatalogSnapshot } from "../domain/inventory-types";
 import type { TableState } from "../domain/table-filters";
 import { formatQuantity } from "./editable-cell";
+import { OrderSoon, type RecommendationsOutcome } from "./order-soon";
 import {
   FilterableTable,
   type TableColumn,
@@ -140,109 +140,6 @@ function Pending({ title, text }: { title: string; text: string }) {
   );
 }
 
-const ORDER_COLUMNS: TableColumn<InventoryRow>[] = [
-  {
-    id: "vendor",
-    label: "Vendor",
-    type: "select",
-    sortable: true,
-    searchable: true,
-    get: (r) => r.vendor,
-    render: (r) => r.vendor,
-  },
-  {
-    id: "name",
-    label: "Name",
-    type: "text",
-    sortable: true,
-    searchable: true,
-    get: (r) => r.name,
-    render: (r) => <span className="font-medium">{r.name}</span>,
-  },
-  {
-    id: "size",
-    label: "Size",
-    type: "select",
-    sortable: true,
-    get: (r) => r.size,
-    render: (r) => r.size ?? "—",
-  },
-  {
-    id: "category",
-    label: "Category",
-    type: "select",
-    sortable: true,
-    tabletHidden: true,
-    get: (r) => r.category,
-    render: (r) => r.category ?? "—",
-  },
-  {
-    id: "subcategory",
-    label: "Subcategory",
-    type: "select",
-    sortable: true,
-    tabletHidden: true,
-    get: (r) => r.subcategory,
-    render: (r) => r.subcategory ?? "—",
-  },
-  {
-    id: "total",
-    label: "Total",
-    type: "number",
-    sortable: true,
-    align: "right",
-    get: (r) => r.total,
-    render: (r) => (
-      <span className="font-semibold">{formatQuantity(r.total)}</span>
-    ),
-  },
-  {
-    id: "cutoff",
-    label: "Cutoff",
-    type: "number",
-    sortable: true,
-    align: "right",
-    get: (r) => r.cutoff,
-    render: (r) => formatQuantity(r.cutoff),
-  },
-  {
-    id: "warning",
-    label: "Warning",
-    type: "number",
-    sortable: true,
-    align: "right",
-    tabletHidden: true,
-    get: (r) => r.effectiveWarning,
-    render: (r) => formatQuantity(r.effectiveWarning),
-  },
-  {
-    id: "par",
-    label: "Par",
-    type: "number",
-    sortable: true,
-    align: "right",
-    get: (r) => r.par,
-    render: (r) => formatQuantity(r.par),
-  },
-  {
-    id: "suggested",
-    label: "Suggested order",
-    type: "number",
-    sortable: true,
-    align: "right",
-    get: (r) => r.suggestedOrder,
-    render: suggestedOrderText,
-  },
-  {
-    id: "status",
-    label: "Status",
-    type: "select",
-    sortable: false,
-    get: (r) => STATUS_LABEL[r.status],
-    render: (r) => <StatusBadge status={r.status} />,
-  },
-];
-
 function ItemCard({ row, detail }: { row: InventoryRow; detail: string }) {
   return (
     <article
@@ -274,11 +171,13 @@ export function DashboardView({
   restaurantSlug,
   timeZone,
   onOpenInventory,
+  onExportRecommendations,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
   timeZone: string;
   onOpenInventory: (state: TableState) => void;
+  onExportRecommendations: (filters: string) => Promise<RecommendationsOutcome>;
 }) {
   const rows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
   // Re-read the clock whenever the data refreshes.
@@ -378,25 +277,15 @@ export function DashboardView({
           Order soon
         </h2>
         <p className="text-muted-foreground text-sm">
-          Critical and Low items, most urgent first. Suggested order is Par
-          minus Total; with no Par it says “Order needed” instead of guessing a
+          Grouped by vendor, most urgent first. Suggested order is Par minus
+          Total; with no Par it says “Order needed” instead of guessing a
           quantity.
         </p>
-        <FilterableTable<InventoryRow>
-          tableKey="dash"
-          restaurantSlug={restaurantSlug}
-          label="Order soon"
+        <OrderSoon
           rows={orderSoon}
-          columns={ORDER_COLUMNS}
-          getRowId={(row) => row.productId}
+          restaurantSlug={restaurantSlug}
           timeZone={timeZone}
-          emptyMessage="Nothing needs ordering right now."
-          renderCard={(row) => (
-            <ItemCard
-              row={row}
-              detail={`Total ${formatQuantity(row.total)} · Cutoff ${formatQuantity(row.cutoff)} · Par ${formatQuantity(row.par)} · Order ${suggestedOrderText(row)}`}
-            />
-          )}
+          onExport={onExportRecommendations}
         />
       </section>
 

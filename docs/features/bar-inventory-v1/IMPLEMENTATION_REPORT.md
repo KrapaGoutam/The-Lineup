@@ -270,3 +270,42 @@ DEV touched: NO (no migration, no hosted run; hosted validation is BI-10)
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-5 — Order soon by vendor and the recommendations export
+
+Branch `feature/bar-inventory-bi5-order-soon` → PR into `development`. **No migration.**
+
+### Delivered
+
+| Layer  | What                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain | `domain/order-soon.ts`: `groupByVendor` (vendors by critical count, then low count, then name; items Critical → Low → closest to cutoff; per-vendor critical / low / suggested total in cents / "order needed" count) and the pure filter-column spec `ORDER_SOON_COLUMNS`, shared by the browser and the export                                                                                    |
+| Export | `domain/order-export.ts`: `buildRecommendationsExport` takes the authorized rows plus the table's **serialized filter string**, re-applies it with the same parser and filter engine, and writes the CSV. `src/lib/csv/write.ts` is the writer: UTF-8 BOM, CRLF, RFC 4180 quoting, **formula-injection guard**, numbers stay numbers                                                                |
+| Server | `exportOrderRecommendationsAction`: live-session check, management role check, rows loaded from the database under the caller's authorization, filters re-applied server-side. The client sends only the filter string, never rows. Demo mode (no server) runs the same pure builder in the browser                                                                                                 |
+| UI     | `components/order-soon.tsx`: collapsible vendor groups (`aria-expanded`, open by default up to 5 vendors), status icon + text, "Order needed" when there is no Par. The shared table kit gains an optional `renderGroups` body, so every column filter, chip, search and the phone Filters sheet still apply; the Filters button is offered at every width because a grouped body has no header row |
+
+### Decisions
+
+1. **The file always equals the screen**: both come from `groupByVendor(applyFilters(needsOrdering(rows)))`; unit tests assert group order, quantities, filters and search against the export.
+2. **No invented quantity**: without a Par the CSV cell says `Order needed`, not a number, and the vendor header counts such items separately from the suggested total.
+3. **XLSX recommendations (one sheet per vendor)** arrive with the XLSX library in BI-8; the CSV writer in `src/lib/csv` is the one BI-8 extends.
+4. `STATUS_LABEL` moved to `domain/stock-rules.ts` (re-exported from the badge) so the domain can name statuses without importing UI.
+
+### Gates
+
+| Gate                               | Result                                                                                              |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck          | PASS                                                                                                |
+| Vitest                             | 1031/1031 (87 files); new: `order-soon.test.ts` 13, `csv/write.test.ts` 5                           |
+| Playwright Dashboard (3 projects)  | 24 passed (grouping, collapse, filters at every width, export of all rows and of a filtered subset) |
+| Playwright all Bar Inventory specs | 70 passed, 2 intentional phone-only skips                                                           |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```
