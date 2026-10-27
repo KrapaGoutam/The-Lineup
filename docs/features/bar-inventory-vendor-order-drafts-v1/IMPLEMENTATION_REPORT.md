@@ -6,6 +6,15 @@ VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complet
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
+## VOD-1.1 corrective fix
+
+VOD-2 discovery found a VOD-1 database defect before any VOD-2 code was written. In `public.inventory_order_draft_save`, change detection compared each stored `order_qty` against `v_order_qty` before that variable was parsed for the current line, so the first line compared against `NULL` and later lines against the previous line's quantity. An Order Qty-only edit (for example blank → 5) could return `changed = false` without persisting or bumping the version; the same flaw could also bump the version on a true no-op and let a stale quantity-only write skip the `PT409` check.
+
+- Fix branch: `fix/vendor-order-draft-order-qty-save`, from `development` at `34c7481e6ad29a9226a197ba513314c271d8b68c`.
+- Additive migration `20261027210000_bar_inventory_order_draft_save_order_qty_fix.sql` redefines the function with the same signature, `SECURITY DEFINER`, empty `search_path`, grants, authorization, `PT409` behavior, and versioning. The current line's quantity is now parsed and validated before it is compared. The VOD-1 migration is not modified.
+- Regression pgTAP `0040_bar_inventory_order_draft_qty_save.test.sql` (50 assertions) covers first-line and later-line quantity-only changes, equal adjacent quantities, true no-ops, blank and zero transitions, stale `PT409`, Sent immutability, authorization, and tenant/location isolation.
+- No UI, no VOD-2 work, hosted DEV and PROD untouched.
+
 ## VOD-1 scope delivered
 
 - Additive migration `20261027195142_bar_inventory_order_drafts.sql`.
