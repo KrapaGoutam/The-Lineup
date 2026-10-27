@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-7 merged, BI-8a PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8a merged, BI-8b PR open)
+
+**BI-8b (the pure import engine: bounded RFC 4180 CSV reader, header mapping, and the CREATE / UPDATE / SKIP / ERROR plan with Current → Imported → Delta, SKU-first matching, near-miss choices, blank = unchanged, 0 = zero) is code complete; PR into `development` pending CI.** No migration and no UI in this slice; report §BI-8b. Vitest 1248/1248. Next: BI-8c (migration, atomic commit, Preview / Confirm UI), then 8d (XLSX import).
 
 **BI-8a (CSV and XLSX exports of inventory, history, order recommendations and analytics, filters re-applied server-side, one formula guard for both formats) is code complete; PR into `development` pending CI.** BI-8 is split into 8a exports, 8b import engine, 8c import commit + migration, 8d XLSX import; report §BI-8a. Vitest 1136/1136; Playwright all Bar Inventory 118 (+2 skips). Next: BI-8b.
 

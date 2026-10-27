@@ -454,3 +454,46 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-8b — The import engine (pure)
+
+Second slice of BI-8 (8a exports merged, PR #179). Branch `feature/bar-inventory-bi8b-import-engine` → PR into `development`. **No migration, no UI, no server code:** this is the part that decides what a file would do, written as pure functions so every rule is unit-tested before any of it can touch data. 8c (database + Preview / Confirm UI) and 8d (XLSX) build on it.
+
+### Delivered
+
+| Module                     | What                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/csv/read.ts`      | RFC 4180 reader: quoted fields, doubled quotes, embedded newlines, CRLF / LF / CR, UTF-8 or UTF-16 byte-order marks, `,` `;` tab sniffed from the first line (never from inside quotes), control characters stripped, blank lines dropped while row numbers stay true to the file (header = row 1). **Bounded:** 5 MB, 5,000 data rows, 40 columns, 500 characters per cell, else a clear error and nothing is allocated past the cap                        |
+| `domain/import-columns.ts` | Header mapping against the approved template with the spec's aliases (`Qty`, `Cut off`, `Min`, `Par`, `Target`, `Item`, `UPC` …), compared as letters and digits only; the **template minimum** (Vendor, Name, On Hand, Backup, Cutoff Limit, PRD) is reported when missing; unknown headers are listed, never dropped silently; two columns for one field → the first wins and the clash is reported; the manager's own mapping overrides the automatic one |
+| `domain/import-plan.ts`    | `buildImportPlan(rows, header, catalog, options)` → every row classified **CREATE / UPDATE / SKIP / ERROR** with `Current → Imported → Delta` per changed field, the status move (e.g. Critical → Healthy), the stock version it was planned against (for conflict detection at commit), warnings, and the proposed new entities                                                                                                                             |
+
+### Rules as implemented (locked D2, D4, D5 and `IMPORT_EXPORT_SPEC.md` §4-§6)
+
+- **Blank = unchanged, `0` = zero**, for every count and level. A row that changes nothing is a Skip ("No changes"), so an all-blank row can never clear anything. On a **new** item, blank counts are 0 and blank levels are none.
+- **Matching:** SKU first; else vendor + name + size + unit (size and unit normalised for matching only: `750ml` = `750 mL`). **Never by name alone**: _Tito's 750 mL_ and _Tito's 1.75 L_ are separate, and the same name under another vendor is a new item. A SKU match whose name / size / unit / vendor differ is an Update **flagged for the manager's tick** (`needsApproval`). A SKU that matches nothing creates the item with it; a different SKU on an identity match is an Error, not an overwrite.
+- **Vendors, categories, subcategories** are matched (letters and digits only, so _Del Papa / DelPapa / DEL PAPA_ are one vendor) or **proposed**, once each, with the first-seen spelling; never created by the plan. A near-miss (edit distance ≤ 2 for longer names, ≤ 1 for short ones, none for tiny ones; e.g. _Fuast_ vs _Faust_) is reported as "Did you mean …?" and **blocks commit until the manager chooses** to map it or create it. A deactivated vendor or category is an Error (no silent reactivation). A subcategory needs a category.
+- **Validation** with plain-language messages, all problems of a row reported together: Vendor and Name required; numbers must be plain, ≥ 0, ≤ 2 decimals (thousand separators, decimal commas and negatives are refused, not guessed); the Warning ≥ Cutoff rule is checked on the **resulting** values (a new cutoff is checked against the level already on file); Par below Cutoff is a warning and the row still imports; 200 characters per field, 500 for Notes; an unknown unit becomes "Other" with its own label (≤ 40), a blank unit assumes Bottle and says so.
+- **In the file:** the same item twice → the later row is the Error and names the first; one SKU on two different items → **both** rows are Errors. Archived products cannot be updated by import.
+- **`canCommit`** is true only when something would be written **and** nothing waits on a choice. Rows in error never propose new entities.
+
+### What 8c and 8d add
+
+8c: the migration (`inventory_import_batches`, the FK from `inventory_adjustments.import_batch_id`, the staged plan, the export change-log), the atomic commit that applies exactly the reviewed plan and writes `bulk_import` ledger rows (refusing a row whose stock changed since preview), pgTAP, server actions, the Preview / Confirm UI with batch history. 8d: XLSX reading behind the bounded zip guard, the sheet picker, rejection of `.xls` / `.xlsm` / `.xlsb`.
+
+### Gates
+
+| Gate                      | Result                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck | PASS                                                                                                                                                                                                                                                                                                                                                            |
+| Vitest                    | 1248/1248 (96 files); new `csv/read.test.ts` 21 (every parsing case, the caps, UTF-16, round trip with the writer), `import-columns.test.ts` 22, `import-plan.test.ts` 69 (identity matching, vendor spellings and near-misses with choices, SKU rules, blank vs 0, diffs and status moves, every validation rule, duplicates and collisions, the plan summary) |
+| Playwright                | not applicable: no UI or runtime change in this slice (CI still runs the full smoke)                                                                                                                                                                                                                                                                            |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```
