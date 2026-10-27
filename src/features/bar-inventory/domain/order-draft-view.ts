@@ -43,6 +43,9 @@ export type OrderDraftView = {
   version: number;
   updatedAt: string;
   updatedByName: string | null;
+  /** Set only on a SENT order: when, and by whom, it was marked sent. */
+  sentAt: string | null;
+  sentByName: string | null;
   lines: OrderDraftLine[];
 };
 

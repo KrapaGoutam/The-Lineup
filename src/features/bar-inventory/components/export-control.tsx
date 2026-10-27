@@ -27,6 +27,9 @@ export type RunExport = (
 /** What the table on screen currently shows, for "Export N filtered rows". */
 export type VisibleInfo = { filters: string; count: number; active: boolean };
 
+/** The options panel's width (`w-64`). */
+const PANEL_WIDTH_PX = 256;
+
 const NONE: VisibleInfo = { filters: "", count: 0, active: false };
 
 /**
@@ -75,6 +78,9 @@ export function ExportControl({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  // Open towards the left when the panel would run past the right edge of the
+  // screen (a button near the right of a phone), so it never adds page scroll.
+  const [alignEnd, setAlignEnd] = useState(false);
   const [scope, setScope] = useState<"all" | "filtered">("filtered");
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +124,14 @@ export function ExportControl({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const rect = buttonRef.current?.getBoundingClientRect();
+          setAlignEnd(
+            rect !== undefined &&
+              rect.left + PANEL_WIDTH_PX > window.innerWidth,
+          );
+          setOpen((v) => !v);
+        }}
       >
         <Download aria-hidden="true" /> {label}
       </button>
@@ -128,7 +141,7 @@ export function ExportControl({
           id={panelId}
           role="dialog"
           aria-label={`${label} options`}
-          className="border-border bg-popover text-popover-foreground absolute top-full left-0 z-30 mt-1 flex w-64 flex-col gap-3 rounded-xl border p-3 shadow-xl"
+          className={`border-border bg-popover text-popover-foreground absolute top-full z-30 mt-1 flex w-64 flex-col gap-3 rounded-xl border p-3 shadow-xl ${alignEnd ? "right-0" : "left-0"}`}
         >
           {info.active ? (
             <fieldset className="flex flex-col gap-1">

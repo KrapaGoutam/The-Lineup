@@ -2,7 +2,7 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 and VOD-4 are not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 is implemented on `feature/bar-order-drafts-v1-sharing-history` (see "VOD-3 sharing delivered"; PR pending exact-head CI); VOD-4 is not started.
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
@@ -113,9 +113,46 @@ Exact-head GitHub CI on `f6c3fd0` (run 40594938733): `application` success, `bro
 
 **Coverage gap to close in VOD-4:** the `host-tablet` project (WebKit) was NOT RUN for VOD-2 — WebKit is not installed in the Cloud VM and CI runs only `desktop`. `server-mobile` (Pixel 7) ran locally only (9/9 new spec; regression green). A Chromium iPad-viewport emulation passed 9/9 but is not a WebKit result. VOD-4 must run host-tablet and server-mobile on a machine with the browsers installed.
 
+## VOD-3 sharing delivered
+
+Branch `feature/bar-order-drafts-v1-sharing-history` from `development` at `75d6ae35cfdfda1ba53d4994b067e12b241c9291`. **No database migration** (no `supabase/**` change); only the existing VOD-1/1.1 RPCs and RLS are used. Tasks T-1, the VOD-2 backlog items (Add item UI, leave-Bar-Inventory guard, Realtime drafts) and VOD-4 are untouched.
+
+- **Copy Order.** `domain/order-draft-share.ts` (`purchaseLines`, `copyOrderText`, `withLiveLabels`). Plain text exactly as D-VOD-11: `{Vendor} — Order Request`, one `{Name} {Size} — {Qty}` line per Included line with Order Qty > 0 (name, then size), the item note in parentheses (collapsed to one line), a `Notes:` block only for a non-empty vendor note. The Suggested Order is never in the vendor text. Quantities use `formatQuantity`, moved unchanged from `components/editable-cell.tsx` to `domain/stock-rules.ts` (and re-exported there) so the domain does not import a client component. A DRAFT shares the catalog's live name, size, SKU and vendor name; a SENT order shares the labels frozen at send.
+- **Clipboard UX.** `components/order-draft-share.tsx` (`CopyOrderButton`): Clipboard API when present; on a refusal or no API, a visible read-only text area, already selected, with an alert and a Select all button. Success is a polite `role="status"` "Order copied". No `alert()`.
+- **Export.** One new `ExportRequest` kind, `order_draft`, carrying only `{ kind, draftId }` (`orderDraftExportRequestSchema`, shared by the action's zod union and the tests). `exportDataAction` validates it, loads the draft by id bound to the server-derived organization and location under the caller's own RLS (`getOrderDraftById`), refuses a missing / other-tenant draft and an order with nothing to send, and calls the existing `prepareExport`. CSV is the **Order** sheet: `Vendor, Item, Size, Unit, SKU, Suggested, Order Qty, Item Note` for Included lines with Order Qty > 0; Suggested is the stored snapshot number or `Order needed`. XLSX is **Order** plus a key/value **Summary** (vendor, status, sent by, sent at in the location time zone and ISO, vendor note, suggested total, items with no suggestion, planned total, order lines). No new writer or dependency; neutralisation is the shared `neutralizeText` through `toCsv` / `workbookSheets`, unchanged. Demo mode builds the same file in the browser from the in-memory draft with the same `prepareExport`.
+- **Mark Sent.** `markOrderDraftSentAction` calls only `inventory_order_draft_mark_sent` (server-derived organization/location, the version the manager reviewed) and returns the authoritative active drafts plus the sent facts. The editor captures `draft.version` when the confirmation opens and sends that version, so a draft another manager changed in the meantime is refused (`PT409` → "This order draft changed elsewhere. Reload the latest version before marking it sent.") and the latest version is shown; nothing newer is silently sent. A retry or a second manager on an already-Sent draft gets "Already marked sent by {name} at {time}. Nothing was changed." and no second record. The confirmation states: recorded as sent outside The Lineup, the draft becomes read-only, inventory is not received or changed, and The Lineup does not email or message vendors. It is blocked while there are unsaved edits (Copy and Export too: they use the saved order the server also builds from) and without a positive Included quantity. After success focus moves to the Sent order's heading. Demo twin: `markSentDemo` in `order-draft-demo.ts` (same wording, no-op and `PT409` shape; the demo save / fill / clear / sync now also refuse a Sent order). Nothing in the flow references stock, the ledger or the catalog write path.
+- **Drafts | Sent.** A labelled group of two `aria-pressed` buttons inside Order Drafts (not a new top-level module; the four tabs are unchanged). Switching with unsaved edits uses the existing Stay / Discard / Save and continue guard.
+- **Sent history.** `getSentOrderDraftsPage`: status `sent` for this organization and location, `sent_at desc, id desc`, an explicit `range` of 20 and an exact `count` (so the 1,000-row API cap can never silently cut history; a page past the end is clamped to the last page); lines are read in explicit pages for just that page's drafts. Rows show vendor, sent date and time in the location time zone (`formatBusinessDateTime`, never raw UTC), sent by, lines ordered (Included with Order Qty > 0) and the planned total (quantities, never money). Previous / Next page buttons with a polite "Page 2 of 3 · 21–40 of 45 sent orders" status.
+- **Sent order view.** `getSentOrderDraftAction` (Sent only). Read-only: no input is rendered; frozen item label, **Suggested (at draft)** beside **Ordered** ("Not ordered" for excluded, blank or zero lines), item note, vendor note, sent by and when, planned / lines / suggested totals. Copy and Export remain. Renaming, archiving or changing par or vendor afterwards does not change it (engine test; real-browser DEV check is VOD-4).
+- **Small shared change.** `ExportControl` now opens its options towards the left when the 256 px panel would run past the right edge of the screen (a button near the right of a phone added page scroll). Other exports are unaffected on wide layouts.
+- **Interpretations to know.** Copy, Export and Mark Sent act on the saved order. "Line count" in the Sent list means lines actually ordered. A new DRAFT after Sent starts from current stock (database behaviour, unchanged).
+
+### VOD-3 validation evidence
+
+```text
+Unit / action / data / component (new):
+  order-draft-share.test.ts        13  Copy text, export document, formula guard, XLSX round trip, request schema
+  order-draft-sent.test.ts          5  summaries, paging past 1,000, clamping
+  order-draft-demo-sent.test.ts    10  Mark Sent, stale, idempotent, read-only, new draft, frozen labels
+  order-draft-sharing-actions.test.ts 13  Mark Sent action, Sent reads, export action (staff, tenant, rows)
+  order-draft-data.test.ts          7  paged Sent read, by-id read, active read
+  order-drafts-view.test.tsx       41  (+17 VOD-3: Copy, fallback, Export, Mark Sent, switch, Sent view, paging)
+Full Vitest: 114 files / 1557 tests PASS (VOD-2: 109 / 1492)
+npm run check (format, lint, typecheck): PASS
+npm run build: PASS (Next.js 16.4.3)
+Playwright, new spec tests/e2e/bar-inventory-order-drafts-sharing.spec.ts: desktop 11/11 PASS, server-mobile 11/11 PASS
+Playwright, all bar-inventory specs: desktop 77/77 PASS; server-mobile 75 passed, 2 intentional skips
+Playwright host-tablet (WebKit): NOT RUN — environment limitation (WebKit is not installed in the Cloud VM; CI runs the desktop project only)
+  supplemental Chromium with the iPad (gen 7) landscape viewport: 19/19 PASS (VOD-3 spec + VOD-2 spec) — NOT a WebKit result
+tests/real, pgTAP:   NOT RUN — no migration, and no Docker / Supabase / hosted credentials in Cloud
+Hosted DEV:          untouched (VOD-4)
+```
+
+**Carried to VOD-4:** run the full Playwright matrix including `host-tablet` WebKit and `server-mobile` on a machine with the browsers; real RLS and Staff denial for Sent reads and the order export; two-context `PT409` for Mark Sent; real export of a Sent order with a renamed / archived product; the real-database no-inventory-mutation check; paging against a hosted history larger than one page.
+
 ## Deferred to approved later phases
 
-- VOD-3: Copy Order, CSV/XLSX, Mark Sent confirmation UI, Sent list/detail.
+- VOD-3: delivered, see below (Copy Order, CSV/XLSX, Mark Sent, Sent list/detail).
 - VOD-4: hosted DEV and responsive/role/concurrency final gate.
 
 No automatic email/SMS/WhatsApp/EDI, purchase-order workflow, receiving, invoice matching, pricing, or cost accounting was added.

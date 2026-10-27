@@ -47,6 +47,10 @@ export function toCents(value: number): number {
 
 export const fromCents = (cents: number): number => cents / 100;
 
+/** A stored quantity as text: "—" when blank, otherwise as-is ("6", "6.5"). */
+export const formatQuantity = (value: number | null) =>
+  value === null ? "—" : String(value);
+
 /** Rounds a derived value (e.g. a sum) to two decimals without drift. */
 export function round2(value: number): number {
   return fromCents(Math.round(value * 100));

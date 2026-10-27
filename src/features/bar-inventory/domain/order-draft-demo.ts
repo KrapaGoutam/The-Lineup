@@ -9,6 +9,7 @@ import {
   validateOrderQuantity,
   type OrderDraftFillMode,
 } from "./order-draft";
+import { hasPurchaseLines } from "./order-draft-share";
 import type {
   OrderDraftLine,
   OrderDraftSavePayload,
@@ -24,14 +25,26 @@ import type {
  */
 
 export type DraftEngineResult =
-  | { ok: true; state: CatalogState; draftId: string; changed: boolean }
+  | {
+      ok: true;
+      state: CatalogState;
+      draftId: string;
+      changed: boolean;
+      /** Mark Sent only: who sent the order and when. */
+      sent?: { sentByName: string | null; sentAt: string | null };
+    }
   | { ok: false; error: string; conflict?: CatalogConflict };
 
 const fail = (error: string, conflict?: CatalogConflict) =>
   ({ ok: false, error, conflict }) as const;
 
+/** Every order draft in the demo state, active and sent. */
 export const draftsOf = (state: CatalogState): OrderDraftView[] =>
   state.orderDrafts ?? [];
+
+/** The ACTIVE (still editable) drafts: what the Order Drafts editor lists. */
+export const activeDraftsOf = (state: CatalogState): OrderDraftView[] =>
+  draftsOf(state).filter((d) => d.status === "draft");
 
 function lineFromRow(row: InventoryRow): OrderDraftLine {
   return {
@@ -104,6 +117,7 @@ function find(state: CatalogState, draftId: string) {
 }
 
 const MISSING = "That order draft is not available.";
+const SENT_READ_ONLY = "A sent order cannot be changed.";
 
 /** `inventory_order_draft_open`: reuse the active draft or create and seed it. */
 export function openDraftDemo(
@@ -135,6 +149,8 @@ export function openDraftDemo(
     version: 1,
     updatedAt: ctx.now.toISOString(),
     updatedByName: ctx.actorName,
+    sentAt: null,
+    sentByName: null,
     lines: neededRows(state, vendor.id).map(lineFromRow),
   };
   return {
@@ -153,6 +169,7 @@ export function saveDraftDemo(
 ): DraftEngineResult {
   const draft = find(state, input.draftId);
   if (!draft) return fail(MISSING);
+  if (draft.status === "sent") return fail(SENT_READ_ONLY);
 
   const note = normalizeVendorNote(input.vendorNote);
   if (!note.ok) return fail(note.error);
@@ -210,6 +227,7 @@ export function fillDraftDemo(
 ): DraftEngineResult {
   const draft = find(state, input.draftId);
   if (!draft) return fail(MISSING);
+  if (draft.status === "sent") return fail(SENT_READ_ONLY);
   const filled = fillOrderDraft(
     {
       status: draft.status,
@@ -242,6 +260,7 @@ export function clearDraftDemo(
 ): DraftEngineResult {
   const draft = find(state, input.draftId);
   if (!draft) return fail(MISSING);
+  if (draft.status === "sent") return fail(SENT_READ_ONLY);
   const cleared = clearOrderDraft({
     status: draft.status,
     vendorNote: draft.vendorNote,
@@ -280,6 +299,7 @@ export function syncDraftDemo(
 ): DraftEngineResult {
   const draft = find(state, input.draftId);
   if (!draft) return fail(MISSING);
+  if (draft.status === "sent") return fail(SENT_READ_ONLY);
   const rows = new Map(buildInventoryRows(state).map((r) => [r.productId, r]));
   const lines = draft.lines.map((line) => {
     const row = rows.get(line.productId);
@@ -313,5 +333,65 @@ export function syncDraftDemo(
     state: replaceDraft(state, touch(draft, ctx, { lines: all })),
     draftId: draft.id,
     changed: true,
+  };
+}
+
+/**
+ * `inventory_order_draft_mark_sent`: record that the manager sent or shared the
+ * order outside the app. It freezes the labels, sets the sent facts, bumps the
+ * version and makes the order read-only. It never touches stock or the ledger
+ * (this function only ever writes `orderDrafts`). A retry on an already-Sent
+ * order changes nothing and returns the first send's facts.
+ */
+export function markSentDemo(
+  state: CatalogState,
+  input: { draftId: string; expectedVersion: number },
+  ctx: CatalogContext,
+): DraftEngineResult {
+  const draft = find(state, input.draftId);
+  if (!draft) return fail(MISSING);
+  if (draft.status === "sent") {
+    return {
+      ok: true,
+      state,
+      draftId: draft.id,
+      changed: false,
+      sent: { sentByName: draft.sentByName, sentAt: draft.sentAt },
+    };
+  }
+  if (input.expectedVersion !== draft.version) return stale(draft);
+  if (!hasPurchaseLines(draft.lines)) {
+    return fail("Add a quantity before marking this order sent.");
+  }
+
+  // Freeze today's catalog labels, once, before the order becomes read-only.
+  const rows = new Map(buildInventoryRows(state).map((r) => [r.productId, r]));
+  const vendor = state.vendors.find((v) => v.id === draft.vendorId);
+  const lines = draft.lines.map((line) => {
+    const row = rows.get(line.productId);
+    return row
+      ? {
+          ...line,
+          name: row.name,
+          size: row.size,
+          unit: row.unit,
+          sku: row.sku,
+        }
+      : line;
+  });
+  const sentAt = ctx.now.toISOString();
+  const sent = touch(draft, ctx, {
+    status: "sent",
+    vendorName: vendor?.name ?? draft.vendorName,
+    sentAt,
+    sentByName: ctx.actorName,
+    lines,
+  });
+  return {
+    ok: true,
+    state: replaceDraft(state, sent),
+    draftId: draft.id,
+    changed: true,
+    sent: { sentByName: ctx.actorName, sentAt },
   };
 }

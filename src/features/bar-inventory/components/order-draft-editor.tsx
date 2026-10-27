@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+import type { MarkSentFacts } from "../actions/order-draft-actions";
 import type { OrderDraftFillMode } from "../domain/order-draft";
+import { purchaseLines } from "../domain/order-draft-share";
 import {
   diffDraftEdits,
   draftTotals,
@@ -31,10 +33,24 @@ import {
 import type { StockStatus } from "../domain/stock-rules";
 import type { OrderDraftApi } from "../hooks/use-order-drafts";
 import { formatQuantity } from "./editable-cell";
+import type { RunExport } from "./export-control";
+import { ShareActions } from "./order-draft-share";
 import { StatusBadge } from "./table-kit/status-badge";
 
 /** What the module needs to know to stop a person leaving unsaved edits. */
 export type DraftGuard = { dirty: boolean; save: () => Promise<boolean> };
+
+/** What the screen needs after Mark Sent succeeds (or was already done). */
+export type DraftSentOutcome = {
+  draftId: string;
+  /** False when the order had already been marked sent (a retry). */
+  changed: boolean;
+  sent: MarkSentFacts | undefined;
+};
+
+const NO_QUANTITY_MESSAGE = "Add a quantity before marking this order sent.";
+const STALE_SEND_MESSAGE =
+  "This order draft changed elsewhere. Reload the latest version before marking it sent.";
 
 type Notice = { kind: "status" | "alert"; text: string } | null;
 
@@ -282,19 +298,26 @@ function LineRow({
  */
 export function OrderDraftEditor({
   draft,
+  shared,
   displayName,
   viewerName,
   timeZone,
   api,
   onGuard,
+  runExport,
+  onSent,
 }: {
   draft: OrderDraftView;
+  /** The same draft with the catalog's live labels: what Copy and Export share. */
+  shared: OrderDraftView;
   /** Live catalog label for a line (a draft shows current names). */
   displayName: (line: OrderDraftLine) => string;
   viewerName: string;
   timeZone: string;
   api: OrderDraftApi;
   onGuard: (guard: DraftGuard | null) => void;
+  runExport: RunExport;
+  onSent: (outcome: DraftSentOutcome) => void;
 }) {
   const uid = useId();
   const [edits, setEdits] = useState<DraftEdits>(EMPTY_EDITS);
@@ -304,7 +327,9 @@ export function OrderDraftEditor({
   const [busy, setBusy] = useState<"save" | "op" | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
-  const [dialog, setDialog] = useState<"fill" | "clear" | null>(null);
+  const [dialog, setDialog] = useState<"fill" | "clear" | "send" | null>(null);
+  // The version the manager was looking at when they opened the confirmation.
+  const [sendVersion, setSendVersion] = useState(0);
   const [fillMode, setFillMode] = useState<OrderDraftFillMode>("empty_only");
 
   const diff = useMemo(() => diffDraftEdits(draft, edits), [draft, edits]);
@@ -431,6 +456,38 @@ export function OrderDraftEditor({
     });
   };
 
+  const startMarkSent = () => {
+    if (busy) return;
+    if (dirty) return blockedByEdits();
+    if (purchaseLines(draft.lines).length === 0) {
+      setNotice({ kind: "alert", text: NO_QUANTITY_MESSAGE });
+      return;
+    }
+    setSendVersion(draft.version);
+    setDialog("send");
+  };
+
+  const confirmMarkSent = async () => {
+    setDialog(null);
+    if (busy) return;
+    setBusy("op");
+    setNotice(null);
+    // Against the version the manager reviewed, never the latest one.
+    const result = await api.markSent(draft.id, sendVersion);
+    setBusy(null);
+    if (result.ok) {
+      onSent({
+        draftId: draft.id,
+        changed: result.changed,
+        sent: result.sent,
+      });
+    } else if (result.conflict?.kind === "stale") {
+      setNotice({ kind: "alert", text: STALE_SEND_MESSAGE });
+    } else {
+      setNotice({ kind: "alert", text: result.error });
+    }
+  };
+
   const fillable = fillableBlankCount(draft);
   const replaceable = replaceableQuantityCount(draft);
   const startFill = () => {
@@ -529,6 +586,25 @@ export function OrderDraftEditor({
         >
           Clear Draft
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-start gap-2" data-testid="send-bar">
+        <Button
+          onClick={startMarkSent}
+          aria-disabled={opsDisabled}
+          className={opsDisabled ? "opacity-60" : undefined}
+        >
+          Mark Sent
+        </Button>
+        <ShareActions
+          draft={shared}
+          runExport={runExport}
+          unsavedReason={
+            dirty
+              ? "Save your changes first. Copy and Export use the saved order."
+              : undefined
+          }
+        />
       </div>
 
       <div
@@ -716,6 +792,41 @@ export function OrderDraftEditor({
           </ul>
         </div>
       )}
+
+      <Dialog
+        open={dialog === "send"}
+        onClose={() => setDialog(null)}
+        title="Mark this order as sent?"
+        description={`Use this after you have sent or shared the order with ${shared.vendorName} outside The Lineup. It only records that the order was sent.`}
+      >
+        <ul className="list-disc space-y-1 pl-5 text-sm">
+          <li>
+            The draft becomes a sent order and is read-only: it can no longer be
+            edited.
+          </li>
+          <li>
+            It does <strong>not</strong> receive inventory or change your stock
+            counts.
+          </li>
+          <li>
+            It does <strong>not</strong> send anything: The Lineup does not
+            email or message vendors.
+          </li>
+          <li>
+            {purchaseLines(draft.lines).length} line
+            {purchaseLines(draft.lines).length === 1 ? "" : "s"} · planned total{" "}
+            {formatQuantity(draftTotals(draft).plannedTotal)} units.
+          </li>
+        </ul>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDialog(null)}>
+            Cancel
+          </Button>
+          <Button onClick={() => void confirmMarkSent()}>
+            Yes, mark as sent
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog
         open={dialog === "fill"}

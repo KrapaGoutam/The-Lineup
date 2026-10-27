@@ -163,7 +163,7 @@ export type CatalogState = {
   ledger?: HistoryEntry[];
   /** Demo mode only: its confirmed imports. Real mode reads batches from the database. */
   importBatches?: ImportBatchView[];
-  /** Demo mode only: its active order drafts. Real mode reads them from the database. */
+  /** Demo mode only: its order drafts, active and sent. Real mode reads them from the database. */
   orderDrafts?: OrderDraftView[];
 };
 
