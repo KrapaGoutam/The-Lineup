@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8d merged, BI-9 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-9 merged, BI-10 PR open)
+
+**BI-10 (hosted DEV validation): GO.** Run on a DEV-pinned production build (PROD ref in 0 files). Real-mode Dashboard, History, Analytics and the CSV/XLSX exports proven against the database row by row; CSV + XLSX import, roles, tenant isolation, concurrency, Realtime (who is told, no storm) and a phone profile all pass: hosted DB 38/38, hosted UI 23/23, no leftovers. Report `docs/features/bar-inventory-v1/DEV_VALIDATION.md`. Tests + report only. Next: BI-11 (final gate).
 
 **BI-9 (Realtime as notify → refetch, responsive and accessibility polish) is code complete; PR into `development` pending CI.** One migration, `20261027130000`: `inventory_stock` and `inventory_adjustments` join the Realtime publication (notification only; RLS decides who is told). A change to a count re-reads the snapshot in every other open window; bursts fold into a few reads; a quiet minute costs none. **Found and fixed a defect from BI-1: in real mode the Bar Inventory snapshot was re-read once a second** (the shell's per-second clock handed the controller a new callback each render). Verified in two real browser windows against hosted DEV, on a production build; Vitest 1356/1356; pgTAP 38 files; report §BI-9. Next: BI-10 (hosted DEV validation).
 
