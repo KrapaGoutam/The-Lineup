@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-2 merged, BI-3 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-3 merged, BI-4 PR open)
+
+**BI-4 (Dashboard: six KPI tiles with drill-down to Inventory, filterable Order soon and Recently changed, honest placeholders for analytics-dependent insights) is code complete; PR into `development` pending CI.** Report §BI-4. Vitest 1013/1013; Playwright Dashboard + module 30, Inventory + Manage 31 (+2 skips). Next: BI-5 (Order soon grouped by vendor).
 
 **BI-3 (shared `FilterableTable` kit, type-appropriate column filters, Inventory view with inline reason-gated adjustments, filtered Manage tables) is code complete; PR into `development` pending CI.** Evidence and the Windows WebKit-wedge investigation: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md` §BI-3. Vitest 998/998; Playwright per project (2 workers) desktop 199, host-tablet 199, server-mobile 197 (+2 skips). Next: BI-4 (Dashboard).
 
