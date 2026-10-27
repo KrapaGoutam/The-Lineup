@@ -7,6 +7,7 @@ import {
   type CategoryView,
   type ProductInput,
   type ProductView,
+  type StockView,
   type SubcategoryView,
   type VendorView,
 } from "./inventory-types";
@@ -369,6 +370,170 @@ function assertProductUnique(
   }
 }
 
+// ---------------------------------------------------------------------
+// Stock (twin of inventory_stock_adjust / inventory_stock_set_levels)
+// ---------------------------------------------------------------------
+function checkQuantity(
+  label: string,
+  value: number | null,
+  allowNegative: boolean,
+) {
+  if (value === null) return;
+  if (!Number.isFinite(value)) throw refuse(`Enter a number for the ${label}.`);
+  if (Math.abs(Math.round(value * 100) / 100 - value) > 1e-9) {
+    throw refuse(`The ${label} can have at most two decimal places.`);
+  }
+  if (Math.abs(value) > 9_999_999_999.99) {
+    throw refuse(`The ${label} is too large.`);
+  }
+  if (value < 0 && !allowNegative) {
+    throw refuse(`The ${label} cannot be negative.`);
+  }
+}
+
+function findStock(state: CatalogState, productId: string): StockView {
+  return (
+    state.stock.find((row) => row.productId === productId) ?? {
+      productId,
+      onHand: 0,
+      backup: 0,
+      cutoff: null,
+      warning: null,
+      par: null,
+      version: 1,
+      updatedAt: null,
+      updatedByName: null,
+      lastAdjustedAt: null,
+    }
+  );
+}
+
+function putStock(state: CatalogState, next: StockView): StockView[] {
+  return state.stock.some((row) => row.productId === next.productId)
+    ? state.stock.map((row) => (row.productId === next.productId ? next : row))
+    : [...state.stock, next];
+}
+
+function staleStock(stock: StockView, entityLabel: string): CatalogRefusal {
+  return new CatalogRefusal(
+    `Someone else changed this ${entityLabel}. Review the latest and try again.`,
+    {
+      kind: "stale",
+      entity: "stock",
+      id: stock.productId,
+      currentVersion: stock.version,
+      updatedBy: stock.updatedByName,
+      updatedAt: stock.updatedAt,
+      current: { onHand: stock.onHand, backup: stock.backup },
+    },
+  );
+}
+
+function adjustStock(
+  state: CatalogState,
+  command: Extract<CatalogCommand, { type: "stockAdjust" }>,
+  ctx: CatalogContext,
+): CatalogState {
+  if (command.onHand === null && command.backup === null) {
+    throw refuse("Enter a quantity.");
+  }
+  const isDelta = command.mode === "delta";
+  checkQuantity("on hand count", command.onHand, isDelta);
+  checkQuantity("backup count", command.backup, isDelta);
+  const product = findProduct(state, command.productId);
+  if (!product.active) {
+    throw refuse("Reactivate this product before changing its count.");
+  }
+  const stock = findStock(state, product.id);
+
+  const cents = (value: number) => Math.round(value * 100);
+  let onHand: number;
+  let backup: number;
+  if (isDelta) {
+    onHand = (cents(stock.onHand) + cents(command.onHand ?? 0)) / 100;
+    backup = (cents(stock.backup) + cents(command.backup ?? 0)) / 100;
+    if (onHand < 0 || backup < 0) {
+      throw refuse("That would take the count below zero.");
+    }
+  } else {
+    onHand = command.onHand ?? stock.onHand;
+    backup = command.backup ?? stock.backup;
+  }
+
+  // Identical request (double submit / retry): nothing to do, nothing logged.
+  if (
+    cents(onHand) === cents(stock.onHand) &&
+    cents(backup) === cents(stock.backup)
+  ) {
+    return state;
+  }
+  if (!isDelta) {
+    if (command.expectedVersion === null) {
+      throw refuse("Reload the item and try again.");
+    }
+    if (stock.version !== command.expectedVersion) {
+      throw staleStock(stock, "count");
+    }
+  }
+  const now = ctx.now.toISOString();
+  return {
+    ...state,
+    stock: putStock(state, {
+      ...stock,
+      onHand,
+      backup,
+      version: stock.version + 1,
+      updatedAt: now,
+      updatedByName: ctx.actorName,
+      lastAdjustedAt: now,
+    }),
+  };
+}
+
+function setLevels(
+  state: CatalogState,
+  command: Extract<CatalogCommand, { type: "stockSetLevels" }>,
+  ctx: CatalogContext,
+): CatalogState {
+  checkQuantity("cutoff", command.cutoff, false);
+  checkQuantity("warning level", command.warning, false);
+  checkQuantity("par level", command.par, false);
+  if (
+    command.warning !== null &&
+    command.cutoff !== null &&
+    command.warning < command.cutoff
+  ) {
+    throw refuse("The warning level must be at least the cutoff.");
+  }
+  const product = findProduct(state, command.productId);
+  if (!product.active) {
+    throw refuse("Reactivate this product before changing its levels.");
+  }
+  const stock = findStock(state, product.id);
+  if (
+    stock.cutoff === command.cutoff &&
+    stock.warning === command.warning &&
+    stock.par === command.par
+  ) {
+    return state;
+  }
+  if (stock.version !== command.expectedVersion) {
+    throw staleStock(stock, "item");
+  }
+  return {
+    ...state,
+    stock: putStock(state, {
+      ...stock,
+      cutoff: command.cutoff,
+      warning: command.warning,
+      par: command.par,
+      version: stock.version + 1,
+      updatedAt: ctx.now.toISOString(),
+      updatedByName: ctx.actorName,
+    }),
+  };
+}
+
 function apply(
   base: CatalogState,
   command: CatalogCommand,
@@ -536,7 +701,11 @@ function apply(
         active: true,
         ...audited(ctx),
       };
-      return { ...state, products: [...state.products, product] };
+      return {
+        ...state,
+        products: [...state.products, product],
+        stock: putStock(state, findStock(state, product.id)),
+      };
     }
     case "productUpdate": {
       const row = findProduct(state, command.id);
@@ -598,6 +767,10 @@ function apply(
         ),
       };
     }
+    case "stockAdjust":
+      return adjustStock(state, command, ctx);
+    case "stockSetLevels":
+      return setLevels(state, command, ctx);
   }
 }
 
@@ -617,5 +790,11 @@ export function applyCatalogCommand(
 }
 
 export function emptyCatalogState(): CatalogState {
-  return { vendors: [], categories: [], subcategories: [], products: [] };
+  return {
+    vendors: [],
+    categories: [],
+    subcategories: [],
+    products: [],
+    stock: [],
+  };
 }

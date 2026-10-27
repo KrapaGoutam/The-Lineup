@@ -46,6 +46,11 @@ async function openBarInventory(page: Page) {
   });
 }
 
+async function openManage(page: Page) {
+  await openBarInventory(page);
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
+}
+
 async function cleanup() {
   const { admin, orgId } = await devLocation();
   const like = `${TAG}%`;
@@ -94,7 +99,7 @@ test("BI-NAV-003: staff never see Bar Inventory", async () => {
 });
 
 test("BI-CAT: a manager builds a catalog that survives a reload; duplicates are refused by the database", async () => {
-  await openBarInventory(manager);
+  await openManage(manager);
   // The system vendor is bootstrapped by the first read.
   await manager.getByRole("tab", { name: "Vendors" }).click();
   await expect(
@@ -167,7 +172,7 @@ test("BI-CAT: a manager builds a catalog that survives a reload; duplicates are 
 
   // A reload re-reads everything from the database.
   await manager.reload();
-  await openBarInventory(manager);
+  await openManage(manager);
   await manager.getByRole("tab", { name: "Products" }).click();
   await expect(
     manager
@@ -189,7 +194,7 @@ test("BI-ADJ-005: a stale edit from a second window is refused, not silently app
   const secondContext = await contexts[0].browser()!.newContext();
   const second = await secondContext.newPage();
   await signIn(second, PINS.TestManager);
-  await openBarInventory(second);
+  await openManage(second);
   await second.getByRole("tab", { name: "Vendors" }).click();
   await second.getByRole("button", { name: `Edit ${TAG} Faust` }).click();
   const secondDialog = second.getByRole("dialog", { name: "Edit vendor" });
@@ -213,4 +218,93 @@ test("BI-ADJ-005: a stale edit from a second window is refused, not silently app
       .getByRole("table", { name: "Vendors" })
       .getByRole("row", { name: new RegExp(`${TAG} Faust Mine`) }),
   ).toBeVisible();
+});
+
+test("BI-3: counts and levels persist through the real server actions; a stale inline edit is never silent", async () => {
+  const name = `${TAG} Tito's`;
+  await manager.reload();
+  await openBarInventory(manager);
+  await manager.getByRole("tab", { name: "Inventory", exact: true }).click();
+  await manager.getByRole("searchbox", { name: "Search Inventory" }).fill(TAG);
+  const table = manager.getByRole("table", { name: "Inventory" });
+  await expect(table.getByRole("row", { name })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // Item sheet: count, then levels (separate operations in the database).
+  await manager.getByRole("button", { name: `Adjust ${name}` }).click();
+  let sheet = manager.getByRole("dialog", { name });
+  await sheet.getByLabel("On hand").fill("6");
+  await sheet.getByLabel("Backup").fill("2");
+  await sheet.getByRole("button", { name: "Save count" }).click();
+  await expect(sheet).toBeHidden({ timeout: 30_000 });
+
+  await manager.getByRole("button", { name: `Adjust ${name}` }).click();
+  sheet = manager.getByRole("dialog", { name });
+  await sheet.getByLabel("Cutoff").fill("4");
+  await sheet.getByLabel("Warning").fill("6");
+  await sheet.getByLabel("Par").fill("12");
+  await sheet.getByRole("button", { name: "Save levels" }).click();
+  await expect(sheet).toBeHidden({ timeout: 30_000 });
+  // total 8 > warning 6
+  await expect(table.getByRole("row", { name })).toContainText("Healthy");
+
+  // Inline count edit with the reason step -> Critical (3 <= 4).
+  await manager
+    .getByRole("button", { name: `Edit On hand for ${name}, currently 6` })
+    .click();
+  await manager.getByLabel(`On hand for ${name}`).fill("1");
+  await manager.getByLabel(`On hand for ${name}`).press("Enter");
+  const reason = manager.getByRole("group", {
+    name: "Reason for changing On hand",
+  });
+  await reason.getByLabel("Reason").selectOption({ label: "Usage" });
+  await reason.getByRole("button", { name: "Save" }).click();
+  await expect(table.getByRole("row", { name })).toContainText("Critical", {
+    timeout: 30_000,
+  });
+
+  // Window A starts an edit from version N; window B saves first.
+  await manager
+    .getByRole("button", { name: `Edit On hand for ${name}, currently 1` })
+    .click();
+  await manager.getByLabel(`On hand for ${name}`).fill("5");
+
+  const secondContext = await contexts[0].browser()!.newContext();
+  const second = await secondContext.newPage();
+  await signIn(second, PINS.TestManager);
+  await openBarInventory(second);
+  await second.getByRole("tab", { name: "Inventory", exact: true }).click();
+  await second.getByRole("searchbox", { name: "Search Inventory" }).fill(TAG);
+  await second
+    .getByRole("button", { name: `Edit On hand for ${name}, currently 1` })
+    .click();
+  await second.getByLabel(`On hand for ${name}`).fill("2");
+  await second.getByLabel(`On hand for ${name}`).press("Enter");
+  const secondReason = second.getByRole("group", {
+    name: "Reason for changing On hand",
+  });
+  await secondReason.getByRole("button", { name: "Save" }).click();
+  await expect(
+    second.getByRole("button", {
+      name: `Edit On hand for ${name}, currently 2`,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await secondContext.close();
+
+  // Window A saves from the stale version: the database refuses, the cell says so.
+  await manager.getByLabel(`On hand for ${name}`).press("Enter");
+  await manager
+    .getByRole("group", { name: "Reason for changing On hand" })
+    .getByRole("button", { name: "Save" })
+    .click();
+  await expect(manager.getByText(/changed this/)).toBeVisible({
+    timeout: 30_000,
+  });
+  await manager.getByRole("button", { name: /Apply mine \(5\)/ }).click();
+  await expect(
+    manager.getByRole("button", {
+      name: `Edit On hand for ${name}, currently 5`,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
 });

@@ -61,6 +61,7 @@ import {
 import { SettingsPage } from "@/features/settings/components/settings-page";
 import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
 import { InventoryModule } from "@/features/bar-inventory/components/inventory-module";
+import { emptyCatalogState } from "@/features/bar-inventory/domain/catalog-engine";
 import { buildDemoCatalog } from "@/features/bar-inventory/domain/demo-catalog";
 import type { CatalogState } from "@/features/bar-inventory/domain/inventory-types";
 import { TasksModule } from "@/features/tasks/components/tasks-module";
@@ -706,9 +707,7 @@ function RestaurantOperationsAppInner({
   // Bar Inventory (demo mode only): the in-memory catalog, held here so it
   // survives tab switches. Real mode reads and writes the database.
   const [demoCatalog, setDemoCatalog] = useState<CatalogState>(() =>
-    demoMode
-      ? buildDemoCatalog()
-      : { vendors: [], categories: [], subcategories: [], products: [] },
+    demoMode ? buildDemoCatalog() : emptyCatalogState(),
   );
   const [demoTasksState, setDemoTasksState] = useState<TasksState>(() =>
     demoMode
@@ -2100,6 +2099,7 @@ function RestaurantOperationsAppInner({
           <InventoryModule
             restaurantSlug={restaurantSlug}
             user={user}
+            timeZone={timeZone}
             onSessionInvalid={forceSignOut}
             demo={
               demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null

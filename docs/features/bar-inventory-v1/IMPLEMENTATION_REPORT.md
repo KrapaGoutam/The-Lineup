@@ -181,3 +181,53 @@ DEV touched: YES (4 migrations; hosted suites with synthetic orgs; 26 leaked syn
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-3 — Shared table kit, column filters, Inventory view
+
+Branch `feature/bar-inventory-bi3-table-kit` → PR into `development`. **No migration** (UI + domain + loader/action wiring only; DEV schema unchanged by this phase).
+
+### Delivered
+
+| Layer         | What                                                                                                                                                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filter engine | `domain/table-filters.ts`: text (contains / starts with / equals), multi-select, numeric (`=` `<` `<=` `>` `>=` between), date (Today / Last 7 / Last 30 / Custom, evaluated in the **location time zone**), stable multi-key sort, URL serialization; malformed URL input and foreign-organization filter context are rejected |
+| Table kit     | `components/table-kit/`: `FilterableTable` (desktop header filter popovers, mobile Filters sheet, active chips, Clear filter / Clear all, global search ANDed with column filters, sortable headers, sort presets, column chooser, card layout below `md`), `Sheet`, `StatusBadge`, `EmptyState`, outside-dismiss hook          |
+| Inventory     | `inventory-view.tsx` + `domain/inventory-rows.ts`: all approved columns, status icon + text, inline stock edit with a reason step (`editable-cell.tsx`), mobile item sheet (`item-sheet.tsx`) and quick adjustment; demo-mode stock engine, stock loader and server-action integration                                          |
+| Manage        | Products, Vendors and Categories tables use the same per-column filters (replacing ad hoc search)                                                                                                                                                                                                                               |
+
+### Defects found while building, fixed here (regression tests added for each)
+
+1. **Empty filter result removed the whole table** (and with it the filter controls, so the user could not clear the filter) → header and filter controls stay; the body shows an empty state.
+2. **Stale inline edit**: a background refresh delivered version B while the user was editing version A, and the cell silently adopted B, so a submit could overwrite a concurrent change → the editing cell keeps the version it **started** from; the server's `PT409 stale` check stays authoritative. Proven with a real two-window scenario against DEV.
+3. **Foreign-organization URL filters**: a shared URL carrying another organization's filter context could be re-stamped onto the current organization → foreign context is dropped when the module mounts.
+4. **Mobile overflow** (BI-1 fix) is now also asserted for the Inventory view.
+
+### WebKit investigation (full-suite wedge on Windows)
+
+The first full demo run (default workers) stalled in the `host-tablet` (WebKit) project: 11 workers sat for ~39 minutes, the run was stopped, and the rest of `host-tablet` plus all of `server-mobile` never executed.
+
+- The 11 stalled cases were 3 × `bar-inventory-inventory` (BI-3's own), 3 × `allocation-open-editing`, 5 × `attendance-reporting`. Rerun individually on `host-tablet` with 2 workers: **11/11 pass in 1.6–6.9 s**.
+- Rerun per project with 2 workers and a global timeout: `host-tablet` **199/199 (7.1 min)**, `server-mobile` **197 passed, 2 skipped (2.6 min)**; the original run had `desktop` at 199 ok / 0 failed.
+- No assertion failure reproduced. Classification: **non-reproduced environment instability (Windows WebKit under default parallelism)**, not a product defect. No test was skipped, deleted or weakened. Exact-head CI is the arbiter. Local full runs should use `--workers=2` per project.
+
+### Gates (exact numbers)
+
+| Gate                                        | Result                                                       |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| format / lint / typecheck                   | PASS                                                         |
+| Vitest                                      | 998/998 (84 files); Bar Inventory focused 248/248            |
+| Filter engine matrix (`table-filters.test`) | 27 tests                                                     |
+| Playwright Inventory (demo)                 | 19 passed, 2 intentional phone-only skips                    |
+| Playwright Manage filters                   | 12 passed                                                    |
+| Playwright full, per project (2 workers)    | desktop 199 · host-tablet 199 · server-mobile 197 (+2 skips) |
+| Hosted DEV UI                               | 4/4 incl. two-window stale-cell conflict                     |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (hosted UI suite with synthetic orgs; no migration in BI-3)
+PROD touched: NO
+PROD migrations: NO
+```

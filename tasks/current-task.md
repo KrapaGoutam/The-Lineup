@@ -1,27 +1,31 @@
-# Current task — Bar Inventory V1 build, then Tasks V1.1 (handoff)
+# Current Task Handoff — Bar Inventory V1 build, then Tasks V1.1
 
 ## Current State & Next Step
 
-Cycle: **implementation after the 2026-10-26 Production release.** Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP (Tips V2 #155 is next; not in this task).
+**Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-3 (table kit + filters + Inventory view) — code complete, gated, in PR.
 
-Current branch: `feature/bar-inventory-bi2-stock-ledger` (from `origin/development` `92024d3`; BI-0 #171 and BI-1 #172 merged)
-**Exact next action:** BI-2 PR is open: wait for exact-head CI (application, browser-smoke, Database), merge with a merge commit; then branch `feature/bar-inventory-bi3-table-kit` and build the table kit (DataTable, column filters x4 types, chips, sort presets, Tabs/Sheet/Skeleton/EmptyState/StatusBadge) + Inventory view (desktop/tablet/mobile cards, inline edit + reason popover, stale-cell UX); apply the filters to the BI-1 Manage tables. Owner decision pending: delete 26 leaked synthetic "V2 Harness" orgs from DEV (see report §BI-2).
+**Branch:** `feature/bar-inventory-bi3-table-kit` · **Base development:** `d216290` (BI-2 merge)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-3 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi3-table-kit`)
+
+**Exact next action:** wait for exact-head CI on the BI-3 PR (application, browser-smoke, Database); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi4-dashboard origin/development` and build BI-4 (Dashboard). Never continue BI-4 on the BI-3 branch.
+**Exact next command:** `gh pr checks <BI-3 PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
 ## Rules for every phase
 
-`feature/*` · `fix/*` · `docs/*` branch → targeted validation → PR → exact-head CI → **merge commit** → `development`. Never commit to `development`/`main`. **No `development → main`** in this task. Migrations DEV only; PROD never touched. `git add` explicit paths only (never `-A`; `docs/testing/` and `*.code-workspace` stay untracked). Do not mix Bar Inventory and Tasks code on one branch. Tips V2 is NOT implemented here.
+`feature/*` · `fix/*` · `docs/*` branch → targeted validation → PR → exact-head CI → **merge commit** → `development`. Never commit to `development`/`main`. **No `development → main`** in this task. Migrations DEV only; PROD never touched. `git add` explicit paths only (never `-A`; `docs/testing/` and `*.code-workspace` stay untracked). Do not mix Bar Inventory and Tasks code on one branch. Tips V2 is NOT implemented here. A commit after CI invalidates that CI evidence.
 
 ## Bar Inventory phases
 
-- [x] **BI-0** decisions locked · XLSX library review (D6) · golden vectors · `TEST_MATRIX.md` (107 scenarios) · `IMPLEMENTATION_REPORT.md` — merged (PR #171, `92a5ae4`)
-- [x] **BI-1** org-level catalog (migration `20261026170000`, DEV applied), 13 RPCs, Manage UI, nav registration — code complete, PR pending (evidence: report §BI-1). Interim: column filters land in BI-3.
-- [x] **BI-2** `inventory_stock`, status view, immutable `inventory_adjustments`, `inventory_stock_adjust` / `_set_levels`, optimistic concurrency, 3 FK-cascade fixes — code complete, PR pending (report §BI-2)
-- [ ] **BI-3** table kit + filters + Inventory view (desktop/tablet/mobile)
-- [ ] **BI-4** Dashboard (KPIs)
+- [x] **BI-0** decisions, XLSX review, vectors, `TEST_MATRIX.md` — merged (PR #171)
+- [x] **BI-1** org-level catalog, 13 RPCs, Manage UI — merged (PR #172)
+- [x] **BI-2** stock, immutable ledger, status view — merged (PR #173, `d216290`)
+- [x] **BI-3** `FilterableTable` kit, filter engine (text/multi-select/numeric/date, location-TZ), sort presets, URL serialization with foreign-org rejection, Inventory view (inline reason-gated edit, stale-version-safe cell, mobile item sheet), Manage Products/Vendors/Categories filters — **PR open, awaiting CI/merge** (report §BI-3)
+- [ ] **BI-4** Dashboard (KPIs: Active/Critical/Low/Healthy/No Cutoff/Recently Changed; sections Order Soon, Fastest Moving, Recently Changed, Frequently Hitting Cutoff — no fake analytics before BI-7)
 - [ ] **BI-5** Order Soon by vendor + recommendation export
-- [ ] **BI-6** History / versioning
+- [ ] **BI-6** History
 - [ ] **BI-7** Analytics
 - [ ] **BI-8** CSV/XLSX import & export
 - [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
@@ -30,26 +34,48 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 ## Tasks V1.1 phases (after Bar Inventory)
 
-Scope in the owner brief: default landing = Tasks → Today (deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized; staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 min in the location time zone, deduplicated per recipient/stage/service date, suppressed when complete. Issues #169, #154 (no duplicates). Phases T-0 → T-6 are defined when group A completes.
+Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-- [ ] T-0 … T-6 (not started)
-
-## Safety ledger (this cycle so far)
+## BI-3 evidence (reuse; do not rerun without cause)
 
 ```
-development merged: YES for BI-0 (PR #171, 92a5ae4); BI-1 PR pending
+Unit:     Vitest 998/998 (84 files); Bar Inventory focused 248/248; filter matrix 27
+DB:       no migration in BI-3; BI-2 pgTAP/hosted DB evidence stands
+Browser:  Inventory demo 19 pass + 2 intentional phone skips; Manage filters 12 pass
+          full per project, 2 workers: desktop 199 · host-tablet 199 (7.1m) · server-mobile 197 + 2 skips (2.6m)
+Hosted:   DEV UI 4/4 incl. two-window stale-cell conflict
+Static:   lint · typecheck · prettier --check PASS
+CI:       pending on the PR head
+```
+
+**WebKit wedge (resolved as non-reproduced environment instability):** the first full run stalled ~39 min in `host-tablet` at default parallelism (11 cases: 3 bar-inventory-inventory, 3 allocation-open-editing, 5 attendance-reporting). All 11 pass in 1.6–6.9 s alone; both full per-project reruns are green. On Windows run Playwright per project with `--workers=2 --global-timeout=…`; do not run the full 3-project matrix at default workers.
+
+## Safety ledger
+
+```
+development merged: YES for BI-0/1/2 (#171 #172 #173); BI-3 PR open
 main merged: NO
-DEV touched: YES (BI-1 migration 20261026170000; hosted suites use synthetic/tagged data)
+DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3 added no migration)
 PROD touched: NO
 PROD migrations: NO
 ```
 
+## Known problems
+
+- **26 leaked synthetic "V2 Harness" orgs in DEV** — harmless; deletion NOT authorized by the owner. Do not delete; ask first if they ever invalidate a test.
+- Windows WebKit instability under default Playwright parallelism (above).
+
 ## GitHub
 
-#168 Bar Inventory V1 (open) · #169 Tasks Today management visibility (open) · #154 Tasks notification narrowing (open) · #155 Tips V2 (open, untouched) · #111 deploy-migrations (open, blocked) · #113 migration/app sequencing (open) · #164 deferred Production checks (open). Verified live 2026-10-26.
+#168 Bar Inventory V1 (open) · #169 Tasks Today management visibility (open) · #154 Tasks notification narrowing (open) · #155 Tips V2 (open, untouched) · #111 deploy-migrations (open, blocked) · #113 migration/app sequencing (open) · #164 deferred Production checks (open).
 
 ## Notes for the next agent
 
-- The `docs/production-release-2026-10-26` branch holds an unmerged docs commit (`a4a8106`: release PASS handoff/STATUS). It is not on `development`; do not assume its content is present.
-- XLSX library installs happen in BI-8 only. The pre-flight zip guard (bounded `fflate` streaming inflate) is specified in `IMPORT_EXPORT_SPEC.md` §1 and was prototyped in BI-0 (scratch, not committed).
-- Shared vectors are the contract between SQL and TypeScript: never "fix" a mismatch by editing a vector without an owner-visible reason.
+- Uncommitted files / running processes: none after the BI-3 commit. Only unrelated `@playwright/mcp` and devtools node processes exist — do not kill them.
+- `docs/production-release-2026-10-26` holds an unmerged docs commit (`a4a8106`); do not assume its content is on `development`.
+- XLSX library installs happen in BI-8 only; the bounded zip guard is specified in `IMPORT_EXPORT_SPEC.md` §1.
+- Shared vectors are the contract between SQL and TypeScript: never edit a vector to hide a mismatch.
+- Every table/list view must reuse the BI-3 `FilterableTable` + `table-filters.ts`; no ad hoc filter systems.
+
+**Read first:** this file · `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md` §BI-3 · `IMPLEMENTATION_PLAN.md` · `UI_UX_PLAN.md`.
+**DO NOT:** merge to `main`, touch PROD, delete the synthetic DEV orgs, start Tips V2, squash/rebase-merge, or merge on red/stale CI.

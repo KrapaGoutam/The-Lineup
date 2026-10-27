@@ -61,6 +61,11 @@ function conflictFrom(error: RpcError): CatalogConflict | undefined {
           typeof detail.updated_by === "string" ? detail.updated_by : null,
         updatedAt:
           typeof detail.updated_at === "string" ? detail.updated_at : null,
+        current:
+          typeof detail.on_hand === "number" &&
+          typeof detail.backup === "number"
+            ? { onHand: detail.on_hand, backup: detail.backup }
+            : undefined,
       };
     }
     if (detail.kind === "duplicate") {
@@ -217,6 +222,30 @@ async function runCommand(
           ...base,
           p_product_id: command.id,
           p_active: command.active,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
+    case "stockAdjust":
+      return (
+        await supabase.rpc("inventory_stock_adjust", {
+          ...base,
+          p_product_id: command.productId,
+          p_mode: command.mode,
+          p_on_hand: command.onHand,
+          p_backup: command.backup,
+          p_reason: command.reason,
+          p_note: command.note,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
+    case "stockSetLevels":
+      return (
+        await supabase.rpc("inventory_stock_set_levels", {
+          ...base,
+          p_product_id: command.productId,
+          p_cutoff: command.cutoff,
+          p_warning: command.warning,
+          p_par: command.par,
           p_expected_version: command.expectedVersion,
         })
       ).error;

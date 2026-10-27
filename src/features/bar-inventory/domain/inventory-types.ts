@@ -78,12 +78,28 @@ export type ProductView = Audited & {
   active: boolean;
 };
 
-/** The whole organization-level catalog (BI-1). */
+/** One product's counts and levels at the (single, for now) location. */
+export type StockView = {
+  productId: string;
+  onHand: number;
+  backup: number;
+  cutoff: number | null;
+  warning: number | null;
+  par: number | null;
+  version: number;
+  /** Null until the first count or level change. */
+  updatedAt: string | null;
+  updatedByName: string | null;
+  lastAdjustedAt: string | null;
+};
+
+/** The organization-level catalog (BI-1) plus location stock (BI-2/3). */
 export type CatalogState = {
   vendors: VendorView[];
   categories: CategoryView[];
   subcategories: SubcategoryView[];
   products: ProductView[];
+  stock: StockView[];
 };
 
 export type CatalogSnapshot = CatalogState & {
@@ -112,6 +128,8 @@ export type CatalogConflict =
       currentVersion: number;
       updatedBy: string | null;
       updatedAt: string | null;
+      /** Stock conflicts: the counts as they are now. */
+      current?: { onHand: number; backup: number };
     }
   | {
       kind: "duplicate";
