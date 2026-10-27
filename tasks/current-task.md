@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8c (import commit: migration + RPCs + pgTAP + Preview / Confirm UI) — NOT STARTED. BI-8a and BI-8b are merged.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8c-1 (import batches + atomic commit, database) — code complete, gated, applied to DEV, in PR. BI-8c-2 (application) is next.
 
-**Branch:** none active. Create `feature/bar-inventory-bi8c-import-commit` from `origin/development` · **Base development:** `d8ea37d` (BI-8b merge, PR #180, head `5751359`, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** none open
+**Branch:** `feature/bar-inventory-bi8c-import-commit` · **Base development:** `0283b5d` (BI-8b + docs sync)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-8c-1 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi8c-import-commit`)
 
-**Exact next action:** `git fetch origin && git switch -c feature/bar-inventory-bi8c-import-commit origin/development` and build **BI-8c** on top of the merged engine (`src/lib/csv/read.ts`, `domain/import-columns.ts`, `domain/import-plan.ts`): (1) a DEV-only migration: `inventory_import_batches` (batch id, filename, format, sheet, actor, time, row count, created / updated / skipped / errors, vendors / categories / subcategories created, status, the staged plan as jsonb, expiry 24 h), the FK from `inventory_adjustments.import_batch_id`, RLS management-only, and an export change-log table; (2) `inventory_import_stage` + `inventory_import_commit(batch_id)` RPCs: atomic, applies EXACTLY the staged plan, creates the confirmed entities, per-row `expected_stock_version` conflict detection (a row whose stock changed since preview is a conflict, never overwritten), writes `bulk_import` ledger rows via the same path as manual adjustments, refuses archived targets; (3) pgTAP (roles, tenant + location isolation, atomicity, conflict, idempotent commit) and a hosted-DB suite; (4) server actions (parse via `parseCsv`/`buildImportPlan` on the SERVER, re-plan on commit); (5) Manage → Import UI: upload, column mapping (`mapHeaders` overrides), Preview with counts and per-row Current → Imported → Delta, near-miss choices (`plan.nearMisses` / `options.choices`), `needsApproval` ticks, error report CSV download, Confirm, result, batch history. Apply the migration to DEV only (method in memory `dev-supabase-access-and-pitfalls`). Then 8d (XLSX read + zip guard + sheet picker).
-**Exact next command:** `git fetch origin && git switch -c feature/bar-inventory-bi8c-import-commit origin/development`
+**Exact next action:** wait for exact-head CI on the BI-8c-1 PR (application, browser-smoke, migrations-and-policies); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi8c2-import-ui origin/development` and build **BI-8c-2**, the application half, on the merged DB + the BI-8b engine: (1) `next.config` `experimental.serverActions.bodySizeLimit` (default 1 MB is below the 5 MB file cap); (2) server actions in `actions/inventory-actions.ts` (ONLY async functions may be exported from that `"use server"` file; verify with a cold-cache `CI=1` run): `importPreviewAction` (decode + `parseCsv` + `mapHeaders` + `buildImportPlan` against the authoritative snapshot, nothing written) and `importCommitAction` (re-plan from the SAME inputs, compare a plan fingerprint to the one the person reviewed, build the staged plan JSON per the migration header, call `inventory_import_stage` then `inventory_import_commit`, send EVERY named RPC argument with explicit nulls, map `{ok:false, conflicts}` and errors to plain messages); (3) a pure `toStagedPlan(plan, selection, catalog)` (+ fingerprint) in `domain/import-stage.ts` that turns `PlanRow`s into the staged JSON (needs `expectedProductVersion`, vendor/category ids, full target product fields for SKU-approved identity changes, `set_product`), with unit tests; add `expectedProductVersion` to `PlanRow`; (4) a demo commit engine so the flow is testable in demo; (5) Manage → Import UI on the table kit: upload, column mapping (`mapHeaders` overrides), Preview (counts, per-row Current → Imported → Delta, warnings, errors, near-miss choices from `plan.nearMisses` → `options.choices`, `needsApproval` ticks, row selection), error-report CSV download, deliberate Confirm that cannot double-submit (a request id per attempt), result and conflict messages, refresh of Inventory; (6) e2e (demo) + extend `tests/real/ui/bar-inventory.real.spec.ts` for hosted. Skipped (documented): the per-export change-log entry. Then 8d (XLSX).
+**Exact next command:** `gh pr checks <BI-8c-1 PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -27,7 +27,7 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
 - [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
 - [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
-- [ ] **BI-8** CSV/XLSX import & export — **8a exports MERGED** (PR #179, `c383f37`) · **8b import engine MERGED** (PR #180, `d8ea37d`) · 8c import commit + migration (next) · 8d XLSX import
+- [ ] **BI-8** CSV/XLSX import & export — **8a exports MERGED** (PR #179) · **8b import engine MERGED** (PR #180) · **8c-1 database: PR open** (migration `20261027120000` applied to DEV; pgTAP 0037; hosted 9/9) · 8c-2 application (next) · 8d XLSX import
 - [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
 - [ ] **BI-10** hosted DEV validation
 - [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
@@ -36,15 +36,15 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-## BI-8b evidence (per-phase detail: see the report)
+## BI-8c-1 evidence (per-phase detail: see the report)
 
 ```
-Unit:     Vitest 1248/1248 (96 files); csv reader 21, header mapping 22, import plan 69
-DB:       no migration in BI-3..8b (8c adds the first since BI-2)
-Browser:  not applicable to 8b; all Bar Inventory specs 118 pass + 2 intentional skips at the BI-8a merge
-Hosted:   none yet; real-mode History / Analytics / export reads are exercised in BI-10
+Unit:     Vitest 1248/1248 (96 files); no application code changed in 8c-1
+DB:       pgTAP 0037 57/57; all 37 pgTAP files pass; migration 20261027120000 (first since BI-2)
+Browser:  not applicable to 8c-1; all Bar Inventory specs 118 pass + 2 intentional skips at the BI-8a merge
+Hosted:   DEV DB 9/9 (real JWTs: access, commit, replay, idempotent staging, double-submit race, conflict, rollback); no leaks (26 V2 Harness orgs unchanged)
 Static:   lint · typecheck · prettier --check PASS
-CI:       green on every merged PR so far (#171-#180)
+CI:       pending on the PR head
 ```
 
 **WebKit (Windows):** the BI-3 full run wedged once at default parallelism; not reproduced (report §BI-3). Run Playwright per project with `--workers=2 --global-timeout=…`.
@@ -54,7 +54,7 @@ CI:       green on every merged PR so far (#171-#180)
 ```
 development merged: YES for BI-0..8b (#171-#180)
 main merged: NO
-DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..8a added no migration)
+DEV touched: YES (BI-1/BI-2 and BI-8c migrations; hosted suites use synthetic orgs; BI-3..8b added none; BI-8c added 20261027120000)
 PROD touched: NO
 PROD migrations: NO
 ```

@@ -497,3 +497,49 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-8c-1 — Import batches and the atomic commit (database)
+
+BI-8c is delivered in two PRs: **8c-1 the database** (this) and **8c-2 the application** (server actions, a demo commit engine, the Preview / Confirm UI, batch history, e2e). Branch `feature/bar-inventory-bi8c-import-commit` → PR into `development`. **One migration, DEV only: `20261027120000_bar_inventory_import_commit.sql`** (applied to DEV; PROD never touched).
+
+### Design
+
+The commit must apply exactly what the manager reviewed, atomically, and never let the browser dictate what is written. So:
+
+1. The **server** parses the file and plans it (BI-8b engine) against the _current_ catalog and **stages** the plan (`inventory_import_stage`).
+2. The **commit** (`inventory_import_commit(batch_id)`) takes only a batch id and reads the staged plan from the database. The browser cannot alter it at commit time.
+3. A commit **calls the existing audited RPCs** (`inventory_vendor_create`, `_category_create`, `_subcategory_create`, `_product_create`, `_product_update`, `_stock_set_levels`, and the adjust path) inside one function call. So an import gets exactly the validation, uniqueness rules, change-log entries and ledger rows a manual change gets, and any error aborts the whole call: **applied completely or not at all**.
+
+### Delivered
+
+| Piece                                 | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_import_batches`            | One row per confirmed import: file name, format, sheet, reason (Stock Count or Delivery / Restock), actor, row / created / updated / skipped / error counts, entities created, the staged plan, the stored result, status `staged` → `committed`. RLS select for the location's managers; **no client write privilege**; foreign keys deferrable so a tenant teardown cascades in any order                                                                                                                                                                          |
+| Ledger link                           | `inventory_adjustments.import_batch_id` (reserved in BI-2) is now a real foreign key to the batch                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `private.inventory_stock_adjust_core` | The BI-2 adjust body, now taking the ledger `source` and `import_batch_id`. The public `inventory_stock_adjust` is a thin wrapper with the **same signature and behavior** (BI-1 / BI-2 pgTAP: 108 + 67 still pass), so clients still cannot forge a source or batch                                                                                                                                                                                                                                                                                                 |
+| `inventory_import_stage`              | Validates and stores the plan (shape, ≤ 5,000 rows, ≤ 8 MB, create / update only). **Idempotent on a client request id**: staging again, or two racing stages, return the same batch                                                                                                                                                                                                                                                                                                                                                                                 |
+| `inventory_import_commit`             | Locks the batch; a committed batch answers `already: true` with its stored result and writes nothing. **Pass 1** locks every product and stock row the plan touches and reports **conflicts** (stock or product changed since the preview, archived, missing) as data, applying nothing. **Pass 2** creates the confirmed vendors, categories and subcategories, then each product, its levels (only the levels the file gave; blanks keep the current value) and its counts as `bulk_import` ledger rows carrying the batch id. Writes an `import` change-log entry |
+
+### Rules preserved
+
+- Blank = unchanged, `0` = zero (the plan carries `null` for blank; levels merge with the current ones). A count that does not change writes no ledger row.
+- A stale row is never overwritten: it is a **conflict that stops the whole import** and leaves the batch staged, so the person previews again. (Chosen over "skip the conflicting row and apply the rest" because the brief forbids a partially applied import.)
+- Nothing is created before confirm: new vendors / categories / subcategories exist only in the staged plan until the commit.
+
+### Gates
+
+| Gate                                 | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pgTAP (local DB)                     | **0037: 57/57** (grants, RLS, staging validation, who may stage and commit, tenant and location isolation, idempotent staging, a successful commit incl. entities / levels / ledger / change log, replay, conflicts for stock / product / archived, atomic rollback after a refused row, a plan naming something it does not create, Delivery / Restock reason, batch reads by role, org teardown). **All 37 pgTAP files pass.** Existing 0033 gained one exclusion (its "all 13 catalog RPCs" count now skips the two import RPCs, covered by 0037) |
+| Hosted DEV DB (real JWTs, PostgREST) | **9/9**: access and no direct writes, commit through the audited path with the batch id, replay, idempotent staging, **two simultaneous commits apply exactly once**, **two simultaneous stages make one batch**, a conflict applies nothing, one refused row rolls everything back; no synthetic org or batch left behind (the 26 "V2 Harness" orgs unchanged)                                                                                                                                                                                      |
+| format / lint / typecheck / Vitest   | PASS; Vitest 1248/1248 (no application code changes in this PR)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (migration 20261027120000 applied; hosted suite with synthetic, self-cleaning data)
+PROD touched: NO
+PROD migrations: NO
+```
