@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8b merged)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8b merged, BI-8c-1 PR open)
+
+**BI-8c-1 (the database half of the import commit: import batches, an atomic commit that reuses the audited RPCs, idempotent staging, conflict detection) is code complete and applied to DEV; PR into `development` pending CI.** pgTAP 0037 57/57 (all 37 files pass), hosted DEV 9/9 including a real double-submit race; report §BI-8c-1. Next: BI-8c-2 (server actions, demo commit, Preview / Confirm UI).
 
 **BI-8b (the pure import engine: bounded RFC 4180 CSV reader, header mapping, and the CREATE / UPDATE / SKIP / ERROR plan with Current → Imported → Delta, SKU-first matching, near-miss choices, blank = unchanged, 0 = zero) is merged (PR #180).** No migration and no UI in this slice; report §BI-8b. Vitest 1248/1248. Next: BI-8c (migration, atomic commit, Preview / Confirm UI), then 8d (XLSX import).
 

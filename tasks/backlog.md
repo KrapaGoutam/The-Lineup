@@ -8,7 +8,7 @@ This backlog holds upcoming feature specifications and technical debt items queu
 
 | Item | Area | Priority | Spec Link | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-8b merged; 8c import commit next) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
+| **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-8b merged; 8c-1 database in PR, 8c-2 application next) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
 | **Tasks Today — management staff visibility** | Tasks | Medium | #169 | Owner / Manager / Assistant Manager: All Staff / My Tasks / per person in Today, staff name on each task. Tracked only. Roadmap #3. |
 | **Tasks notification scope** | Tasks | Medium | #154 | Limit the notification inbox to Opening and Closing operational work; settle ready/assigned/due/overdue semantics first. |
 | **Release conditions C1–C8** | Platform | High | #160, #161 | Release-readiness audit (2026-10-26) returned NO-GO: repair/replace the PROD migration route (#111), reconcile PROD missing `20260911130000` (#161), migrations-first procedure (#113), backup check, same-day numeric-label re-run. See `docs/releases/release-readiness-2026-10/GO_NO_GO.md`. |
