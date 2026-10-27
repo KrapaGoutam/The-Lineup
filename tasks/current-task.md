@@ -11,13 +11,14 @@ VOD-1 — database/domain foundation
 ## Git and tracking
 
 - Branch: `feature/bar-order-drafts-v1-foundation`
-- HEAD: `fe69c1391902ef7dee1a62f7f0931846af341e28`
+- HEAD before this handoff-only follow-up: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
+- Green implementation commit: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
 - Base `development` HEAD: `fe69c1391902ef7dee1a62f7f0931846af341e28`
 - Base verification: `origin/development` is an ancestor of the feature branch; merge base is `fe69c13`
 - Issue: #190
-- PR: none yet
-- Project: #4
-- Milestone: Future Product Backlog (confirm before PR/tracking update)
+- PR: #193 — open against `development`
+- Project: #4 — Status `In Progress`, Phase `Implementation`, Priority `P2`, Version `Future`, Work Type `Feature`
+- Milestone: Future Product Backlog
 
 ## Completed
 
@@ -50,7 +51,8 @@ VOD-1 — database/domain foundation
 - [x] Run targeted and required repository validation.
 - [x] Complete the independent security/tenant-isolation review; all ten findings are resolved and covered by the focused contract.
 - [x] Complete the final accidental-file and scope audit; `AGENTS.md`, package files, environment files, and the parked Tasks refs are unchanged.
-- [ ] Commit, push, open PR to `development`, update issue/project/milestone tracking, and monitor exact-head CI.
+- [x] Commit and push the VOD-1 foundation, open PR #193 to `development`, and update issue/project/milestone tracking.
+- [ ] Monitor exact-head CI and resolve any failure before merge.
 - [ ] Merge with a merge commit only after exact-head application and database CI are green.
 - [ ] Synchronize development, local docs, GitHub tracking, and this handoff; stop before VOD-2.
 
@@ -119,12 +121,12 @@ Implemented draft-level `version` starting at 1. Every mutation takes `p_expecte
 - Database lint: `supabase db lint --local --level error --fail-on error` PASS.
 - Migration history: local and remote-history columns both contain `20261027195142` in the disposable local stack.
 - Playwright: not run because VOD-1 has no UI, Route Handler, or Server Action changes.
-- CI: no VOD-1 PR yet.
+- CI: PR #193 application, browser-smoke, database, and Vercel checks started on implementation commit `b39866d`; the handoff follow-up will intentionally supersede that head before exact-head approval.
 - Last inherited green evidence: dependency PR #188 — Vitest 1406/1406; Playwright desktop 241, host-tablet 241, server-mobile 239 + 2 intentional skips.
 
 ## GitHub checks
 
-No VOD-1 PR or checks yet. Database and normal application CI must both be green on the exact VOD-1 head before merge.
+PR #193 is open against `development`. Initial application, browser-smoke, database, and Vercel checks are running; merge is forbidden until every required check is green on the final remote/PR head and all four SHA checks agree.
 
 ## Known issues
 
@@ -134,18 +136,7 @@ No VOD-1 PR or checks yet. Database and normal application CI must both be green
 
 ## Uncommitted files
 
-- `tasks/current-task.md`
-- `supabase/tests/database/0039_bar_inventory_order_drafts.test.sql`
-- `supabase/migrations/20261027195142_bar_inventory_order_drafts.sql`
-- `src/features/bar-inventory/domain/order-draft.ts`
-- `src/features/bar-inventory/domain/order-draft.test.ts`
-- `src/types/database.generated.ts` — regenerated from the local full migration replay; includes previously missing Bar Inventory types as well as VOD-1.
-- `supabase/tests/database/0033_bar_inventory_catalog.test.sql` — preserves that legacy test's original catalog-RPC scope now that VOD adds six separate RPCs.
-- `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md`
-- `docs/features/bar-inventory-vendor-order-drafts-v1/PLAN.md`
-- `docs/STATUS.md`
-- `docs/ROADMAP.md`
-- `tasks/backlog.md`
+- `tasks/current-task.md` — PR/tracking/CI handoff follow-up only.
 
 ## Running processes/background jobs
 
@@ -198,12 +189,12 @@ PROD migrations: NO
 ## Exact next command
 
 ```powershell
-git add docs/ROADMAP.md docs/STATUS.md docs/features/bar-inventory-vendor-order-drafts-v1/PLAN.md docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md src/features/bar-inventory/domain/order-draft.ts src/features/bar-inventory/domain/order-draft.test.ts src/types/database.generated.ts supabase/migrations/20261027195142_bar_inventory_order_drafts.sql supabase/tests/database/0033_bar_inventory_catalog.test.sql supabase/tests/database/0039_bar_inventory_order_drafts.test.sql tasks/backlog.md tasks/current-task.md
+git add tasks/current-task.md && git commit -m "docs(handoff): record VOD-1 PR state (#190)"
 ```
 
 ## Exact next action
 
-Stage only the audited VOD-1 file set, inspect the staged diff summary, and commit the green foundation.
+Commit and push the handoff-only follow-up, then verify local/remote/PR/check SHA equality and monitor exact-head CI.
 
 ## Read first
 
