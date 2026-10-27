@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import {
   useCatalogController,
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
+import { AnalyticsView } from "./analytics-view";
 import { DashboardView } from "./dashboard-view";
 import { HistoryView, type HistoryLoad } from "./history-view";
 import type { RecommendationsOutcome } from "./order-soon";
@@ -28,7 +29,7 @@ import {
 import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
 
-type View = "dashboard" | "inventory" | "manage" | "history";
+type View = "dashboard" | "inventory" | "manage" | "history" | "analytics";
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -117,8 +118,20 @@ function ManagerInventory({
   );
   // History comes from the immutable ledger. Demo keeps its ledger in memory;
   // real mode reads it from the database under the caller's own access.
+  //
+  // `loadHistory` must keep one identity: the app shell re-renders every
+  // second (the clock) and rebuilds `demo`, and a new function each time
+  // would make every view re-read the ledger each second. It reads the latest
+  // values through a ref, updated in a layout effect so it is current before
+  // any view's fetch effect runs.
+  const latest = useRef({ demo, snapshot, restaurantSlug, onSessionInvalid });
+  useLayoutEffect(() => {
+    latest.current = { demo, snapshot, restaurantSlug, onSessionInvalid };
+  });
   const loadHistory = useCallback(
     async (days: number, productId: string | null): Promise<HistoryLoad> => {
+      const { demo, snapshot, restaurantSlug, onSessionInvalid } =
+        latest.current;
       if (demo) {
         const since = days === 0 ? 0 : Date.now() - days * 86_400_000;
         const all = (snapshot?.ledger ?? []).filter(
@@ -141,7 +154,7 @@ function ManagerInventory({
       if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
       return result;
     },
-    [demo, snapshot, restaurantSlug, onSessionInvalid],
+    [],
   );
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
@@ -222,6 +235,14 @@ function ManagerInventory({
           loadHistory={loadHistory}
           onOpenHistory={() => setView("history")}
         />
+      ) : view === "analytics" ? (
+        <AnalyticsView
+          snapshot={controller.snapshot}
+          restaurantSlug={restaurantSlug}
+          timeZone={timeZone}
+          load={loadHistory}
+          onBack={() => setView("dashboard")}
+        />
       ) : view === "history" ? (
         <HistoryView
           snapshot={controller.snapshot}
@@ -237,6 +258,8 @@ function ManagerInventory({
           timeZone={timeZone}
           onExportRecommendations={exportRecommendations}
           onOpenHistory={() => setView("history")}
+          onOpenAnalytics={() => setView("analytics")}
+          loadHistory={loadHistory}
           onOpenInventory={(state) => {
             // The Inventory table reads its filters from the URL when it mounts.
             writeTableState("inv", restaurantSlug, state);

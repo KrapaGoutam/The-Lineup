@@ -503,6 +503,7 @@ function adjustStock(
     statusAfter: evaluateStock(next, { archived: false })
       .status as HistoryEntry["statusAfter"],
     actorName: ctx.actorName,
+    cutoffAtTime: stock.cutoff,
     importBatchId: null,
   };
   return {

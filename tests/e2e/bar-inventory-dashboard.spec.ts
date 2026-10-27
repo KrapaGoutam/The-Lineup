@@ -213,15 +213,24 @@ test("a count change shows up under Recently changed and in its tile", async ({
   expect(page.url()).toContain("inv.f.updated");
 });
 
-test("the movement insights say what they need instead of showing invented numbers", async ({
+test("the movement insights rank real ledger movement (BI-7)", async ({
   page,
 }) => {
   await signIn(page);
   await openBarInventory(page);
   const insights = page.getByRole("region", { name: "Movement insights" });
-  await expect(insights).toContainText("Fastest moving");
-  await expect(insights).toContainText("Frequently hitting cutoff");
-  await expect(insights).toContainText("once Analytics is available");
+  const fastest = insights.getByRole("list", { name: "Fastest moving" });
+  await expect(fastest.getByTestId("insight-item")).toHaveText([
+    /Modelo Especial.*1\.5\/day/,
+    /Tito's Handmade Vodka.*0\.4\/day/,
+    /Casamigos Blanco.*0\.17\/day/,
+  ]);
+  const hitting = insights.getByRole("list", {
+    name: "Frequently hitting cutoff",
+  });
+  await expect(hitting.getByTestId("insight-item")).toHaveText([
+    /Tito's Handmade Vodka.*2×/,
+  ]);
 });
 
 const orderRegion = (page: Page) =>

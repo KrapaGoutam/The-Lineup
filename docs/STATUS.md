@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-5 merged, BI-6 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-6 merged, BI-7 PR open)
+
+**BI-7 (Analytics from the ledger: Confirmed Usage vs Observed Depletion, rates, restocks, cutoff hits, vendor demand, days to cutoff only with enough history, as a range) is code complete; PR into `development` pending CI.** Report §BI-7 lists the rules, four small interpretations to confirm, and what is deferred (the depletion-over-time chart, shrink and count-variance tables). Vitest 1103/1103; Playwright all Bar Inventory 100 (+2 skips). Next: BI-8 (CSV/XLSX import and export).
 
 **BI-6 (History: every count change from the immutable ledger, every column filterable, per-item History in the item sheet) is code complete; PR into `development` pending CI.** Report §BI-6, including the historical-identity audit and its one known limit (labels are the item's current ones). Vitest 1047/1047; Playwright all Bar Inventory 79 (+2 skips). Next: BI-7 (Analytics).
 

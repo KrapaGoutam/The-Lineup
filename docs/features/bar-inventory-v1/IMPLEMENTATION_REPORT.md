@@ -351,3 +351,58 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-7 — Analytics from the ledger
+
+Branch `feature/bar-inventory-bi7-analytics` → PR into `development`. **No migration.** The ledger already stores `status_after` and `cutoff_at_time` per row (BI-2), so crossings are exact and a later cutoff change cannot rewrite them.
+
+### Delivered
+
+| Layer  | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain | `domain/analytics.ts` (pure, `ANALYTICS_SPEC.md` is normative): `classifyEntry`, `isCutoffCrossing`, windows in the location time zone, `buildItemAnalytics`, `estimateDaysToCutoff`, `fastestMoving` / `slowestMoving` / `frequentlyHittingCutoff`, `vendorDemand`, `summarize`, and the pure filter-column specs                                                                                                                                                                                                                                         |
+| Data   | `cutoff_at_time` is now read with each ledger row (`HistoryEntry.cutoffAtTime`); the existing `getHistoryAction` serves analytics (365 days, 5,000-row cap, truncation reported)                                                                                                                                                                                                                                                                                                                                                                           |
+| UI     | **Analytics view** (from Dashboard "See analytics"): period (7 / 14 / 30 / 90 days or a custom range), "Include observed depletion" (default on) and "Include breakage and comps" (default off), summary (total depletion split Confirmed / Observed, average per day and per week, restocked quantity and count, cutoff hits), an **Item movement** table and a **Vendor demand** table, both on the shared table kit with every column filterable; the totals follow the item table's filters. The Dashboard's two placeholders are now real top-5 lists |
+| Demo   | Back-dated, deterministic chains per demo product, ending exactly at today's counts, so the demo shows every state (a chronic cutoff hitter, a fast mover, a slow one, an item with too little history). Unit-tested against the spec's own vectors                                                                                                                                                                                                                                                                                                        |
+
+### Rules as implemented (locked D3 and the spec)
+
+- **Consumption** is judged on the change in _total available_ (on hand + backup): a negative **Usage** is Confirmed Usage; a negative **Stock Count** is Observed Depletion (never called a sale); **Breakage / Comp** are shrink (off by default). **Correction, Transfer In / Out, Delivery, Restock, "Other", a positive Stock Count and a move between on hand and backup are never consumption.**
+- **Rates** need ≥ 3 depletion events in the window and ≥ 14 days of history, else "Not enough history" and no number. Average per day = depletion ÷ calendar days in the window (quiet days count).
+- **Days to cutoff**: `No cutoff set` → `At or below cutoff` → `Not enough history` → `No recent movement` → a whole-day range from the faster and slower of the 7- and 30-day rates (`12–24 days`, `about 3 days`, `30+ days`, `20–30+ days`). Never a decimal. Judged on the last 30 days whatever period is on screen.
+- **Cutoff hit** = a change that leaves the item critical from a total above the cutoff recorded on that row: one per fall, not one per later adjustment while it stays down. **Chronic** = 2 or more hits in 30 days.
+- **Dead stock** = nothing depleted over a window of 30+ days, in stock, 14+ days of history: rate 0, "No movement".
+
+### Interpretations to confirm (small, deliberate)
+
+1. "Item has existed ≥ 14 days" is measured from the item's **first recorded change**: the catalog does not expose a creation date, and the first recorded change is the evidence that matters.
+2. Archived items are left out of the analytics tables.
+3. The Dashboard's two lists are previews (top 5) of the Analytics tables; the filterable tables are in the Analytics view.
+4. **Not in this phase:** the depletion-over-time chart (needs SVG primitives; the tables carry every metric, and the spec requires a table equivalent anyway), the shrink and count-variance tables, and the cross-unit "par turns" ranking beyond the per-item column.
+
+### Defects found by this phase's tests and fixed
+
+- `FilterableTable` defaulted `sortOnlyColumns` / `defaultSort` / `sortPresets` to a fresh `[]` each render, which invalidated its memoised rows and re-fired `onVisibleRows` every render; the first caller to set state from that callback looped. The defaults are stable now.
+- The app shell re-renders every second (header clock) and rebuilds the `demo` object, so `loadHistory` changed identity every second; every ledger consumer re-read it and Analytics flashed its loading state, unmounting its tables mid-interaction. `loadHistory` now keeps one identity (it reads current values through a ref updated in a layout effect) and `useLedger` re-reads on an explicit key and never blanks the screen.
+- Rates now display to at most 2 decimals (`formatRate`); the Dashboard briefly showed `0.1667/day`.
+
+### Gates
+
+| Gate                              | Result                                                                                                                                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck         | PASS                                                                                                                                                                                                              |
+| Vitest                            | 1103/1103 (90 files); new `analytics.test.ts` 49 (every spec vector, classifier, exclusions, windows and time zone, toggles, crossings, dead stock, rankings, vendor demand, filters), `analytics-demo.test.ts` 7 |
+| Playwright Analytics (3 projects) | 21 passed: totals, Confirmed vs Observed, the toggle, ranking and thin data, period change and a refused custom range, filters narrowing table and totals, vendor demand, navigation                              |
+| Playwright all Bar Inventory      | 100 passed, 2 intentional phone-only skips                                                                                                                                                                        |
+
+Not covered locally: the real-mode ledger read (`cutoff_at_time` is a new selected column, checked against the ledger migration); the hosted DEV run in BI-10 exercises it.
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```

@@ -12,7 +12,7 @@ export const HISTORY_ROW_LIMIT = 5000;
 export const ITEM_HISTORY_LIMIT = 25;
 
 const COLUMNS =
-  "id, created_at, product_id, source, reason, note, prev_on_hand, new_on_hand, prev_backup, new_backup, status_after, actor_profile_id, import_batch_id";
+  "id, created_at, product_id, source, reason, note, prev_on_hand, new_on_hand, prev_backup, new_backup, status_after, cutoff_at_time, actor_profile_id, import_batch_id";
 
 type LedgerRow = {
   id: number;
@@ -26,6 +26,7 @@ type LedgerRow = {
   prev_backup: number;
   new_backup: number;
   status_after: HistoryEntry["statusAfter"];
+  cutoff_at_time: number | null;
   actor_profile_id: string;
   import_batch_id: string | null;
 };
@@ -84,6 +85,8 @@ export async function getHistoryEntries(
         prevBackup: Number(row.prev_backup),
         newBackup: Number(row.new_backup),
         statusAfter: row.status_after,
+        cutoffAtTime:
+          row.cutoff_at_time === null ? null : Number(row.cutoff_at_time),
         actorName: names.get(row.actor_profile_id) ?? null,
         importBatchId: row.import_batch_id,
       }),
