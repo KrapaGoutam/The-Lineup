@@ -6,7 +6,27 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-1 COMPLETE — database/domain foundation merged; stop before VOD-2
+VOD-1.1 corrective fix — IN PROGRESS (VOD-2 NOT STARTED)
+
+## VOD-1.1 corrective fix
+
+- Branch: `fix/vendor-order-draft-order-qty-save`
+- Base: `34c7481e6ad29a9226a197ba513314c271d8b68c` (verified `origin/development`)
+- Reason: Order Qty-only saves can be incorrectly treated as no-op. `public.inventory_order_draft_save` compared stored `order_qty` against `v_order_qty` before it was parsed for the current line (NULL on the first line, the previous line's value afterwards).
+- Fix: additive migration `20261027210000_bar_inventory_order_draft_save_order_qty_fix.sql` redefines the function (same signature, grants, empty `search_path`, PT409, versioning); the historical VOD-1 migration is NOT modified. Regression pgTAP: `0040_bar_inventory_order_draft_qty_save.test.sql`.
+- Prior Cloud commit `99e25a9` was not reachable; the fix was recreated from repository truth.
+- VOD-2: NOT STARTED. VOD-0, VOD-1, VOD-1 docs sync #194 COMPLETE. Tasks T-1 PARKED at `03d5d45` (no PR). `main` and PROD UNTOUCHED.
+
+## Current State & Next Step
+
+Migration, regression pgTAP `0040`, and docs are complete locally and validated as far as the Cloud VM allows (see evidence below). Next: commit, push, open the PR to `development`, then monitor exact-head CI. Database CI is the authoritative gate; do not merge on anything else.
+
+### VOD-1.1 validation evidence
+
+- Scratch Postgres 16 (not the Supabase stack; Docker/Supabase CLI and pgTAP unavailable in Cloud): all 51 migrations replay cleanly. `0040` was run through a bespoke minimal TAP shim, not pgTAP. Against the original function the quantity-only assertions fail (`changed=false`, nothing persisted, stale write accepted); against the repaired function 50/50 pass.
+- Existing `0039` through the same shim: 86 pass / 0 fail. The 2 dblink concurrency assertions are NOT RUN — environment limitation.
+- `npm run check`: PASS (format, ESLint, typegen, tsc).
+- Real pgTAP (`supabase test db`) and application CI: pending on GitHub.
 
 ## Git and tracking
 
