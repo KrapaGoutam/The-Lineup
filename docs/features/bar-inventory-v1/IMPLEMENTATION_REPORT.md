@@ -309,3 +309,45 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-6 — History over the immutable ledger
+
+Branch `feature/bar-inventory-bi6-history` → PR into `development`. **No migration**: the ledger (`inventory_adjustments`, BI-2) already holds everything History needs, and its RLS select policy already scopes reads by organization, location and role.
+
+### Delivered
+
+| Layer  | What                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Domain | `domain/history.ts`: `buildHistoryRows` joins ledger entries to the catalog by the product's stable id, newest first (the ledger id breaks equal-timestamp ties), with exact cent deltas; `HISTORY_COLUMNS` (pure filter spec, reusable by a server export), sort presets, `changeSummary` ("On hand 6 → 4 (−2) · Backup 1 → 3 (+2)")                                                                                          |
+| Data   | `data/history-data.ts` + `getHistoryAction`: live-session and management-role checks, rows read under the caller's own RLS for the organization's location, bounded by range (30 / 90 / 365 days / everything) and a 5,000-row cap (the view says when it was cut); one item = its latest 25 changes                                                                                                                           |
+| UI     | `components/history-view.tsx`: every ledger column filterable through the shared table kit (date, vendor, item, category, subcategory, size, unit, reason, source, previous / new / Δ on hand and backup, actor, note, import batch), chips, Clear filter / Clear all, search, sort presets, phone cards, a range selector. `components/item-history.tsx`: a collapsible **History** section in the item sheet, loaded on open |
+| Demo   | The in-memory engine now appends a ledger entry per count change (same reason → source mapping, frozen status after), so History works and is testable without a database                                                                                                                                                                                                                                                      |
+
+History is a secondary view reached from the Dashboard ("Full history") and from Inventory ("History"), not a fourth tab: the approved UI plan and `BI-NAV-004` keep three primary views.
+
+### Historical identity (audit result)
+
+The ledger stores only the product's stable id. That is enough to keep every entry attached to its item: products are archived, never deleted (the only delete is the service-role cascade used for tenant teardown), and vendors, categories and subcategories are deactivated, never removed. So an old row stays readable after a product rename, archive, vendor rename or deactivation, category rename, and an archived item is marked "Archived".
+
+**Known limit, decided deliberately and not fixed here:** names are the item's _current_ ones. If a product is renamed, or moved to another vendor, older rows show the new name / vendor, because the ledger does not snapshot them. Snapshotting would change the audited `inventory_stock_adjust` function and need a backfill, which is a larger risk than this phase warrants; if the owner wants "as it was at the time" labels, it should be its own change. BI-7's Vendor Demand will read the product's current vendor for the same reason.
+
+### Gates
+
+| Gate                         | Result                                                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck    | PASS                                                                                                                                                                                    |
+| Vitest                       | 1047/1047 (88 files); new `history.test.ts` 16 (order and ties, cent-exact deltas, labels, rename / archive / deactivate, every filter type, combined filters and search, default sort) |
+| Playwright History           | 9 passed (3 projects): both entry points, newest first, reason filter + search + Clear all, item History, no page overflow                                                              |
+| Playwright all Bar Inventory | 79 passed, 2 intentional phone-only skips                                                                                                                                               |
+
+Not covered locally: the real-mode read (`getHistoryAction` against Supabase). Its columns were checked against the ledger migration; the hosted DEV run in BI-10 exercises it with real JWTs, including role denial and tenant isolation (RLS itself is covered by the BI-2 pgTAP suites).
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```

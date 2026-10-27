@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatBusinessDateTime } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
@@ -172,12 +173,14 @@ export function DashboardView({
   timeZone,
   onOpenInventory,
   onExportRecommendations,
+  onOpenHistory,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
   timeZone: string;
   onOpenInventory: (state: TableState) => void;
   onExportRecommendations: (filters: string) => Promise<RecommendationsOutcome>;
+  onOpenHistory: () => void;
 }) {
   const rows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
   // Re-read the clock whenever the data refreshes.
@@ -294,9 +297,14 @@ export function DashboardView({
         className="flex flex-col gap-2"
         data-testid="bi-recent-section"
       >
-        <h2 id="bi-recent" className="text-lg font-semibold">
-          Recently changed
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="bi-recent" className="text-lg font-semibold">
+            Recently changed
+          </h2>
+          <Button variant="ghost" onClick={onOpenHistory}>
+            Full history
+          </Button>
+        </div>
         <FilterableTable<InventoryRow>
           tableKey="recent"
           restaurantSlug={restaurantSlug}

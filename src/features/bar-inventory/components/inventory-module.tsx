@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Designation } from "@/features/auth/domain/passcode";
 
-import { exportOrderRecommendationsAction } from "../actions/inventory-actions";
+import {
+  exportOrderRecommendationsAction,
+  getHistoryAction,
+} from "../actions/inventory-actions";
 import { buildInventoryRows } from "../domain/inventory-rows";
 import { isInventoryManager } from "../domain/inventory-types";
 import { buildRecommendationsExport } from "../domain/order-export";
@@ -15,6 +18,7 @@ import {
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
 import { DashboardView } from "./dashboard-view";
+import { HistoryView, type HistoryLoad } from "./history-view";
 import type { RecommendationsOutcome } from "./order-soon";
 import { InventoryView } from "./inventory-view";
 import {
@@ -24,7 +28,7 @@ import {
 import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
 
-type View = "dashboard" | "inventory" | "manage";
+type View = "dashboard" | "inventory" | "manage" | "history";
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -111,6 +115,34 @@ function ManagerInventory({
     },
     [demo, snapshot, timeZone, restaurantSlug, onSessionInvalid],
   );
+  // History comes from the immutable ledger. Demo keeps its ledger in memory;
+  // real mode reads it from the database under the caller's own access.
+  const loadHistory = useCallback(
+    async (days: number, productId: string | null): Promise<HistoryLoad> => {
+      if (demo) {
+        const since = days === 0 ? 0 : Date.now() - days * 86_400_000;
+        const all = (snapshot?.ledger ?? []).filter(
+          (entry) =>
+            (!productId || entry.productId === productId) &&
+            Date.parse(entry.at) >= since,
+        );
+        const newest = all.toReversed();
+        return {
+          ok: true,
+          entries: productId ? newest.slice(0, 25) : newest,
+          truncated: false,
+        };
+      }
+      const result = await getHistoryAction({
+        restaurantSlug,
+        days,
+        productId,
+      });
+      if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+      return result;
+    },
+    [demo, snapshot, restaurantSlug, onSessionInvalid],
+  );
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -187,6 +219,16 @@ function ManagerInventory({
           run={controller.run}
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
+          loadHistory={loadHistory}
+          onOpenHistory={() => setView("history")}
+        />
+      ) : view === "history" ? (
+        <HistoryView
+          snapshot={controller.snapshot}
+          restaurantSlug={restaurantSlug}
+          timeZone={timeZone}
+          load={loadHistory}
+          onBack={() => setView("inventory")}
         />
       ) : (
         <DashboardView
@@ -194,6 +236,7 @@ function ManagerInventory({
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
           onExportRecommendations={exportRecommendations}
+          onOpenHistory={() => setView("history")}
           onOpenInventory={(state) => {
             // The Inventory table reads its filters from the URL when it mounts.
             writeTableState("inv", restaurantSlug, state);

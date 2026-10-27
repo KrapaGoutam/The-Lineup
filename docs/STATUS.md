@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-4 merged, BI-5 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-5 merged, BI-6 PR open)
+
+**BI-6 (History: every count change from the immutable ledger, every column filterable, per-item History in the item sheet) is code complete; PR into `development` pending CI.** Report §BI-6, including the historical-identity audit and its one known limit (labels are the item's current ones). Vitest 1047/1047; Playwright all Bar Inventory 79 (+2 skips). Next: BI-7 (Analytics).
 
 **BI-5 (Order soon grouped by vendor with per-vendor counts and suggested totals; CSV recommendations export re-applied server-side from the filter string; formula-safe CSV writer) is code complete; PR into `development` pending CI.** Report §BI-5. Vitest 1031/1031; Playwright all Bar Inventory 70 (+2 skips). Next: BI-6 (History).
 

@@ -4,6 +4,8 @@ import {
   type CatalogConflict,
   type CatalogFailure,
   type CatalogState,
+  type HistoryEntry,
+  type HistorySource,
   type CategoryView,
   type ProductInput,
   type ProductView,
@@ -11,6 +13,7 @@ import {
   type SubcategoryView,
   type VendorView,
 } from "./inventory-types";
+import { evaluateStock, sourceForReason } from "./stock-rules";
 import {
   cleanText,
   isUnitType,
@@ -476,17 +479,36 @@ function adjustStock(
     }
   }
   const now = ctx.now.toISOString();
+  const next = {
+    ...stock,
+    onHand,
+    backup,
+    version: stock.version + 1,
+    updatedAt: now,
+    updatedByName: ctx.actorName,
+    lastAdjustedAt: now,
+  };
+  const ledger = state.ledger ?? [];
+  const entry: HistoryEntry = {
+    id: String(ledger.length + 1),
+    at: now,
+    productId: product.id,
+    reason: command.reason,
+    source: sourceForReason(command.reason) as HistorySource,
+    note: command.note,
+    prevOnHand: stock.onHand,
+    newOnHand: onHand,
+    prevBackup: stock.backup,
+    newBackup: backup,
+    statusAfter: evaluateStock(next, { archived: false })
+      .status as HistoryEntry["statusAfter"],
+    actorName: ctx.actorName,
+    importBatchId: null,
+  };
   return {
     ...state,
-    stock: putStock(state, {
-      ...stock,
-      onHand,
-      backup,
-      version: stock.version + 1,
-      updatedAt: now,
-      updatedByName: ctx.actorName,
-      lastAdjustedAt: now,
-    }),
+    stock: putStock(state, next),
+    ledger: [...ledger, entry],
   };
 }
 
