@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Banknote,
   CalendarDays,
@@ -100,6 +100,13 @@ import {
   type DemoShift,
   type TeamMember,
 } from "@/lib/demo-data";
+import {
+  DEFAULT_APP_TAB,
+  resolveTab,
+  tabFromParam,
+  tabHref,
+  type AppTab,
+} from "@/lib/app-tab";
 import { cn } from "@/lib/utils";
 
 import {
@@ -116,17 +123,6 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-
-type AppTab =
-  | "schedule"
-  | "allocation"
-  | "tasks"
-  | "tips"
-  | "team"
-  | "attendance"
-  | "barInventory"
-  | "payroll"
-  | "settings";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
 // active; secondary, plain icon+label) rather than one flat row. Tasks V1:
@@ -612,7 +608,33 @@ function RestaurantOperationsAppInner({
     null,
   );
   const [signInStalled, setSignInStalled] = useState(false);
-  const [tab, setTab] = useState<AppTab>("allocation");
+  // Tasks V1.1 / D-1: Tasks is the default landing; an explicit module rides
+  // in `?tab=`. The URL is mirrored (not owned) by this state so a tab click
+  // is instant, while reload and back/forward still land on the right module.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlTab = tabFromParam(searchParams.get("tab"));
+  const [requestedTab, setRequestedTab] = useState<AppTab>(
+    urlTab ?? DEFAULT_APP_TAB,
+  );
+  const [seenUrlTab, setSeenUrlTab] = useState<AppTab | null>(urlTab);
+  if (urlTab !== seenUrlTab) {
+    // History navigation (or any URL change) re-selects the module.
+    setSeenUrlTab(urlTab);
+    setRequestedTab(urlTab ?? DEFAULT_APP_TAB);
+  }
+  function setTab(next: AppTab) {
+    setRequestedTab(next);
+    const href = tabHref(pathname, window.location.search, next);
+    if (href !== `${window.location.pathname}${window.location.search}`) {
+      window.history.pushState(null, "", href);
+    }
+  }
+  /** Back to the default landing with a clean URL (sign-out). */
+  function resetTab() {
+    setRequestedTab(DEFAULT_APP_TAB);
+    window.history.replaceState(null, "", pathname);
+  }
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Feature 015 (Phases B/D): real mode seeds every one of these from the
@@ -854,6 +876,9 @@ function RestaurantOperationsAppInner({
   }
 
   const isManager = user.role !== "server";
+  // What is actually on screen: the requested module unless this viewer
+  // cannot open it (UX fallback only; the server enforces access).
+  const tab = resolveTab(requestedTab, { isManager, demoMode });
   // Unread Tasks notifications for the tab badge. Demo mode derives it from
   // the in-memory state; real mode from the last fetch / the inbox itself.
   const tasksUnread = demoMode
@@ -900,7 +925,7 @@ function RestaurantOperationsAppInner({
   function forceSignOut() {
     if (!demoMode) void fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
-    setTab("schedule");
+    resetTab();
   }
 
   /**
@@ -1661,7 +1686,7 @@ function RestaurantOperationsAppInner({
   async function signOut() {
     if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
     setUser(null);
-    setTab("schedule");
+    resetTab();
     // Bug fix: signing out always happens from inside this open menu --
     // without closing it here, `showAvatarPanel` stays true underneath the
     // login screen and is still true the instant the next person signs in,
