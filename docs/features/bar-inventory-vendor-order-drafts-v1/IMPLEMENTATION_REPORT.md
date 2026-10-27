@@ -2,7 +2,7 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is implemented on `feature/bar-order-drafts-v1-ui` (see "VOD-2 UI delivered"); VOD-3 and VOD-4 are not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 and VOD-4 are not started.
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
@@ -79,7 +79,7 @@ The first focused pgTAP run occurred before the migration and failed on the miss
 
 ## VOD-2 UI delivered
 
-Branch `feature/bar-order-drafts-v1-ui` from `development` at `f6bab25bb6d613fb583d11b853c4807e1fa77941`. **No database migration.** The PR number, exact tested head and merge SHA are recorded in `tasks/current-task.md` and the post-merge docs sync.
+Branch `feature/bar-order-drafts-v1-ui` from `development` at `f6bab25bb6d613fb583d11b853c4807e1fa77941`. **No database migration.** PR #196, exact tested head `f6c3fd0fa8cffc954672d67fbbd998b5fdab0b8e`, merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (merged by the owner with a merge commit after exact-head CI was green).
 
 - **Navigation.** `Order Drafts` is a fourth Bar Inventory tab (Dashboard · Inventory · Order Drafts · Manage). History and Analytics stay sub-views. No new top-level module; Tasks T-1 `?tab=` work untouched.
 - **Data and RPC layer.** Reads: `data/order-draft-data.ts` pages the location's ACTIVE drafts and lines under the caller's RLS and fails (never truncates) when a list would exceed the paging cap. Writes: `actions/order-draft-actions.ts` — one Server Action per RPC (`open`, `save`, `fill`, `clear`, `sync`) plus `list`; each is zod-validated, requires a live session and a management role, calls only the `inventory_order_draft_*` RPC, then re-reads and returns the authoritative active drafts (database truth → canonical state). `domain/db-conflict.ts` is the `PT409` parser extracted from `inventory-actions.ts` so both action files share it. No client-persisted state, no parallel persistence.
@@ -107,7 +107,11 @@ tests/real, pgTAP:        NOT RUN — no Docker/Supabase/hosted credentials in C
 Hosted DEV:               untouched (VOD-4)
 ```
 
-Final repository-gate results (check, full Vitest, build, regression Playwright) and exact-head CI are recorded in `tasks/current-task.md`.
+Local repository gates: `npm run check` PASS; `npm run test` PASS (109 files / 1492 tests); `npm run build` PASS; Bar Inventory regression Playwright (desktop + server-mobile) 130 passed / 2 intentional skips after updating the BI-NAV-001 four-tab assertion.
+
+Exact-head GitHub CI on `f6c3fd0` (run 40594938733): `application` success, `browser-smoke` success (this workflow runs the full Playwright suite on the `desktop` project only, Chromium), `Vercel Preview Comments` success. Database workflow: PATH-GATED / NOT REQUIRED (no `supabase/**` change). The earlier run on `583e648` was cancelled by the newer push and is not evidence.
+
+**Coverage gap to close in VOD-4:** the `host-tablet` project (WebKit) was NOT RUN for VOD-2 — WebKit is not installed in the Cloud VM and CI runs only `desktop`. `server-mobile` (Pixel 7) ran locally only (9/9 new spec; regression green). A Chromium iPad-viewport emulation passed 9/9 but is not a WebKit result. VOD-4 must run host-tablet and server-mobile on a machine with the browsers installed.
 
 ## Deferred to approved later phases
 

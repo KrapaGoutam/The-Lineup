@@ -6,155 +6,89 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-2 — Vendor Order Drafts UI + Editing — IN PROGRESS
+VOD-2 — Vendor Order Drafts UI + Editing — COMPLETE (merged). VOD-3 NEXT / NOT STARTED.
 
 ## Execution
 
-Claude Code Cloud (GitHub/origin is the source of truth; nothing relies on a local Windows checkout).
+Claude Code Cloud (GitHub/origin is the source of truth).
 
 ## Branch / base
 
-- Branch: `feature/bar-order-drafts-v1-ui`
-- Base development SHA: `f6bab25bb6d613fb583d11b853c4807e1fa77941` (verified `origin/development`; ancestry verified before editing)
-- HEAD: `git rev-parse HEAD` (the PR head is the CI-tested SHA; see GitHub for the exact value)
-- Issue: #190 (stays OPEN; progress comment posted)
-- PR: #196 → `development` (https://github.com/KrapaGoutam/The-Lineup/pull/196), merge-commit only
-- Project #4: Status `In Progress`, Phase `Implementation`, Priority `P2`, Version `Future`, Work Type `Feature`
-- Milestone: Future Product Backlog (unchanged)
+- VOD-2 branch: `feature/bar-order-drafts-v1-ui` (merged; do not reuse)
+- Base development SHA: `f6bab25bb6d613fb583d11b853c4807e1fa77941`
+- VOD-2 exact tested head: `f6c3fd0fa8cffc954672d67fbbd998b5fdab0b8e`
+- VOD-2 merge commit on `development`: `292ca1a12ad136ff25d7af57537533fbc3c61209` (PR #196, merge commit, merged by the owner after exact-head CI was green)
+- This post-merge docs sync: branch `docs/vod2-post-merge-sync` from `292ca1a` (PR number in GitHub)
+- Issue: #190 (stays OPEN)
+- Project #4: update NOT PERFORMED — tool unavailable in Cloud. Handoff item: set Project #4 to reflect VOD-2 complete / VOD-3 next if tooling exists. Milestone unchanged: Future Product Backlog.
 
 ## Phase ledger
 
 ```text
-VOD-1.1:            COMPLETE
-PR:                 #195
-tested head:        fa3762ba0b7e214b9633c0a37a2e4feedbed6f18
-merge:              f6bab25bb6d613fb583d11b853c4807e1fa77941
-development base for VOD-2: f6bab25bb6d613fb583d11b853c4807e1fa77941
-
-VOD-0 #191 COMPLETE · VOD-1 #193 COMPLETE (merge 876be20) · VOD-1 docs #194 COMPLETE (34c7481)
-VOD-2:              IN PROGRESS
-VOD-3:              NOT STARTED
-VOD-4:              NOT STARTED
-Tasks T-1:          PARKED   Tasks T-2..T-6: NOT STARTED
-Final Development Gate: NOT STARTED
+Dependency #188 COMPLETE · Tasks Plan #189 COMPLETE · VOD-0 #191 COMPLETE
+VOD-1 #193 COMPLETE (876be20) · VOD-1 docs #194 COMPLETE (34c7481)
+VOD-1.1 #195 COMPLETE (tested fa3762b, merge f6bab25)
+VOD-2 #196 COMPLETE (tested f6c3fd0, merge 292ca1a)
+VOD-3 NEXT / NOT STARTED · VOD-4 NOT STARTED
+Tasks T-1 PARKED (feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED) · T-2..T-6 NOT STARTED
+Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
 
 ## VOD-1.1 correction (reuse, do not redo)
 
 `#195` · `fa3762b` · `f6bab25`. `inventory_order_draft_save` now parses each line's Order Qty before comparing it with stored state, so quantity-only edits persist. Regression pgTAP `0040` (50 assertions). There is NO client workaround; none may be introduced.
 
-## VOD-2 locked scope
+## VOD-2 delivered (summary; detail in IMPLEMENTATION_REPORT.md "VOD-2 UI delivered")
 
-Implement: Order Drafts tab (Dashboard · Inventory · Order Drafts · Manage), active vendor draft list/create/open, active draft editor, read-only Suggested Order, Order Qty editing, item note, vendor note, include/exclude, Fill from Suggestions, Clear Draft, Update suggestions (PLAN D-VOD-4), suggested/planned totals + manual-quantity indicator, Dashboard Order Soon "Create Order Draft"/"Open Order Draft" CTA, loading/empty/error states, PT409 conflict UI with Reload latest, desktop/host-tablet/server-mobile responsive layout, accessibility, demo-mode engine.
+Order Drafts tab; active vendor drafts (Create/Open from the picker and Dashboard Order soon); read-only Suggested Order beside Order Qty; item and vendor notes (newlines kept); Include/Exclude; Fill from Suggestions (empty-only / confirmed replace-all); Update suggestions; Clear Draft; suggested/planned totals and manual-quantity count; explicit sparse Save; PT409 UI (Reload latest / Keep my edits on the latest); unsaved-edit guard; demo-mode engine; responsive + accessible layout. No migration. No VOD-3 feature was pre-coded.
 
-NOT in VOD-2 (VOD-3): Drafts | Sent switch, Mark Sent, Copy Order, CSV, XLSX, Sent history. Do not pre-code them.
+- UI architecture / data layer: `domain/order-draft-view.ts`, `domain/order-draft-demo.ts`, `domain/db-conflict.ts`, `data/order-draft-data.ts`, `actions/order-draft-actions.ts`, `hooks/use-order-drafts.ts`, `components/order-drafts-view.tsx`, `components/order-draft-editor.tsx`, CTA in `components/order-soon.tsx`, tab + guard in `components/inventory-module.tsx`.
+- Tests: Vitest 109 files / 1492 tests; new spec `tests/e2e/bar-inventory-order-drafts.spec.ts`; `BI-NAV-001` updated for the fourth tab.
+- CI on `f6c3fd0` (run 40594938733): application success, browser-smoke success (CI runs the `desktop` project only), Vercel success; database workflow path-gated / not required.
 
-No database migration is expected. If a backend defect blocks correct UI: STOP, report it, do not work around it in the client.
+## Known issues / gaps for VOD-4
 
-## Completed
-
-- [x] Fetched origin; `origin/development` = `f6bab25`.
-- [x] Read handoff + PLAN / ACCEPTANCE_CRITERIA / TEST_MATRIX / IMPLEMENTATION_REPORT.
-- [x] Created `feature/bar-order-drafts-v1-ui` from `origin/development`.
-- [x] `npm ci` (node_modules present in the Cloud VM).
-- [x] First handoff update (this file).
-
-## In progress
-
-- [x] Inspect targeted Bar Inventory patterns.
-- [x] Pure domain `order-draft-view.ts` + demo engine `order-draft-demo.ts` + unit tests (39 tests green).
-- [x] Server data/actions, `use-order-drafts` hook, editor, view, Order soon CTA, module tab + dirty guard (typecheck + eslint clean).
-- [x] Component tests (24 view/editor + 5 Order soon CTA) and Playwright spec `tests/e2e/bar-inventory-order-drafts.spec.ts` (9 tests).
-- [x] Repo gates (local, Cloud): Bar Inventory regression Playwright (`tests/e2e/bar-inventory*.spec.ts`, desktop + server-mobile): 130 passed, 2 intentional skips, 2 failed = the old three-tab assertion in `bar-inventory.spec.ts` (BI-NAV-001) — updated to the new four-tab contract and re-run green; `npm run check` PASS; `npm run test` PASS (109 files / 1492 tests; was 105 / 1424); `npm run build` PASS.
-- [x] Commit, push, open PR #196 to `development`.
-- [ ] Exact-head CI fully green (application, browser-smoke, Vercel; database workflow is path-gated — no `supabase/**` change), then MERGE COMMIT.
-- [x] Feature docs, ROADMAP, STATUS, backlog updated pre-merge (PR number/merge SHA go in the post-merge docs sync).
-
-## Not started
-
-- [x] Unit tests (domain / demo engine / payload builder).
-- [ ] Component tests (editor, conflict UI, view, CTA).
-- [ ] Playwright (`tests/e2e/bar-inventory-order-drafts.spec.ts`) on desktop, host-tablet, server-mobile.
-- [ ] PR to `development`, exact-head CI, merge commit, then post-merge docs sync (`docs/*` branch + PR: merge SHA, #190 comment, roadmap/status).
-
-## UI architecture
-
-- New tab `Order Drafts` between Inventory and Manage in `components/inventory-module.tsx` (`View` gains `"drafts"`).
-- Pure domain: `domain/order-draft-view.ts` (view types, qty text parsing, sparse save payload builder, eligibility) and `domain/order-draft-demo.ts` (in-memory engine mirroring the six RPCs; demo state lives on `CatalogState.orderDrafts`).
-- Server: `data/order-draft-data.ts` (paged RLS reads), `actions/order-draft-actions.ts` (list/open/save/fill/clear/sync; each returns the authoritative active-drafts list).
-- Client: `hooks/use-order-drafts.ts` (one controller; demo → engine, real → actions), `components/order-drafts-view.tsx`, `components/order-draft-editor.tsx`, CTA in `components/order-soon.tsx`.
-
-## Data/RPC layer
-
-Reads go through the caller's RLS (SELECT-only). Writes go ONLY through the six `inventory_order_draft_*` RPCs via server actions. After every mutation the action re-reads the active drafts and returns them (database truth → canonical state). No client-side persisted state.
-
-## Save strategy
-
-Explicit Save/Discard (no per-keystroke RPC). One sparse `save` carrying only changed lines + vendor note. Fill/Clear/Update suggestions are separate confirmed RPCs and are blocked while unsaved edits exist (save or discard first). States shown: clean, dirty, saving, saved (only after a successful response), error, conflict.
-
-## PT409 handling
-
-A stale write shows an inline alert ("This order draft changed elsewhere…") and keeps typed edits. Actions: **Reload latest** (discard my edits, load server version) and **Keep my edits on latest** (load server version, keep unsaved edits for review — never auto-saved). Same-person stale reloads quietly.
-
-## Responsive behavior
-
-One DOM, CSS grid rows: stacked card-like rows on phone, aligned columns from `md`. No horizontal page scroll; touch targets ≥ 44 px (existing `min-h-11` primitives).
-
-## Tests
-
-- Unit: `order-draft-view.test.ts` (21) and `order-draft-demo.test.ts` (18) PASS, including quantity-only blank→5, blank→0, 5→blank, same-value no-op, stale PT409 shape, fill/clear/sync.
-- Component: `order-drafts-view.test.tsx` (24) + `order-soon.test.tsx` (5) PASS. Mutation check: dropping Order Qty from change detection fails 15 tests.
-- Playwright (demo mode) `bar-inventory-order-drafts.spec.ts`: desktop 9/9 PASS, server-mobile 9/9 PASS. host-tablet (WebKit) NOT RUN locally — WebKit not installed in Cloud VM (Chromium iPad-viewport emulation 9/9 PASS, supplemental only). GitHub CI is authoritative for WebKit.
-- Do NOT commit `AGENTS.md`: `next dev` rewrites its "This is NOT the Next.js you know" heading (`#` → `##`); run `git checkout AGENTS.md` before every commit.
-
-## CI
-
-PR #196 opened; application + browser-smoke queued on the pushed head. Database workflow: PATH-GATED / NOT REQUIRED (no `supabase/**` change). Verify before merge: local HEAD = remote branch HEAD = PR head = CI-tested SHA, all required checks green, mergeState CLEAN.
-
-## GitHub tracking
-
-Issue #190 open (comment posted with PR #196). Project #4 update NOT PERFORMED — tool unavailable in this Cloud session (precise handoff item: set Project #4 to VOD-2 in review/complete after merge if tooling exists). Milestone unchanged: Future Product Backlog.
-
-## Docs
-
-To update at completion: `PLAN.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_REPORT.md`, `docs/ROADMAP.md`, `docs/STATUS.md`, `tasks/backlog.md` (only if something changed), this file.
+- host-tablet (WebKit) Playwright was NOT RUN for VOD-2 (no WebKit in Cloud, CI runs desktop only); server-mobile ran locally only. VOD-4 must run both on a machine with the browsers.
+- Real-database behaviour of the new Server Actions (RLS, two-context PT409) is untested until VOD-4 (hosted DEV); pgTAP 0039/0040 cover the RPCs.
+- Not guarded: leaving Bar Inventory entirely with unsaved draft edits (only `beforeunload`). No "Add item" UI. No Realtime for drafts. All recorded in `tasks/backlog.md`.
+- `next dev` rewrites the `AGENTS.md` heading (`#` → `##`); never commit that change (`git checkout AGENTS.md`).
+- I stated in the PR body and the #190 comment that GitHub CI is authoritative for host-tablet; CI actually runs `desktop` only (corrected in docs).
 
 ## Backlog
 
-No change yet.
+Updated in VOD-2 (deferrals above) and in this sync (VOD-4 browser-project requirement).
 
-## Known issues
+## Tasks T-1 PARKED
 
-- Cloud VM has no Docker/Supabase/hosted credentials: pgTAP and `tests/real` are NOT RUN here; GitHub CI is authoritative. No migration is part of this phase.
+Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged NO. Do not resume until VOD-4 completes.
+
+## Safety ledger
+
+```text
+development merged: YES — VOD-2 PR #196 / 292ca1a (merge commit)
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```
 
 ## Uncommitted files
 
-See `git status`; the first checkpoint commit contains the domain, server, hook and UI files.
+None after the docs-sync commit.
 
 ## Running processes
 
 None.
 
-## Safety ledger
-
-```text
-development merged: NO (this phase not merged yet)
-main merged: NO
-DEV touched: NO
-PROD touched: NO
-PROD migrations: NO
-Tasks T-1 PARKED: feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED
-```
-
 ## Exact next command
 
 ```bash
-git fetch origin feature/bar-order-drafts-v1-ui && git rev-parse HEAD origin/feature/bar-order-drafts-v1-ui
+git fetch origin && git rev-parse origin/development
 ```
 
 ## Exact next action
 
-Wait for exact-head CI on PR #196. If red: inspect only the failing workflow/job/step, fix, push, wait for fresh exact-head CI. If green: verify local HEAD = remote HEAD = PR head = CI-tested SHA, then merge PR #196 with a MERGE COMMIT (no squash/rebase), record merge SHA, then open a `docs/*` post-merge sync PR (roadmap/status/report/backlog/handoff with merge SHA; VOD-2 COMPLETE, VOD-3 NEXT) and STOP. Do not start VOD-3.
+STOP. VOD-2 is complete. VOD-3 (Drafts | Sent switch, Copy Order, CSV, XLSX, Mark Sent, Sent history) starts in a FRESH session from the updated `development`: create `feature/bar-order-drafts-v1-sharing-history`, re-read the five VOD docs, and keep Tasks T-1 parked. Do not start VOD-3 in this session.
 
 ## Read first
 
@@ -166,8 +100,7 @@ Wait for exact-head CI on PR #196. If red: inspect only the failing workflow/job
 
 ## DO NOT
 
-- Do not touch `main`, PROD, or the parked Tasks branch (`feature/tasks-v1-1-default-landing`).
-- Do not start VOD-3, create its branch, or implement Copy/CSV/XLSX/Mark Sent/Sent history.
+- Do not touch `main`, PROD, or the parked Tasks branch.
 - Do not delete or modify hosted DEV product data (including V2 Harness orgs).
 - Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
 - Do not merge on stale, partial, or red CI.
