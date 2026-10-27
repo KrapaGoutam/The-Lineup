@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8d (XLSX import: bounded zip guard, sheet picker, same pipeline as CSV) — code complete, gated, verified against hosted DEV, in PR. BI-9 (Realtime notify→refetch + responsive polish) is next.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-9 (Realtime notify→refetch, responsive + accessibility polish, and a fix for the snapshot being re-read every second in real mode) — code complete, gated, verified against hosted DEV on a production build, in PR. BI-10 (hosted DEV validation) is next.
 
-**Branch:** `feature/bar-inventory-bi8d-xlsx-import` · **Base development:** `c3ccbcc` (BI-8c-2 merge, PR #183, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-8d PR into `development` (find with `gh pr list --head feature/bar-inventory-bi8d-xlsx-import`)
+**Branch:** `feature/bar-inventory-bi9-realtime-responsive` · **Base development:** `0ea9381` (BI-8d merge, PR #184, CI green)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-9 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi9-realtime-responsive`)
 
-**Exact next action:** wait for exact-head CI on the BI-8d PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi9-realtime-responsive origin/development` and build **BI-9**: Realtime = DB truth → invalidation → refetch (no reload storm, no duplicate subscriptions, the old every-second reload must not return) plus responsive/a11y polish across the Bar Inventory views. Then BI-10 (hosted DEV validation proving the real-mode reads for History, Analytics and exports, import CSV + XLSX, roles, tenant isolation, concurrency, realtime), BI-11 (final gate), Tasks V1.1.
-**Exact next command:** `gh pr checks <BI-8d PR number> --watch`
+**Exact next action:** wait for exact-head CI on the BI-9 PR (application, browser-smoke, migrations-and-policies); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi10-dev-validation origin/development` and run **BI-10**: hosted DEV validation on a DEV-pinned production build proving the real-mode reads for History, Analytics and exports, CSV + XLSX import/export, roles, tenant isolation, concurrency, realtime and responsive behaviour; write `docs/features/bar-inventory-v1/DEV_VALIDATION.md`; fix and re-run any defect. Then BI-11 (final gate), Tasks V1.1.
+**Exact next command:** `gh pr checks <BI-9 PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -28,7 +28,7 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
 - [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
 - [x] **BI-8** CSV/XLSX import & export — 8a exports MERGED (PR #179) · 8b import engine MERGED (PR #180) · 8c-1 database MERGED (PR #182) · 8c-2 application MERGED (PR #183, `c3ccbcc`) · **8d XLSX import: PR open** (report §BI-8d; hosted DEV UI 5/5)
-- [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
+- [x] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch — **PR open** (report §BI-9; migration `20261027130000` on DEV; hosted DEV UI 6/6 + 11/11 on a production build)
 - [ ] **BI-10** hosted DEV validation
 - [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
 
@@ -36,13 +36,13 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-## BI-8d evidence (per-phase detail: see the report)
+## BI-9 evidence (per-phase detail: see the report)
 
 ```
-Unit:     Vitest 1330/1330; src/lib/xlsx 57 (guard 20, workbook 33 + convergence)
-DB:       no migration in 8d (pgTAP 37 files pass from 8c-1)
-Browser:  Import CSV 24 + XLSX 15 (3 projects); Bar Inventory + payroll cold-cache CI=1 run (desktop) 59 pass, 0 use-server errors
-Hosted:   DEV UI 5/5 (adds an .xlsx read on the server, a hostile .xlsx refused, commit recorded format=xlsx sheet=Stock); no leftovers, 26 V2 Harness orgs unchanged
+Unit:     Vitest 1356/1356 (new: invalidation gate 6, inventory realtime 12, catalog controller 8)
+DB:       pgTAP 38 files pass (0038: 7 — publication membership, RLS stays on, no client writes)
+Browser:  responsive/a11y sweep 12 (3 projects); all Bar Inventory specs on tablet 58 + phone 56 (+2 skips); cold-cache CI=1 desktop run over Bar Inventory + payroll + table-allocation + tasks 145 pass, 0 use-server errors
+Hosted:   DEV UI Realtime 6/6 (dev server) and Realtime + import 11/11 on a DEV-pinned PRODUCTION build (PROD ref in 0 files of .next); older hosted specs 9/9; no leftovers, 26 V2 Harness orgs unchanged
 Static:   lint · typecheck · prettier --check PASS
 CI:       pending on the PR head
 ```
@@ -52,9 +52,9 @@ CI:       pending on the PR head
 ## Safety ledger
 
 ```
-development merged: YES for BI-0..8c-2 (#171-#183)
+development merged: YES for BI-0..8d (#171-#184)
 main merged: NO
-DEV touched: YES (BI-1/BI-2 and BI-8c migrations; hosted suites use synthetic orgs; BI-3..8b added none; BI-8c added 20261027120000)
+DEV touched: YES (BI-1/BI-2, BI-8c and BI-9 migrations — BI-9 added 20261027130000, publication membership only; hosted suites use synthetic orgs and tagged data)
 PROD touched: NO
 PROD migrations: NO
 ```
