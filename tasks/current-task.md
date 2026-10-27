@@ -2,34 +2,33 @@
 
 **Cycle:** post-release development on `development` (PROD release of 2026-10-26 is done). Owner sequence (2026-10-27): Tasks plan → **Bar Inventory — Vendor Order Drafts V1** (VOD-0 → VOD-4) → **Tasks V1.1** (T-1 → T-6) → final `development` integration gate → STOP before `main`/PROD. Tips V2 (#155) is NOT part of this task.
 **Feature:** Bar Inventory — Vendor Order Drafts V1 (NEW enhancement; Bar Inventory V1 #168 stays COMPLETE, do not reopen it and do not rerun BI-11)
-**Phase:** **VOD-0 (planning only)** — in progress, PR not yet opened
+**Phase:** **VOD-0 DONE and merged** (PR #191, head `dda7754`, merge `3d170bd`). **Next: VOD-1 (database/domain foundation)**, not started.
 
 ## Current State & Next Step
 
-**Branch:** `docs/bar-inventory-vendor-order-drafts-v1-plan` · **Base development:** `126c72d` (merge of PR #189)
-**HEAD:** the VOD-0 docs commit once made (`git rev-parse HEAD`; at the time of writing the branch holds uncommitted docs on top of `126c72d`)
-**Issue:** #190 (NEW, created this session; labels type:feature, priority:p2, module:bar-inventory; milestone Future Product Backlog) · **Project #4:** #190 added, Status Planned / Priority P2 / Phase Plan / Version Future / Work Type Feature (the Module field has no Bar Inventory option, same as #168) · **PR:** none yet
+**Base development:** `3d170bd` · **Issue:** #190 (labels type:feature, priority:p2, module:bar-inventory; milestone Future Product Backlog) · **Project #4:** #190 added (Status Planned / Priority P2 / Phase Plan / Version Future / Work Type Feature; the Module field has no Bar Inventory option, same as #168)
 
-**Completed this session**
+**Completed**
 
-- #188 (next 16.4.3, zod 4.6.7) was already MERGED: head `f7e794b`, merge `0699498`, CI `application` / `migrations-and-policies` / `browser-smoke` green on that head; `deploy-migrations` skipped as designed. Nothing to redo.
-- Stray `AGENTS.md` heading edit (`#`→`##`, Next postinstall) inspected (only that line), restored to the repository version.
-- Tasks V1.1 plan PR **#189 MERGED**: head `31b23a9`, CI `application` + `browser-smoke` green on that exact head (local HEAD = PR head = CI-tested SHA), merge commit `126c72d`. It locks the four owner decisions: `?tab=` addressing (kebab-case, `/r/[slug]?tab=`, invalid → Tasks), Opening/Closing operational notifications kept, Opening reminders for management **plus staff authorized to work the incomplete Opening items (own scope only; management-only rejected)**, every non-cancelled Opening item required (future `required` flag → backlog). Database workflow correctly did not run (no `supabase/**` change).
+- #188 (next 16.4.3, zod 4.6.7) MERGED earlier: head `f7e794b`, merge `0699498`, CI green on that head. Stray `AGENTS.md` heading edit restored.
+- Tasks V1.1 plan PR #189 MERGED (head `31b23a9`, merge `126c72d`); locks the four owner decisions: `?tab=` addressing (kebab-case, `/r/[slug]?tab=`, invalid → Tasks), Opening/Closing operational notifications kept, Opening reminders for management **plus staff authorized to work the incomplete Opening items (own scope only)**, every non-cancelled Opening item required (future `required` flag in backlog).
+- **VOD-0 MERGED** (PR #191, head `dda7754` = CI-tested SHA, merge `3d170bd`): `docs/features/bar-inventory-vendor-order-drafts-v1/{PLAN,ACCEPTANCE_CRITERIA,TEST_MATRIX}.md`, roadmap row 3, STATUS section, backlog row, issue #190 on Project #4.
 
-**In progress (VOD-0, docs only, uncommitted on the branch):** `docs/features/bar-inventory-vendor-order-drafts-v1/{PLAN,ACCEPTANCE_CRITERIA,TEST_MATRIX}.md`; roadmap row 3, `docs/STATUS.md` section, `tasks/backlog.md` row, this handoff.
-**Not started:** VOD-1 … VOD-4, Tasks T-1 … T-6, final development gate.
+**Not started:** VOD-1 … VOD-4, Tasks T-1 … T-6 (T-1 has unmerged uncommitted work in another session, see warning below), final development gate.
 
-**Exact next action:** run `npx prettier --check` on the changed docs, commit with explicit paths (never `git add -A`), push `docs/bar-inventory-vendor-order-drafts-v1-plan`, open the PR to `development` (mention #190), wait for exact-head CI (local HEAD = PR head = CI-tested SHA), merge with a MERGE COMMIT, fetch/refresh `development`, update this handoff, then branch `feature/bar-order-drafts-v1-foundation` for **VOD-1**. Do NOT start VOD-1 on the docs branch. Do NOT start Tasks T-1 before VOD-4 is done.
-**Exact next command:** `npx prettier --check docs/features/bar-inventory-vendor-order-drafts-v1/*.md docs/ROADMAP.md docs/STATUS.md tasks/backlog.md tasks/current-task.md`
+**Exact next action (VOD-1):** from fresh `origin/development` create `feature/bar-order-drafts-v1-foundation` in a working tree you own (see the shared-tree warning). Read `PLAN.md` §3–§4 and `TEST_MATRIX.md` (VOD-001…VOD-092). Order: migration `2026102…_bar_inventory_order_drafts.sql` (two tables, partial unique index, immutability triggers, RLS, six `inventory_order_draft_*` RPCs, deferrable actor FKs) → pgTAP `0039_bar_inventory_order_drafts.test.sql` red → pure `domain/order-draft.ts` + vectors → minimal data/actions only as the contract needs. No UI. Then PR (database workflow must run: `supabase/**` changes), exact-head CI, MERGE COMMIT, handoff, STOP.
+**Exact next command:** `git fetch origin && git worktree add <short-path> -b feature/bar-order-drafts-v1-foundation origin/development` (or, once `the-lineup-24` is finished, `git switch -c feature/bar-order-drafts-v1-foundation origin/development` in the main tree).
+
+**Key VOD decisions (full text in `PLAN.md` §3):** tab "Order Drafts" between Inventory and Manage (History/Analytics stay sub-views) · tables `inventory_order_drafts` + `inventory_order_draft_items`, one `DRAFT` per org+location+vendor via a partial unique index, `DRAFT`/`SENT` only · suggestion snapshot + frozen labels at send · six RPCs (open, save, fill, clear, sync, mark_sent), draft-level `version` + `PT409` · Mark Sent never references `inventory_stock`/`inventory_adjustments` (body-scan pgTAP + before/after equality test) · export = new `order_draft` request kind through `exportDataAction`/`ExportDocument` (request carries only a draft id) · system "Unassigned" vendor gets no draft · no Realtime in V1. D-VOD-9 (Unassigned) and D-VOD-12 (export includes the Suggested column) are open to owner veto and do not block VOD-1.
 
 **Key VOD decisions (full text in `PLAN.md` §3):** tab "Order Drafts" between Inventory and Manage (History/Analytics stay sub-views — the repo has no such tabs) · tables `inventory_order_drafts` + `inventory_order_draft_items`, one `DRAFT` per org+location+vendor via a partial unique index, `DRAFT`/`SENT` only · suggestion snapshot + frozen labels at send · six RPCs (open, save, fill, clear, sync, mark_sent), draft-level `version` + `PT409` · Mark Sent never references `inventory_stock`/`inventory_adjustments` (body-scan pgTAP + before/after equality test) · export = new `order_draft` request kind through `exportDataAction`/`ExportDocument` (request carries only a draft id) · system "Unassigned" vendor gets no draft · no Realtime in V1. Planner decisions D-VOD-9 (Unassigned) and D-VOD-12 (export includes the Suggested column) are open to owner veto and do not block VOD-1.
 
 **Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. `tasks_can_view` lets any member view Opening/Closing items but only managers, assignees and `all_team`/`anyone` can work them (`tasks_can_work`), which is the staff reminder eligibility rule. Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load; reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
 
-**Tests:** none run this session (docs only). Last known green: Vitest 1406/1406, Playwright desktop 241 / host-tablet 241 / server-mobile 239 (+2 skips), pgTAP 38 files (from #188 / BI-11).
-**CI:** #188 and #189 exact-head green (above). **Hosted DEV:** untouched this session.
-**Uncommitted files:** the VOD-0 docs listed above. **Running background processes:** none started by this session.
-**Known defects:** none new. Local branch `feature/tasks-v1-1-default-landing` exists and points at `126c72d` with no commits of its own; it is not in use (T-1 must wait for VOD-4) — delete it or reuse it from a fresh `development` when T-1 starts.
+**Tests:** none run for VOD-0 (docs only; `prettier --check` passed). Last known green: Vitest 1406/1406, Playwright desktop 241 / host-tablet 241 / server-mobile 239 (+2 skips), pgTAP 38 files (from #188 / BI-11).
+**CI:** #188, #189 and #191 exact-head green (`application` + `browser-smoke`; database workflow path-gated, correctly absent). **Hosted DEV:** untouched.
+**Uncommitted files:** none on this docs branch. **Running background processes:** none from this session.
+**SHARED WORKING TREE WARNING:** another Claude session (`the-lineup-24`) works in `C:UserskrapaDocumentsProjectsRestaurentThe Lineup` on `feature/tasks-v1-1-default-landing` with UNCOMMITTED Tasks T-1 code (`src/lib/app-tab*.ts`, `restaurant-operations-app.tsx`, e2e specs, `tasks-v1-1/IMPLEMENTATION_REPORT.md`) and a Playwright run on :3000. It started T-1 from the pre-merge handoff, against the owner order (VOD before Tasks code). It agreed to push that branch WITHOUT a PR or merge until VOD-4 is done. Do not switch branches, start a dev server, or run Playwright in that tree until it says it is finished; do not discard its files. Use a short-path git worktree (long design-export paths break checkout under the scratchpad) or wait for it. `AGENTS.md` carries a stray npm-install heading edit in that tree: never stage it.
 
 ```
 development merged: YES (#189 = 126c72d)
@@ -38,8 +37,6 @@ DEV touched: YES earlier in Bar Inventory (BI-1/2/8c/9 migrations); NOT this ses
 PROD touched: NO
 PROD migrations: NO
 ```
-
-**Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. "Deep links respected / refresh keeps the module" therefore needs a minimal `?tab=` mechanism (PLAN §D-1). Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load (`task_notifications_sweep`); reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
