@@ -8,6 +8,7 @@
  * intentionally stay in the DEV org.
  */
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import writeXlsxFile from "write-excel-file/node";
 
 import {
   accountButton,
@@ -46,7 +47,7 @@ async function openImport(page: Page) {
 }
 
 const upload = (page: Page, rows: string[], name: string) =>
-  page.getByLabel("CSV file").setInputFiles({
+  page.getByLabel("CSV or Excel file").setInputFiles({
     name,
     mimeType: "text/csv",
     buffer: Buffer.from([HEADER, ...rows].join("\n")),
@@ -265,4 +266,86 @@ test("the batches are in the import history and the changes are in History as bu
   await expect(
     manager.getByText("Bulk import").filter({ visible: true }).first(),
   ).toBeVisible({ timeout: 30_000 });
+});
+
+test("an Excel workbook is read on the server, previewed, committed and recorded as xlsx", async () => {
+  await openImport(manager);
+  const filename = `${TAG}-book.xlsx`;
+  const book = Buffer.from(
+    await writeXlsxFile([
+      {
+        sheet: "Stock",
+        data: [
+          HEADER.split(",").map((value) => ({ value })),
+          [
+            `${TAG} Dist`,
+            `${TAG} Malbec`,
+            null,
+            null,
+            "750 mL",
+            "Bottle",
+            null,
+            14,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+        ],
+      },
+    ]).toBuffer(),
+  );
+  await manager.getByLabel("CSV or Excel file").setInputFiles({
+    name: filename,
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: book,
+  });
+  await expect(
+    manager.getByRole("region", { name: "Import preview" }),
+  ).toContainText("On hand 12 → 14 (+2)", { timeout: 30_000 });
+
+  // A hostile file is refused by the server, and nothing is previewed from it.
+  await manager.getByLabel("CSV or Excel file").setInputFiles({
+    name: `${TAG}-fake.xlsx`,
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from("Vendor,Name\nx,y"),
+  });
+  await expect(
+    manager.getByRole("alert").filter({ hasText: "isn't a valid .xlsx" }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  await manager.getByLabel("CSV or Excel file").setInputFiles({
+    name: filename,
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: book,
+  });
+  await expect(
+    manager.getByRole("region", { name: "Import preview" }),
+  ).toContainText("On hand 12 → 14 (+2)", { timeout: 30_000 });
+  await manager.getByRole("button", { name: /^Review and import/ }).click();
+  await manager
+    .getByRole("dialog", { name: "Import these changes?" })
+    .getByRole("button", { name: "Import now" })
+    .click();
+  await expect(manager.getByText("Import complete")).toBeVisible({
+    timeout: 30_000,
+  });
+
+  expect((await product())?.stock.on_hand).toBe(14);
+  const { admin } = await devLocation();
+  const { data: batch } = await admin
+    .from("inventory_import_batches")
+    .select("format, sheet, status, updated_count")
+    .eq("filename", filename)
+    .single();
+  expect(batch).toMatchObject({
+    format: "xlsx",
+    sheet: "Stock",
+    status: "committed",
+    updated_count: 1,
+  });
 });

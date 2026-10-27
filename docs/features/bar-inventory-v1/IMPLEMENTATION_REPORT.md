@@ -565,7 +565,7 @@ Second half of BI-8c (8c-1 database merged, PR #182). Branch `feature/bar-invent
 ### Behaviour worth knowing
 
 - A "stale" or "changed" outcome never applies anything: the person is told, and the preview refreshes against the current inventory.
-- `.xlsx` / `.xls` files are turned away with "Save As → CSV" until slice 8d.
+- `.xlsx` files are accepted from slice 8d (see §BI-8d); `.xls` / `.xlsm` / `.xlsb` are turned away with "Save As → Excel Workbook (.xlsx) or CSV".
 - Rows matched by SKU under a changed name are left out until ticked ("Approve").
 - The per-export change-log entry from the BI-8a spec is **not** built (stated twice now; it needs its own RPC and is low value next to the import log). Listed as deferred.
 
@@ -578,6 +578,52 @@ Second half of BI-8c (8c-1 database merged, PR #182). Branch `feature/bar-invent
 | Playwright Import, 3 projects                                                          | 24 passed: preview → confirm → Inventory and History; problems explained + error report; near-miss must be chosen; manual column mapping; untick a row; double click applies once; Excel turned away; template                                                                                                                                                                                                                                                                                                                                                             |
 | Cold-cache CI-like run (`rm -rf .next`, `CI=1`) over all Bar Inventory specs + payroll | 160 passed, 2 intentional skips, **0** "use server" errors (this PR adds a `"use server"` file)                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Hosted DEV UI (real browser, server action, real JWT, commit RPC)**                  | **4/4**: new vendor + category + product previewed, confirmed and verified in the database (stock, levels, a `bulk_import` ledger row pointing at its committed batch); an update with a delta and a **double click applied once** (2 ledger rows total, 1 batch); **an inventory change made after the preview is refused and the preview refreshes**, then the refreshed preview commits; batches in the import history and the changes in History as Bulk import. No tagged leftovers (0 products / vendors / categories / batches); the 26 "V2 Harness" orgs unchanged |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (hosted UI run with tagged data, cleaned up; no migration)
+PROD touched: NO
+PROD migrations: NO
+```
+
+## BI-8d — XLSX import
+
+Last slice of BI-8. Branch `feature/bar-inventory-bi8d-xlsx-import` → PR into `development`. **No migration.** The only new dependency entry is `fflate@0.8.3` (exact), which was already installed transitively; `read-excel-file@9.3.12` and `write-excel-file@4.1.1` are unchanged.
+
+### The path an .xlsx takes
+
+`Manage → Import → upload .xlsx` → the browser sends the bytes (base64) to `readWorkbookAction` (real mode) or reads them locally with the same code (demo mode) → the **guard** inspects the zip without trusting it → the library reads only bytes the guard accepted → the chosen sheet becomes **CSV text** → from here the file is a CSV: the same header mapping, plan, fingerprint, Preview, Confirm, stage and commit. There is no XLSX-specific business rule downstream; a test proves an .xlsx and the equivalent CSV give an identical plan and fingerprint.
+
+### Delivered
+
+| Piece                                      | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/lib/xlsx/guard.ts`                    | Streaming `fflate` `Unzip` that counts **real decompressed bytes** (headers can lie). Caps: 5 MB file, 200 entries, 30 MB per entry, 50 MB per archive, 5 sheets. Refuses macros (`vbaProject.bin`), legacy formats, corrupt zips and non-xlsx (text renamed .xlsx). Finds formula cells with no saved value. Warns about external links and embeddings. First stop reason wins (fflate hands a callback-thrown error back to the same callback)                                           |
+| `src/lib/xlsx/workbook.ts`                 | `readWorkbook(bytes, reader, {sheet})`: guard first, then the injected reader (Node or browser build). Refuses a selected sheet with uncalculated formulas (a blank would mean "leave unchanged"), enforces 5,000 rows / 40 columns / 500 characters per cell, one CSV line per spreadsheet row so row numbers match Excel's, numbers via `toPrecision(12)` (no float noise), booleans TRUE/FALSE, dates as ISO days, control characters stripped by the same function the CSV reader uses |
+| `read-node.ts` / `read-browser.ts`         | Thin adapters over `read-excel-file` (Node server action vs browser, dynamically imported so it is not in the first bundle)                                                                                                                                                                                                                                                                                                                                                                |
+| `actions/import-actions.ts`                | `readWorkbookAction` (zod, live-session + management-role checks, base64 capped); `commitImportAction` now takes `format` and `sheet`, stored on the batch                                                                                                                                                                                                                                                                                                                                 |
+| `import-view.tsx` / `inventory-module.tsx` | "CSV or Excel file" upload, a **Sheet** picker with each sheet's row count (re-reads without re-uploading), "older Excel format" message for .xls / .xlsm / .xlsb, a **Format** column (CSV / Excel) in the import history; demo mode uses the same reader                                                                                                                                                                                                                                 |
+| `next.config.ts`                           | Server Action body limit 8 MB (a 5 MB file is ~6.7 MB as base64)                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+### Behaviour worth knowing
+
+- A workbook is never executed or recalculated: the **saved** value of a cell is what is imported.
+- A file that unzips to far more than it claims (a zip bomb) is refused by counting bytes while inflating, not by trusting the directory.
+- Errors are plain sentences ("isn't a valid .xlsx workbook", "more data than can be imported", "contains macros"); library or parser text is never shown.
+- Only the selected sheet is imported; other sheets are listed in the picker, never merged.
+
+### Gates
+
+| Gate                                                                                    | Result                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| format / lint / typecheck                                                               | PASS                                                                                                                                                                                                                                                                                                                                             |
+| Vitest                                                                                  | 1330/1330; `src/lib/xlsx` 57 (guard 20: bombs by entries / per-entry / archive, lying headers, macros, legacy, truncated, text-as-xlsx, formula gaps; workbook 33 incl. real library round-trip, number/date/boolean text, blank rows keep numbers, limits, convergence with CSV)                                                                |
+| Playwright XLSX, 3 projects                                                             | 15 passed: preview equals the CSV one then commit, recorded as Excel; blank = unchanged / 0 = zero; sheet picker re-read; damaged / truncated / zip-bomb / macro workbook refused with nothing previewed; manual column mapping. The CSV Import spec (24) still passes with a legacy `.xls` rejection replacing the old "Excel turned away" case |
+| Cold-cache CI-like run (`rm -rf .next`, `CI=1`) Bar Inventory + payroll specs (desktop) | 59 passed, **0** "use server" errors (`import-actions.ts` changed)                                                                                                                                                                                                                                                                               |
+| **Hosted DEV UI (real browser, server action, real JWT)**                               | **5/5**: the four CSV flows plus a real .xlsx read by the server action, previewed, a text-renamed .xlsx refused, committed, and the batch recorded `format=xlsx, sheet=Stock`. No tagged leftovers; the 26 "V2 Harness" orgs unchanged                                                                                                          |
 
 ### Safety
 

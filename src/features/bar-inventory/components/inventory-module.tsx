@@ -7,7 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { Designation } from "@/features/auth/domain/passcode";
 import { base64ToBlob } from "@/lib/download-file";
 import { EXPORT_MIME, sheetToCsv } from "@/lib/export/document";
+import { readWorkbookBrowser } from "@/lib/xlsx/read-browser";
 import { workbookToBlob } from "@/lib/xlsx/write-browser";
+import { readWorkbook } from "@/lib/xlsx/workbook";
 
 import {
   exportDataAction,
@@ -16,6 +18,7 @@ import {
 import {
   commitImportAction,
   listImportBatchesAction,
+  readWorkbookAction,
   previewImportAction,
 } from "../actions/import-actions";
 import type { ImportField } from "../domain/import-columns";
@@ -218,6 +221,22 @@ function ManagerInventory({
         if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
         return result;
       },
+      async readWorkbook({ base64, sheet }) {
+        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        if (demo) {
+          // Demo has no server: the same guard and reader run here, the
+          // browser build of the reader loaded only now.
+          const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+          return readWorkbook(bytes, readWorkbookBrowser, { sheet });
+        }
+        const result = await readWorkbookAction({
+          restaurantSlug,
+          base64,
+          sheet,
+        });
+        if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+        return result;
+      },
       async commit(request) {
         const { demo, restaurantSlug, onSessionInvalid, actorName } =
           latest.current;
@@ -257,7 +276,12 @@ function ManagerInventory({
               newId: () => crypto.randomUUID(),
             },
             reason: request.reason,
-            batch: { id: request.requestId, filename: request.filename },
+            batch: {
+              id: request.requestId,
+              filename: request.filename,
+              format: request.format,
+              sheet: request.sheet,
+            },
           });
           if ("conflicts" in applied) {
             return {
