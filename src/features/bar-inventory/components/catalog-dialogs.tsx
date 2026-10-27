@@ -118,7 +118,8 @@ function Footer({
   onCancel: () => void;
 }) {
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    // Sticky so the action stays in view when a long form scrolls (phones).
+    <div className="border-border bg-card sticky bottom-0 -mx-5 -mb-5 flex flex-wrap justify-end gap-2 border-t px-5 py-3">
       <Button variant="ghost" onClick={onCancel} disabled={busy}>
         Cancel
       </Button>
@@ -457,7 +458,7 @@ export function ProductDialog({
       open={open}
       onClose={onClose}
       title={product ? "Edit product" : "Add product"}
-      description="Vendor, name, size and unit identify a product. Counts and levels are added in the next step of the build."
+      description="Vendor, name, size and unit identify a product. Set counts and levels from Inventory after adding it."
       className="max-w-[min(94vw,40rem)] sm:w-[min(94vw,40rem)]"
     >
       {open ? (

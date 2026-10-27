@@ -247,6 +247,8 @@ export function InventoryView({
 
   return (
     <div className="flex w-full max-w-full min-w-0 flex-col gap-3">
+      {/* The phone cards title each item with an h3; this keeps the outline h1 > h2 > h3. */}
+      <h2 className="sr-only">Inventory</h2>
       {notice ? (
         <p
           role="alert"
@@ -358,6 +360,7 @@ export function InventoryView({
               </Button>
               <Button
                 variant="outline"
+                aria-label={`Adjust ${row.name}`}
                 onClick={() => setSheetFor(row.productId)}
               >
                 Adjust…

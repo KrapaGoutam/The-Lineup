@@ -47,36 +47,72 @@ export function useCatalogController({
   const [loading, setLoading] = useState(!demo);
   const [loadError, setLoadError] = useState<string | null>(null);
   const lastFetch = useRef(0);
-  const inFlight = useRef(false);
+  // The shell hands over a new function every render (it re-renders every
+  // second for the header clock). Read through a ref so it can never be a
+  // dependency of the loader: as one, every render re-ran the load effect and
+  // the snapshot was re-read once a second.
+  const sessionInvalid = useRef(onSessionInvalid);
+  useEffect(() => {
+    sessionInvalid.current = onSessionInvalid;
+  });
+  const reading = useRef<Promise<void> | null>(null);
+  const rerun = useRef(false);
 
-  const refresh = useCallback(async () => {
-    if (demo || inFlight.current) return;
-    inFlight.current = true;
-    setLoading(true);
-    try {
-      const result = await getCatalogSnapshotAction({ restaurantSlug });
-      lastFetch.current = Date.now();
-      if (result.ok) {
-        setSnapshot(result.data);
-        setLoadError(null);
-      } else if (result.sessionInvalid) {
-        onSessionInvalid?.();
-      } else {
-        setLoadError(result.error);
-      }
-    } finally {
-      inFlight.current = false;
-      setLoading(false);
+  // One read at a time. A request that arrives while a read is in flight is
+  // remembered and run once it ends -- the read in flight may have started
+  // before the change that prompted the request, so dropping it could leave
+  // the screen one change behind. Every caller gets the same promise, which
+  // settles after the last read.
+  const read = useCallback((): Promise<void> => {
+    if (demo) return Promise.resolve();
+    if (reading.current) {
+      rerun.current = true;
+      return reading.current;
     }
-  }, [demo, restaurantSlug, onSessionInvalid]);
+    const run = (async () => {
+      try {
+        do {
+          rerun.current = false;
+          const result = await getCatalogSnapshotAction({ restaurantSlug });
+          lastFetch.current = Date.now();
+          if (result.ok) {
+            setSnapshot(result.data);
+            setLoadError(null);
+          } else if (result.sessionInvalid) {
+            sessionInvalid.current?.();
+            break;
+          } else {
+            setLoadError(result.error);
+          }
+        } while (rerun.current);
+      } finally {
+        reading.current = null;
+        rerun.current = false;
+        setLoading(false);
+      }
+    })();
+    reading.current = run;
+    return run;
+  }, [demo, restaurantSlug]);
+
+  // A manual refresh shows "Refreshing…"; `background` re-reads (Realtime,
+  // focus) keep the screen exactly as it is.
+  const refresh = useCallback(
+    async (options?: { background?: boolean }) => {
+      if (demo) return;
+      if (options?.background !== true) setLoading(true);
+      await read();
+    },
+    [demo, read],
+  );
 
   useEffect(() => {
     if (demo) return;
-    void refresh();
+    void read();
     const onFocus = () => {
       if (document.visibilityState === "hidden") return;
       if (Date.now() - lastFetch.current < FOCUS_REFRESH_MIN_MS) return;
-      void refresh();
+      void read();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -84,7 +120,7 @@ export function useCatalogController({
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [demo, refresh]);
+  }, [demo, read]);
 
   // Demo mode: make sure the system vendor exists (like inventory_bootstrap).
   useEffect(() => {
@@ -126,14 +162,14 @@ export function useCatalogController({
         return { ok: true, snapshot: result.data };
       }
       if (result.sessionInvalid) {
-        onSessionInvalid?.();
+        sessionInvalid.current?.();
         return { ok: false, error: result.error };
       }
       // A refused write may mean the screen is stale: show the latest.
       if (result.conflict?.kind === "stale") void refresh();
       return { ok: false, error: result.error, conflict: result.conflict };
     },
-    [demo, viewer.name, restaurantSlug, onSessionInvalid, refresh],
+    [demo, viewer.name, restaurantSlug, refresh],
   );
 
   return {

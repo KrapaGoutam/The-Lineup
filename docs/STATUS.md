@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8c-2 merged, BI-8d PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8d merged, BI-9 PR open)
+
+**BI-9 (Realtime as notify → refetch, responsive and accessibility polish) is code complete; PR into `development` pending CI.** One migration, `20261027130000`: `inventory_stock` and `inventory_adjustments` join the Realtime publication (notification only; RLS decides who is told). A change to a count re-reads the snapshot in every other open window; bursts fold into a few reads; a quiet minute costs none. **Found and fixed a defect from BI-1: in real mode the Bar Inventory snapshot was re-read once a second** (the shell's per-second clock handed the controller a new callback each render). Verified in two real browser windows against hosted DEV, on a production build; Vitest 1356/1356; pgTAP 38 files; report §BI-9. Next: BI-10 (hosted DEV validation).
 
 **BI-8d (XLSX import: a bounded zip guard, a sheet picker, and the workbook converted to CSV text so preview and commit are the exact CSV pipeline) is code complete; PR into `development` pending CI.** No migration. Verified in a real browser against hosted DEV (5/5, incl. the server reading an .xlsx and refusing a hostile one); Vitest 1330/1330; Playwright Import CSV 24 + XLSX 15; report §BI-8d. `fflate@0.8.3` is now a direct exact-pinned dependency. Next: BI-9 (Realtime + responsive polish).
 

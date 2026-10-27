@@ -2100,6 +2100,7 @@ function RestaurantOperationsAppInner({
             restaurantSlug={restaurantSlug}
             user={user}
             timeZone={timeZone}
+            locationId={locationId}
             onSessionInvalid={forceSignOut}
             demo={
               demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null

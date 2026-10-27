@@ -634,3 +634,63 @@ DEV touched: YES (hosted UI run with tagged data, cleaned up; no migration)
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-9 — Realtime (notify → refetch) and responsive / accessibility polish
+
+Branch `feature/bar-inventory-bi9-realtime-responsive` → PR into `development`. **One migration:** `20261027130000_bar_inventory_realtime.sql` (applied to DEV, recorded in `schema_migrations`; head `20261027130000`).
+
+### Realtime (owner decision D7)
+
+Database = truth, event = invalidation, client = refetch. **A payload is never read.**
+
+| Piece                                                   | What                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Migration                                               | Adds `inventory_stock` and `inventory_adjustments` to `supabase_realtime` (idempotent, each only if absent). No policy, grant or table change: Realtime applies each table's SELECT policy per subscriber, so only a management role with access to the location is told anything. Catalog edits (rename, archive) are not published — the spec names these two tables; the focus re-read and every write's version check cover the rest |
+| `src/lib/realtime/start-authenticated-channel.ts`       | The lifecycle the Table Allocation board proved (#134): no session → never subscribe as `anon`; `setAuth` before subscribe; JWT kept fresh; one channel per lifecycle; a dying channel with the same topic is awaited; every (re)join signals so missed events are recovered. Generic over table bindings. The allocation hook is untouched                                                                                              |
+| `src/lib/realtime/invalidation-gate.ts`                 | Folds a burst into one re-read (400 ms quiet, 2.5 s cap). An 800-row import is one read, not 800                                                                                                                                                                                                                                                                                                                                         |
+| `hooks/use-inventory-realtime.ts`                       | One channel per location, two bindings filtered `location_id=eq.<id>`. Callback and client factory are read through refs, so neither can rebuild the subscription (the #134 loop)                                                                                                                                                                                                                                                        |
+| `hooks/use-catalog-controller.ts`                       | `read()` is one read at a time; a request that arrives mid-read queues exactly **one** more (the read in flight may predate the change); every caller shares one promise. `refresh({background:true})` never shows "Refreshing…"; focus re-reads are background too                                                                                                                                                                      |
+| `inventory-module.tsx`, `restaurant-operations-app.tsx` | Wiring (`locationId` prop). History and Analytics already re-read when the snapshot changes, so they follow                                                                                                                                                                                                                                                                                                                              |
+
+### Defect found and fixed: the snapshot was re-read every second (since BI-1)
+
+Counting window B's server-action calls showed one snapshot read per second. `forceSignOut` in the shell is a plain `function`, so it is a new function every render; the shell re-renders every second (clock). The controller's loader depended on it, so its load effect re-ran every second. It was invisible (a quiet re-read), but it was a standing load of one read per second per open Bar Inventory tab, and it would have made Realtime meaningless. Fixed at the source: the callback is read through a ref. Regression tests fail without the fix (4 reads instead of 1) and pass with it. After the fix: 2 snapshot reads on mount, **0** in a 10 s quiet period, 4 for a 9-update burst.
+
+### Responsive and accessibility
+
+A sweep over every view on the three device projects (overflow, accessible names, 24×24 targets, heading outline), plus dialogs and keyboard. Findings and fixes:
+
+- Phone Inventory: item cards are `h3` with no `h2` above them → added a screen-reader `h2` ("Inventory").
+- Phone cards: every "Adjust…" button had the same name → `Adjust <item>` (starts with the visible text).
+- Add-product (and other catalog) dialogs: the primary action scrolled out of view on a phone → sticky footer.
+- Stale copy removed: "Counts and levels are added in the next step of the build."
+- Tablet, desktop: no overflow, unnamed controls or small targets found.
+- Not asserted: focus restore after a dialog closes (Safari does not focus a button on tap — the browser's behaviour).
+
+### Gates
+
+| Gate                             | Result                                                                                                                                                                                                                                                                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck        | PASS                                                                                                                                                                                                                                                                                                            |
+| Vitest                           | 1356/1356 (102 files)                                                                                                                                                                                                                                                                                           |
+| pgTAP                            | 38 files pass; 0038 (7): both tables published and nothing else in the module; RLS enabled; no client write policy; `anon` cannot read; `authenticated` has select only                                                                                                                                         |
+| Playwright                       | responsive sweep 12 (3 projects); all Bar Inventory specs: tablet 58, phone 56 (+2 intentional skips); cold-cache `CI=1` desktop run over Bar Inventory + payroll + table-allocation + tasks: 145 passed, **0** "use server" errors                                                                             |
+| **Hosted DEV, two real windows** | **6/6** (BI-RT-002/004): A imports three items and they appear in B without a reload; a quiet 10 s costs B **0** reads; a change made behind the app's back reaches B as the database's value; A's inline edit reaches B; a 9-update burst ends on the final values in ≤ 4 reads; B's History shows A's entries |
+| **Hosted DEV, production build** | DEV-pinned `next build` + `next start`: PROD ref in **0** files of `.next` (BI-REL-001); the Realtime + import specs **11/11** (the #134 loop only ever showed in the production bundle)                                                                                                                        |
+| Older hosted specs               | 9/9 (catalog, stale edit, counts, import CSV + XLSX)                                                                                                                                                                                                                                                            |
+| Cleanup                          | 0 tagged products / vendors / categories / batches left; 26 "V2 Harness" orgs unchanged                                                                                                                                                                                                                         |
+
+### Not done / carried
+
+- Catalog edits are not Realtime-published (see above).
+- A staff window never mounts the module, so the "staff receive nothing" case is by construction and by RLS (0035); BI-10 re-proves it from the database side.
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (migration 20261027130000; hosted UI runs with tagged data, cleaned up)
+PROD touched: NO
+PROD migrations: NO
+```

@@ -31,6 +31,7 @@ import {
   useCatalogController,
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
+import { useInventoryRealtime } from "../hooks/use-inventory-realtime";
 import { AnalyticsView } from "./analytics-view";
 import { DashboardView } from "./dashboard-view";
 import { HistoryView, type HistoryLoad } from "./history-view";
@@ -58,6 +59,8 @@ type Props = {
   demo: DemoCatalogBinding | null;
   /** The location's time zone: dates and date filters are shown in it. */
   timeZone: string;
+  /** The location whose stock changes are listened for (real mode). */
+  locationId?: string | null;
   onSessionInvalid?: () => void;
 };
 
@@ -88,6 +91,7 @@ function ManagerInventory({
   user,
   demo,
   timeZone,
+  locationId = null,
   onSessionInvalid,
 }: Props) {
   const viewer = useMemo(
@@ -103,6 +107,16 @@ function ManagerInventory({
     restaurantSlug,
     viewer,
     onSessionInvalid,
+  });
+  // Realtime = invalidation only: any change to a count or the ledger makes
+  // the controller re-read the snapshot (quietly, folded into one read). The
+  // views that read the ledger follow the snapshot, so they refresh with it.
+  const refresh = controller.refresh;
+  useInventoryRealtime({
+    enabled: !demo,
+    userId: user.profileId,
+    locationId,
+    onInvalidate: () => void refresh({ background: true }),
   });
   const [view, setView] = useState<View>("dashboard");
   const snapshot = controller.snapshot;
