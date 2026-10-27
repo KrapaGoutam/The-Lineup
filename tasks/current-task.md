@@ -6,17 +6,18 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-1 — database/domain foundation
+VOD-1 COMPLETE — database/domain foundation merged; stop before VOD-2
 
 ## Git and tracking
 
-- Branch: `feature/bar-order-drafts-v1-foundation`
-- HEAD before this handoff-only follow-up: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
+- Implementation branch: `feature/bar-order-drafts-v1-foundation`
+- Post-merge sync branch: `docs/vod1-post-merge-sync`
 - Green implementation commit: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
-- Base `development` HEAD: `fe69c1391902ef7dee1a62f7f0931846af341e28`
-- Base verification: `origin/development` is an ancestor of the feature branch; merge base is `fe69c13`
+- Exact tested feature head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`
+- VOD-1 merge commit on `development`: `876be20cf691022093d838dcca8330bbbf03e584`
+- Base verification: the post-merge sync branch was created directly from fresh `origin/development` at `876be20`
 - Issue: #190
-- PR: #193 — open against `development`
+- PR: #193 — merged to `development` with a merge commit
 - Project: #4 — Status `In Progress`, Phase `Implementation`, Priority `P2`, Version `Future`, Work Type `Feature`
 - Milestone: Future Product Backlog
 
@@ -52,9 +53,9 @@ VOD-1 — database/domain foundation
 - [x] Complete the independent security/tenant-isolation review; all ten findings are resolved and covered by the focused contract.
 - [x] Complete the final accidental-file and scope audit; `AGENTS.md`, package files, environment files, and the parked Tasks refs are unchanged.
 - [x] Commit and push the VOD-1 foundation, open PR #193 to `development`, and update issue/project/milestone tracking.
-- [ ] Monitor exact-head CI and resolve any failure before merge.
-- [ ] Merge with a merge commit only after exact-head application and database CI are green.
-- [ ] Synchronize development, local docs, GitHub tracking, and this handoff; stop before VOD-2.
+- [x] Monitor exact-head CI; application, browser-smoke, database, and Vercel passed on `dbf608e`.
+- [x] Merge PR #193 with merge commit `876be20` only after exact-head CI was green.
+- [x] Synchronize the VOD-1 completion state in repository docs and GitHub tracking; stop before VOD-2.
 
 ## Locked product decisions
 
@@ -121,12 +122,12 @@ Implemented draft-level `version` starting at 1. Every mutation takes `p_expecte
 - Database lint: `supabase db lint --local --level error --fail-on error` PASS.
 - Migration history: local and remote-history columns both contain `20261027195142` in the disposable local stack.
 - Playwright: not run because VOD-1 has no UI, Route Handler, or Server Action changes.
-- CI: PR #193 application, browser-smoke, database, and Vercel checks started on implementation commit `b39866d`; the handoff follow-up will intentionally supersede that head before exact-head approval.
+- CI: PR #193 application, browser-smoke, database migrations/policies, Vercel, and Vercel Preview Comments all passed on exact feature head `dbf608e`. The deploy-migrations job correctly skipped on the PR.
 - Last inherited green evidence: dependency PR #188 — Vitest 1406/1406; Playwright desktop 241, host-tablet 241, server-mobile 239 + 2 intentional skips.
 
 ## GitHub checks
 
-PR #193 is open against `development`. Initial application, browser-smoke, database, and Vercel checks are running; merge is forbidden until every required check is green on the final remote/PR head and all four SHA checks agree.
+PR #193 merged to `development` at `876be20`. Immediately before merge, local head, remote feature head, PR head, application/browser workflow head, and database workflow head all equalled `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`; every required check passed and GitHub reported `mergeState=CLEAN`.
 
 ## Known issues
 
@@ -136,7 +137,7 @@ PR #193 is open against `development`. Initial application, browser-smoke, datab
 
 ## Uncommitted files
 
-- `tasks/current-task.md` — PR/tracking/CI handoff follow-up only.
+- Final post-merge documentation sync only: `tasks/current-task.md`, VOD feature plan/report, status, roadmap, and backlog.
 
 ## Running processes/background jobs
 
@@ -152,7 +153,7 @@ Local Docker Desktop and the repository Supabase stack were started for pgTAP. N
 ## Roadmap status
 
 - VOD-0 COMPLETE.
-- VOD-1 IMPLEMENTED LOCALLY; PR/CI/MERGE IN PROGRESS.
+- VOD-1 COMPLETE and merged to `development` at `876be20`.
 - VOD-2, VOD-3, VOD-4 NOT STARTED.
 - Tasks T-1 PARKED; T-2 through T-6 NOT STARTED.
 
@@ -179,7 +180,7 @@ Do not resume until Vendor Order Drafts V1 reaches VOD-4 completion.
 ## Safety ledger
 
 ```text
-development merged: NO (VOD-1)
+development merged: YES — PR #193 / 876be20 (VOD-1)
 main merged: NO
 DEV touched: NO
 PROD touched: NO
@@ -189,12 +190,12 @@ PROD migrations: NO
 ## Exact next command
 
 ```powershell
-git add tasks/current-task.md && git commit -m "docs(handoff): record VOD-1 PR state (#190)"
+git status --short --branch
 ```
 
 ## Exact next action
 
-Commit and push the handoff-only follow-up, then verify local/remote/PR/check SHA equality and monitor exact-head CI.
+STOP. VOD-1 is complete. Do not start VOD-2 in this run; when explicitly resumed, branch from fresh `origin/development` and reread the VOD plan/acceptance/test matrix.
 
 ## Read first
 

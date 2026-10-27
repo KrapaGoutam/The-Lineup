@@ -2,9 +2,9 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 implements the database and pure-domain foundation only. VOD-2, VOD-3, and VOD-4 are not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2, VOD-3, and VOD-4 are not started.
 
-Issue: #190. Branch: `feature/bar-order-drafts-v1-foundation`. Integration target: `development`. `main` and PROD are untouched.
+Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
 ## VOD-1 scope delivered
 
