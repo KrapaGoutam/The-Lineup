@@ -32,7 +32,7 @@ import { AnalyticsInsights } from "./analytics-insights";
 import { formatQuantity } from "./editable-cell";
 import type { LoadHistory } from "./history-view";
 import type { RunExport } from "./export-control";
-import { OrderSoon } from "./order-soon";
+import { OrderSoon, type OrderDraftCta } from "./order-soon";
 import {
   FilterableTable,
   type TableColumn,
@@ -167,6 +167,7 @@ export function DashboardView({
   onOpenHistory,
   onOpenAnalytics,
   loadHistory,
+  draftCta = null,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
@@ -176,6 +177,8 @@ export function DashboardView({
   onOpenHistory: () => void;
   onOpenAnalytics: () => void;
   loadHistory: LoadHistory;
+  /** Create / Open Order Draft on each vendor of Order soon. */
+  draftCta?: OrderDraftCta | null;
 }) {
   const rows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
   // Re-read the clock whenever the data refreshes.
@@ -284,6 +287,7 @@ export function DashboardView({
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
           runExport={runExport}
+          draftCta={draftCta}
         />
       </section>
 
