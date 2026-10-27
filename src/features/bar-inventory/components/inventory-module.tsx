@@ -13,6 +13,15 @@ import {
   exportDataAction,
   getHistoryAction,
 } from "../actions/inventory-actions";
+import {
+  commitImportAction,
+  listImportBatchesAction,
+  previewImportAction,
+} from "../actions/import-actions";
+import type { ImportField } from "../domain/import-columns";
+import { applyStagedPlanDemo } from "../domain/import-demo";
+import { planImport, prepareCommit } from "../domain/import-run";
+import type { ImportApi } from "./import-view";
 import { prepareExport } from "../domain/exports";
 import { isInventoryManager } from "../domain/inventory-types";
 import {
@@ -108,6 +117,7 @@ function ManagerInventory({
     restaurantSlug,
     timeZone,
     onSessionInvalid,
+    actorName: user.name,
   });
   useLayoutEffect(() => {
     latest.current = {
@@ -116,6 +126,7 @@ function ManagerInventory({
       restaurantSlug,
       timeZone,
       onSessionInvalid,
+      actorName: user.name,
     };
   });
   const loadHistory = useCallback(
@@ -190,6 +201,106 @@ function ManagerInventory({
           : result.content,
     };
   }, []);
+  // Imports. Demo has no server: it plans and commits here, with the same pure
+  // functions the server action uses. Real mode asks the server, which
+  // re-plans the file against the database and commits atomically. One
+  // identity, like `loadHistory`.
+  const importApi = useMemo<ImportApi>(
+    () => ({
+      async preview(request) {
+        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        if (demo) return planImport(request, demo.state);
+        const result = await previewImportAction({
+          restaurantSlug,
+          ...request,
+          mapping: request.mapping as Record<string, ImportField | null>,
+        });
+        if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+        return result;
+      },
+      async commit(request) {
+        const { demo, restaurantSlug, onSessionInvalid, actorName } =
+          latest.current;
+        if (demo) {
+          const already = demo.state.importBatches?.find(
+            (b) => b.id === request.requestId,
+          );
+          if (already) {
+            return {
+              ok: true,
+              batchId: already.id,
+              result: {
+                created: already.created,
+                updated: already.updated,
+                skipped: already.skipped,
+                errors: already.errors,
+                vendors_created: already.vendorsCreated,
+                categories_created: already.categoriesCreated,
+                subcategories_created: already.subcategoriesCreated,
+                ledger_rows: 0,
+                already: true,
+              },
+            };
+          }
+          const prep = prepareCommit(
+            request,
+            { excluded: request.excluded, approved: request.approved },
+            request.fingerprint,
+            demo.state,
+          );
+          if (!prep.ok)
+            return { ok: false, kind: prep.kind, error: prep.error };
+          const applied = applyStagedPlanDemo(demo.state, prep.staged, {
+            ctx: {
+              actorName,
+              now: new Date(),
+              newId: () => crypto.randomUUID(),
+            },
+            reason: request.reason,
+            batch: { id: request.requestId, filename: request.filename },
+          });
+          if ("conflicts" in applied) {
+            return {
+              ok: false,
+              kind: "conflict",
+              conflicts: applied.conflicts,
+              error:
+                "Some items changed since you previewed this file, so nothing was imported. Preview it again.",
+            };
+          }
+          if (!applied.ok) {
+            return { ok: false, kind: "error", error: applied.error };
+          }
+          demo.setState(applied.state);
+          return {
+            ok: true,
+            batchId: request.requestId,
+            result: applied.result,
+          };
+        }
+        const result = await commitImportAction({
+          restaurantSlug,
+          ...request,
+          mapping: request.mapping as Record<string, ImportField | null>,
+        });
+        if (!result.ok && "sessionInvalid" in result && result.sessionInvalid) {
+          onSessionInvalid?.();
+        }
+        return result;
+      },
+      async loadBatches() {
+        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        if (demo) return { ok: true, batches: demo.state.importBatches ?? [] };
+        const result = await listImportBatchesAction({ restaurantSlug });
+        if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+        return result;
+      },
+    }),
+    [],
+  );
+  const onImported = useCallback(() => {
+    if (!latest.current.demo) void controller.refresh();
+  }, [controller]);
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -259,6 +370,8 @@ function ManagerInventory({
           run={controller.run}
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
+          imports={importApi}
+          onImported={onImported}
         />
       ) : view === "inventory" ? (
         <InventoryView

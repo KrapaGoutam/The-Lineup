@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8b merged, BI-8c-1 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8c-1 merged, BI-8c-2 PR open)
+
+**BI-8c-2 (the import application: server actions that re-plan against the database and commit atomically, a demo commit engine, and the Manage → Import Preview / Confirm UI with column mapping, near-miss choices, row ticks, error report and batch history) is code complete; PR into `development` pending CI.** Verified in a real browser against hosted DEV (4/4, including a double click that applies once and an inventory change made under an open preview); Vitest 1277/1277; Playwright Import 24 across 3 projects; report §BI-8c-2. Next: BI-8d (XLSX import).
 
 **BI-8c-1 (the database half of the import commit: import batches, an atomic commit that reuses the audited RPCs, idempotent staging, conflict detection) is code complete and applied to DEV; PR into `development` pending CI.** pgTAP 0037 57/57 (all 37 files pass), hosted DEV 9/9 including a real double-submit race; report §BI-8c-1. Next: BI-8c-2 (server actions, demo commit, Preview / Confirm UI).
 

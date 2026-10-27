@@ -130,6 +130,27 @@ export type HistoryEntry = {
   importBatchId: string | null;
 };
 
+/** One confirmed import, as the batch history shows it. */
+export type ImportBatchView = {
+  id: string;
+  filename: string;
+  format: "csv" | "xlsx";
+  sheet: string | null;
+  reason: AdjustmentReason;
+  status: "staged" | "committed";
+  rowsInFile: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  vendorsCreated: number;
+  categoriesCreated: number;
+  subcategoriesCreated: number;
+  actorName: string | null;
+  createdAt: string;
+  committedAt: string | null;
+};
+
 /** The organization-level catalog (BI-1) plus location stock (BI-2/3). */
 export type CatalogState = {
   vendors: VendorView[];
@@ -139,6 +160,8 @@ export type CatalogState = {
   stock: StockView[];
   /** Demo mode only: its in-memory ledger. Real mode reads history from the database. */
   ledger?: HistoryEntry[];
+  /** Demo mode only: its confirmed imports. Real mode reads batches from the database. */
+  importBatches?: ImportBatchView[];
 };
 
 export type CatalogSnapshot = CatalogState & {
