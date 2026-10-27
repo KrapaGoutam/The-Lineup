@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-6 (History) — code complete, gated, in PR.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-7 (Analytics) — code complete, gated, in PR.
 
-**Branch:** `feature/bar-inventory-bi6-history` · **Base development:** `41fc232` (BI-5 merge, PR #176, head `9ee1594`, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-6 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi6-history`)
+**Branch:** `feature/bar-inventory-bi7-analytics` · **Base development:** `0e39e0f` (BI-6 merge, PR #177, head `9563938`, CI green)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-7 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi7-analytics`)
 
-**Exact next action:** wait for exact-head CI on the BI-6 PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi7-analytics origin/development` and build BI-7 (Analytics from the ledger: Observed Depletion = negative Stock Count; Confirmed Usage = Usage; Correction / Transfer / Delivery / Restock are NOT consumption; fastest / slowest moving, averages per day and week, restocked quantity and count, repeated cutoff hits by transition, vendor demand, days to cutoff only with enough history and as a range; replace the Dashboard placeholders; reuse `FilterableTable`; `buildHistoryRows` / `HISTORY_COLUMNS` in `domain/history.ts` are the ledger read model). Never continue BI-7 on the BI-6 branch.
-**Exact next command:** `gh pr checks <BI-6 PR number> --watch`
+**Exact next action:** wait for exact-head CI on the BI-7 PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi8-import-export origin/development` and build BI-8 per `IMPORT_EXPORT_SPEC.md`: Upload → Parse → Validate → Preview → Match → Diff → Confirm → Import; CREATE/UPDATE/SKIP/ERROR rows; blank = unchanged, 0 = zero; vendors/categories matched or proposed (never created before confirm); SKU else vendor+name+size+unit matching; import writes ledger rows and an import batch (needs a migration: `inventory_import_batches` + FK from `inventory_adjustments.import_batch_id`, DEV only); XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` server-side behind a bounded zip guard, multi-sheet picker; extend `src/lib/csv/write.ts` for exports (inventory all/filtered, history, recommendations incl. one-sheet-per-vendor XLSX, analytics) with the server re-applying filters. Never continue BI-8 on the BI-7 branch.
+**Exact next command:** `gh pr checks <BI-7 PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -25,8 +25,8 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-3** `FilterableTable` kit, filter engine, Inventory view, Manage filters — merged (PR #174, `4a5ed19`)
 - [x] **BI-4** Dashboard — merged (PR #175, `ee573c0`)
 - [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
-- [x] **BI-6** History over the immutable ledger (`domain/history.ts`, `getHistoryAction`, History view reached from Dashboard / Inventory, per-item History in the item sheet; demo engine keeps a ledger) — **PR open, awaiting CI/merge** (report §BI-6; labels are the item's current ones, a deliberate known limit)
-- [ ] **BI-7** Analytics
+- [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
+- [x] **BI-7** Analytics from the ledger (`domain/analytics.ts`, Analytics view from the Dashboard, Dashboard top-5 lists, deterministic back-dated demo history; fixed two latent table-kit / loader identity bugs) — **PR open, awaiting CI/merge** (report §BI-7; chart and shrink/variance tables deferred)
 - [ ] **BI-8** CSV/XLSX import & export
 - [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
 - [ ] **BI-10** hosted DEV validation
@@ -36,13 +36,13 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-## BI-6 evidence (earlier phases: see the report)
+## BI-7 evidence (earlier phases: see the report)
 
 ```
-Unit:     Vitest 1047/1047 (88 files); history 16
-DB:       no migration in BI-3..6
-Browser:  History 9 pass (3 projects); all Bar Inventory specs 79 pass + 2 intentional phone skips
-Hosted:   none yet; the real-mode History read is exercised in BI-10
+Unit:     Vitest 1103/1103 (90 files); analytics 49, demo analytics 7
+DB:       no migration in BI-3..7
+Browser:  Analytics 21 pass (3 projects); all Bar Inventory specs 100 pass + 2 intentional phone skips
+Hosted:   none yet; the real-mode History / Analytics read is exercised in BI-10
 Static:   lint · typecheck · prettier --check PASS
 CI:       pending on the PR head
 ```
@@ -52,9 +52,9 @@ CI:       pending on the PR head
 ## Safety ledger
 
 ```
-development merged: YES for BI-0..5 (#171 #172 #173 #174 #175 #176); BI-6 PR open
+development merged: YES for BI-0..6 (#171 #172 #173 #174 #175 #176 #177); BI-7 PR open
 main merged: NO
-DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..6 added no migration)
+DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..7 added no migration)
 PROD touched: NO
 PROD migrations: NO
 ```

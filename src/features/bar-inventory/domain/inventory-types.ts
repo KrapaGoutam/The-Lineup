@@ -124,6 +124,8 @@ export type HistoryEntry = {
   prevBackup: number;
   newBackup: number;
   statusAfter: Exclude<StockStatus, "archived">;
+  /** The cutoff in force when the change was made (null = none set). */
+  cutoffAtTime: number | null;
   actorName: string | null;
   importBatchId: string | null;
 };

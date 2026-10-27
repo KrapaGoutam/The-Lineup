@@ -91,6 +91,12 @@ type Props<Row> = {
 
 const SLUG_PARAM = "bi.org";
 
+// Stable defaults: a fresh `[]` per render would invalidate the memoised
+// rows below and re-fire `onVisibleRows` on every render.
+const NO_COLUMNS: never[] = [];
+const NO_SORT: SortKey[] = [];
+const NO_PRESETS: SortPreset[] = [];
+
 /**
  * Drops table state that belongs to another organization (a shared or stale
  * URL). Run once when the module mounts, before any table reads its state, so
@@ -271,11 +277,11 @@ export function FilterableTable<Row>({
   label,
   rows,
   columns,
-  sortOnlyColumns = [],
+  sortOnlyColumns = NO_COLUMNS,
   getRowId,
   timeZone,
-  defaultSort = [],
-  sortPresets = [],
+  defaultSort = NO_SORT,
+  sortPresets = NO_PRESETS,
   renderCard,
   renderGroups,
   rowActions,

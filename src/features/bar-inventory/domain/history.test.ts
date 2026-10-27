@@ -89,6 +89,7 @@ function entry(over: Partial<HistoryEntry>): HistoryEntry {
     prevBackup: 0,
     newBackup: 0,
     statusAfter: "healthy",
+    cutoffAtTime: 4,
     actorName: "Manager",
     importBatchId: null,
     ...over,

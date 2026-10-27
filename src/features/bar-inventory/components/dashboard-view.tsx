@@ -12,7 +12,6 @@ import {
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { formatBusinessDateTime } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +28,9 @@ import {
 } from "../domain/inventory-rows";
 import type { CatalogSnapshot } from "../domain/inventory-types";
 import type { TableState } from "../domain/table-filters";
+import { AnalyticsInsights } from "./analytics-insights";
 import { formatQuantity } from "./editable-cell";
+import type { LoadHistory } from "./history-view";
 import { OrderSoon, type RecommendationsOutcome } from "./order-soon";
 import {
   FilterableTable,
@@ -130,17 +131,6 @@ function KpiTile({
   );
 }
 
-function Pending({ title, text }: { title: string; text: string }) {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-1 py-4">
-        <h3 className="font-semibold">{title}</h3>
-        <p className="text-muted-foreground text-sm">{text}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ItemCard({ row, detail }: { row: InventoryRow; detail: string }) {
   return (
     <article
@@ -164,8 +154,8 @@ function ItemCard({ row, detail }: { row: InventoryRow; detail: string }) {
 
 /**
  * Dashboard: the six tiles, what needs ordering, what changed recently.
- * Insights that need adjustment history (movers, cutoff hits) say so rather
- * than showing a number the data cannot yet support; Analytics (BI-7) fills them.
+ * The movement insights come from the ledger-based analytics and say so when
+ * the data cannot yet support a ranking.
  */
 export function DashboardView({
   snapshot,
@@ -174,6 +164,8 @@ export function DashboardView({
   onOpenInventory,
   onExportRecommendations,
   onOpenHistory,
+  onOpenAnalytics,
+  loadHistory,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
@@ -181,6 +173,8 @@ export function DashboardView({
   onOpenInventory: (state: TableState) => void;
   onExportRecommendations: (filters: string) => Promise<RecommendationsOutcome>;
   onOpenHistory: () => void;
+  onOpenAnalytics: () => void;
+  loadHistory: LoadHistory;
 }) {
   const rows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
   // Re-read the clock whenever the data refreshes.
@@ -327,19 +321,12 @@ export function DashboardView({
         />
       </section>
 
-      <section
-        aria-label="Movement insights"
-        className="grid gap-3 md:grid-cols-2"
-      >
-        <Pending
-          title="Fastest moving"
-          text="Shown once Analytics is available, from confirmed usage and observed depletion in the adjustment history."
-        />
-        <Pending
-          title="Frequently hitting cutoff"
-          text="Shown once Analytics is available, from how often each item crossed its cutoff in the adjustment history."
-        />
-      </section>
+      <AnalyticsInsights
+        snapshot={snapshot}
+        timeZone={timeZone}
+        load={loadHistory}
+        onOpenAnalytics={onOpenAnalytics}
+      />
     </div>
   );
 }
