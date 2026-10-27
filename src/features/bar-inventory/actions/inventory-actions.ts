@@ -12,6 +12,8 @@ import {
   catalogCommandSchema,
   type CatalogCommand,
 } from "../domain/catalog-commands";
+import { buildInventoryRows } from "../domain/inventory-rows";
+import { buildRecommendationsExport } from "../domain/order-export";
 import {
   isInventoryManager,
   type CatalogConflict,
@@ -338,4 +340,46 @@ export async function runCatalogCommandAction(input: {
   if (!snapshot)
     return { ok: false, error: "Bar Inventory could not be loaded." };
   return { ok: true, data: snapshot };
+}
+
+export type RecommendationsActionResult =
+  | { ok: true; filename: string; csv: string }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/**
+ * Vendor order recommendations as CSV. The caller sends only the table's
+ * filter string; the rows come from the database under the caller's own
+ * authorization and the filters are re-applied here, so the file can only
+ * contain rows the caller may see and match what the screen shows.
+ */
+export async function exportOrderRecommendationsAction(input: {
+  restaurantSlug: string;
+  filters: string;
+}): Promise<RecommendationsActionResult> {
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, filters: z.string().max(2000) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveManager(parsed.data.restaurantSlug);
+  if (!caller.ok) return caller;
+
+  const location = await getPrimaryLocation(caller.organizationId);
+  if (!location) return { ok: false, error: "No location is set up yet." };
+  const snapshot = await getCatalogSnapshot(caller.organizationId);
+  if (!snapshot)
+    return { ok: false, error: "Bar Inventory could not be loaded." };
+
+  const file = buildRecommendationsExport({
+    rows: buildInventoryRows(snapshot),
+    filters: parsed.data.filters,
+    timeZone: location.time_zone,
+    now: new Date(),
+    slug: parsed.data.restaurantSlug,
+  });
+  return { ok: true, filename: file.filename, csv: file.csv };
 }

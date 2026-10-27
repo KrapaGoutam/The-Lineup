@@ -19,6 +19,14 @@ export const STOCK_STATUSES = [
 ] as const;
 export type StockStatus = (typeof STOCK_STATUSES)[number];
 
+export const STATUS_LABEL: Record<StockStatus, string> = {
+  critical: "Critical",
+  low: "Low",
+  healthy: "Healthy",
+  no_cutoff: "No cutoff",
+  archived: "Archived",
+};
+
 /** Warning fallback: cutoff + max(1, ceil(cutoff * 0.25)). */
 export const WARNING_FALLBACK_RATIO = 0.25;
 export const WARNING_FALLBACK_MIN_STEP = 1;

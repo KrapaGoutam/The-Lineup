@@ -1,17 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Designation } from "@/features/auth/domain/passcode";
 
+import { exportOrderRecommendationsAction } from "../actions/inventory-actions";
+import { buildInventoryRows } from "../domain/inventory-rows";
 import { isInventoryManager } from "../domain/inventory-types";
+import { buildRecommendationsExport } from "../domain/order-export";
 import {
   useCatalogController,
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
 import { DashboardView } from "./dashboard-view";
+import type { RecommendationsOutcome } from "./order-soon";
 import { InventoryView } from "./inventory-view";
 import {
   dropForeignTableState,
@@ -82,6 +86,31 @@ function ManagerInventory({
     onSessionInvalid,
   });
   const [view, setView] = useState<View>("dashboard");
+  const snapshot = controller.snapshot;
+  // Demo has no server: build the file here from the in-memory catalog. Real
+  // mode asks the server, which re-applies the filters to the authorized rows.
+  const exportRecommendations = useCallback(
+    async (filters: string): Promise<RecommendationsOutcome> => {
+      if (demo) {
+        if (!snapshot) return { ok: false, error: "Nothing to export yet." };
+        const file = buildRecommendationsExport({
+          rows: buildInventoryRows(snapshot),
+          filters,
+          timeZone,
+          now: new Date(),
+          slug: restaurantSlug,
+        });
+        return { ok: true, filename: file.filename, csv: file.csv };
+      }
+      const result = await exportOrderRecommendationsAction({
+        restaurantSlug,
+        filters,
+      });
+      if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+      return result;
+    },
+    [demo, snapshot, timeZone, restaurantSlug, onSessionInvalid],
+  );
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -164,6 +193,7 @@ function ManagerInventory({
           snapshot={controller.snapshot}
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
+          onExportRecommendations={exportRecommendations}
           onOpenInventory={(state) => {
             // The Inventory table reads its filters from the URL when it mounts.
             writeTableState("inv", restaurantSlug, state);
