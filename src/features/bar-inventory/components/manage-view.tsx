@@ -26,13 +26,15 @@ import {
   FilterableTable,
   type TableColumn,
 } from "./table-kit/filterable-table";
+import { ImportView, type ImportApi } from "./import-view";
 
-type Section = "products" | "vendors" | "categories";
+type Section = "products" | "vendors" | "categories" | "import";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "products", label: "Products" },
   { id: "vendors", label: "Vendors" },
   { id: "categories", label: "Categories" },
+  { id: "import", label: "Import" },
 ];
 
 const statusText = (active: boolean) => (active ? "Active" : "Archived");
@@ -109,11 +111,15 @@ export function ManageView({
   run,
   restaurantSlug,
   timeZone,
+  imports,
+  onImported,
 }: {
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
   restaurantSlug: string;
   timeZone: string;
+  imports: ImportApi;
+  onImported: () => void;
 }) {
   const [section, setSection] = useState<Section>("products");
   const [showArchived, setShowArchived] = useState(false);
@@ -593,6 +599,10 @@ export function ManageView({
             }
           />
         </section>
+      ) : null}
+
+      {section === "import" ? (
+        <ImportView api={imports} timeZone={timeZone} onImported={onImported} />
       ) : null}
 
       {section === "categories" ? (

@@ -102,6 +102,8 @@ export type PlanRow = {
   productId: string | null;
   /** The stock row's version when planned, for conflict detection at commit. */
   expectedStockVersion: number | null;
+  /** The product's version when planned, for the metadata conflict check at commit. */
+  expectedProductVersion: number | null;
   display: { vendor: string; name: string; size: string | null; unit: string };
   vendor: EntityResolution;
   category: EntityResolution;
@@ -598,6 +600,7 @@ export function buildImportPlan(
       matchedBy: null,
       productId: null,
       expectedStockVersion: null,
+      expectedProductVersion: null,
       changes: [],
       statusBefore: null,
       statusAfter: null,
@@ -672,6 +675,7 @@ export function buildImportPlan(
         matchedBy: null,
         productId: null,
         expectedStockVersion: null,
+        expectedProductVersion: null,
         changes: [],
         statusBefore: null,
         statusAfter,
@@ -772,6 +776,7 @@ export function buildImportPlan(
       matchedBy,
       productId: product.id,
       expectedStockVersion: current.version,
+      expectedProductVersion: product.version,
       changes,
       statusBefore:
         STATUS_LABEL[evaluateStock(before, { archived: false }).status],
