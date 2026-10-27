@@ -2,7 +2,7 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 is implemented on `feature/bar-order-drafts-v1-sharing-history` (see "VOD-3 sharing delivered"; PR pending exact-head CI); VOD-4 is not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 is complete and merged to `development` via PR #198 at merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165` (see "VOD-3 sharing delivered"); VOD-4 is next and not started.
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
@@ -115,7 +115,7 @@ Exact-head GitHub CI on `f6c3fd0` (run 40594938733): `application` success, `bro
 
 ## VOD-3 sharing delivered
 
-Branch `feature/bar-order-drafts-v1-sharing-history` from `development` at `75d6ae35cfdfda1ba53d4994b067e12b241c9291`. **No database migration** (no `supabase/**` change); only the existing VOD-1/1.1 RPCs and RLS are used. Tasks T-1, the VOD-2 backlog items (Add item UI, leave-Bar-Inventory guard, Realtime drafts) and VOD-4 are untouched.
+Branch `feature/bar-order-drafts-v1-sharing-history` from `development` at `75d6ae35cfdfda1ba53d4994b067e12b241c9291`. PR #198, exact tested head `054355ddd4c049812965cb9d27424a396c3d7667`, merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165`. **No database migration** (no `supabase/**` change); only the existing VOD-1/1.1 RPCs and RLS are used. Tasks T-1, the VOD-2 backlog items (Add item UI, leave-Bar-Inventory guard, Realtime drafts) and VOD-4 are untouched.
 
 - **Copy Order.** `domain/order-draft-share.ts` (`purchaseLines`, `copyOrderText`, `withLiveLabels`). Plain text exactly as D-VOD-11: `{Vendor} — Order Request`, one `{Name} {Size} — {Qty}` line per Included line with Order Qty > 0 (name, then size), the item note in parentheses (collapsed to one line), a `Notes:` block only for a non-empty vendor note. The Suggested Order is never in the vendor text. Quantities use `formatQuantity`, moved unchanged from `components/editable-cell.tsx` to `domain/stock-rules.ts` (and re-exported there) so the domain does not import a client component. A DRAFT shares the catalog's live name, size, SKU and vendor name; a SENT order shares the labels frozen at send.
 - **Clipboard UX.** `components/order-draft-share.tsx` (`CopyOrderButton`): Clipboard API when present; on a refusal or no API, a visible read-only text area, already selected, with an alert and a Select all button. Success is a polite `role="status"` "Order copied". No `alert()`.
@@ -146,6 +146,10 @@ Playwright host-tablet (WebKit): NOT RUN — environment limitation (WebKit is n
   supplemental Chromium with the iPad (gen 7) landscape viewport: 19/19 PASS (VOD-3 spec + VOD-2 spec) — NOT a WebKit result
 tests/real, pgTAP:   NOT RUN — no migration, and no Docker / Supabase / hosted credentials in Cloud
 Hosted DEV:          untouched (VOD-4)
+
+Exact-head GitHub CI on 054355d (run 40603971319): application success, browser-smoke success
+  (runs the desktop project only), Vercel Preview Comments success. Database workflow: PATH-GATED /
+  NOT REQUIRED (no supabase/** change). Local head = remote head = PR head = CI-tested SHA.
 ```
 
 **Carried to VOD-4:** run the full Playwright matrix including `host-tablet` WebKit and `server-mobile` on a machine with the browsers; real RLS and Staff denial for Sent reads and the order export; two-context `PT409` for Mark Sent; real export of a Sent order with a renamed / archived product; the real-database no-inventory-mutation check; paging against a hosted history larger than one page.
