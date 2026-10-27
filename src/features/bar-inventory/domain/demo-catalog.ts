@@ -15,7 +15,9 @@ export function buildDemoCatalog(): CatalogState {
   let counter = 0;
   const ctx: CatalogContext = {
     actorName: "Demo Owner",
-    now: new Date("2026-10-20T16:00:00Z"),
+    // Relative to now so date filters (Today / Last 7 days) behave the same
+    // whenever the demo runs.
+    now: new Date(),
     newId: () => `demo-${String(++counter).padStart(4, "0")}`,
   };
   let state = withSystemVendor(emptyCatalogState(), ctx);
@@ -80,5 +82,58 @@ export function buildDemoCatalog(): CatalogState {
       notes: null,
     },
   });
+  run({
+    type: "productCreate",
+    input: {
+      vendorId: faust,
+      name: "House Rail Gin",
+      categoryId: spirits,
+      subcategoryId: null,
+      size: "1 L",
+      unitType: "bottle",
+      unitLabel: null,
+      sku: null,
+      notes: null,
+    },
+  });
+
+  // Counts and levels (one of each status: critical, healthy, low, no cutoff).
+  const byName = (name: string) =>
+    state.products.find((p) => p.name === name)!.id;
+  const stock = (
+    name: string,
+    cutoff: number | null,
+    warning: number | null,
+    par: number | null,
+    onHand: number,
+    backup: number,
+  ) => {
+    const productId = byName(name);
+    if (cutoff !== null || par !== null) {
+      run({
+        type: "stockSetLevels",
+        productId,
+        cutoff,
+        warning,
+        par,
+        expectedVersion: 1,
+      });
+    }
+    const version = state.stock.find((s) => s.productId === productId)!.version;
+    run({
+      type: "stockAdjust",
+      productId,
+      mode: "set",
+      onHand,
+      backup,
+      reason: "stock_count",
+      note: null,
+      expectedVersion: version,
+    });
+  };
+  stock("Tito's Handmade Vodka", 4, 6, 12, 2, 1);
+  stock("Casamigos Blanco", 3, null, 10, 6, 2);
+  stock("Modelo Especial", 2, null, 12, 3, 0);
+  stock("House Rail Gin", null, null, null, 5, 0);
   return state;
 }

@@ -8,6 +8,7 @@ import type {
   CatalogSnapshot,
   CategoryView,
   ProductView,
+  StockView,
   SubcategoryView,
   UnitType,
   VendorView,
@@ -53,6 +54,22 @@ const CATEGORY_COLUMNS = `id, name, active, ${AUDIT}`;
 const SUBCATEGORY_COLUMNS = `id, category_id, name, active, ${AUDIT}`;
 const PRODUCT_COLUMNS = `id, vendor_id, name, category_id, subcategory_id, size, unit_type, unit_label, sku, notes, active, ${AUDIT}`;
 
+const STOCK_COLUMNS =
+  "product_id, on_hand, backup, cutoff, warning, par, version, updated_at, updated_by, last_adjusted_at";
+
+type StockRow = {
+  product_id: string;
+  on_hand: number;
+  backup: number;
+  cutoff: number | null;
+  warning: number | null;
+  par: number | null;
+  version: number;
+  updated_at: string | null;
+  updated_by: string | null;
+  last_adjusted_at: string | null;
+};
+
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 async function readAll<T>(
@@ -60,15 +77,19 @@ async function readAll<T>(
   table: string,
   columns: string,
   organizationId: string,
+  options: { orderBy?: string; locationId?: string } = {},
 ): Promise<T[] | null> {
   const rows: T[] = [];
+  const orderBy = options.orderBy ?? "name";
   for (let page = 0; page < MAX_PAGES; page++) {
-    const { data, error } = await supabase
+    let query = supabase
       .from(table)
       .select(columns)
-      .eq("organization_id", organizationId)
-      .order("name", { ascending: true })
-      .order("id", { ascending: true })
+      .eq("organization_id", organizationId);
+    if (options.locationId) query = query.eq("location_id", options.locationId);
+    const { data, error } = await query
+      .order(orderBy, { ascending: true })
+      .order(options.orderBy ? "location_id" : "id", { ascending: true })
       .range(page * PAGE, page * PAGE + PAGE - 1)
       .overrideTypes<T[], { merge: false }>();
     if (error || !data) {
@@ -102,7 +123,7 @@ export async function getCatalogSnapshot(
     return null;
   }
 
-  const [vendors, categories, subcategories, products, roster] =
+  const [vendors, categories, subcategories, products, stock, roster] =
     await Promise.all([
       readAll<VendorRow>(
         supabase,
@@ -128,9 +149,21 @@ export async function getCatalogSnapshot(
         PRODUCT_COLUMNS,
         organizationId,
       ),
+      readAll<StockRow>(
+        supabase,
+        "inventory_stock",
+        STOCK_COLUMNS,
+        organizationId,
+        {
+          orderBy: "product_id",
+          locationId: location.id,
+        },
+      ),
       getOrganizationRoster(organizationId),
     ]);
-  if (!vendors || !categories || !subcategories || !products) return null;
+  if (!vendors || !categories || !subcategories || !products || !stock) {
+    return null;
+  }
 
   const names = new Map(roster.map((member) => [member.id, member.name]));
   const audit = (row: Audit) => ({
@@ -181,6 +214,22 @@ export async function getCatalogSnapshot(
         notes: row.notes,
         active: row.active,
         ...audit(row),
+      }),
+    ),
+    stock: stock.map(
+      (row): StockView => ({
+        productId: row.product_id,
+        onHand: Number(row.on_hand),
+        backup: Number(row.backup),
+        cutoff: row.cutoff === null ? null : Number(row.cutoff),
+        warning: row.warning === null ? null : Number(row.warning),
+        par: row.par === null ? null : Number(row.par),
+        version: row.version,
+        updatedAt: row.updated_at,
+        updatedByName: row.updated_by
+          ? (names.get(row.updated_by) ?? null)
+          : null,
+        lastAdjustedAt: row.last_adjusted_at,
       }),
     ),
     loadedAt: new Date().toISOString(),

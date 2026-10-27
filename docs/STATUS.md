@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 done)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-2 merged, BI-3 PR open)
+
+**BI-3 (shared `FilterableTable` kit, type-appropriate column filters, Inventory view with inline reason-gated adjustments, filtered Manage tables) is code complete; PR into `development` pending CI.** Evidence and the Windows WebKit-wedge investigation: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md` §BI-3. Vitest 998/998; Playwright per project (2 workers) desktop 199, host-tablet 199, server-mobile 197 (+2 skips). Next: BI-4 (Dashboard).
 
 **BI-0 (decisions, XLSX library review, golden vectors, test matrix) complete.** Owner decisions D1–D8 locked; XLSX = `read-excel-file@9.3.12` + `write-excel-file@4.1.1` behind our bounded zip guard (installed in BI-8). Evidence: `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md`. Next: BI-1 (catalog). No application code or migration yet; `development → main` is not part of this cycle.
 

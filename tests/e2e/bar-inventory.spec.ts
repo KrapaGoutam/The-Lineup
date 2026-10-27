@@ -34,6 +34,11 @@ async function openBarInventory(page: Page) {
   ).toBeVisible();
 }
 
+async function openManage(page: Page) {
+  await openBarInventory(page);
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
+}
+
 async function noPageHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(
     () =>
@@ -49,14 +54,14 @@ test("a manager reaches Bar Inventory from the secondary tier / More (BI-NAV-001
   await signIn(page, "2468");
   await openBarInventory(page);
 
-  // Three views only; Manage is where the catalog is set up (BI-1).
+  // Three views only; Inventory (counts) is the default landing.
   const views = page.getByRole("tablist", { name: "Bar Inventory views" });
   await expect(views.getByRole("tab")).toHaveText([
     "Dashboard",
     "Inventory",
     "Manage",
   ]);
-  await expect(views.getByRole("tab", { name: "Manage" })).toHaveAttribute(
+  await expect(views.getByRole("tab", { name: "Inventory" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -97,7 +102,7 @@ test("vendors: add, spelling variants are refused with the existing name, rename
   page,
 }) => {
   await signIn(page, "2468");
-  await openBarInventory(page);
+  await openManage(page);
   await page.getByRole("tab", { name: "Vendors" }).click();
 
   // Seeded vendors plus the read-only system vendor.
@@ -154,7 +159,7 @@ test("products: identity, units (Other), inline new vendor, archive (BI-CAT-007/
   page,
 }) => {
   await signIn(page, "9999");
-  await openBarInventory(page);
+  await openManage(page);
   await page.getByRole("tab", { name: "Products" }).click();
 
   const table = page.getByRole("table", { name: "Products" });
@@ -216,7 +221,7 @@ test("categories and subcategories: a subcategory belongs to a category (BI-CAT-
   page,
 }) => {
   await signIn(page, "2468");
-  await openBarInventory(page);
+  await openManage(page);
   await page.getByRole("tab", { name: "Categories" }).click();
 
   const table = page.getByRole("table", { name: "Categories" });

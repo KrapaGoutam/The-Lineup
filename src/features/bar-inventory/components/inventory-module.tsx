@@ -11,7 +11,10 @@ import {
   useCatalogController,
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
+import { InventoryView } from "./inventory-view";
+import { dropForeignTableState } from "./table-kit/filterable-table";
 import { ManageView } from "./manage-view";
+import { TableSkeleton } from "./table-kit/empty-state";
 
 type View = "dashboard" | "inventory" | "manage";
 
@@ -26,6 +29,8 @@ type Props = {
   user: { profileId: string; name: string; designation: Designation };
   /** Present in demo mode only; real mode reads and writes the database. */
   demo: DemoCatalogBinding | null;
+  /** The location's time zone: dates and date filters are shown in it. */
+  timeZone: string;
   onSessionInvalid?: () => void;
 };
 
@@ -55,6 +60,7 @@ function ManagerInventory({
   restaurantSlug,
   user,
   demo,
+  timeZone,
   onSessionInvalid,
 }: Props) {
   const viewer = useMemo(
@@ -71,7 +77,9 @@ function ManagerInventory({
     viewer,
     onSessionInvalid,
   });
-  const [view, setView] = useState<View>("manage");
+  const [view, setView] = useState<View>("inventory");
+  // Runs once, before any table reads its URL state.
+  useState(() => dropForeignTableState(restaurantSlug));
 
   return (
     <div
@@ -127,19 +135,32 @@ function ManagerInventory({
           </CardContent>
         </Card>
       ) : !controller.snapshot ? (
-        <p className="text-muted-foreground text-sm" role="status">
-          Loading Bar Inventory…
-        </p>
+        <div>
+          <p className="sr-only" role="status">
+            Loading Bar Inventory…
+          </p>
+          <TableSkeleton />
+        </div>
       ) : view === "manage" ? (
-        <ManageView snapshot={controller.snapshot} run={controller.run} />
+        <ManageView
+          snapshot={controller.snapshot}
+          run={controller.run}
+          restaurantSlug={restaurantSlug}
+          timeZone={timeZone}
+        />
+      ) : view === "inventory" ? (
+        <InventoryView
+          snapshot={controller.snapshot}
+          run={controller.run}
+          restaurantSlug={restaurantSlug}
+          timeZone={timeZone}
+        />
       ) : (
         <Card>
           <CardContent className="py-6">
             <p className="text-muted-foreground text-sm">
-              {view === "dashboard"
-                ? "The Dashboard (stock levels, what to order and from whom) arrives once counts are added in the next steps of the build."
-                : "The Inventory table (counts, levels and history) arrives in the next steps of the build."}{" "}
-              Set up vendors, categories and products under Manage now.
+              The Dashboard (what to order and from whom) arrives in the next
+              step of the build. Counts and levels are under Inventory.
             </p>
           </CardContent>
         </Card>

@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { formatBusinessDate } from "@/lib/date-time";
 
+import type { CatalogCommand } from "../domain/catalog-commands";
 import {
   unitDisplay,
   type CatalogSnapshot,
@@ -14,7 +15,6 @@ import {
   type SubcategoryView,
   type VendorView,
 } from "../domain/inventory-types";
-import type { CatalogCommand } from "../domain/catalog-commands";
 import {
   CategoryDialog,
   ProductDialog,
@@ -22,6 +22,10 @@ import {
   VendorDialog,
   type RunCatalogCommand,
 } from "./catalog-dialogs";
+import {
+  FilterableTable,
+  type TableColumn,
+} from "./table-kit/filterable-table";
 
 type Section = "products" | "vendors" | "categories";
 
@@ -31,54 +35,13 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "categories", label: "Categories" },
 ];
 
-const formatWhen = (iso: string) =>
-  new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+const statusText = (active: boolean) => (active ? "Active" : "Archived");
 
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
     <Badge tone="success">Active</Badge>
   ) : (
     <Badge tone="neutral">Archived</Badge>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="text-muted-foreground px-3 py-2 text-left text-xs font-semibold whitespace-nowrap"
-    >
-      {children}
-    </th>
-  );
-}
-
-const Td = ({
-  children,
-  className = "",
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) => (
-  <td className={`px-3 py-2 align-middle text-sm ${className}`}>{children}</td>
-);
-
-function TableShell({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-border relative w-full max-w-full min-w-0 overflow-x-auto rounded-xl border">
-      <table
-        aria-label={label}
-        className="w-full min-w-[40rem] border-collapse"
-      >
-        {children}
-      </table>
-    </div>
   );
 }
 
@@ -102,12 +65,55 @@ function ShowArchived({
   );
 }
 
+type ProductRow = {
+  id: string;
+  name: string;
+  vendor: string;
+  category: string | null;
+  subcategory: string | null;
+  size: string | null;
+  unit: string;
+  sku: string | null;
+  notes: string | null;
+  status: string;
+  updatedAt: string;
+  updatedBy: string | null;
+  product: ProductView;
+};
+
+type VendorRow = {
+  id: string;
+  name: string;
+  status: string;
+  items: number;
+  updatedAt: string;
+  updatedBy: string | null;
+  vendor: VendorView;
+};
+
+type CategoryRow = {
+  id: string;
+  /** The category's own name (also set on its subcategory rows). */
+  category: string;
+  subcategory: string | null;
+  status: string;
+  items: number;
+  updatedAt: string;
+  updatedBy: string | null;
+  categoryRef: CategoryView;
+  subRef: SubcategoryView | null;
+};
+
 export function ManageView({
   snapshot,
   run,
+  restaurantSlug,
+  timeZone,
 }: {
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
+  restaurantSlug: string;
+  timeZone: string;
 }) {
   const [section, setSection] = useState<Section>("products");
   const [showArchived, setShowArchived] = useState(false);
@@ -126,46 +132,317 @@ export function ManageView({
     categoryId: string | null;
   } | null>(null);
 
-  const vendorName = useMemo(
-    () => new Map(snapshot.vendors.map((vendor) => [vendor.id, vendor.name])),
-    [snapshot.vendors],
-  );
-  const categoryName = useMemo(
-    () => new Map(snapshot.categories.map((c) => [c.id, c.name])),
-    [snapshot.categories],
-  );
-  const subName = useMemo(
-    () => new Map(snapshot.subcategories.map((s) => [s.id, s.name])),
-    [snapshot.subcategories],
-  );
-  const itemCount = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const product of snapshot.products) {
-      if (!product.active) continue;
-      counts.set(product.vendorId, (counts.get(product.vendorId) ?? 0) + 1);
-    }
-    return counts;
-  }, [snapshot.products]);
-
   async function act(command: CatalogCommand) {
     setNotice(null);
     const result = await run(command);
     if (!result.ok) setNotice(result.error);
   }
 
-  const products = snapshot.products.filter((p) => showArchived || p.active);
-  const vendors = snapshot.vendors.filter((v) => showArchived || v.active);
-  const categories = snapshot.categories.filter(
-    (c) => showArchived || c.active,
+  const productRows = useMemo<ProductRow[]>(() => {
+    const vendors = new Map(snapshot.vendors.map((v) => [v.id, v.name]));
+    const categories = new Map(snapshot.categories.map((c) => [c.id, c.name]));
+    const subs = new Map(snapshot.subcategories.map((s) => [s.id, s.name]));
+    return snapshot.products
+      .filter((p) => showArchived || p.active)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        vendor: vendors.get(p.vendorId) ?? "—",
+        category: p.categoryId ? (categories.get(p.categoryId) ?? null) : null,
+        subcategory: p.subcategoryId
+          ? (subs.get(p.subcategoryId) ?? null)
+          : null,
+        size: p.size,
+        unit: unitDisplay(p.unitType, p.unitLabel),
+        sku: p.sku,
+        notes: p.notes,
+        status: statusText(p.active),
+        updatedAt: p.updatedAt,
+        updatedBy: p.updatedByName,
+        product: p,
+      }));
+  }, [snapshot, showArchived]);
+
+  const vendorRows = useMemo<VendorRow[]>(() => {
+    const counts = new Map<string, number>();
+    for (const p of snapshot.products) {
+      if (p.active) counts.set(p.vendorId, (counts.get(p.vendorId) ?? 0) + 1);
+    }
+    return snapshot.vendors
+      .filter((v) => showArchived || v.active)
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        status: statusText(v.active),
+        items: counts.get(v.id) ?? 0,
+        updatedAt: v.updatedAt,
+        updatedBy: v.updatedByName,
+        vendor: v,
+      }));
+  }, [snapshot, showArchived]);
+
+  const categoryRows = useMemo<CategoryRow[]>(() => {
+    const rows: CategoryRow[] = [];
+    for (const category of snapshot.categories) {
+      if (!showArchived && !category.active) continue;
+      rows.push({
+        id: category.id,
+        category: category.name,
+        subcategory: null,
+        status: statusText(category.active),
+        items: snapshot.products.filter(
+          (p) => p.active && p.categoryId === category.id,
+        ).length,
+        updatedAt: category.updatedAt,
+        updatedBy: category.updatedByName,
+        categoryRef: category,
+        subRef: null,
+      });
+      for (const sub of snapshot.subcategories) {
+        if (sub.categoryId !== category.id || (!showArchived && !sub.active))
+          continue;
+        rows.push({
+          id: sub.id,
+          category: category.name,
+          subcategory: sub.name,
+          status: statusText(sub.active),
+          items: snapshot.products.filter(
+            (p) => p.active && p.subcategoryId === sub.id,
+          ).length,
+          updatedAt: sub.updatedAt,
+          updatedBy: sub.updatedByName,
+          categoryRef: category,
+          subRef: sub,
+        });
+      }
+    }
+    return rows;
+  }, [snapshot, showArchived]);
+
+  const when = (iso: string) => formatBusinessDate(iso, timeZone);
+
+  const productColumns = useMemo<TableColumn<ProductRow>[]>(
+    () => [
+      {
+        id: "name",
+        label: "Name",
+        type: "text",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.name,
+        render: (r) => <span className="font-medium">{r.name}</span>,
+      },
+      {
+        id: "vendor",
+        label: "Vendor",
+        type: "select",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.vendor,
+        render: (r) => r.vendor,
+      },
+      {
+        id: "category",
+        label: "Category",
+        type: "select",
+        sortable: true,
+        get: (r) => r.category,
+        render: (r) => r.category ?? "—",
+      },
+      {
+        id: "subcategory",
+        label: "Subcategory",
+        type: "select",
+        sortable: true,
+        get: (r) => r.subcategory,
+        render: (r) => r.subcategory ?? "—",
+      },
+      {
+        id: "size",
+        label: "Size",
+        type: "select",
+        sortable: true,
+        get: (r) => r.size,
+        render: (r) => r.size ?? "—",
+      },
+      {
+        id: "unit",
+        label: "Unit",
+        type: "select",
+        sortable: true,
+        get: (r) => r.unit,
+        render: (r) => r.unit,
+      },
+      {
+        id: "sku",
+        label: "SKU",
+        type: "text",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.sku,
+        render: (r) => r.sku ?? "—",
+      },
+      {
+        id: "notes",
+        label: "Notes",
+        type: "text",
+        tabletHidden: true,
+        get: (r) => r.notes,
+        render: (r) => r.notes ?? "—",
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "select",
+        sortable: true,
+        get: (r) => r.status,
+        render: (r) => <StatusBadge active={r.product.active} />,
+      },
+      {
+        id: "updated",
+        label: "Updated",
+        type: "date",
+        sortable: true,
+        tabletHidden: true,
+        get: (r) => r.updatedAt,
+        render: (r) => when(r.updatedAt),
+      },
+      {
+        id: "updatedBy",
+        label: "Updated by",
+        type: "select",
+        sortable: true,
+        tabletHidden: true,
+        get: (r) => r.updatedBy,
+        render: (r) => r.updatedBy ?? "—",
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeZone],
   );
 
-  const empty = (text: string, action: string, onAction: () => void) => (
-    <Card>
-      <CardContent className="flex flex-col items-start gap-3 py-6">
-        <p className="text-muted-foreground text-sm">{text}</p>
-        <Button onClick={onAction}>{action}</Button>
-      </CardContent>
-    </Card>
+  const vendorColumns = useMemo<TableColumn<VendorRow>[]>(
+    () => [
+      {
+        id: "name",
+        label: "Name",
+        type: "text",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.name,
+        render: (r) => (
+          <span className="font-medium">
+            {r.name}
+            {r.vendor.isSystem ? (
+              <Badge tone="accent" className="ml-2">
+                System
+              </Badge>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "select",
+        sortable: true,
+        get: (r) => r.status,
+        render: (r) => <StatusBadge active={r.vendor.active} />,
+      },
+      {
+        id: "items",
+        label: "Items",
+        type: "number",
+        sortable: true,
+        align: "right",
+        get: (r) => r.items,
+        render: (r) => r.items,
+      },
+      {
+        id: "updated",
+        label: "Last updated",
+        type: "date",
+        sortable: true,
+        get: (r) => r.updatedAt,
+        render: (r) => when(r.updatedAt),
+      },
+      {
+        id: "updatedBy",
+        label: "Updated by",
+        type: "select",
+        sortable: true,
+        get: (r) => r.updatedBy,
+        render: (r) => r.updatedBy ?? "—",
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeZone],
+  );
+
+  const categoryColumns = useMemo<TableColumn<CategoryRow>[]>(
+    () => [
+      {
+        id: "category",
+        label: "Category",
+        type: "select",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.category,
+        render: (r) => (
+          <span className={r.subRef ? "text-muted-foreground" : "font-medium"}>
+            {r.category}
+          </span>
+        ),
+      },
+      {
+        id: "subcategory",
+        label: "Subcategory",
+        type: "select",
+        sortable: true,
+        searchable: true,
+        get: (r) => r.subcategory,
+        render: (r) => (r.subcategory ? `↳ ${r.subcategory}` : "—"),
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "select",
+        sortable: true,
+        get: (r) => r.status,
+        render: (r) => (
+          <StatusBadge
+            active={r.subRef ? r.subRef.active : r.categoryRef.active}
+          />
+        ),
+      },
+      {
+        id: "items",
+        label: "Items",
+        type: "number",
+        sortable: true,
+        align: "right",
+        get: (r) => r.items,
+        render: (r) => r.items,
+      },
+      {
+        id: "updated",
+        label: "Updated",
+        type: "date",
+        sortable: true,
+        get: (r) => r.updatedAt,
+        render: (r) => when(r.updatedAt),
+      },
+      {
+        id: "updatedBy",
+        label: "Updated by",
+        type: "select",
+        sortable: true,
+        get: (r) => r.updatedBy,
+        render: (r) => r.updatedBy ?? "—",
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeZone],
   );
 
   return (
@@ -209,94 +486,55 @@ export function ManageView({
               Add product
             </Button>
           </div>
-          {products.length === 0 ? (
-            empty(
+          <FilterableTable<ProductRow>
+            tableKey="prod"
+            restaurantSlug={restaurantSlug}
+            label="Products"
+            rows={productRows}
+            columns={productColumns}
+            getRowId={(r) => r.id}
+            timeZone={timeZone}
+            defaultSort={[{ id: "name", dir: "asc" }]}
+            emptyMessage={
               showArchived
                 ? "No products yet."
-                : "No active products yet. Add your first product (a spreadsheet import arrives in a later step).",
-              "Add product",
-              () => setProductDialog({ product: null }),
-            )
-          ) : (
-            <TableShell label="Products">
-              <thead className="bg-muted/40">
-                <tr>
-                  <Th>Name</Th>
-                  <Th>Vendor</Th>
-                  <Th>Category</Th>
-                  <Th>Size</Th>
-                  <Th>Unit</Th>
-                  <Th>SKU</Th>
-                  <Th>Status</Th>
-                  <Th>Updated</Th>
-                  <Th>
-                    <span className="sr-only">Actions</span>
-                  </Th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id} className="border-border border-t">
-                    <Td className="font-medium">{product.name}</Td>
-                    <Td>{vendorName.get(product.vendorId) ?? "—"}</Td>
-                    <Td>
-                      {product.categoryId
-                        ? [
-                            categoryName.get(product.categoryId),
-                            product.subcategoryId
-                              ? subName.get(product.subcategoryId)
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" › ")
-                        : "—"}
-                    </Td>
-                    <Td>{product.size ?? "—"}</Td>
-                    <Td>{unitDisplay(product.unitType, product.unitLabel)}</Td>
-                    <Td>{product.sku ?? "—"}</Td>
-                    <Td>
-                      <StatusBadge active={product.active} />
-                    </Td>
-                    <Td className="text-muted-foreground whitespace-nowrap">
-                      {formatWhen(product.updatedAt)}
-                      {product.updatedByName
-                        ? ` · ${product.updatedByName}`
-                        : ""}
-                    </Td>
-                    <Td className="whitespace-nowrap">
-                      <div className="flex gap-1">
-                        {product.active ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Edit ${product.name}`}
-                            onClick={() => setProductDialog({ product })}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`${product.active ? "Archive" : "Reactivate"} ${product.name}`}
-                          onClick={() =>
-                            void act({
-                              type: "productSetActive",
-                              id: product.id,
-                              active: !product.active,
-                              expectedVersion: product.version,
-                            })
-                          }
-                        >
-                          {product.active ? "Archive" : "Reactivate"}
-                        </Button>
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableShell>
-          )}
+                : "No active products yet. Add your first product (a spreadsheet import arrives in a later step)."
+            }
+            emptyAction={
+              <Button onClick={() => setProductDialog({ product: null })}>
+                Add product
+              </Button>
+            }
+            rowActions={(row) => (
+              <div className="flex gap-1">
+                {row.product.active ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Edit ${row.name}`}
+                    onClick={() => setProductDialog({ product: row.product })}
+                  >
+                    Edit
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${row.product.active ? "Archive" : "Reactivate"} ${row.name}`}
+                  onClick={() =>
+                    void act({
+                      type: "productSetActive",
+                      id: row.product.id,
+                      active: !row.product.active,
+                      expectedVersion: row.product.version,
+                    })
+                  }
+                >
+                  {row.product.active ? "Archive" : "Reactivate"}
+                </Button>
+              </div>
+            )}
+          />
         </section>
       ) : null}
 
@@ -307,74 +545,53 @@ export function ManageView({
               Add vendor
             </Button>
           </div>
-          <TableShell label="Vendors">
-            <thead className="bg-muted/40">
-              <tr>
-                <Th>Name</Th>
-                <Th>Status</Th>
-                <Th>Items</Th>
-                <Th>Last updated</Th>
-                <Th>
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {vendors.map((vendor) => (
-                <tr key={vendor.id} className="border-border border-t">
-                  <Td className="font-medium">
-                    {vendor.name}
-                    {vendor.isSystem ? (
-                      <Badge tone="accent" className="ml-2">
-                        System
-                      </Badge>
-                    ) : null}
-                  </Td>
-                  <Td>
-                    <StatusBadge active={vendor.active} />
-                  </Td>
-                  <Td>{itemCount.get(vendor.id) ?? 0}</Td>
-                  <Td className="text-muted-foreground whitespace-nowrap">
-                    {formatWhen(vendor.updatedAt)}
-                    {vendor.updatedByName ? ` · ${vendor.updatedByName}` : ""}
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {vendor.isSystem ? (
-                      <span className="text-muted-foreground text-xs">
-                        Read-only
-                      </span>
-                    ) : (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Edit ${vendor.name}`}
-                          onClick={() => setVendorDialog({ vendor })}
-                        >
-                          Rename
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`${vendor.active ? "Deactivate" : "Reactivate"} ${vendor.name}`}
-                          onClick={() =>
-                            void act({
-                              type: "vendorSetActive",
-                              id: vendor.id,
-                              active: !vendor.active,
-                              expectedVersion: vendor.version,
-                            })
-                          }
-                        >
-                          {vendor.active ? "Deactivate" : "Reactivate"}
-                        </Button>
-                      </div>
-                    )}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </TableShell>
+          <FilterableTable<VendorRow>
+            tableKey="vend"
+            restaurantSlug={restaurantSlug}
+            label="Vendors"
+            rows={vendorRows}
+            columns={vendorColumns}
+            getRowId={(r) => r.id}
+            timeZone={timeZone}
+            defaultSort={[{ id: "name", dir: "asc" }]}
+            emptyMessage="No vendors yet."
+            emptyAction={
+              <Button onClick={() => setVendorDialog({ vendor: null })}>
+                Add vendor
+              </Button>
+            }
+            rowActions={(row) =>
+              row.vendor.isSystem ? (
+                <span className="text-muted-foreground text-xs">Read-only</span>
+              ) : (
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Edit ${row.name}`}
+                    onClick={() => setVendorDialog({ vendor: row.vendor })}
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${row.vendor.active ? "Deactivate" : "Reactivate"} ${row.name}`}
+                    onClick={() =>
+                      void act({
+                        type: "vendorSetActive",
+                        id: row.vendor.id,
+                        active: !row.vendor.active,
+                        expectedVersion: row.vendor.version,
+                      })
+                    }
+                  >
+                    {row.vendor.active ? "Deactivate" : "Reactivate"}
+                  </Button>
+                </div>
+              )
+            }
+          />
         </section>
       ) : null}
 
@@ -388,138 +605,97 @@ export function ManageView({
               Add category
             </Button>
           </div>
-          {categories.length === 0 ? (
-            empty(
-              "No categories yet. Categories and subcategories are optional; they help you filter products.",
-              "Add category",
-              () => setCategoryDialog({ category: null }),
-            )
-          ) : (
-            <TableShell label="Categories">
-              <thead className="bg-muted/40">
-                <tr>
-                  <Th>Name</Th>
-                  <Th>Status</Th>
-                  <Th>Items</Th>
-                  <Th>
-                    <span className="sr-only">Actions</span>
-                  </Th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.flatMap((category) => {
-                  const subs = snapshot.subcategories.filter(
-                    (sub) =>
-                      sub.categoryId === category.id &&
-                      (showArchived || sub.active),
-                  );
-                  const count = snapshot.products.filter(
-                    (p) => p.active && p.categoryId === category.id,
-                  ).length;
-                  return [
-                    <tr key={category.id} className="border-border border-t">
-                      <Td className="font-medium">{category.name}</Td>
-                      <Td>
-                        <StatusBadge active={category.active} />
-                      </Td>
-                      <Td>{count}</Td>
-                      <Td className="whitespace-nowrap">
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Rename ${category.name}`}
-                            onClick={() => setCategoryDialog({ category })}
-                          >
-                            Rename
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Add subcategory to ${category.name}`}
-                            disabled={!category.active}
-                            onClick={() =>
-                              setSubDialog({
-                                sub: null,
-                                categoryId: category.id,
-                              })
-                            }
-                          >
-                            Add subcategory
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`${category.active ? "Archive" : "Reactivate"} ${category.name}`}
-                            onClick={() =>
-                              void act({
-                                type: "categorySetActive",
-                                id: category.id,
-                                active: !category.active,
-                                expectedVersion: category.version,
-                              })
-                            }
-                          >
-                            {category.active ? "Archive" : "Reactivate"}
-                          </Button>
-                        </div>
-                      </Td>
-                    </tr>,
-                    ...subs.map((sub) => (
-                      <tr
-                        key={sub.id}
-                        className="border-border bg-muted/20 border-t"
-                      >
-                        <Td className="pl-8">↳ {sub.name}</Td>
-                        <Td>
-                          <StatusBadge active={sub.active} />
-                        </Td>
-                        <Td>
-                          {
-                            snapshot.products.filter(
-                              (p) => p.active && p.subcategoryId === sub.id,
-                            ).length
-                          }
-                        </Td>
-                        <Td className="whitespace-nowrap">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`Edit ${sub.name} under ${category.name}`}
-                              onClick={() =>
-                                setSubDialog({
-                                  sub,
-                                  categoryId: sub.categoryId,
-                                })
-                              }
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`${sub.active ? "Archive" : "Reactivate"} ${sub.name}`}
-                              onClick={() =>
-                                void act({
-                                  type: "subcategorySetActive",
-                                  id: sub.id,
-                                  active: !sub.active,
-                                  expectedVersion: sub.version,
-                                })
-                              }
-                            >
-                              {sub.active ? "Archive" : "Reactivate"}
-                            </Button>
-                          </div>
-                        </Td>
-                      </tr>
-                    )),
-                  ];
-                })}
-              </tbody>
-            </TableShell>
-          )}
+          <FilterableTable<CategoryRow>
+            tableKey="cat"
+            restaurantSlug={restaurantSlug}
+            label="Categories"
+            rows={categoryRows}
+            columns={categoryColumns}
+            getRowId={(r) => r.id}
+            timeZone={timeZone}
+            emptyMessage="No categories yet. Categories and subcategories are optional; they help you filter products."
+            emptyAction={
+              <Button onClick={() => setCategoryDialog({ category: null })}>
+                Add category
+              </Button>
+            }
+            rowActions={(row) =>
+              row.subRef ? (
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Edit ${row.subRef.name} under ${row.category}`}
+                    onClick={() =>
+                      setSubDialog({
+                        sub: row.subRef,
+                        categoryId: row.subRef!.categoryId,
+                      })
+                    }
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${row.subRef.active ? "Archive" : "Reactivate"} ${row.subRef.name}`}
+                    onClick={() =>
+                      void act({
+                        type: "subcategorySetActive",
+                        id: row.subRef!.id,
+                        active: !row.subRef!.active,
+                        expectedVersion: row.subRef!.version,
+                      })
+                    }
+                  >
+                    {row.subRef.active ? "Archive" : "Reactivate"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Rename ${row.category}`}
+                    onClick={() =>
+                      setCategoryDialog({ category: row.categoryRef })
+                    }
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Add subcategory to ${row.category}`}
+                    disabled={!row.categoryRef.active}
+                    onClick={() =>
+                      setSubDialog({
+                        sub: null,
+                        categoryId: row.categoryRef.id,
+                      })
+                    }
+                  >
+                    Add subcategory
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${row.categoryRef.active ? "Archive" : "Reactivate"} ${row.category}`}
+                    onClick={() =>
+                      void act({
+                        type: "categorySetActive",
+                        id: row.categoryRef.id,
+                        active: !row.categoryRef.active,
+                        expectedVersion: row.categoryRef.version,
+                      })
+                    }
+                  >
+                    {row.categoryRef.active ? "Archive" : "Reactivate"}
+                  </Button>
+                </div>
+              )
+            }
+          />
         </section>
       ) : null}
 
