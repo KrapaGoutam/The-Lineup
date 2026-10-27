@@ -69,6 +69,10 @@ describe("cellText", () => {
     [0, "0"],
     [3.25, "3.25"],
     [0.1 + 0.2, "0.3"],
+    // Whole numbers are exact: an EAN-13 barcode held as a number must not be rounded.
+    [5012345678905, "5012345678905"],
+    [123456789012345, "123456789012345"],
+    [-42, "-42"],
     // Beyond what JavaScript will write out in full: left as is, and the
     // importer rejects it with a clear "not a number" message.
     [1e21, "1e+21"],
@@ -313,6 +317,56 @@ describe("readWorkbook: formulas that were never calculated", () => {
       },
     );
     expect(r.ok).toBe(true);
+  });
+});
+
+describe("readWorkbook: cells showing an Excel error, and empty-text formulas", () => {
+  const withCells = async (cells: string) =>
+    edit(await book([stockSheet("Stock", [["Faust", "Gin"]])]), (name, text) =>
+      name === "xl/worksheets/sheet1.xml"
+        ? text.replace("</sheetData>", `<row r="9">${cells}</row></sheetData>`)
+        : undefined,
+    );
+
+  it("refuses a sheet with an error cell, naming it, instead of reading a blank", async () => {
+    const r = await readWorkbook(
+      await withCells(
+        '<c r="H9" t="e"><f>VLOOKUP(1,A:B,2,0)</f><v>#N/A</v></c>',
+      ),
+      readWorkbookNode,
+      { sheet: "Stock" },
+    );
+    expect(r).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("H9"),
+    });
+    if (!r.ok) expect(r.error).toContain("Excel error");
+  });
+
+  it("a formula that returns an empty string does not block the sheet", async () => {
+    const r = await readWorkbook(
+      await withCells('<c r="M9" t="str"><f>IF(A9="","",A9)</f><v></v></c>'),
+      readWorkbookNode,
+      { sheet: "Stock" },
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("a 13-digit barcode stored as a number reaches the importer exactly", async () => {
+    const sheet: ExportSheet = stockSheet("Stock", [["Faust", "Gin"]]);
+    const raw: RawSheet[] = [
+      {
+        sheet: "S",
+        data: [
+          ["Vendor", "Name", "SKU"],
+          ["Faust", "Gin", 5012345678905],
+        ],
+      },
+    ];
+    const r = await readWorkbook(await book([sheet]), async () => raw, {
+      sheet: "S",
+    });
+    expect(r.ok && r.csv).toContain("5012345678905");
   });
 });
 

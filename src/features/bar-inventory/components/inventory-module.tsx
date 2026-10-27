@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +52,14 @@ import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
 
 type View = "dashboard" | "inventory" | "manage" | "history" | "analytics";
+
+const VIEW_NAMES: Record<View, string> = {
+  dashboard: "Dashboard",
+  inventory: "Inventory",
+  manage: "Manage",
+  history: "History",
+  analytics: "Analytics",
+};
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -119,6 +134,29 @@ function ManagerInventory({
     onInvalidate: () => void refresh({ background: true }),
   });
   const [view, setView] = useState<View>("dashboard");
+  // History and Analytics are reached from Inventory and the Dashboard and go
+  // back to them, so that is the tab that is "current" while they are open.
+  const currentTab: View =
+    view === "history"
+      ? "inventory"
+      : view === "analytics"
+        ? "dashboard"
+        : view;
+  // A control that switches the view (a tile, "Back") unmounts with the old
+  // view, which would drop keyboard and screen-reader focus to the page top.
+  // When that happens, focus the new view's region, which announces its name.
+  const viewRegion = useRef<HTMLDivElement>(null);
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      viewRegion.current?.focus({ preventScroll: true });
+    }
+  }, [view]);
   const snapshot = controller.snapshot;
   // History comes from the immutable ledger. Demo keeps its ledger in memory;
   // real mode reads it from the database under the caller's own access.
@@ -353,8 +391,12 @@ function ManagerInventory({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => void controller.refresh()}
-            disabled={controller.loading}
+            onClick={() => {
+              if (!controller.loading) void controller.refresh();
+            }}
+            // aria-disabled, not disabled: a disabled button drops keyboard focus.
+            aria-disabled={controller.loading}
+            className={controller.loading ? "opacity-60" : undefined}
           >
             {controller.loading ? "Refreshing…" : "Refresh"}
           </Button>
@@ -370,8 +412,8 @@ function ManagerInventory({
           <Button
             key={id}
             role="tab"
-            aria-selected={view === id}
-            variant={view === id ? "secondary" : "ghost"}
+            aria-selected={currentTab === id}
+            variant={currentTab === id ? "secondary" : "ghost"}
             size="sm"
             className="shrink-0"
             onClick={() => setView(id)}
@@ -381,80 +423,97 @@ function ManagerInventory({
         ))}
       </div>
 
-      {controller.loadError && !controller.snapshot ? (
-        <Card>
-          <CardContent className="flex flex-col items-start gap-3 py-6">
-            <p role="alert" className="text-destructive text-sm">
-              {controller.loadError}
+      {controller.loadError && controller.snapshot ? (
+        <p
+          role="alert"
+          className="border-destructive/30 bg-destructive/15 text-destructive rounded-lg border px-3 py-2 text-sm"
+        >
+          {controller.loadError} Showing the last information we loaded.
+        </p>
+      ) : null}
+
+      <div
+        ref={viewRegion}
+        role="region"
+        aria-label={`${VIEW_NAMES[view]} view`}
+        tabIndex={-1}
+        className="flex w-full max-w-full min-w-0 flex-col gap-4 outline-none"
+      >
+        {controller.loadError && !controller.snapshot ? (
+          <Card>
+            <CardContent className="flex flex-col items-start gap-3 py-6">
+              <p role="alert" className="text-destructive text-sm">
+                {controller.loadError}
+              </p>
+              <Button
+                variant="secondary"
+                onClick={() => void controller.refresh()}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : !controller.snapshot ? (
+          <div>
+            <p className="sr-only" role="status">
+              Loading Bar Inventory…
             </p>
-            <Button
-              variant="secondary"
-              onClick={() => void controller.refresh()}
-            >
-              Try again
-            </Button>
-          </CardContent>
-        </Card>
-      ) : !controller.snapshot ? (
-        <div>
-          <p className="sr-only" role="status">
-            Loading Bar Inventory…
-          </p>
-          <TableSkeleton />
-        </div>
-      ) : view === "manage" ? (
-        <ManageView
-          snapshot={controller.snapshot}
-          run={controller.run}
-          restaurantSlug={restaurantSlug}
-          timeZone={timeZone}
-          imports={importApi}
-          onImported={onImported}
-        />
-      ) : view === "inventory" ? (
-        <InventoryView
-          snapshot={controller.snapshot}
-          run={controller.run}
-          restaurantSlug={restaurantSlug}
-          timeZone={timeZone}
-          loadHistory={loadHistory}
-          onOpenHistory={() => setView("history")}
-          runExport={runExport}
-        />
-      ) : view === "analytics" ? (
-        <AnalyticsView
-          snapshot={controller.snapshot}
-          restaurantSlug={restaurantSlug}
-          timeZone={timeZone}
-          load={loadHistory}
-          onBack={() => setView("dashboard")}
-          runExport={runExport}
-        />
-      ) : view === "history" ? (
-        <HistoryView
-          snapshot={controller.snapshot}
-          restaurantSlug={restaurantSlug}
-          timeZone={timeZone}
-          load={loadHistory}
-          onBack={() => setView("inventory")}
-          runExport={runExport}
-        />
-      ) : (
-        <DashboardView
-          snapshot={controller.snapshot}
-          restaurantSlug={restaurantSlug}
-          timeZone={timeZone}
-          runExport={runExport}
-          onOpenHistory={() => setView("history")}
-          onOpenAnalytics={() => setView("analytics")}
-          loadHistory={loadHistory}
-          onOpenInventory={(state) => {
-            // The Inventory table reads its filters from the URL when it mounts.
-            writeTableState("inv", restaurantSlug, state);
-            setView("inventory");
-          }}
-        />
-      )}
+            <TableSkeleton />
+          </div>
+        ) : view === "manage" ? (
+          <ManageView
+            snapshot={controller.snapshot}
+            run={controller.run}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            imports={importApi}
+            onImported={onImported}
+          />
+        ) : view === "inventory" ? (
+          <InventoryView
+            snapshot={controller.snapshot}
+            run={controller.run}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            loadHistory={loadHistory}
+            onOpenHistory={() => setView("history")}
+            runExport={runExport}
+          />
+        ) : view === "analytics" ? (
+          <AnalyticsView
+            snapshot={controller.snapshot}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            load={loadHistory}
+            onBack={() => setView("dashboard")}
+            runExport={runExport}
+          />
+        ) : view === "history" ? (
+          <HistoryView
+            snapshot={controller.snapshot}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            load={loadHistory}
+            onBack={() => setView("inventory")}
+            runExport={runExport}
+          />
+        ) : (
+          <DashboardView
+            snapshot={controller.snapshot}
+            restaurantSlug={restaurantSlug}
+            timeZone={timeZone}
+            runExport={runExport}
+            onOpenHistory={() => setView("history")}
+            onOpenAnalytics={() => setView("analytics")}
+            loadHistory={loadHistory}
+            onOpenInventory={(state) => {
+              // The Inventory table reads its filters from the URL when it mounts.
+              writeTableState("inv", restaurantSlug, state);
+              setView("inventory");
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

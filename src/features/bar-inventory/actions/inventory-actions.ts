@@ -24,6 +24,7 @@ import {
   type CatalogCommand,
 } from "../domain/catalog-commands";
 import { daysBetween } from "../domain/analytics";
+import { friendlyDbMessage } from "../domain/db-error";
 import {
   exportNeedsLedger,
   prepareExport,
@@ -54,13 +55,6 @@ const slugSchema = z
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type RpcError = { message?: string; code?: string; details?: string | null };
-
-/** Every failure the database raises is already a plain-language sentence. */
-function friendly(message: string | undefined): string {
-  return message && message.length < 200
-    ? message
-    : "That didn't work. Please try again.";
-}
 
 /** PT409 stale and 23505 duplicate carry a JSON `details` the UI can act on. */
 function conflictFrom(error: RpcError): CatalogConflict | undefined {
@@ -347,7 +341,7 @@ export async function runCatalogCommandAction(input: {
   if (failure) {
     return {
       ok: false,
-      error: friendly(failure.message),
+      error: friendlyDbMessage(failure),
       conflict: conflictFrom(failure),
     };
   }

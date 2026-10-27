@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-9 merged, BI-10 PR open)
+## Bar Inventory V1 — CODE COMPLETE ON `development` (#168; BI-0 → BI-10 merged, BI-11 PR open)
+
+**BI-11 (final Bar Inventory gate — not a release): GO.** Three independent read-only reviews (security/RLS, code correctness, accessibility + dependencies); every finding checked against the code before acting. Fixed with regression tests: History, Analytics and exports were silently capped at 1,000 rows (proven on hosted DEV); a ~1 KB hostile .xlsx could crash the server (reproduced) and quadratic regexes could stall it; Excel error cells, empty-text formulas and 13-digit barcodes were mishandled; offline froze the screen; raw database errors could reach users; plus accessibility and import-planning fixes. Vitest 1406, Playwright desktop 241 / tablet 241 / phone 239 (+2 skips), hosted DEV DB 42 and UI 24 on a production build. Report `docs/features/bar-inventory-v1/FINAL_GATE.md`. **Owner decisions pending:** the export audit log (AC-EXP-4: build or waive) and light-theme contrast tokens (app-wide). **Next:** security dependency bumps (next, zod) as their own change, then Tasks V1.1. `main` and PROD untouched.
 
 **BI-10 (hosted DEV validation): GO.** Run on a DEV-pinned production build (PROD ref in 0 files). Real-mode Dashboard, History, Analytics and the CSV/XLSX exports proven against the database row by row; CSV + XLSX import, roles, tenant isolation, concurrency, Realtime (who is told, no storm) and a phone profile all pass: hosted DB 38/38, hosted UI 23/23, no leftovers. Report `docs/features/bar-inventory-v1/DEV_VALIDATION.md`. Tests + report only. Next: BI-11 (final gate).
 

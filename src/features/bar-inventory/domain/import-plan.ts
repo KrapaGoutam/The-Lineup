@@ -716,8 +716,23 @@ export function buildImportPlan(
       });
     };
 
+    // A blank size, or a unit the file never named (it defaulted to Bottle),
+    // is "unchanged" -- as it is for every other field -- so it is compared as
+    // the product's own value. Otherwise a file with only Vendor, Name, SKU and
+    // counts would propose clearing every matched item's size.
+    const draftVendorScope = scopeOf(draft.vendor);
+    const draftIdentity =
+      draftVendorScope !== null && nameKey(draft.name) !== null
+        ? productIdentityKey({
+            vendorId: draftVendorScope,
+            name: draft.name,
+            size: draft.size ?? product.size,
+            unitType: draft.unitAssumed ? product.unitType : draft.unitType,
+            unitLabel: draft.unitAssumed ? product.unitLabel : draft.unitLabel,
+          })
+        : null;
     const identityChanged =
-      matchedBy === "sku" && draft.identity !== productIdentityKey(product);
+      matchedBy === "sku" && draftIdentity !== productIdentityKey(product);
     if (identityChanged) {
       const vendorNow = vendorNameById.get(product.vendorId) ?? "";
       text(
@@ -727,12 +742,13 @@ export function buildImportPlan(
         draft.vendor.kind === "none" ? "" : draft.vendor.name,
       );
       text("name", "Name", product.name, draft.name);
-      text("size", "Size", product.size, draft.size);
+      const currentUnit = unitDisplay(product.unitType, product.unitLabel);
+      text("size", "Size", product.size, draft.size ?? product.size);
       text(
         "unit",
         "Unit",
-        unitDisplay(product.unitType, product.unitLabel),
-        unitLabelNow,
+        currentUnit,
+        draft.unitAssumed ? currentUnit : unitLabelNow,
       );
     }
     number("onHand", "On hand", before.onHand, draft.values.onHand);

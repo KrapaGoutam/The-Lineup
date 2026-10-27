@@ -574,7 +574,7 @@ export function ManageView({
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label={`Edit ${row.name}`}
+                    aria-label={`Rename ${row.name}`}
                     onClick={() => setVendorDialog({ vendor: row.vendor })}
                   >
                     Rename

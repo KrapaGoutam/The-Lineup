@@ -345,3 +345,62 @@ test.describe("on a phone", () => {
     }
   });
 });
+
+test("History and its export go past the API's 1,000-row cap, end to end", async () => {
+  // 1,200 more ledger rows for one item, spread over the last 25 days, written
+  // with the service role (the ledger is append-only for everyone else). The
+  // product delete in cleanup() cascades them.
+  const { admin, orgId, locationId } = await devLocation();
+  const { data: product } = await admin
+    .from("inventory_products")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("name", USED)
+    .single();
+  const { data: existing } = await admin
+    .from("inventory_adjustments")
+    .select("actor_profile_id")
+    .eq("product_id", product!.id)
+    .limit(1)
+    .single();
+  const now = Date.now();
+  const rows = Array.from({ length: 1200 }, (_, i) => ({
+    organization_id: orgId,
+    location_id: locationId,
+    product_id: product!.id,
+    source: "manual_edit",
+    reason: "stock_count",
+    prev_on_hand: 9 + (i % 2),
+    new_on_hand: 10 - (i % 2),
+    prev_backup: 0,
+    new_backup: 0,
+    status_after: "healthy",
+    actor_profile_id: existing!.actor_profile_id,
+    created_at: new Date(now - (i + 1) * 1800_000).toISOString(),
+    stock_version_after: 100 + i,
+  }));
+  for (let i = 0; i < rows.length; i += 400) {
+    const { error } = await admin
+      .from("inventory_adjustments")
+      .insert(rows.slice(i, i + 400));
+    expect(error).toBeNull();
+  }
+
+  await page.reload();
+  await openModule(page);
+  await tab(page, "Dashboard").click();
+  await page.getByRole("button", { name: "Full history" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Inventory history" }),
+  ).toBeVisible();
+  await page
+    .getByRole("searchbox", { name: /Search/ })
+    .first()
+    .fill(USED);
+  const csv = await exportAs(page, "Export history", "CSV");
+  const lines = (await csvLines(csv.path)).filter((l) => l.includes(USED));
+  // 1,200 new rows + the 3 from the earlier tests; the old code stopped at 1,000.
+  expect(lines.length).toBe(1203);
+  // History must not claim a cut when nothing was cut.
+  await expect(page.getByText(/most recent changes/i)).toHaveCount(0);
+});

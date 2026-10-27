@@ -114,6 +114,10 @@ export function EditableCell({
     extra: { reason: AdjustmentReason; note: string | null } | null,
     version: number,
   ) {
+    // One write per edit: a held or double-tapped Enter in the reason step
+    // must not send a second request carrying the same version (it would come
+    // back as a conflict with the person's own first save).
+    if (phaseRef.current === "saving") return;
     go("saving");
     setError(null);
     setMine(

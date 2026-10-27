@@ -188,7 +188,7 @@ test("BI-ADJ-005: a stale edit from a second window is refused, not silently app
   const row = manager
     .getByRole("table", { name: "Vendors" })
     .getByRole("row", { name: new RegExp(`${TAG} Faust`) });
-  await row.getByRole("button", { name: `Edit ${TAG} Faust` }).click();
+  await row.getByRole("button", { name: `Rename ${TAG} Faust` }).click();
   const dialog = manager.getByRole("dialog", { name: "Edit vendor" });
 
   const secondContext = await contexts[0].browser()!.newContext();
@@ -196,7 +196,7 @@ test("BI-ADJ-005: a stale edit from a second window is refused, not silently app
   await signIn(second, PINS.TestManager);
   await openManage(second);
   await second.getByRole("tab", { name: "Vendors" }).click();
-  await second.getByRole("button", { name: `Edit ${TAG} Faust` }).click();
+  await second.getByRole("button", { name: `Rename ${TAG} Faust` }).click();
   const secondDialog = second.getByRole("dialog", { name: "Edit vendor" });
   await secondDialog.getByLabel("Vendor name").fill(`${TAG} Faust Dist`);
   await secondDialog.getByRole("button", { name: "Save vendor" }).click();
