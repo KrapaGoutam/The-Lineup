@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8b (import engine, pure) — code complete, gated, in PR.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8c (import commit: migration + RPCs + pgTAP + Preview / Confirm UI) — NOT STARTED. BI-8a and BI-8b are merged.
 
-**Branch:** `feature/bar-inventory-bi8b-import-engine` · **Base development:** `c383f37` (BI-8a merge, PR #179, head `c4a009d`, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-8b PR into `development` (find with `gh pr list --head feature/bar-inventory-bi8b-import-engine`)
+**Branch:** none active. Create `feature/bar-inventory-bi8c-import-commit` from `origin/development` · **Base development:** `d8ea37d` (BI-8b merge, PR #180, head `5751359`, CI green)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** none open
 
-**Exact next action:** wait for exact-head CI on the BI-8b PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi8c-import-commit origin/development` and build **BI-8c** on top of the merged engine (`src/lib/csv/read.ts`, `domain/import-columns.ts`, `domain/import-plan.ts`): (1) a DEV-only migration: `inventory_import_batches` (batch id, filename, format, sheet, actor, time, row count, created / updated / skipped / errors, vendors / categories / subcategories created, status, the staged plan as jsonb, expiry 24 h), the FK from `inventory_adjustments.import_batch_id`, RLS management-only, and an export change-log table; (2) `inventory_import_stage` + `inventory_import_commit(batch_id)` RPCs: atomic, applies EXACTLY the staged plan, creates the confirmed entities, per-row `expected_stock_version` conflict detection (a row whose stock changed since preview is a conflict, never overwritten), writes `bulk_import` ledger rows via the same path as manual adjustments, refuses archived targets; (3) pgTAP (roles, tenant + location isolation, atomicity, conflict, idempotent commit) and a hosted-DB suite; (4) server actions (parse via `parseCsv`/`buildImportPlan` on the SERVER, re-plan on commit); (5) Manage → Import UI: upload, column mapping (`mapHeaders` overrides), Preview with counts and per-row Current → Imported → Delta, near-miss choices (`plan.nearMisses` / `options.choices`), `needsApproval` ticks, error report CSV download, Confirm, result, batch history. Apply the migration to DEV only (method in memory `dev-supabase-access-and-pitfalls`). Then 8d (XLSX read + zip guard + sheet picker).
-**Exact next command:** `gh pr checks <BI-8b PR number> --watch`
+**Exact next action:** `git fetch origin && git switch -c feature/bar-inventory-bi8c-import-commit origin/development` and build **BI-8c** on top of the merged engine (`src/lib/csv/read.ts`, `domain/import-columns.ts`, `domain/import-plan.ts`): (1) a DEV-only migration: `inventory_import_batches` (batch id, filename, format, sheet, actor, time, row count, created / updated / skipped / errors, vendors / categories / subcategories created, status, the staged plan as jsonb, expiry 24 h), the FK from `inventory_adjustments.import_batch_id`, RLS management-only, and an export change-log table; (2) `inventory_import_stage` + `inventory_import_commit(batch_id)` RPCs: atomic, applies EXACTLY the staged plan, creates the confirmed entities, per-row `expected_stock_version` conflict detection (a row whose stock changed since preview is a conflict, never overwritten), writes `bulk_import` ledger rows via the same path as manual adjustments, refuses archived targets; (3) pgTAP (roles, tenant + location isolation, atomicity, conflict, idempotent commit) and a hosted-DB suite; (4) server actions (parse via `parseCsv`/`buildImportPlan` on the SERVER, re-plan on commit); (5) Manage → Import UI: upload, column mapping (`mapHeaders` overrides), Preview with counts and per-row Current → Imported → Delta, near-miss choices (`plan.nearMisses` / `options.choices`), `needsApproval` ticks, error report CSV download, Confirm, result, batch history. Apply the migration to DEV only (method in memory `dev-supabase-access-and-pitfalls`). Then 8d (XLSX read + zip guard + sheet picker).
+**Exact next command:** `git fetch origin && git switch -c feature/bar-inventory-bi8c-import-commit origin/development`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -27,7 +27,7 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
 - [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
 - [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
-- [ ] **BI-8** CSV/XLSX import & export — **8a exports MERGED** (PR #179, `c383f37`) · **8b import engine: PR open** (report §BI-8b) · 8c import commit + migration · 8d XLSX import
+- [ ] **BI-8** CSV/XLSX import & export — **8a exports MERGED** (PR #179, `c383f37`) · **8b import engine MERGED** (PR #180, `d8ea37d`) · 8c import commit + migration (next) · 8d XLSX import
 - [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
 - [ ] **BI-10** hosted DEV validation
 - [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
@@ -44,7 +44,7 @@ DB:       no migration in BI-3..8b (8c adds the first since BI-2)
 Browser:  not applicable to 8b; all Bar Inventory specs 118 pass + 2 intentional skips at the BI-8a merge
 Hosted:   none yet; real-mode History / Analytics / export reads are exercised in BI-10
 Static:   lint · typecheck · prettier --check PASS
-CI:       pending on the PR head
+CI:       green on every merged PR so far (#171-#180)
 ```
 
 **WebKit (Windows):** the BI-3 full run wedged once at default parallelism; not reproduced (report §BI-3). Run Playwright per project with `--workers=2 --global-timeout=…`.
@@ -52,7 +52,7 @@ CI:       pending on the PR head
 ## Safety ledger
 
 ```
-development merged: YES for BI-0..8a (#171 #172 #173 #174 #175 #176 #177 #178 #179)
+development merged: YES for BI-0..8b (#171-#180)
 main merged: NO
 DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..8a added no migration)
 PROD touched: NO
