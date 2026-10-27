@@ -1,6 +1,6 @@
 # Bar Inventory — Vendor Order Drafts V1 — Plan
 
-**Status:** VOD-0 complete; VOD-1 database/domain foundation merged via PR #193 at `876be20`; VOD-1.1 corrective save fix delivered on `fix/vendor-order-draft-order-qty-save` (see Implementation Report); VOD-2 UI + editing implemented on `feature/bar-order-drafts-v1-ui` (see Implementation Report; PR number and merge SHA are recorded in the post-merge sync); VOD-3 next · **Issue:** #190 · **Companions:** `ACCEPTANCE_CRITERIA.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_REPORT.md` · **Parent module:** Bar Inventory V1 (#168, complete — BI-0 → BI-11 merged; this is a **new enhancement**, #168 is not reopened)
+**Status:** VOD-0 complete; VOD-1 database/domain foundation merged via PR #193 at `876be20`; VOD-1.1 corrective save fix delivered on `fix/vendor-order-draft-order-qty-save` (see Implementation Report); VOD-2 UI + editing complete and merged via PR #196 at `292ca1a` (see Implementation Report); VOD-3 next but not started · **Issue:** #190 · **Companions:** `ACCEPTANCE_CRITERIA.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_REPORT.md` · **Parent module:** Bar Inventory V1 (#168, complete — BI-0 → BI-11 merged; this is a **new enhancement**, #168 is not reopened)
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only. Tasks V1.1 _code_ waits for this feature.
 
 ## 1. Outcome
