@@ -9,8 +9,8 @@ This backlog holds upcoming feature specifications and technical debt items queu
 | Item | Area | Priority | Spec Link | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-10 merged; BI-11 final gate GO in PR; follow-ups below) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
-| **Tasks Today — management staff visibility** | Tasks | Medium | #169 | Owner / Manager / Assistant Manager: All Staff / My Tasks / per person in Today, staff name on each task. Tracked only. Roadmap #3. |
-| **Tasks notification scope** | Tasks | Medium | #154 | Limit the notification inbox to Opening and Closing operational work; settle ready/assigned/due/overdue semantics first. |
+| **Tasks Today — management staff visibility** | Tasks | Medium | #169 | Owner / Manager / Assistant Manager: All Staff / My Tasks / per person in Today, staff name on each task. Planned in `docs/features/tasks-v1-1/` (T-2). Roadmap #3. |
+| **Tasks notification scope** | Tasks | Medium | #154 | Limit the notification inbox to Opening and Closing operational work; semantics settled in `docs/features/tasks-v1-1/PLAN.md` D-3 (T-3); Opening reminders are T-4/T-5. |
 | **Release conditions C1–C8** | Platform | High | #160, #161 | Release-readiness audit (2026-10-26) returned NO-GO: repair/replace the PROD migration route (#111), reconcile PROD missing `20260911130000` (#161), migrations-first procedure (#113), backup check, same-day numeric-label re-run. See `docs/releases/release-readiness-2026-10/GO_NO_GO.md`. |
 | **Tips V2 — Corrections, History & Analytics** | Tips | Medium | #155 | Edit/void saved tips with audit, history and day/week/month/custom analytics. No Finalize Day. |
 | **Realtime Floor Sync** | Floor / Realtime | High | TBD | Add Supabase Realtime broadcast for multi-tablet table allocation updates. |
@@ -37,6 +37,7 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] Optional manager verification (`pending_verification`) for cash count / temperature log / security closing.
 - [ ] Per-assignee completion for shared tasks.
 - [ ] Push / email / SMS notification channels.
+- [ ] Required / optional checklist items (a `required` flag). Tasks V1.1 treats every non-cancelled Opening item as required (owner Decision 4, `docs/features/tasks-v1-1/PLAN.md` D-6).
 - [ ] Realtime as an invalidation-only signal (re-evaluate; #134 is fixed and merged to `development`).
 - [ ] Hosted real-mode Tasks suites (`tests/real/tasks-v1.db.real.test.ts`, `tests/real/ui/tasks.real.spec.ts`) in a protected CI job with DEV secrets.
 
