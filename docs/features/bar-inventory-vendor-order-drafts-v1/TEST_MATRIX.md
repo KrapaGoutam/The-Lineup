@@ -73,3 +73,25 @@ Targeted **U** → focused **D** (`supabase test db` on the touched file; VOD-1 
 VOD-4 runs the whole matrix against hosted DEV on a production build and the full three-project Playwright suite once, then reconciles the issue, Project #4, roadmap, status, backlog and handoff.
 
 Windows WebKit has hung under default parallelism before: run Playwright per project with `--workers=2 --global-timeout=…`, rerun an affected failure to decide whether it reproduces, and never weaken a legitimate test to get green.
+
+## VOD-2 coverage (UI + editing)
+
+`U` = Vitest (pure domain / demo engine), `C` = Vitest component tests, `E` = Playwright in demo mode (desktop, host-tablet, server-mobile). Real-database behaviour of the RPCs stays covered by pgTAP `0039` / `0040` (VOD-1 / VOD-1.1); hosted DEV is VOD-4.
+
+| ID                  | VOD-2 evidence                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VOD-006             | `U` demo `open` refuses Unassigned / inactive / unknown vendor; `C` picker never lists Unassigned; `C`+`E` Order soon shows "Assign a vendor in Manage…" and no button for the system vendor |
+| VOD-011/012         | `U` snapshot survives stock change until Update suggestions; `C` no-Par line shows "Order needed", flags "Quantity needed", Fill leaves it blank                                             |
+| VOD-013/014         | `U` blank / 0 / 5 / 5.0 / abc / negative / 3-decimal; item note 200 and vendor note 1,000 rejected (not truncated); newlines kept; whitespace-only → blank                                   |
+| VOD-015/020/021     | `C`+`E` Included off keeps the line visible and marked "Excluded", drops it from Planned total; totals labelled units, no `$`; manual-quantity count                                         |
+| VOD-030/031/032     | `U`+`C`+`E` Fill empty-only / replace-all (count-bearing confirmation), Clear confirmation names what is lost and never touches stock                                                        |
+| VOD-041/042         | `C` stale save refused, edits kept, Reload latest / Keep my edits on the latest, save blocked until resolved, newer version under edits detected, own-session conflict is a status           |
+| VOD-044             | `C` failed save keeps edits, says "have not been saved", never "Order draft saved.", retry works                                                                                             |
+| VOD-045             | `E` Stay / Discard changes / Save and continue on tab change; `C` guard                                                                                                                      |
+| VOD-046 (UI flow)   | `U`+`C`+`E` quantity-only edit blank → 5, blank → 0, 5 → blank, same value no-op, persisted after leaving and reopening the tab                                                              |
+| VOD-093             | `E` staff never see Bar Inventory / Order Drafts (server refusal for staff is in the action and the database)                                                                                |
+| VOD-100/101/102     | `E` tab order Dashboard · Inventory · Order Drafts · Manage; Create → Open CTA, one draft only; Dashboard has no editable quantities                                                         |
+| VOD-110/111/112/113 | `E` no horizontal scroll, controls inside the viewport, targets ≥ 44 px, keyboard-only dialog open / Escape / focus return, polite status vs assertive alert regions                         |
+| VOD-120 (partial)   | `U`+`E` demo create, edit, fill, clear, update suggestions run on the same pure engine; Copy / export / Mark Sent / Sent history demo parts belong to VOD-3                                  |
+
+Not in VOD-2 (VOD-3): VOD-005 UI, 050–053, 060–064, 070–077 UI, 080–083, Drafts | Sent switch. VOD-041 two-browser-context and VOD-130 are VOD-4 (hosted DEV).

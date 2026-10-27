@@ -2,7 +2,7 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2, VOD-3, and VOD-4 are not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is implemented on `feature/bar-order-drafts-v1-ui` (see "VOD-2 UI delivered"); VOD-3 and VOD-4 are not started.
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
@@ -77,9 +77,40 @@ Hosted DEV:     untouched
 
 The first focused pgTAP run occurred before the migration and failed on the missing tables as intended. Independent security review then drove hardening for NULL Fill mode, full Sent-child immutability, new-product save races, named quantity errors, real-row RLS assertions, concurrent open, sync append, stale Mark Sent, and fresh post-Sent seeding. The full suite also exposed a legacy BI-1 catalog-RPC count that needed to exclude the six new order-draft RPCs.
 
+## VOD-2 UI delivered
+
+Branch `feature/bar-order-drafts-v1-ui` from `development` at `f6bab25bb6d613fb583d11b853c4807e1fa77941`. **No database migration.** The PR number, exact tested head and merge SHA are recorded in `tasks/current-task.md` and the post-merge docs sync.
+
+- **Navigation.** `Order Drafts` is a fourth Bar Inventory tab (Dashboard · Inventory · Order Drafts · Manage). History and Analytics stay sub-views. No new top-level module; Tasks T-1 `?tab=` work untouched.
+- **Data and RPC layer.** Reads: `data/order-draft-data.ts` pages the location's ACTIVE drafts and lines under the caller's RLS and fails (never truncates) when a list would exceed the paging cap. Writes: `actions/order-draft-actions.ts` — one Server Action per RPC (`open`, `save`, `fill`, `clear`, `sync`) plus `list`; each is zod-validated, requires a live session and a management role, calls only the `inventory_order_draft_*` RPC, then re-reads and returns the authoritative active drafts (database truth → canonical state). `domain/db-conflict.ts` is the `PT409` parser extracted from `inventory-actions.ts` so both action files share it. No client-persisted state, no parallel persistence.
+- **Controller.** `hooks/use-order-drafts.ts` owns the drafts, a single-flight ordered apply (a slower, older response never overwrites a newer one), focus/open re-reads, and one stable `OrderDraftApi`. Real mode calls the actions; demo mode runs the same operations on `CatalogState.orderDrafts` through `domain/order-draft-demo.ts`, the in-memory twin of the six RPCs (same wording, no-op rule and `PT409` shape).
+- **Editor.** `components/order-draft-editor.tsx`. Suggested Order is read-only text (number, or "Order needed" — never invented); Order Qty is a labelled decimal text box; item note and vendor note are plain-text areas that keep internal newlines (trim-only normalization from `order-draft.ts`; limits 200 / 1,000 rejected, not truncated); Include is a labelled checkbox and an excluded line stays visible with an "Excluded" badge. Totals: Suggested total (+ N order needed), Planned order total, included lines and "manual quantity needed" count — ordering units, never money.
+- **Save strategy.** Explicit Save / Discard (no per-keystroke RPC). One sparse `inventory_order_draft_save` carrying the vendor note and only the lines whose values changed (`diffDraftEdits` in `domain/order-draft-view.ts`; same value, `5` → `5.0`, blank → blank are not changes). States: clean · dirty · saving · saved (announced only after a successful response) · error (edits kept, "have not been saved") · conflict. No client workaround for the VOD-1.1 defect exists or is needed.
+- **Fill / Update suggestions / Clear.** Separate RPCs, blocked while there are unsaved edits. Fill: empty-only runs directly; when typed quantities exist a dialog defaults to "Fill empty quantities only" and offers count-bearing "Replace all". Clear: confirmation naming what is lost; never touches stock. Update suggestions re-stamps snapshots and appends newly Critical/Low items without touching Order Qty, notes or Included.
+- **PT409 handling.** Edits remember the draft version they started from. A refused (`PT409`) save, or a newer version that arrives under unsaved edits, shows "This order draft changed elsewhere", who saved which version and when, keeps the typed values and blocks Save until the person chooses **Reload latest** (discard mine) or **Keep my edits on the latest** (re-base deliberately, then Save re-sends only the changed lines). Nothing is auto-merged or silently overwritten. A conflict with the same person's other session is reported as a status, not an alert. Idempotent retries (the first request succeeded) return "no changes" from the database instead of conflicting.
+- **Dashboard.** Order soon keeps its role. Each vendor group shows **Create Order Draft** (no active draft) or **Open Order Draft** (active draft), resolved by stable vendor id; both land on the Order Drafts tab. The system Unassigned vendor (matched by the stable `isSystem` flag, not its name) shows "Assign a vendor in Manage to draft an order." and no button; an inactive vendor without a draft explains why. No button renders until drafts have loaded.
+- **Navigation guard.** Leaving the tab (or switching draft) with unsaved edits asks **Stay / Discard changes / Save and continue**; `beforeunload` warns while dirty. Leaving Bar Inventory entirely through the app shell is not interceptable from the module (see backlog).
+- **Responsive and accessibility.** One DOM per line: stacked card rows on phones, a five-column grid from `md` (Item · Suggested · Order Qty · Item note · Included) — no horizontal page scroll, existing `min-h-11` primitives, no hover-only controls. Inputs have programmatic labels naming the item, errors are tied with `aria-describedby`/`aria-invalid`, dialogs use the repository's native `<dialog>` primitive (focus trap, Escape, focus restore), polite `role="status"` for success and assertive `role="alert"` for failures, status never colour-only.
+- **Permissions.** Owner / Manager / Assistant Manager only; Staff never mount the module and the actions and database refuse them.
+
+### VOD-2 validation evidence
+
+```text
+Unit (view model):        order-draft-view.test.ts   21 tests PASS
+Unit (demo engine):       order-draft-demo.test.ts   18 tests PASS
+Component:                order-drafts-view.test.tsx 24 tests PASS; order-soon.test.tsx 5 tests PASS
+Playwright desktop:       tests/e2e/bar-inventory-order-drafts.spec.ts 9/9 PASS
+Playwright server-mobile: 9/9 PASS
+Playwright host-tablet:   NOT RUN locally — WebKit is not installed in the Cloud VM
+                          (supplemental Chromium iPad-viewport emulation: 9/9 PASS; not a WebKit result)
+tests/real, pgTAP:        NOT RUN — no Docker/Supabase/hosted credentials in Cloud (no migration in VOD-2)
+Hosted DEV:               untouched (VOD-4)
+```
+
+Final repository-gate results (check, full Vitest, build, regression Playwright) and exact-head CI are recorded in `tasks/current-task.md`.
+
 ## Deferred to approved later phases
 
-- VOD-2: Order Drafts tab, editor, Dashboard CTA, server reads/actions, demo wiring, conflict UI.
 - VOD-3: Copy Order, CSV/XLSX, Mark Sent confirmation UI, Sent list/detail.
 - VOD-4: hosted DEV and responsive/role/concurrency final gate.
 
