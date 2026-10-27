@@ -54,11 +54,13 @@ test("a manager reaches Bar Inventory from the secondary tier / More (BI-NAV-001
   await signIn(page, "2468");
   await openBarInventory(page);
 
-  // Three views only; the Dashboard (what to order) is the default landing.
+  // Four views (Order Drafts was added by Vendor Order Drafts V1, AC-NAV-1);
+  // the Dashboard (what to order) is the default landing.
   const views = page.getByRole("tablist", { name: "Bar Inventory views" });
   await expect(views.getByRole("tab")).toHaveText([
     "Dashboard",
     "Inventory",
+    "Order Drafts",
     "Manage",
   ]);
   await expect(views.getByRole("tab", { name: "Dashboard" })).toHaveAttribute(

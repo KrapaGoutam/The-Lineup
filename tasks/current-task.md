@@ -64,15 +64,17 @@ No database migration is expected. If a backend defect blocks correct UI: STOP, 
 - [x] Inspect targeted Bar Inventory patterns.
 - [x] Pure domain `order-draft-view.ts` + demo engine `order-draft-demo.ts` + unit tests (39 tests green).
 - [x] Server data/actions, `use-order-drafts` hook, editor, view, Order soon CTA, module tab + dirty guard (typecheck + eslint clean).
-- [ ] Component tests (editor / conflict / view / CTA) and Playwright spec.
+- [x] Component tests (24 view/editor + 5 Order soon CTA) and Playwright spec `tests/e2e/bar-inventory-order-drafts.spec.ts` (9 tests).
+- [x] Repo gates (local, Cloud): Bar Inventory regression Playwright (`tests/e2e/bar-inventory*.spec.ts`, desktop + server-mobile): 130 passed, 2 intentional skips, 2 failed = the old three-tab assertion in `bar-inventory.spec.ts` (BI-NAV-001) — updated to the new four-tab contract and re-run green; `npm run check` PASS; `npm run test` PASS (109 files / 1492 tests; was 105 / 1424); `npm run build` PASS.
+- [ ] Commit, push, open PR to `development`, exact-head CI, merge commit.
+- [x] Feature docs, ROADMAP, STATUS, backlog updated pre-merge (PR number/merge SHA go in the post-merge docs sync).
 
 ## Not started
 
 - [x] Unit tests (domain / demo engine / payload builder).
 - [ ] Component tests (editor, conflict UI, view, CTA).
 - [ ] Playwright (`tests/e2e/bar-inventory-order-drafts.spec.ts`) on desktop, host-tablet, server-mobile.
-- [ ] `npm run check`, `npm run test`, `npm run build`.
-- [ ] Commit, push, PR to `development`, exact-head CI, merge commit, sync docs/GitHub.
+- [ ] PR to `development`, exact-head CI, merge commit, then post-merge docs sync (`docs/*` branch + PR: merge SHA, #190 comment, roadmap/status).
 
 ## UI architecture
 
@@ -100,7 +102,9 @@ One DOM, CSS grid rows: stacked card-like rows on phone, aligned columns from `m
 ## Tests
 
 - Unit: `order-draft-view.test.ts` (21) and `order-draft-demo.test.ts` (18) PASS, including quantity-only blank→5, blank→0, 5→blank, same-value no-op, stale PT409 shape, fill/clear/sync.
-- Component + Playwright: pending.
+- Component: `order-drafts-view.test.tsx` (24) + `order-soon.test.tsx` (5) PASS. Mutation check: dropping Order Qty from change detection fails 15 tests.
+- Playwright (demo mode) `bar-inventory-order-drafts.spec.ts`: desktop 9/9 PASS, server-mobile 9/9 PASS. host-tablet (WebKit) NOT RUN locally — WebKit not installed in Cloud VM (Chromium iPad-viewport emulation 9/9 PASS, supplemental only). GitHub CI is authoritative for WebKit.
+- Do NOT commit `AGENTS.md`: `next dev` rewrites its "This is NOT the Next.js you know" heading (`#` → `##`); run `git checkout AGENTS.md` before every commit.
 
 ## CI
 
