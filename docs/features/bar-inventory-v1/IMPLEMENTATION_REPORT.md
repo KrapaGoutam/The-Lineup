@@ -694,3 +694,16 @@ DEV touched: YES (migration 20261027130000; hosted UI runs with tagged data, cle
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-10 — Hosted DEV validation
+
+Verdict **GO**; full report `DEV_VALIDATION.md`. Branch `feature/bar-inventory-bi10-dev-validation`: **tests and report only** (no product code, no migration). New tests: `tests/real/ui/bar-inventory-validation.real.spec.ts` (8: real-mode Dashboard, Inventory / Order-soon / History / Analytics exports compared with the database, the item sheet's history, a phone profile) and `tests/real/bar-inventory-realtime-access.db.real.test.ts` (a location manager is notified of stock and ledger changes; same-org staff and another tenant's manager receive nothing, subscribed to the same filter).
+
+| Gate                                                                               | Result                               |
+| ---------------------------------------------------------------------------------- | ------------------------------------ |
+| Hosted DB (catalog, stock, import, realtime-access)                                | 38/38                                |
+| Hosted UI on a DEV-pinned production build (import, realtime, validation, catalog) | 23/23                                |
+| PROD ref in `.next`                                                                | 0 files                              |
+| Leftovers                                                                          | none; 26 "V2 Harness" orgs unchanged |
+
+No defect was found in this phase. Safety: main NOT touched; PROD NOT touched; no migration.

@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-9 (Realtime notify→refetch, responsive + accessibility polish, and a fix for the snapshot being re-read every second in real mode) — code complete, gated, verified against hosted DEV on a production build, in PR. BI-10 (hosted DEV validation) is next.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-10 (hosted DEV validation) — done, verdict GO, in PR (tests + `DEV_VALIDATION.md` only; no product code, no migration). BI-11 (final Bar Inventory gate) is next.
 
-**Branch:** `feature/bar-inventory-bi9-realtime-responsive` · **Base development:** `0ea9381` (BI-8d merge, PR #184, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-9 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi9-realtime-responsive`)
+**Branch:** `feature/bar-inventory-bi10-dev-validation` · **Base development:** `d61d35f` (BI-9 merge, PR #185, CI green)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-10 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi10-dev-validation`)
 
-**Exact next action:** wait for exact-head CI on the BI-9 PR (application, browser-smoke, migrations-and-policies); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi10-dev-validation origin/development` and run **BI-10**: hosted DEV validation on a DEV-pinned production build proving the real-mode reads for History, Analytics and exports, CSV + XLSX import/export, roles, tenant isolation, concurrency, realtime and responsive behaviour; write `docs/features/bar-inventory-v1/DEV_VALIDATION.md`; fix and re-run any defect. Then BI-11 (final gate), Tasks V1.1.
-**Exact next command:** `gh pr checks <BI-9 PR number> --watch`
+**Exact next action:** wait for exact-head CI on the BI-10 PR; if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi11-final-gate origin/development` and run **BI-11**: the final Bar Inventory gate — code, migration, security, RLS, dependency, accessibility and responsive reviews (use read-only sub-agents for independent review), full suite (lint, typecheck, Vitest, pgTAP, Playwright 3 projects, cold-cache CI run), docs/issue reconciliation (#168, #111, #113, #164 stay open and untouched in meaning). It is NOT a release. Then Tasks V1.1.
+**Exact next command:** `gh pr checks <BI-10 PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -29,20 +29,20 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
 - [x] **BI-8** CSV/XLSX import & export — 8a exports MERGED (PR #179) · 8b import engine MERGED (PR #180) · 8c-1 database MERGED (PR #182) · 8c-2 application MERGED (PR #183, `c3ccbcc`) · **8d XLSX import: PR open** (report §BI-8d; hosted DEV UI 5/5)
 - [x] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch — **PR open** (report §BI-9; migration `20261027130000` on DEV; hosted DEV UI 6/6 + 11/11 on a production build)
-- [ ] **BI-10** hosted DEV validation
+- [x] **BI-10** hosted DEV validation — **GO**, PR open (`DEV_VALIDATION.md`; hosted DB 38/38, hosted UI on a DEV-pinned production build 23/23)
 - [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
 
 ## Tasks V1.1 phases (after Bar Inventory)
 
 Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-## BI-9 evidence (per-phase detail: see the report)
+## BI-10 evidence (full report: `docs/features/bar-inventory-v1/DEV_VALIDATION.md`)
 
 ```
-Unit:     Vitest 1356/1356 (new: invalidation gate 6, inventory realtime 12, catalog controller 8)
-DB:       pgTAP 38 files pass (0038: 7 — publication membership, RLS stays on, no client writes)
-Browser:  responsive/a11y sweep 12 (3 projects); all Bar Inventory specs on tablet 58 + phone 56 (+2 skips); cold-cache CI=1 desktop run over Bar Inventory + payroll + table-allocation + tasks 145 pass, 0 use-server errors
-Hosted:   DEV UI Realtime 6/6 (dev server) and Realtime + import 11/11 on a DEV-pinned PRODUCTION build (PROD ref in 0 files of .next); older hosted specs 9/9; no leftovers, 26 V2 Harness orgs unchanged
+Unit:     Vitest 1356/1356 (unchanged: BI-10 adds hosted tests only)
+DB:       pgTAP 38 files pass; hosted DB suites 38/38 (catalog, stock, import, realtime-access: manager notified; same-org staff and another tenant hear nothing)
+Browser:  demo suites as in BI-9 (sweep 12, tablet 58, phone 56, cold-cache desktop 145)
+Hosted:   production build pinned to DEV (PROD ref in 0 files): UI 23/23 — real-mode Dashboard, Inventory/Order-soon/History/Analytics exports equal the database, CSV + XLSX import, realtime, phone; no leftovers, 26 V2 Harness orgs unchanged
 Static:   lint · typecheck · prettier --check PASS
 CI:       pending on the PR head
 ```
