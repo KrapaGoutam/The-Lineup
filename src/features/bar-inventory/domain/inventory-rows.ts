@@ -4,7 +4,12 @@ import {
   type ProductView,
   type StockView,
 } from "./inventory-types";
-import { evaluateStock, statusRank, type StockStatus } from "./stock-rules";
+import {
+  evaluateStock,
+  STATUS_LABEL,
+  statusRank,
+  type StockStatus,
+} from "./stock-rules";
 import type { ColumnSpec, SortKey } from "./table-filters";
 
 /** One line of the Inventory table: a product joined with its stock. */
@@ -104,6 +109,74 @@ export function buildInventoryRows(state: CatalogState): InventoryRow[] {
     ),
   );
 }
+
+/**
+ * The Inventory table's filterable columns, without any rendering. The view
+ * decorates these; the export parses and applies the same spec, so a filtered
+ * export always matches the screen.
+ */
+export const INVENTORY_COLUMNS: ColumnSpec<InventoryRow>[] = [
+  {
+    id: "vendor",
+    label: "Vendor",
+    type: "select",
+    searchable: true,
+    get: (r) => r.vendor,
+  },
+  {
+    id: "name",
+    label: "Name",
+    type: "text",
+    searchable: true,
+    get: (r) => r.name,
+  },
+  { id: "category", label: "Category", type: "select", get: (r) => r.category },
+  {
+    id: "subcategory",
+    label: "Subcategory",
+    type: "select",
+    get: (r) => r.subcategory,
+  },
+  { id: "size", label: "Size", type: "select", get: (r) => r.size },
+  { id: "unit", label: "Unit", type: "select", get: (r) => r.unit },
+  {
+    id: "sku",
+    label: "SKU",
+    type: "text",
+    searchable: true,
+    get: (r) => r.sku,
+  },
+  { id: "onHand", label: "On hand", type: "number", get: (r) => r.onHand },
+  { id: "backup", label: "Backup", type: "number", get: (r) => r.backup },
+  { id: "total", label: "Total", type: "number", get: (r) => r.total },
+  { id: "cutoff", label: "Cutoff", type: "number", get: (r) => r.cutoff },
+  { id: "warning", label: "Warning", type: "number", get: (r) => r.warning },
+  { id: "par", label: "Par", type: "number", get: (r) => r.par },
+  {
+    id: "status",
+    label: "Status",
+    type: "select",
+    get: (r) => STATUS_LABEL[r.status],
+  },
+  {
+    id: "suggested",
+    label: "Suggested order",
+    type: "number",
+    get: (r) => r.suggestedOrder,
+  },
+  {
+    id: "updated",
+    label: "Last updated",
+    type: "date",
+    get: (r) => r.updatedAt,
+  },
+  {
+    id: "updatedBy",
+    label: "Updated by",
+    type: "select",
+    get: (r) => r.updatedBy,
+  },
+];
 
 /** Sortable but not shown: severity order and distance to the cutoff. */
 export const INVENTORY_SORT_ONLY_COLUMNS: ColumnSpec<InventoryRow>[] = [

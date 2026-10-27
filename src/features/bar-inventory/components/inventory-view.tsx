@@ -8,6 +8,7 @@ import { formatBusinessDateTime } from "@/lib/date-time";
 
 import {
   buildInventoryRows,
+  INVENTORY_COLUMNS,
   INVENTORY_DEFAULT_SORT,
   INVENTORY_SORT_ONLY_COLUMNS,
   INVENTORY_SORT_PRESETS,
@@ -20,6 +21,11 @@ import {
   type AdjustmentReason,
 } from "../domain/stock-rules";
 import { EditableCell, formatQuantity, type CellSave } from "./editable-cell";
+import {
+  ExportControl,
+  useVisibleInfo,
+  type RunExport,
+} from "./export-control";
 import type { LoadHistory } from "./history-view";
 import { ItemSheet, type ItemSheetActions } from "./item-sheet";
 import type { RunCatalogCommand } from "./catalog-dialogs";
@@ -27,7 +33,7 @@ import {
   FilterableTable,
   type TableColumn,
 } from "./table-kit/filterable-table";
-import { STATUS_LABEL, StatusBadge } from "./table-kit/status-badge";
+import { StatusBadge } from "./table-kit/status-badge";
 
 export function InventoryView({
   snapshot,
@@ -36,6 +42,7 @@ export function InventoryView({
   timeZone,
   loadHistory,
   onOpenHistory,
+  runExport,
 }: {
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
@@ -43,7 +50,9 @@ export function InventoryView({
   timeZone: string;
   loadHistory: LoadHistory;
   onOpenHistory: () => void;
+  runExport: RunExport;
 }) {
+  const [exportInfo, onVisibleRows] = useVisibleInfo<InventoryRow>();
   const [showArchived, setShowArchived] = useState(false);
   const [lastReason, setLastReason] = useState<AdjustmentReason>("stock_count");
   const [sheetFor, setSheetFor] = useState<string | null>(null);
@@ -139,149 +148,98 @@ export function InventoryView({
   }
 
   const columns = useMemo<TableColumn<InventoryRow>[]>(() => {
+    // Labels, types and `get` come from the shared spec the export also uses.
+    const spec = new Map(
+      INVENTORY_COLUMNS.map((column) => [column.id, column]),
+    );
+    const col = (
+      id: string,
+      extra: Pick<TableColumn<InventoryRow>, "render"> &
+        Partial<
+          Pick<TableColumn<InventoryRow>, "sortable" | "align" | "tabletHidden">
+        >,
+    ): TableColumn<InventoryRow> => ({ ...spec.get(id)!, ...extra });
     const editable = (
       id: "onHand" | "backup" | "cutoff" | "warning" | "par",
-      label: string,
       mode: "quantity" | "level",
-    ): TableColumn<InventoryRow> => ({
-      id,
-      label,
-      type: "number",
-      sortable: true,
-      align: "right",
-      tabletHidden: false,
-      get: (row) => row[id],
-      render: (row) => (
-        <EditableCell
-          label={label}
-          itemName={row.name}
-          value={row[id]}
-          mode={mode}
-          defaultReason={lastReason}
-          expectedVersion={row.stockVersion}
-          onSave={
-            mode === "quantity"
-              ? saveQuantity(row, id as "onHand" | "backup")
-              : saveLevel(row, id as "cutoff" | "warning" | "par")
-          }
-        />
-      ),
-    });
-    return [
-      {
-        id: "vendor",
-        label: "Vendor",
-        type: "select",
-        sortable: true,
-        searchable: true,
-        get: (r) => r.vendor,
-        render: (r) => r.vendor,
-      },
-      {
-        id: "name",
-        label: "Name",
-        type: "text",
-        sortable: true,
-        searchable: true,
-        get: (r) => r.name,
-        render: (r) => <span className="font-medium">{r.name}</span>,
-      },
-      {
-        id: "category",
-        label: "Category",
-        type: "select",
-        sortable: true,
-        tabletHidden: true,
-        get: (r) => r.category,
-        render: (r) => r.category ?? "—",
-      },
-      {
-        id: "subcategory",
-        label: "Subcategory",
-        type: "select",
-        sortable: true,
-        tabletHidden: true,
-        get: (r) => r.subcategory,
-        render: (r) => r.subcategory ?? "—",
-      },
-      {
-        id: "size",
-        label: "Size",
-        type: "select",
-        sortable: true,
-        get: (r) => r.size,
-        render: (r) => r.size ?? "—",
-      },
-      {
-        id: "unit",
-        label: "Unit",
-        type: "select",
-        sortable: true,
-        get: (r) => r.unit,
-        render: (r) => r.unit,
-      },
-      {
-        id: "sku",
-        label: "SKU",
-        type: "text",
-        sortable: true,
-        tabletHidden: true,
-        searchable: true,
-        get: (r) => r.sku,
-        render: (r) => r.sku ?? "—",
-      },
-      editable("onHand", "On hand", "quantity"),
-      editable("backup", "Backup", "quantity"),
-      {
-        id: "total",
-        label: "Total",
-        type: "number",
+    ): TableColumn<InventoryRow> => {
+      const { label } = spec.get(id)!;
+      return col(id, {
         sortable: true,
         align: "right",
-        get: (r) => r.total,
+        tabletHidden: false,
+        render: (row) => (
+          <EditableCell
+            label={label}
+            itemName={row.name}
+            value={row[id]}
+            mode={mode}
+            defaultReason={lastReason}
+            expectedVersion={row.stockVersion}
+            onSave={
+              mode === "quantity"
+                ? saveQuantity(row, id as "onHand" | "backup")
+                : saveLevel(row, id as "cutoff" | "warning" | "par")
+            }
+          />
+        ),
+      });
+    };
+    return [
+      col("vendor", { sortable: true, render: (r) => r.vendor }),
+      col("name", {
+        sortable: true,
+        render: (r) => <span className="font-medium">{r.name}</span>,
+      }),
+      col("category", {
+        sortable: true,
+        tabletHidden: true,
+        render: (r) => r.category ?? "—",
+      }),
+      col("subcategory", {
+        sortable: true,
+        tabletHidden: true,
+        render: (r) => r.subcategory ?? "—",
+      }),
+      col("size", { sortable: true, render: (r) => r.size ?? "—" }),
+      col("unit", { sortable: true, render: (r) => r.unit }),
+      col("sku", {
+        sortable: true,
+        tabletHidden: true,
+        render: (r) => r.sku ?? "—",
+      }),
+      editable("onHand", "quantity"),
+      editable("backup", "quantity"),
+      col("total", {
+        sortable: true,
+        align: "right",
         render: (r) => (
           <span className="font-semibold">{formatQuantity(r.total)}</span>
         ),
-      },
-      editable("cutoff", "Cutoff", "level"),
-      editable("warning", "Warning", "level"),
-      editable("par", "Par", "level"),
-      {
-        id: "status",
-        label: "Status",
-        type: "select",
+      }),
+      editable("cutoff", "level"),
+      editable("warning", "level"),
+      editable("par", "level"),
+      col("status", {
         sortable: false,
-        get: (r) => STATUS_LABEL[r.status],
         render: (r) => <StatusBadge status={r.status} />,
-      },
-      {
-        id: "suggested",
-        label: "Suggested order",
-        type: "number",
+      }),
+      col("suggested", {
         sortable: true,
         align: "right",
         tabletHidden: true,
-        get: (r) => r.suggestedOrder,
         render: suggestedOrderText,
-      },
-      {
-        id: "updated",
-        label: "Last updated",
-        type: "date",
+      }),
+      col("updated", {
         sortable: true,
-        get: (r) => r.updatedAt,
         render: (r) =>
           r.updatedAt ? formatBusinessDateTime(r.updatedAt, timeZone) : "—",
-      },
-      {
-        id: "updatedBy",
-        label: "Updated by",
-        type: "select",
+      }),
+      col("updatedBy", {
         sortable: true,
         tabletHidden: true,
-        get: (r) => r.updatedBy,
         render: (r) => r.updatedBy ?? "—",
-      },
+      }),
     ];
     // The save callbacks close over `run` and `lastReason` only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,6 +266,7 @@ export function InventoryView({
         timeZone={timeZone}
         defaultSort={INVENTORY_DEFAULT_SORT}
         sortPresets={INVENTORY_SORT_PRESETS}
+        onVisibleRows={onVisibleRows}
         emptyMessage="No products yet. Add products under Manage to start counting."
         toolbarExtras={
           <>
@@ -323,6 +282,12 @@ export function InventoryView({
             <Button variant="ghost" onClick={onOpenHistory}>
               <History aria-hidden="true" /> History
             </Button>
+            <ExportControl
+              label="Export inventory"
+              info={exportInfo}
+              build={(filters) => ({ kind: "inventory", filters })}
+              run={runExport}
+            />
           </>
         }
         rowActions={(row) => (

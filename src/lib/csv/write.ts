@@ -12,12 +12,22 @@ export type CsvCell = string | number | null | undefined;
 const BOM = "﻿";
 const DANGEROUS_START = /^[=+\-@\t\r]/;
 
+/**
+ * Text a spreadsheet treats as plain text: a value that could be read as a
+ * formula (starts with `=`, `+`, `-`, `@`, a tab or a carriage return) gets a
+ * leading single quote. Shared by the CSV and XLSX exports so both are guarded
+ * the same way. Numbers never pass through this.
+ */
+export function neutralizeText(value: string): string {
+  return DANGEROUS_START.test(value) ? `'${value}` : value;
+}
+
 export function csvCell(value: CsvCell): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "number") {
     return Number.isFinite(value) ? String(value) : "";
   }
-  const safe = DANGEROUS_START.test(value) ? `'${value}` : value;
+  const safe = neutralizeText(value);
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 

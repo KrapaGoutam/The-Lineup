@@ -4,8 +4,14 @@ import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getCurrentUser } from "@/lib/current-user";
+import {
+  EXPORT_MIME,
+  sheetToCsv,
+  type ExportFormat,
+} from "@/lib/export/document";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
+import { workbookToBuffer } from "@/lib/xlsx/write-node";
 
 import { getCatalogSnapshot } from "../data/catalog-data";
 import {
@@ -17,8 +23,12 @@ import {
   catalogCommandSchema,
   type CatalogCommand,
 } from "../domain/catalog-commands";
-import { buildInventoryRows } from "../domain/inventory-rows";
-import { buildRecommendationsExport } from "../domain/order-export";
+import { daysBetween } from "../domain/analytics";
+import {
+  exportNeedsLedger,
+  prepareExport,
+  type ExportRequest,
+} from "../domain/exports";
 import {
   isInventoryManager,
   type CatalogConflict,
@@ -348,48 +358,6 @@ export async function runCatalogCommandAction(input: {
   return { ok: true, data: snapshot };
 }
 
-export type RecommendationsActionResult =
-  | { ok: true; filename: string; csv: string }
-  | { ok: false; error: string; sessionInvalid?: true };
-
-/**
- * Vendor order recommendations as CSV. The caller sends only the table's
- * filter string; the rows come from the database under the caller's own
- * authorization and the filters are re-applied here, so the file can only
- * contain rows the caller may see and match what the screen shows.
- */
-export async function exportOrderRecommendationsAction(input: {
-  restaurantSlug: string;
-  filters: string;
-}): Promise<RecommendationsActionResult> {
-  const parsed = z
-    .object({ restaurantSlug: slugSchema, filters: z.string().max(2000) })
-    .safeParse(input);
-  if (!parsed.success) return { ok: false, error: "That request is invalid." };
-
-  const supabase = await createClient();
-  const invalid = await requireLiveSession(supabase);
-  if (invalid) return invalid;
-
-  const caller = await resolveManager(parsed.data.restaurantSlug);
-  if (!caller.ok) return caller;
-
-  const location = await getPrimaryLocation(caller.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
-  const snapshot = await getCatalogSnapshot(caller.organizationId);
-  if (!snapshot)
-    return { ok: false, error: "Bar Inventory could not be loaded." };
-
-  const file = buildRecommendationsExport({
-    rows: buildInventoryRows(snapshot),
-    filters: parsed.data.filters,
-    timeZone: location.time_zone,
-    now: new Date(),
-    slug: parsed.data.restaurantSlug,
-  });
-  return { ok: true, filename: file.filename, csv: file.csv };
-}
-
 export type HistoryActionResult =
   | { ok: true; entries: HistoryEntry[]; truncated: boolean }
   | { ok: false; error: string; sessionInvalid?: true };
@@ -438,4 +406,122 @@ export async function getHistoryAction(input: {
   });
   if (!page) return { ok: false, error: "History could not be loaded." };
   return { ok: true, ...page };
+}
+
+export type ExportActionResult =
+  | {
+      ok: true;
+      filename: string;
+      mime: string;
+      /** Text for CSV; base64 for the binary .xlsx. */
+      encoding: "text" | "base64";
+      content: string;
+    }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+const filtersSchema = z.string().max(2000);
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const MAX_ANALYTICS_SPAN_DAYS = 400;
+
+const exportRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("inventory"), filters: filtersSchema }),
+  z.object({
+    kind: z.literal("history"),
+    filters: filtersSchema,
+    days: z
+      .number()
+      .refine((n) => (HISTORY_RANGES as readonly number[]).includes(n)),
+  }),
+  z.object({ kind: z.literal("recommendations"), filters: filtersSchema }),
+  z.object({
+    kind: z.literal("analytics"),
+    filters: filtersSchema,
+    window: z.object({ from: dateSchema, to: dateSchema }),
+    includeObserved: z.boolean(),
+    includeShrink: z.boolean(),
+  }),
+]);
+
+/**
+ * One export (inventory, history, order recommendations or analytics) as CSV
+ * or XLSX. The browser sends only WHAT to export and the table's filter
+ * string. The rows come from the database under the caller's own access and
+ * the filters are re-applied here, so a file can only hold rows the caller may
+ * see and always matches the screen; the client never supplies rows.
+ */
+export async function exportDataAction(input: {
+  restaurantSlug: string;
+  format: ExportFormat;
+  request: ExportRequest;
+}): Promise<ExportActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      format: z.enum(["csv", "xlsx"]),
+      request: exportRequestSchema,
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+  const { restaurantSlug, format, request } = parsed.data;
+  if (
+    request.kind === "analytics" &&
+    (request.window.from > request.window.to ||
+      daysBetween(request.window.from, request.window.to) >
+        MAX_ANALYTICS_SPAN_DAYS)
+  ) {
+    return { ok: false, error: "Choose a valid date range." };
+  }
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveManager(restaurantSlug);
+  if (!caller.ok) return caller;
+
+  const location = await getPrimaryLocation(caller.organizationId);
+  if (!location) return { ok: false, error: "No location is set up yet." };
+  const snapshot = await getCatalogSnapshot(caller.organizationId);
+  if (!snapshot)
+    return { ok: false, error: "Bar Inventory could not be loaded." };
+
+  const now = new Date();
+  let entries: HistoryEntry[] = [];
+  if (exportNeedsLedger(request.kind)) {
+    const days = request.kind === "history" ? request.days : 365;
+    const page = await getHistoryEntries(caller.organizationId, {
+      since:
+        days === 0
+          ? null
+          : new Date(now.getTime() - days * MS_PER_DAY).toISOString(),
+      productId: null,
+      limit: HISTORY_ROW_LIMIT,
+    });
+    if (!page) return { ok: false, error: "History could not be loaded." };
+    entries = page.entries;
+  }
+
+  const file = prepareExport(
+    request,
+    { catalog: snapshot, entries },
+    { timeZone: location.time_zone, now, slug: restaurantSlug },
+    format,
+  );
+  return format === "csv"
+    ? {
+        ok: true,
+        filename: file.filename,
+        mime: EXPORT_MIME.csv,
+        encoding: "text",
+        content: sheetToCsv(file.document.csv),
+      }
+    : {
+        ok: true,
+        filename: file.filename,
+        mime: EXPORT_MIME.xlsx,
+        encoding: "base64",
+        content: (await workbookToBuffer(file.document.sheets)).toString(
+          "base64",
+        ),
+      };
 }

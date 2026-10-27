@@ -406,3 +406,51 @@ DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-8a — Exports (CSV and XLSX)
+
+BI-8 (import + export) is delivered in four slices, each its own PR through CI: **8a Exports** (this), **8b** the import engine (pure: CSV parser, header mapping, validation, matching, diff), **8c** import commit (migration for batches + atomic commit RPC, pgTAP, server actions, Preview / Confirm UI), **8d** XLSX import (bounded zip guard, sheet picker). Branch `feature/bar-inventory-bi8-import-export` → PR into `development`. **No migration.**
+
+### Delivered
+
+| Layer        | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dependencies | `write-excel-file@4.1.1` and `read-excel-file@9.3.12`, exact pins, exactly as decided in BI-0 (D6). The reader is used here only to read generated workbooks back in tests; the guarded import use is 8d                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Shared       | `src/lib/export/document.ts`: one format-neutral table model written as CSV or XLSX, so both carry the same rows and the same formula guard (`neutralizeText`, one rule: a text value starting `=` `+` `-` `@` tab or CR gets a leading `'`; numbers are never altered); Excel-safe sheet names (no `[]:*?/\`, ≤ 31 chars, not blank, not the reserved "History", unique); filenames `bar-inventory_<restaurant>_<export>_<yyyy-mm-dd>.<ext>` (`-filtered` when filters are on). `src/lib/xlsx/write-node.ts` (server) and `write-browser.ts` (demo only, loaded on demand) are the only two places the writer is called |
+| Domain       | `domain/exports.ts` `prepareExport`: **Inventory**, **History**, **Order recommendations** and **Analytics** from one request type. Each parses the table's filter string with the table kit's own parser and applies it with its own pure column spec (`INVENTORY_COLUMNS` is now shared by the Inventory view, so the screen and the file cannot drift), then the table's sort or its default. History and Analytics take their range / period                                                                                                                                                                         |
+| Server       | `exportDataAction` replaces the BI-5 recommendations-only action: live-session and management-role checks, rows loaded under the caller's own RLS, filters re-applied here, CSV as text or XLSX as base64. The client sends **what** to export and the filter string, never rows. Demo mode (no server) builds the identical file in the browser from the same pure function                                                                                                                                                                                                                                             |
+| UI           | `ExportControl` on Inventory, History, Order soon and Analytics: Download CSV / Download Excel (.xlsx); with filters on, the person chooses "Filtered rows (N)" or "All rows"                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+### What each file contains
+
+- **Inventory:** every active item (archived are left out, like the default view): vendor, name, category, subcategory, size, unit, SKU, on hand, backup, total, cutoff, warning, par, status, suggested order (a number, or "Order needed" with no Par, never invented), last updated as ISO **and** local time, updated by, notes.
+- **History:** ledger rows newest first with ISO and local date, previous / new / change for on hand and backup as signed numbers, status after, actor, note, import batch. The XLSX sheet is "Inventory history" (Excel reserves the name "History").
+- **Order recommendations:** CSV is one flat table with a Vendor column; XLSX is a **Summary** sheet plus **one sheet per vendor**.
+- **Analytics:** the item table for the chosen period and toggles, with the period written on each row; a rate is blank when there was not enough history.
+
+### Deferred (stated, not forgotten)
+
+- The per-export **change-log entry** the spec describes (actor, export type, filters, row count) needs a database write; it goes with 8c's migration.
+- Exports run in the request (a 5,000-row cap on ledger reads, a few MB at most); streaming and a progress bar are not needed at this size and are not built.
+
+### Gates
+
+| Gate                                        | Result                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| format / lint / typecheck                   | PASS                                                                                                                                                                                                                                                                                                                            |
+| Vitest                                      | 1136/1136 (93 files); new `exports.test.ts` 17 (filters, sort, filtered vs all, archived, formula in a name in both formats, ISO + local time, the four builders, workbook sheets), `export/document.test.ts` 12, `xlsx/write.test.ts` 4 (**round trip through the approved reader**: numbers stay numbers, `=cmd…` stays text) |
+| Playwright exports (3 projects)             | CSV and XLSX downloads read back, filtered vs all, history, analytics, per-vendor workbook, menu dismiss; plus the updated recommendations flow                                                                                                                                                                                 |
+| Playwright all Bar Inventory                | 118 passed, 2 intentional phone-only skips                                                                                                                                                                                                                                                                                      |
+| Cold-cache CI-like run (`CI=1`, no `.next`) | 19 passed, 0 server-action errors (the BI-6 lesson)                                                                                                                                                                                                                                                                             |
+
+Not covered locally: the real-mode action against Supabase (the same pure builder and the same loaders as History / Analytics); BI-10's hosted run exercises it with real JWTs.
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO
+PROD touched: NO
+PROD migrations: NO
+```

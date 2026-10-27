@@ -23,7 +23,13 @@ import {
 } from "../domain/analytics";
 import { buildInventoryRows } from "../domain/inventory-rows";
 import type { CatalogSnapshot } from "../domain/inventory-types";
+import type { TableState } from "../domain/table-filters";
 import { formatQuantity } from "./editable-cell";
+import {
+  ExportControl,
+  useVisibleInfo,
+  type RunExport,
+} from "./export-control";
 import type { LoadHistory } from "./history-view";
 import {
   FilterableTable,
@@ -78,12 +84,14 @@ export function AnalyticsView({
   timeZone,
   load,
   onBack,
+  runExport,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
   timeZone: string;
   load: LoadHistory;
   onBack: () => void;
+  runExport: RunExport;
 }) {
   const ledger = useLedger(load, snapshot);
   const [preset, setPreset] = useState<string>("30");
@@ -94,7 +102,14 @@ export function AnalyticsView({
   const [includeObserved, setIncludeObserved] = useState(true);
   const [includeShrink, setIncludeShrink] = useState(false);
   const [visible, setVisible] = useState<ItemAnalytics[]>([]);
-  const remember = useCallback((rows: ItemAnalytics[]) => setVisible(rows), []);
+  const [exportInfo, trackExport] = useVisibleInfo<ItemAnalytics>();
+  const remember = useCallback(
+    (rows: ItemAnalytics[], state: TableState) => {
+      setVisible(rows);
+      trackExport(rows, state);
+    },
+    [trackExport],
+  );
 
   const ready = ledger.status === "ready" ? ledger : null;
   const now = useMemo(() => new Date(), [ready]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -251,9 +266,26 @@ export function AnalyticsView({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Analytics</h2>
-        <Button variant="ghost" onClick={onBack}>
-          Back
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportControl
+            label="Export analytics"
+            info={exportInfo}
+            build={(filters) => ({
+              kind: "analytics",
+              filters,
+              window,
+              includeObserved,
+              includeShrink,
+            })}
+            run={runExport}
+            disabled={
+              ledger.status !== "ready" || (preset === CUSTOM && !customValid)
+            }
+          />
+          <Button variant="ghost" onClick={onBack}>
+            Back
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

@@ -5,14 +5,16 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Designation } from "@/features/auth/domain/passcode";
+import { base64ToBlob } from "@/lib/download-file";
+import { EXPORT_MIME, sheetToCsv } from "@/lib/export/document";
+import { workbookToBlob } from "@/lib/xlsx/write-browser";
 
 import {
-  exportOrderRecommendationsAction,
+  exportDataAction,
   getHistoryAction,
 } from "../actions/inventory-actions";
-import { buildInventoryRows } from "../domain/inventory-rows";
+import { prepareExport } from "../domain/exports";
 import { isInventoryManager } from "../domain/inventory-types";
-import { buildRecommendationsExport } from "../domain/order-export";
 import {
   useCatalogController,
   type DemoCatalogBinding,
@@ -20,7 +22,7 @@ import {
 import { AnalyticsView } from "./analytics-view";
 import { DashboardView } from "./dashboard-view";
 import { HistoryView, type HistoryLoad } from "./history-view";
-import type { RecommendationsOutcome } from "./order-soon";
+import { type RunExport } from "./export-control";
 import { InventoryView } from "./inventory-view";
 import {
   dropForeignTableState,
@@ -92,30 +94,6 @@ function ManagerInventory({
   });
   const [view, setView] = useState<View>("dashboard");
   const snapshot = controller.snapshot;
-  // Demo has no server: build the file here from the in-memory catalog. Real
-  // mode asks the server, which re-applies the filters to the authorized rows.
-  const exportRecommendations = useCallback(
-    async (filters: string): Promise<RecommendationsOutcome> => {
-      if (demo) {
-        if (!snapshot) return { ok: false, error: "Nothing to export yet." };
-        const file = buildRecommendationsExport({
-          rows: buildInventoryRows(snapshot),
-          filters,
-          timeZone,
-          now: new Date(),
-          slug: restaurantSlug,
-        });
-        return { ok: true, filename: file.filename, csv: file.csv };
-      }
-      const result = await exportOrderRecommendationsAction({
-        restaurantSlug,
-        filters,
-      });
-      if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
-      return result;
-    },
-    [demo, snapshot, timeZone, restaurantSlug, onSessionInvalid],
-  );
   // History comes from the immutable ledger. Demo keeps its ledger in memory;
   // real mode reads it from the database under the caller's own access.
   //
@@ -124,9 +102,21 @@ function ManagerInventory({
   // would make every view re-read the ledger each second. It reads the latest
   // values through a ref, updated in a layout effect so it is current before
   // any view's fetch effect runs.
-  const latest = useRef({ demo, snapshot, restaurantSlug, onSessionInvalid });
+  const latest = useRef({
+    demo,
+    snapshot,
+    restaurantSlug,
+    timeZone,
+    onSessionInvalid,
+  });
   useLayoutEffect(() => {
-    latest.current = { demo, snapshot, restaurantSlug, onSessionInvalid };
+    latest.current = {
+      demo,
+      snapshot,
+      restaurantSlug,
+      timeZone,
+      onSessionInvalid,
+    };
   });
   const loadHistory = useCallback(
     async (days: number, productId: string | null): Promise<HistoryLoad> => {
@@ -156,6 +146,50 @@ function ManagerInventory({
     },
     [],
   );
+  // Exports. Demo has no server, so it builds the file here from the in-memory
+  // catalog (the .xlsx writer is loaded only when asked for); real mode asks
+  // the server, which re-applies the filters to the authorized rows. One
+  // identity, like `loadHistory`.
+  const runExport = useCallback<RunExport>(async (request, format) => {
+    const { demo, snapshot, restaurantSlug, timeZone, onSessionInvalid } =
+      latest.current;
+    if (demo) {
+      if (!snapshot) return { ok: false, error: "Nothing to export yet." };
+      const file = prepareExport(
+        request,
+        { catalog: snapshot, entries: snapshot.ledger ?? [] },
+        { timeZone, now: new Date(), slug: restaurantSlug },
+        format,
+      );
+      return {
+        ok: true,
+        filename: file.filename,
+        mime: EXPORT_MIME[format],
+        data:
+          format === "csv"
+            ? sheetToCsv(file.document.csv)
+            : await workbookToBlob(file.document.sheets),
+      };
+    }
+    const result = await exportDataAction({
+      restaurantSlug,
+      format,
+      request,
+    });
+    if (!result.ok) {
+      if (result.sessionInvalid) onSessionInvalid?.();
+      return { ok: false, error: result.error };
+    }
+    return {
+      ok: true,
+      filename: result.filename,
+      mime: result.mime,
+      data:
+        result.encoding === "base64"
+          ? base64ToBlob(result.content, result.mime)
+          : result.content,
+    };
+  }, []);
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -234,6 +268,7 @@ function ManagerInventory({
           timeZone={timeZone}
           loadHistory={loadHistory}
           onOpenHistory={() => setView("history")}
+          runExport={runExport}
         />
       ) : view === "analytics" ? (
         <AnalyticsView
@@ -242,6 +277,7 @@ function ManagerInventory({
           timeZone={timeZone}
           load={loadHistory}
           onBack={() => setView("dashboard")}
+          runExport={runExport}
         />
       ) : view === "history" ? (
         <HistoryView
@@ -250,13 +286,14 @@ function ManagerInventory({
           timeZone={timeZone}
           load={loadHistory}
           onBack={() => setView("inventory")}
+          runExport={runExport}
         />
       ) : (
         <DashboardView
           snapshot={controller.snapshot}
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
-          onExportRecommendations={exportRecommendations}
+          runExport={runExport}
           onOpenHistory={() => setView("history")}
           onOpenAnalytics={() => setView("analytics")}
           loadHistory={loadHistory}
