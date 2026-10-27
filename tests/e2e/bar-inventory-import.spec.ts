@@ -50,7 +50,7 @@ const upload = (
   header = HEADER,
   name = "stock.csv",
 ) =>
-  page.getByLabel("CSV file").setInputFiles({
+  page.getByLabel("CSV or Excel file").setInputFiles({
     name,
     mimeType: "text/csv",
     buffer: Buffer.from([header, ...rows].join("\n")),
@@ -241,19 +241,18 @@ test("double-clicking Import applies the file once", async ({ page }) => {
   ).toHaveCount(1);
 });
 
-test("an Excel file is turned away with what to do instead", async ({
+test("an older Excel format is turned away with what to do instead", async ({
   page,
 }) => {
   await signIn(page);
   await openImport(page);
-  await page.getByLabel("CSV file").setInputFiles({
-    name: "stock.xlsx",
-    mimeType:
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buffer: Buffer.from("PK"),
+  await page.getByLabel("CSV or Excel file").setInputFiles({
+    name: "stock.xls",
+    mimeType: "application/vnd.ms-excel",
+    buffer: Buffer.from("not really"),
   });
   await expect(
-    page.getByRole("alert").filter({ hasText: "Save As → CSV" }),
+    page.getByRole("alert").filter({ hasText: "older Excel format" }),
   ).toBeVisible();
 });
 

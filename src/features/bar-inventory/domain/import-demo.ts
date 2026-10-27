@@ -35,7 +35,12 @@ export function applyStagedPlanDemo(
   options: {
     ctx: CatalogContext;
     reason: Extract<AdjustmentReason, "stock_count" | "delivery_restock">;
-    batch: { id: string; filename: string };
+    batch: {
+      id: string;
+      filename: string;
+      format?: "csv" | "xlsx";
+      sheet?: string | null;
+    };
   },
 ): DemoImportCommit {
   const { ctx, reason, batch } = options;
@@ -210,8 +215,8 @@ export function applyStagedPlanDemo(
     const record: ImportBatchView = {
       id: batch.id,
       filename: batch.filename,
-      format: "csv",
-      sheet: null,
+      format: batch.format ?? "csv",
+      sheet: batch.sheet ?? null,
       reason,
       status: "committed",
       rowsInFile: staged.summary.rows,

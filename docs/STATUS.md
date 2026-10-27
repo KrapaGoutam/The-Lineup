@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8c-1 merged, BI-8c-2 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-8c-2 merged, BI-8d PR open)
+
+**BI-8d (XLSX import: a bounded zip guard, a sheet picker, and the workbook converted to CSV text so preview and commit are the exact CSV pipeline) is code complete; PR into `development` pending CI.** No migration. Verified in a real browser against hosted DEV (5/5, incl. the server reading an .xlsx and refusing a hostile one); Vitest 1330/1330; Playwright Import CSV 24 + XLSX 15; report §BI-8d. `fflate@0.8.3` is now a direct exact-pinned dependency. Next: BI-9 (Realtime + responsive polish).
 
 **BI-8c-2 (the import application: server actions that re-plan against the database and commit atomically, a demo commit engine, and the Manage → Import Preview / Confirm UI with column mapping, near-miss choices, row ticks, error report and batch history) is code complete; PR into `development` pending CI.** Verified in a real browser against hosted DEV (4/4, including a double click that applies once and an inventory change made under an open preview); Vitest 1277/1277; Playwright Import 24 across 3 projects; report §BI-8c-2. Next: BI-8d (XLSX import).
 

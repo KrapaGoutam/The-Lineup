@@ -61,6 +61,11 @@ export function decodeCsvBytes(bytes: Uint8Array): CsvDecodeResult {
 // C0 controls except tab / newline / carriage return, and DEL.
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
+/** Removes control characters; shared with the workbook reader so both paths clean cells the same way. */
+export function stripControlCharacters(value: string): string {
+  return value.replace(CONTROL, "");
+}
+
 function sniffDelimiter(text: string): Delimiter {
   const counts: Record<Delimiter, number> = { ",": 0, ";": 0, "\t": 0 };
   let quoted = false;
@@ -92,7 +97,7 @@ export function parseCsv(input: string): CsvParseResult {
   let rowNumber = 1;
 
   const endCell = (): string | null => {
-    const clean = cell.replace(CONTROL, "");
+    const clean = stripControlCharacters(cell);
     if (clean.length > CSV_LIMITS.maxCell) {
       return `Row ${rowNumber} has a value longer than ${CSV_LIMITS.maxCell} characters.`;
     }

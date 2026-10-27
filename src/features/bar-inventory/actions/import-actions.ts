@@ -7,6 +7,8 @@ import { getOrganizationRoster } from "@/features/team/data/roster";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
+import { readWorkbookNode } from "@/lib/xlsx/read-node";
+import { readWorkbook, type SheetInfo } from "@/lib/xlsx/workbook";
 
 import { getCatalogSnapshot } from "../data/catalog-data";
 import { IMPORT_FIELDS, type HeaderMapping } from "../domain/import-columns";
@@ -56,6 +58,9 @@ const requestSchema = z.object({
 
 const commitSchema = requestSchema.extend({
   filename: z.string().trim().min(1).max(255),
+  /** Where the rows came from; recorded on the batch. */
+  format: z.enum(["csv", "xlsx"]).default("csv"),
+  sheet: z.string().max(100).nullable().default(null),
   /** Chosen by the browser per confirm attempt, so a retry or double click is the same attempt. */
   requestId: z.string().uuid(),
   fingerprint: z.string().regex(/^[0-9a-f]{1,16}$/),
@@ -109,6 +114,17 @@ export type ImportCommitActionResult =
       error: string;
       sessionInvalid?: true;
     };
+
+export type WorkbookActionResult =
+  | {
+      ok: true;
+      sheets: SheetInfo[];
+      selected: string;
+      /** The chosen sheet as CSV text: from here on it is the CSV import. */
+      csv: string;
+      warnings: string[];
+    }
+  | { ok: false; error: string; sessionInvalid?: true };
 
 export type ImportBatchesActionResult =
   | { ok: true; batches: ImportBatchView[] }
@@ -165,6 +181,34 @@ async function caller(
     organizationId: manager.organizationId,
     locationId: location.id,
   };
+}
+
+/**
+ * Reads an .xlsx the person chose and hands back the selected sheet as CSV
+ * text, after the bounded pre-flight guard. Nothing is written. From here the
+ * file is an ordinary CSV: preview and commit are the same code as for a CSV.
+ */
+export async function readWorkbookAction(input: {
+  restaurantSlug: string;
+  base64: string;
+  sheet: string | null;
+}): Promise<WorkbookActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      // 5 MB of file is about 6.7 million base64 characters.
+      base64: z.string().min(1).max(7_000_000),
+      sheet: z.string().max(100).nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const who = await caller(supabase, parsed.data.restaurantSlug);
+  if (!who.ok) return who;
+
+  const bytes = new Uint8Array(Buffer.from(parsed.data.base64, "base64"));
+  return readWorkbook(bytes, readWorkbookNode, { sheet: parsed.data.sheet });
 }
 
 /**
@@ -233,8 +277,8 @@ export async function commitImportAction(
     p_location_id: who.locationId,
     p_request_id: data.requestId,
     p_filename: data.filename,
-    p_format: "csv",
-    p_sheet: null,
+    p_format: data.format,
+    p_sheet: data.format === "xlsx" ? data.sheet : null,
     p_reason: data.reason,
     p_plan: prep.staged,
   });

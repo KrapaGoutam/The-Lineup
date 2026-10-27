@@ -20,10 +20,12 @@ import { toCsv } from "@/lib/csv/write";
 import { downloadFile } from "@/lib/download-file";
 import { formatBusinessDateTime } from "@/lib/date-time";
 import { EXPORT_MIME } from "@/lib/export/document";
+import type { SheetInfo } from "@/lib/xlsx/workbook";
 
 import type {
   ImportCommitActionResult,
   ImportPreviewActionResult,
+  WorkbookActionResult,
 } from "../actions/import-actions";
 import { signedQuantity } from "../domain/history";
 import {
@@ -51,9 +53,16 @@ import {
 /** The three operations the import needs, from the server (real) or the engine (demo). */
 export type ImportApi = {
   preview: (request: ImportRequest) => Promise<ImportPreviewActionResult>;
+  /** Reads an .xlsx (base64) into the chosen sheet's CSV text; nothing is written. */
+  readWorkbook: (input: {
+    base64: string;
+    sheet: string | null;
+  }) => Promise<WorkbookActionResult>;
   commit: (
     request: ImportRequest & {
       filename: string;
+      format: "csv" | "xlsx";
+      sheet: string | null;
       requestId: string;
       fingerprint: string;
       excluded: number[];
@@ -65,7 +74,15 @@ export type ImportApi = {
   >;
 };
 
-type Source = { filename: string; csv: string; warnings: string[] };
+type Source = {
+  filename: string;
+  /** The rows as CSV text: the file itself, or the chosen sheet of a workbook. */
+  csv: string;
+  warnings: string[];
+  format: "csv" | "xlsx";
+  sheet: string | null;
+  sheets: SheetInfo[];
+};
 type Params = {
   reason: ImportRequest["reason"];
   mapping: Record<number, ImportField | null>;
@@ -107,6 +124,15 @@ const TEMPLATE = toCsv([
 ]);
 
 const wordList = (items: string[]) => items.join(", ");
+
+/** Bytes to base64 in chunks (a single String.fromCharCode(...bytes) overflows the stack on big files). */
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 function changeText(row: PlanRow): string {
   if (row.action === "update") {
@@ -163,6 +189,7 @@ export function ImportView({
 }) {
   const fileId = useId();
   const reasonId = useId();
+  const sheetId = useId();
   const [source, setSource] = useState<Source | null>(null);
   const [params, setParams] = useState<Params>({
     reason: "stock_count",
@@ -180,6 +207,11 @@ export function ImportView({
   const [confirming, setConfirming] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+  // The chosen workbook, kept so another sheet can be read without re-uploading.
+  const [workbook, setWorkbook] = useState<{
+    filename: string;
+    base64: string;
+  } | null>(null);
   const [done, setDone] = useState<{
     filename: string;
     result: Extract<ImportCommitActionResult, { ok: true }>["result"];
@@ -248,20 +280,66 @@ export function ImportView({
     [api],
   );
 
+  /** Reads one sheet of the chosen workbook, then previews it like any CSV. */
+  async function readSheet(
+    filename: string,
+    base64: string,
+    sheet: string | null,
+  ) {
+    setBusy(true);
+    try {
+      const result = await api.readWorkbook({ base64, sheet });
+      if (!result.ok) {
+        setSource(null);
+        setPreview(null);
+        setProblem({ message: result.error, header: null });
+        return;
+      }
+      const next: Source = {
+        filename,
+        csv: result.csv,
+        warnings: result.warnings,
+        format: "xlsx",
+        sheet: result.selected,
+        sheets: result.sheets,
+      };
+      const fresh: Params = { ...params, mapping: {}, choices: {} };
+      setWorkbook({ filename, base64 });
+      setSource(next);
+      setParams(fresh);
+      await run(next, fresh);
+    } catch {
+      setSource(null);
+      setPreview(null);
+      setProblem({
+        message: "That didn't work. Please try again.",
+        header: null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     setDone(null);
-    if (/\.(xlsx|xls|xlsm|xlsb)$/i.test(file.name)) {
+    setWorkbook(null);
+    if (/.(xls|xlsm|xlsb)$/i.test(file.name)) {
       setSource(null);
       setPreview(null);
       setProblem({
         message:
-          "Excel files are not supported here yet. In Excel, use Save As → CSV, then upload that.",
+          "That is an older Excel format. In Excel, use Save As → Excel Workbook (.xlsx) or CSV, then upload that.",
         header: null,
       });
       return;
     }
-    const decoded = decodeCsvBytes(new Uint8Array(await file.arrayBuffer()));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (/.xlsx$/i.test(file.name)) {
+      await readSheet(file.name, toBase64(bytes), null);
+      return;
+    }
+    const decoded = decodeCsvBytes(bytes);
     if (!decoded.ok) {
       setSource(null);
       setPreview(null);
@@ -272,6 +350,9 @@ export function ImportView({
       filename: file.name,
       csv: decoded.text,
       warnings: decoded.warnings,
+      format: "csv",
+      sheet: null,
+      sheets: [],
     };
     const fresh: Params = { ...params, mapping: {}, choices: {} };
     setSource(next);
@@ -330,6 +411,8 @@ export function ImportView({
         mapping: params.mapping,
         choices: params.choices,
         filename: source.filename,
+        format: source.format,
+        sheet: source.sheet,
         requestId: attempt.current,
         fingerprint: preview.fingerprint,
         excluded: [...excluded],
@@ -517,19 +600,20 @@ export function ImportView({
         <CardContent className="flex flex-col gap-3 py-4">
           <h2 className="text-lg font-semibold">Import from a file</h2>
           <p className="text-muted-foreground text-sm">
-            Upload a CSV, review exactly what it would do, then confirm. Nothing
-            changes until you confirm. A blank cell leaves the current value
-            alone; a <strong>0</strong> sets it to zero.
+            Upload a CSV or an Excel (.xlsx) file, review exactly what it would
+            do, then confirm. Nothing changes until you confirm. A blank cell
+            leaves the current value alone; a <strong>0</strong> sets it to
+            zero.
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor={fileId} className="text-sm font-medium">
-                CSV file
+                CSV or Excel file
               </label>
               <input
                 id={fileId}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="border-border bg-card text-foreground file:bg-secondary file:text-secondary-foreground min-h-11 max-w-full rounded-lg border px-2 py-1.5 text-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5"
                 onChange={(event) => {
                   void onFile(event.target.files?.[0]);
@@ -570,6 +654,33 @@ export function ImportView({
               <Download aria-hidden="true" /> Download template
             </Button>
           </div>
+          {source?.format === "xlsx" && source.sheets.length > 1 && workbook ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={sheetId} className="text-sm font-medium">
+                Sheet
+              </label>
+              <Select
+                id={sheetId}
+                className="w-auto"
+                value={source.sheet ?? ""}
+                disabled={busy}
+                onChange={(event) =>
+                  void readSheet(
+                    workbook.filename,
+                    workbook.base64,
+                    event.target.value,
+                  )
+                }
+              >
+                {source.sheets.map((sheet) => (
+                  <option key={sheet.name} value={sheet.name}>
+                    {sheet.name} ({sheet.rows}{" "}
+                    {sheet.rows === 1 ? "row" : "rows"})
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
           <p className="text-muted-foreground text-xs">
             Needs the columns Vendor, Name, On Hand, Backup and Cutoff Limit.
             Category, Subcategory, Size, Unit, SKU, Warning Level, Par Level and
@@ -926,6 +1037,17 @@ function BatchHistory({
         searchable: true,
         get: (b) => b.filename,
         render: (b) => <span className="font-medium">{b.filename}</span>,
+      },
+      {
+        id: "format",
+        label: "Format",
+        type: "select",
+        tabletHidden: true,
+        get: (b) => (b.format === "xlsx" ? "Excel" : "CSV"),
+        render: (b) =>
+          b.format === "xlsx"
+            ? `Excel${b.sheet ? ` · ${b.sheet}` : ""}`
+            : "CSV",
       },
       {
         id: "reason",
