@@ -3,13 +3,16 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-11 (final Bar Inventory gate) — done, in PR: three independent read-only reviews, every finding verified, 16 defects fixed with regression tests, full suite and hosted DEV re-run green. See `docs/features/bar-inventory-v1/FINAL_GATE.md`. **Next: the security dependency bumps (`fix/security-dependency-bumps`: next 16.3.4→16.4.3, zod 4.5.4→4.6.7), then Tasks V1.1.**
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-0 → BI-11 are ALL MERGED to `development` (BI-11 = PR #187, merge `951faa7`). Bar Inventory is complete; `FINAL_GATE.md` is the record. **Now: security dependency bumps (`fix/security-dependency-bumps`: next 16.3.4→16.4.3, zod 4.5.4→4.6.7), then Tasks V1.1.**
 
-**Branch:** `feature/bar-inventory-bi11-final-gate` · **Base development:** `01c0263` (BI-10 merge, PR #186, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-11 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi11-final-gate`)
+**Branch:** `fix/security-dependency-bumps` · **Base development:** `951faa7`
+**Issue:** none (npm audit finding) · **Project #4:** n/a · **PR:** dependency-bump PR into `development` (find with `gh pr list --head fix/security-dependency-bumps`)
 
-**Exact next action:** wait for exact-head CI on the BI-11 PR (application, browser-smoke); if green, merge with a **merge commit**. Then branch `fix/security-dependency-bumps` from `origin/development`: bump `next` to 16.4.3 and `zod` to 4.6.7 (non-major; `npm audit --omit=dev` flagged Server Actions DoS and zod collection memory exhaustion), run the FULL suite (Vitest, pgTAP, Playwright 3 projects cold-cache, hosted DEV on a production build), PR, merge. Then **Tasks V1.1**: read `docs/features/tasks-v1-1/` and issues #169 / #154 first. Owner decisions pending (see FINAL_GATE.md): AC-EXP-4 export audit log (build or waive) and light-theme contrast tokens.
-**Exact next command:** `gh pr checks <BI-11 PR number> --watch`
+**Dependency-bump evidence (session resumed 2026-10-27 after a usage limit):** `format:check` · `lint` · `typecheck` PASS · Vitest 1406/1406 · Playwright (dev server, `CI=1`): desktop 241/241, host-tablet 241/241, server-mobile 239 + 2 skipped. No `supabase/**` change, so no database check applies. `npm install` rewrote one heading in `AGENTS.md` (`#` → `##`, a Next postinstall rule block): deliberately NOT staged.
+**Exact next action:** wait for exact-head CI on the bump PR; merge with a **merge commit**. Then branch `docs/tasks-v1-1-plan` from refreshed `origin/development` and commit `docs/features/tasks-v1-1/` (PLAN, TEST_MATRIX; already written, untracked in the working tree). Then T-1.
+**Exact next command:** `gh pr checks <bump PR number> --watch`
+
+**Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. "Deep links respected / refresh keeps the module" therefore needs a minimal `?tab=` mechanism (PLAN §D-1). Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load (`task_notifications_sweep`); reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
