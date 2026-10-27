@@ -37,6 +37,7 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] Optional manager verification (`pending_verification`) for cash count / temperature log / security closing.
 - [ ] Per-assignee completion for shared tasks.
 - [ ] Push / email / SMS notification channels.
+- [ ] Required / optional checklist items (a `required` flag). Tasks V1.1 treats every non-cancelled Opening item as required (owner Decision 4, `docs/features/tasks-v1-1/PLAN.md` D-6).
 - [ ] Realtime as an invalidation-only signal (re-evaluate; #134 is fixed and merged to `development`).
 - [ ] Hosted real-mode Tasks suites (`tests/real/tasks-v1.db.real.test.ts`, `tests/real/ui/tasks.real.spec.ts`) in a protected CI job with DEV secrets.
 
