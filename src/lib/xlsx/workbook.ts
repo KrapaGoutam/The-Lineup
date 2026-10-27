@@ -48,6 +48,9 @@ export function cellText(cell: SheetCell): string {
     return Number.isNaN(cell.getTime()) ? "" : cell.toISOString().slice(0, 10);
   }
   if (!Number.isFinite(cell)) return "";
+  // A whole number is exact as it is: a 13-digit barcode (EAN-13) held as a
+  // number must not be rounded to 12 significant digits.
+  if (Number.isSafeInteger(cell)) return String(cell);
   // Floating-point noise from a calculated cell (0.30000000000000004) is not data.
   const rounded = Number(cell.toPrecision(12));
   const text = String(rounded);
@@ -119,6 +122,19 @@ export async function readWorkbook(
     return {
       ok: false,
       error: `“${chosen.sheet}” has ${gaps.length} formula cell(s) with no saved value (${shown}${gaps.length > 5 ? ", …" : ""}). Open the file in Excel, save it, and upload it again.`,
+    };
+  }
+
+  // A cell showing #N/A, #REF!, #DIV/0! … reads as blank, i.e. "leave unchanged".
+  const errored = guard.errorCells.filter((g) => g.sheet === chosen.sheet);
+  if (errored.length > 0) {
+    const shown = errored
+      .slice(0, 5)
+      .map((g) => g.cell)
+      .join(", ");
+    return {
+      ok: false,
+      error: `“${chosen.sheet}” has ${errored.length} cell(s) showing an Excel error (${shown}${errored.length > 5 ? ", …" : ""}). Fix them in Excel, save, and upload it again.`,
     };
   }
 

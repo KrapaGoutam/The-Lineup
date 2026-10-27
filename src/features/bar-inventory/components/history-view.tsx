@@ -98,6 +98,8 @@ export function HistoryView({
 }) {
   const [exportInfo, onVisibleRows] = useVisibleInfo<HistoryRow>();
   const [days, setDays] = useState(30);
+  // Bumped by "Try again": the effect re-reads even though nothing else changed.
+  const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{
     days: number;
     outcome: HistoryLoad;
@@ -118,7 +120,10 @@ export function HistoryView({
     return () => {
       cancelled = true;
     };
-  }, [days, load]);
+    // `snapshot` is a dependency on purpose: a change anywhere (this window or,
+    // through Realtime, another) re-reads the ledger, keeping the last answer on
+    // screen until the new one arrives.
+  }, [days, load, snapshot, attempt]);
 
   const loading = loaded?.days !== days;
   const outcome = loading ? null : loaded.outcome;
@@ -263,7 +268,13 @@ export function HistoryView({
             <p role="alert" className="text-destructive text-sm">
               {outcome.error}
             </p>
-            <Button variant="secondary" onClick={() => setDays((d) => d)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setLoaded(null);
+                setAttempt((n) => n + 1);
+              }}
+            >
               Try again
             </Button>
           </CardContent>

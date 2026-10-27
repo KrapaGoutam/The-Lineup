@@ -650,7 +650,7 @@ Database = truth, event = invalidation, client = refetch. **A payload is never r
 | `src/lib/realtime/invalidation-gate.ts`                 | Folds a burst into one re-read (400 ms quiet, 2.5 s cap). An 800-row import is one read, not 800                                                                                                                                                                                                                                                                                                                                         |
 | `hooks/use-inventory-realtime.ts`                       | One channel per location, two bindings filtered `location_id=eq.<id>`. Callback and client factory are read through refs, so neither can rebuild the subscription (the #134 loop)                                                                                                                                                                                                                                                        |
 | `hooks/use-catalog-controller.ts`                       | `read()` is one read at a time; a request that arrives mid-read queues exactly **one** more (the read in flight may predate the change); every caller shares one promise. `refresh({background:true})` never shows "Refreshing…"; focus re-reads are background too                                                                                                                                                                      |
-| `inventory-module.tsx`, `restaurant-operations-app.tsx` | Wiring (`locationId` prop). History and Analytics already re-read when the snapshot changes, so they follow                                                                                                                                                                                                                                                                                                                              |
+| `inventory-module.tsx`, `restaurant-operations-app.tsx` | Wiring (`locationId` prop). Analytics re-reads when the snapshot changes, so it follows (History did not until BI-11 — see §BI-11)                                                                                                                                                                                                                                                                                                       |
 
 ### Defect found and fixed: the snapshot was re-read every second (since BI-1)
 
@@ -707,3 +707,15 @@ Verdict **GO**; full report `DEV_VALIDATION.md`. Branch `feature/bar-inventory-b
 | Leftovers                                                                          | none; 26 "V2 Harness" orgs unchanged |
 
 No defect was found in this phase. Safety: main NOT touched; PROD NOT touched; no migration.
+
+## BI-11 — Final Bar Inventory gate
+
+Not a release. Branch `feature/bar-inventory-bi11-final-gate`; no migration. Full report: `FINAL_GATE.md`. Three read-only reviews, every finding verified; 16 defects fixed with regression tests (ledger read past the 1,000-row API cap; XLSX memory and regex denial-of-service; error cells, empty-text formulas and barcodes; offline handling; raw database errors; History retry and snapshot following; double-Enter writes; SKU blank size/unit; demo re-reads) plus accessibility fixes. Correction to the BI-9 section: History did not follow the snapshot; it does now. Suites: Vitest 1406; Playwright desktop 241 / tablet 241 / phone 239 (+2 skips); hosted DEV DB 42 and UI 24 on a DEV-pinned production build (PROD ref in 0 files). Owner decisions pending: export audit log (AC-EXP-4), light-theme contrast.
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: YES (hosted suites, tagged data cleaned up; no migration)
+PROD touched: NO
+PROD migrations: NO
+```

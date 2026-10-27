@@ -5,6 +5,11 @@ import { getOrganizationRoster } from "@/features/team/data/roster";
 import { createClient } from "@/lib/supabase/server";
 
 import type { HistoryEntry, HistorySource } from "../domain/inventory-types";
+import {
+  collectLedger,
+  olderThan,
+  type LedgerCursor,
+} from "../domain/ledger-paging";
 import type { AdjustmentReason } from "../domain/stock-rules";
 
 /** Most rows one read returns; the caller is told when more exist. */
@@ -47,26 +52,35 @@ export async function getHistoryEntries(
   if (!location) return null;
   const supabase = await createClient();
 
-  let query = supabase
-    .from("inventory_adjustments")
-    .select(COLUMNS)
-    .eq("organization_id", organizationId)
-    .eq("location_id", location.id);
-  if (options.since) query = query.gte("created_at", options.since);
-  if (options.productId) query = query.eq("product_id", options.productId);
-
-  const [{ data, error }, roster] = await Promise.all([
-    query
+  // The API caps every response (max_rows), however large a limit is asked
+  // for, so the ledger is read in pages that each fit under the cap -- see
+  // ledger-paging.ts. One row more than the limit tells us it was cut.
+  const fetchPage = async (cursor: LedgerCursor | null, size: number) => {
+    let query = supabase
+      .from("inventory_adjustments")
+      .select(COLUMNS)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id);
+    if (options.since) query = query.gte("created_at", options.since);
+    if (options.productId) query = query.eq("product_id", options.productId);
+    if (cursor) query = query.or(olderThan(cursor));
+    const { data: page, error: pageError } = await query
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .limit(options.limit + 1)
-      .overrideTypes<LedgerRow[], { merge: false }>(),
+      .limit(size)
+      .overrideTypes<LedgerRow[], { merge: false }>();
+    if (pageError || !page) {
+      console.error("getHistoryEntries", pageError);
+      return null;
+    }
+    return page;
+  };
+
+  const [data, roster] = await Promise.all([
+    collectLedger(fetchPage, options.limit + 1),
     getOrganizationRoster(organizationId),
   ]);
-  if (error || !data) {
-    console.error("getHistoryEntries", error);
-    return null;
-  }
+  if (!data) return null;
 
   const names = new Map(roster.map((member) => [member.id, member.name]));
   const truncated = data.length > options.limit;

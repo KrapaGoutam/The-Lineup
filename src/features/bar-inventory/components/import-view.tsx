@@ -221,6 +221,15 @@ export function ImportView({
   // One id per confirm attempt: a retry or a double click is the same attempt.
   const attempt = useRef<string | null>(null);
 
+  // The result of an import is the most consequential thing on this screen, so
+  // it is announced from a live region that is always mounted (one inserted
+  // together with its text is not reliably read) and focus moves to it: the
+  // button that opened the confirm dialog is gone by then.
+  const doneHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (done) doneHeading.current?.focus();
+  }, [done]);
+
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -591,11 +600,22 @@ export function ImportView({
   const created = chosen.filter((r) => r.action === "create").length;
   const updated = chosen.length - created;
 
+  const announcement = done
+    ? `Finished importing: ${done.result.created} created, ${done.result.updated} updated, ${done.result.skipped} skipped, ${done.result.errors} with errors.`
+    : busy
+      ? "Working on your file."
+      : preview
+        ? "Preview ready. Review the changes, then choose Review and import."
+        : "";
+
   return (
     <div
       className="flex min-w-0 flex-col gap-4"
       data-testid="bar-inventory-import"
     >
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <Card>
         <CardContent className="flex flex-col gap-3 py-4">
           <h2 className="text-lg font-semibold">Import from a file</h2>
@@ -691,8 +711,14 @@ export function ImportView({
 
       {done ? (
         <Card>
-          <CardContent className="flex flex-col gap-2 py-4" role="status">
-            <h3 className="font-semibold">Import complete</h3>
+          <CardContent className="flex flex-col gap-2 py-4">
+            <h3
+              ref={doneHeading}
+              tabIndex={-1}
+              className="font-semibold outline-none"
+            >
+              Import complete
+            </h3>
             <p className="text-sm">
               {done.filename}: {done.result.created} created,{" "}
               {done.result.updated} updated, {done.result.skipped} skipped,{" "}

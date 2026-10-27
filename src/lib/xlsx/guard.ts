@@ -1,5 +1,7 @@
 import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
 
+import { attrOf, scanSheet, SHEET_SCAN_LIMITS, startTags } from "./scan";
+
 /**
  * Pre-flight guard for an uploaded workbook. The spreadsheet library is NEVER
  * handed bytes this has not accepted: the library alone inflates a whole zip
@@ -29,7 +31,8 @@ export type GuardCode =
   | "too_many_entries"
   | "entry_too_large"
   | "archive_too_large"
-  | "too_many_sheets";
+  | "too_many_sheets"
+  | "sheet_too_large";
 
 const MESSAGES: Record<GuardCode, string> = {
   too_large: "That file is larger than 5 MB.",
@@ -47,6 +50,7 @@ const MESSAGES: Record<GuardCode, string> = {
   archive_too_large:
     "This workbook expands to more data than can be imported safely.",
   too_many_sheets: `This workbook has more than ${XLSX_LIMITS.maxSheets} sheets. Keep only the sheet you need, or save it as CSV.`,
+  sheet_too_large: `A sheet in this workbook has data beyond column ${SHEET_SCAN_LIMITS.maxColumn} or row ${SHEET_SCAN_LIMITS.maxRow.toLocaleString("en-US")}, which is more than can be imported. Keep only the data you need, or save it as CSV.`,
 };
 
 export type FormulaGap = { sheet: string; cell: string };
@@ -58,6 +62,8 @@ export type GuardResult =
       sheets: string[];
       /** Formula cells Excel never calculated (no saved value). */
       formulaGaps: FormulaGap[];
+      /** Cells that show an Excel error (#N/A, #REF!, …); the library reads them as blank. */
+      errorCells: FormulaGap[];
       warnings: string[];
     }
   | { ok: false; code: GuardCode; message: string };
@@ -98,29 +104,22 @@ const decode = (chunks: Uint8Array[]): string => {
   return new TextDecoder("utf-8").decode(all);
 };
 
-const attr = (tag: string, name: string): string | null =>
-  new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1] ?? null;
-
 const unescapeXml = (text: string) =>
   text
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_, hex: string) =>
+      safeChar(Number.parseInt(hex, 16)),
+    )
+    .replace(/&#(\d{1,7});/g, (_, dec: string) => safeChar(Number(dec)))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&");
 
-/** Cells with a formula (`<f>`) and no saved value (`<v>`). */
-function formulaGapsIn(xml: string): string[] {
-  const gaps: string[] = [];
-  const cell = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
-  for (const match of xml.matchAll(cell)) {
-    const inner = match[2];
-    if (!inner || !/<f[\s>/]/.test(inner)) continue;
-    const hasValue = /<v[^>]*>[^<]+<\/v>/.test(inner) || /<is[\s>]/.test(inner);
-    if (!hasValue) gaps.push(attr(match[1], "r") ?? "?");
-  }
-  return gaps;
-}
+const safeChar = (code: number) =>
+  Number.isInteger(code) && code >= 0 && code <= 0x10ffff
+    ? String.fromCodePoint(code)
+    : "";
 
 export function inspectWorkbook(bytes: Uint8Array): GuardResult {
   if (bytes.length > XLSX_LIMITS.maxFileBytes) return fail("too_large");
@@ -203,9 +202,14 @@ export function inspectWorkbook(bytes: Uint8Array): GuardResult {
   const workbook = decode(kept.get("xl/workbook.xml") ?? []);
   const rels = decode(kept.get("xl/_rels/workbook.xml.rels") ?? []);
   const target = new Map<string, string>();
-  for (const rel of rels.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = attr(rel[0], "Id");
-    const to = attr(rel[0], "Target");
+  const relTags = startTags(rels, "Relationship");
+  const sheetTags = startTags(workbook, "sheet");
+  if (relTags === "malformed" || sheetTags === "malformed") {
+    return fail("corrupt");
+  }
+  for (const tag of relTags) {
+    const id = attrOf(tag, "Id");
+    const to = attrOf(tag, "Target");
     if (id && to) {
       target.set(
         id,
@@ -214,9 +218,9 @@ export function inspectWorkbook(bytes: Uint8Array): GuardResult {
     }
   }
   const sheets: { name: string; file: string | null }[] = [];
-  for (const tag of workbook.matchAll(/<sheet\b[^>]*>/g)) {
-    const name = attr(tag[0], "name");
-    const rid = attr(tag[0], "r:id");
+  for (const tag of sheetTags) {
+    const name = attrOf(tag, "name");
+    const rid = attrOf(tag, "r:id");
     if (name)
       sheets.push({
         name: unescapeXml(name),
@@ -225,13 +229,19 @@ export function inspectWorkbook(bytes: Uint8Array): GuardResult {
   }
   if (sheets.length > XLSX_LIMITS.maxSheets) return fail("too_many_sheets");
 
+  // Every worksheet part is scanned, mapped to a name or not: the library
+  // parses them all, so each must be inside the bounds.
   const formulaGaps: FormulaGap[] = [];
-  for (const sheet of sheets) {
-    const chunks = sheet.file ? sheetXml.get(sheet.file) : undefined;
-    if (!chunks) continue;
-    for (const cell of formulaGapsIn(decode(chunks))) {
-      formulaGaps.push({ sheet: sheet.name, cell });
+  const errorCells: FormulaGap[] = [];
+  for (const [file, chunks] of sheetXml) {
+    const scan = scanSheet(decode(chunks));
+    if (!scan.ok) {
+      return fail(scan.reason === "malformed" ? "corrupt" : "sheet_too_large");
     }
+    const name = sheets.find((s) => s.file === file)?.name;
+    if (name === undefined) continue;
+    for (const cell of scan.gaps) formulaGaps.push({ sheet: name, cell });
+    for (const cell of scan.errors) errorCells.push({ sheet: name, cell });
   }
 
   // Links and embedded objects are never followed; say that they were ignored.
@@ -245,5 +255,11 @@ export function inspectWorkbook(bytes: Uint8Array): GuardResult {
   if (embedded > 0)
     warnings.push(`${embedded} embedded object(s) were ignored.`);
 
-  return { ok: true, sheets: sheets.map((s) => s.name), formulaGaps, warnings };
+  return {
+    ok: true,
+    sheets: sheets.map((s) => s.name),
+    formulaGaps,
+    errorCells,
+    warnings,
+  };
 }

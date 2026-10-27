@@ -4,12 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogSnapshot } from "../domain/inventory-types";
 
 const getSnapshot = vi.fn();
+const runCommand = vi.fn();
 vi.mock("../actions/inventory-actions", () => ({
   getCatalogSnapshotAction: (...args: unknown[]) => getSnapshot(...args),
-  runCatalogCommandAction: vi.fn(),
+  runCatalogCommandAction: (...args: unknown[]) => runCommand(...args),
 }));
 
-import { useCatalogController } from "./use-catalog-controller";
+import {
+  OFFLINE_READ_MESSAGE,
+  OFFLINE_WRITE_MESSAGE,
+  useCatalogController,
+} from "./use-catalog-controller";
 
 const viewer = {
   profileId: "p1",
@@ -47,6 +52,7 @@ const mount = () =>
 
 beforeEach(() => {
   getSnapshot.mockReset();
+  runCommand.mockReset();
 });
 
 describe("useCatalogController re-reads (BI-9: notify -> refetch)", () => {
@@ -195,6 +201,72 @@ describe("useCatalogController re-reads (BI-9: notify -> refetch)", () => {
     });
     expect(first).not.toHaveBeenCalled();
     expect(latest).toHaveBeenCalledTimes(1);
+  });
+
+  it("a first load that cannot reach the server says so, instead of showing a skeleton forever", async () => {
+    getSnapshot.mockRejectedValue(new Error("Failed to fetch"));
+    const { result } = mount();
+    await act(async () => {});
+    expect(result.current.snapshot).toBeNull();
+    expect(result.current.loadError).toBe(OFFLINE_READ_MESSAGE);
+    expect(result.current.loading).toBe(false);
+
+    // And it recovers when the connection does.
+    getSnapshot.mockResolvedValueOnce({ ok: true, data: snapshot("back") });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.loadError).toBeNull();
+    expect(result.current.snapshot?.loadedAt).toBe("back");
+  });
+
+  it("an offline background re-read keeps the data and reports the problem", async () => {
+    getSnapshot.mockResolvedValueOnce({ ok: true, data: snapshot("first") });
+    const { result } = mount();
+    await act(async () => {});
+    getSnapshot.mockRejectedValueOnce(new Error("Failed to fetch"));
+    await act(async () => {
+      await result.current.refresh({ background: true });
+    });
+    expect(result.current.snapshot?.loadedAt).toBe("first");
+    expect(result.current.loadError).toBe(OFFLINE_READ_MESSAGE);
+  });
+
+  it("a write that cannot reach the server returns an error to its caller, never a rejection", async () => {
+    getSnapshot.mockResolvedValue({ ok: true, data: snapshot("first") });
+    runCommand.mockRejectedValue(new Error("Failed to fetch"));
+    const { result } = mount();
+    await act(async () => {});
+    let outcome: Awaited<ReturnType<typeof result.current.run>> | undefined;
+    await act(async () => {
+      outcome = await result.current.run({
+        type: "vendorCreate",
+        name: "X",
+        notes: null,
+      } as never);
+    });
+    expect(outcome).toEqual({ ok: false, error: OFFLINE_WRITE_MESSAGE });
+  });
+
+  it("in demo mode the snapshot keeps one identity while the shell rebuilds the binding every second", () => {
+    const state = {
+      vendors: [],
+      categories: [],
+      subcategories: [],
+      products: [],
+      stock: [],
+    };
+    const { result, rerender } = renderHook(() =>
+      useCatalogController({
+        // A new binding object each render, like the shell's per-second clock.
+        demo: { state, setState: vi.fn() },
+        restaurantSlug: "the-lineup",
+        viewer,
+      }),
+    );
+    const first = result.current.snapshot;
+    for (let i = 0; i < 10; i += 1) rerender();
+    expect(result.current.snapshot).toBe(first);
   });
 
   it("an invalid session signs out and stops re-reading", async () => {

@@ -48,7 +48,7 @@ import { useOutsideDismiss } from "./use-outside-dismiss";
 export type TableColumn<Row> = ColumnSpec<Row> & {
   render: (row: Row) => ReactNode;
   align?: "right";
-  /** Hidden on tablets (md..lg); still reachable via the column chooser. */
+  /** Hidden on tablets (md..lg); its filter stays reachable in the Filters sheet. */
   tabletHidden?: boolean;
   /** No filter control (kept sortable if `sortable`). */
   noFilter?: boolean;
@@ -456,7 +456,7 @@ export function FilterableTable<Row>({
         />
         <Button
           variant="secondary"
-          className={renderGroups ? undefined : "md:hidden"}
+          className={renderGroups ? undefined : "lg:hidden"}
           onClick={() => setSheetOpen(true)}
         >
           <SlidersHorizontal aria-hidden="true" /> Filters

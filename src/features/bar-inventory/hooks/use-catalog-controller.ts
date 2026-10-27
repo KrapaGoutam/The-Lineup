@@ -28,6 +28,11 @@ export type CatalogRunResult =
   | { ok: true; snapshot: CatalogSnapshot }
   | { ok: false; error: string; conflict?: CatalogConflict };
 
+export const OFFLINE_READ_MESSAGE =
+  "Couldn't reach the server. Check your connection and try again.";
+export const OFFLINE_WRITE_MESSAGE =
+  "Couldn't reach the server, so we can't confirm that was saved. Refresh to check, then try again.";
+
 // Re-read on focus at most this often (notify-and-refetch: the database is
 // the truth, the screen only ever shows what a read returned).
 const FOCUS_REFRESH_MIN_MS = 15_000;
@@ -73,7 +78,14 @@ export function useCatalogController({
       try {
         do {
           rerun.current = false;
-          const result = await getCatalogSnapshotAction({ restaurantSlug });
+          let result: Awaited<ReturnType<typeof getCatalogSnapshotAction>>;
+          try {
+            result = await getCatalogSnapshotAction({ restaurantSlug });
+          } catch {
+            // Offline or the server dropped the request: say so, never freeze.
+            setLoadError(OFFLINE_READ_MESSAGE);
+            break;
+          }
           lastFetch.current = Date.now();
           if (result.ok) {
             setSnapshot(result.data);
@@ -133,9 +145,14 @@ export function useCatalogController({
     if (next !== demo.state) demo.setState(next);
   }, [demo, viewer.name]);
 
+  // Keyed on the state, not on `demo`: the shell rebuilds the `demo` object
+  // every second (header clock), and a new snapshot each time would make every
+  // view that follows the snapshot re-read each second.
+  const demoState = demo?.state ?? null;
   const demoSnapshot = useMemo<CatalogSnapshot | null>(
-    () => (demo ? { ...demo.state, loadedAt: new Date().toISOString() } : null),
-    [demo],
+    () =>
+      demoState ? { ...demoState, loadedAt: new Date().toISOString() } : null,
+    [demoState],
   );
 
   const run = useCallback(
@@ -155,7 +172,12 @@ export function useCatalogController({
           snapshot: { ...result.state, loadedAt: new Date().toISOString() },
         };
       }
-      const result = await runCatalogCommandAction({ restaurantSlug, command });
+      let result: Awaited<ReturnType<typeof runCatalogCommandAction>>;
+      try {
+        result = await runCatalogCommandAction({ restaurantSlug, command });
+      } catch {
+        return { ok: false, error: OFFLINE_WRITE_MESSAGE };
+      }
       if (result.ok) {
         lastFetch.current = Date.now();
         setSnapshot(result.data);

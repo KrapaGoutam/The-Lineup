@@ -125,7 +125,7 @@ test("vendors: add, spelling variants are refused with the existing name, rename
   await expect(dialog).toBeHidden();
   await expect(table.getByRole("row", { name: /Brewer Supply/ })).toBeVisible();
 
-  await table.getByRole("button", { name: "Edit Brewer Supply" }).click();
+  await table.getByRole("button", { name: "Rename Brewer Supply" }).click();
   dialog = page.getByRole("dialog", { name: "Edit vendor" });
   await dialog.getByLabel("Vendor name").fill("Brewer Supply Co");
   await dialog.getByRole("button", { name: "Save vendor" }).click();

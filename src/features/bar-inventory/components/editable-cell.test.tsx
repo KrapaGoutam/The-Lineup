@@ -136,4 +136,33 @@ describe("EditableCell", () => {
     await user.click(screen.getByRole("button", { name: /Apply mine \(6\)/ }));
     expect(onSave).toHaveBeenLastCalledWith(6, null, 7);
   });
+
+  it("a held or double-tapped Enter in the reason step sends one write, not two", async () => {
+    const user = userEvent.setup();
+    let finish!: () => void;
+    const onSave = vi
+      .fn<CellSave>()
+      .mockImplementation(
+        () => new Promise((resolve) => (finish = () => resolve({ ok: true }))),
+      );
+    render(
+      <EditableCell {...base} value={5} expectedVersion={1} onSave={onSave} />,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /Edit On hand for Tito's, currently 5/,
+      }),
+    );
+    const input = screen.getByLabelText("On hand for Tito's");
+    await user.clear(input);
+    await user.type(input, "4{Enter}");
+    const select = screen
+      .getByRole("group", { name: "Reason for changing On hand" })
+      .querySelector("select") as HTMLSelectElement;
+    select.focus();
+    // Enter twice while the first request is still in flight.
+    await user.keyboard("{Enter}{Enter}{Enter}");
+    expect(onSave).toHaveBeenCalledTimes(1);
+    finish();
+  });
 });

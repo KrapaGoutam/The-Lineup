@@ -40,6 +40,7 @@ describe("inspectWorkbook: what it accepts", () => {
       ok: true,
       sheets: ["Stock"],
       formulaGaps: [],
+      errorCells: [],
       warnings: [],
     });
   });
@@ -223,6 +224,145 @@ describe("inspectWorkbook: formulas with no saved value", () => {
       ok: true,
       formulaGaps: [{ sheet: "S2", cell: "A1" }],
     });
+  });
+});
+
+const sheet1 = "xl/worksheets/sheet1.xml";
+/** A valid one-sheet workbook with `tail` appended inside <sheetData>. */
+const withSheetData = async (tail: string) =>
+  edit(await valid("Stock"), (name, text) =>
+    name === sheet1
+      ? text.replace("</sheetData>", tail + "</sheetData>")
+      : undefined,
+  );
+
+describe("inspectWorkbook: how far the data reaches (memory bound)", () => {
+  it("refuses a value far to the right (a ~1 KB file that would need billions of slots)", async () => {
+    rejects(
+      await withSheetData('<row r="1"><c r="XFD1"><v>1</v></c></row>'),
+      "sheet_too_large",
+    );
+  });
+
+  it("refuses a value far down", async () => {
+    rejects(
+      await withSheetData(
+        '<row r="1048576"><c r="A1048576"><v>1</v></c></row>',
+      ),
+      "sheet_too_large",
+    );
+  });
+
+  it("refuses an empty row numbered far down", async () => {
+    rejects(await withSheetData('<row r="900000"/>'), "sheet_too_large");
+  });
+
+  it("is not fooled by single-quoted attributes (XML allows them)", async () => {
+    rejects(
+      await withSheetData("<row r='1'><c r='XFD1'><v>1</v></c></row>"),
+      "sheet_too_large",
+    );
+  });
+
+  it("the edge of the limit is accepted: column 40, row 50,000", async () => {
+    const book = await withSheetData(
+      '<row r="50000"><c r="AN50000"><v>1</v></c></row>',
+    );
+    expect(inspectWorkbook(book)).toMatchObject({ ok: true });
+  });
+
+  it("styled empty cells far away cost nothing and are fine", async () => {
+    const book = await withSheetData('<row r="1"><c r="XFD1" s="1"/></row>');
+    expect(inspectWorkbook(book)).toMatchObject({ ok: true });
+  });
+});
+
+describe("inspectWorkbook: cells that show an Excel error, and empty-text formulas", () => {
+  it("reports an error cell (#N/A would otherwise import as blank = unchanged)", async () => {
+    const book = await withSheetData(
+      '<row r="9"><c r="B9" t="e"><f>VLOOKUP(1,A:B,2,0)</f><v>#N/A</v></c></row>',
+    );
+    expect(inspectWorkbook(book)).toMatchObject({
+      ok: true,
+      errorCells: [{ sheet: "Stock", cell: "B9" }],
+      formulaGaps: [],
+    });
+  });
+
+  it("a formula that returns the empty string is a real blank, not a gap", async () => {
+    const book = await withSheetData(
+      '<row r="9"><c r="B9" t="str"><f>IF(A9="","",A9)</f><v></v></c></row>',
+    );
+    expect(inspectWorkbook(book)).toMatchObject({ ok: true, formulaGaps: [] });
+  });
+
+  it("but an untyped or numeric formula with an empty value is still a gap", async () => {
+    const book = await withSheetData(
+      '<row r="9"><c r="B9"><f>1+1</f><v></v></c><c r="C9" t="n"><f>2</f></c></row>',
+    );
+    expect(inspectWorkbook(book)).toMatchObject({
+      ok: true,
+      formulaGaps: [
+        { sheet: "Stock", cell: "B9" },
+        { sheet: "Stock", cell: "C9" },
+      ],
+    });
+  });
+});
+
+describe("inspectWorkbook: sheet names with numeric entities", () => {
+  it("matches a name written as &#233; / &#xE9; to the library's name", () => {
+    const files = skeleton([
+      strToU8(
+        '<worksheet><sheetData><row r="1"><c r="A1"><f>1</f></c></row></sheetData></worksheet>',
+      ),
+    ]);
+    files["xl/workbook.xml"] = strToU8(
+      '<workbook><sheets><sheet name="Caf&#233; &#xE9;" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    );
+    expect(inspectWorkbook(zip(files))).toMatchObject({
+      ok: true,
+      sheets: ["Café é"],
+      formulaGaps: [{ sheet: "Café é", cell: "A1" }],
+    });
+  });
+});
+
+describe("inspectWorkbook: hostile XML cannot stall the server (linear scan)", () => {
+  // Each of these took seconds to hours with the earlier backtracking patterns.
+  const within = (ms: number, run: () => void) => {
+    const start = performance.now();
+    run();
+    expect(performance.now() - start).toBeLessThan(ms);
+  };
+
+  it("hundreds of thousands of unclosed <c> tags", async () => {
+    const book = await withSheetData("<c>".repeat(300_000));
+    within(1500, () => rejects(book, "corrupt"));
+  });
+
+  it("hundreds of thousands of '<Relationship ' with no end", () => {
+    const files = skeleton([strToU8("<worksheet><sheetData/></worksheet>")]);
+    files["xl/_rels/workbook.xml.rels"] = strToU8(
+      "<Relationship ".repeat(200_000),
+    );
+    within(1500, () => rejects(zip(files), "corrupt"));
+  });
+
+  it("an enormous start tag is not a tag", async () => {
+    const book = await withSheetData('<c r="A1" x="' + "a".repeat(6000) + '">');
+    rejects(book, "corrupt");
+  });
+
+  it("a hundred thousand ordinary cells scan in well under a second", async () => {
+    const cells = Array.from(
+      { length: 100_000 },
+      (_, i) => `<c r="A1"><v>${i}</v></c>`,
+    ).join("");
+    const book = await withSheetData(`<row r="1">${cells}</row>`);
+    within(1500, () =>
+      expect(inspectWorkbook(book)).toMatchObject({ ok: true }),
+    );
   });
 });
 

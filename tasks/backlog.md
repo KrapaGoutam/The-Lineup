@@ -8,7 +8,7 @@ This backlog holds upcoming feature specifications and technical debt items queu
 
 | Item | Area | Priority | Spec Link | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-9 merged; BI-10 hosted validation GO in PR; BI-11 next) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
+| **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-10 merged; BI-11 final gate GO in PR; follow-ups below) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
 | **Tasks Today — management staff visibility** | Tasks | Medium | #169 | Owner / Manager / Assistant Manager: All Staff / My Tasks / per person in Today, staff name on each task. Tracked only. Roadmap #3. |
 | **Tasks notification scope** | Tasks | Medium | #154 | Limit the notification inbox to Opening and Closing operational work; settle ready/assigned/due/overdue semantics first. |
 | **Release conditions C1–C8** | Platform | High | #160, #161 | Release-readiness audit (2026-10-26) returned NO-GO: repair/replace the PROD migration route (#111), reconcile PROD missing `20260911130000` (#161), migrations-first procedure (#113), backup check, same-day numeric-label re-run. See `docs/releases/release-readiness-2026-10/GO_NO_GO.md`. |
@@ -43,3 +43,13 @@ This backlog holds upcoming feature specifications and technical debt items queu
 ## Carried over (unchanged by Tasks V1)
 
 - #106 `private.has_org_role` creator bypass · #109 Table Allocation UX consistency · #134 production-build Realtime (**release blocker for `development → main`**) · PR #135 protected-Preview manual smoke · Neon credential rotation · production stale duplicate active-entry review.
+
+## Bar Inventory follow-ups (from the BI-11 gate; none blocks the module)
+
+- [ ] **Owner decision:** export audit log (AC-EXP-4) — build `inventory_log_export` + migration, or record a waiver.
+- [ ] **Owner / design decision:** light-theme contrast tokens (`--warn`, `--ok`, `--destructive`, `--muted-foreground`, `--primary`) are 2.7–4.3:1 against 4.5:1; app-wide.
+- [ ] Import-commit hardening (migration): treat a missing expected version on an update row as an error; compare reason / location / plan on stage replay; require the staging actor and a maximum age on commit; take a per-location advisory lock (or order rows) to avoid deadlocks between concurrent imports; a pgTAP case for a forged plan carrying another tenant's ids.
+- [ ] Full ARIA tabs (arrow keys, `tabpanel`) on the view switcher, and its specs.
+- [ ] Out-of-order import previews (request sequence guard); analytics custom ranges older than the 365-day lookback; render cost of a 5,000-product table every second (memoise / paginate); table date presets keep a frozen "now".
+- [ ] Low accessibility polish: column chooser focus on Escape, Enter in "New vendor name", polite confirmation for ± buttons, export panel width at 360 px, backdrop-click discarding typed data, `dvh` for dialog height, analytics card heading levels, 44 px primary row actions on touch.
+- [ ] Realtime for catalog edits (rename / archive) if wanted; today they arrive on the next focus re-read or write.

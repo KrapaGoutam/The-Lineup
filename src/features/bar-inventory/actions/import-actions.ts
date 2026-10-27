@@ -14,6 +14,7 @@ import { getCatalogSnapshot } from "../data/catalog-data";
 import { IMPORT_FIELDS, type HeaderMapping } from "../domain/import-columns";
 import type { ImportPlan } from "../domain/import-plan";
 import { planImport, prepareCommit } from "../domain/import-run";
+import { friendlyDbMessage } from "../domain/db-error";
 import type {
   ImportCommitResult,
   ImportConflict,
@@ -56,6 +57,10 @@ const requestSchema = z.object({
     .default({}),
 });
 
+// A row number is the line in the file, blank lines included, so it can exceed
+// the 5,000-row cap; it is bounded by the file's 6M-character limit instead.
+const MAX_ROW_NUMBER = 6_000_000;
+
 const commitSchema = requestSchema.extend({
   filename: z.string().trim().min(1).max(255),
   /** Where the rows came from; recorded on the batch. */
@@ -64,24 +69,8 @@ const commitSchema = requestSchema.extend({
   /** Chosen by the browser per confirm attempt, so a retry or double click is the same attempt. */
   requestId: z.string().uuid(),
   fingerprint: z.string().regex(/^[0-9a-f]{1,16}$/),
-  excluded: z
-    .array(
-      z
-        .number()
-        .int()
-        .min(1)
-        .max(MAX_ROWS + 2),
-    )
-    .max(MAX_ROWS),
-  approved: z
-    .array(
-      z
-        .number()
-        .int()
-        .min(1)
-        .max(MAX_ROWS + 2),
-    )
-    .max(MAX_ROWS),
+  excluded: z.array(z.number().int().min(1).max(MAX_ROW_NUMBER)).max(MAX_ROWS),
+  approved: z.array(z.number().int().min(1).max(MAX_ROW_NUMBER)).max(MAX_ROWS),
 });
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -154,13 +143,6 @@ async function resolveManager(restaurantSlug: string) {
     };
   }
   return { ok: true as const, organizationId: user.organizationId };
-}
-
-/** Database messages that are already a plain sentence are shown; the rest are not. */
-function friendly(message: string | undefined): string {
-  return message && message.length < 200
-    ? message
-    : "That didn't work. Please try again.";
 }
 
 async function caller(
@@ -283,7 +265,11 @@ export async function commitImportAction(
     p_plan: prep.staged,
   });
   if (staged.error || typeof staged.data !== "string") {
-    return { ok: false, kind: "error", error: friendly(staged.error?.message) };
+    return {
+      ok: false,
+      kind: "error",
+      error: friendlyDbMessage(staged.error ?? {}),
+    };
   }
 
   const committed = await supabase.rpc("inventory_import_commit", {
@@ -295,7 +281,7 @@ export async function commitImportAction(
     return {
       ok: false,
       kind: "error",
-      error: friendly(committed.error.message),
+      error: friendlyDbMessage(committed.error),
     };
   }
 

@@ -628,6 +628,50 @@ describe("SKU matching (AC-IMP-4)", () => {
     });
   });
 
+  it("a blank Size and an unnamed Unit mean 'unchanged' on a SKU match (not 'clear the size')", () => {
+    // Vendor, Name, SKU and counts only: no Size or Unit column at all.
+    const r = one({
+      Vendor: "Faust",
+      Name: "Tito's Handmade Vodka",
+      SKU: "TITOS-750",
+      "On Hand": "5",
+    });
+    expect(r).toMatchObject({
+      action: "update",
+      matchedBy: "sku",
+      needsApproval: false,
+    });
+    expect(r.changes.map((c) => c.field)).toEqual(["onHand"]);
+  });
+
+  it("a SKU match that names a different Size is still held for approval, showing the change", () => {
+    const r = one({
+      Vendor: "Faust",
+      Name: "Tito's Handmade Vodka",
+      Size: "1 L",
+      SKU: "TITOS-750",
+      "On Hand": "5",
+    });
+    expect(r).toMatchObject({ matchedBy: "sku", needsApproval: true });
+    expect(change(r, "size")).toMatchObject({
+      current: "750 mL",
+      imported: "1 L",
+    });
+  });
+
+  it("a SKU match that names a different Unit is still held for approval", () => {
+    const r = one({
+      Vendor: "Faust",
+      Name: "Tito's Handmade Vodka",
+      Size: "750 mL",
+      Unit: "Case",
+      SKU: "TITOS-750",
+      "On Hand": "5",
+    });
+    expect(r).toMatchObject({ matchedBy: "sku", needsApproval: true });
+    expect(change(r, "unit")).toMatchObject({ imported: "Case" });
+  });
+
   it("a SKU that matches nothing creates the item with that SKU", () => {
     const r = one({
       Vendor: "Faust",
