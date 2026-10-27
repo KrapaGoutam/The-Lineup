@@ -5,12 +5,12 @@
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
 **Feature:** Bar Inventory V1 (#168) · **Phase:** BI-0 → BI-11 are ALL MERGED to `development` (BI-11 = PR #187, merge `951faa7`). Bar Inventory is complete; `FINAL_GATE.md` is the record. **Now: security dependency bumps (`fix/security-dependency-bumps`: next 16.3.4→16.4.3, zod 4.5.4→4.6.7), then Tasks V1.1.**
 
-**Branch:** `fix/security-dependency-bumps` · **Base development:** `951faa7`
-**Issue:** none (npm audit finding) · **Project #4:** n/a · **PR:** dependency-bump PR into `development` (find with `gh pr list --head fix/security-dependency-bumps`)
+**Branch:** `docs/tasks-v1-1-plan` (T-0) · **Base development:** `0699498` (security bump, PR #188 merged, exact-head CI green)
+**Issue:** #169, #154 · **Project #4:** existing items (do not duplicate) · **PR:** T-0 docs PR (find with `gh pr list --head docs/tasks-v1-1-plan`)
 
-**Dependency-bump evidence (session resumed 2026-10-27 after a usage limit):** `format:check` · `lint` · `typecheck` PASS · Vitest 1406/1406 · Playwright (dev server, `CI=1`): desktop 241/241, host-tablet 241/241, server-mobile 239 + 2 skipped. No `supabase/**` change, so no database check applies. `npm install` rewrote one heading in `AGENTS.md` (`#` → `##`, a Next postinstall rule block): deliberately NOT staged.
-**Exact next action:** wait for exact-head CI on the bump PR; merge with a **merge commit**. Then branch `docs/tasks-v1-1-plan` from refreshed `origin/development` and commit `docs/features/tasks-v1-1/` (PLAN, TEST_MATRIX; already written, untracked in the working tree). Then T-1.
-**Exact next command:** `gh pr checks <bump PR number> --watch`
+**Done this session:** BI-11 confirmed merged (#187); dependency bump merged (#188: desktop/tablet/phone Playwright all green, Vitest 1406); Tasks V1.1 plan + test matrix written (`docs/features/tasks-v1-1/`). `AGENTS.md` still carries an unstaged Next-postinstall heading edit: never stage it.
+**Exact next action:** exact-head CI on the T-0 PR, merge commit; then branch `feature/tasks-v1-1-default-landing` from refreshed `origin/development` and build T-1 (PLAN D-1): initial tab = tasks, optional `?tab=` read on mount + pushState/popstate, role fallback, update e2e sign-in helpers that assumed Table Allocation.
+**Exact next command:** `gh pr checks <T-0 PR number> --watch`
 
 **Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. "Deep links respected / refresh keeps the module" therefore needs a minimal `?tab=` mechanism (PLAN §D-1). Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load (`task_notifications_sweep`); reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
 
