@@ -9,6 +9,11 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getCatalogSnapshot } from "../data/catalog-data";
 import {
+  getHistoryEntries,
+  HISTORY_ROW_LIMIT,
+  ITEM_HISTORY_LIMIT,
+} from "../data/history-data";
+import {
   catalogCommandSchema,
   type CatalogCommand,
 } from "../domain/catalog-commands";
@@ -18,6 +23,7 @@ import {
   isInventoryManager,
   type CatalogConflict,
   type CatalogSnapshot,
+  type HistoryEntry,
 } from "../domain/inventory-types";
 
 export type InventoryActionResult =
@@ -382,4 +388,54 @@ export async function exportOrderRecommendationsAction(input: {
     slug: parsed.data.restaurantSlug,
   });
   return { ok: true, filename: file.filename, csv: file.csv };
+}
+
+export type HistoryActionResult =
+  | { ok: true; entries: HistoryEntry[]; truncated: boolean }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/** How far back the History view may read (days; 0 = everything, up to the row limit). */
+export const HISTORY_RANGES = [30, 90, 365, 0] as const;
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Inventory history from the immutable ledger, newest first. With a
+ * `productId` it is that one item's latest changes (the item sheet);
+ * otherwise it is the whole location over the chosen range (the History view).
+ */
+export async function getHistoryAction(input: {
+  restaurantSlug: string;
+  days: number;
+  productId: string | null;
+}): Promise<HistoryActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      days: z
+        .number()
+        .refine((n) => (HISTORY_RANGES as readonly number[]).includes(n)),
+      productId: z.string().uuid().nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveManager(parsed.data.restaurantSlug);
+  if (!caller.ok) return caller;
+
+  const { days, productId } = parsed.data;
+  const page = await getHistoryEntries(caller.organizationId, {
+    since:
+      productId || days === 0
+        ? null
+        : new Date(Date.now() - days * MS_PER_DAY).toISOString(),
+    productId,
+    limit: productId ? ITEM_HISTORY_LIMIT : HISTORY_ROW_LIMIT,
+  });
+  if (!page) return { ok: false, error: "History could not be loaded." };
+  return { ok: true, ...page };
 }

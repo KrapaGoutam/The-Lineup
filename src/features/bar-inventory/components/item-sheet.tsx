@@ -15,6 +15,8 @@ import {
   toCents,
   type AdjustmentReason,
 } from "../domain/stock-rules";
+import type { LoadHistory } from "./history-view";
+import { ItemHistory } from "./item-history";
 import { Sheet } from "./table-kit/sheet";
 import { StatusBadge } from "./table-kit/status-badge";
 
@@ -70,15 +72,19 @@ const text = (value: number | null) => (value === null ? "" : String(value));
  * different operations in the database: counts write the immutable ledger,
  * levels are change-logged.
  */
+export type ItemHistorySource = { timeZone: string; load: LoadHistory };
+
 export function ItemSheet({
   row,
   defaultReason,
   actions,
+  history,
   onClose,
 }: {
   row: InventoryRow | null;
   defaultReason: AdjustmentReason;
   actions: ItemSheetActions;
+  history?: ItemHistorySource;
   onClose: () => void;
 }) {
   return (
@@ -96,6 +102,7 @@ export function ItemSheet({
           row={row}
           defaultReason={defaultReason}
           actions={actions}
+          history={history}
           onClose={onClose}
         />
       ) : null}
@@ -107,11 +114,13 @@ function ItemForm({
   row,
   defaultReason,
   actions,
+  history,
   onClose,
 }: {
   row: InventoryRow;
   defaultReason: AdjustmentReason;
   actions: ItemSheetActions;
+  history?: ItemHistorySource;
   onClose: () => void;
 }) {
   const id = useId();
@@ -344,6 +353,13 @@ function ItemForm({
         >
           {message.text}
         </p>
+      ) : null}
+      {history ? (
+        <ItemHistory
+          productId={row.productId}
+          timeZone={history.timeZone}
+          load={history.load}
+        />
       ) : null}
       <div className="flex justify-end">
         <Button variant="ghost" onClick={onClose}>

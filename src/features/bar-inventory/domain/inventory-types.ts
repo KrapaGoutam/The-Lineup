@@ -1,5 +1,7 @@
 import type { Designation } from "@/features/auth/domain/passcode";
 
+import type { AdjustmentReason, StockStatus } from "./stock-rules";
+
 /** Curated unit types (owner decision D8). `other` carries a custom label. */
 export const UNIT_TYPES = [
   "bottle",
@@ -93,6 +95,39 @@ export type StockView = {
   lastAdjustedAt: string | null;
 };
 
+/** Ledger `source` values (the database derives them from the reason). */
+export const HISTORY_SOURCES = [
+  "manual_edit",
+  "bulk_import",
+  "delivery",
+  "count",
+  "receiving",
+  "system",
+] as const;
+export type HistorySource = (typeof HISTORY_SOURCES)[number];
+
+/**
+ * One immutable ledger row: a change to a product's on-hand / backup count.
+ * Keyed by the product's stable id, so it stays attached to the item through
+ * renames and archiving; display names are joined from the current catalog.
+ */
+export type HistoryEntry = {
+  id: string;
+  /** ISO time of the change. */
+  at: string;
+  productId: string;
+  reason: AdjustmentReason;
+  source: HistorySource;
+  note: string | null;
+  prevOnHand: number;
+  newOnHand: number;
+  prevBackup: number;
+  newBackup: number;
+  statusAfter: Exclude<StockStatus, "archived">;
+  actorName: string | null;
+  importBatchId: string | null;
+};
+
 /** The organization-level catalog (BI-1) plus location stock (BI-2/3). */
 export type CatalogState = {
   vendors: VendorView[];
@@ -100,6 +135,8 @@ export type CatalogState = {
   subcategories: SubcategoryView[];
   products: ProductView[];
   stock: StockView[];
+  /** Demo mode only: its in-memory ledger. Real mode reads history from the database. */
+  ledger?: HistoryEntry[];
 };
 
 export type CatalogSnapshot = CatalogState & {

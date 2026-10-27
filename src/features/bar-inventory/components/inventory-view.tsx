@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { History, Minus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   type AdjustmentReason,
 } from "../domain/stock-rules";
 import { EditableCell, formatQuantity, type CellSave } from "./editable-cell";
+import type { LoadHistory } from "./history-view";
 import { ItemSheet, type ItemSheetActions } from "./item-sheet";
 import type { RunCatalogCommand } from "./catalog-dialogs";
 import {
@@ -33,11 +34,15 @@ export function InventoryView({
   run,
   restaurantSlug,
   timeZone,
+  loadHistory,
+  onOpenHistory,
 }: {
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
   restaurantSlug: string;
   timeZone: string;
+  loadHistory: LoadHistory;
+  onOpenHistory: () => void;
 }) {
   const [showArchived, setShowArchived] = useState(false);
   const [lastReason, setLastReason] = useState<AdjustmentReason>("stock_count");
@@ -305,15 +310,20 @@ export function InventoryView({
         sortPresets={INVENTORY_SORT_PRESETS}
         emptyMessage="No products yet. Add products under Manage to start counting."
         toolbarExtras={
-          <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4"
-              checked={showArchived}
-              onChange={(event) => setShowArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
+          <>
+            <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={showArchived}
+                onChange={(event) => setShowArchived(event.target.checked)}
+              />
+              Show archived
+            </label>
+            <Button variant="ghost" onClick={onOpenHistory}>
+              <History aria-hidden="true" /> History
+            </Button>
+          </>
         }
         rowActions={(row) => (
           <Button
@@ -395,6 +405,7 @@ export function InventoryView({
         row={sheetRow}
         defaultReason={lastReason}
         actions={sheetActions}
+        history={{ timeZone, load: loadHistory }}
         onClose={() => setSheetFor(null)}
       />
     </div>
