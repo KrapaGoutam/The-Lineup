@@ -1,6 +1,6 @@
 # Bar Inventory — Vendor Order Drafts V1 — Plan
 
-**Status:** planned (VOD-0), not built · **Issue:** see `tasks/current-task.md` · **Companions:** `ACCEPTANCE_CRITERIA.md`, `TEST_MATRIX.md` · **Parent module:** Bar Inventory V1 (#168, complete — BI-0 → BI-11 merged; this is a **new enhancement**, #168 is not reopened)
+**Status:** VOD-0 complete; VOD-1 database/domain foundation implemented; VOD-2 next · **Issue:** #190 · **Companions:** `ACCEPTANCE_CRITERIA.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_REPORT.md` · **Parent module:** Bar Inventory V1 (#168, complete — BI-0 → BI-11 merged; this is a **new enhancement**, #168 is not reopened)
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only. Tasks V1.1 _code_ waits for this feature.
 
 ## 1. Outcome

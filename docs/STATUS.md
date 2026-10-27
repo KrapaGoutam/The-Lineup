@@ -7,9 +7,9 @@
 
 ---
 
-## Bar Inventory — Vendor Order Drafts V1 — PLANNED (#190, VOD-0)
+## Bar Inventory — Vendor Order Drafts V1 — VOD-1 FOUNDATION IMPLEMENTED (#190)
 
-New enhancement on top of the completed Bar Inventory V1 (#168 is not reopened). A new **Order Drafts** tab holds one editable `DRAFT` per vendor and location, where the manager prepares the quantity they will actually order (kept separate from the system's Suggested Order), with notes, an Included switch, Fill from Suggestions, Copy Order, CSV/XLSX export, and **Mark Sent**, which records that the order was sent outside the app and **never changes inventory**. Plan, acceptance criteria and test matrix: `docs/features/bar-inventory-vendor-order-drafts-v1/`. Phases VOD-1 (database/domain) → VOD-4 (hosted DEV gate); Tasks V1.1 code starts after it. Nothing is built yet. `main` and PROD untouched.
+New enhancement on top of the completed Bar Inventory V1 (#168 is not reopened). **VOD-1 implements the database/domain foundation only:** two tenant/location-scoped tables, one active `DRAFT` per vendor/location, stable Unassigned-vendor rejection, `DRAFT`/`SENT` lifecycle, immutable Sent history, six RPC-authoritative mutations, draft-level optimistic concurrency, exact suggested/planned totals, Fill/Clear rules, RLS, and management-only authorization. Mark Sent is proven not to mutate stock or the adjustment ledger. Local evidence: clean migration replay; focused pgTAP 88/88 including a real two-backend concurrent-open test; full pgTAP 39 files / 1121 assertions; Vitest 105 files / 1424 tests; check and production build pass. No UI, export, clipboard, hosted DEV data, `main`, or PROD change is in VOD-1. Report: `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md`. **VOD-2 is next but not started**; Tasks T-1 remains parked until VOD-4.
 
 ## Bar Inventory V1 — CODE COMPLETE ON `development` (#168; BI-0 → BI-11 merged, final gate PR #187)
 
