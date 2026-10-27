@@ -32,6 +32,8 @@ async function openInventory(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Bar Inventory" }),
   ).toBeVisible();
+  // The module lands on the Dashboard; these tests are about the Inventory view.
+  await page.getByRole("tab", { name: "Inventory", exact: true }).click();
   await expect(
     page.getByRole("tab", { name: "Inventory", exact: true }),
   ).toHaveAttribute("aria-selected", "true");

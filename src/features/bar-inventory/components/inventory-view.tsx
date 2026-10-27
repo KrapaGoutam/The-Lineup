@@ -11,6 +11,7 @@ import {
   INVENTORY_DEFAULT_SORT,
   INVENTORY_SORT_ONLY_COLUMNS,
   INVENTORY_SORT_PRESETS,
+  suggestedOrderText,
   type InventoryRow,
 } from "../domain/inventory-rows";
 import type { CatalogSnapshot } from "../domain/inventory-types";
@@ -26,11 +27,6 @@ import {
   type TableColumn,
 } from "./table-kit/filterable-table";
 import { STATUS_LABEL, StatusBadge } from "./table-kit/status-badge";
-
-function showOrder(row: InventoryRow) {
-  if (row.orderNeeded) return "Order needed";
-  return row.suggestedOrder === null ? "—" : String(row.suggestedOrder);
-}
 
 export function InventoryView({
   snapshot,
@@ -261,7 +257,7 @@ export function InventoryView({
         align: "right",
         tabletHidden: true,
         get: (r) => r.suggestedOrder,
-        render: showOrder,
+        render: suggestedOrderText,
       },
       {
         id: "updated",
@@ -363,7 +359,7 @@ export function InventoryView({
               {formatQuantity(row.effectiveWarning)} · Par{" "}
               {formatQuantity(row.par)}
               {row.status === "critical" || row.status === "low"
-                ? ` · Order ${showOrder(row)}`
+                ? ` · Order ${suggestedOrderText(row)}`
                 : ""}
             </p>
             <div className="flex flex-wrap items-center gap-2">

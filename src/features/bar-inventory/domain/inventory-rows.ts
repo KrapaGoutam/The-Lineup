@@ -149,3 +149,9 @@ export const INVENTORY_SORT_PRESETS = [
     keys: [{ id: "updated", dir: "desc" as const }],
   },
 ];
+
+/** "Order needed" when there is no par to compute a quantity from; never an invented number. */
+export function suggestedOrderText(row: InventoryRow): string {
+  if (row.orderNeeded) return "Order needed";
+  return row.suggestedOrder === null ? "—" : String(row.suggestedOrder);
+}

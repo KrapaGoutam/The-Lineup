@@ -123,6 +123,34 @@ function readState(
   return parseTableState(own, columns);
 }
 
+/**
+ * Writes one table's state into the URL, replacing only that table's own
+ * parameters. Also how the Dashboard opens the Inventory table pre-filtered:
+ * a table reads this state when it mounts.
+ */
+export function writeTableState(
+  tableKey: string,
+  slug: string,
+  state: TableState,
+) {
+  const params = new URLSearchParams(window.location.search);
+  const prefix = `${tableKey}.`;
+  [...params.keys()]
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => params.delete(key));
+  serializeTableState(state).forEach((value, key) =>
+    params.set(`${prefix}${key}`, value),
+  );
+  const hasOurs = [...params.keys()].some((key) =>
+    /\.(f\.[^.]+|q|sort)$/.test(key),
+  );
+  if (hasOurs) params.set(SLUG_PARAM, slug);
+  else params.delete(SLUG_PARAM);
+  const query = params.toString();
+  const url = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+  window.history.replaceState(window.history.state, "", url);
+}
+
 /** Filter / sort / search state mirrored to the URL so refresh and back keep it. */
 function useTableUrlState(
   tableKey: string,
@@ -133,22 +161,7 @@ function useTableUrlState(
     readState(tableKey, slug, columns),
   );
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const prefix = `${tableKey}.`;
-    [...params.keys()]
-      .filter((key) => key.startsWith(prefix))
-      .forEach((key) => params.delete(key));
-    serializeTableState(state).forEach((value, key) =>
-      params.set(`${prefix}${key}`, value),
-    );
-    const hasOurs = [...params.keys()].some((key) =>
-      /\.(f\.[^.]+|q|sort)$/.test(key),
-    );
-    if (hasOurs) params.set(SLUG_PARAM, slug);
-    else params.delete(SLUG_PARAM);
-    const query = params.toString();
-    const url = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
-    window.history.replaceState(window.history.state, "", url);
+    writeTableState(tableKey, slug, state);
   }, [state, tableKey, slug]);
   return [state, setState] as const;
 }

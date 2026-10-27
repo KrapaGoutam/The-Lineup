@@ -231,3 +231,42 @@ DEV touched: YES (hosted UI suite with synthetic orgs; no migration in BI-3)
 PROD touched: NO
 PROD migrations: NO
 ```
+
+## BI-4 — Dashboard
+
+Branch `feature/bar-inventory-bi4-dashboard` → PR into `development`. **No migration**: the Dashboard is a read model over the stock rows the Inventory view already loads.
+
+### Delivered
+
+| Layer     | What                                                                                                                                                                                                                                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain    | `domain/dashboard.ts`: six KPI counts (`buildKpis`), urgency order (`needsOrdering`: Critical, then Low, then closest to cutoff, then vendor and name), 7-day change set in the **location time zone** (`recentlyChangedRows`), and the table state each tile opens (`tileDrillDown`)                               |
+| UI        | `components/dashboard-view.tsx`: Active items / Critical / Low / Healthy / No cutoff / Recently changed tiles (2 columns on phones), **Order soon** and **Recently changed** as shared `FilterableTable`s (every column filterable), Fastest moving and Frequently hitting cutoff as honest "needs Analytics" cards |
+| Table kit | `writeTableState` exported from `filterable-table.tsx` (the hook's URL write, extracted). A tile click writes the Inventory filter into the URL and switches view, so the drill-down opens with exactly the tile's rows (BI-DASH-006); `suggestedOrderText` moved to `inventory-rows.ts` and shared                 |
+| Landing   | The module now opens on **Dashboard** (BI-1 had Inventory as an interim landing because no Dashboard existed)                                                                                                                                                                                                       |
+
+### Decisions
+
+1. **Order soon is a flat, filterable list here.** The vendor-grouped presentation with per-vendor counts and suggested totals is BI-5; it reuses `needsOrdering` and the same table.
+2. **No invented analytics.** Fastest moving and Frequently hitting cutoff need the adjustment-history read model (BI-7), so they say so instead of showing numbers.
+3. **A tile's number and its drill-down cannot disagree**: both come from the same rule (`tileDrillDown` is unit-tested against `buildKpis`).
+4. **Recently changed = last 7 local days of `updatedAt`** (the Inventory table's "Last updated" column and its `7d` date filter), archived excluded. The demo stamps its seeded rows with the load time, so the demo shows 4.
+
+### Gates
+
+| Gate                                               | Result                                           |
+| -------------------------------------------------- | ------------------------------------------------ |
+| format / lint / typecheck                          | PASS                                             |
+| Vitest                                             | 1013/1013 (85 files); new `dashboard.test.ts` 15 |
+| Playwright Dashboard + module (3 projects)         | 30 passed                                        |
+| Playwright Inventory + Manage filters (3 projects) | 31 passed, 2 intentional phone-only skips        |
+
+### Safety
+
+```
+development merged: see PR
+main merged: NO
+DEV touched: NO (no migration, no hosted run; hosted validation is BI-10)
+PROD touched: NO
+PROD migrations: NO
+```

@@ -11,8 +11,12 @@ import {
   useCatalogController,
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
+import { DashboardView } from "./dashboard-view";
 import { InventoryView } from "./inventory-view";
-import { dropForeignTableState } from "./table-kit/filterable-table";
+import {
+  dropForeignTableState,
+  writeTableState,
+} from "./table-kit/filterable-table";
 import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
 
@@ -77,7 +81,7 @@ function ManagerInventory({
     viewer,
     onSessionInvalid,
   });
-  const [view, setView] = useState<View>("inventory");
+  const [view, setView] = useState<View>("dashboard");
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -156,14 +160,16 @@ function ManagerInventory({
           timeZone={timeZone}
         />
       ) : (
-        <Card>
-          <CardContent className="py-6">
-            <p className="text-muted-foreground text-sm">
-              The Dashboard (what to order and from whom) arrives in the next
-              step of the build. Counts and levels are under Inventory.
-            </p>
-          </CardContent>
-        </Card>
+        <DashboardView
+          snapshot={controller.snapshot}
+          restaurantSlug={restaurantSlug}
+          timeZone={timeZone}
+          onOpenInventory={(state) => {
+            // The Inventory table reads its filters from the URL when it mounts.
+            writeTableState("inv", restaurantSlug, state);
+            setView("inventory");
+          }}
+        />
       )}
     </div>
   );
