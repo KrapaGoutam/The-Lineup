@@ -16,9 +16,9 @@ Claude Code Cloud (GitHub/origin is the source of truth; nothing relies on a loc
 
 - Branch: `feature/bar-order-drafts-v1-ui`
 - Base development SHA: `f6bab25bb6d613fb583d11b853c4807e1fa77941` (verified `origin/development`; ancestry verified before editing)
-- HEAD: see `git rev-parse HEAD` (updated after each commit)
-- Issue: #190 (stays OPEN)
-- PR: not opened yet
+- HEAD: `git rev-parse HEAD` (the PR head is the CI-tested SHA; see GitHub for the exact value)
+- Issue: #190 (stays OPEN; progress comment posted)
+- PR: #196 → `development` (https://github.com/KrapaGoutam/The-Lineup/pull/196), merge-commit only
 - Project #4: Status `In Progress`, Phase `Implementation`, Priority `P2`, Version `Future`, Work Type `Feature`
 - Milestone: Future Product Backlog (unchanged)
 
@@ -66,7 +66,8 @@ No database migration is expected. If a backend defect blocks correct UI: STOP, 
 - [x] Server data/actions, `use-order-drafts` hook, editor, view, Order soon CTA, module tab + dirty guard (typecheck + eslint clean).
 - [x] Component tests (24 view/editor + 5 Order soon CTA) and Playwright spec `tests/e2e/bar-inventory-order-drafts.spec.ts` (9 tests).
 - [x] Repo gates (local, Cloud): Bar Inventory regression Playwright (`tests/e2e/bar-inventory*.spec.ts`, desktop + server-mobile): 130 passed, 2 intentional skips, 2 failed = the old three-tab assertion in `bar-inventory.spec.ts` (BI-NAV-001) — updated to the new four-tab contract and re-run green; `npm run check` PASS; `npm run test` PASS (109 files / 1492 tests; was 105 / 1424); `npm run build` PASS.
-- [ ] Commit, push, open PR to `development`, exact-head CI, merge commit.
+- [x] Commit, push, open PR #196 to `development`.
+- [ ] Exact-head CI fully green (application, browser-smoke, Vercel; database workflow is path-gated — no `supabase/**` change), then MERGE COMMIT.
 - [x] Feature docs, ROADMAP, STATUS, backlog updated pre-merge (PR number/merge SHA go in the post-merge docs sync).
 
 ## Not started
@@ -108,11 +109,11 @@ One DOM, CSS grid rows: stacked card-like rows on phone, aligned columns from `m
 
 ## CI
 
-Pending.
+PR #196 opened; application + browser-smoke queued on the pushed head. Database workflow: PATH-GATED / NOT REQUIRED (no `supabase/**` change). Verify before merge: local HEAD = remote branch HEAD = PR head = CI-tested SHA, all required checks green, mergeState CLEAN.
 
 ## GitHub tracking
 
-Issue #190 open; Project #4 / milestone to be verified after PR (tooling availability recorded at that time).
+Issue #190 open (comment posted with PR #196). Project #4 update NOT PERFORMED — tool unavailable in this Cloud session (precise handoff item: set Project #4 to VOD-2 in review/complete after merge if tooling exists). Milestone unchanged: Future Product Backlog.
 
 ## Docs
 
@@ -148,12 +149,12 @@ Tasks T-1 PARKED: feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGE
 ## Exact next command
 
 ```bash
-git status --short --branch
+git fetch origin feature/bar-order-drafts-v1-ui && git rev-parse HEAD origin/feature/bar-order-drafts-v1-ui
 ```
 
 ## Exact next action
 
-Write component tests for `OrderDraftEditor` (conflict banner, Reload latest, Keep my edits, qty-only save, validation errors, fill/clear dialogs) and `OrderDraftsView`, then `tests/e2e/bar-inventory-order-drafts.spec.ts` (demo mode, 3 projects), then run `npm run check`, `npm run test`, `npm run build`.
+Wait for exact-head CI on PR #196. If red: inspect only the failing workflow/job/step, fix, push, wait for fresh exact-head CI. If green: verify local HEAD = remote HEAD = PR head = CI-tested SHA, then merge PR #196 with a MERGE COMMIT (no squash/rebase), record merge SHA, then open a `docs/*` post-merge sync PR (roadmap/status/report/backlog/handoff with merge SHA; VOD-2 COMPLETE, VOD-3 NEXT) and STOP. Do not start VOD-3.
 
 ## Read first
 
