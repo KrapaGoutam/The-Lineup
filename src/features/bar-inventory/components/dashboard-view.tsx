@@ -31,7 +31,8 @@ import type { TableState } from "../domain/table-filters";
 import { AnalyticsInsights } from "./analytics-insights";
 import { formatQuantity } from "./editable-cell";
 import type { LoadHistory } from "./history-view";
-import { OrderSoon, type RecommendationsOutcome } from "./order-soon";
+import type { RunExport } from "./export-control";
+import { OrderSoon } from "./order-soon";
 import {
   FilterableTable,
   type TableColumn,
@@ -162,7 +163,7 @@ export function DashboardView({
   restaurantSlug,
   timeZone,
   onOpenInventory,
-  onExportRecommendations,
+  runExport,
   onOpenHistory,
   onOpenAnalytics,
   loadHistory,
@@ -171,7 +172,7 @@ export function DashboardView({
   restaurantSlug: string;
   timeZone: string;
   onOpenInventory: (state: TableState) => void;
-  onExportRecommendations: (filters: string) => Promise<RecommendationsOutcome>;
+  runExport: RunExport;
   onOpenHistory: () => void;
   onOpenAnalytics: () => void;
   loadHistory: LoadHistory;
@@ -282,7 +283,7 @@ export function DashboardView({
           rows={orderSoon}
           restaurantSlug={restaurantSlug}
           timeZone={timeZone}
-          onExport={onExportRecommendations}
+          runExport={runExport}
         />
       </section>
 

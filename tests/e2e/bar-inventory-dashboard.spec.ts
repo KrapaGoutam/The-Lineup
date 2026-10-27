@@ -292,6 +292,7 @@ test("exporting recommendations downloads what is shown, and only that (BI-DASH-
 
   const all = page.waitForEvent("download");
   await region.getByRole("button", { name: "Export recommendations" }).click();
+  await page.getByRole("button", { name: "Download CSV" }).click();
   const full = await all;
   expect(full.suggestedFilename()).toMatch(
     /^bar-inventory_.+_order-recommendations_\d{4}-\d{2}-\d{2}\.csv$/,
@@ -301,13 +302,18 @@ test("exporting recommendations downloads what is shown, and only that (BI-DASH-
   expect(fullText).toContain("Del Papa,Modelo Especial");
   expect(fullText).not.toContain("Casamigos");
 
+  // With a search on, the person can still export everything, or just what is shown.
   await region
     .getByRole("searchbox", { name: "Search Order soon" })
     .fill("modelo");
-  const filtered = page.waitForEvent("download");
   await region.getByRole("button", { name: "Export recommendations" }).click();
+  await expect(page.getByLabel("Filtered rows (1)")).toBeChecked();
+  const filtered = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const filteredDownload = await filtered;
+  expect(filteredDownload.suggestedFilename()).toContain("-filtered");
   const filteredText = await readFile(
-    (await (await filtered).path()) as string,
+    (await filteredDownload.path()) as string,
     "utf8",
   );
   expect(filteredText).toContain("Del Papa,Modelo Especial");

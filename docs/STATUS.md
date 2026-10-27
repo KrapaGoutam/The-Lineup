@@ -7,7 +7,9 @@
 
 ---
 
-## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-6 merged, BI-7 PR open)
+## Bar Inventory V1 — IN BUILD (#168; BI-0 → BI-7 merged, BI-8a PR open)
+
+**BI-8a (CSV and XLSX exports of inventory, history, order recommendations and analytics, filters re-applied server-side, one formula guard for both formats) is code complete; PR into `development` pending CI.** BI-8 is split into 8a exports, 8b import engine, 8c import commit + migration, 8d XLSX import; report §BI-8a. Vitest 1136/1136; Playwright all Bar Inventory 118 (+2 skips). Next: BI-8b.
 
 **BI-7 (Analytics from the ledger: Confirmed Usage vs Observed Depletion, rates, restocks, cutoff hits, vendor demand, days to cutoff only with enough history, as a range) is code complete; PR into `development` pending CI.** Report §BI-7 lists the rules, four small interpretations to confirm, and what is deferred (the depletion-over-time chart, shrink and count-variance tables). Vitest 1103/1103; Playwright all Bar Inventory 100 (+2 skips). Next: BI-8 (CSV/XLSX import and export).
 

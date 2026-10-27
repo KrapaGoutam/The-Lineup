@@ -3,13 +3,13 @@
 ## Current State & Next Step
 
 **Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-7 (Analytics) — code complete, gated, in PR.
+**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-8a (exports) — code complete, gated, in PR. BI-8 is split: 8a exports · 8b import engine · 8c import commit + migration · 8d XLSX import.
 
-**Branch:** `feature/bar-inventory-bi7-analytics` · **Base development:** `0e39e0f` (BI-6 merge, PR #177, head `9563938`, CI green)
-**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-7 PR into `development` (find with `gh pr list --head feature/bar-inventory-bi7-analytics`)
+**Branch:** `feature/bar-inventory-bi8-import-export` · **Base development:** `450aeaf` (BI-7 merge, PR #178, head `4b74663`, CI green)
+**Issue:** #168 (open) · **Project #4:** Bar Inventory item (do not duplicate) · **PR:** BI-8a PR into `development` (find with `gh pr list --head feature/bar-inventory-bi8-import-export`)
 
-**Exact next action:** wait for exact-head CI on the BI-7 PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi8-import-export origin/development` and build BI-8 per `IMPORT_EXPORT_SPEC.md`: Upload → Parse → Validate → Preview → Match → Diff → Confirm → Import; CREATE/UPDATE/SKIP/ERROR rows; blank = unchanged, 0 = zero; vendors/categories matched or proposed (never created before confirm); SKU else vendor+name+size+unit matching; import writes ledger rows and an import batch (needs a migration: `inventory_import_batches` + FK from `inventory_adjustments.import_batch_id`, DEV only); XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` server-side behind a bounded zip guard, multi-sheet picker; extend `src/lib/csv/write.ts` for exports (inventory all/filtered, history, recommendations incl. one-sheet-per-vendor XLSX, analytics) with the server re-applying filters. Never continue BI-8 on the BI-7 branch.
-**Exact next command:** `gh pr checks <BI-7 PR number> --watch`
+**Exact next action:** wait for exact-head CI on the BI-8a PR (application, browser-smoke); if green, merge with a **merge commit**; then `git fetch origin && git switch -c feature/bar-inventory-bi8b-import-engine origin/development` and build **BI-8b**, the PURE import engine (no DB, no UI) per `IMPORT_EXPORT_SPEC.md` §2-§6: an RFC 4180 CSV parser in `src/lib/csv/read.ts` (quoted fields, doubled quotes, embedded newlines, UTF-8/UTF-16 BOM, delimiter sniff `,` `;` tab, caps 5 MB / 5,000 rows / 40 columns / 200-char cells), header alias mapping (`Qty`→On Hand, `Cut off`/`Min`→Cutoff Limit, `Par`/`Target`→Par Level, `Item`/`Product`→Name, `Item Code`/`UPC`→SKU …), row validation (blank = unchanged, 0 = zero, ≤ 2 decimals, thousand separators rejected, Cutoff ≤ Warning, Par < Cutoff warning), vendor/category/subcategory matching or proposing (NEW VENDOR / NEW CATEGORY, never created before confirm), product matching (SKU first, else vendor+name+size+unit, never name alone), in-file duplicates, and the CREATE / UPDATE / SKIP / ERROR plan with Current / Imported / Delta, all against the existing `keys.ts` normalizers. Then 8c (migration `inventory_import_batches` + FK from `inventory_adjustments.import_batch_id`, stage + atomic commit RPC writing `bulk_import` ledger rows, pgTAP, server actions, Preview / Confirm UI, batch history, the export change-log entry), then 8d (XLSX read behind the bounded zip guard, sheet picker). Never continue the next slice on this branch.
+**Exact next command:** `gh pr checks <BI-8a PR number> --watch`
 
 Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
 
@@ -26,8 +26,8 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 - [x] **BI-4** Dashboard — merged (PR #175, `ee573c0`)
 - [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
 - [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
-- [x] **BI-7** Analytics from the ledger (`domain/analytics.ts`, Analytics view from the Dashboard, Dashboard top-5 lists, deterministic back-dated demo history; fixed two latent table-kit / loader identity bugs) — **PR open, awaiting CI/merge** (report §BI-7; chart and shrink/variance tables deferred)
-- [ ] **BI-8** CSV/XLSX import & export
+- [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
+- [ ] **BI-8** CSV/XLSX import & export — **8a exports: PR open** (report §BI-8a; `write-excel-file@4.1.1` + `read-excel-file@9.3.12` installed, exact pins) · 8b import engine · 8c import commit + migration · 8d XLSX import
 - [ ] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch
 - [ ] **BI-10** hosted DEV validation
 - [ ] **BI-11** final integration gate (full suite once; **not** a Production release)
@@ -36,13 +36,13 @@ Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only ·
 
 Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
 
-## BI-7 evidence (earlier phases: see the report)
+## BI-8a evidence (earlier phases: see the report)
 
 ```
-Unit:     Vitest 1103/1103 (90 files); analytics 49, demo analytics 7
-DB:       no migration in BI-3..7
-Browser:  Analytics 21 pass (3 projects); all Bar Inventory specs 100 pass + 2 intentional phone skips
-Hosted:   none yet; the real-mode History / Analytics read is exercised in BI-10
+Unit:     Vitest 1136/1136 (93 files); exports 17, export document 12, xlsx round trip 4
+DB:       no migration in BI-3..8a
+Browser:  all Bar Inventory specs 118 pass + 2 intentional phone skips; cold-cache CI-like run 19 pass, 0 use-server errors
+Hosted:   none yet; real-mode History / Analytics / export reads are exercised in BI-10
 Static:   lint · typecheck · prettier --check PASS
 CI:       pending on the PR head
 ```
@@ -52,9 +52,9 @@ CI:       pending on the PR head
 ## Safety ledger
 
 ```
-development merged: YES for BI-0..6 (#171 #172 #173 #174 #175 #176 #177); BI-7 PR open
+development merged: YES for BI-0..7 (#171 #172 #173 #174 #175 #176 #177 #178)
 main merged: NO
-DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..7 added no migration)
+DEV touched: YES (BI-1/BI-2 migrations; hosted suites use synthetic orgs; BI-3..8a added no migration)
 PROD touched: NO
 PROD migrations: NO
 ```

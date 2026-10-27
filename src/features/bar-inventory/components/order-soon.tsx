@@ -1,10 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
-import { useCallback, useId, useMemo, useRef, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { downloadTextFile } from "@/lib/download-file";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 
 import type { InventoryRow } from "../domain/inventory-rows";
 import {
@@ -12,21 +9,17 @@ import {
   ORDER_SOON_COLUMNS,
   type VendorGroup,
 } from "../domain/order-soon";
-import {
-  EMPTY_TABLE_STATE,
-  serializeTableState,
-  type TableState,
-} from "../domain/table-filters";
 import { formatQuantity } from "./editable-cell";
+import {
+  ExportControl,
+  useVisibleInfo,
+  type RunExport,
+} from "./export-control";
 import {
   FilterableTable,
   type TableColumn,
 } from "./table-kit/filterable-table";
 import { StatusBadge } from "./table-kit/status-badge";
-
-export type RecommendationsOutcome =
-  | { ok: true; filename: string; csv: string }
-  | { ok: false; error: string };
 
 /** Few vendors: show everything open. Many: start collapsed. */
 const OPEN_BY_DEFAULT_UP_TO = 5;
@@ -147,72 +140,36 @@ export function OrderSoon({
   rows,
   restaurantSlug,
   timeZone,
-  onExport,
+  runExport,
 }: {
   /** Critical and Low items, most urgent first. */
   rows: InventoryRow[];
   restaurantSlug: string;
   timeZone: string;
-  onExport: (filters: string) => Promise<RecommendationsOutcome>;
+  runExport: RunExport;
 }) {
-  const stateRef = useRef<TableState>(EMPTY_TABLE_STATE);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const remember = useCallback(
-    (_visible: InventoryRow[], state: TableState) => {
-      stateRef.current = state;
-    },
-    [],
-  );
-
-  async function exportNow() {
-    setBusy(true);
-    setError(null);
-    try {
-      const outcome = await onExport(
-        serializeTableState(stateRef.current).toString(),
-      );
-      if (outcome.ok) downloadTextFile(outcome.filename, outcome.csv);
-      else setError(outcome.error);
-    } catch {
-      setError("That didn't work. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const [info, onVisibleRows] = useVisibleInfo<InventoryRow>();
   return (
-    <div className="flex flex-col gap-2">
-      {error ? (
-        <p
-          role="alert"
-          className="border-destructive/30 bg-destructive/15 text-destructive rounded-lg border px-3 py-2 text-sm"
-        >
-          {error}
-        </p>
-      ) : null}
-      <FilterableTable<InventoryRow>
-        tableKey="dash"
-        restaurantSlug={restaurantSlug}
-        label="Order soon"
-        rows={rows}
-        columns={COLUMNS}
-        getRowId={(row) => row.productId}
-        timeZone={timeZone}
-        emptyMessage="Nothing needs ordering right now."
-        onVisibleRows={remember}
-        renderGroups={(visible) => <VendorGroups rows={visible} />}
-        toolbarExtras={
-          <Button
-            variant="secondary"
-            onClick={() => void exportNow()}
-            disabled={busy || rows.length === 0}
-          >
-            <Download aria-hidden="true" />
-            {busy ? "Exporting…" : "Export recommendations"}
-          </Button>
-        }
-      />
-    </div>
+    <FilterableTable<InventoryRow>
+      tableKey="dash"
+      restaurantSlug={restaurantSlug}
+      label="Order soon"
+      rows={rows}
+      columns={COLUMNS}
+      getRowId={(row) => row.productId}
+      timeZone={timeZone}
+      emptyMessage="Nothing needs ordering right now."
+      onVisibleRows={onVisibleRows}
+      renderGroups={(visible) => <VendorGroups rows={visible} />}
+      toolbarExtras={
+        <ExportControl
+          label="Export recommendations"
+          info={info}
+          build={(filters) => ({ kind: "recommendations", filters })}
+          run={runExport}
+          disabled={rows.length === 0}
+        />
+      }
+    />
   );
 }

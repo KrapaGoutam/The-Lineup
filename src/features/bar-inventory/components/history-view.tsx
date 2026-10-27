@@ -21,6 +21,11 @@ import {
 import type { CatalogSnapshot, HistoryEntry } from "../domain/inventory-types";
 import { formatQuantity } from "./editable-cell";
 import {
+  ExportControl,
+  useVisibleInfo,
+  type RunExport,
+} from "./export-control";
+import {
   FilterableTable,
   type TableColumn,
 } from "./table-kit/filterable-table";
@@ -82,13 +87,16 @@ export function HistoryView({
   timeZone,
   load,
   onBack,
+  runExport,
 }: {
   snapshot: CatalogSnapshot;
   restaurantSlug: string;
   timeZone: string;
   load: LoadHistory;
   onBack: () => void;
+  runExport: RunExport;
 }) {
+  const [exportInfo, onVisibleRows] = useVisibleInfo<HistoryRow>();
   const [days, setDays] = useState(30);
   const [loaded, setLoaded] = useState<{
     days: number;
@@ -226,6 +234,12 @@ export function HistoryView({
               </option>
             ))}
           </Select>
+          <ExportControl
+            label="Export history"
+            info={exportInfo}
+            build={(filters) => ({ kind: "history", filters, days })}
+            run={runExport}
+          />
           <Button variant="ghost" onClick={onBack}>
             Back
           </Button>
@@ -275,6 +289,7 @@ export function HistoryView({
             timeZone={timeZone}
             defaultSort={HISTORY_DEFAULT_SORT}
             sortPresets={HISTORY_SORT_PRESETS}
+            onVisibleRows={onVisibleRows}
             emptyMessage="No count changes in this range yet."
             renderCard={(row) => (
               <article
