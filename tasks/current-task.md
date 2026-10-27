@@ -1,107 +1,213 @@
 # Current Task Handoff
 
-**Cycle:** post-release development on `development` (PROD release of 2026-10-26 is done). Owner sequence (2026-10-27): Tasks plan → **Bar Inventory — Vendor Order Drafts V1** (VOD-0 → VOD-4) → **Tasks V1.1** (T-1 → T-6) → final `development` integration gate → STOP before `main`/PROD. Tips V2 (#155) is NOT part of this task.
-**Feature:** Bar Inventory — Vendor Order Drafts V1 (NEW enhancement; Bar Inventory V1 #168 stays COMPLETE, do not reopen it and do not rerun BI-11)
-**Phase:** **VOD-0 DONE and merged** (PR #191, head `dda7754`, merge `3d170bd`). **Next: VOD-1 (database/domain foundation)**, not started.
+## Current cycle
 
-## Current State & Next Step
+Vendor Order Drafts V1
 
-**Base development:** `3d170bd` · **Issue:** #190 (labels type:feature, priority:p2, module:bar-inventory; milestone Future Product Backlog) · **Project #4:** #190 added (Status Planned / Priority P2 / Phase Plan / Version Future / Work Type Feature; the Module field has no Bar Inventory option, same as #168)
+## Current phase
 
-**Completed**
+VOD-1 — database/domain foundation
 
-- #188 (next 16.4.3, zod 4.6.7) MERGED earlier: head `f7e794b`, merge `0699498`, CI green on that head. Stray `AGENTS.md` heading edit restored.
-- Tasks V1.1 plan PR #189 MERGED (head `31b23a9`, merge `126c72d`); locks the four owner decisions: `?tab=` addressing (kebab-case, `/r/[slug]?tab=`, invalid → Tasks), Opening/Closing operational notifications kept, Opening reminders for management **plus staff authorized to work the incomplete Opening items (own scope only)**, every non-cancelled Opening item required (future `required` flag in backlog).
-- **VOD-0 MERGED** (PR #191, head `dda7754` = CI-tested SHA, merge `3d170bd`): `docs/features/bar-inventory-vendor-order-drafts-v1/{PLAN,ACCEPTANCE_CRITERIA,TEST_MATRIX}.md`, roadmap row 3, STATUS section, backlog row, issue #190 on Project #4.
+## Git and tracking
 
-**Not started:** VOD-1 … VOD-4, Tasks T-1 … T-6 (T-1 has unmerged uncommitted work in another session, see warning below), final development gate.
+- Branch: `feature/bar-order-drafts-v1-foundation`
+- HEAD before this handoff-only follow-up: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
+- Green implementation commit: `b39866daaaa2b810b1b331d70484fcb22dd9b8ea`
+- Base `development` HEAD: `fe69c1391902ef7dee1a62f7f0931846af341e28`
+- Base verification: `origin/development` is an ancestor of the feature branch; merge base is `fe69c13`
+- Issue: #190
+- PR: #193 — open against `development`
+- Project: #4 — Status `In Progress`, Phase `Implementation`, Priority `P2`, Version `Future`, Work Type `Feature`
+- Milestone: Future Product Backlog
 
-**Exact next action (VOD-1):** from fresh `origin/development` create `feature/bar-order-drafts-v1-foundation` in a working tree you own (see the shared-tree warning). Read `PLAN.md` §3–§4 and `TEST_MATRIX.md` (VOD-001…VOD-092). Order: migration `2026102…_bar_inventory_order_drafts.sql` (two tables, partial unique index, immutability triggers, RLS, six `inventory_order_draft_*` RPCs, deferrable actor FKs) → pgTAP `0039_bar_inventory_order_drafts.test.sql` red → pure `domain/order-draft.ts` + vectors → minimal data/actions only as the contract needs. No UI. Then PR (database workflow must run: `supabase/**` changes), exact-head CI, MERGE COMMIT, handoff, STOP.
-**Exact next command:** `git fetch origin && git worktree add <short-path> -b feature/bar-order-drafts-v1-foundation origin/development` (or, once `the-lineup-24` is finished, `git switch -c feature/bar-order-drafts-v1-foundation origin/development` in the main tree).
+## Completed
 
-**Key VOD decisions (full text in `PLAN.md` §3):** tab "Order Drafts" between Inventory and Manage (History/Analytics stay sub-views) · tables `inventory_order_drafts` + `inventory_order_draft_items`, one `DRAFT` per org+location+vendor via a partial unique index, `DRAFT`/`SENT` only · suggestion snapshot + frozen labels at send · six RPCs (open, save, fill, clear, sync, mark_sent), draft-level `version` + `PT409` · Mark Sent never references `inventory_stock`/`inventory_adjustments` (body-scan pgTAP + before/after equality test) · export = new `order_draft` request kind through `exportDataAction`/`ExportDocument` (request carries only a draft id) · system "Unassigned" vendor gets no draft · no Realtime in V1. D-VOD-9 (Unassigned) and D-VOD-12 (export includes the Suggested column) are open to owner veto and do not block VOD-1.
+- [x] Read the continuation request and repository `AGENTS.md`.
+- [x] Read the VOD-0 `PLAN.md`, `ACCEPTANCE_CRITERIA.md`, and `TEST_MATRIX.md`.
+- [x] Read `docs/STATUS.md`, `docs/PRD.md`, `docs/ARCHITECTURE.md`, and `docs/DATA_MODEL.md`.
+- [x] Read the restaurant feature, Supabase, and Supabase Postgres best-practice skills and relevant schema/RLS/concurrency references.
+- [x] Checked current Git state on the parked Tasks branch: clean at `03d5d45519b66e546141cb72473cbde268ef2125`.
+- [x] Fetched all remotes with prune.
+- [x] Confirmed `origin/development` contains the handoff merge and is exactly `fe69c1391902ef7dee1a62f7f0931846af341e28`.
+- [x] Created `feature/bar-order-drafts-v1-foundation` directly from fresh `origin/development`.
+- [x] Confirmed the parked Tasks local and remote refs still point to `03d5d45519b66e546141cb72473cbde268ef2125`.
 
-**Key VOD decisions (full text in `PLAN.md` §3):** tab "Order Drafts" between Inventory and Manage (History/Analytics stay sub-views — the repo has no such tabs) · tables `inventory_order_drafts` + `inventory_order_draft_items`, one `DRAFT` per org+location+vendor via a partial unique index, `DRAFT`/`SENT` only · suggestion snapshot + frozen labels at send · six RPCs (open, save, fill, clear, sync, mark_sent), draft-level `version` + `PT409` · Mark Sent never references `inventory_stock`/`inventory_adjustments` (body-scan pgTAP + before/after equality test) · export = new `order_draft` request kind through `exportDataAction`/`ExportDocument` (request carries only a draft id) · system "Unassigned" vendor gets no draft · no Realtime in V1. Planner decisions D-VOD-9 (Unassigned) and D-VOD-12 (export includes the Suggested column) are open to owner veto and do not block VOD-1.
+## In progress
 
-**Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. `tasks_can_view` lets any member view Opening/Closing items but only managers, assignees and `all_team`/`anyone` can work them (`tasks_can_work`), which is the staff reminder eligibility rule. Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load; reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
+- [x] Inspect targeted Bar Inventory migration, authorization, RPC, RLS, pgTAP, and pure-domain conventions.
+- [x] Finalize the smallest VOD-1 schema/RPC/domain contract that exactly implements the approved VOD-0 plan.
+- [x] Replay the new migration locally and make the focused pgTAP contract green.
+- [x] Implement and test the pure TypeScript domain core.
+- [x] Run targeted format, lint, typecheck, unit, and focused database checks.
+- [x] Run the full database and unit-test gates.
+- [x] Run full `npm run check` and `npm run build`.
 
-**Tests:** none run for VOD-0 (docs only; `prettier --check` passed). Last known green: Vitest 1406/1406, Playwright desktop 241 / host-tablet 241 / server-mobile 239 (+2 skips), pgTAP 38 files (from #188 / BI-11).
-**CI:** #188, #189 and #191 exact-head green (`application` + `browser-smoke`; database workflow path-gated, correctly absent). **Hosted DEV:** untouched.
-**Uncommitted files:** none on this docs branch. **Running background processes:** none from this session.
-**SHARED WORKING TREE WARNING:** another Claude session (`the-lineup-24`) works in `C:UserskrapaDocumentsProjectsRestaurentThe Lineup` on `feature/tasks-v1-1-default-landing` with UNCOMMITTED Tasks T-1 code (`src/lib/app-tab*.ts`, `restaurant-operations-app.tsx`, e2e specs, `tasks-v1-1/IMPLEMENTATION_REPORT.md`) and a Playwright run on :3000. It started T-1 from the pre-merge handoff, against the owner order (VOD before Tasks code). It agreed to push that branch WITHOUT a PR or merge until VOD-4 is done. Do not switch branches, start a dev server, or run Playwright in that tree until it says it is finished; do not discard its files. Use a short-path git worktree (long design-export paths break checkout under the scratchpad) or wait for it. `AGENTS.md` carries a stray npm-install heading edit in that tree: never stage it.
+## Not started
 
-```
-development merged: YES (#189 = 126c72d)
-main merged: NO
-DEV touched: YES earlier in Bar Inventory (BI-1/2/8c/9 migrations); NOT this session
-PROD touched: NO
-PROD migrations: NO
-```
+- [x] Author meaningful VOD-1 pgTAP contracts first.
+- [x] Create the additive VOD-1 migration.
+- [x] Implement the pure `order-draft.ts` domain core and unit vectors.
+- [x] Regenerate Supabase database types from the fully replayed local schema.
+- [x] Run targeted and required repository validation.
+- [x] Complete the independent security/tenant-isolation review; all ten findings are resolved and covered by the focused contract.
+- [x] Complete the final accidental-file and scope audit; `AGENTS.md`, package files, environment files, and the parked Tasks refs are unchanged.
+- [x] Commit and push the VOD-1 foundation, open PR #193 to `development`, and update issue/project/milestone tracking.
+- [ ] Monitor exact-head CI and resolve any failure before merge.
+- [ ] Merge with a merge commit only after exact-head application and database CI are green.
+- [ ] Synchronize development, local docs, GitHub tracking, and this handoff; stop before VOD-2.
 
-Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
+## Locked product decisions
 
-## Rules for every phase
+- Suggested quantity is a read-only snapshot and is never overwritten by `order_qty`.
+- `order_qty` is manager-entered `numeric(12,2)`; blank is undecided and zero is valid but omitted from vendor-facing output.
+- Drafts support item notes, a vendor note, and included/excluded lines.
+- At most one `DRAFT` exists per organization + location + vendor, enforced by a partial unique index.
+- V1 statuses are only `draft` and `sent`.
+- The stable system `Unassigned` vendor cannot have a draft.
+- Owner, Manager, and Assistant Manager are allowed; Staff is denied at the database boundary.
+- Mark Sent records an external send, freezes history, and never mutates stock or the adjustment ledger.
+- SENT drafts and items are immutable except tenant-teardown cascades.
+- No UI, export, clipboard, messaging, hosted-DEV product-data mutation, or VOD-2 work belongs in this phase.
 
-`feature/*` · `fix/*` · `docs/*` branch → targeted validation → PR → exact-head CI → **merge commit** → `development`. Never commit to `development`/`main`. **No `development → main`** in this task. Migrations DEV only; PROD never touched. `git add` explicit paths only (never `-A`; `docs/testing/` and `*.code-workspace` stay untracked). Do not mix Bar Inventory and Tasks code on one branch. Tips V2 is NOT implemented here. A commit after CI invalidates that CI evidence.
+## Architecture decisions
 
-## Bar Inventory phases
+- Two tables: `inventory_order_drafts` and `inventory_order_draft_items`.
+- RPC-authoritative writes; authenticated clients receive SELECT only under RLS.
+- Six planned RPCs: `inventory_order_draft_open`, `inventory_order_draft_save`, `inventory_order_draft_fill`, `inventory_order_draft_clear`, `inventory_order_draft_sync`, `inventory_order_draft_mark_sent`.
+- Every mutation uses draft-level optimistic concurrency and `PT409` stale details; a true no-op does not bump the version.
+- `open` is retry-safe and race-safe through the database uniqueness invariant.
+- Privileged functions use an empty `search_path`, schema-qualified objects, verified session identity, and existing membership/location authorization helpers.
+- Pure TypeScript owns deterministic fill/clear/totals/editability rules; SQL and TypeScript share vectors where appropriate.
 
-- [x] **BI-0** decisions, XLSX review, vectors, `TEST_MATRIX.md` — merged (PR #171)
-- [x] **BI-1** org-level catalog, 13 RPCs, Manage UI — merged (PR #172)
-- [x] **BI-2** stock, immutable ledger, status view — merged (PR #173, `d216290`)
-- [x] **BI-3** `FilterableTable` kit, filter engine, Inventory view, Manage filters — merged (PR #174, `4a5ed19`)
-- [x] **BI-4** Dashboard — merged (PR #175, `ee573c0`)
-- [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
-- [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
-- [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
-- [x] **BI-8** CSV/XLSX import & export — 8a exports MERGED (PR #179) · 8b import engine MERGED (PR #180) · 8c-1 database MERGED (PR #182) · 8c-2 application MERGED (PR #183, `c3ccbcc`) · **8d XLSX import: PR open** (report §BI-8d; hosted DEV UI 5/5)
-- [x] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch — **PR open** (report §BI-9; migration `20261027130000` on DEV; hosted DEV UI 6/6 + 11/11 on a production build)
-- [x] **BI-10** hosted DEV validation — **GO**, PR open (`DEV_VALIDATION.md`; hosted DB 38/38, hosted UI on a DEV-pinned production build 23/23)
-- [x] **BI-11** final integration gate — **PR open** (`FINAL_GATE.md`; NOT a release; `main` and PROD untouched)
+## Schema
 
-## Tasks V1.1 phases (after Bar Inventory)
+Created in the VOD-1 migration: `inventory_order_drafts` and `inventory_order_draft_items`, with composite tenant/location foreign keys, partial active-draft uniqueness, snapshot fields, draft-level versioning, Sent consistency, and immutable Sent history triggers.
 
-Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined in `docs/features/tasks-v1-1/PLAN.md` (T-0 merged, PR #189). T-1 → T-6 not started; they wait for Vendor Order Drafts V1 (VOD-4).
+## Migrations
 
-## BI-11 evidence (full report: `docs/features/bar-inventory-v1/FINAL_GATE.md`)
+Created and replayed successfully from a clean local database: `supabase/migrations/20261027195142_bar_inventory_order_drafts.sql`.
 
-```
-Unit:     Vitest 1406/1406 (104 files)
-DB:       pgTAP 38 files pass (no migration in BI-11); hosted DB suites 42/42 incl. ledger paging past the 1,000-row API cap
-Browser:  full Playwright cold-cache CI=1: desktop 241, tablet 241, phone 239 + 2 skips; 0 use-server errors
-Hosted:   production build pinned to DEV (PROD ref in 0 files): UI 24/24 (incl. History + export past 1,000 rows); no leftovers, 26 V2 Harness orgs unchanged
-Static:   lint · typecheck · prettier --check PASS
-CI:       pending on the PR head
-```
+The migration was created with `supabase migration new bar_inventory_order_drafts`, not by inventing a timestamp. It has not been applied to hosted DEV or PROD.
 
-**WebKit (Windows):** the BI-3 full run wedged once at default parallelism; not reproduced (report §BI-3). Run Playwright per project with `--workers=2 --global-timeout=…`.
+## RPCs
+
+Implemented and focused-pgTAP verified: `inventory_order_draft_open`, `inventory_order_draft_save`, `inventory_order_draft_fill`, `inventory_order_draft_clear`, `inventory_order_draft_sync`, and `inventory_order_draft_mark_sent`. All six use the existing `private.inventory_begin` authorization seam, lock the exact organization/location draft, derive actors from `auth.uid()`, and pin an empty `search_path`.
+
+## RLS/security
+
+- Implemented: RLS enabled on both public tables; revoke all from `public`, `anon`, and `authenticated`; grant SELECT to `authenticated`; explicit tenant/location management policies; no direct client writes.
+- Authorization source: authenticated identity plus live membership/location rows only. No user-editable metadata.
+- Current Supabase guidance reviewed on 2026-10-27: explicit grants are required for newly created tables; `SECURITY DEFINER` functions must pin an empty `search_path` and narrow EXECUTE privileges.
+
+## Concurrency
+
+Implemented draft-level `version` starting at 1. Every mutation takes `p_expected_version`; stale writes raise `PT409` with the existing repository detail shape and apply nothing. The partial active-draft unique index and retry-safe open RPC enforce one open draft per organization/location/vendor. The focused pgTAP contract dispatches simultaneous opens through two independent password-authenticated Postgres backends and proves both callers receive the same non-null draft while exactly one active row persists.
+
+## DEV migration/schema state
+
+- DEV touched in VOD-1: NO.
+- VOD-1 migration applied to the disposable local test database only. It has not been applied to hosted DEV or PROD.
+- Hosted DEV product data has not been changed.
+
+## Tests
+
+- pgTAP: `0039_bar_inventory_order_drafts.test.sql` written first. Pre-migration run RED as required. Full local migration replay PASS three times (including after security-review hardening). Focused VOD pgTAP PASS, 88/88. Full database suite PASS, 39 files / 1121 assertions.
+- Unit: focused `order-draft.test.ts` PASS, 18/18. Full Vitest PASS, 105 files / 1424 tests.
+- Lint: affected TypeScript files PASS.
+- Format: affected formatted files PASS. SQL is validated by migration replay/pgTAP; this repository has no SQL Prettier parser.
+- Typecheck: full `next typegen && tsc --noEmit` PASS.
+- Repository check: full `npm run check` PASS (format, ESLint, Next type generation, TypeScript).
+- Build: full `npm run build` PASS (Next.js 16.4.3; all 13 pages generated).
+- Database lint: `supabase db lint --local --level error --fail-on error` PASS.
+- Migration history: local and remote-history columns both contain `20261027195142` in the disposable local stack.
+- Playwright: not run because VOD-1 has no UI, Route Handler, or Server Action changes.
+- CI: PR #193 application, browser-smoke, database, and Vercel checks started on implementation commit `b39866d`; the handoff follow-up will intentionally supersede that head before exact-head approval.
+- Last inherited green evidence: dependency PR #188 — Vitest 1406/1406; Playwright desktop 241, host-tablet 241, server-mobile 239 + 2 intentional skips.
+
+## GitHub checks
+
+PR #193 is open against `development`. Initial application, browser-smoke, database, and Vercel checks are running; merge is forbidden until every required check is green on the final remote/PR head and all four SHA checks agree.
+
+## Known issues
+
+- `docs/STATUS.md` and the old handoff contain stale historical status prose; update only the VOD-1 sections in this phase.
+- The local sandbox cannot write `.git` without command approval; `git fetch` required the approved elevated command path.
+- The Supabase changelog notes that new public tables stop being automatically exposed to Data/GraphQL APIs on 2026-10-30; VOD-1 will use explicit grants regardless.
+
+## Uncommitted files
+
+- `tasks/current-task.md` — PR/tracking/CI handoff follow-up only.
+
+## Running processes/background jobs
+
+Local Docker Desktop and the repository Supabase stack were started for pgTAP. No app/dev/Playwright process was started.
+
+## Docs updated
+
+- `tasks/current-task.md` updated at VOD-1 start and branch creation.
+- `docs/features/bar-inventory-vendor-order-drafts-v1/PLAN.md` records VOD-1 implemented and VOD-2 next.
+- `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md` records the VOD-1 schema, RPC, security, domain, inventory-isolation, evidence, and deferrals.
+- `docs/STATUS.md`, `docs/ROADMAP.md`, and `tasks/backlog.md` are synchronized to VOD-1 implemented / VOD-2 next without starting VOD-2.
+
+## Roadmap status
+
+- VOD-0 COMPLETE.
+- VOD-1 IMPLEMENTED LOCALLY; PR/CI/MERGE IN PROGRESS.
+- VOD-2, VOD-3, VOD-4 NOT STARTED.
+- Tasks T-1 PARKED; T-2 through T-6 NOT STARTED.
+
+## Backlog status
+
+No new VOD-1 deferrals identified yet. Existing future procurement items remain out of scope.
+
+## Tasks T-1 PARKED
+
+Branch:
+`feature/tasks-v1-1-default-landing`
+
+Commit:
+`03d5d45`
+
+PR:
+none
+
+Merged:
+NO
+
+Do not resume until Vendor Order Drafts V1 reaches VOD-4 completion.
 
 ## Safety ledger
 
-```
-development merged: YES for BI-0..8d (#171-#184)
+```text
+development merged: NO (VOD-1)
 main merged: NO
-DEV touched: YES (BI-1/BI-2, BI-8c and BI-9 migrations — BI-9 added 20261027130000, publication membership only; hosted suites use synthetic orgs and tagged data)
+DEV touched: NO
 PROD touched: NO
 PROD migrations: NO
 ```
 
-## Known problems
+## Exact next command
 
-- **26 leaked synthetic "V2 Harness" orgs in DEV** — harmless; deletion NOT authorized by the owner. Do not delete; ask first if they ever invalidate a test.
-- Windows WebKit instability under default Playwright parallelism (above).
+```powershell
+git add tasks/current-task.md && git commit -m "docs(handoff): record VOD-1 PR state (#190)"
+```
 
-## GitHub
+## Exact next action
 
-#190 Vendor Order Drafts V1 (open, planned) · #168 Bar Inventory V1 (open) · #169 Tasks Today management visibility (open) · #154 Tasks notification narrowing (open) · #155 Tips V2 (open, untouched) · #111 deploy-migrations (open, blocked) · #113 migration/app sequencing (open) · #164 deferred Production checks (open).
+Commit and push the handoff-only follow-up, then verify local/remote/PR/check SHA equality and monitor exact-head CI.
 
-## Notes for the next agent
+## Read first
 
-- Uncommitted files / running processes: none after the BI-3 commit. Only unrelated `@playwright/mcp` and devtools node processes exist — do not kill them.
-- `docs/production-release-2026-10-26` holds an unmerged docs commit (`a4a8106`); do not assume its content is on `development`.
-- XLSX libraries are exact-pinned (`write-excel-file@4.1.1`, `read-excel-file@9.3.12`, `fflate@0.8.3`); do not add another spreadsheet library. The guard is `src/lib/xlsx/guard.ts`.
-- Shared vectors are the contract between SQL and TypeScript: never edit a vector to hide a mismatch.
-- Every table/list view must reuse the BI-3 `FilterableTable` + `table-filters.ts`; no ad hoc filter systems.
+1. `tasks/current-task.md`
+2. `docs/features/bar-inventory-vendor-order-drafts-v1/PLAN.md`
+3. `docs/features/bar-inventory-vendor-order-drafts-v1/ACCEPTANCE_CRITERIA.md`
+4. `docs/features/bar-inventory-vendor-order-drafts-v1/TEST_MATRIX.md`
 
-**Read first:** this file · `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md` §BI-3 · `IMPLEMENTATION_PLAN.md` · `UI_UX_PLAN.md`.
-**DO NOT:** merge to `main`, touch PROD, delete the synthetic DEV orgs, start Tips V2, squash/rebase-merge, or merge on red/stale CI.
+## DO NOT
+
+- Do not touch `main`, PROD, or the parked Tasks branch.
+- Do not start VOD-2, create a VOD-2 branch, or implement UI/export/sharing.
+- Do not delete or modify hosted DEV product data, including V2 Harness organizations.
+- Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
+- Do not merge on stale, partial, or red CI.
+- Do not include an unrelated `AGENTS.md` heading change.
