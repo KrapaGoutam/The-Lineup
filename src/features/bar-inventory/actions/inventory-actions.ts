@@ -394,8 +394,8 @@ export type HistoryActionResult =
   | { ok: true; entries: HistoryEntry[]; truncated: boolean }
   | { ok: false; error: string; sessionInvalid?: true };
 
-/** How far back the History view may read (days; 0 = everything, up to the row limit). */
-export const HISTORY_RANGES = [30, 90, 365, 0] as const;
+/** How far back the History view may read (days; 0 = everything, up to the row limit). Not exported: a "use server" file may only export async functions. */
+const HISTORY_RANGES = [30, 90, 365, 0] as const;
 
 const MS_PER_DAY = 86_400_000;
 
