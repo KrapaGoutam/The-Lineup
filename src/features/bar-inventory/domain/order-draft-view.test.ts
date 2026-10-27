@@ -46,6 +46,8 @@ const draft = (
   version: 3,
   updatedAt: "2026-10-27T15:10:00Z",
   updatedByName: "Mia",
+  sentAt: null,
+  sentByName: null,
   lines,
   ...over,
 });

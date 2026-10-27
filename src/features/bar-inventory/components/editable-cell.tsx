@@ -10,6 +10,7 @@ import type { CatalogConflict } from "../domain/inventory-types";
 import {
   ADJUSTMENT_REASONS,
   ADJUSTMENT_REASON_LABELS,
+  formatQuantity,
   toCents,
   type AdjustmentReason,
 } from "../domain/stock-rules";
@@ -22,8 +23,7 @@ export type CellSave = (
   { ok: true } | { ok: false; error: string; conflict?: CatalogConflict }
 >;
 
-export const formatQuantity = (value: number | null) =>
-  value === null ? "—" : String(value);
+export { formatQuantity };
 
 type Phase = "idle" | "edit" | "reason" | "saving";
 type Stale = Extract<CatalogConflict, { kind: "stale" }>;

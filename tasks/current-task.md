@@ -6,7 +6,16 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-2 — Vendor Order Drafts UI + Editing — COMPLETE (merged). VOD-3 NEXT / NOT STARTED.
+VOD-3 — Sharing / Export / Mark Sent / Sent History — IN PROGRESS. VOD-2 COMPLETE. VOD-4 NOT STARTED.
+
+- Base development: `75d6ae35cfdfda1ba53d4994b067e12b241c9291`
+- Branch: `feature/bar-order-drafts-v1-sharing-history` (PR: not yet opened)
+- Copy Order + clipboard fallback: implemented (`domain/order-draft-share.ts`, `components/order-draft-share.tsx`)
+- Export (CSV/XLSX): implemented via existing `ExportRequest` kind `order_draft` (draftId only), `exportDataAction`
+- Mark Sent: implemented (`markOrderDraftSentAction`, demo twin `markSentDemo`, dialog in editor)
+- Sent history + read-only detail + explicit paging (20/page, exact count): implemented (`components/order-draft-sent.tsx`, `data/order-draft-data.ts`)
+- Unit / component / action / data tests: written and passing locally; Playwright spec: NEXT
+- No migration. CI / PR / docs: not yet done
 
 ## Execution
 

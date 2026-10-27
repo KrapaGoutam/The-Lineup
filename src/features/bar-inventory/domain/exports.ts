@@ -26,6 +26,12 @@ import {
   INVENTORY_SORT_ONLY_COLUMNS,
 } from "./inventory-rows";
 import type { CatalogState, HistoryEntry } from "./inventory-types";
+import type { OrderDraftView } from "./order-draft-view";
+import {
+  orderDraftDocument,
+  vendorFileSlug,
+  withLiveLabels,
+} from "./order-draft-share";
 import { recommendationsDocument } from "./order-export";
 import { STATUS_LABEL } from "./stock-rules";
 import {
@@ -42,6 +48,8 @@ export type ExportRequest =
   | { kind: "inventory"; filters: string }
   | { kind: "history"; filters: string; days: number }
   | { kind: "recommendations"; filters: string }
+  /** One order draft, Draft or Sent. Only the id travels; the server loads the rows. */
+  | { kind: "order_draft"; draftId: string }
   | {
       kind: "analytics";
       filters: string;
@@ -59,6 +67,8 @@ export type ExportData = {
   >;
   /** Needed for history and analytics only. */
   entries: readonly HistoryEntry[];
+  /** Needed for `order_draft` only: the draft the request names, loaded by the caller's own access. */
+  orderDraft?: OrderDraftView | null;
 };
 
 export type ExportContext = { timeZone: string; now: Date; slug: string };
@@ -325,6 +335,25 @@ function analyticsDocument(
 }
 
 /**
+ * One order draft's file. The draft comes from the caller's own authorized
+ * read, never from the request, and must be the one the request names.
+ */
+function orderDraftExport(
+  draftId: string,
+  data: ExportData,
+  ctx: ExportContext,
+) {
+  const draft = data.orderDraft;
+  if (!draft || draft.id !== draftId) {
+    throw new Error("That order draft is not available.");
+  }
+  return {
+    ...orderDraftDocument(withLiveLabels(draft, data.catalog), ctx),
+    filtered: false,
+  };
+}
+
+/**
  * Builds the file for one export request, in one place for the browser (demo)
  * and the server action: the filters are re-applied here to rows the caller
  * is authorized to read, so a file always equals what the screen shows.
@@ -342,14 +371,20 @@ export function prepareExport(
         ? historyDocument(data, request.filters, request.days, ctx)
         : request.kind === "analytics"
           ? analyticsDocument(data, request, ctx)
-          : recommendationsDocument({
-              rows: buildInventoryRows(data.catalog),
-              filters: request.filters,
-              timeZone: ctx.timeZone,
-              now: ctx.now,
-            });
+          : request.kind === "order_draft"
+            ? orderDraftExport(request.draftId, data, ctx)
+            : recommendationsDocument({
+                rows: buildInventoryRows(data.catalog),
+                filters: request.filters,
+                timeZone: ctx.timeZone,
+                now: ctx.now,
+              });
   const what =
-    request.kind === "recommendations" ? "order-recommendations" : request.kind;
+    request.kind === "recommendations"
+      ? "order-recommendations"
+      : request.kind === "order_draft"
+        ? `order-${vendorFileSlug(data.orderDraft?.vendorName ?? "")}`
+        : request.kind;
   return {
     filename: exportFilename({
       slug: ctx.slug,

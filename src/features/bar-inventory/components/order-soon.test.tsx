@@ -25,6 +25,8 @@ const draft = (vendorName: string): OrderDraftView => ({
   version: 1,
   updatedAt: "2026-10-27T16:00:00Z",
   updatedByName: "Mia",
+  sentAt: null,
+  sentByName: null,
   lines: [],
 });
 

@@ -7,7 +7,11 @@ import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
-import { getActiveOrderDrafts } from "../data/order-draft-data";
+import {
+  getActiveOrderDrafts,
+  getOrderDraftById,
+  getSentOrderDraftsPage,
+} from "../data/order-draft-data";
 import { conflictFrom, type RpcError } from "../domain/db-conflict";
 import { friendlyDbMessage } from "../domain/db-error";
 import {
@@ -15,6 +19,7 @@ import {
   type CatalogConflict,
 } from "../domain/inventory-types";
 import { ORDER_DRAFT_FILL_MODES } from "../domain/order-draft";
+import type { SentDraftPage } from "../domain/order-draft-sent";
 import type { OrderDraftView } from "../domain/order-draft-view";
 
 /**
@@ -25,6 +30,12 @@ import type { OrderDraftView } from "../domain/order-draft-view";
  * only give staff and signed-out callers a plain refusal.
  */
 
+/** What Mark Sent reports: who sent the order, and when. */
+export type MarkSentFacts = {
+  sentByName: string | null;
+  sentAt: string | null;
+};
+
 export type OrderDraftActionResult =
   | {
       ok: true;
@@ -34,6 +45,8 @@ export type OrderDraftActionResult =
       draftId: string | null;
       /** False when the database found nothing to change (a true no-op). */
       changed: boolean;
+      /** Mark Sent only: the sent facts (for a retry, those of the first send). */
+      sent?: MarkSentFacts;
     }
   | {
       ok: false;
@@ -114,7 +127,7 @@ const isFailure = (
 async function finish(
   caller: Caller,
   failure: RpcError | null,
-  outcome: { draftId: string | null; changed: boolean },
+  outcome: { draftId: string | null; changed: boolean; sent?: MarkSentFacts },
 ): Promise<OrderDraftActionResult> {
   if (failure) {
     return {
@@ -296,4 +309,103 @@ export async function syncOrderDraftAction(input: {
     draftId: parsed.data.draftId,
     changed: changedFlag(data),
   });
+}
+
+const textOrNull = (value: unknown): string | null =>
+  typeof value === "string" && value !== "" ? value : null;
+
+/**
+ * Mark Sent: record that the manager sent or shared this order OUTSIDE the
+ * app. One RPC against the version the manager reviewed; a stale version is
+ * refused (`PT409`) so nobody sends an order they have not seen. It never
+ * touches inventory. Repeating it on an already-Sent draft changes nothing and
+ * returns the first send's facts.
+ */
+export async function markOrderDraftSentAction(input: {
+  restaurantSlug: string;
+  draftId: string;
+  expectedVersion: number;
+}): Promise<OrderDraftActionResult> {
+  const parsed = draftRef.safeParse(input);
+  if (!parsed.success) return BAD_REQUEST;
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (isFailure(caller)) return caller;
+
+  const { data, error } = await caller.supabase.rpc(
+    "inventory_order_draft_mark_sent",
+    {
+      p_organization_id: caller.organizationId,
+      p_location_id: caller.locationId,
+      p_draft_id: parsed.data.draftId,
+      p_expected_version: parsed.data.expectedVersion,
+    },
+  );
+  const facts =
+    typeof data === "object" && data !== null
+      ? (data as { sent_by?: unknown; sent_at?: unknown })
+      : {};
+  return finish(caller, error, {
+    draftId: parsed.data.draftId,
+    changed: changedFlag(data),
+    sent: {
+      sentByName: textOrNull(facts.sent_by),
+      sentAt: textOrNull(facts.sent_at),
+    },
+  });
+}
+
+export type SentOrdersResult =
+  | { ok: true; page: SentDraftPage }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/** One page of the Sent history, newest first. */
+export async function listSentOrderDraftsAction(input: {
+  restaurantSlug: string;
+  page: number;
+}): Promise<SentOrdersResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      page: z.number().int().min(0).max(100_000),
+    })
+    .safeParse(input);
+  if (!parsed.success) return BAD_REQUEST;
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (isFailure(caller)) return caller;
+
+  const page = await getSentOrderDraftsPage(
+    caller.organizationId,
+    caller.locationId,
+    parsed.data.page,
+  );
+  if (!page) return { ok: false, error: "Sent orders could not be loaded." };
+  return { ok: true, page };
+}
+
+export type SentOrderResult =
+  | { ok: true; draft: OrderDraftView }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/** One Sent order with its frozen lines, for the read-only view. */
+export async function getSentOrderDraftAction(input: {
+  restaurantSlug: string;
+  draftId: string;
+}): Promise<SentOrderResult> {
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, draftId: idSchema })
+    .safeParse(input);
+  if (!parsed.success) return BAD_REQUEST;
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (isFailure(caller)) return caller;
+
+  const { draft, failed } = await getOrderDraftById(
+    caller.organizationId,
+    caller.locationId,
+    parsed.data.draftId,
+  );
+  if (failed) return { ok: false, error: "That order could not be loaded." };
+  if (!draft || draft.status !== "sent") {
+    return { ok: false, error: "That sent order is not available." };
+  }
+  return { ok: true, draft };
 }

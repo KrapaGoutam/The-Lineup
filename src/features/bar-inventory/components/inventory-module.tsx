@@ -41,8 +41,14 @@ import {
 } from "../hooks/use-catalog-controller";
 import { useInventoryRealtime } from "../hooks/use-inventory-realtime";
 import { useOrderDrafts } from "../hooks/use-order-drafts";
+import { draftsOf } from "../domain/order-draft-demo";
+import {
+  hasPurchaseLines,
+  NOTHING_TO_SEND_MESSAGE,
+} from "../domain/order-draft-share";
 import {
   vendorDraftTargets,
+  type OrderDraftView,
   type VendorDraftTarget,
 } from "../domain/order-draft-view";
 import { AnalyticsView } from "./analytics-view";
@@ -268,9 +274,20 @@ function ManagerInventory({
       latest.current;
     if (demo) {
       if (!snapshot) return { ok: false, error: "Nothing to export yet." };
+      let orderDraft: OrderDraftView | null = null;
+      if (request.kind === "order_draft") {
+        orderDraft =
+          draftsOf(demo.state).find((d) => d.id === request.draftId) ?? null;
+        if (!orderDraft) {
+          return { ok: false, error: "That order draft is not available." };
+        }
+        if (!hasPurchaseLines(orderDraft.lines)) {
+          return { ok: false, error: NOTHING_TO_SEND_MESSAGE };
+        }
+      }
       const file = prepareExport(
         request,
-        { catalog: snapshot, entries: snapshot.ledger ?? [] },
+        { catalog: snapshot, entries: snapshot.ledger ?? [], orderDraft },
         { timeZone, now: new Date(), slug: restaurantSlug },
         format,
       );
@@ -551,6 +568,7 @@ function ManagerInventory({
             navigate={navigate}
             viewerName={user.name}
             timeZone={timeZone}
+            runExport={runExport}
           />
         ) : view === "inventory" ? (
           <InventoryView

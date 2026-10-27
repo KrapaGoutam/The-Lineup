@@ -12,10 +12,14 @@ import {
 import {
   clearOrderDraftAction,
   fillOrderDraftAction,
+  getSentOrderDraftAction,
   listOrderDraftsAction,
+  listSentOrderDraftsAction,
+  markOrderDraftSentAction,
   openOrderDraftAction,
   saveOrderDraftAction,
   syncOrderDraftAction,
+  type MarkSentFacts,
   type OrderDraftActionResult,
 } from "../actions/order-draft-actions";
 import type { CatalogContext } from "../domain/catalog-engine";
@@ -26,14 +30,17 @@ import type {
 } from "../domain/inventory-types";
 import type { OrderDraftFillMode } from "../domain/order-draft";
 import {
+  activeDraftsOf,
   clearDraftDemo,
   draftsOf,
   fillDraftDemo,
+  markSentDemo,
   openDraftDemo,
   saveDraftDemo,
   syncDraftDemo,
   type DraftEngineResult,
 } from "../domain/order-draft-demo";
+import { pageSentDrafts, type SentDraftPage } from "../domain/order-draft-sent";
 import type {
   OrderDraftSavePayload,
   OrderDraftView,
@@ -50,8 +57,18 @@ export type DraftOpResult =
       drafts: OrderDraftView[];
       draftId: string | null;
       changed: boolean;
+      /** Mark Sent only: who sent it and when (the first send's, on a retry). */
+      sent?: MarkSentFacts;
     }
   | { ok: false; error: string; conflict?: CatalogConflict };
+
+export type SentListResult =
+  | { ok: true; page: SentDraftPage }
+  | { ok: false; error: string };
+
+export type SentOrderResult =
+  | { ok: true; draft: OrderDraftView }
+  | { ok: false; error: string };
 
 /** Every way the screens change a draft. One identity for the whole session. */
 export type OrderDraftApi = {
@@ -66,6 +83,18 @@ export type OrderDraftApi = {
   ) => Promise<DraftOpResult>;
   clear: (draftId: string, expectedVersion: number) => Promise<DraftOpResult>;
   sync: (draftId: string, expectedVersion: number) => Promise<DraftOpResult>;
+  /**
+   * Record that the order was sent or shared OUTSIDE the app, against the
+   * version the manager reviewed. Never touches inventory.
+   */
+  markSent: (
+    draftId: string,
+    expectedVersion: number,
+  ) => Promise<DraftOpResult>;
+  /** One page (zero-based) of the Sent history, newest first. */
+  listSent: (page: number) => Promise<SentListResult>;
+  /** One Sent order with its frozen lines. */
+  getSent: (draftId: string) => Promise<SentOrderResult>;
   /** Re-read the drafts from the database (the screen shows what a read returned). */
   reload: () => Promise<void>;
 };
@@ -157,7 +186,7 @@ export function useOrderDrafts({
 
   const demoState = demo?.state ?? null;
   const demoDrafts = useMemo(
-    () => (demoState ? draftsOf(demoState) : null),
+    () => (demoState ? activeDraftsOf(demoState) : null),
     [demoState],
   );
 
@@ -179,9 +208,10 @@ export function useOrderDrafts({
       if (result.state !== demo.state) demo.setState(result.state);
       return {
         ok: true,
-        drafts: draftsOf(result.state),
+        drafts: activeDraftsOf(result.state),
         draftId: result.draftId,
         changed: result.changed,
+        sent: result.sent,
       };
     };
 
@@ -272,6 +302,65 @@ export function useOrderDrafts({
                 expectedVersion,
               }),
             ),
+      markSent: (draftId, expectedVersion) =>
+        isDemo()
+          ? Promise.resolve(
+              runDemo((s, c) =>
+                markSentDemo(s, { draftId, expectedVersion }, c),
+              ),
+            )
+          : runRemote(() =>
+              markOrderDraftSentAction({
+                restaurantSlug: slug(),
+                draftId,
+                expectedVersion,
+              }),
+            ),
+      listSent: async (page) => {
+        const { demo } = latest.current;
+        if (demo) {
+          return { ok: true, page: pageSentDrafts(draftsOf(demo.state), page) };
+        }
+        try {
+          const result = await listSentOrderDraftsAction({
+            restaurantSlug: slug(),
+            page,
+          });
+          if (!result.ok && result.sessionInvalid) {
+            latest.current.onSessionInvalid?.();
+          }
+          return result.ok
+            ? { ok: true, page: result.page }
+            : { ok: false, error: result.error };
+        } catch {
+          return { ok: false, error: OFFLINE_READ_MESSAGE };
+        }
+      },
+      getSent: async (draftId) => {
+        const { demo } = latest.current;
+        if (demo) {
+          const draft = draftsOf(demo.state).find(
+            (d) => d.id === draftId && d.status === "sent",
+          );
+          return draft
+            ? { ok: true, draft }
+            : { ok: false, error: "That sent order is not available." };
+        }
+        try {
+          const result = await getSentOrderDraftAction({
+            restaurantSlug: slug(),
+            draftId,
+          });
+          if (!result.ok && result.sessionInvalid) {
+            latest.current.onSessionInvalid?.();
+          }
+          return result.ok
+            ? { ok: true, draft: result.draft }
+            : { ok: false, error: result.error };
+        } catch {
+          return { ok: false, error: OFFLINE_READ_MESSAGE };
+        }
+      },
       reload: async () => {
         if (!isDemo()) {
           setLoading(true);
