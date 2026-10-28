@@ -139,3 +139,68 @@ No recipient logic changed. Recipients are still exactly the named person (or al
 ### Status
 
 **T-3 COMPLETE.** PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`). T-4 NOT STARTED; Part 2 on hold; `main` and PROD untouched.
+
+## T-4 — Opening reminder server/database engine (PLAN D-4, #154)
+
+**Branch:** `feature/tasks-v1-1-opening-reminders` from `development` @ `175ca0590b25962dbf63d878f7cfecfb2295f4f9` (verified equal to `origin/development`). Claude Code, **Local Windows** session (real local Supabase stack, Docker). **Two additive migrations; applied to hosted DEV only; `main` and PROD untouched. No UI**: the popup, catch-up card, CTA and dismiss are T-5.
+
+### What was built
+
+| Piece                                                | Where                                                                                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Enum value `opening_reminder`                        | `20261028100000_tasks_v1_1_opening_reminder_type.sql` (own migration: PostgreSQL cannot use a new enum value in the same transaction) |
+| `task_notifications.payload jsonb`                   | `20261028100100_tasks_v1_1_opening_reminders.sql` (object-only, <= 1 KiB; the machine-readable contract the UI reads)                 |
+| `private.tasks_notify` gate extended                 | same migration. One writer, one gate. The 8-argument signature gains an optional `p_payload`; the old overload is dropped             |
+| `private.tasks_profile_can_access_location`          | same. Profile-parameterised twin of `tasks_can_access_location` (that one keys off `auth.uid()`, the caller, not the recipient)       |
+| `private.tasks_opening_reminders_run(org, loc, now)` | same. The evaluator; the **clock is an argument** so pgTAP is deterministic and no client time is ever consulted                      |
+| `public.task_opening_reminders_sweep(org, loc)`      | same. Thin RPC (`tasks_begin` membership check, then `run(..., clock_timestamp())`). Takes only the tenant                            |
+| Snapshot wiring                                      | `getTasksSnapshot` calls the sweep after `checklist_generate_daily`, before the notification read; best-effort and logged             |
+| TS contract                                          | `domain/opening-reminder.ts` (stages, offsets, dedupe key, `parseOpeningReminder`); mapper reads `payload`; demo gate mirrors SQL     |
+
+### Locked stage-window semantics (as built)
+
+- **Stages / identifiers:** `open` (+0), `plus_15`, `plus_30`. The plan's names `OPEN`, `OPEN_PLUS_15`, `OPEN_PLUS_30` map to these stable lowercase ids; the ids (not copy) are the keys. **Nothing exists after `plus_30`.**
+- **Service date** = today in `locations.time_zone`. **Opening instant** = `(service_date + opening_local) AT TIME ZONE time_zone`; `opening_local` is `operating_hours` for that weekday, else `locations.opening_local`; a `closed` day emits nothing. No zone, offset or time is hard-coded.
+- **Stage instants** are `opening + 0 / 15 / 30 minutes` as **absolute instants**, so a DST change cannot stretch or shrink the gap (pgTAP proves spring-forward, fall-back, a non-existent and an ambiguous local opening time).
+- **Eligible window:** a stage becomes eligible when its instant has passed (`now >= instant`, inclusive) and stays eligible until the service date ends at local midnight; the next date has its own keys.
+- **Who/when (per recipient, judged when the stage is stored):** a stage is stored only if, over **that recipient's scope**, (a) at least one item was incomplete **at the stage instant** (rebuilt from `task_events`; completed or cancelled at or before the instant counts as done at it), (b) at least one is incomplete **now**, and (c) the stage was not stored before. Required item = every non-cancelled item of today's Opening checklists (D-6); cancelled items never count.
+- **Late evaluation (the merged plan wins over the brief's softer wording):** the plan (D-4, TS-025, TS-034) says a stage that was _truly_ incomplete at its own instant is **persisted once on catch-up**, while a stage whose work was _complete at its own instant_ is **never back-filled**. Proven both ways: a first look at 09:34 on still-open work stores `open`, `plus_15`, `plus_30` once (at most 3 per recipient per day); work completed at 09:05 and reopened at 09:20, first looked at 09:31, stores `open` and `plus_30` and **not** `plus_15`. The brief's "do not blindly back-fill" is honoured as: never from current status alone, never for a stage that was complete at its instant, never for a past service date, never after `plus_30`. If the owner wants _no_ catch-up at all (only the stage current at the moment of the first look), that is a small change to the `due` CTE plus T-5 behaviour and should be decided before T-5.
+
+### Recipients and privacy (enforced in the stored data)
+
+- **Management** (`owner`, `general_manager`, `shift_manager`): scope = every required Opening item at the location.
+- **Staff:** only for items they may work: named assignee, or `all_team` / `anyone` (the `tasks_can_work` rule, evaluated for the recipient). Never "all staff", "clocked in" or "scheduled". A staff member with no authorized incomplete item gets nothing even when management does.
+- A staff reminder stores only a **count of their own items**: no `task_id`, no `checklist_instance_id`, no names. Title and body are generic. The gate **rejects** an `opening_reminder` that carries a task or instance reference.
+- Inactive members never receive one; a role change or reassignment is honoured because eligibility is computed at store time. RLS on `task_notifications` is unchanged (own rows only).
+- Payload (6 keys, minimal): `stage`, `service_date`, `location_id`, `stage_at` (UTC ISO), `incomplete_count` (at the stage instant), `incomplete_now`.
+
+### Idempotency, concurrency, security
+
+- Dedupe key per recipient: `opening_reminder:<location_id>:<service_date>:<stage>` on the existing `unique (recipient_profile_id, dedupe_key)` index with `ON CONFLICT DO NOTHING`. No new table and no new index (the evaluator's reads ride `checklist_instances_location_date_idx`, `tasks_instance_idx`, `task_events_task_idx` and the dedupe index; steady-state sweeps store nothing).
+- A per-location `pg_advisory_xact_lock` serialises overlapping evaluators, so the loser sees the winner's rows, stores nothing and reports `0` (the returned count is exact). Mutation-checked: removing the lock makes both evaluators report 2 (sum 4) and fails the pgTAP concurrency asserts, while the unique index still keeps the rows at 2.
+- All new functions are `SECURITY DEFINER`, `set search_path = ''`, schema-qualified, with no dynamic SQL. `anon` cannot call the sweep; `authenticated` can (membership checked) and cannot reach the evaluator, the writer or the recipient helper (EXECUTE revoked, asserted). Clients have no write grant on `task_notifications`.
+- **Cross-location:** the schema is location-keyed and sweeping one location never touches another's items (proven). Authorization today is organization-wide (`tasks_can_access_location`); Part 2 must change `tasks_can_access_location` and `tasks_profile_can_access_location` together (commented in the migration).
+- **No cron and no browser dependency.** The evaluator is server-side and idempotent; the only unattended trigger the app has is "any member's Tasks load runs the sweep" (the same pattern as checklist generation and the due-soon sweep). The client 30 s wake-up that re-fetches when a stage instant is crossed is a UI concern and moves to **T-5**.
+
+### Not changed (T-3 guarantees preserved)
+
+Ordinary `kind = 'task'` assigned / reassigned / completed / due-soon / overdue notifications remain suppressed (pgTAP 0041 and 0042 section 8). Opening/Closing task notifications and `checklist_available` still pass the gate. `task_events` and `tasks_emit` are untouched; the sweep writes no audit events (asserted). No stored notification was deleted. T-4 added **no** Opening/Closing assigned/reassigned/completed emitter (T-3's finding stands).
+
+### Tests
+
+| Layer            | Result                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pgTAP (new)      | `0042_tasks_v1_1_opening_reminders.test.sql` **108/108** on the real local Supabase image (PG17): shape and privileges, OPEN/+15/+30 boundaries (-1 s and exact), recipients, privacy, counts, idempotency, completion/cancel/reopen, late catch-up, time zone, hours, business date, DST x5, gate fail-closed x9, RPC authorization, RLS reads, the real-RPC path, and **real two-backend concurrency (dblink)** |
+| pgTAP (full)     | `supabase test db --local`: all 42 files pass (the 41 existing, including 0039 dblink which T-3 could not run, plus 0042)                                                                                                                                                                                                                                                                                         |
+| Vitest           | **1629/1629** (117 files; +23 from 1606: `opening-reminder.test.ts` and the gate-mirror vectors in `notifications.test.ts`)                                                                                                                                                                                                                                                                                       |
+| tests/real (DEV) | `tasks-v1.db.real.test.ts` **12/12** (closes the T-3 gap) and the new `tasks-opening-reminders.db.real.test.ts` **7/7**: five members sweep at the same instant over PostgREST with real JWTs, exact row accounting, RLS reads, anon/outsider/foreign-location rejection, the evaluator not reachable over the API, audit unchanged                                                                               |
+| Playwright       | Tasks + management-today + default-landing + dashboard: `desktop` 57/57 and `server-mobile` 57/57 (demo mode). Real `host-tablet` WebKit: **12 pass, the rest fail at sign-in** (`Account and quick settings` never appears), the pre-existing environment gap recorded on 2026-09-07 that happens before any Tasks code runs; **not claimed as PASS**, T-6 owns it                                               |
+| Static / build   | `npm run check` (prettier, eslint, tsc) clean; `npm run build` green with the env pinned to DEV values (0 PROD-ref occurrences in `.next`); `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build` green with `/` prerendered static                                                                                                                                                     |
+
+### Hosted DEV (DEV only, ref `opmujepkemwcdxxorhfd`, proven from `.env.development.local` before any write)
+
+Before: 51 migrations, latest `20261027210000`, none of the T-3/T-4 objects. Applied via the repository's DEV route (Management API, guarded to the DEV ref, plus a `supabase_migrations.schema_migrations` row each): `20261028090000_tasks_v1_1_notification_scope` (T-3's migration, which had never reached DEV and is a prerequisite), `20261028100000_tasks_v1_1_opening_reminder_type`, `20261028100100_tasks_v1_1_opening_reminders`. After: **54 migrations = local 54**, latest `20261028100100`; `task_opening_reminders_sweep`, the `opening_reminder` enum value and `task_notifications.payload` present. Both hosted suites cleaned up after themselves: 0 `opening_reminder` rows remain. Pre-existing DEV harness organizations were not touched.
+
+### Status
+
+**T-4 implemented and validated; PR open.** Merge details, tested head and the exact-head CI record are added at merge (post-merge sync). T-5 (popup, catch-up UX, CTA, dismiss, client wake-up, demo-mode emitter) NOT STARTED; T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.

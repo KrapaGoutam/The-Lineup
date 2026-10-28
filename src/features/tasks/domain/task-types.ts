@@ -1,5 +1,7 @@
 import type { Designation } from "@/features/auth/domain/passcode";
 
+import type { OpeningReminder } from "./opening-reminder";
+
 /**
  * Tasks V1 domain vocabulary. Mirrors the Postgres enums in
  * supabase/migrations/20261025090000_tasks_v1_foundation.sql one-to-one so
@@ -171,6 +173,7 @@ export const NOTIFICATION_TYPES = [
   "overdue",
   "completed",
   "checklist_available",
+  "opening_reminder",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -184,6 +187,8 @@ export type NotificationView = {
   checklistInstanceId: string | null;
   createdAt: string;
   readAt: string | null;
+  /** Set only on an `opening_reminder`: its parsed machine-readable payload. */
+  reminder?: OpeningReminder | null;
 };
 
 export type ChecklistKind = "opening" | "closing";

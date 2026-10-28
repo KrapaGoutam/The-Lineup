@@ -75,6 +75,22 @@ export async function getTasksSnapshot(
     );
   }
 
+  // Opening reminders (open / +15 / +30): the database decides from its own
+  // clock and the location time zone, and stores at most one per recipient and
+  // stage. Idempotent and best-effort, and run before the notification read so
+  // a reminder that just fell due is in this snapshot. A failure only means no
+  // new reminder this load; the next load (any member, any tab) tries again.
+  const reminded = await supabase.rpc("task_opening_reminders_sweep", {
+    p_organization_id: organizationId,
+    p_location_id: location.id,
+  });
+  if (reminded.error) {
+    console.error(
+      "getTasksSnapshot: task_opening_reminders_sweep",
+      reminded.error,
+    );
+  }
+
   // Time-driven notifications (due soon / overdue): idempotent, best-effort.
   const swept = await supabase.rpc("task_notifications_sweep", {
     p_organization_id: organizationId,
