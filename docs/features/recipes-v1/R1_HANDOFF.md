@@ -1,9 +1,9 @@
-﻿# Recipes V1 — R-1 Handoff
+# Recipes V1 — R-1 Handoff
 
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED
+Status: R1-A COMPLETE; R1-B COMPLETE; R1-C NEXT / NOT STARTED
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
 Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED.
+R1-A COMPLETE; R1-B COMPLETE; R1-C NEXT / NOT STARTED.
 
 ## Completed
 
@@ -26,7 +26,7 @@ R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED.
 
 ## In Progress
 
-- R1-B landing, search and navigation implemented; validation and review in progress.
+- None. R1-B landing, search and navigation complete; R1-C is next.
 
 ## Not Started
 
@@ -73,8 +73,8 @@ R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED.
 
 ## Exact Next Action
 
-1. Start R1-B in a new Codex session on the same branch: Recipes navigation, read layer and List View.
-2. Fetch and check branch, local/remote HEAD and status; read this handoff and the relevant R-0 UI sections.
+1. Start R1-C in a new session on the same branch: Recipe Detail and Perfect/House; baseline search was completed in R1-B.
+2. Fetch and check branch, local/remote HEAD and status; read this handoff and the relevant R-0 detail sections.
 3. Do not open the final R-1 PR until R1-B, R1-C and R1-D are complete. Do not touch main or PROD.
 
 ## Safety
@@ -87,7 +87,7 @@ PROD migrations: NO
 R-2 started: NO
 Part 2 started: NO
 
-## R1-B execution checkpoint
+## R1-B execution checkpoint (historical)
 
 - Current milestone: R1-B IN PROGRESS; R1-A COMPLETE; R1-C NOT STARTED.
 - Starting HEAD: `d47bcbe7f0b3a09a07ca3f00150be2c4474ca885`; fetched feature branch matched and working tree clean.
@@ -98,7 +98,7 @@ Part 2 started: NO
 - Risks/tests: preserve default Tasks, route and history; verify category/fallback and recipe-number ordering, roles, isolation, focused browser/navigation regressions, check and both builds.
 - Exact first task: inspect canonical app-tab/navigation and existing server read patterns, then add the Recipes tab and compact read layer.
 
-### R1-B working checkpoint
+### R1-B working checkpoint (historical)
 
 - Navigation wired in `src/lib/app-tab.ts` and `src/components/restaurant-operations-app.tsx`; Recipes appears after Bar Inventory and in More, with no role gate.
 - Added `src/features/recipes/{actions,components,domain}`. The server action validates slug, verifies live session and membership, and reads active categories and paged active summaries scoped by organization through RLS. No detail graph or database changes.
@@ -106,10 +106,20 @@ Part 2 started: NO
 - Focused domain and app-tab Vitest: 13/13 passed. TypeScript passed before latest changes.
 - Remaining: focused browser coverage and navigation regressions; component/read security tests; check, normal and empty-env builds; review, handoff, commit and push. Exact next action: add and run Recipes browser tests.
 
-### R1-B verification checkpoint
+### R1-B verification checkpoint (historical)
 
 - Focused Vitest: 19/19 (domain, component, action and canonical tab tests). Full Vitest before the final component/test additions: 126 files, 1699 assertions passed.
 - Recipes browser tests: all 9 cases reported passed across desktop, host-tablet and server-mobile; the Windows Playwright process remained in web-server teardown and was interrupted after the nine pass lines. Earlier combined default-landing and Recipes run: all 33 default-landing cases and 5/6 Recipes cases passed; tablet history case failed before the test waited for the destination heading, and passed on both subsequent tablet runs.
 - `npm run check` passed; normal and empty-public-Supabase-env builds passed after the loading skeleton change.
 - No R1-B migration or hosted data changes. R1-A's existing DEV RLS evidence remains valid; this session's server-action authorization checks are mocked. Browser coverage uses synthetic demo data; empty/error/loading are component-tested, not browser-tested. Actual R1-B authenticated read and browser empty state remain unverified.
-- Exact next action: verify authenticated real-mode landing read and empty browser state using a safe local or DEV test harness, finish any needed corrections, rerun affected gates, then review and finalize R1-B. Do not start R1-C or open a PR.
+- Follow-up: guarded real-mode DEV browser test passed 2/2 for TestManager and TestServer1, each reading the empty landing through the actual server action. No recipe records were created. Existing Tasks sign-in/landing actions also ran in DEV.
+
+### R1-B complete
+
+- R1-A HEAD: `d47bcbe7f0b3a09a07ca3f00150be2c4474ca885`; R1-B code checkpoint: `c5e0b58e64675fbb396864928bb70c20efac2af5`. Check git for final R1-B documentation/test commit HEAD.
+- Navigation: canonical Recipes tab after Bar Inventory, all roles, More on mobile; default Tasks and restaurant route retained. The tab helper strips recipe-specific parameters when leaving.
+- Read: server-resolved active membership and live session, organization filters and existing RLS, active categories and paged active recipe summaries. DEV manager and staff empty reads passed; cross-org and inactive-policy evidence remains the R1-A pgTAP/DEV validation, complemented by mocked action tests.
+- List: category metadata ordering, fallback last, stored number ordering, empty, existing loading skeleton and error states. Baseline search implemented per R1.5; detail, links and editing remain later scope.
+- Tests: focused Vitest 19/19; full Vitest 1699/1699 before final focused test additions; nine Recipes demo browser cases reported passing across desktop/tablet/mobile, with Windows server teardown interrupted after the pass lines; 33 default-landing regression cases passed in the earlier combined run. Real-mode DEV empty landing 2/2 passed. Check and both normal/empty-public-env builds passed after the final application changes. The real-mode test was added after these builds.
+- DEV: no migration or recipe data created in R1-B; real-mode sign-in also ran existing Tasks actions. PROD untouched. No R-1 PR opened.
+- Exact next action: start R1-C in a new session on this same branch, beginning with this handoff. Do not merge development or touch main or PROD.

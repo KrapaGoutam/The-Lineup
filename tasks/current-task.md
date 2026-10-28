@@ -176,6 +176,8 @@ git fetch origin && git status -sb && git log --oneline -5 origin/development
 ## R1-B active checklist
 
 - [x] Fetch and verify clean starting branch and matching remote at d47bcbe; read R1-A handoff.
-- [ ] Integrate Recipes navigation and organization-scoped list read; preserve default and route behavior.
-- [ ] Verify focused unit/browser/navigation tests, check and both builds.
-- [ ] Review, update handoff, commit and push R1-B; R1-C remains next.
+- [x] Integrate Recipes navigation and organization-scoped list read; preserve default and route behavior.
+- [x] Verify focused unit/browser/navigation tests, check and both builds.
+- [x] Review and update handoff; R1-B implementation checkpoint committed and pushed. R1-C is next.
+
+Recipes V1 R1-B COMPLETE; R1-C NEXT. See `docs/features/recipes-v1/R1_HANDOFF.md`.
