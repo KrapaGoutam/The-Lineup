@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -40,7 +40,7 @@ export async function getRecipeIndexAction(input: {
     let query = client
       .from("bar_recipes")
       .select(
-        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular,is_active",
+        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular,is_menu_item,is_alcoholic,image_thumb_path,is_active",
       )
       .eq("organization_id", user.organizationId);
     if (user.designation === "staff") query = query.eq("is_active", true);

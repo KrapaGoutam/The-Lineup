@@ -14,6 +14,10 @@ export type Recipe = {
   alternate_name: string | null;
   base_spirit: string | null;
   is_popular: boolean;
+  is_menu_item?: boolean;
+  is_alcoholic?: boolean;
+  image_thumb_path?: string | null;
+  image_path?: string | null;
 };
 export type RecipeIndex = { categories: Category[]; recipes: Recipe[] };
 

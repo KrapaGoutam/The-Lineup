@@ -1,5 +1,5 @@
-﻿"use client";
-import { useEffect, useRef, useState } from "react";
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { RecipeDetailView } from "./recipe-detail";
 import { RecipeEditorScreen } from "./recipe-editor-screen";
@@ -18,12 +18,14 @@ import {
   getRecipeDetailAction,
   getRecipeIndexAction,
 } from "../actions/recipe-actions";
+import { type Recipe, type RecipeIndex } from "../domain/recipe-index";
+import { useViewPreference } from "../hooks/use-view-preference";
 import {
-  groups,
-  search,
-  type Recipe,
-  type RecipeIndex,
-} from "../domain/recipe-index";
+  deriveBrowsingData,
+  type RecipeFilterMode,
+  type RecipeSortMode,
+} from "../domain/recipe-filters";
+import { RecipePictureBook } from "./recipe-picture-book";
 
 const demoIndex: RecipeIndex = {
   categories: [
@@ -45,6 +47,8 @@ const demoIndex: RecipeIndex = {
       alternate_name: null,
       base_spirit: "Gin",
       is_popular: true,
+      is_menu_item: true,
+      is_alcoholic: true,
     },
     {
       id: "r2",
@@ -55,6 +59,21 @@ const demoIndex: RecipeIndex = {
       alternate_name: null,
       base_spirit: null,
       is_popular: false,
+      is_menu_item: true,
+      is_alcoholic: false,
+    },
+    {
+      id: "r3",
+      category_id: "c1",
+      recipe_number: 15,
+      name: "R1 Test Archived",
+      slug: "r1-test-archived",
+      alternate_name: null,
+      base_spirit: null,
+      is_popular: false,
+      is_menu_item: false,
+      is_alcoholic: true,
+      is_active: false,
     },
   ],
 };
@@ -133,6 +152,20 @@ export function RecipesModule({
   );
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [viewMode, setViewMode] = useViewPreference();
+  const [filterMode, setFilterMode] = useState<RecipeFilterMode>("all");
+  const [sortMode, setSortMode] = useState<RecipeSortMode>("book");
+  const browsing = useMemo(() => {
+    if (!state.data) return null;
+    return deriveBrowsingData({
+      index: state.data,
+      isManagement,
+      showArchived,
+      filterMode,
+      sortMode,
+      query,
+    });
+  }, [state.data, isManagement, showArchived, filterMode, sortMode, query]);
   const [demoCategories, setDemoCategories] = useState<ManagementCategory[]>(
     () =>
       demoIndex.categories.map((c) => ({ ...c, is_active: true, version: 1 })),
@@ -620,16 +653,6 @@ export function RecipesModule({
       </div>
     );
   }
-  const visibleIndex = state.data
-    ? {
-        ...state.data,
-        recipes: state.data.recipes.filter(
-          (r) => r.is_active !== false || (isManagement && showArchived),
-        ),
-      }
-    : null;
-  const results =
-    visibleIndex && query.trim() ? search(visibleIndex, query) : null;
   return (
     <section className="flex flex-col gap-6 pb-24">
       <h1 className="text-2xl font-semibold">Bar Recipes</h1>
@@ -675,28 +698,173 @@ export function RecipesModule({
         </div>
       ) : state.data && state.data.recipes.length === 0 ? (
         <p>No recipes have been added yet.</p>
-      ) : state.data ? (
+      ) : state.data && browsing ? (
         <>
-          <div>
-            <label htmlFor="recipe-search" className="sr-only">
-              Search recipes
-            </label>
-            <Input
-              id="recipe-search"
-              placeholder="Search recipes, spirits, numbers..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1">
+              <label htmlFor="recipe-search" className="sr-only">
+                Search recipes
+              </label>
+              <Input
+                id="recipe-search"
+                placeholder="Search recipes, spirits, numbers..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
+            <div
+              role="group"
+              aria-label="View mode"
+              className="border-border bg-muted inline-flex shrink-0 rounded-lg border p-1"
+            >
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                aria-pressed={viewMode === "list"}
+                className={cn(
+                  "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition",
+                  viewMode === "list"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("picture")}
+                aria-pressed={viewMode === "picture"}
+                className={cn(
+                  "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition",
+                  viewMode === "picture"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Picture Book
+              </button>
+            </div>
           </div>
-          {results ? (
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="group"
+              aria-label="Filter recipes"
+              className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-1 text-sm"
+            >
+              <button
+                type="button"
+                onClick={() => setFilterMode("all")}
+                aria-pressed={filterMode === "all"}
+                className={cn(
+                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMode === "all"
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode("popular")}
+                aria-pressed={filterMode === "popular"}
+                className={cn(
+                  "flex min-h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMode === "popular"
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span aria-hidden="true">&#9733;</span> Popular
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode("on_menu")}
+                aria-pressed={filterMode === "on_menu"}
+                className={cn(
+                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMode === "on_menu"
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                On menu
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode("non_alcoholic")}
+                aria-pressed={filterMode === "non_alcoholic"}
+                className={cn(
+                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMode === "non_alcoholic"
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Non-alcoholic
+              </button>
+            </div>
+
+            <div
+              role="group"
+              aria-label="Sort order"
+              className="border-border bg-muted/60 inline-flex shrink-0 items-center gap-1 rounded-lg border p-1 text-xs"
+            >
+              <button
+                type="button"
+                onClick={() => setSortMode("book")}
+                aria-pressed={sortMode === "book"}
+                className={cn(
+                  "cursor-pointer rounded-md px-2.5 py-1 font-medium transition",
+                  sortMode === "book"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Book order
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortMode("az")}
+                aria-pressed={sortMode === "az"}
+                className={cn(
+                  "cursor-pointer rounded-md px-2.5 py-1 font-medium transition",
+                  sortMode === "az"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                A–Z
+              </button>
+            </div>
+          </div>
+
+          {viewMode === "picture" ? (
+            <RecipePictureBook
+              groups={browsing.groups}
+              searchResults={browsing.searchResults}
+              categories={state.data.categories}
+              query={query}
+              restaurantSlug={demo ? undefined : restaurantSlug}
+              href={hrefFor}
+              onNavigate={navigate}
+              onClearSearch={() => setQuery("")}
+              onClearFilter={() => setFilterMode("all")}
+            />
+          ) : browsing.searchResults !== null ? (
             <section>
               <h2 className="text-lg font-semibold">
-                Results ({results.length})
+                Results ({browsing.searchResults.length})
               </h2>
-              {results.length ? (
-                <Rows recipes={results} href={hrefFor} open={navigate} />
+              {browsing.searchResults.length ? (
+                <Rows
+                  recipes={browsing.searchResults}
+                  href={hrefFor}
+                  open={navigate}
+                />
               ) : (
-                <div>
+                <div className="flex flex-col items-start gap-3 py-4">
                   <p>No recipes match {query}.</p>
                   <Button variant="outline" onClick={() => setQuery("")}>
                     Clear search
@@ -704,13 +872,22 @@ export function RecipesModule({
                 </div>
               )}
             </section>
+          ) : browsing.groups.length === 0 ? (
+            <div className="flex flex-col items-start gap-3 py-6">
+              <p className="text-muted-foreground">
+                No recipes match this filter.
+              </p>
+              <Button variant="outline" onClick={() => setFilterMode("all")}>
+                Clear filters
+              </Button>
+            </div>
           ) : (
-            groups(visibleIndex!).map((group) => (
+            browsing.groups.map((group) => (
               <section key={group.category.id}>
                 <h2 className="text-lg font-semibold">
                   {group.category.name}{" "}
                   <span className="text-muted-foreground">
-                    ({group.recipes.length})
+                    ({group.activeCount})
                   </span>
                 </h2>
                 <Rows recipes={group.recipes} href={hrefFor} open={navigate} />
