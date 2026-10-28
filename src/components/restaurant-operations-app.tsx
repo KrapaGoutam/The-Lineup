@@ -637,7 +637,13 @@ function RestaurantOperationsAppInner({
     urlTab ?? DEFAULT_APP_TAB,
   );
   const [seenUrlTab, setSeenUrlTab] = useState<AppTab | null>(urlTab);
-  if (urlTab !== seenUrlTab) {
+  // The router snapshot can lag a popstate; never apply it over the current URL.
+  if (
+    urlTab !== seenUrlTab &&
+    (typeof window === "undefined" ||
+      urlTab ===
+        tabFromParam(new URLSearchParams(window.location.search).get("tab")))
+  ) {
     // History navigation (or any URL change) re-selects the module.
     setSeenUrlTab(urlTab);
     setRequestedTab(urlTab ?? DEFAULT_APP_TAB);
@@ -896,7 +902,8 @@ function RestaurantOperationsAppInner({
     if (!user) return;
     const param = new URLSearchParams(window.location.search).get("tab");
     if (param === null) return;
-    const shown = resolveTab(requestedTab, {
+    // Normalize the actual destination, not a possibly stale requestedTab.
+    const shown = resolveTab(tabFromParam(param) ?? DEFAULT_APP_TAB, {
       isManager: user.role !== "server",
       demoMode,
     });
