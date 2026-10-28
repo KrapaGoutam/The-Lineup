@@ -244,3 +244,7 @@ Created in R-0. Scenario ids `RC-nnn` map to a test layer and the phase that mus
 - The section tables are authoritative. Any row whose layers include **D** or **H** is required to pass in the CI `Database` job or the hosted-DEV run of that phase; rows with **E** run in all three Playwright projects unless the scenario is viewport-specific (RC-006, RC-086, RC-090, RC-092 name the viewport behaviour they need).
 - R-2g re-runs the entire matrix (not only R-2 rows) and adds RC-153, RC-154, RC-158.
 - Total: 160 scenarios (RC-001 … RC-160).
+
+## Recipes V1 R-1 checkpoint
+
+R1-D evidence: check PASS; Vitest 1708/1708; controlled single-worker tablet landing 15/15 over five repetitions; combined Recipes/default landing 45/45 across desktop, WebKit tablet and mobile. Post-review tablet assertions 3/3 passed; teardown hung. Cross-org: pgTAP and mocked server actions PASS; archived Staff denial: pgTAP and server-action behavior PASS. Fresh hosted browser duplication of these two security cases NOT RUN. DEV parity: PASS, independent authenticated read-only Supabase project query, 55 migrations, latest 20261028140623_bar_recipes_foundation. DEV synthetic cleanup: PASS, six tables zero.

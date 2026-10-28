@@ -68,3 +68,8 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] B-RC-7 Shell-level unsaved-changes guard for tab switches (also benefits Bar Inventory Order Drafts).
 - [ ] Bulk image upload, structured batch recipes, recipe scaling/unit conversion, print/PDF export, per-location recipe sets (Part 2), organization-configurable Perfect/House labels UI.
 - [ ] Extract the three one-line manager predicates (`isInventoryManager`, `isTasksManager`, `isRecipesManager`) into one shared helper — a separate refactor, not part of any feature.
+
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1 local validation is complete; PR and merge remain pending. R-2 remains next and is not started.

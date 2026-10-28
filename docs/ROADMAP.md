@@ -102,3 +102,7 @@ Tracking: parent #133, milestone "Platform / CI Reliability", Project #4, PR #13
 10. CSV/PDF export and configurable restaurant policies
 
 POS, reservations, payroll, SMS, and native apps require separate product discovery after pilot evidence.
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR and merge pending. R-2 remains next.

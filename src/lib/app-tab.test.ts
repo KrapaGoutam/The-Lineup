@@ -17,6 +17,7 @@ const ALL_TABS: AppTab[] = [
   "team",
   "attendance",
   "barInventory",
+  "recipes",
   "payroll",
   "settings",
 ];
@@ -53,6 +54,12 @@ describe("tabHref", () => {
     expect(tabHref("/", "?tab=schedule", "tasks")).toBe("/");
   });
 
+  it("preserves restaurant paths and removes recipe parameters when leaving", () => {
+    expect(
+      tabHref("/r/example", "?tab=recipes&recipe=x&mode=edit", "schedule"),
+    ).toBe("/r/example?tab=schedule");
+    expect(tabHref("/r/example", "", "recipes")).toBe("/r/example?tab=recipes");
+  });
   it("sets the module and keeps unrelated parameters", () => {
     expect(tabHref("/", "", "allocation")).toBe("/?tab=allocation");
     expect(tabHref("/r/the-monks", "?x=1", "barInventory")).toBe(
@@ -68,6 +75,7 @@ describe("resolveTab fallback (TS-005)", () => {
     expect(resolveTab("team", staff)).toBe("tasks");
     expect(resolveTab("barInventory", staff)).toBe("tasks");
     expect(resolveTab("schedule", staff)).toBe("schedule");
+    expect(resolveTab("recipes", staff)).toBe("recipes");
   });
 
   it("lets managers open them", () => {

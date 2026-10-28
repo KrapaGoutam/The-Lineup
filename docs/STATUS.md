@@ -203,3 +203,7 @@ DEV-only. Merged to `development` with an owner-approved CI exception for PR #13
 3. **No Moving Occupied Tables:** Floor rebalancing must never move seated/occupied tables.
 4. **Overrides Require Auditing:** Any manual assignment or override records user attribution.
 5. **Quality Gate:** Before every commit, run `npm run check`, `npm test`, and `npm run build`.
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR and merge pending. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.

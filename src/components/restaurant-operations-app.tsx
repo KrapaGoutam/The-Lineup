@@ -12,6 +12,7 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Martini,
   Settings2,
   SlidersHorizontal,
   Store,
@@ -61,6 +62,7 @@ import {
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
 import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
+import { RecipesModule } from "@/features/recipes/components/recipes-module";
 import { InventoryModule } from "@/features/bar-inventory/components/inventory-module";
 import { emptyCatalogState } from "@/features/bar-inventory/domain/catalog-engine";
 import { buildDemoCatalog } from "@/features/bar-inventory/domain/demo-catalog";
@@ -169,6 +171,7 @@ const barInventoryTab = {
   label: "Bar Inventory",
   icon: Wine,
 };
+const recipesTab = { id: "recipes" as const, label: "Recipes", icon: Martini };
 // Feature 020 Phase 2: manager/owner-only, real mode only -- gated exactly
 // like Team was before Feature 019, plus !demoMode, since this phase has
 // no demo-mode data source built for it yet (deliberately deferred, see
@@ -634,14 +637,26 @@ function RestaurantOperationsAppInner({
     urlTab ?? DEFAULT_APP_TAB,
   );
   const [seenUrlTab, setSeenUrlTab] = useState<AppTab | null>(urlTab);
-  if (urlTab !== seenUrlTab) {
+  // The router snapshot can lag a popstate; never apply it over the current URL.
+  if (
+    urlTab !== seenUrlTab &&
+    (typeof window === "undefined" ||
+      urlTab ===
+        tabFromParam(new URLSearchParams(window.location.search).get("tab")))
+  ) {
     // History navigation (or any URL change) re-selects the module.
     setSeenUrlTab(urlTab);
     setRequestedTab(urlTab ?? DEFAULT_APP_TAB);
   }
   function setTab(next: AppTab) {
     setRequestedTab(next);
-    const href = tabHref(pathname, window.location.search, next);
+    let href = tabHref(pathname, window.location.search, next);
+    if (next === "recipes") {
+      const url = new URL(href, window.location.origin);
+      url.searchParams.delete("recipe");
+      url.searchParams.delete("mode");
+      href = url.pathname + url.search;
+    }
     if (href !== `${window.location.pathname}${window.location.search}`) {
       window.history.pushState(null, "", href);
     }
@@ -887,7 +902,8 @@ function RestaurantOperationsAppInner({
     if (!user) return;
     const param = new URLSearchParams(window.location.search).get("tab");
     if (param === null) return;
-    const shown = resolveTab(requestedTab, {
+    // Normalize the actual destination, not a possibly stale requestedTab.
+    const shown = resolveTab(tabFromParam(param) ?? DEFAULT_APP_TAB, {
       isManager: user.role !== "server",
       demoMode,
     });
@@ -959,6 +975,7 @@ function RestaurantOperationsAppInner({
     ...(isManager ? [teamTab] : []),
     attendanceTab,
     ...(isManager ? [barInventoryTab] : []),
+    recipesTab,
     tipsTab,
     ...(!demoMode ? [payrollTab] : []),
   ];
@@ -2194,6 +2211,13 @@ function RestaurantOperationsAppInner({
             demo={
               demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null
             }
+          />
+        ) : null}
+        {tab === "recipes" ? (
+          <RecipesModule
+            restaurantSlug={restaurantSlug}
+            demo={demoMode}
+            onSessionInvalid={forceSignOut}
           />
         ) : null}
         {tab === "tips" ? (
