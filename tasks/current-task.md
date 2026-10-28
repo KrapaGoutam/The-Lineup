@@ -2,11 +2,11 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is IN PROGRESS** on `feature/tasks-v1-1-opening-reminders` (base `development` `175ca0590b25962dbf63d878f7cfecfb2295f4f9`; Local Windows session; T-5 NOT STARTED, T-6 NOT STARTED, Recipes SHELVED). · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (popup + catch-up UX) is NEXT / NOT STARTED**, T-6 NOT STARTED, Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
 
-T-4 — Opening reminder server/database engine (PLAN D-4, #154): **BUILT and validated; PR open** (see Branch / base). Next phase: T-5 popup + catch-up UX, a NEW session. T-5 NOT STARTED, T-6 NOT STARTED, Recipes SHELVED, Part 2 ON HOLD.
+T-4 — Opening reminder server/database engine (PLAN D-4, #154): **COMPLETE** (PR #209, merge `796cff3`). Next phase: T-5 popup + catch-up UX, a NEW session. T-5 NOT STARTED, T-6 NOT STARTED, Recipes SHELVED, Part 2 ON HOLD.
 
 ## Execution
 
@@ -14,12 +14,12 @@ T-4: Claude Code **Local Windows** (Sonnet 5.5, high effort), real local Supabas
 
 ## Branch / base
 
-- T-4: branch `feature/tasks-v1-1-opening-reminders` from `development` @ `175ca0590b25962dbf63d878f7cfecfb2295f4f9`; PR, tested head and merge commit are recorded at merge (post-merge sync)
+- T-4: branch `feature/tasks-v1-1-opening-reminders` from `development` @ `175ca0590b25962dbf63d878f7cfecfb2295f4f9`; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`); `development` HEAD after merge `796cff3` (before this docs sync)
 - T-3: branch `feature/tasks-v1-1-notification-scope` from `f4f1aae26fdcf95d7d6b960eafb624ca05bcaa27`; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`); `development` HEAD after merge `3a442a6` (before this docs sync)
 - T-2: branch `feature/tasks-v1-1-management-today` from `c6f309eae5c674e71b3906ff1b26faae0440ca22`; PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents); `development` HEAD after merge `46ea022`
 - T-1 (done): PR #203 tested `1e3e4b1`, merge `cf3ae39`; docs PR #204, merge `c6f309e`
 - Issue: #169 (tracking) · Project #4 (card update not performed: Projects tooling unavailable in this session)
-- Issue: #154 (T-3 tracking) · T-4 BUILT (PR open) · T-5 NEXT / NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
+- Issue: #154 (T-3 tracking) · T-4 COMPLETE · T-5 NEXT / NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
 
 ## Phase ledger
 
@@ -29,7 +29,7 @@ Tasks T-0 plan COMPLETE (#189)
 Tasks T-1 COMPLETE (PR #203, tested 1e3e4b1, merge cf3ae39)
 Tasks T-2 COMPLETE (PR #205, tested c2ef864, merge 46ea022)
 Tasks T-3 COMPLETE (PR #207, tested 2fef134, merge 3a442a6)
-Tasks T-4 BUILT, PR open (feature/tasks-v1-1-opening-reminders) · T-5..T-6 NOT STARTED
+Tasks T-4 COMPLETE (PR #209, tested f48ea31, merge 796cff3) · T-5 NEXT / NOT STARTED · T-6 NOT STARTED
 Part 2 (multi-org / multi-location / attendance) ON HOLD
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
@@ -56,7 +56,7 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
   - [x] TS: `domain/opening-reminder.ts`, mapper `payload`, gate mirror, snapshot calls the sweep, regenerated `database.generated.ts`; Vitest tasks 118/118, tsc clean
   - [x] tests/real on DEV: `tasks-v1.db.real` 12/12 + new `tasks-opening-reminders.db.real` 7/7 (0 reminder rows left); npm run check, Vitest 1629/1629, normal build (env pinned to DEV, 0 PROD refs) and empty-Supabase-env build green; Playwright desktop + server-mobile 57/57 each; host-tablet WebKit = known sign-in gap (not PASS)
   - [x] docs: PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog
-  - [ ] commit explicit paths, push, PR -> development, exact-head CI (application, browser-smoke, Database, Vercel), MERGE COMMIT, post-merge docs sync PR
+  - [x] commit explicit paths, push, PR #209 -> development, exact-head CI green (application, browser-smoke, Database, Vercel), MERGE COMMIT `796cff3`, post-merge docs sync PR
 - [ ] T-5 (popup + catch-up UX, client wake-up, demo-mode emitter): NEW session after T-4 merges. NOT STARTED.
 
 ## Exact next command

@@ -203,4 +203,4 @@ Before: 51 migrations, latest `20261027210000`, none of the T-3/T-4 objects. App
 
 ### Status
 
-**T-4 implemented and validated; PR open.** Merge details, tested head and the exact-head CI record are added at merge (post-merge sync). T-5 (popup, catch-up UX, CTA, dismiss, client wake-up, demo-mode emitter) NOT STARTED; T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.
+**T-4 COMPLETE.** PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`). T-5 (popup, catch-up UX, CTA, dismiss, client wake-up, demo-mode emitter) NOT STARTED; T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.
