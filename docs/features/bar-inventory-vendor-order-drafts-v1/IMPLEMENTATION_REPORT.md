@@ -223,7 +223,7 @@ Repository gates (final-gate branch code): prettier --check . PASS · eslint --m
 
 **DEV footprint.** The hosted browser spec's Mark Sent leaves immutable history by design: two Sent orders (one per green run), tagged `VOD4-1793147896144` and `VOD4-1793150815862`, with the two vendors, four products, two categories and two subcategories they reference, in the `the-monks` DEV organization. All other tagged data was removed. The 26 pre-existing synthetic `V2 Harness` organizations were not touched. The DB suite leaves nothing (disposable organization, cascade teardown).
 
-**Tracking.** `main` untouched, PROD untouched, no PROD migration. Tasks T-1 remains parked at `03d5d45` (no PR, not merged). `next dev` rewrote `AGENTS.md` during Playwright runs; reverted before every commit.
+**Tracking.** Final-gate PR #201 (tested head `260ffe1c4760e93233fa5c45e4fb7eb6a956556a`, exact-head CI application / browser-smoke / Vercel green, local = remote = PR head = CI-tested SHA), merge commit `3f6509b770dd2a03ff73792cf179be9dc71fe982`. Issue #190 commented and closed; Project #4 card set to Done; milestone Future Product Backlog unchanged. `main` untouched, PROD untouched, no PROD migration. Tasks T-1 remains parked at `03d5d45` (no PR, not merged). `next dev` rewrote `AGENTS.md` during Playwright runs; reverted before every commit.
 
 ## Deferred to approved later phases
 
