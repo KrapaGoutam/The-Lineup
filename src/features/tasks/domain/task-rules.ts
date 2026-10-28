@@ -1,10 +1,14 @@
+import { zonedWallTimeFromInstant } from "@/lib/timezone";
+
 import {
   ACTIVE_STATUSES,
   type AssignmentMode,
+  type ChecklistInstanceView,
   type DueWindow,
   type TaskKind,
   type TaskPriority,
   type TaskStatus,
+  type TaskTeamMember,
   type TaskView,
   type TaskViewer,
   isTasksManager,
@@ -207,6 +211,150 @@ export function personProgress(tasks: readonly TaskView[]): PersonProgress[] {
     }
   }
   return [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ---------------------------------------------------------------------
+// Management Today (Tasks V1.1 T-2, #169)
+// ---------------------------------------------------------------------
+
+/**
+ * Which slice of Today a manager is looking at. This is a *view* over rows
+ * the viewer may already read (RLS decides that, not this code); it never
+ * grants access. People are always addressed by profile id, never by name.
+ */
+export type TodayScope =
+  | { type: "all" }
+  | { type: "mine" }
+  | { type: "person"; profileId: string };
+
+export const ALL_STAFF_SCOPE: TodayScope = { type: "all" };
+
+/** `<select>` value for a scope: "all" | "mine" | "person:<profileId>". */
+export function scopeToValue(scope: TodayScope): string {
+  return scope.type === "person" ? `person:${scope.profileId}` : scope.type;
+}
+
+export function scopeFromValue(value: string): TodayScope {
+  if (value === "mine") return { type: "mine" };
+  if (value.startsWith("person:") && value.length > "person:".length) {
+    return { type: "person", profileId: value.slice("person:".length) };
+  }
+  return ALL_STAFF_SCOPE;
+}
+
+/**
+ * The scope actually applied. Staff always get "all" of what they can
+ * already read (the control is never rendered for them, and a stale or
+ * hand-edited value cannot widen anything); a person who is no longer on
+ * the active team falls back to "all" rather than showing a silent blank.
+ */
+export function resolveScope(
+  scope: TodayScope,
+  viewer: TaskViewer,
+  team: readonly TaskTeamMember[],
+): TodayScope {
+  if (!isTasksManager(viewer.designation)) return ALL_STAFF_SCOPE;
+  if (
+    scope.type === "person" &&
+    !team.some((member) => member.profileId === scope.profileId)
+  ) {
+    return ALL_STAFF_SCOPE;
+  }
+  return scope;
+}
+
+/**
+ * Who a row belongs to. individual / multiple: the named assignees;
+ * all_team: "Whole team"; anyone: "Anyone". Nothing is invented (a task
+ * with no named assignee yields ""), and "Completed by" stays a separate
+ * fact shown elsewhere on the row.
+ */
+export function staffLabel(
+  task: Pick<TaskView, "assignmentMode" | "assignees">,
+): string {
+  if (task.assignmentMode === "all_team") return "Whole team";
+  if (task.assignmentMode === "anyone") return "Anyone";
+  return task.assignees.map((a) => a.name).join(", ");
+}
+
+/**
+ * Narrow rows to a scope.
+ * - all: unchanged.
+ * - mine: the existing "My Tasks" rule (assigned to me, or open to the whole
+ *   team / anyone eligible) -- not "created by me".
+ * - person: that person as a *named* assignee only; shared (all_team /
+ *   anyone) work is not attributed to an individual.
+ */
+export function filterByScope(
+  tasks: readonly TaskView[],
+  scope: TodayScope,
+  viewer: TaskViewer,
+): TaskView[] {
+  switch (scope.type) {
+    case "all":
+      return [...tasks];
+    case "mine":
+      return tasks.filter((task) => isMine(viewer, task));
+    case "person":
+      return tasks.filter(
+        (task) =>
+          !isBroadMode(task.assignmentMode) &&
+          task.assignees.some((a) => a.profileId === scope.profileId),
+      );
+  }
+}
+
+export type TodayGroups = {
+  opening: TaskView[];
+  general: TaskView[];
+  closing: TaskView[];
+};
+
+/**
+ * Today's work for the service date, grouped Opening / General / Closing and
+ * sorted overdue first. Same Today meaning as the My Tasks list: today's
+ * work plus anything overdue, plus work finished today (so a check-off does
+ * not make the row vanish). Cancelled work never appears; upcoming work
+ * waits for its day. Opening / Closing come from today's checklist
+ * instances only -- earlier days are history, not Today.
+ */
+export function buildTodayGroups(
+  input: {
+    tasks: readonly TaskView[];
+    checklists: readonly ChecklistInstanceView[];
+    today: string;
+    timeZone: string;
+    now: Date;
+  },
+  scope: TodayScope,
+  viewer: TaskViewer,
+): TodayGroups {
+  const { today, timeZone, now } = input;
+  const inToday = (task: TaskView): boolean => {
+    const bucket = taskBucket(task, now, today);
+    if (bucket === "overdue" || bucket === "today") return true;
+    return (
+      bucket === "completed" &&
+      task.completedAt !== null &&
+      zonedWallTimeFromInstant(new Date(task.completedAt), timeZone).date ===
+        today
+    );
+  };
+  const checklistItems = (kind: "opening" | "closing") =>
+    input.checklists
+      .filter((c) => c.kind === kind && c.serviceDate === today)
+      .flatMap((c) => c.items)
+      .filter((item) => item.status !== "cancelled");
+  const arrange = (tasks: readonly TaskView[]) =>
+    sortTasks(filterByScope(tasks, scope, viewer), now, today);
+
+  return {
+    opening: arrange(checklistItems("opening")),
+    general: arrange(
+      input.tasks.filter((task) => task.kind === "task" && inToday(task)),
+    ),
+    closing: arrange(checklistItems("closing")),
+  };
 }
 
 // ---------------------------------------------------------------------

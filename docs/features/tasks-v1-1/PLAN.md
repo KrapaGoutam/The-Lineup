@@ -1,6 +1,6 @@
 # Tasks V1.1 — Plan
 
-**Status:** planned, not built · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
+**Status:** T-0 plan merged; T-1 COMPLETE; T-2 implemented (PR to `development`, see `IMPLEMENTATION_REPORT.md`); T-3..T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only.
 **Sequencing:** Tasks _code_ (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
 
@@ -84,7 +84,7 @@ Accepted values (kebab-case, URL-facing): `tasks`, `allocation`, `schedule`, `te
 | ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | T-0   | `docs/tasks-v1-1-plan`                        | This plan, `TEST_MATRIX.md`, handoff, roadmap/status                                                                                              | no        |
 | T-1   | `feature/tasks-v1-1-default-landing`          | D-1: default Tasks, `?tab=` addressing, e2e helper updates for the new default **(COMPLETE)**                                                     | no        |
-| T-2   | `feature/tasks-v1-1-today-management`         | D-2: scope selector, staff names, grouped Today, staff-privacy tests                                                                              | no        |
+| T-2   | `feature/tasks-v1-1-management-today`         | D-2: scope selector, staff names, grouped Today, staff-privacy tests **(implemented; branch name as run)**                                        | no        |
 | T-3   | `feature/tasks-v1-1-notification-scope`       | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP                                                                                            | yes       |
 | T-4   | `feature/tasks-v1-1-opening-reminders-server` | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay)                                                              | yes (2)   |
 | T-5   | `feature/tasks-v1-1-opening-reminders-ui`     | D-5: shell popup, catch-up, CTA, multi-tab, demo-mode parity, browser tests                                                                       | no        |

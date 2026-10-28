@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import type { TaskCommand } from "../domain/task-commands";
+import { ALL_STAFF_SCOPE, type TodayScope } from "../domain/task-rules";
 import {
   DEFAULT_TASK_CATEGORIES,
   isTasksManager,
@@ -56,6 +57,9 @@ export function TasksWorkspace({ controller }: Props) {
   const { snapshot, viewer, run } = controller;
   const manager = isTasksManager(viewer.designation);
   const [tab, setTab] = useState<TasksTab>("today");
+  // Kept here (not in TodayView) so the choice survives hopping to another
+  // Tasks section and back. Only managers can change it.
+  const [todayScope, setTodayScope] = useState<TodayScope>(ALL_STAFF_SCOPE);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [form, setForm] = useState<{
     task?: TaskView;
@@ -224,6 +228,8 @@ export function TasksWorkspace({ controller }: Props) {
           {tab === "today" ? (
             <TodayView
               controller={controller}
+              scope={todayScope}
+              onScopeChange={setTodayScope}
               categoryName={categoryName}
               onToggle={toggle}
               onOpen={(task) => setOpenTaskId(task.id)}
