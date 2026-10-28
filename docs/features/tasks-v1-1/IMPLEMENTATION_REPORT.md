@@ -207,7 +207,7 @@ Before: 51 migrations, latest `20261027210000`, none of the T-3/T-4 objects. App
 
 ## T-5 — Opening reminder popup + catch-up UX (PLAN D-5, #154)
 
-**Branch:** `feature/tasks-v1-1-reminder-popup` from `development` @ `bfea042f40289f42335e1d76e320b820ceeaab21` (verified equal to the expected `origin/development`). Claude Code **Cloud** session (Sonnet 5.5, high effort). **No migration; `supabase/**` unchanged; T-4 database semantics unchanged; hosted DEV and PROD not touched.** `main` untouched.
+**Branch:** `feature/tasks-v1-1-reminder-popup` from `development` @ `bfea042f40289f42335e1d76e320b820ceeaab21` (verified equal to the expected `origin/development`). Claude Code **Cloud** session (Sonnet 5.5, high effort). **No migration; `supabase/**`unchanged; T-4 database semantics unchanged; hosted DEV and PROD not touched.**`main` untouched.
 
 ### The locked decision
 
@@ -215,15 +215,15 @@ T-4 stores every legitimately missed stage on late catch-up (a first look at 09:
 
 ### What was built
 
-| Piece                                          | Where                                                                                                                                                                                                                                     |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Popup selection, copy, live actionable count   | `domain/opening-reminder-popup.ts` (pure; no clock, no timing rule, stage ids from the payload only)                                                                                                                                      |
-| Server read model                              | `data/opening-reminder-prompt-data.ts`: `checklist_generate_daily`, then `task_opening_reminders_sweep(org, loc)` (tenant only), then the caller's own `opening_reminder` rows plus a count of today's incomplete Opening items in the caller's scope |
-| Server actions                                 | `getOpeningReminderPromptAction({ restaurantSlug })` and `acknowledgeOpeningReminderAction({ restaurantSlug, ids })` (existing `task_notifications_mark_read`, own rows only) in `actions/tasks-actions.ts`                              |
-| Wake gate + hook                               | `hooks/wake-gate.ts` (one request in flight, 5 s spacing, monotonic clock), `hooks/use-opening-reminder-prompt.ts`                                                                                                                        |
-| Dialog + sources                               | `components/opening-reminder-prompt.tsx` (built on `components/ui/dialog.tsx`), `components/opening-reminder-sources.ts` (real: the two actions; demo: the in-memory engine)                                                             |
-| Shell mount                                    | `restaurant-operations-app.tsx`: mounted for any signed-in person on any module, keyed by profile + restaurant; CTA remounts Tasks (Today) and sets the tab through the T-1 helper                                                        |
-| Demo twin of the sweep                         | `domain/opening-reminder-engine.ts`: same stages, same judged-at-the-stage-instant rule, same per-recipient scope, same dedupe key; demo location opens 09:00; **opt-in with `?demoReminders=1`**; the Tasks controller runs it too, like the real snapshot calls the sweep |
+| Piece                                        | Where                                                                                                                                                                                                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Popup selection, copy, live actionable count | `domain/opening-reminder-popup.ts` (pure; no clock, no timing rule, stage ids from the payload only)                                                                                                                                                                        |
+| Server read model                            | `data/opening-reminder-prompt-data.ts`: `checklist_generate_daily`, then `task_opening_reminders_sweep(org, loc)` (tenant only), then the caller's own `opening_reminder` rows plus a count of today's incomplete Opening items in the caller's scope                       |
+| Server actions                               | `getOpeningReminderPromptAction({ restaurantSlug })` and `acknowledgeOpeningReminderAction({ restaurantSlug, ids })` (existing `task_notifications_mark_read`, own rows only) in `actions/tasks-actions.ts`                                                                 |
+| Wake gate + hook                             | `hooks/wake-gate.ts` (one request in flight, 5 s spacing, monotonic clock), `hooks/use-opening-reminder-prompt.ts`                                                                                                                                                          |
+| Dialog + sources                             | `components/opening-reminder-prompt.tsx` (built on `components/ui/dialog.tsx`), `components/opening-reminder-sources.ts` (real: the two actions; demo: the in-memory engine)                                                                                                |
+| Shell mount                                  | `restaurant-operations-app.tsx`: mounted for any signed-in person on any module, keyed by profile + restaurant; CTA remounts Tasks (Today) and sets the tab through the T-1 helper                                                                                          |
+| Demo twin of the sweep                       | `domain/opening-reminder-engine.ts`: same stages, same judged-at-the-stage-instant rule, same per-recipient scope, same dedupe key; demo location opens 09:00; **opt-in with `?demoReminders=1`**; the Tasks controller runs it too, like the real snapshot calls the sweep |
 
 ### Behaviour
 
@@ -232,7 +232,7 @@ T-4 stores every legitimately missed stage on late catch-up (a first look at 09:
 - **Persistence:** the database read state. Reload, another tab and reconnect converge on it; an optimistic mark is dropped if the save fails (the popup returns).
 - **Wake-up (implemented triggers):** mount (sign-in / first authenticated load), tab visible, window focus, back online, and a 60 s heartbeat while visible (a device left open on one screen has no focus event; without it nothing would fire at 09:15). All pass through one gate. A failed wake keeps the last state, logs, and retries on the next trigger; no client-made reminder, no "complete" inferred from a failure. Cost: one idempotent sweep plus three small reads per visible tab per minute; steady-state sweeps store nothing.
 - **Privacy:** the browser sends the restaurant (and, to acknowledge, one of its own notification ids): never a stage, a recipient or a time. Staff copy has no number and no names; the staff popup is built from their own notification and a count of work they may do. No management-wide fetch follows a staff notification.
-- **Copy** (stage-aware, no elapsed-time claim): management "Opening Tasks Are Ready" (`open`), "Opening Tasks Need Attention" with "N Opening items are still incomplete." (`plus_15`) / "need attention." (`plus_30`) and *View Opening Tasks*; staff "Opening Task Reminder" with *View My Opening Tasks*. Stage badge text plus accent / warning / danger tone from existing tokens. No audio, push, SMS or email.
+- **Copy** (stage-aware, no elapsed-time claim): management "Opening Tasks Are Ready" (`open`), "Opening Tasks Need Attention" with "N Opening items are still incomplete." (`plus_15`) / "need attention." (`plus_30`) and _View Opening Tasks_; staff "Opening Task Reminder" with _View My Opening Tasks_. Stage badge text plus accent / warning / danger tone from existing tokens. No audio, push, SMS or email.
 - **Accessibility:** native `<dialog>` primitive (focus trap, Escape, top layer), accessible title + description, initial focus on the primary action, focus returns to the previously focused control on close, 48 px buttons, full-width on narrow screens.
 
 ### Scope kept out
@@ -241,19 +241,18 @@ No migration, no change to T-4's SQL, no change to the T-3 notification gate, no
 
 ### Tests
 
-| Layer            | Result                                                                                                                                                                                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest           | **1687/1687** (122 files; +58 from 1629): selection / priority / superseded / actionability / copy / live count (24 incl. wake gate), demo engine incl. catch-up and reopen (13), popup + wake component tests (17), server read model (4)                                                                                  |
-| Playwright       | `opening-reminder-popup.spec.ts` 10 tests; `desktop` and `server-mobile`: 134/134 with `tasks`, `management-today`, `default-landing`, `dashboard` (67 each). Chromium **emulating** iPad (gen 7) landscape: 28/28 (popup, default-landing, management-today). Labeled accurately: emulation, not WebKit                   |
-| Static / build   | `npm run check` (prettier, eslint, tsc) clean; `npm run build` green; `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build` green (`/` prerendered static). This container has no `.env*.local`, so the two builds exercise the same configuration; the empty-variable build was run explicitly |
-| Not run          | **Real `host-tablet` WebKit** (`/opt/pw-browsers/webkit-2359` is absent; T-6 owns it); hosted DEV (T-6); `tests/real` suites (no secrets in this container; real-mode UI specs may now see the popup, T-6 should run them); a two-browser E2E (demo state is per page; convergence is proven against a shared fake server) |
+| Layer          | Result                                                                                                                                                                                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest         | **1687/1687** (122 files; +58 from 1629): selection / priority / superseded / actionability / copy / live count (24 incl. wake gate), demo engine incl. catch-up and reopen (13), popup + wake component tests (17), server read model (4)                                                                                 |
+| Playwright     | `opening-reminder-popup.spec.ts` 10 tests; `desktop` and `server-mobile`: 134/134 with `tasks`, `management-today`, `default-landing`, `dashboard` (67 each). Chromium **emulating** iPad (gen 7) landscape: 28/28 (popup, default-landing, management-today). Labeled accurately: emulation, not WebKit                   |
+| Static / build | `npm run check` (prettier, eslint, tsc) clean; `npm run build` green; `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build` green (`/` prerendered static). This container has no `.env*.local`, so the two builds exercise the same configuration; the empty-variable build was run explicitly  |
+| Not run        | **Real `host-tablet` WebKit** (`/opt/pw-browsers/webkit-2359` is absent; T-6 owns it); hosted DEV (T-6); `tests/real` suites (no secrets in this container; real-mode UI specs may now see the popup, T-6 should run them); a two-browser E2E (demo state is per page; convergence is proven against a shared fake server) |
 
 ### Known limits
 
 - Demo state is in memory, so a page reload rebuilds it; "reload after dismiss" is proven against a persistent fake server in the component tests, and by navigation / focus / time in Playwright.
-- The popup reads live Opening items for *today's* Opening instances only; a service day with no generated Opening checklist produces neither reminders nor a popup (same as T-4).
+- The popup reads live Opening items for _today's_ Opening instances only; a service day with no generated Opening checklist produces neither reminders nor a popup (same as T-4).
 
 ### Status
 
 **T-5 implemented and validated locally; PR, exact-head CI and merge are recorded in `tasks/current-task.md` and the PR.** T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.
-
