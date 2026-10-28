@@ -3264,6 +3264,7 @@ export type Database = {
           dedupe_key: string | null;
           id: number;
           organization_id: string;
+          payload: Json | null;
           read_at: string | null;
           recipient_profile_id: string;
           task_id: string | null;
@@ -3277,6 +3278,7 @@ export type Database = {
           dedupe_key?: string | null;
           id?: never;
           organization_id: string;
+          payload?: Json | null;
           read_at?: string | null;
           recipient_profile_id: string;
           task_id?: string | null;
@@ -3290,6 +3292,7 @@ export type Database = {
           dedupe_key?: string | null;
           id?: never;
           organization_id?: string;
+          payload?: Json | null;
           read_at?: string | null;
           recipient_profile_id?: string;
           task_id?: string | null;
@@ -4428,6 +4431,10 @@ export type Database = {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: number;
       };
+      task_opening_reminders_sweep: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: number;
+      };
       task_recurrence_generate: {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: number;
@@ -4574,7 +4581,8 @@ export type Database = {
         | "due_soon"
         | "overdue"
         | "completed"
-        | "checklist_available";
+        | "checklist_available"
+        | "opening_reminder";
       task_priority: "normal" | "high" | "urgent";
       task_status:
         | "open"
@@ -4785,6 +4793,7 @@ export const Constants = {
         "overdue",
         "completed",
         "checklist_available",
+        "opening_reminder",
       ],
       task_priority: ["normal", "high", "urgent"],
       task_status: ["open", "in_progress", "blocked", "completed", "cancelled"],

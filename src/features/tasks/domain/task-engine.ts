@@ -3,6 +3,10 @@ import {
   zonedWallTimeToInstant,
 } from "@/lib/timezone";
 
+import {
+  openingReminderDedupeKey,
+  type OpeningReminder,
+} from "./opening-reminder";
 import { occurrenceDates, weekdayOf } from "./recurrence";
 import type {
   CommandResult,
@@ -152,16 +156,36 @@ export function validateAssignees(
 
 /**
  * The notification inbox carries Opening and Closing operational work only
- * (PLAN D-3, #154). Mirrors the gate in private.tasks_notify: a notification is
- * kept when it announces a generated checklist, or when its task is an Opening
- * or Closing item. Anything else -- every `kind = 'task'` event, or a call that
- * names no task -- is dropped. Audit events are a separate record and never
- * pass through this gate.
+ * (PLAN D-3 / D-4, #154). Mirrors the gate in private.tasks_notify: a
+ * notification is kept when it announces a generated checklist, when it is a
+ * well-formed Opening reminder (a known stage, its location, service date and
+ * stage encoded in the dedupe key, no task reference), or when its task is an
+ * Opening or Closing item. Anything else -- every `kind = 'task'` event, or a
+ * call that names no task -- is dropped. Audit events are a separate record and
+ * never pass through this gate.
  */
 export function isOperationalNotification(
   state: TasksState,
-  input: { type: NotificationType; taskId: string | null },
+  input: {
+    type: NotificationType;
+    taskId: string | null;
+    reminder?: OpeningReminder | null;
+    dedupeKey?: string | null;
+  },
 ): boolean {
+  if (input.type === "opening_reminder") {
+    const reminder = input.reminder;
+    return (
+      input.taskId === null &&
+      !!reminder &&
+      input.dedupeKey ===
+        openingReminderDedupeKey(
+          reminder.locationId,
+          reminder.serviceDate,
+          reminder.stage,
+        )
+    );
+  }
   if (input.type === "checklist_available") return true;
   const task = input.taskId
     ? state.tasks.find((t) => t.id === input.taskId)
@@ -184,6 +208,7 @@ export function notify(
     title: string;
     body: string | null;
     dedupeKey?: string | null;
+    reminder?: OpeningReminder | null;
   },
 ): TasksState {
   if (!isOperationalNotification(state, input)) return state;
@@ -206,6 +231,8 @@ export function notify(
     checklistInstanceId: input.instanceId ?? null,
     createdAt: ctx.now.toISOString(),
     readAt: null,
+    reminder:
+      input.type === "opening_reminder" ? (input.reminder ?? null) : null,
     recipientId: input.recipientId,
     dedupeKey: key,
   };

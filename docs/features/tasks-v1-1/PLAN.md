@@ -1,8 +1,8 @@
 # Tasks V1.1 — Plan
 
-**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4..T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
+**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 built and validated, PR open (see IMPLEMENTATION*REPORT); T-5..T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only.
-**Sequencing:** Tasks _code_ (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
+**Sequencing:** Tasks \_code* (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
 
 ## 1. Outcome
 
@@ -72,7 +72,8 @@ Accepted values (kebab-case, URL-facing): `tasks`, `allocation`, `schedule`, `te
 - Dedup key: `opening_reminder:<location_id>:<service_date>:<STAGE>` per recipient, enforced by the existing unique index. Repeated RPCs, reloads, two tabs, reconnects and retries are no-ops.
 - New enum value `opening_reminder` (its own migration; PostgreSQL cannot use an added enum value in the same transaction). Body carries the recipient's own incomplete count at the stage instant.
 - Safety: `security definer`, `set search_path = ''`, membership checked through `private.tasks_begin`, org/location validated, no client-supplied profile ids.
-- Client wake-up: the controller's existing 30 s clock refreshes the snapshot when `now` crosses a stage instant (the snapshot exposes `openingAt`). This is only a wake-up; the server still decides.
+- Client wake-up: the controller's existing 30 s clock refreshes the snapshot when `now` crosses a stage instant (the snapshot exposes `openingAt`). This is only a wake-up; the server still decides. **Moved to T-5** (UI): T-4 ships the engine and the `OPENING_REMINDER_OFFSET_MINUTES` contract only.
+- **As built in T-4 (amendments):** stage ids are lowercase `open`, `plus_15`, `plus_30` (the dedupe key and `payload.stage` use them; `OPEN`/`OPEN_PLUS_*` above are the same stages); the key is `opening_reminder:<location_id>:<service_date>:<stage>`; the reminder carries a machine-readable `payload` (`stage`, `service_date`, `location_id`, `stage_at`, `incomplete_count` at the stage instant, `incomplete_now`) in a new `task_notifications.payload` column and **no** `task_id` / `checklist_instance_id` (the gate rejects any); an advisory transaction lock per location serialises overlapping sweeps; the evaluator is `private.tasks_opening_reminders_run(org, loc, now)` with an injected clock and the public RPC passes `clock_timestamp()`. The late-evaluation rule is unchanged: a truly missed stage is stored once on catch-up, a stage complete at its own instant is never back-filled.
 
 **D-5 Popup and catch-up.** `OpeningReminderPrompt` mounted in the app shell (visible on any module), built on `components/ui/dialog.tsx`, never `alert()`. It shows the **newest unread** `opening_reminder` for today's service date; older stages stay in the notification history. **View Opening Tasks** marks the stage notifications read and navigates to Tasks → Opening. **Dismiss** only marks them read (`task_notifications_mark_read`), so a second tab drops the popup on its next refresh/focus and no task state changes. Copy per the owner brief (T+0 "Opening tasks are not complete", T+15 "still incomplete", T+30 "overdue").
 
@@ -80,15 +81,15 @@ Accepted values (kebab-case, URL-facing): `tasks`, `allocation`, `schedule`, `te
 
 ## 4. Phases
 
-| Phase | Branch (from latest `development`)            | Scope                                                                                                                                             | Migration |
-| ----- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| T-0   | `docs/tasks-v1-1-plan`                        | This plan, `TEST_MATRIX.md`, handoff, roadmap/status                                                                                              | no        |
-| T-1   | `feature/tasks-v1-1-default-landing`          | D-1: default Tasks, `?tab=` addressing, e2e helper updates for the new default **(COMPLETE)**                                                     | no        |
-| T-2   | `feature/tasks-v1-1-management-today`         | D-2: scope selector, staff names, grouped Today, staff-privacy tests **(COMPLETE; branch name as run)**                                           | no        |
-| T-3   | `feature/tasks-v1-1-notification-scope`       | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP **(COMPLETE; migration `20261028090000`)**                                                 | yes       |
-| T-4   | `feature/tasks-v1-1-opening-reminders-server` | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay)                                                              | yes (2)   |
-| T-5   | `feature/tasks-v1-1-opening-reminders-ui`     | D-5: shell popup, catch-up, CTA, multi-tab, demo-mode parity, browser tests                                                                       | no        |
-| T-6   | `docs/tasks-v1-1-final-gate`                  | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment | no        |
+| Phase | Branch (from latest `development`)        | Scope                                                                                                                                                                        | Migration |
+| ----- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| T-0   | `docs/tasks-v1-1-plan`                    | This plan, `TEST_MATRIX.md`, handoff, roadmap/status                                                                                                                         | no        |
+| T-1   | `feature/tasks-v1-1-default-landing`      | D-1: default Tasks, `?tab=` addressing, e2e helper updates for the new default **(COMPLETE)**                                                                                | no        |
+| T-2   | `feature/tasks-v1-1-management-today`     | D-2: scope selector, staff names, grouped Today, staff-privacy tests **(COMPLETE; branch name as run)**                                                                      | no        |
+| T-3   | `feature/tasks-v1-1-notification-scope`   | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP **(COMPLETE; migration `20261028090000`)**                                                                            | yes       |
+| T-4   | `feature/tasks-v1-1-opening-reminders`    | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay) **(BUILT; PR open; branch name as run; migrations `20261028100000`, `20261028100100`)** | yes (2)   |
+| T-5   | `feature/tasks-v1-1-opening-reminders-ui` | D-5: shell popup, catch-up, CTA, multi-tab, demo-mode parity, browser tests                                                                                                  | no        |
+| T-6   | `docs/tasks-v1-1-final-gate`              | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment                            | no        |
 
 T-3 and T-4 touch the same function family; T-3 merges first and T-4 branches from it. Each phase ends with targeted tests, the phase regression, exact-head CI (local head = PR head = CI-tested SHA), a merge commit and a handoff update.
 

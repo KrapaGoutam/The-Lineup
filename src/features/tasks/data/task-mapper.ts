@@ -13,6 +13,7 @@ import type {
   TaskStatus,
   TaskView,
 } from "../domain/task-types";
+import { parseOpeningReminder } from "../domain/opening-reminder";
 
 /** The columns Tasks reads from `public.tasks` (plus its assignment embed). */
 export type TaskRow = {
@@ -244,10 +245,12 @@ export type NotificationRow = {
   checklist_instance_id: string | null;
   created_at: string;
   read_at: string | null;
+  /** Machine-readable payload; set only on an opening_reminder. */
+  payload: unknown;
 };
 
 export const NOTIFICATION_ROW_COLUMNS =
-  "id, type, title, body, task_id, checklist_instance_id, created_at, read_at";
+  "id, type, title, body, task_id, checklist_instance_id, created_at, read_at, payload";
 
 export function mapNotificationRow(row: NotificationRow): NotificationView {
   return {
@@ -259,5 +262,9 @@ export function mapNotificationRow(row: NotificationRow): NotificationView {
     checklistInstanceId: row.checklist_instance_id,
     createdAt: row.created_at,
     readAt: row.read_at,
+    reminder:
+      row.type === "opening_reminder"
+        ? parseOpeningReminder(row.payload)
+        : null,
   };
 }

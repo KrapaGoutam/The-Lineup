@@ -324,6 +324,87 @@ describe("operational gate (TS-043 policy vectors)", () => {
   });
 });
 
+describe("opening_reminder gate (T-4, mirrors pgTAP 0042 section 8)", () => {
+  const reminder = {
+    stage: "open" as const,
+    serviceDate: "2026-07-01",
+    locationId: "loc",
+    stageAt: "2026-07-01T14:00:00Z",
+    incompleteCount: 2,
+    incompleteNow: 2,
+  };
+  const key = "opening_reminder:loc:2026-07-01:open";
+  const input = {
+    type: "opening_reminder" as const,
+    taskId: null,
+    reminder,
+    dedupeKey: key,
+  };
+  const state = emptyTasksState();
+
+  it("keeps a structured reminder", () => {
+    expect(isOperationalNotification(state, input)).toBe(true);
+  });
+
+  it.each([
+    [
+      "a mismatched dedupe key",
+      { ...input, dedupeKey: "opening_reminder:wrong" },
+    ],
+    ["no dedupe key", { ...input, dedupeKey: null }],
+    ["no payload", { ...input, reminder: null }],
+    ["a task reference", { ...input, taskId: "t1" }],
+    [
+      "a stage that does not match its key",
+      { ...input, reminder: { ...reminder, stage: "plus_15" as const } },
+    ],
+  ])("fails closed on %s", (_label, bad) => {
+    expect(isOperationalNotification(state, bad)).toBe(false);
+  });
+
+  it("an Opening task id cannot carry an opening_reminder through the task clause", () => {
+    const withTask: TasksState = {
+      ...state,
+      tasks: [makeTask({ id: "src", kind: "opening" })],
+    };
+    expect(
+      isOperationalNotification(withTask, {
+        type: "opening_reminder",
+        taskId: "src",
+        reminder: null,
+        dedupeKey: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("notify stores one per recipient and key, with its payload, and nothing else leaks in", () => {
+    const ctx = ctxFor("mona", NOW);
+    const send = (s: TasksState, recipientId: string) =>
+      notify(s, ctx, {
+        recipientId,
+        type: "opening_reminder",
+        taskId: null,
+        title: "Opening tasks are not complete",
+        body: "2 Opening tasks are not complete",
+        dedupeKey: key,
+        reminder,
+      });
+    let next = send(state, "ann");
+    next = send(next, "ann");
+    next = send(next, "bea");
+    expect(next.notifications.map((n) => n.recipientId)).toEqual([
+      "ann",
+      "bea",
+    ]);
+    expect(next.notifications[0]?.reminder).toEqual(reminder);
+    expect(next.notifications[0]?.taskId).toBeNull();
+    // An existing ordinary-notification policy is untouched.
+    expect(
+      isOperationalNotification(state, { type: "assigned", taskId: null }),
+    ).toBe(false);
+  });
+});
+
 describe("read state (TASK-053)", () => {
   it("marks some or all read, only for the viewer", () => {
     // Two checklists (Opening + Closing) give each non-starter two notifications.
