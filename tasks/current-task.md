@@ -6,13 +6,17 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-3 — Sharing / Export / Mark Sent / Sent History — COMPLETE (merged). VOD-4 NEXT / NOT STARTED.
+VOD-4 — Hosted DEV / Final Vendor Order Drafts Gate — IN PROGRESS (VOD-3 COMPLETE, merged).
 
 ## Execution
 
-Claude Code Cloud (GitHub/origin is the source of truth).
+Local Windows PC (Claude Sonnet 5.5). Hosted DEV only; PROD forbidden.
 
 ## Branch / base
+
+- VOD-4 branch: `feature/vendor-order-drafts-v1-final-gate` (renamed locally from `test/vendor-order-drafts-v1-final-gate`; no commits of its own)
+- VOD-4 base development SHA: `6b8dcead804a3aa803b2e8e3eb1dfd2c4bf1660c` (= origin/development)
+- Tasks T-1 PARKED at `03d5d45`; main UNTOUCHED; PROD UNTOUCHED
 
 - VOD-3 branch: `feature/bar-order-drafts-v1-sharing-history`
 - Base development SHA: `75d6ae35cfdfda1ba53d4994b067e12b241c9291`
@@ -77,7 +81,23 @@ None.
 git fetch origin && git rev-parse origin/development
 ```
 
-## Exact next action
+## Current State & Next Step (VOD-4)
+
+- [x] Branch renamed, HEAD == origin/development == 6b8dcea, tree clean
+- [x] Prove DEV target: `.env.development.local` -> ref `opmujepkemwcdxxorhfd` (DEV); PROD ref `ftadewtkjlaotfdvtjcv` is only in `.env.production.local`; harness hard-aborts on anything but DEV
+- [x] DEV migration parity: BEFORE 49 migrations (latest 20261027130000, no order-draft tables). APPLIED to DEV via Management API + schema*migrations row (repo precedent): 20261027195142_bar_inventory_order_drafts, 20261027210000_bar_inventory_order_draft_save_order_qty_fix. AFTER 51/51, latest 20261027210000, 6 `inventory_order_draft*\*` RPCs present. PROD untouched.
+- [x] Wrote hosted real DB test `tests/real/bar-inventory-order-drafts.db.real.test.ts` (38 tests, disposable harness org, real JWTs, role matrix, RLS, PT409 two-context, Mark Sent stock/ledger isolation, immutability, retry, new draft, frozen labels, real data layer paging past 1,000 rows). Run 2: 36/38 passed.
+- DEFECT D1 (real, found by hosted run): `getSentOrderDraftsPage` returns null for a page past the end because PostgREST answers an out-of-range offset with PGRST103 (416), not an empty page; the clamp branch only handles empty data. Unit fake never produced PGRST103. Needs `fix/sent-history-past-end-page` from origin/development: failing-first unit test + clamp via head count. Severity low (Sent history never shrinks; only stale/crafted page numbers). Keep the failing real assertion until fixed.
+- (test-expectation bugs fixed, NOT product defects: 1e9 is a valid Order Qty — cap is 9,999,999,999.99; summary arithmetic)
+- [x] VOD demo-mode Playwright (bar-inventory-order-drafts + -sharing, 20 tests each project, --workers=2): desktop 20/20, host-tablet (WebKit 26.6, build 2359 already installed) 20/20, server-mobile 20/20
+- [x] Hosted real UI spec `tests/real/ui/bar-inventory-order-drafts.real.spec.ts` on a DEV-pinned PRODUCTION build (0 PROD-ref matches in .next): 15/15 PASS (desktop Chromium; Owner + Manager + Staff contexts; real import seed, concurrent Create -> 1 draft, qty-only blank->5->6->0->blank across real reloads, notes/Include, Clear/Fill/Update suggestions, two-window PT409 + Keep my edits, stale Mark Sent refused, Copy/CSV/XLSX + formula neutralisation, Mark Sent no stock/ledger change, Chicago time, idempotent retry, Sent immutable, Sent list/detail, new draft, rename after Sent frozen, Sent exports). Left in DEV the-monks: ONE immutable Sent order tagged `VOD4-1793147764614` + its vendor/2 products/1 category/1 subcategory (cannot be deleted by design). All other tagged data removed.
+- Test-side fixes only (not defects): stale Owner screen needs reload (no Realtime for drafts = known deferred), conflict banner wording, Windows clipboard CRLF.
+- [ ] Broader Bar Inventory regression x3 projects; repo gates (check parts, vitest, build)
+- [ ] Defect D1 fix branch; closure docs; PR
+- NOTE: `next dev` rewrites AGENTS.md -> `git checkout AGENTS.md` before any commit.
+- [ ] tests/real, Playwright (desktop / host-tablet WebKit / server-mobile), repo gates, closure docs
+
+## Exact next action (VOD-3 text, superseded by VOD-4 start)
 
 STOP. VOD-3 is complete. VOD-4 (hosted DEV / final Vendor Order Drafts gate: real RLS, Staff denial, two-context PT409, no inventory mutation against the real ledger, full browser matrix including host-tablet WebKit and server-mobile, tests/real) starts in a FRESH session from the updated `development`. Keep Tasks T-1 parked. Do not touch `main` or PROD.
 
