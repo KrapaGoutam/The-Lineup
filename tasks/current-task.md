@@ -2,6 +2,45 @@
 
 ## Current cycle
 
+Recipes V1
+
+```text
+Cycle:                      Recipes V1
+Previous Production release: COMPLETE (main 9e0be4b)
+Recipes R-0:                IN PROGRESS   (planning + architecture + data + UI contract; docs only)
+Recipes R-1:                NOT STARTED
+Recipes R-2:                NOT STARTED
+Part 2:                     ON HOLD
+main:                       CURRENT PRODUCTION (untouched)
+PROD:                       UNCHANGED DURING R-0
+```
+
+- **Phase:** Recipes V1 R-0 — Claude Code Cloud, Sonnet 5.5, high, NEW session. Objective: an implementation-ready contract (PRD, plan, data model, security, UI/UX, source mapping, test matrix, R-1/R-2 implementation plan) so R-1 and R-2 can build without making product decisions.
+- **Branch:** `docs/recipes-v1-r0-planning` (from `development`, PR target `development`, MERGE COMMIT only).
+- **Base SHA:** `73ebc210d97778db238b26acbee82481190560ea` (= `origin/development` at start; `origin/main` = `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`).
+- **Safety flags:** docs only · no application code · no migration · no Storage bucket · no seed/recipe data · no DEV database touched · PROD NOT touched · `main` NOT touched · R-1 / R-2 / Part 2 NOT started · no `development -> main`.
+- **Plan folder:** `docs/features/recipes-v1/` (`PRD.md`, `PLAN.md`, `DATA_MODEL.md`, `SECURITY_AND_ROLES.md`, `UI_UX_PLAN.md`, `SOURCE_MAPPING.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_PLAN.md`, `STORAGE_PLAN.md`).
+- **Exact next action:** finish and commit the R-0 docs, push, open the PR into `development`, require exact-head CI, merge by merge commit, then record the merge SHA. After that: STOP. R-1 is a separate NEW session (Codex).
+
+### R-0 step checklist (interruption-safe; check off as each is written and reviewed)
+
+- [x] sync verified (`development` = `origin/development` = `73ebc21`), branch created, handoff marked IN PROGRESS
+- [x] `PRD.md`
+- [x] `DATA_MODEL.md`
+- [x] `SECURITY_AND_ROLES.md`
+- [x] `STORAGE_PLAN.md`
+- [x] `UI_UX_PLAN.md`
+- [x] `SOURCE_MAPPING.md`
+- [x] `TEST_MATRIX.md`
+- [x] `IMPLEMENTATION_PLAN.md`
+- [x] `PLAN.md` (decision register, review checklist, Codex build prompt)
+- [x] `docs/ROADMAP.md`, `docs/STATUS.md`, `tasks/backlog.md` updated
+- [x] tracking issue created: #220 (Project #4 update NOT PERFORMED — Projects tooling unavailable in this session)
+- [x] docs checks green (`prettier --check`, tracked-path check), diff inspected: zero app code, zero migrations
+- [ ] commit, push, PR -> `development`, exact-head CI green, MERGE COMMIT, merge SHA recorded
+
+## Previous cycle (Tasks V1.1 and Production release 2026-10-28)
+
 Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (Opening reminder popup + catch-up UX) is COMPLETE** (#154; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`)). **T-6 (final gate) is COMPLETE — GO** (#154, #169; PR #213, tested head `75c964b10a9c319cd76e84eaa753b647b3a12e4c` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `711a683` (two parents: `deee02b` + `75c964b`); Local Windows, Sonnet 5.5, high). **Tasks V1.1 engineering phases T-1 through T-6 are complete.** Next: final Tasks V1.1 audit / release-readiness review, then explicit owner approval before any `development -> main`. Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Production release (2026-10-28): DEPLOYED
@@ -104,8 +143,8 @@ git fetch origin && git status -sb && git log --oneline -5 origin/development
 ## Read first
 
 1. `tasks/current-task.md`
-2. `docs/features/tasks-v1-1/PLAN.md` (D-2, phase table) and `TEST_MATRIX.md` (TS-010..TS-017)
-3. `docs/features/tasks-v1-1/IMPLEMENTATION_REPORT.md` (T-1)
+2. `docs/features/recipes-v1/PLAN.md` (decision register and the Codex build prompt), then `DATA_MODEL.md`, `SECURITY_AND_ROLES.md`, `IMPLEMENTATION_PLAN.md`
+3. `docs/features/recipes-v1/TEST_MATRIX.md` (RC-001 ...) for the phase being built
 
 ## DO NOT
 
@@ -115,3 +154,4 @@ git fetch origin && git status -sb && git log --oneline -5 origin/development
 - Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
 - Do not merge on stale, partial, or red CI.
 - `next dev` rewrites the `AGENTS.md` heading; never commit that change (`git checkout AGENTS.md`).
+- Recipes V1: R-0 is documentation only. Do not start R-1 or R-2 in the R-0 session; no Recipes application code, migration, Storage bucket or seed data. Part 2 stays ON HOLD.
