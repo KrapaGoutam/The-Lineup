@@ -107,11 +107,11 @@ test("manager renames, changes designation, resets passcode, and links attendanc
   // success.
   await signOut(page);
   await signInOnCurrentPage(page, "5150");
-  // Scoped to <main> -- on mobile, the account button's own name text
-  // sits in a lg:-only block that's present but hidden, not what this
-  // assertion means to check.
+  // Sign-in lands on Tasks. The account menu names who is signed in (the
+  // button's own name text is lg-only, so open the menu and look inside it).
+  await accountButton(page).click();
   await expect(
-    page.getByRole("main").getByText("Mia Rodriguez").first(),
+    page.getByText("Mia Rodriguez").filter({ visible: true }).first(),
   ).toBeVisible();
 });
 
