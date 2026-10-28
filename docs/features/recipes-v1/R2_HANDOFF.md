@@ -1,7 +1,7 @@
 # Recipes V1 R-2 handoff
 
 - R2-A: COMPLETE.
-- R2-B: COMPLETE. R2-C: COMPLETE. R2-D: COMPLETE. R2-E: NEXT / NOT STARTED. All later slices and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
+- R2-B: COMPLETE. R2-C: COMPLETE. R2-D: COMPLETE. R2-E: COMPLETE. R2-F: NEXT / NOT STARTED. All later slices and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
 - Branch: feature/recipes-v1-r2-management. Base development: 8f358a422c91275319c9f4479891a54a4cbb21c3. Starting HEAD: cb1fd09823e12c54a2befb8a80e674ec7a122ab5.
 - Canonical migration: 20261028193159_bar_recipes_management_and_images.sql, CLI-created after inspecting migration-new help. Repository migrations: 56. Scratch draft removed after promotion; there is one canonical implementation.
 - Local-GO implementation commit: 4a4c551. Final validated implementation/test SHA: b05569c70426c6974054b620d99b0b7db3bec598. The final branch SHA is the completion documentation commit containing this handoff, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-A handoff'`; final response records it explicitly. Same feature branch, no rebase/reset/merge.
@@ -159,8 +159,53 @@ Final OP1.0 connector audit against DEV `opmujepkemwcdxxorhfd`: recipes/categori
 
 Full repository-versus-DEV version/name comparison: **56 / 56, zero mismatches**, latest `20261028193159_bar_recipes_management_and_images`. No R2-D migration, no migration applied, no schema/type changes, no R2-A pgTAP replay. Security/accessibility/tenant-isolation/scope diff review PASS. Only intentional synthetic fixture bytes are committed; no env/build/trace/log/screenshot/temp artifacts.
 
-PROD untouched; main/development unchanged; no real Monks or web-sourced images; no R-2 PR; no Part 2. R2-E NOT STARTED.
+PROD untouched; main/development unchanged; no real Monks or web-sourced images; no R-2 PR; no Part 2.
+
+## R2-E COMPLETE (2026-10-28)
+
+R2-A/B/C/D/E COMPLETE. R2-F NEXT / NOT STARTED. Starting committed HEAD `2f8200783f207c7f94e809c9d2fd7fe18a8315a5`, verified clean and equal to fetched remote on `feature/recipes-v1-r2-management`. Implemented and verified end-to-end in Antigravity. Same feature branch; no rebase, reset, force push, or merge.
+
+### Implemented contract
+
+- `use-view-preference.ts`: SSR-safe `useSyncExternalStore` hook managing `recipes-view-preference` in `localStorage`. Defaults to `"list"`. Dispatches custom window events across listeners to keep parallel components synchronized. Safely catches `localStorage` read/write exceptions (private browsing / disabled storage) with silent fallback to `"list"`.
+- `recipe-filters.ts`: Pure functional browsing pipeline containing:
+  - `filterRecipes`: single-selection filter chips supporting `All`, `Popular` (`is_popular === true`), `On menu` (`is_menu_item === true`), and `Non-alcoholic` (`is_alcoholic === false` explicit boolean, never inferred).
+  - `sortRecipes`: sort modes `Book order` (`recipe_number` asc, default) and `A–Z` (`name` asc, case-insensitive).
+  - `groupRecipes`: groups recipes under categories ordered by fallback-last (`is_fallback === true`), `display_order`, then `name`. Omit empty categories. Active recipe count per category excludes archived recipes (`activeCount`).
+  - `deriveBrowsingData`: memoized pipeline producing filtered recipes, search results, and category groups. When a search query is active, the layout transforms into flat `Results (n)` sorted by the chosen sort mode, where each card displays a category caption.
+- `recipe-card.tsx`: Picture book card rendered as a single `<a>` tag (single keyboard tab stop / click target) containing `RecipeImage` in thumbnail mode (`thumbnail={true}` with lazy loading), zero-padded recipe number, name, Popular star badge (`★`), and Archived badge with parent dimming (`opacity-60`). Supports optional category caption in flat search results.
+- `recipe-picture-book.tsx`: Picture Book browsing component rendering responsive grid (2 columns on mobile, up to 5 on wide screens), category headings with active recipe counts, search-flat Results mode with category captions, and accessible empty states for search and filters.
+- `recipes-module.tsx`: Integrated `[ List | Picture Book ]` view toggle button group (`aria-pressed`), single-select filter chips (`aria-pressed`), and sort toggle button group (`aria-pressed`). Preserves search query, active filter chip, and sort mode seamlessly across view switches. List View deliberately loads no images, preserving performance.
+- `recipe-actions.ts` & `recipe-index.ts`: Updated `getRecipeIndexAction` and `Recipe` type to fetch `is_menu_item`, `is_alcoholic`, and `image_thumb_path` for both Staff and Management. Staff query maintains server-level `is_active: true` filter.
+
+### Validation evidence
+
+- Focused Recipes Vitest suite: **25 test files / 217 tests PASS** (baseline was 20 files / 185 tests). Added:
+  - `use-view-preference.test.tsx` (6 tests): default list, picture persistence, reload restoration, list restoration, invalid storage value fallback, storage exceptions.
+  - `recipe-filters.test.ts` (14 tests): all filter modes, sorting, grouping, active count calculation, search flattening.
+  - `recipe-card.test.tsx` (4 tests): single tab stop, onNavigate navigation, category caption, archived dimming.
+  - `recipe-picture-book.test.tsx` (4 tests): grouped layout, search-flat mode, clear search, clear filters.
+  - `recipes-browse.test.tsx` (4 tests): view switching, filter chips, sort order, Staff vs Management controls.
+- Full Vitest suite: **149 test files / 1,910 tests PASS** (100%).
+- Code quality & style: `npm run check` PASS (Prettier formatting, ESLint 0 errors / 0 warnings, Next route types generation, and TypeScript `tsc --noEmit`).
+- Playwright E2E matrix: **36 tests PASS** across desktop Chromium, WebKit `host-tablet`, and `server-mobile`, including 4 new tests in `recipes-picture-book.spec.ts` covering view toggle, card thumbnail placeholders, filter chips, sort toggle, search flattening, back navigation state preservation, reload persistence, and role isolation.
+- Production builds: DEV-pinned production build PASS; explicit-empty public Supabase build PASS (static root). Server and static bundle scans (`check-nonprod-env.mjs --scan .next`) confirmed **0 PROD references and 0 private secrets**. Migrations remain 56 in repository and DEV.
+
+### Hosted DEV evidence and cleanup
+
+- Hosted browser suite `tests/real/ui/recipes-browsing.real.spec.ts` executed against the DEV-pinned production build: **1/1 comprehensive flow PASS** (17.6s, 21.2s including setup/teardown) against real DEV (`opmujepkemwcdxxorhfd`).
+- Real passcode management signed in as synthetic TestManager, imported synthetic recipes (citrus, highball, and archived candidate), and validated:
+  - Initial default List View and switch to Picture Book view.
+  - Category sections and cards rendering with thumbnail placeholders and Popular star.
+  - Filter chips (`Popular`, `Non-alcoholic`, `On menu`, `All`).
+  - Sort toggle (`Book order`, `A–Z`).
+  - Picture Book search flattening to `Results (1)` with category caption.
+  - Recipe archiving in UI, verifying `Show archived` defaults off, toggles on with dimmed card and `Archived` badge, and toggles off.
+  - View preference persistence across page reloads (Picture Book preserved; List View preserved).
+  - Staff role isolation: synthetic TestServer1 signed in, toggled Picture Book, viewed active cards, and confirmed `Show archived` and archived recipe are completely inaccessible.
+- Teardown in `afterAll` deleted all synthetic recipes, categories, and image storage folders. Verified **0 remaining synthetic rows** in DEV database.
 
 ### Next
 
-R2-D COMPLETE. Next: **R2-E — Picture Book + Filters + Sorting + View Preference**, Codex LOCAL, GPT-6.1 Terra / Medium, NEW session, Auto-Review. Continue the same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R2-F unless explicitly combining phases. Do not open the R-2 PR, touch main or touch PROD. STOP.
+R2-E COMPLETE. Next: **R2-F — Management Category Reassignment + Real-Time Sync**, Codex LOCAL, GPT-6.1 Terra / Medium, NEW session, Auto-Review. Continue the same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R-2g unless explicitly combining phases. Do not open the R-2 PR, touch main or touch PROD. STOP.
+
