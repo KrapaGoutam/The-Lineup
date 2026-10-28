@@ -63,3 +63,13 @@ Phase gates: targeted U → focused D (`supabase test db` on the touched files) 
 | TS-017          | E PASS: labelled native `<select>`, focusable, 44 px, inside the viewport, no horizontal overflow                                                                                                        |
 | Audit actor     | U + E: a manager completing from a person view is the actor (`Completed by <manager>`), the assignee is unchanged                                                                                        |
 | Cross-org       | Not new: no new query; the roster and tasks queries are unchanged and RLS-scoped (pgTAP 0026 / `tasks-v1.db.real.test.ts` own the tenant seam). **Not re-run in T-2.**                                   |
+
+## T-3 evidence (Notification narrowing, #154)
+
+| ID      | Result                                                                                                                                                                                                                                         |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TS-040  | U `notifications.test.ts` and D `0041` (+ updated `0026`, `0029`) PASS: normal assigned / reassigned / completed / due-soon / overdue store nothing. E `tasks.spec.ts` asserts no inbox item for an ordinary assignment                        |
+| TS-041  | U + D PASS: `checklist_available` (Opening and Closing) stored; Opening / Closing assigned / reassigned / completed-for-you pass the gate to the named recipient only. **No caller emits the task-bearing ones today (finding in the report)** |
+| TS-042  | D `0041` PASS: create → reassign → complete → reopen → cancel leave `created, reassigned, completed, reopened, cancelled` in `task_events` (actor preserved) with zero notifications; legacy rows survive. U asserts the engine events         |
+| TS-043  | U + D PASS: the same 13 (type, source kind) vectors in `notifications.test.ts` and `0041`                                                                                                                                                      |
+| Privacy | D PASS: staff read only their own notifications; another organization reads none; cross-org task id and inactive recipient store nothing; dedupe key idempotency holds                                                                         |

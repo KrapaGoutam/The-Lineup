@@ -150,7 +150,29 @@ export function validateAssignees(
   return ok(people);
 }
 
-/** Mirrors private.tasks_notify: active recipients only, deduped by key. */
+/**
+ * The notification inbox carries Opening and Closing operational work only
+ * (PLAN D-3, #154). Mirrors the gate in private.tasks_notify: a notification is
+ * kept when it announces a generated checklist, or when its task is an Opening
+ * or Closing item. Anything else -- every `kind = 'task'` event, or a call that
+ * names no task -- is dropped. Audit events are a separate record and never
+ * pass through this gate.
+ */
+export function isOperationalNotification(
+  state: TasksState,
+  input: { type: NotificationType; taskId: string | null },
+): boolean {
+  if (input.type === "checklist_available") return true;
+  const task = input.taskId
+    ? state.tasks.find((t) => t.id === input.taskId)
+    : undefined;
+  return task?.kind === "opening" || task?.kind === "closing";
+}
+
+/**
+ * Mirrors private.tasks_notify: operational sources only, active recipients
+ * only, deduped by key.
+ */
 export function notify(
   state: TasksState,
   ctx: EngineContext,
@@ -164,6 +186,7 @@ export function notify(
     dedupeKey?: string | null;
   },
 ): TasksState {
+  if (!isOperationalNotification(state, input)) return state;
   if (!ctx.team.some((m) => m.profileId === input.recipientId)) return state;
   const key = input.dedupeKey ?? null;
   if (
@@ -193,7 +216,11 @@ export function notify(
   };
 }
 
-/** Mirrors task_notifications_sweep: due within an hour / overdue < 3 days. */
+/**
+ * Mirrors task_notifications_sweep: due within an hour / overdue < 3 days. It
+ * only ever targets `kind = 'task'`, which the operational gate in `notify`
+ * drops, so it is a no-op kept for parity with the RPC.
+ */
 export function sweepNotifications(
   state: TasksState,
   ctx: EngineContext,

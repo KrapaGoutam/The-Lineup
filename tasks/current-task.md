@@ -2,11 +2,11 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 (notification narrowing) is NEXT / NOT STARTED.** · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 (notification narrowing, #154) IN PROGRESS** on `feature/tasks-v1-1-notification-scope` (base `development` @ `f4f1aae26fdcf95d7d6b960eafb624ca05bcaa27`). **T-4 NOT STARTED.** · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
 
-T-2 — Management Today / staff visibility (#169): COMPLETE. Next phase: T-3 notification narrowing (PLAN D-3), a NEW session from the then-current `origin/development`.
+T-3 — Notification narrowing (#154, PLAN D-3): IN PROGRESS. Gate in `private.tasks_notify` (one migration) + TypeScript demo-engine mirror + tests. T-4 NOT STARTED (do not start).
 
 ## Execution
 
@@ -17,7 +17,7 @@ Claude Code Cloud (Sonnet 5.5, high effort, new session). No hosted DEV, no migr
 - T-2: branch `feature/tasks-v1-1-management-today` from `c6f309eae5c674e71b3906ff1b26faae0440ca22`; PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents); `development` HEAD after merge `46ea022`
 - T-1 (done): PR #203 tested `1e3e4b1`, merge `cf3ae39`; docs PR #204, merge `c6f309e`
 - Issue: #169 (tracking) · Project #4 (card update not performed: Projects tooling unavailable in this session)
-- T-3: NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
+- T-3: IN PROGRESS · branch `feature/tasks-v1-1-notification-scope` · base `development` @ `f4f1aae26fdcf95d7d6b960eafb624ca05bcaa27` · tracking #154 · T-4 NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
 
 ## Phase ledger
 
@@ -39,7 +39,18 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ## Current State & Next Step
 
 - [x] T-2 implemented, validated, exact-head CI green, merged (`46ea022`), docs synced
-- [ ] T-3 in a NEW session: `feature/tasks-v1-1-notification-scope` from the then-current `origin/development` (migration; DEV only)
+- [ ] T-3 IN PROGRESS (this session): migration `20261028090000_tasks_v1_1_notification_scope.sql`, `task-engine.ts` mirror, vitest + pgTAP + e2e updates, docs. Next step: see the checkboxes below, then push and open the PR.
+
+## T-3 progress (this session)
+
+- [x] Migration `20261028090000_tasks_v1_1_notification_scope.sql` (gate in `private.tasks_notify`; sweep count fixed)
+- [x] `task-engine.ts` mirror (`isOperationalNotification`) + `notifications.test.ts` (Vitest 1606/1606)
+- [x] pgTAP: new `0041`, updated `0026`, `0029` (local PG16 harness; 0039 needs dblink, unrelated)
+- [x] e2e `tasks.spec.ts` notification test + `tests/real/tasks-v1.db.real.test.ts` updated
+- [x] check, build, empty-Supabase-env build green; Playwright 57/57 desktop, server-mobile, Chromium-iPad
+- [x] Docs: IMPLEMENTATION_REPORT, TEST_MATRIX, PLAN, ROADMAP, STATUS, backlog
+- [ ] Commit, push, PR to `development`, exact-head CI, merge commit, post-merge docs sync (`docs/tasks-v1-1-t3-post-merge-sync`), #154 comment
+- T-4 NOT STARTED. Do not start it in this session.
 
 ## Exact next command
 

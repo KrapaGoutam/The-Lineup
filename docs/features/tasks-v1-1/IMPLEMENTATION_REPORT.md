@@ -86,3 +86,56 @@ Mutations (complete / reopen / assign / cancel / carry forward / edit, recurrenc
 ### Status
 
 **T-2 COMPLETE.** PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents). Caveat: the `host-tablet` WebKit project was not run (not installable in the cloud container; CI browser-smoke is `desktop` only) — covered by Chromium iPad emulation locally; run real WebKit at T-6. T-3 (notification narrowing) **not started**; Part 2 on hold.
+
+## T-3 — Notification narrowing (PLAN D-3, #154)
+
+**Branch:** `feature/tasks-v1-1-notification-scope` from `development` @ `f4f1aae26fdcf95d7d6b960eafb624ca05bcaa27` (verified equal to the expected T-2 post-merge docs state). Claude Code Cloud. **One additive migration, `supabase/migrations/20261028090000_tasks_v1_1_notification_scope.sql`; DEV only, no hosted DEV run, `main` and PROD untouched.**
+
+### Why a migration (the plan's choice, confirmed against the code)
+
+Notifications are written **only** by `private.tasks_notify` (security definer, called from `task_create`, `task_assign`, `task_complete`, `task_notifications_sweep` and `checklist_generate_daily`). The client never creates them, and the inbox reads `task_notifications` through RLS. Suppression therefore has to live in that one function: an application-only or client-side filter would still store, fetch and count the noise. The function keeps its signature, so call sites, grants and the `(recipient, dedupe_key)` idempotency are unchanged. Rollback is re-creating the previous body.
+
+### Notification policy, before and after
+
+| Event (writer)                                                       | Before                     | After                                        |
+| -------------------------------------------------------------------- | -------------------------- | -------------------------------------------- |
+| Normal task assigned (`task_create`)                                 | stored for each assignee   | **suppressed**                               |
+| Normal task reassigned (`task_assign`)                               | stored for each new person | **suppressed**                               |
+| Normal task completed for you / to creator (`task_complete`)         | stored                     | **suppressed**                               |
+| Normal task due soon / overdue (`task_notifications_sweep`)          | stored                     | **suppressed** (sweep kept, now returns 0)   |
+| Opening / Closing `checklist_available` (`checklist_generate_daily`) | stored                     | **kept**                                     |
+| Opening / Closing task `assigned` / `reassigned` / `completed`       | stored when emitted        | **kept at the gate** (see the finding below) |
+
+The gate: a notification is stored only if `p_type = 'checklist_available'` or `p_task_id` names a task **in the same organization** whose `kind` is `opening` or `closing`. Classification uses the structured `tasks.kind`, never title text. It fails closed: a call that names no operational source stores nothing. `opening_reminder` is deliberately not in the gate; T-4 adds the enum value and extends the gate.
+
+**Finding recorded for T-4.** Today's lifecycle RPCs only call `tasks_notify` for assignment, reassignment and completion when `kind = 'task'` (`if t.kind = 'task'` guards), so Opening / Closing assigned / reassigned / completed notifications were **never emitted by any caller before T-3**. The plan's "kept (as today)" is therefore honoured at the gate (they pass if ever emitted, proven by direct `tasks_notify` calls in pgTAP 0041 and vitest), and the only operational notification stored in practice is `checklist_available`. T-3 added no new emitter (that would be recipient expansion, outside scope).
+
+### Audit preserved
+
+`task_events` and `private.tasks_emit` are not touched. pgTAP 0041 drives a normal task through create → reassign → complete (as the assignee) → reopen → cancel: **zero** notification rows, and `task_events` holds exactly `created, reassigned, completed, reopened, cancelled` with the real actor on `completed`. Checklist generation audit is unchanged. Existing stored notifications are **not** deleted (0041 seeds a legacy row; it survives and can still be marked read).
+
+### TypeScript demo engine
+
+`isOperationalNotification` (pure, exported) mirrors the SQL gate and is applied at the top of `notify`, so demo mode and the database agree. `sweepNotifications` is unchanged and is now a natural no-op. Shared policy vectors (type x source kind, 13 rows) are in `notifications.test.ts` and pgTAP 0041 asserts the same pairs.
+
+### Privacy and isolation
+
+No recipient logic changed. Recipients are still exactly the named person (or all other active members for a checklist announcement); inactive members get nothing; an Opening task id from another organization does not open the gate; RLS on `task_notifications` is unchanged (staff read only their own, another organization reads none), asserted in 0041. Narrowing only reduces what is stored, so no new information reaches anyone.
+
+### Tests
+
+| Layer          | Result                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest         | 1606/1606 (116 files; +20 from 1586, all in `notifications.test.ts` rewritten for the new policy)                                                                                                                                                                                                                                                                                                                      |
+| pgTAP (local)  | New `0041_tasks_v1_1_notification_scope` 19/19; updated 0026 (81) and 0029 (13) pass; 0027 and 0028 pass unchanged. All 41 files pass **except 0039** (needs a `dblink` loopback the local harness does not provide; Vendor Order Drafts, unrelated). Run on a throwaway PostgreSQL 16 with stubbed Supabase `auth`/roles/`pg_cron`, applying all 52 migrations; the CI `Database` job is the Supabase-image authority |
+| Playwright     | `tasks`, `management-today`, `default-landing`, `dashboard` specs (57 each): `desktop` 57/57, `server-mobile` 57/57, Chromium emulating iPad (gen 7) landscape 57/57. The rewritten notification test passes on all three                                                                                                                                                                                              |
+| Static / build | prettier, eslint, tsc clean; `npm run build` green; `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build` green (`/` static). This container has no `.env*.local`, so the two builds exercise the same configuration; the empty-variable build was still run explicitly                                                                                                                      |
+| Not run        | Real `host-tablet` (WebKit is not installable here; CI browser-smoke is desktop only; T-6 should run it); hosted DEV and `tests/real/tasks-v1.db.real.test.ts` (updated for the new policy, not executed); the full Playwright suite (exact-head CI)                                                                                                                                                                   |
+
+### Updated existing tests
+
+`tests/e2e/tasks.spec.ts` notification test now asserts the Opening / Closing checklist announcements appear and the ordinary assignment adds none (the old "open a notification, jump to its task" step is gone because no task-bearing notification remains in V1). pgTAP 0026 (assigned / reassigned now absent) and 0029 (sweep stores nothing; read state exercised on checklist notifications) were updated to the new contract.
+
+### Status
+
+**T-3 implemented; PR and exact-head CI evidence are recorded in the post-merge sync.** T-4 NOT STARTED; Part 2 on hold.

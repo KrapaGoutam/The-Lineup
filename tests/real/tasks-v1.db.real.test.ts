@@ -408,7 +408,7 @@ describe("recurrence and notifications", () => {
     expect(stopped.data!.filter((t) => t.status === "open")).toHaveLength(0);
   });
 
-  it("TASK-050/052/053 assignment, sweep and read state", async () => {
+  it("TASK-050/052/053 operational notifications, sweep and read state", async () => {
     const unread = async () =>
       (
         await fx.server1.client
@@ -416,7 +416,16 @@ describe("recurrence and notifications", () => {
           .select("id", { count: "exact", head: true })
           .is("read_at", null)
       ).count ?? 0;
-    expect(await unread()).toBeGreaterThan(0); // assigned notifications exist
+    // T-3: only operational notifications remain. The checklist started
+    // earlier by another member is announced; the normal-task assignments made
+    // by this suite store nothing (their audit rows are asserted elsewhere).
+    expect(await unread()).toBeGreaterThan(0);
+    const types = await fx.server1.client
+      .from("task_notifications")
+      .select("type");
+    expect(
+      (types.data ?? []).every((n) => n.type === "checklist_available"),
+    ).toBe(true);
     const sweep = await fx.server2.client.rpc("task_notifications_sweep", {
       p_organization_id: org,
       p_location_id: loc,
