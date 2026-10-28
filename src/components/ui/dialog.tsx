@@ -83,6 +83,7 @@ export function Dialog({
             ) : null}
           </div>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={onClose}

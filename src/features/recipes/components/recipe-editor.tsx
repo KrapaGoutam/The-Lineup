@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { copyVariant, variantHasContent } from "../domain/copy-variant";
+import { emptyVariant } from "../domain/recipe-editor-state";
 import {
   editorStatesEqual,
   existingEditorState,
@@ -34,6 +36,7 @@ export function RecipeEditor({
   navigationTarget,
   onKeepNavigation,
   onLeaveNavigation,
+  managementControls,
 }: {
   data: EditorLoad;
   onSave: (
@@ -52,6 +55,10 @@ export function RecipeEditor({
   navigationTarget?: string | null;
   onKeepNavigation?: () => void;
   onLeaveNavigation?: (target: string) => void;
+  managementControls?: (
+    dirty: boolean,
+    updateCategories: (categories: EditorLoad["categories"]) => void,
+  ) => React.ReactNode;
 }) {
   const initialize = (load: EditorLoad) =>
     load.recipe
@@ -69,9 +76,15 @@ export function RecipeEditor({
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const [variantDialog, setVariantDialog] = useState<"copy" | "remove" | null>(
+    null,
+  );
+  const [announcement, setAnnouncement] = useState("");
+  const [copied, setCopied] = useState(false);
+  const houseRef = useRef<HTMLHeadingElement>(null);
   const saving = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const dirty = !editorStatesEqual(form, baseline);
+  const dirty = copied || !editorStatesEqual(form, baseline);
   const dirtyCallback = useRef(onDirtyChange);
   useEffect(() => {
     dirtyCallback.current = onDirtyChange;
@@ -126,6 +139,7 @@ export function RecipeEditor({
         return;
       }
       setBaseline(form);
+      setCopied(false);
       setVersion(result.data.version);
       setStale(false);
       setMessage("Recipe saved");
@@ -148,6 +162,7 @@ export function RecipeEditor({
       const next = initialize(latest);
       setForm(next);
       setBaseline(next);
+      setCopied(false);
       setVersion(latest.recipe?.version ?? null);
       setCategories(latest.categories);
       setErrors({});
@@ -162,6 +177,68 @@ export function RecipeEditor({
       setBusy(false);
     }
   }
+  const houseControls = (
+    <section
+      className="flex flex-col gap-3"
+      aria-labelledby="house-management-title"
+    >
+      <h2
+        id="house-management-title"
+        ref={houseRef}
+        tabIndex={-1}
+        className="text-lg font-semibold"
+      >
+        House Recipe options
+      </h2>
+      <div className="flex flex-wrap gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!variantHasContent(form.variants.perfect)}
+          onClick={() => {
+            setAnnouncement("");
+            setVariantDialog("copy");
+          }}
+        >
+          Copy Perfect Recipe → House Recipe
+        </Button>
+        {!form.variants.house ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setForm({
+                ...form,
+                variants: { ...form.variants, house: emptyVariant() },
+              })
+            }
+          >
+            Add House Recipe
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (variantHasContent(form.variants.house))
+                setVariantDialog("remove");
+              else
+                setForm({
+                  ...form,
+                  variants: { ...form.variants, house: null },
+                });
+            }}
+          >
+            Remove House Recipe
+          </Button>
+        )}
+      </div>
+      {!variantHasContent(form.variants.perfect) ? (
+        <p className="text-muted-foreground">Add a Perfect Recipe first</p>
+      ) : null}
+      <p aria-live="polite">{announcement}</p>
+    </section>
+  );
   return (
     <form
       ref={formRef}
@@ -251,6 +328,11 @@ export function RecipeEditor({
         </div>
       ) : null}
       <fieldset disabled={busy} className="flex min-w-0 flex-col gap-6">
+        {managementControls?.(dirty, (next) =>
+          setCategories(
+            next.filter((c) => c.is_active || c.id === form.category_id),
+          ),
+        )}
         <section
           className="border-border flex flex-col gap-4 rounded-xl border p-4"
           aria-labelledby="basic-info-title"
@@ -369,34 +451,101 @@ export function RecipeEditor({
               : "Save the recipe first, then add a photo."}
           </p>
         </section>
-        {(["perfect", "house"] as const).map((kind) =>
-          form.variants[kind] ? (
-            <RecipeVariantEditor
-              key={kind}
-              kind={kind}
-              value={form.variants[kind]}
-              errors={errors}
-              onChange={(value) =>
-                setForm({
-                  ...form,
-                  variants: { ...form.variants, [kind]: value },
-                })
-              }
-            />
-          ) : (
-            <section key={kind} className="border-border rounded-xl border p-4">
-              <h2 className="text-lg font-semibold">
-                {kind === "house"
-                  ? "House Recipe"
-                  : "Perfect Bartending Recipe"}
-              </h2>
-              <p className="text-muted-foreground">
-                No {kind === "house" ? "House" : "Perfect"} recipe.
-              </p>
-            </section>
-          ),
-        )}
+        {(["perfect", "house"] as const).map((kind) => (
+          <Fragment key={kind}>
+            {kind === "house" ? houseControls : null}
+            {form.variants[kind] ? (
+              <RecipeVariantEditor
+                key={kind}
+                kind={kind}
+                value={form.variants[kind]}
+                errors={errors}
+                onChange={(value) =>
+                  setForm({
+                    ...form,
+                    variants: { ...form.variants, [kind]: value },
+                  })
+                }
+              />
+            ) : (
+              <section
+                key={kind}
+                className="border-border rounded-xl border p-4"
+              >
+                <h2 className="text-lg font-semibold">
+                  {kind === "house"
+                    ? "House Recipe"
+                    : "Perfect Bartending Recipe"}
+                </h2>
+                <p className="text-muted-foreground">
+                  No {kind === "house" ? "House" : "Perfect"} recipe.
+                </p>
+              </section>
+            )}
+          </Fragment>
+        ))}
       </fieldset>
+      <Dialog
+        open={variantDialog !== null}
+        onClose={() => setVariantDialog(null)}
+        title={
+          variantDialog === "remove"
+            ? "Remove House Recipe?"
+            : variantHasContent(form.variants.house)
+              ? "Replace the House Recipe?"
+              : "Copy the Perfect Recipe into the House Recipe?"
+        }
+        description={
+          variantDialog === "remove"
+            ? "The House Recipe will be removed when you press Save."
+            : variantHasContent(form.variants.house)
+              ? "Everything currently in the House Recipe will be replaced by a copy of the Perfect Recipe. This isn't saved until you press Save."
+              : "You can then edit the differences. This isn't saved until you press Save."
+        }
+      >
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setVariantDialog(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              const removing = variantDialog === "remove";
+              if (!removing && !variantHasContent(form.variants.perfect))
+                return;
+              setForm({
+                ...form,
+                variants: {
+                  ...form.variants,
+                  house: removing
+                    ? null
+                    : copyVariant(form.variants.perfect!, () =>
+                        crypto.randomUUID(),
+                      ),
+                },
+              });
+              setVariantDialog(null);
+              if (!removing) setCopied(true);
+              setAnnouncement(
+                removing
+                  ? "House Recipe removed. Save to keep this change."
+                  : "House Recipe copied from Perfect",
+              );
+              requestAnimationFrame(() => houseRef.current?.focus());
+            }}
+          >
+            {variantDialog === "remove"
+              ? "Remove House"
+              : variantHasContent(form.variants.house)
+                ? "Replace House"
+                : "Copy Recipe"}
+          </Button>
+        </div>
+      </Dialog>
       <Dialog
         open={discard || !!navigationTarget}
         title="Discard changes?"

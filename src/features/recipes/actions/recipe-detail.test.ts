@@ -15,7 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   client.mockResolvedValue({ from });
   session.mockResolvedValue(null);
-  user.mockResolvedValue({ organizationId: "org-a" });
+  user.mockResolvedValue({ organizationId: "org-a", designation: "staff" });
 });
 describe("detail authorization", () => {
   it("scopes active recipe and all related reads to the resolved organization", async () => {

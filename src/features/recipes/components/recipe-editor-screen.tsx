@@ -12,6 +12,10 @@ import type {
 } from "../domain/recipe-editor-state";
 import type { RecipePayload, SaveResult } from "../domain/recipe-validation";
 import { RecipeEditor } from "./recipe-editor";
+import { RecipeArchiveControl } from "./recipe-archive-control";
+import { RecipeCategoryDialog } from "./recipe-category-dialog";
+import { RecipeDetailView } from "./recipe-detail";
+import type { ManagementCategory } from "../domain/recipe-management";
 export function RecipeEditorScreen({
   restaurantSlug,
   slug,
@@ -25,6 +29,10 @@ export function RecipeEditorScreen({
   navigationTarget,
   onKeepNavigation,
   onLeaveNavigation,
+  onArchived,
+  demoCategories,
+  onCategoriesChanged,
+  occupiedCategoryIds,
 }: {
   restaurantSlug: string;
   slug: string | null;
@@ -45,6 +53,10 @@ export function RecipeEditorScreen({
   navigationTarget?: string | null;
   onKeepNavigation?: () => void;
   onLeaveNavigation?: (target: string) => void;
+  onArchived?: (active: boolean, version: number, categoryId?: string) => void;
+  demoCategories?: ManagementCategory[];
+  onCategoriesChanged?: (categories: ManagementCategory[]) => void;
+  occupiedCategoryIds?: string[];
 }) {
   const [result, setResult] = useState<{ data?: EditorLoad; error?: string }>(
     demo ? { data: demoLoad } : {},
@@ -90,9 +102,59 @@ export function RecipeEditorScreen({
       </section>
     );
   if (!result.data) return <TableSkeleton />;
+  const archive = (dirty: boolean) =>
+    result.data?.recipe ? (
+      <RecipeArchiveControl
+        recipe={result.data.recipe}
+        dirty={dirty}
+        demo={demo}
+        restaurantSlug={restaurantSlug}
+        demoCategories={demoCategories}
+        onSessionInvalid={onSessionInvalid}
+        onReload={() => {
+          setResult({});
+          setAttempt((a) => a + 1);
+        }}
+        onChanged={(active, version, categoryId) => {
+          onArchived?.(active, version, categoryId);
+          onExit();
+        }}
+      />
+    ) : null;
+  if (result.data.recipe?.is_active === false)
+    return (
+      <div className="flex flex-col gap-4">
+        <p role="status">Archived — hidden from staff</p>
+        {archive(false)}
+        <RecipeDetailView
+          recipe={result.data.recipe}
+          backHref="?tab=recipes"
+          onBack={(e) => {
+            e.preventDefault();
+            onExit();
+          }}
+        />
+      </div>
+    );
   return (
     <RecipeEditor
       data={result.data}
+      managementControls={(dirty, updateCategories) => (
+        <div className="flex flex-wrap items-start gap-3">
+          {archive(dirty)}
+          <RecipeCategoryDialog
+            restaurantSlug={restaurantSlug}
+            demo={demo}
+            demoCategories={demoCategories}
+            occupiedCategoryIds={occupiedCategoryIds}
+            onSessionInvalid={onSessionInvalid}
+            onChanged={(categories) => {
+              updateCategories(categories);
+              onCategoriesChanged?.(categories);
+            }}
+          />
+        </div>
+      )}
       onSave={(payload, recipeId, expectedVersion) =>
         demo
           ? demoSave(payload, recipeId, expectedVersion)

@@ -31,21 +31,19 @@ export async function getRecipeIndexAction(input: {
   const categories = await client
     .from("bar_recipe_categories")
     .select("id,name,display_order,is_fallback")
-    .eq("organization_id", user.organizationId)
-    .eq("is_active", true);
+    .eq("organization_id", user.organizationId);
   if (categories.error)
     return { ok: false, error: "Recipes could not be loaded." };
   const recipes: RecipeIndex["recipes"] = [];
   for (let offset = 0; ; offset += 1000) {
-    const page = await client
+    let query = client
       .from("bar_recipes")
       .select(
-        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular",
+        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular,is_active",
       )
-      .eq("organization_id", user.organizationId)
-      .eq("is_active", true)
-      .order("recipe_number")
-      .range(offset, offset + 999);
+      .eq("organization_id", user.organizationId);
+    if (user.designation === "staff") query = query.eq("is_active", true);
+    const page = await query.order("recipe_number").range(offset, offset + 999);
     if (page.error) return { ok: false, error: "Recipes could not be loaded." };
     recipes.push(...page.data);
     if (page.data.length < 1000) break;
@@ -83,15 +81,16 @@ export async function getRecipeDetailAction(input: {
   if (!user)
     return { ok: false, error: "You need to sign in to view recipes." };
   const org = user.organizationId;
-  const recipe = await client
+  let recipeQuery = client
     .from("bar_recipes")
     .select(
-      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id",
+      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id,is_active,version",
     )
     .eq("organization_id", org)
-    .eq("is_active", true)
-    .eq("slug", parsed.data.slug)
-    .maybeSingle();
+    .eq("slug", parsed.data.slug);
+  if (user.designation === "staff")
+    recipeQuery = recipeQuery.eq("is_active", true);
+  const recipe = await recipeQuery.maybeSingle();
   if (recipe.error) return { ok: false, error: "Recipes could not be loaded." };
   if (!recipe.data) return { ok: true, data: null };
   const [category, variants] = await Promise.all([

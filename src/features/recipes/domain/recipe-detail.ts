@@ -34,4 +34,10 @@ export type RecipeDetail = Pick<
   | "description"
   | "is_popular"
   | "is_menu_item"
-> & { category: string; variants: DetailVariant[] };
+> & {
+  category: string;
+  variants: DetailVariant[];
+  is_active?: boolean;
+  version?: number;
+  category_id?: string;
+};

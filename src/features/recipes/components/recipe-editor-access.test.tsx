@@ -26,11 +26,56 @@ import {
   serializeEditorState,
   newEditorState,
 } from "../domain/recipe-editor-state";
+import { demoRecipeFromState } from "../domain/demo-recipes";
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 describe("editor access and demo safety", () => {
+  it("archived management edit URLs render read-only with Restore and no editable form", () => {
+    const recipe = {
+      ...demoRecipeFromState(
+        newEditorState("fallback", 1),
+        "r",
+        "archived",
+        2,
+        "Fallback",
+      ),
+      is_active: false,
+    };
+    render(
+      <RecipeEditorScreen
+        restaurantSlug="test"
+        slug="archived"
+        demo
+        demoLoad={{
+          categories: [
+            {
+              id: "fallback",
+              name: "Fallback",
+              is_fallback: true,
+              is_active: true,
+            },
+          ],
+          nextNumber: 2,
+          recipe,
+        }}
+        demoSave={vi.fn()}
+        onExit={vi.fn()}
+        onSaved={vi.fn()}
+        onSessionInvalid={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Archived — hidden from staff")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Restore Recipe" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument();
+    expect(getRecipeEditorAction).not.toHaveBeenCalled();
+  });
   it.each([
     "tab=recipes&mode=new",
     "tab=recipes&recipe=r1-test-citrus&mode=edit",

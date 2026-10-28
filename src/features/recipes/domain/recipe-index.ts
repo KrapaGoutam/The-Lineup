@@ -5,6 +5,7 @@ export type Category = {
   is_fallback: boolean;
 };
 export type Recipe = {
+  is_active?: boolean;
   id: string;
   category_id: string;
   recipe_number: number;

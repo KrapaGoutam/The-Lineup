@@ -10,6 +10,10 @@ import type { RecipeDetail, DetailVariant } from "../domain/recipe-detail";
 import { TableSkeleton } from "@/features/bar-inventory/components/table-kit/empty-state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { RecipeArchiveControl } from "./recipe-archive-control";
+import { RecipeCategoryDialog } from "./recipe-category-dialog";
+import type { ManagementCategory } from "../domain/recipe-management";
 import {
   getRecipeDetailAction,
   getRecipeIndexAction,
@@ -66,7 +70,7 @@ function Rows({
   return (
     <ul className="grid gap-1 lg:grid-cols-2">
       {recipes.map((r) => (
-        <li key={r.id}>
+        <li key={r.id} className={cn(r.is_active === false && "opacity-60")}>
           <a
             href={href(r.slug)}
             onClick={(event) => open(event, r.slug)}
@@ -77,6 +81,11 @@ function Rows({
               {String(r.recipe_number).padStart(2, "0")}
             </span>
             <span>{r.name}</span>
+            {r.is_active === false ? (
+              <span className="border-border rounded border px-2 text-xs">
+                Archived
+              </span>
+            ) : null}
             {r.is_popular ? <span aria-label="Popular">&#9733;</span> : null}
           </a>
         </li>
@@ -123,6 +132,11 @@ export function RecipesModule({
     demo ? { data: demoIndex } : {},
   );
   const [query, setQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [demoCategories, setDemoCategories] = useState<ManagementCategory[]>(
+    () =>
+      demoIndex.categories.map((c) => ({ ...c, is_active: true, version: 1 })),
+  );
   const [attempt, setAttempt] = useState(0);
   const invalidRef = useRef(onSessionInvalid);
   useEffect(() => {
@@ -281,6 +295,73 @@ export function RecipesModule({
     setSaved(false);
     window.history.pushState(null, "", pathname + "?" + params.toString());
   }
+  function categoriesChanged(categories: ManagementCategory[]) {
+    if (demo) {
+      setDemoCategories(categories);
+      setState((previous) =>
+        previous.data ? { data: { ...previous.data, categories } } : previous,
+      );
+      setDemoRecords((previous) =>
+        Object.fromEntries(
+          Object.entries(previous).map(([key, recipe]) => [
+            key,
+            {
+              ...recipe,
+              category:
+                categories.find((c) => c.id === recipe.category_id)?.name ??
+                recipe.category,
+            },
+          ]),
+        ),
+      );
+    } else setAttempt((a) => a + 1);
+  }
+  function archiveChanged(
+    active: boolean,
+    version: number,
+    categoryId?: string,
+  ) {
+    if (demo && slug && detail?.data) {
+      const recipe = demoRecords[slug] ?? {
+        ...detail.data,
+        category_id:
+          detail.data.category_id ??
+          state.data?.recipes.find((r) => r.slug === slug)?.category_id ??
+          "c2",
+        alternate_name: null,
+        is_alcoholic: true,
+        version: detail.data.version ?? 1,
+      };
+      const next = {
+        ...recipe,
+        is_active: active,
+        version,
+        category_id: categoryId ?? recipe.category_id,
+        category:
+          demoCategories.find(
+            (c) => c.id === (categoryId ?? recipe.category_id),
+          )?.name ?? recipe.category,
+      };
+      setDemoRecords((records) => ({ ...records, [slug]: next }));
+      setState((previous) =>
+        previous.data
+          ? {
+              data: {
+                ...previous.data,
+                recipes: previous.data.recipes.map((r) =>
+                  r.id === recipe.id
+                    ? { ...r, is_active: active, category_id: next.category_id }
+                    : r,
+                ),
+              },
+            }
+          : previous,
+      );
+    } else {
+      setDetail(null);
+      setAttempt((a) => a + 1);
+    }
+  }
   if (editing) {
     const index = state.data ?? demoIndex;
     const existing =
@@ -311,8 +392,16 @@ export function RecipesModule({
         restaurantSlug={restaurantSlug}
         slug={mode === "edit" ? slug : null}
         demo={demo}
+        demoCategories={demoCategories}
+        onCategoriesChanged={categoriesChanged}
+        onArchived={archiveChanged}
+        occupiedCategoryIds={index.recipes
+          .filter((r) => r.is_active !== false)
+          .map((r) => r.category_id)}
         demoLoad={{
-          categories: index.categories.map((c) => ({ ...c, is_active: true })),
+          categories: demoCategories.filter(
+            (c) => c.is_active || c.id === existing?.category_id,
+          ),
           nextNumber:
             Math.max(0, ...index.recipes.map((r) => r.recipe_number)) + 1,
           recipe: existing,
@@ -462,7 +551,7 @@ export function RecipesModule({
     return (
       <div className="flex flex-col gap-4">
         {saved ? <p role="status">Recipe saved</p> : null}
-        {isManagement ? (
+        {isManagement && current.data.is_active !== false ? (
           <Button
             variant="outline"
             className="self-end"
@@ -470,6 +559,25 @@ export function RecipesModule({
           >
             Edit Recipe
           </Button>
+        ) : null}
+        {isManagement ? (
+          <>
+            {current.data.is_active === false ? (
+              <p role="status">Archived — hidden from staff</p>
+            ) : null}
+            <RecipeArchiveControl
+              recipe={current.data}
+              restaurantSlug={restaurantSlug}
+              demo={demo}
+              demoCategories={demoCategories}
+              onSessionInvalid={onSessionInvalid}
+              onChanged={archiveChanged}
+              onReload={() => {
+                setDetail(null);
+                setAttempt((a) => a + 1);
+              }}
+            />
+          </>
         ) : null}
         <RecipeDetailView
           key={slug}
@@ -480,14 +588,43 @@ export function RecipesModule({
       </div>
     );
   }
-  const results = state.data && query.trim() ? search(state.data, query) : null;
+  const visibleIndex = state.data
+    ? {
+        ...state.data,
+        recipes: state.data.recipes.filter(
+          (r) => r.is_active !== false || (isManagement && showArchived),
+        ),
+      }
+    : null;
+  const results =
+    visibleIndex && query.trim() ? search(visibleIndex, query) : null;
   return (
     <section className="flex flex-col gap-6 pb-24">
       <h1 className="text-2xl font-semibold">Bar Recipes</h1>
       {isManagement ? (
-        <Button className="self-start" onClick={() => openEditor("new")}>
-          Add Recipe
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button className="self-start" onClick={() => openEditor("new")}>
+            Add Recipe
+          </Button>
+          <RecipeCategoryDialog
+            restaurantSlug={restaurantSlug}
+            demo={demo}
+            demoCategories={demoCategories}
+            occupiedCategoryIds={state.data?.recipes
+              .filter((r) => r.is_active !== false)
+              .map((r) => r.category_id)}
+            onSessionInvalid={onSessionInvalid}
+            onChanged={categoriesChanged}
+          />
+          <label className="flex min-h-11 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Show archived
+          </label>
+        </div>
       ) : null}
       {!state.data && !state.error ? (
         <TableSkeleton />
@@ -536,7 +673,7 @@ export function RecipesModule({
               )}
             </section>
           ) : (
-            groups(state.data).map((group) => (
+            groups(visibleIndex!).map((group) => (
               <section key={group.category.id}>
                 <h2 className="text-lg font-semibold">
                   {group.category.name}{" "}

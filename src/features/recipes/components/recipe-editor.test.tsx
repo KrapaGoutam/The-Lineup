@@ -93,6 +93,123 @@ function fixture(edit = false) {
   return { ...props, state };
 }
 describe("recipe editor", () => {
+  it("marks an identical replacement dirty until Save", async () => {
+    const state = newEditorState("fallback", 1);
+    state.name = "Identical";
+    state.variants.perfect!.method = "Shake";
+    state.variants.house = structuredClone(state.variants.perfect);
+    render(
+      <RecipeEditor
+        data={{
+          categories: [
+            {
+              id: "fallback",
+              name: "Fallback",
+              is_active: true,
+              is_fallback: true,
+            },
+          ],
+          nextNumber: 2,
+          recipe: demoRecipeFromState(
+            state,
+            "recipe",
+            "identical",
+            1,
+            "Fallback",
+          ),
+        }}
+        onSave={vi.fn()}
+        onReload={vi.fn()}
+        onSaved={vi.fn()}
+        onExit={vi.fn()}
+        onSessionInvalid={vi.fn()}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /Copy Perfect Recipe/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Replace House" }),
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(screen.getByText("Unsaved changes")).toBeVisible();
+  });
+  it("copies unsaved Perfect with overwrite protection, independence, focus and no auto-save", async () => {
+    const props = fixture(true);
+    const user = userEvent.setup();
+    const perfect = screen
+      .getByText("Perfect Bartending Recipe", { selector: "summary" })
+      .closest("details")!;
+    const house = screen
+      .getByText("House Recipe", { selector: "summary" })
+      .closest("details")!;
+    await user.clear(within(perfect).getByLabelText("Method"));
+    await user.type(within(perfect).getByLabelText("Method"), "Unsaved method");
+    await user.click(
+      screen.getByRole("button", { name: /Copy Perfect Recipe/ }),
+    );
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Replace the House Recipe?" }),
+      ).getByRole("button", { name: "Cancel" }),
+    );
+    expect(within(house).getByLabelText("Method")).toHaveValue("House method");
+    await user.click(
+      screen.getByRole("button", { name: /Copy Perfect Recipe/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Replace House" }));
+    expect(within(house).getByLabelText("Method")).toHaveValue(
+      "Unsaved method",
+    );
+    expect(
+      screen.getByText("House Recipe copied from Perfect"),
+    ).toHaveAttribute("aria-live", "polite");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "House Recipe options" }),
+      ).toHaveFocus(),
+    );
+    await user.clear(within(house).getByLabelText("Method"));
+    await user.type(within(house).getByLabelText("Method"), "Independent");
+    expect(within(perfect).getByLabelText("Method")).toHaveValue(
+      "Unsaved method",
+    );
+    expect(props.onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(props.onSave.mock.calls[0][0].variants.house.method).toBe(
+      "Independent",
+    );
+  });
+  it("guards empty Perfect, creates House after confirmation and removes it through normal Save", async () => {
+    const props = fixture();
+    const user = userEvent.setup();
+    expect(
+      screen.getByRole("button", { name: /Copy Perfect Recipe/ }),
+    ).toBeDisabled();
+    await user.type(screen.getByLabelText("Name"), "Copy new");
+    await user.type(screen.getByLabelText("Method"), "Local");
+    await user.click(
+      screen.getByRole("button", { name: /Copy Perfect Recipe/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Copy Recipe" }));
+    expect(screen.getAllByLabelText("Method")[1]).toHaveValue("Local");
+    await user.click(
+      screen.getByRole("button", { name: "Remove House Recipe" }),
+    );
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Remove House Recipe?" }),
+      ).getByRole("button", { name: "Cancel" }),
+    );
+    expect(screen.getAllByLabelText("Method")).toHaveLength(2);
+    await user.click(
+      screen.getByRole("button", { name: "Remove House Recipe" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Remove House" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(props.onSave.mock.calls[0][0].variants.house).toBeNull();
+  });
   it("renders Add and suppresses clean saves", () => {
     const props = fixture();
     expect(screen.getByRole("heading", { name: "Add Recipe" })).toBeVisible();

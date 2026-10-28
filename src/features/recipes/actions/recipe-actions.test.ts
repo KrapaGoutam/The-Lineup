@@ -19,7 +19,7 @@ beforeEach(() => {
   user.mockResolvedValue({ organizationId: "org-a", designation: "staff" });
 });
 describe("recipe index read", () => {
-  it("reads only active rows for the server-resolved organization for staff and management", async () => {
+  it("scopes reads to the server-resolved organization; management may read archived rows", async () => {
     const filters: [string, unknown][] = [];
     from.mockImplementation((table: string) => {
       const result = { data: [], error: null };

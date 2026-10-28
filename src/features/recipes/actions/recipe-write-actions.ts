@@ -108,10 +108,9 @@ export async function getRecipeEditorAction(input: {
     };
   const basic = await client
     .from("bar_recipes")
-    .select("id,version,category_id,alternate_name,is_alcoholic")
+    .select("id,version,category_id,alternate_name,is_alcoholic,is_active")
     .eq("organization_id", org)
     .eq("slug", parsed.data.slug)
-    .eq("is_active", true)
     .maybeSingle();
   if (basic.error || !basic.data)
     return { ok: false, error: "This recipe is unavailable for editing." };
@@ -128,7 +127,6 @@ export async function getRecipeEditorAction(input: {
     .select("version")
     .eq("organization_id", org)
     .eq("id", basic.data.id)
-    .eq("is_active", true)
     .maybeSingle();
   if (check.error || check.data?.version !== basic.data.version)
     return {
