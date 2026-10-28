@@ -2,11 +2,13 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(13);
 
 -- ---------------------------------------------------------------------
--- Tasks V1 / T7 -- in-app notifications. Cast (org A): manager Mona,
--- staff Ann / Bea. Org B: owner Otto.
+-- Tasks V1 / T7 -- in-app notifications, narrowed by Tasks V1.1 / T-3:
+-- ordinary-task due-soon / overdue are no longer stored, so read state is
+-- exercised on the Opening / Closing checklist notifications that remain.
+-- Cast (org A): manager Mona, staff Ann / Bea. Org B: owner Otto.
 -- ---------------------------------------------------------------------
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, aud, role)
 values
@@ -65,55 +67,56 @@ update public.tasks set
   due_time = date_trunc('minute', (now() - interval '2 hours') at time zone 'America/Chicago')::time
 where title = 'Team task';
 
--- 1. Sweep ------------------------------------------------------------------------
+-- 1. Sweep (Tasks V1.1 / T-3: ordinary tasks no longer produce due notifications) -----
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029005', true);
 select is(
   public.task_notifications_sweep('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021'),
-  2, 'TASK-052 any member''s sweep notifies the due-soon and the overdue assignee'
+  0, 'TS-040 the sweep stores nothing for ordinary tasks (due soon / overdue are suppressed)'
 );
 select is(
   public.task_notifications_sweep('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021'),
-  0, 'the sweep is idempotent (no duplicates on reload)'
+  0, 'the sweep stays idempotent'
 );
 reset role;
 
 select is(
-  (select count(*)::int from public.task_notifications where type = 'due_soon'),
-  1, 'one due-soon notification'
+  (select count(*)::int from public.task_notifications where type in ('due_soon', 'overdue', 'assigned')),
+  0, 'no due-soon, overdue or assigned notification exists for ordinary tasks'
 );
 select is(
-  (select count(*)::int from public.task_notifications where type = 'overdue'),
-  1, 'one overdue notification'
-);
-select is(
-  (select count(*)::int from public.task_notifications n join public.tasks t on t.id = n.task_id
-   where t.title = 'Far task' and n.type in ('due_soon', 'overdue')),
-  0, 'a task due hours from now is not announced yet'
-);
-select is(
-  (select count(*)::int from public.task_notifications n join public.tasks t on t.id = n.task_id
-   where t.title = 'Team task' and n.type in ('due_soon', 'overdue')),
-  0, 'team-wide tasks have no single owner to nag'
+  (select count(*)::int from public.task_events where event_type = 'created'),
+  4, 'audit: the four ordinary tasks are still recorded as created'
 );
 
--- 2. Reading and read state ----------------------------------------------------------
+-- 2. Operational notifications remain: Opening and Closing checklists -------------------
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029002', true);
+select public.checklist_template_save('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021',null,'opening','Weekday Opening','{0,1,2,3,4,5,6}',true,'[{"title":"Unlock entrance","assignment_mode":"anyone"}]'::jsonb);
+select public.checklist_template_save('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021',null,'closing','Weekday Closing','{0,1,2,3,4,5,6}',true,'[{"title":"Lock patio","assignment_mode":"anyone"}]'::jsonb);
+select lives_ok(
+  $$select public.checklist_generate_daily('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021')$$,
+  'a manager starts today''s Opening and Closing checklists'
+);
+reset role;
+
+-- 3. Reading and read state ----------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029004', true);
 select is(
-  (select count(*)::int from public.task_notifications), 4,
-  'Ann sees only her own notifications (2 assigned + due soon + overdue)'
+  (select count(*)::int from public.task_notifications), 2,
+  'Ann sees only her own notifications (the Opening and Closing checklists)'
 );
 select is(
-  (select count(*)::int from public.task_notifications where read_at is null), 4,
-  'TASK-053 all four start unread'
+  (select count(*)::int from public.task_notifications where read_at is null), 2,
+  'TASK-053 both start unread'
 );
 select is(
   public.task_notifications_mark_read(array[(select min(id) from public.task_notifications)]),
   1, 'one notification can be marked read'
 );
 select is(
-  (select count(*)::int from public.task_notifications where read_at is null), 3,
+  (select count(*)::int from public.task_notifications where read_at is null), 1,
   'the unread count drops'
 );
 select throws_ok(
@@ -121,15 +124,15 @@ select throws_ok(
   '42501', null, 'clients cannot write notifications directly'
 );
 select is(
-  public.task_notifications_mark_read(), 3, 'mark all read'
+  public.task_notifications_mark_read(), 1, 'mark all read'
 );
 reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029005', true);
 select is(
-  (select count(*)::int from public.task_notifications where read_at is null), 1,
-  'another person''s read state is untouched (Bea still has her own unread assignment)'
+  (select count(*)::int from public.task_notifications where read_at is null), 2,
+  'another person''s read state is untouched (Bea still has her own two unread)'
 );
 reset role;
 

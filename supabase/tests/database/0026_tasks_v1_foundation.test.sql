@@ -423,16 +423,16 @@ select ok(
   'reassignment is audited'
 );
 
--- 9. Notifications --------------------------------------------------------
+-- 9. Notifications (Tasks V1.1 / T-3: ordinary tasks no longer notify) ----------------
 select ok(
-  exists (select 1 from public.task_notifications
-          where recipient_profile_id = '00000000-0000-0000-0000-000000026004' and type = 'assigned'),
-  'TASK-050 the assignee is notified'
+  not exists (select 1 from public.task_notifications
+              where recipient_profile_id = '00000000-0000-0000-0000-000000026004' and type = 'assigned'),
+  'TS-040 assigning a normal task stores no inbox notification'
 );
 select ok(
-  exists (select 1 from public.task_notifications
-          where recipient_profile_id = '00000000-0000-0000-0000-000000026005' and type = 'reassigned'),
-  'TASK-051 a reassigned person is notified'
+  not exists (select 1 from public.task_notifications
+              where recipient_profile_id = '00000000-0000-0000-0000-000000026005' and type = 'reassigned'),
+  'TS-040 reassigning a normal task stores no inbox notification'
 );
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
