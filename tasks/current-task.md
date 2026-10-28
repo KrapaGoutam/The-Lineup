@@ -2,21 +2,22 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE** (default Tasks landing + `?tab=` navigation). **T-2 (Management Today) is NEXT / NOT STARTED.** Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 (Management Today, #169) IN PROGRESS.** T-3 NOT STARTED · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
 
-T-1 — Default landing + `?tab=` navigation reconciliation (#169). Reconciled the parked branch with current `development` (`66d8fc6`) and closed three contract gaps (URL/UI mismatch, a back/forward race, missing tests). Detail: `docs/features/tasks-v1-1/IMPLEMENTATION_REPORT.md`.
+T-2 — Management Today / staff visibility (#169). Branch `feature/tasks-v1-1-management-today` from `origin/development` @ `c6f309eae5c674e71b3906ff1b26faae0440ca22` (verified = expected T-1 post-merge docs state). Scope: All Staff / My Tasks / specific staff member for Owner, Manager, Assistant Manager; Staff gets no control and no coworker data (RLS stays the gate). No migration expected.
 
 ## Execution
 
-Local Windows PC (Claude Sonnet 5.5). No database, no hosted DEV, no migration. PROD never targeted.
+Claude Code Cloud (Sonnet 5.5, high effort, new session). No hosted DEV, no migration. PROD never targeted.
 
 ## Branch / base
 
-- Branch: `feature/tasks-v1-1-default-landing` (parked commit `03d5d45` preserved; `origin/development` @ `66d8fc6` merged in, no conflicts)
-- PR #203 · tested head `1e3e4b1bbdddadbd72a3fbcb579a9f56765bb26e` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Vercel green) · merge commit `cf3ae3945cebda981e503eea5f6b91e5a1a720bd` (two parents) · `development` HEAD after merge `cf3ae39`
-- Issue: #169 · Project #4
+- Branch: `feature/tasks-v1-1-management-today` from `origin/development` @ `c6f309eae5c674e71b3906ff1b26faae0440ca22` (T-1 post-merge docs state)
+- T-1 (done): PR #203 tested `1e3e4b1`, merge `cf3ae39`; docs PR #204, merge `c6f309e`
+- Issue: #169 (tracking) · Project #4 (card update not performed: Projects tooling unavailable in this session)
+- T-3: NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
 
 ## Phase ledger
 
@@ -24,10 +25,23 @@ Local Windows PC (Claude Sonnet 5.5). No database, no hosted DEV, no migration. 
 Vendor Order Drafts V1 COMPLETE (VOD-0..VOD-4, #190 closed)
 Tasks T-0 plan COMPLETE (#189)
 Tasks T-1 COMPLETE (PR #203, tested 1e3e4b1, merge cf3ae39)
-Tasks T-2 NEXT / NOT STARTED · T-3..T-6 NOT STARTED
+Tasks T-2 IN PROGRESS: implemented + validated locally, PR/CI/merge pending
+Tasks T-3..T-6 NOT STARTED
 Part 2 (multi-org / multi-location / attendance) ON HOLD
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
+
+## T-2 result (local, pre-PR)
+
+- Management Today: `Show tasks for` select (All Staff / My Tasks / person by profile id) for Owner, Manager, Assistant Manager; Opening / General / Closing groups; staff name on each row; staff unchanged. Detail: `docs/features/tasks-v1-1/IMPLEMENTATION_REPORT.md` (T-2).
+- Evidence: Vitest 1586/1586; `management-today.spec.ts` 7/7 on desktop and server-mobile; Tasks + default-landing + dashboard regression 57/57 desktop, server-mobile and Chromium-emulated iPad; check, build and the empty-Supabase-env build green. WebKit (host-tablet) not installable here: left to CI.
+
+## Current State & Next Step
+
+- [x] `origin/development` verified = `c6f309e`; branch created
+- [x] Implementation, unit/component and Playwright tests, local gates, docs
+- [ ] Commit explicit paths, push, PR -> `development`, exact-head CI (branch HEAD = remote = PR head = CI-tested SHA), MERGE COMMIT
+- [ ] Post-merge sync PR `docs/tasks-v1-1-t2-post-merge-sync` (merge SHA), then T-3 in a NEW session
 
 ## T-1 result
 
@@ -36,18 +50,10 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 - Evidence: Vitest 1568/1568; `default-landing.spec.ts` 33/33; navigation-sensitive regression 243/243 on desktop, host-tablet, server-mobile; check and build pass. Full Playwright suite left to exact-head CI.
 - Not changed: Vendor Order Drafts, the brand "Home" and Settings "Back" (still Table Allocation, by design).
 
-## Current State & Next Step
-
-- [x] Parked T-1 classified (still required / safe to preserve), `origin/development` merged in, no conflicts
-- [x] URL/UI mismatch, popstate race and test gaps closed
-- [x] Local gates green (check, Vitest, build, targeted Playwright x3 projects)
-- [x] PR #203 -> `development`: first head `2f2299b` failed CI (`useSearchParams` needs Suspense when `/` is static; invisible locally); fixed in `1e3e4b1`, exact-head CI green, merge commit `cf3ae39`
-- [ ] T-2 in a NEW session: `feature/tasks-v1-1-management-today` from the then-current `origin/development`
-
 ## Exact next command
 
 ```bash
-git fetch origin && git log --oneline -5 origin/development
+git fetch origin && git status -sb && gh pr list --head feature/tasks-v1-1-management-today
 ```
 
 ## Read first

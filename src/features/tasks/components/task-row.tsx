@@ -18,6 +18,7 @@ import {
   canWorkTask,
   dueText,
   isOverdue,
+  staffLabel,
   taskTypeLabel,
 } from "../domain/task-rules";
 import type { TaskView, TaskViewer } from "../domain/task-types";
@@ -47,12 +48,6 @@ export function canToggleTask(task: TaskView, viewer: TaskViewer): boolean {
     isTasksManager(viewer.designation) ||
     task.completedBy?.profileId === viewer.profileId
   );
-}
-
-function assigneeText(task: TaskView): string {
-  if (task.assignmentMode === "all_team") return "All team";
-  if (task.assignmentMode === "anyone") return "Anyone";
-  return task.assignees.map((a) => a.name).join(", ");
 }
 
 /**
@@ -132,7 +127,12 @@ export function TaskRow({
               : dueText(task, today)}
           {" · "}
           {categoryName}
-          {showAssignees ? ` · ${assigneeText(task)}` : null}
+          {showAssignees && staffLabel(task) ? (
+            <>
+              {" · "}
+              <span data-testid="task-staff">{staffLabel(task)}</span>
+            </>
+          ) : null}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
           {overdue ? (

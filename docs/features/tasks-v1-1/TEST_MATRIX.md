@@ -50,3 +50,16 @@ Layers: **U** Vitest · **D** pgTAP · **E** Playwright (desktop, host-tablet, s
 | TS-050 | Hosted DEV: sweep with a real location and time zone, no leftovers                                                                                             | H       | T-6     |
 
 Phase gates: targeted U → focused D (`supabase test db` on the touched files) → focused E → phase regression (full Tasks spec plus anything the change touches) → exact-head CI. T-6 runs the full three-project suite and the hosted DEV suite on a production build.
+
+## T-2 evidence (Management Today, #169)
+
+| ID              | Result                                                                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TS-010 / TS-011 | U `management-today.test.tsx` (Owner, Manager) and E `management-today.spec.ts` (demo owner 9999, manager 2468) PASS                                                                                     |
+| TS-012          | U (Assistant Manager, `asa`) PASS. **No Assistant Manager demo passcode exists, so no Playwright run** (recorded gap)                                                                                    |
+| TS-013 / TS-014 | U (`task-rules.test.ts`, `management-today.test.tsx`) and E PASS. My Tasks = existing assigned-or-shared rule; person = named assignees by profile id only                                               |
+| TS-015          | U `staffLabel` PASS (individual, multiple, Whole team, Anyone, nothing invented)                                                                                                                         |
+| TS-016          | U (staff: no selector, no coworker row; `resolveScope` pins staff to all; engine snapshot test) and E PASS. **D: existing pgTAP 0026 (RLS) is the server proof; not re-run in T-2 (no database change)** |
+| TS-017          | E PASS: labelled native `<select>`, focusable, 44 px, inside the viewport, no horizontal overflow                                                                                                        |
+| Audit actor     | U + E: a manager completing from a person view is the actor (`Completed by <manager>`), the assignee is unchanged                                                                                        |
+| Cross-org       | Not new: no new query; the roster and tasks queries are unchanged and RLS-scoped (pgTAP 0026 / `tasks-v1.db.real.test.ts` own the tenant seam). **Not re-run in T-2.**                                   |

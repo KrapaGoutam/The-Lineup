@@ -10,6 +10,7 @@ import {
   summarizeToday,
   taskBucket,
   taskProgress,
+  type TodayScope,
 } from "../domain/task-rules";
 import {
   isTasksManager,
@@ -17,10 +18,14 @@ import {
   type TaskView,
 } from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
+import { ManagementToday } from "./management-today";
 import { TaskList } from "./task-list";
 
 type Props = {
   controller: TasksController;
+  /** Management scope (All Staff / My Tasks / person); ignored for staff. */
+  scope: TodayScope;
+  onScopeChange: (scope: TodayScope) => void;
   categoryName: (slug: string) => string;
   onToggle: (task: TaskView) => void;
   onOpen: (task: TaskView) => void;
@@ -84,6 +89,8 @@ function SummaryCard({
  */
 export function TodayView({
   controller,
+  scope,
+  onScopeChange,
   categoryName,
   onToggle,
   onOpen,
@@ -176,17 +183,28 @@ export function TodayView({
         />
       </div>
 
-      <div className="space-y-2.5">
-        <h2 className="text-sm font-semibold">Up next for you</h2>
-        <TaskList
-          tasks={upNext}
+      {manager ? (
+        <ManagementToday
           controller={controller}
+          scope={scope}
+          onScopeChange={onScopeChange}
           categoryName={categoryName}
-          emptyText="You're all caught up."
           onToggle={onToggle}
           onOpen={onOpen}
         />
-      </div>
+      ) : (
+        <div className="space-y-2.5">
+          <h2 className="text-sm font-semibold">Up next for you</h2>
+          <TaskList
+            tasks={upNext}
+            controller={controller}
+            categoryName={categoryName}
+            emptyText="You're all caught up."
+            onToggle={onToggle}
+            onOpen={onOpen}
+          />
+        </div>
+      )}
     </section>
   );
 }
