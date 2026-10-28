@@ -18,6 +18,8 @@ import type {
 // would still be cut off is reported as a failure, never silently truncated.
 const PAGE = 1000;
 const MAX_PAGES = 10;
+// PostgREST error for a range that starts past the last row.
+const PAST_THE_END = "PGRST103";
 // Draft ids per `in (...)` filter, so the request URL stays short.
 const DRAFT_ID_CHUNK = 40;
 
@@ -251,11 +253,36 @@ export async function getSentOrderDraftsPage(
       .overrideTypes<DraftRow[], { merge: false }>();
   }
 
+  async function countSent(): Promise<number | null> {
+    const { count, error } = await supabase
+      .from("inventory_order_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("location_id", locationId)
+      .eq("status", "sent");
+    if (error || count === null) {
+      console.error("getSentOrderDraftsPage: count", error);
+      return null;
+    }
+    return count;
+  }
+
   let page = Math.max(0, Math.floor(requestedPage));
   let result = await readPage(page);
-  // Past the end (the history shrank, or a stale link): show the last page.
-  if (!result.error && result.data?.length === 0 && (result.count ?? 0) > 0) {
-    page = Math.ceil((result.count ?? 0) / SENT_PAGE_SIZE) - 1;
+  // Past the end (a stale link or a typed page number): show the last page.
+  // PostgREST does not answer such a range with an empty page: it refuses it
+  // (416, PGRST103, "Requested range not satisfiable") and sends no count.
+  const refused = result.error?.code === PAST_THE_END;
+  if (
+    refused ||
+    (!result.error && result.data?.length === 0 && (result.count ?? 0) > 0)
+  ) {
+    const total = refused ? await countSent() : (result.count ?? 0);
+    if (total === null) return null;
+    if (total === 0) {
+      return { drafts: [], page: 0, pageSize: SENT_PAGE_SIZE, total: 0 };
+    }
+    page = Math.ceil(total / SENT_PAGE_SIZE) - 1;
     result = await readPage(page);
   }
   const { data, error, count } = result;

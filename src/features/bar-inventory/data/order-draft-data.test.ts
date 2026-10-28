@@ -183,6 +183,80 @@ describe("getSentOrderDraftsPage (VOD-080)", () => {
     expect(page).toMatchObject({ page: 2, total: 45 });
   });
 
+  it("falls back to the last page when PostgREST refuses a range past the end (PGRST103)", async () => {
+    // Observed on hosted DEV: a range that starts past the last row is not an
+    // empty page, it is `416 PGRST103 Requested range not satisfiable`.
+    const { client, reads } = fakeClient((table, calls) => {
+      if (table !== "inventory_order_drafts") {
+        return { data: [itemRow("d-1")], error: null };
+      }
+      if ((arg(calls, "select")?.[1] as { head?: boolean })?.head) {
+        return { data: null, error: null, count: 45 };
+      }
+      return (arg(calls, "range") as number[])[0] === 1980
+        ? {
+            data: null,
+            error: {
+              code: "PGRST103",
+              message: "Requested range not satisfiable",
+            },
+            count: null,
+          }
+        : { data: [draftRow(1)], error: null, count: 45 };
+    });
+    mocks.createClient.mockResolvedValue(client);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const page = await getSentOrderDraftsPage(ORG, LOC, 99);
+    const draftReads = reads.filter(
+      (r) => r.table === "inventory_order_drafts",
+    );
+    // Scoped to this organization and location, like the page reads.
+    const count = draftReads.find(
+      (r) => (arg(r.calls, "select")?.[1] as { head?: boolean })?.head,
+    )!;
+    expect(filters(count.calls)).toEqual([
+      `organization_id=${ORG}`,
+      `location_id=${LOC}`,
+      "status=sent",
+    ]);
+    expect(
+      draftReads
+        .filter((r) => arg(r.calls, "range"))
+        .map((r) => arg(r.calls, "range")),
+    ).toEqual([
+      [1980, 1999],
+      [40, 59],
+    ]);
+    expect(page).toMatchObject({ page: 2, total: 45 });
+    expect(page!.drafts).toHaveLength(1);
+  });
+
+  it("a range past the end of an empty history is an empty first page, not a failure", async () => {
+    const { client } = fakeClient((table, calls) => {
+      if ((arg(calls, "select")?.[1] as { head?: boolean })?.head) {
+        return { data: null, error: null, count: 0 };
+      }
+      return table === "inventory_order_drafts"
+        ? {
+            data: null,
+            error: {
+              code: "PGRST103",
+              message: "Requested range not satisfiable",
+            },
+            count: null,
+          }
+        : { data: [], error: null };
+    });
+    mocks.createClient.mockResolvedValue(client);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await getSentOrderDraftsPage(ORG, LOC, 5)).toEqual({
+      drafts: [],
+      page: 0,
+      pageSize: SENT_PAGE_SIZE,
+      total: 0,
+    });
+  });
+
   it("reports nothing sent as an empty first page, and a failure as null", async () => {
     mocks.createClient.mockResolvedValue(
       fakeClient(() => ({ data: [], error: null, count: 0 })).client,
