@@ -1,7 +1,7 @@
 # Recipes V1 R-2 handoff
 
 - R2-A: COMPLETE.
-- R2-B: NEXT / NOT STARTED. All R2-C+, R2g and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
+- R2-B: COMPLETE. R2-C: NEXT / NOT STARTED. All R2-D+, R2g and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
 - Branch: feature/recipes-v1-r2-management. Base development: 8f358a422c91275319c9f4479891a54a4cbb21c3. Starting HEAD: cb1fd09823e12c54a2befb8a80e674ec7a122ab5.
 - Canonical migration: 20261028193159_bar_recipes_management_and_images.sql, CLI-created after inspecting migration-new help. Repository migrations: 56. Scratch draft removed after promotion; there is one canonical implementation.
 - Local-GO implementation commit: 4a4c551. Final validated implementation/test SHA: b05569c70426c6974054b620d99b0b7db3bec598. The final branch SHA is the completion documentation commit containing this handoff, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-A handoff'`; final response records it explicitly. Same feature branch, no rebase/reset/merge.
@@ -45,3 +45,45 @@ Target independently verified via the existing OP1.0 Supabase connector: the-lin
 DEV touched only for the R2-A migration, its history alignment, controlled security validation and cleanup. PROD untouched; no PROD migration; main/development unchanged; no real Monks recipe import; no editor/image UI; R-2 PR NOT OPENED; Part 2 NOT STARTED.
 
 R2-A COMPLETE. Next: R2-B, management write actions and editor core. Use Codex, LOCAL, GPT-6.1 Terra, Medium, NEW SESSION. Continue SAME branch feature/recipes-v1-r2-management, starting with this handoff. Do not start R2-C, open the R-2 PR, touch main or touch PROD. STOP here.
+
+## R2-B COMPLETE (2026-10-28)
+
+R2-B starting committed HEAD: `cd12f6efc84c383702c983a3dbf71062432721f1`. The existing uncommitted model, serializer, three tests and checkpoint notes were preserved and continued. Implementation/test commit: `723154a2311e9fbca78ebbe3c63bff36ffaf3b83`, pushed on the same branch. Final HEAD is the completion-documentation commit, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-B handoff'`; the final report records its exact SHA. No reset, stash, rebase or merge.
+
+### Application contract
+
+- `domain/recipe-editor-state.ts`: new/existing initialization, fresh client-only row keys, deterministic serialization, normalized snapshot comparison and immutable row reordering. Single-line whitespace normalization matches R2-A; description, steps, tips and batch notes retain multiline prose. Keys, child ids, sort order, slug, archive and image fields never enter the save payload. `recipe-validation.ts` provides shared bounded payload validation and typed outcomes; `demo-recipes.ts` projects saved demo state back into a read graph.
+- `data/recipe-write-data.ts`: server-only caller-session `bar_recipe_save` wrapper. Action input is `{ restaurantSlug, recipeId, expectedVersion, payload }`; organization is resolved server-side. Create uses null id/version; update sends the loaded expected version. Success is `{ id, slug, version, recipe_number }`. Known `22023`, `23505`, `PT409` and `42501` failures map to safe messages; unknown/malformed/network responses use a retryable fallback. Structured duplicate number detail retains the existing recipe label for inline feedback and number-field focus.
+- `actions/recipe-write-actions.ts`: live-session and active server-resolved membership checks, Staff rejection before mutation, strict payload validation, then caller-client RPC. No service-role client in the editor path. The editor read paginates category choices, includes archived rows in max-number suggestion, retains only an existing recipe's current inactive category, and checks the version again after reading the graph to avoid pairing old fields with a newer version.
+- `recipe-editor-screen.tsx`, `recipe-editor.tsx`, `recipe-editor-fields.tsx` and `recipes-module.tsx` connect Add (`?tab=recipes&mode=new`) and Edit (`?tab=recipes&recipe=<slug>&mode=edit`), preserving root and `/r/<slug>` paths. Management-only entry points; Staff manual URLs render the read experience. Demo editing/saving is in memory and never invokes live actions.
+- Basic Info includes editable 1–9999 number, name, category, free-text base spirit, explicit alcoholic flag, alternate name, description, Popular and On menu. Perfect and existing House fields are editable. Ingredient, step and garnish repeaters have add/remove/up/down, caps and stable keys. Native suggestion comboboxes permit arbitrary valid text. Mobile disclosures, single-column fields and fixed bottom actions; wider layouts use columns and top-right sticky actions. Desktop/mobile screenshots inspected; no horizontal overflow in browser coverage.
+
+### State, validation and navigation
+
+Dirty state compares normalized payloads and suppresses no-op saves. Successful writes update snapshot/version and return to the immutable-slug detail with “Recipe saved”. Saving disables controls and guards duplicate submission. Failed saves preserve all input. Client errors have visible labels, inline messages, `aria-invalid`/`aria-describedby`, an alert summary and first-invalid focus.
+
+`PT409` retains the form, never retries automatically and offers Reload latest / Keep editing. Reload explicitly replaces the graph, category choices, version and snapshot and clears dirty/stale state; Keep editing only dismisses the prompt. Failed reload keeps local edits. Dirty Cancel and Recipes history navigation ask Discard changes / Keep editing; the module keeps the editor mounted while confirmation is pending. `beforeunload` protects refresh/close. The documented shell-wide cross-module navigation limitation remains; the global shell was not redesigned.
+
+No Copy, variant-management workflow, Archive/Restore, Show archived, category-management dialog, image processing/storage UI, Picture Book or later filters/sorting/preferences were implemented. The Image block is a placeholder only. R2-C remains unstarted.
+
+### Validation evidence
+
+- Preliminary tests rerun first: 3/3 PASS. Final focused Recipes suite: 10 files / 57 tests PASS, comprising editor domain 6, write data 10, actions 9, editor/access components 17 and existing Recipes regression 15.
+- `npm run check`: PASS (format, lint, generated routes and TypeScript). Full Vitest final run: 134 files / 1,750 tests PASS. The first broad run was 1,749; it was repeated only after final whitespace normalization added its regression test. A validation-helper overload typing issue and format drift were fixed; final TypeScript/check/build gates pass.
+- New editor Playwright first matrix: 12/12 PASS, including completed teardown after stopping its task-owned Next child process on Windows. Adding browser Back coverage exposed a Chromium route/unmount issue; module-level retention fixed it. Final editor + existing Recipes list/detail matrix: 24/24 PASS across desktop Chromium, real WebKit `host-tablet` and `server-mobile`, including all repeater reorder paths, renumbering, custom suggestions, dirty Cancel/Back and Staff URL fallback. No timing-based stale browser test: hosted two-window stale validation below is deterministic.
+- Final DEV-pinned production build PASS; explicit empty-string public-Supabase production build PASS (static root). Public configuration was provided explicitly, despite `.env.production.local` loading; no env file changed. Build scans found zero PROD Supabase references and zero exact DEV secret/service-role values. DEV build was recreated when needed to serve the hosted test after the empty build and final normalization fix. No deployment.
+- No SQL/migration change, no R2-A replay/full pgTAP rerun. Repository 56 / DEV 56; full version/name comparison has zero mismatches; latest remains `20261028193159`.
+
+### Hosted DEV evidence and cleanup
+
+`PLAYWRIGHT_BASE_URL=http://localhost:3002 npm run test:real:ui -- tests/real/ui/recipes-editor.real.spec.ts` ran against the explicitly DEV-pinned production build; the test independently refuses a non-DEV/PROD-referencing server. Final run: 1/1 comprehensive flow PASS (41.0 seconds; 45.6 seconds including fixture/teardown).
+
+The flow signs in as synthetic TestManager through the real passcode path, creates a synthetic recipe, verifies detail, edits/renumbers it and verifies unchanged id/slug with version 1→2 in DEV. It edits both Perfect and pre-existing House content, moves an ingredient and reloads the editor to verify persistence. A second manager window saves a newer version; the first gets the real `PT409` UI with local values retained, Keep editing preserves them, and explicit Reload latest clears dirty state. Staff sees read-only fallback on both Add/Edit URLs; replaying the captured management save request using Staff's own session returns permission denial. The previously created recipe remains at version 2.
+
+The first hosted attempt successfully created a recipe but hit the existing app-wide Opening reminder modal before Edit. Its teardown cleaned every synthetic row. The test now dismisses that prompt normally for the shared synthetic users; no Recipes authorization was mocked. The corrected flow passed, and passed again on the final normalized implementation build.
+
+Every run uses unique synthetic recipe/category names, collision-checks its reserved test numbers and deletes only its own identified graph. Final test teardown reports recipes/variants/ingredients/steps/garnishes/categories all zero. Independent connector SQL after the final run confirms all six Recipes tables contain zero rows; migration count is still 56. Existing organizations, V2 Harness organizations, bucket and Storage policies were retained. No real Monks recipes, PROD connection/migration, main/development change, R-2 PR or Part 2 work.
+
+### Next
+
+R2-A COMPLETE. R2-B COMPLETE. Next: **R2-C — Copy Perfect → House + Archive/Restore + Category Management**, NEW session, Codex LOCAL, GPT-6.1 Terra / Medium, Auto-Review, same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R2-D, open the R-2 PR, merge development, touch main or touch PROD. STOP.

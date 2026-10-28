@@ -1,10 +1,10 @@
-# Current task: Recipes V1 R2-A COMPLETE; R2-B NEXT
+# Current task: Recipes V1 R2-B COMPLETE; R2-C NEXT
 
-- [x] Reconcile development, create R-2 branch, and push preflight handoff.
-- [x] Read locked R-2 contracts and assess local tooling.
-- [x] Complete management and Storage migration, preserving R-1 import; scratch removed.
-- [x] Pass focused policy tests, clean replay, full database gate and generated types.
-- [x] Verify DEV target, apply migration, test security and clean synthetic data.
-- [x] Update handoff, review and checkpoint commit/push; stop before R2-B.
+- [x] Preserve preliminary work; verify starting HEAD and branch.
+- [x] Complete management writes and responsive Add/Edit core, authorization, demo safety, validation, dirty protection and stale recovery.
+- [x] Focused Recipes: 10 files / 57 tests; full Vitest: 134 files / 1,750 tests; check; both builds; bundle scans PASS.
+- [x] Recipes browser regression: 24/24 across desktop, real WebKit tablet and mobile.
+- [x] Hosted DEV complete management/Staff/two-window stale flow PASS; independent cleanup: all six Recipes tables zero; migration parity 56/56.
+- [x] Review and push implementation `723154a`; record final evidence in R2_HANDOFF.
 
-R2-A complete: DEV/repo parity 56/56; hosted 7/7; zero synthetic rows/objects; local database, concurrency, app and browser gates PASS. Full evidence and final branch-SHA resolution: `docs/features/recipes-v1/R2_HANDOFF.md`. R2-B NEXT / NOT STARTED on the same branch, new session. No PROD, main/development merge, R-2 PR or Part 2 work. Completion documentation is the final commit/push for this session.
+Completion documentation is the final commit/push for this session. R2-C NEXT / NOT STARTED. No new migration, PROD, main/development merge, real Monks recipe import, R-2 PR or Part 2 work. Final SHA resolves via the completion commit documented in `docs/features/recipes-v1/R2_HANDOFF.md`.
