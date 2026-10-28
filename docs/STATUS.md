@@ -207,3 +207,7 @@ DEV-only. Merged to `development` with an owner-approved CI exception for PR #13
 ## Recipes V1 R-1 checkpoint
 
 Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.
+
+### Recipes V1 R2-A complete (feature branch only)
+
+Management database and private image Storage foundation complete on `feature/recipes-v1-r2-management`; R2-B next / not started. DEV/repository parity 56/56, latest `20261028193159_bar_recipes_management_and_images`; migration-created hosted Storage policies verified. Final focused database 166 assertions, concurrency harness, hosted real-JWT suite 7/7, app checks, Vitest 1708 and browser regression 45/45 passed. Full pgTAP ran once (45 files / 1462 assertions), followed by final focused checks after a narrow normalization correction. Synthetic DB and Storage residue zero. No R-2 PR or main/development merge; PROD untouched. Evidence and continuation: [R2 handoff](features/recipes-v1/R2_HANDOFF.md).
