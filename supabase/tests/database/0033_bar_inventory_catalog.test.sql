@@ -126,6 +126,7 @@ select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname like 'inventory_%' and p.proname not like 'inventory_stock_%'
      and p.proname not like 'inventory_import_%'
+     and p.proname not like 'inventory_order_draft_%'
      and has_function_privilege('authenticated', p.oid, 'execute')
      and not has_function_privilege('anon', p.oid, 'execute')),
   13, 'BI-SEC-003 all 13 catalog RPCs are executable by authenticated and not anon'

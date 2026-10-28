@@ -1,5 +1,6 @@
 import type { Designation } from "@/features/auth/domain/passcode";
 
+import type { OrderDraftView } from "./order-draft-view";
 import type { AdjustmentReason, StockStatus } from "./stock-rules";
 
 /** Curated unit types (owner decision D8). `other` carries a custom label. */
@@ -162,6 +163,8 @@ export type CatalogState = {
   ledger?: HistoryEntry[];
   /** Demo mode only: its confirmed imports. Real mode reads batches from the database. */
   importBatches?: ImportBatchView[];
+  /** Demo mode only: its order drafts, active and sent. Real mode reads them from the database. */
+  orderDrafts?: OrderDraftView[];
 };
 
 export type CatalogSnapshot = CatalogState & {

@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { workbookToBuffer } from "@/lib/xlsx/write-node";
 
 import { getCatalogSnapshot } from "../data/catalog-data";
+import { getOrderDraftById } from "../data/order-draft-data";
 import {
   getHistoryEntries,
   HISTORY_ROW_LIMIT,
@@ -24,6 +25,7 @@ import {
   type CatalogCommand,
 } from "../domain/catalog-commands";
 import { daysBetween } from "../domain/analytics";
+import { conflictFrom, type RpcError } from "../domain/db-conflict";
 import { friendlyDbMessage } from "../domain/db-error";
 import {
   exportNeedsLedger,
@@ -31,11 +33,17 @@ import {
   type ExportRequest,
 } from "../domain/exports";
 import {
+  hasPurchaseLines,
+  NOTHING_TO_SEND_MESSAGE,
+  orderDraftExportRequestSchema,
+} from "../domain/order-draft-share";
+import {
   isInventoryManager,
   type CatalogConflict,
   type CatalogSnapshot,
   type HistoryEntry,
 } from "../domain/inventory-types";
+import type { OrderDraftView } from "../domain/order-draft-view";
 
 export type InventoryActionResult =
   | { ok: true; data: CatalogSnapshot }
@@ -54,51 +62,6 @@ const slugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
-type RpcError = { message?: string; code?: string; details?: string | null };
-
-/** PT409 stale and 23505 duplicate carry a JSON `details` the UI can act on. */
-function conflictFrom(error: RpcError): CatalogConflict | undefined {
-  if ((error.code !== "PT409" && error.code !== "23505") || !error.details) {
-    return undefined;
-  }
-  try {
-    const detail = JSON.parse(error.details) as Record<string, unknown>;
-    if (detail.kind === "stale") {
-      return {
-        kind: "stale",
-        entity: String(detail.entity ?? ""),
-        id: String(detail.id ?? ""),
-        currentVersion: Number(detail.current_version ?? 0),
-        updatedBy:
-          typeof detail.updated_by === "string" ? detail.updated_by : null,
-        updatedAt:
-          typeof detail.updated_at === "string" ? detail.updated_at : null,
-        current:
-          typeof detail.on_hand === "number" &&
-          typeof detail.backup === "number"
-            ? { onHand: detail.on_hand, backup: detail.backup }
-            : undefined,
-      };
-    }
-    if (detail.kind === "duplicate") {
-      return {
-        kind: "duplicate",
-        entity: String(detail.entity ?? ""),
-        field: String(detail.field ?? ""),
-        existingId:
-          typeof detail.existing_id === "string" ? detail.existing_id : null,
-        existingLabel:
-          typeof detail.existing_label === "string"
-            ? detail.existing_label
-            : null,
-      };
-    }
-  } catch {
-    // Not JSON: fall through to the plain message.
-  }
-  return undefined;
-}
-
 type CommandArgs = { p_organization_id: string; p_location_id: string };
 
 async function runCommand(
@@ -427,6 +390,8 @@ const exportRequestSchema = z.discriminatedUnion("kind", [
       .refine((n) => (HISTORY_RANGES as readonly number[]).includes(n)),
   }),
   z.object({ kind: z.literal("recommendations"), filters: filtersSchema }),
+  // Only the draft id: the server loads the draft and its lines itself.
+  orderDraftExportRequestSchema,
   z.object({
     kind: z.literal("analytics"),
     filters: filtersSchema,
@@ -437,7 +402,8 @@ const exportRequestSchema = z.discriminatedUnion("kind", [
 ]);
 
 /**
- * One export (inventory, history, order recommendations or analytics) as CSV
+ * One export (inventory, history, order recommendations, one order draft or
+ * analytics) as CSV
  * or XLSX. The browser sends only WHAT to export and the table's filter
  * string. The rows come from the database under the caller's own access and
  * the filters are re-applied here, so a file can only hold rows the caller may
@@ -480,6 +446,26 @@ export async function exportDataAction(input: {
     return { ok: false, error: "Bar Inventory could not be loaded." };
 
   const now = new Date();
+  let orderDraft: OrderDraftView | null = null;
+  if (request.kind === "order_draft") {
+    // Bound to this organization and location and read under the caller's own
+    // access: another tenant's draft id finds nothing.
+    const found = await getOrderDraftById(
+      caller.organizationId,
+      location.id,
+      request.draftId,
+    );
+    if (found.failed) {
+      return { ok: false, error: "That order could not be loaded." };
+    }
+    if (!found.draft) {
+      return { ok: false, error: "That order draft is not available." };
+    }
+    if (!hasPurchaseLines(found.draft.lines)) {
+      return { ok: false, error: NOTHING_TO_SEND_MESSAGE };
+    }
+    orderDraft = found.draft;
+  }
   let entries: HistoryEntry[] = [];
   if (exportNeedsLedger(request.kind)) {
     const days = request.kind === "history" ? request.days : 365;
@@ -497,7 +483,7 @@ export async function exportDataAction(input: {
 
   const file = prepareExport(
     request,
-    { catalog: snapshot, entries },
+    { catalog: snapshot, entries, orderDraft },
     { timeZone: location.time_zone, now, slug: restaurantSlug },
     format,
   );

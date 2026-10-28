@@ -3,7 +3,10 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+
 import type { InventoryRow } from "../domain/inventory-rows";
+import type { VendorDraftTarget } from "../domain/order-draft-view";
 import {
   groupByVendor,
   ORDER_SOON_COLUMNS,
@@ -33,14 +36,77 @@ const COLUMNS: TableColumn<InventoryRow>[] = ORDER_SOON_COLUMNS.map(
   }),
 );
 
+/**
+ * Order soon only decides WHAT needs ordering; the draft itself is prepared in
+ * Order Drafts. `open` resolves to an error message, or null once it has
+ * switched to the draft.
+ */
+export type OrderDraftCta = {
+  targets: ReadonlyMap<string, VendorDraftTarget>;
+  open: (target: VendorDraftTarget) => Promise<string | null>;
+};
+
+function DraftAction({ vendor, cta }: { vendor: string; cta: OrderDraftCta }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const target = cta.targets.get(vendor);
+  // The stable system "Unassigned" vendor can never have a draft; a vendor the
+  // catalog no longer knows is treated the same way.
+  if (!target || target.isSystem) {
+    return (
+      <p className="text-muted-foreground px-3 pb-2 text-xs">
+        Assign a vendor in Manage to draft an order.
+      </p>
+    );
+  }
+  if (!target.draftId && !target.active) {
+    return (
+      <p className="text-muted-foreground px-3 pb-2 text-xs">
+        This vendor is inactive. Reactivate it in Manage to draft an order.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col items-start gap-1 px-3 pb-2">
+      <Button
+        size="sm"
+        variant={target.draftId ? "secondary" : "default"}
+        aria-disabled={pending}
+        className={pending ? "opacity-60" : undefined}
+        onClick={async () => {
+          if (pending) return;
+          setPending(true);
+          setError(null);
+          const failure = await cta.open(target);
+          setPending(false);
+          if (failure) setError(failure);
+        }}
+      >
+        {pending
+          ? "Opening…"
+          : target.draftId
+            ? "Open Order Draft"
+            : "Create Order Draft"}
+      </Button>
+      {error ? (
+        <p role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Group({
   group,
   open,
   onToggle,
+  cta,
 }: {
   group: VendorGroup;
   open: boolean;
   onToggle: () => void;
+  cta: OrderDraftCta | null;
 }) {
   const bodyId = useId();
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -73,6 +139,7 @@ function Group({
           {group.orderNeeded > 0 ? ` + ${group.orderNeeded} order needed` : ""}
         </span>
       </button>
+      {cta ? <DraftAction vendor={group.vendor} cta={cta} /> : null}
       {open ? (
         <ul id={bodyId} className="divide-border divide-y border-t">
           {group.items.map((item) => (
@@ -108,7 +175,13 @@ function Group({
   );
 }
 
-function VendorGroups({ rows }: { rows: InventoryRow[] }) {
+function VendorGroups({
+  rows,
+  cta,
+}: {
+  rows: InventoryRow[];
+  cta: OrderDraftCta | null;
+}) {
   const groups = useMemo(() => groupByVendor(rows), [rows]);
   const [chosen, setChosen] = useState<Record<string, boolean>>({});
   return (
@@ -120,6 +193,7 @@ function VendorGroups({ rows }: { rows: InventoryRow[] }) {
           <Group
             key={group.vendor}
             group={group}
+            cta={cta}
             open={open}
             onToggle={() =>
               setChosen((current) => ({ ...current, [group.vendor]: !open }))
@@ -141,12 +215,15 @@ export function OrderSoon({
   restaurantSlug,
   timeZone,
   runExport,
+  draftCta = null,
 }: {
   /** Critical and Low items, most urgent first. */
   rows: InventoryRow[];
   restaurantSlug: string;
   timeZone: string;
   runExport: RunExport;
+  /** Null until the drafts have loaded: no Create/Open button is shown. */
+  draftCta?: OrderDraftCta | null;
 }) {
   const [info, onVisibleRows] = useVisibleInfo<InventoryRow>();
   return (
@@ -160,7 +237,7 @@ export function OrderSoon({
       timeZone={timeZone}
       emptyMessage="Nothing needs ordering right now."
       onVisibleRows={onVisibleRows}
-      renderGroups={(visible) => <VendorGroups rows={visible} />}
+      renderGroups={(visible) => <VendorGroups rows={visible} cta={draftCta} />}
       toolbarExtras={
         <ExportControl
           label="Export recommendations"

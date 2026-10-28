@@ -1,85 +1,89 @@
-# Current Task Handoff — Bar Inventory V1 build, then Tasks V1.1
+# Current Task Handoff
 
-## Current State & Next Step
+## Current cycle
 
-**Current cycle:** implementation after the 2026-10-26 Production release. Owner order: Phase group A **Bar Inventory V1 (BI-0 → BI-11)**, then Phase group B **Tasks V1.1 (T-0 → T-6)**, then STOP on `development` (Tips V2 #155 is NOT part of this task).
-**Feature:** Bar Inventory V1 (#168) · **Phase:** BI-0 → BI-11 are ALL MERGED to `development` (BI-11 = PR #187, merge `951faa7`). Bar Inventory is complete; `FINAL_GATE.md` is the record. **Now: security dependency bumps (`fix/security-dependency-bumps`: next 16.3.4→16.4.3, zod 4.5.4→4.6.7), then Tasks V1.1.**
+Vendor Order Drafts V1 — **COMPLETE** (VOD-4 GO, 2026-10-27). Next product sequence: Tasks V1.1.
 
-**Owner re-sequencing (2026-10-27):** Tasks _code_ now waits for a NEW Bar Inventory enhancement, **Vendor Order Drafts V1** (VOD-0 plan → VOD-1 DB/domain → VOD-2 tab + editing → VOD-3 copy/CSV/XLSX/Sent history → VOD-4 hosted DEV + final gate). Bar Inventory V1 (#168, BI-0…BI-11) stays COMPLETE; do not reopen #168 and do not rerun BI-11. Create/locate a NEW GitHub issue for Vendor Order Drafts and add it to Project #4 in VOD-0. Then Tasks T-1…T-6, then the final development integration gate, then STOP before `main`/PROD.
+## Current phase
 
-**Branch:** `docs/tasks-v1-1-plan` (T-0) · **Base development:** `0699498` (PR #188 merge commit; head `f7e794b`; CI application / migrations-and-policies / browser-smoke green on that head; `deploy-migrations` skipped as designed)
-**Issue:** #169, #154 · **Project #4:** existing items (do not duplicate) · **PR:** #189 (T-0 docs, open)
+VOD-4 — Hosted DEV / Final Vendor Order Drafts Gate — **GO**. Closure PR #201 merged; this file is synced after the merge.
 
-**Done this session:** #188 confirmed MERGED (nothing to do). Stray `AGENTS.md` heading change (`#`→`##`, Next postinstall) restored to the repository version. Tasks V1.1 PLAN + TEST_MATRIX updated with the four owner decisions: D-1 `?tab=` addressing (kebab-case values, `/r/[slug]?tab=`, invalid → Tasks), D-3 Opening/Closing operational notifications kept, D-4 reminders for management **plus staff authorized to work the incomplete Opening items (own scope only)** — the management-only proposal is rejected, D-6 every non-cancelled Opening item is required (backlog item added for a future `required` flag). Docs only; no code, no migration.
-**Exact next action:** commit the doc edits (explicit paths), push `docs/tasks-v1-1-plan`, wait for exact-head CI on PR #189 (local HEAD = PR head = CI-tested SHA), merge with a MERGE COMMIT into `development`, refresh `development`, update this handoff, then start **VOD-0** (`docs/bar-inventory-vendor-order-drafts-v1-plan`). Do NOT start T-1.
-**Exact next command:** `gh pr checks 189 --watch`
+## Execution
 
-**Tasks V1.1 repo truth (verified 2026-10-27):** the app has NO per-module URLs — `tab` is `useState<AppTab>("allocation")` in `src/components/restaurant-operations-app.tsx`; only `/` and `/r/[slug]` exist. "Deep links respected / refresh keeps the module" therefore needs a minimal `?tab=` mechanism (PLAN §D-1). Business hours live in `operating_hours` (+ `locations.opening_local` fallback), time zone in `locations.time_zone`. The Tasks snapshot already runs idempotent sweeps on load (`task_notifications_sweep`); reminders follow that pattern. Owner decisions pending (FINAL_GATE.md): AC-EXP-4 export audit log and light-theme contrast tokens.
+Local Windows PC (Claude Sonnet 5.5). Hosted DEV only; PROD never targeted.
 
-Owner decisions **D1–D8 are LOCKED** (`PRD.md` §10): management roles only · vendor required + system "Unassigned" · Observed Depletion vs Confirmed Usage · blank = unchanged, `0` = zero · org catalog + location stock · XLSX via `read-excel-file@9.3.12` + `write-excel-file@4.1.1` (BI-8) · Realtime = notify→refetch · units Bottle/Can/Pack/Case/Keg + Other.
+## Branch / base
 
-## Rules for every phase
+- Final-gate branch: `feature/vendor-order-drafts-v1-final-gate` (renamed locally from `test/vendor-order-drafts-v1-final-gate`)
+- Base development SHA: `6b8dcead804a3aa803b2e8e3eb1dfd2c4bf1660c`
+- Defect fix: `fix/sent-history-past-end-page` — PR #200, tested head `652c7652c41ff24869e434525f21dd8209fb37f2`, merge commit `f3b0e0de27b95cdb05961450554cd23a021731f6` (exact-head CI green; merge commit)
+- Final tested development SHA: `f3b0e0de27b95cdb05961450554cd23a021731f6`; the final-gate branch merged it in (no history rewrite)
+- Issue: #190 · Project #4 · Milestone: Future Product Backlog
 
-`feature/*` · `fix/*` · `docs/*` branch → targeted validation → PR → exact-head CI → **merge commit** → `development`. Never commit to `development`/`main`. **No `development → main`** in this task. Migrations DEV only; PROD never touched. `git add` explicit paths only (never `-A`; `docs/testing/` and `*.code-workspace` stay untracked). Do not mix Bar Inventory and Tasks code on one branch. Tips V2 is NOT implemented here. A commit after CI invalidates that CI evidence.
+## Phase ledger
 
-## Bar Inventory phases
-
-- [x] **BI-0** decisions, XLSX review, vectors, `TEST_MATRIX.md` — merged (PR #171)
-- [x] **BI-1** org-level catalog, 13 RPCs, Manage UI — merged (PR #172)
-- [x] **BI-2** stock, immutable ledger, status view — merged (PR #173, `d216290`)
-- [x] **BI-3** `FilterableTable` kit, filter engine, Inventory view, Manage filters — merged (PR #174, `4a5ed19`)
-- [x] **BI-4** Dashboard — merged (PR #175, `ee573c0`)
-- [x] **BI-5** Order soon by vendor + recommendations CSV export — merged (PR #176, `41fc232`)
-- [x] **BI-6** History over the immutable ledger — merged (PR #177, `0e39e0f`)
-- [x] **BI-7** Analytics from the ledger — merged (PR #178, `450aeaf`)
-- [x] **BI-8** CSV/XLSX import & export — 8a exports MERGED (PR #179) · 8b import engine MERGED (PR #180) · 8c-1 database MERGED (PR #182) · 8c-2 application MERGED (PR #183, `c3ccbcc`) · **8d XLSX import: PR open** (report §BI-8d; hosted DEV UI 5/5)
-- [x] **BI-9** responsive polish, a11y, regression, Realtime notify→refetch — **PR open** (report §BI-9; migration `20261027130000` on DEV; hosted DEV UI 6/6 + 11/11 on a production build)
-- [x] **BI-10** hosted DEV validation — **GO**, PR open (`DEV_VALIDATION.md`; hosted DB 38/38, hosted UI on a DEV-pinned production build 23/23)
-- [x] **BI-11** final integration gate — **PR open** (`FINAL_GATE.md`; NOT a release; `main` and PROD untouched)
-
-## Tasks V1.1 phases (after Bar Inventory)
-
-Scope: default landing = Tasks → Today for every role (explicit deep links respected) · management Today view (All Staff / My Tasks / person, server-authorized, staff name per task) · notification scope narrowed to Opening/Closing (#154) · server-authoritative Opening reminders at open, +15, +30 (location time zone, DST-safe, deduped per location/service date/recipient/stage `OPEN`/`OPEN_PLUS_15`/`OPEN_PLUS_30`, suppressed when complete, catch-up shows newest only, nothing after +30). Issues #169, #154 (search before creating any). Docs in `docs/features/tasks-v1-1/`. Phases T-0 → T-6 are defined when group A completes. Not started.
-
-## BI-11 evidence (full report: `docs/features/bar-inventory-v1/FINAL_GATE.md`)
-
-```
-Unit:     Vitest 1406/1406 (104 files)
-DB:       pgTAP 38 files pass (no migration in BI-11); hosted DB suites 42/42 incl. ledger paging past the 1,000-row API cap
-Browser:  full Playwright cold-cache CI=1: desktop 241, tablet 241, phone 239 + 2 skips; 0 use-server errors
-Hosted:   production build pinned to DEV (PROD ref in 0 files): UI 24/24 (incl. History + export past 1,000 rows); no leftovers, 26 V2 Harness orgs unchanged
-Static:   lint · typecheck · prettier --check PASS
-CI:       pending on the PR head
+```text
+Dependency #188 COMPLETE · Tasks Plan #189 COMPLETE · VOD-0 #191 COMPLETE
+VOD-1 #193 COMPLETE (876be20) · VOD-1 docs #194 COMPLETE (34c7481)
+VOD-1.1 #195 COMPLETE (tested fa3762b, merge f6bab25)
+VOD-2 #196 COMPLETE (tested f6c3fd0, merge 292ca1a) · VOD-2 docs #197 COMPLETE (merge 75d6ae3)
+VOD-3 #198 COMPLETE (tested 054355d, merge 64e3007) · VOD-3 docs #199 COMPLETE (merge 6b8dcea)
+VOD-4 COMPLETE — GO · defect fix #200 (merge f3b0e0d) · closure #201 (tested 260ffe1, merge 3f6509b)
+Tasks T-1 PARKED (feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED) · T-2..T-6 NOT STARTED
+Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
 
-**WebKit (Windows):** the BI-3 full run wedged once at default parallelism; not reproduced (report §BI-3). Run Playwright per project with `--workers=2 --global-timeout=…`.
+## VOD-4 result (detail: IMPLEMENTATION_REPORT.md "VOD-4 — hosted DEV final gate", TEST_MATRIX.md "VOD-4 coverage")
+
+- DEV `opmujepkemwcdxxorhfd` was 2 migrations behind (49 → 51); applied only `20261027195142` and `20261027210000` via the Management API + `schema_migrations` row (hard-coded DEV ref). PROD not touched.
+- New hosted suites: `tests/real/bar-inventory-order-drafts.db.real.test.ts` (38/38) and `tests/real/ui/bar-inventory-order-drafts.real.spec.ts` (15/15, run twice).
+- Demo Playwright order-drafts specs 20/20 on desktop, host-tablet WebKit, server-mobile; whole Bar Inventory regression 78 · 78 · 76 + 2 skips; pgTAP 40 files / 1,171 assertions; Vitest 114 files / 1,559; format, lint, typecheck, `next build` pass.
+- Defect D1 (low): Sent-history page past the end returned null (PostgREST `PGRST103`). Fixed in #200.
+- Intermittent, unrelated: `bar-inventory-realtime-access` failed twice right after the bulk insert, then passed 3/3.
+- Not run (stated in the report): hosted browser spec on tablet/phone; Assistant Manager in a browser (no synthetic passcode user); Staff server-action call from a hosted browser; forged export id from a hosted browser; VOD-077 delivery-after-send on DEV.
+- DEV footprint: two immutable Sent orders tagged `VOD4-1793147896144` and `VOD4-1793150815862` (with the vendors/products/categories they reference) in the `the-monks` org. Cannot be deleted by design. 26 `V2 Harness` orgs untouched.
+
+## Tasks T-1 PARKED
+
+Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged NO. Untouched during VOD-4. A separate session may now reconcile and resume it.
 
 ## Safety ledger
 
-```
-development merged: YES for BI-0..8d (#171-#184)
+```text
+development merged: YES — fix PR #200 / f3b0e0d (merge commit); final-gate PR #201 / 3f6509b (merge commit, exact-head CI green)
 main merged: NO
-DEV touched: YES (BI-1/BI-2, BI-8c and BI-9 migrations — BI-9 added 20261027130000, publication membership only; hosted suites use synthetic orgs and tagged data)
+DEV touched: YES — two repository migrations applied; synthetic hosted test data; two immutable Sent orders left (see above)
 PROD touched: NO
 PROD migrations: NO
 ```
 
-## Known problems
+## Current State & Next Step
 
-- **26 leaked synthetic "V2 Harness" orgs in DEV** — harmless; deletion NOT authorized by the owner. Do not delete; ask first if they ever invalidate a test.
-- Windows WebKit instability under default Playwright parallelism (above).
+- [x] Branch renamed; HEAD == origin/development == 6b8dcea at start
+- [x] DEV proven (ref `opmujepkemwcdxxorhfd`), migration parity 51/51
+- [x] Hosted real DB + browser suites, browser matrix, pgTAP, repo gates
+- [x] Defect D1 fixed and merged (#200)
+- [x] Closure docs written (PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog, this file)
+- [x] Closure PR #201: tested head `260ffe1c4760e93233fa5c45e4fb7eb6a956556a` = local = remote = PR head = CI-tested SHA; merge commit `3f6509b770dd2a03ff73792cf179be9dc71fe982`
+- [x] #190 commented with the gate summary and CLOSED; Project #4 card Status = Done; milestone stays Future Product Backlog (no completion semantics, nothing else reorganised)
+- [x] This `docs/vod-4-post-merge-sync` PR records the final-gate PR number and merge SHA (docs only)
 
-## GitHub
+## Exact next command
 
-#168 Bar Inventory V1 (open) · #169 Tasks Today management visibility (open) · #154 Tasks notification narrowing (open) · #155 Tips V2 (open, untouched) · #111 deploy-migrations (open, blocked) · #113 migration/app sequencing (open) · #164 deferred Production checks (open).
+```bash
+git status --short && git log --oneline -3
+```
 
-## Notes for the next agent
+## Read first
 
-- Uncommitted files / running processes: none after the BI-3 commit. Only unrelated `@playwright/mcp` and devtools node processes exist — do not kill them.
-- `docs/production-release-2026-10-26` holds an unmerged docs commit (`a4a8106`); do not assume its content is on `development`.
-- XLSX libraries are exact-pinned (`write-excel-file@4.1.1`, `read-excel-file@9.3.12`, `fflate@0.8.3`); do not add another spreadsheet library. The guard is `src/lib/xlsx/guard.ts`.
-- Shared vectors are the contract between SQL and TypeScript: never edit a vector to hide a mismatch.
-- Every table/list view must reuse the BI-3 `FilterableTable` + `table-filters.ts`; no ad hoc filter systems.
+1. `tasks/current-task.md`
+2. `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md` (VOD-4 section)
+3. `docs/features/bar-inventory-vendor-order-drafts-v1/TEST_MATRIX.md` (VOD-4 coverage)
 
-**Read first:** this file · `docs/features/bar-inventory-v1/IMPLEMENTATION_REPORT.md` §BI-3 · `IMPLEMENTATION_PLAN.md` · `UI_UX_PLAN.md`.
-**DO NOT:** merge to `main`, touch PROD, delete the synthetic DEV orgs, start Tips V2, squash/rebase-merge, or merge on red/stale CI.
+## DO NOT
+
+- Do not touch `main`, PROD, or the parked Tasks branch in this phase.
+- Do not delete or modify hosted DEV product data (including V2 Harness orgs and the two Sent orders).
+- Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
+- Do not merge on stale, partial, or red CI.
+- `next dev` rewrites the `AGENTS.md` heading; never commit that change (`git checkout AGENTS.md`).

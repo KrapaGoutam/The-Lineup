@@ -11,6 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import type { Designation } from "@/features/auth/domain/passcode";
 import { base64ToBlob } from "@/lib/download-file";
 import { EXPORT_MIME, sheetToCsv } from "@/lib/export/document";
@@ -39,9 +40,23 @@ import {
   type DemoCatalogBinding,
 } from "../hooks/use-catalog-controller";
 import { useInventoryRealtime } from "../hooks/use-inventory-realtime";
+import { useOrderDrafts } from "../hooks/use-order-drafts";
+import { draftsOf } from "../domain/order-draft-demo";
+import {
+  hasPurchaseLines,
+  NOTHING_TO_SEND_MESSAGE,
+} from "../domain/order-draft-share";
+import {
+  vendorDraftTargets,
+  type OrderDraftView,
+  type VendorDraftTarget,
+} from "../domain/order-draft-view";
 import { AnalyticsView } from "./analytics-view";
 import { DashboardView } from "./dashboard-view";
 import { HistoryView, type HistoryLoad } from "./history-view";
+import type { DraftGuard } from "./order-draft-editor";
+import { OrderDraftsView } from "./order-drafts-view";
+import type { OrderDraftCta } from "./order-soon";
 import { type RunExport } from "./export-control";
 import { InventoryView } from "./inventory-view";
 import {
@@ -51,11 +66,18 @@ import {
 import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
 
-type View = "dashboard" | "inventory" | "manage" | "history" | "analytics";
+type View =
+  | "dashboard"
+  | "inventory"
+  | "drafts"
+  | "manage"
+  | "history"
+  | "analytics";
 
 const VIEW_NAMES: Record<View, string> = {
   dashboard: "Dashboard",
   inventory: "Inventory",
+  drafts: "Order Drafts",
   manage: "Manage",
   history: "History",
   analytics: "Analytics",
@@ -64,6 +86,7 @@ const VIEW_NAMES: Record<View, string> = {
 const VIEWS: { id: View; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
   { id: "inventory", label: "Inventory" },
+  { id: "drafts", label: "Order Drafts" },
   { id: "manage", label: "Manage" },
 ];
 
@@ -133,7 +156,37 @@ function ManagerInventory({
     locationId,
     onInvalidate: () => void refresh({ background: true }),
   });
+  // Vendor Order Drafts: the data layer, the draft on screen, and a guard that
+  // stops anyone leaving unsaved edits without choosing what happens to them.
+  const orderDrafts = useOrderDrafts({
+    demo,
+    restaurantSlug,
+    viewer,
+    onSessionInvalid,
+  });
+  const reloadDrafts = orderDrafts.api.reload;
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const draftGuard = useRef<DraftGuard | null>(null);
+  const registerGuard = useCallback((guard: DraftGuard | null) => {
+    draftGuard.current = guard;
+  }, []);
+  const [pendingNav, setPendingNav] = useState<(() => void) | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const navigate = useCallback((go: () => void) => {
+    if (draftGuard.current?.dirty) {
+      setLeaveError(null);
+      setPendingNav(() => go);
+    } else {
+      go();
+    }
+  }, []);
   const [view, setView] = useState<View>("dashboard");
+  // Opening the tab shows what the database holds now (like leaving and
+  // coming back to Bar Inventory).
+  useEffect(() => {
+    if (view === "drafts") void reloadDrafts();
+  }, [view, reloadDrafts]);
   // History and Analytics are reached from Inventory and the Dashboard and go
   // back to them, so that is the tab that is "current" while they are open.
   const currentTab: View =
@@ -221,9 +274,20 @@ function ManagerInventory({
       latest.current;
     if (demo) {
       if (!snapshot) return { ok: false, error: "Nothing to export yet." };
+      let orderDraft: OrderDraftView | null = null;
+      if (request.kind === "order_draft") {
+        orderDraft =
+          draftsOf(demo.state).find((d) => d.id === request.draftId) ?? null;
+        if (!orderDraft) {
+          return { ok: false, error: "That order draft is not available." };
+        }
+        if (!hasPurchaseLines(orderDraft.lines)) {
+          return { ok: false, error: NOTHING_TO_SEND_MESSAGE };
+        }
+      }
       const file = prepareExport(
         request,
-        { catalog: snapshot, entries: snapshot.ledger ?? [] },
+        { catalog: snapshot, entries: snapshot.ledger ?? [], orderDraft },
         { timeZone, now: new Date(), slug: restaurantSlug },
         format,
       );
@@ -377,6 +441,28 @@ function ManagerInventory({
   const onImported = useCallback(() => {
     if (!latest.current.demo) void controller.refresh();
   }, [controller]);
+  // Dashboard → Order soon: Create Order Draft / Open Order Draft. The draft is
+  // always opened through the database's open-or-reuse call, never duplicated.
+  const draftApi = orderDrafts.api;
+  const draftList = orderDrafts.drafts;
+  const draftCta = useMemo<OrderDraftCta | null>(() => {
+    if (!snapshot || draftList === null) return null;
+    return {
+      targets: vendorDraftTargets(snapshot.vendors, draftList),
+      open: async (target: VendorDraftTarget) => {
+        if (target.draftId) {
+          setSelectedDraftId(target.draftId);
+          setView("drafts");
+          return null;
+        }
+        const result = await draftApi.open(target.vendorId);
+        if (!result.ok) return result.error;
+        setSelectedDraftId(result.draftId);
+        setView("drafts");
+        return null;
+      },
+    };
+  }, [snapshot, draftList, draftApi]);
   // Runs once, before any table reads its URL state.
   useState(() => dropForeignTableState(restaurantSlug));
 
@@ -416,7 +502,7 @@ function ManagerInventory({
             variant={currentTab === id ? "secondary" : "ghost"}
             size="sm"
             className="shrink-0"
-            onClick={() => setView(id)}
+            onClick={() => navigate(() => setView(id))}
           >
             {label}
           </Button>
@@ -469,6 +555,21 @@ function ManagerInventory({
             imports={importApi}
             onImported={onImported}
           />
+        ) : view === "drafts" ? (
+          <OrderDraftsView
+            snapshot={controller.snapshot}
+            drafts={orderDrafts.drafts}
+            loading={orderDrafts.loading}
+            loadError={orderDrafts.loadError}
+            api={orderDrafts.api}
+            selectedDraftId={selectedDraftId}
+            onSelectDraft={setSelectedDraftId}
+            onGuard={registerGuard}
+            navigate={navigate}
+            viewerName={user.name}
+            timeZone={timeZone}
+            runExport={runExport}
+          />
         ) : view === "inventory" ? (
           <InventoryView
             snapshot={controller.snapshot}
@@ -506,6 +607,7 @@ function ManagerInventory({
             onOpenHistory={() => setView("history")}
             onOpenAnalytics={() => setView("analytics")}
             loadHistory={loadHistory}
+            draftCta={draftCta}
             onOpenInventory={(state) => {
               // The Inventory table reads its filters from the URL when it mounts.
               writeTableState("inv", restaurantSlug, state);
@@ -514,6 +616,57 @@ function ManagerInventory({
           />
         )}
       </div>
+
+      <Dialog
+        open={pendingNav !== null}
+        onClose={() => {
+          if (!leaving) setPendingNav(null);
+        }}
+        title="You have unsaved changes"
+        description="This order draft has changes that haven't been saved."
+      >
+        {leaveError ? (
+          <p role="alert" className="text-destructive text-sm">
+            {leaveError}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={() => setPendingNav(null)}>
+            Stay
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const go = pendingNav;
+              setPendingNav(null);
+              go?.();
+            }}
+          >
+            Discard changes
+          </Button>
+          <Button
+            aria-disabled={leaving}
+            onClick={async () => {
+              if (leaving) return;
+              setLeaving(true);
+              setLeaveError(null);
+              const saved = (await draftGuard.current?.save()) ?? true;
+              setLeaving(false);
+              if (saved) {
+                const go = pendingNav;
+                setPendingNav(null);
+                go?.();
+              } else {
+                setLeaveError(
+                  "Your changes weren't saved. Fix the problem in the draft, or discard them.",
+                );
+              }
+            }}
+          >
+            {leaving ? "Saving…" : "Save and continue"}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }
