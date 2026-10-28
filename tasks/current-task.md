@@ -7,20 +7,20 @@ Recipes V1
 ```text
 Cycle:                      Recipes V1
 Previous Production release: COMPLETE (main 9e0be4b)
-Recipes R-0:                IN PROGRESS   (planning + architecture + data + UI contract; docs only)
-Recipes R-1:                NOT STARTED
-Recipes R-2:                NOT STARTED
+Recipes R-0:                COMPLETE      (PR #221 merged; docs only)
+Recipes R-1:                NEXT (NOT STARTED)
+Recipes R-2:                PLANNED (NOT STARTED)
 Part 2:                     ON HOLD
 main:                       CURRENT PRODUCTION (untouched)
-PROD:                       UNCHANGED DURING R-0
+PROD:                       UNCHANGED (R-0 touched nothing)
 ```
 
-- **Phase:** Recipes V1 R-0 — Claude Code Cloud, Sonnet 5.5, high, NEW session. Objective: an implementation-ready contract (PRD, plan, data model, security, UI/UX, source mapping, test matrix, R-1/R-2 implementation plan) so R-1 and R-2 can build without making product decisions.
-- **Branch:** `docs/recipes-v1-r0-planning` (from `development`, PR target `development`, MERGE COMMIT only).
+- **Phase:** Recipes V1 R-0 (COMPLETE) — Claude Code Cloud, Sonnet 5.5, high, NEW session. Objective: an implementation-ready contract (PRD, plan, data model, security, UI/UX, source mapping, test matrix, R-1/R-2 implementation plan) so R-1 and R-2 can build without making product decisions.
+- **Branch:** `docs/recipes-v1-r0-planning` (from `development`, PR #221 into `development`, MERGE COMMIT). Tested head `f01ace87c83f412bd450342846aa5ba6021d69b3` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change). Merge commit `26cceaf78cda08d20a04cdea16b0978e21626a3b` (parents `73ebc21` + `f01ace8`). Tracking issue #220; Project #4 update NOT PERFORMED (Projects tooling unavailable).
 - **Base SHA:** `73ebc210d97778db238b26acbee82481190560ea` (= `origin/development` at start; `origin/main` = `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`).
 - **Safety flags:** docs only · no application code · no migration · no Storage bucket · no seed/recipe data · no DEV database touched · PROD NOT touched · `main` NOT touched · R-1 / R-2 / Part 2 NOT started · no `development -> main`.
 - **Plan folder:** `docs/features/recipes-v1/` (`PRD.md`, `PLAN.md`, `DATA_MODEL.md`, `SECURITY_AND_ROLES.md`, `UI_UX_PLAN.md`, `SOURCE_MAPPING.md`, `TEST_MATRIX.md`, `IMPLEMENTATION_PLAN.md`, `STORAGE_PLAN.md`).
-- **Exact next action:** finish and commit the R-0 docs, push, open the PR into `development`, require exact-head CI, merge by merge commit, then record the merge SHA. After that: STOP. R-1 is a separate NEW session (Codex).
+- **Exact next action:** R-1 in a NEW Codex session (GPT-5.6 Sol, high) using the prompt at the end of `docs/features/recipes-v1/PLAN.md`. Do not start R-2. Do not merge `main`. Do not touch PROD.
 
 ### R-0 step checklist (interruption-safe; check off as each is written and reviewed)
 
@@ -37,7 +37,7 @@ PROD:                       UNCHANGED DURING R-0
 - [x] `docs/ROADMAP.md`, `docs/STATUS.md`, `tasks/backlog.md` updated
 - [x] tracking issue created: #220 (Project #4 update NOT PERFORMED — Projects tooling unavailable in this session)
 - [x] docs checks green (`prettier --check`, tracked-path check), diff inspected: zero app code, zero migrations
-- [ ] commit, push, PR -> `development`, exact-head CI green, MERGE COMMIT, merge SHA recorded
+- [x] commit, push, PR #221 -> `development`, exact-head CI green, MERGE COMMIT `26cceaf`, merge SHA recorded (this sync)
 
 ## Previous cycle (Tasks V1.1 and Production release 2026-10-28)
 
