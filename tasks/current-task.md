@@ -1,10 +1,10 @@
-# Current task ? Recipes V1 R1-D
+﻿# Current task: Recipes V1 R2-A
 
-Status: COMPLETE. R-1 PR #223 merged into development at `c99b8bacfc46e4ca0c618393a87653d14602f702`; tested feature SHA `92f4503b15345e39fa3390b8ef10cb4b79683d9e`. Exact-head application, browser-smoke, Database and Vercel checks passed. See `docs/features/recipes-v1/R1_HANDOFF.md` for validation and safety details.
+- [x] Reconcile development and create R-2 feature branch.
+- [x] Read locked R-2 contracts and assess local tooling.
+- [ ] Implement management and Storage migration and focused policy tests.
+- [ ] Verify local replay, database gate, generated types, and required quality checks.
+- [ ] Verify DEV target, apply migration, test security and clean synthetic data.
+- [ ] Update handoff, review, commit and push; stop before R2-B.
 
-- [x] Review and retain tablet URL race fix; verify focused tablet assertions.
-- [x] Record independent DEV 55-migration parity and prior validation evidence.
-- [x] Commit, push, open PR #223 and merge to development with exact-head CI green.
-- [ ] Merge this metadata-only documentation sync PR to development and verify its final HEAD.
-
-R-2 NEXT / NOT STARTED; Part 2 not started; main unchanged; PROD untouched; no real recipes imported.
+In flight: implementation has not started. Detailed recovery state: `docs/features/recipes-v1/R2_HANDOFF.md`.
