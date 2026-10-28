@@ -72,4 +72,4 @@ This backlog holds upcoming feature specifications and technical debt items queu
 
 ## Recipes V1 R-1 checkpoint
 
-Recipes V1 R-1 local validation is complete; PR and merge remain pending. R-2 remains next and is not started.
+Recipes V1 R-1 local validation is complete; PR #223 merged to development. R-2 remains next and is not started.

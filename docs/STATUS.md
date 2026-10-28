@@ -206,4 +206,4 @@ DEV-only. Merged to `development` with an owner-approved CI exception for PR #13
 
 ## Recipes V1 R-1 checkpoint
 
-Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR and merge pending. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.
