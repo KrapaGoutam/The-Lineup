@@ -328,4 +328,4 @@ T-5 proved the popup in demo mode. This drives the real server actions against t
 
 ### Status
 
-**T-6 GO.** No `supabase/**` change, no migration, no new product behavior. PR, tested head and merge SHA are recorded in `tasks/current-task.md` and the post-merge sync. Next: final Tasks V1.1 audit / release-readiness review, then explicit owner approval before any `development -> main`. Recipes SHELVED; Part 2 ON HOLD; `main` and PROD untouched.
+**T-6 GO.** No `supabase/**` change, no migration, no new product behavior. PR #213, tested head `75c964b10a9c319cd76e84eaa753b647b3a12e4c` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `711a683` (two parents: `deee02b` + `75c964b`). Next: final Tasks V1.1 audit / release-readiness review, then explicit owner approval before any `development -> main`. Recipes SHELVED; Part 2 ON HOLD; `main` and PROD untouched.

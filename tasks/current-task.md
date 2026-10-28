@@ -2,9 +2,13 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (Opening reminder popup + catch-up UX) is COMPLETE** (#154; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`)). **T-6 (final gate) is IN PROGRESS** on branch `feature/tasks-v1-1-final-gate` from development `deee02ba740b179279307477a0c32da5e04b0224` (Local Windows, Sonnet 5.5, high), Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (Opening reminder popup + catch-up UX) is COMPLETE** (#154; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`)). **T-6 (final gate) is COMPLETE — GO** (#154, #169; PR #213, tested head `75c964b10a9c319cd76e84eaa753b647b3a12e4c` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `711a683` (two parents: `deee02b` + `75c964b`); Local Windows, Sonnet 5.5, high). **Tasks V1.1 engineering phases T-1 through T-6 are complete.** Next: final Tasks V1.1 audit / release-readiness review, then explicit owner approval before any `development -> main`. Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
+
+T-6 — Final validation / release-readiness gate (#154, #169): **COMPLETE — GO** (Claude Code Local Windows, Sonnet 5.5). PR #213, merge `711a683`. Real host-tablet WebKit 289/289, desktop 289/289, server-mobile 287 + 2 intentional skips; pgTAP 42 files / 1297; hosted DEV parity 54 and `tests/real` Tasks 19/19; TS-050 PASS; real-mode popup spec 3/3; Vitest 1689/1689; one hydration-marker race fixed. DEV touched (controlled tests, cleaned); PROD NOT touched; no PROD migration; `main` UNTOUCHED; Recipes and Part 2 NOT started. **Next phase: final Tasks V1.1 audit / release-readiness review, a NEW session. Do not merge `main` and do not start Recipes without explicit owner approval.**
+
+Previous phase line (T-5):
 
 T-5 — Opening reminder popup + catch-up UX (#154): **COMPLETE** (Claude Code Cloud, Sonnet 5.5). Branch `feature/tasks-v1-1-reminder-popup` from `origin/development` @ `bfea042f40289f42335e1d76e320b820ceeaab21`; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`). No migration, `supabase/**` unchanged. Next phase: **T-6 final gate, a NEW Claude Code LOCAL WINDOWS session (Sonnet 5.5, high)**: real host-tablet WebKit, hosted DEV, full matrix, DB/security verification. T-6 NOT STARTED; Recipes SHELVED; Part 2 ON HOLD; `main` UNTOUCHED; PROD UNTOUCHED.
 
@@ -23,7 +27,7 @@ T-4: Claude Code **Local Windows** (Sonnet 5.5, high effort), real local Supabas
 - T-2: branch `feature/tasks-v1-1-management-today` from `c6f309eae5c674e71b3906ff1b26faae0440ca22`; PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents); `development` HEAD after merge `46ea022`
 - T-1 (done): PR #203 tested `1e3e4b1`, merge `cf3ae39`; docs PR #204, merge `c6f309e`
 - Issue: #169 (tracking) · Project #4 (card update not performed: Projects tooling unavailable in this session)
-- Issue: #154 (T-3 tracking) · T-4 COMPLETE · T-5 COMPLETE · T-6 evidence COMPLETE (GO), PR pending · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
+- Issue: #154 (T-3 tracking) · T-4 COMPLETE · T-5 COMPLETE · T-6 COMPLETE (GO) · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
 
 ## Phase ledger
 
@@ -33,7 +37,7 @@ Tasks T-0 plan COMPLETE (#189)
 Tasks T-1 COMPLETE (PR #203, tested 1e3e4b1, merge cf3ae39)
 Tasks T-2 COMPLETE (PR #205, tested c2ef864, merge 46ea022)
 Tasks T-3 COMPLETE (PR #207, tested 2fef134, merge 3a442a6)
-Tasks T-4 COMPLETE (PR #209, tested f48ea31, merge 796cff3) · Tasks T-5 COMPLETE (PR #211, tested 9bf2279, merge 53c94d2) · T-6 GO (PR pending)
+Tasks T-4 COMPLETE (PR #209, tested f48ea31, merge 796cff3) · Tasks T-5 COMPLETE (PR #211, tested 9bf2279, merge 53c94d2) · Tasks T-6 COMPLETE — GO (PR #213, tested 75c964b, merge 711a683)
 Part 2 (multi-org / multi-location / attendance) ON HOLD
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
@@ -70,7 +74,7 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
   - [x] tests: Vitest 1687/1687 (+58); Playwright `tests/e2e/opening-reminder-popup.spec.ts` (10 tests; `page.clock.install`, `?demoReminders=1`); desktop + server-mobile 134/134 with tasks, management-today, default-landing, dashboard; Chromium iPad emulation 28/28 (not WebKit); host-tablet WebKit NOT RUN (webkit binary absent)
   - [x] check, normal build and empty-Supabase-env build green; docs (PLAN D-5 as built, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog) updated
   - [x] committed, pushed, PR #211 -> development, exact-head CI green on `9bf2279` (browser-smoke was cancelled once by a job timeout on first-test page loads, not reproducible locally (full desktop suite 289/289 cold), passed on the single re-run), MERGE COMMIT `53c94d2`, #154 commented, post-merge docs sync (this change)
-- [ ] T-6 (final gate): IN PROGRESS (Local Windows) on `feature/tasks-v1-1-final-gate`, base `deee02b`; gate log under `## T-6 progress
+- [x] T-6 (final gate): COMPLETE — GO (Local Windows). Branch `feature/tasks-v1-1-final-gate` from `deee02b`; PR #213, tested head `75c964b10a9c319cd76e84eaa753b647b3a12e4c` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `711a683` (two parents: `deee02b` + `75c964b`); #154 commented and closed, #169 commented (left open until release); post-merge docs sync (this change). Gate log under `## T-6 progress`. **Next: final Tasks V1.1 audit / release-readiness review (a NEW session); DO NOT merge `main` without explicit owner approval.**
 
 - [x] base verified (local = origin/development = `deee02b`), branch created, handoff marked IN PROGRESS
 - [x] real host-tablet WebKit (webkit-2359 present) reproduced the sign-in failure: root cause = `data-hydrated` marker outside the app's Suspense boundary (fast `fill()` reset by hydration on `/r/<slug>`); fixed in `restaurant-operations-app.tsx` / `layout.tsx`, regression test `hydration-marker.test.tsx`; 1 failure in 66 before, 0 in 110 after
@@ -79,7 +83,7 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 - [x] production build, DEV-pinned, demo mode: desktop 289/289, host-tablet WebKit 289/289 (also 289/289 on the default dev-server config), server-mobile 287 + 2 intentional skips
 - [x] `npm run check` clean; Vitest 1689/1689; normal build PASS; empty-Supabase-env build PASS (`/` static); `.next` scans show 0 PROD refs
 - [x] docs: PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT (T-6), ROADMAP, STATUS, backlog
-- [ ] commit explicit paths, push, PR -> development, exact-head CI, MERGE COMMIT, #154 comment, post-merge docs sync
+- [x] commit explicit paths, push, PR #213 -> development, exact-head CI green (application, browser-smoke, Vercel; Database path-gated), MERGE COMMIT `711a683`, #154 commented and closed, #169 commented, post-merge docs sync
 
 DEV touched: YES (controlled tests: hosted suites, real-mode UI, read-only catalog queries; all cleaned) · PROD touched: NO · PROD migrations: NO · main: UNTOUCHED
 

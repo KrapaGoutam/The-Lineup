@@ -1,6 +1,6 @@
 # Tasks V1.1 — Plan
 
-**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 COMPLETE (PR #209, merge `796cff3`); T-5 COMPLETE (PR #211, merge `53c94d2`; see §3 D-5 _As built in T-5_); T-6 COMPLETE (final gate: GO; see `IMPLEMENTATION_REPORT.md` T-6) · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
+**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 COMPLETE (PR #209, merge `796cff3`); T-5 COMPLETE (PR #211, merge `53c94d2`; see §3 D-5 _As built in T-5_); T-6 COMPLETE (final gate: GO; PR #213, merge `711a683`; see `IMPLEMENTATION_REPORT.md` T-6) · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only.
 **Sequencing:** Tasks \_code\* (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
 
