@@ -6,7 +6,7 @@ Vendor Order Drafts V1
 
 ## Current phase
 
-VOD-3 — Sharing / Export / Mark Sent / Sent History — IMPLEMENTED, PR into `development` pending exact-head CI. VOD-2 COMPLETE. VOD-4 NOT STARTED.
+VOD-3 — Sharing / Export / Mark Sent / Sent History — COMPLETE (merged). VOD-4 NEXT / NOT STARTED.
 
 ## Execution
 
@@ -16,7 +16,8 @@ Claude Code Cloud (GitHub/origin is the source of truth).
 
 - VOD-3 branch: `feature/bar-order-drafts-v1-sharing-history`
 - Base development SHA: `75d6ae35cfdfda1ba53d4994b067e12b241c9291`
-- Implementation PR: see GitHub (opened after this commit); merge commit only after exact-head CI is green
+- Implementation PR: #198 — exact tested head `054355ddd4c049812965cb9d27424a396c3d7667`, merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165` (merge commit method, exact-head CI green)
+- Post-merge docs sync: branch `docs/vod-3-post-merge-sync` from `64e3007` (PR number in GitHub)
 - Issue: #190 (stays OPEN until VOD-4 passes)
 - Project #4: update NOT PERFORMED — Projects tool unavailable. Milestone unchanged: Future Product Backlog.
 
@@ -27,7 +28,7 @@ Dependency #188 COMPLETE · Tasks Plan #189 COMPLETE · VOD-0 #191 COMPLETE
 VOD-1 #193 COMPLETE (876be20) · VOD-1 docs #194 COMPLETE (34c7481)
 VOD-1.1 #195 COMPLETE (tested fa3762b, merge f6bab25)
 VOD-2 #196 COMPLETE (tested f6c3fd0, merge 292ca1a) · VOD-2 docs #197 COMPLETE (merge 75d6ae3)
-VOD-3 IMPLEMENTED — PR pending exact-head CI / merge · VOD-4 NOT STARTED
+VOD-3 #198 COMPLETE (tested 054355d, merge 64e3007) · VOD-4 NEXT / NOT STARTED
 Tasks T-1 PARKED (feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED) · T-2..T-6 NOT STARTED
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
@@ -55,7 +56,7 @@ Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged N
 ## Safety ledger
 
 ```text
-development merged: NO for VOD-3 yet (PR pending) — VOD-2 #196 / 292ca1a and docs #197 / 75d6ae3 are merged
+development merged: YES — VOD-3 PR #198 / 64e3007 (merge commit); VOD-2 #196 / 292ca1a and docs #197 / 75d6ae3 earlier
 main merged: NO
 DEV touched: NO
 PROD touched: NO
@@ -64,7 +65,7 @@ PROD migrations: NO
 
 ## Uncommitted files
 
-None after the VOD-3 commit.
+None after the docs-sync commit.
 
 ## Running processes
 
@@ -73,12 +74,12 @@ None.
 ## Exact next command
 
 ```bash
-git fetch origin && git rev-parse origin/development origin/feature/bar-order-drafts-v1-sharing-history
+git fetch origin && git rev-parse origin/development
 ```
 
 ## Exact next action
 
-Verify exact-head CI on the VOD-3 PR (local head = remote head = PR head = CI-tested SHA), fix only real failures, merge with a MERGE COMMIT (no squash / rebase), then record the merge SHA in a small `docs/vod-3-post-merge-sync` PR if needed and STOP. Do not start VOD-4 or Tasks T-1 in this session.
+STOP. VOD-3 is complete. VOD-4 (hosted DEV / final Vendor Order Drafts gate: real RLS, Staff denial, two-context PT409, no inventory mutation against the real ledger, full browser matrix including host-tablet WebKit and server-mobile, tests/real) starts in a FRESH session from the updated `development`. Keep Tasks T-1 parked. Do not touch `main` or PROD.
 
 ## Read first
 
