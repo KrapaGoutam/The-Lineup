@@ -138,4 +138,4 @@ No recipient logic changed. Recipients are still exactly the named person (or al
 
 ### Status
 
-**T-3 implemented; PR and exact-head CI evidence are recorded in the post-merge sync.** T-4 NOT STARTED; Part 2 on hold.
+**T-3 COMPLETE.** PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`). T-4 NOT STARTED; Part 2 on hold; `main` and PROD untouched.
