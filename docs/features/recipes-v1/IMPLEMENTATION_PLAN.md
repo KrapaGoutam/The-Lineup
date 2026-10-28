@@ -179,4 +179,4 @@ No scope expansion. Out of V1 (all recorded in `tasks/backlog.md`): duplicate re
 
 ## Recipes V1 R-1 checkpoint
 
-R1-A, R1-B and R1-C complete; R1-D local validation complete, PR and exact-head CI/merge pending. R-2 not started.
+R1-A, R1-B and R1-C complete; R1-D local validation complete, PR #223 merged to development after exact-head CI passed. R-2 not started.

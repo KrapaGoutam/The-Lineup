@@ -105,4 +105,4 @@ POS, reservations, payroll, SMS, and native apps require separate product discov
 
 ## Recipes V1 R-1 checkpoint
 
-Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR and merge pending. R-2 remains next.
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. R-2 remains next.

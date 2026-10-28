@@ -164,4 +164,4 @@ Run the full gate (check, test, both builds, full pgTAP, the existing e2e regres
 
 ## Recipes V1 R-1 checkpoint
 
-R-1 implementation and local validation are complete; PR and exact-head CI/merge remain pending. R-2 is next and has not started.
+R-1 implementation and local validation are complete; PR #223 merged to development after exact-head CI passed. R-2 is next and has not started.

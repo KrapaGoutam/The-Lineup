@@ -3,7 +3,7 @@
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D IN PROGRESS
+Status: R-1 COMPLETE; R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D COMPLETE
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
 Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D local validation complete; PR and merge pending.
+R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D COMPLETE; PR #223 merged to development.
 
 ## Completed
 
@@ -24,7 +24,7 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D local validation complete; PR 
 - Recovery checkpoint `0d7d4fa` committed and pushed the existing draft migration, test and handoff. Fetch confirmed origin/development remained `c3e44536` and the feature branch matched the checkpoint.
 - R1-A migration, import foundation, synthetic fixture, generated types and local DB tests completed. DEV migration applied and synthetic validation passed.
 
-## In Progress
+## Historical R1-D checkpoint
 
 - R1-D started at `a9eb6ff6ed4afa1ba13c2148de2dffac6d184d8c`; origin/development `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`; initial tree clean. PR NOT OPENED; PROD UNTOUCHED.
 - Planned: scope, security, migration parity and evidence audit; check, full Vitest, focused browser matrix and controlled tablet history; DEV-pinned and empty-env builds; DEV cleanup, documentation, tracking and PR.
@@ -32,7 +32,7 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D local validation complete; PR 
 
 ## Not Started
 
-- R1-D PR and merge; R-2.
+- R-2.
 
 ## Locked Decisions
 
@@ -158,7 +158,7 @@ Part 2 started: NO
 - PROD: no database or deployment operation; see build configuration note above. R1-D, R-2 and Part 2 not started; no PR opened.
 - Exact next action: R1-D final R-1 gate, documentation and PR in a new session, same branch. Do not start R-2 or touch main or PROD.
 
-## R1-D in-flight checkpoint
+## Historical R1-D in-flight checkpoint
 
 - Starting HEAD and origin feature: `a9eb6ff6ed4afa1ba13c2148de2dffac6d184d8c`; origin/development: `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`. No PR opened.
 - Scope audit: one Recipes migration, `20261028140623_bar_recipes_foundation.sql`; 55 local SQL migration files. No DB/import files changed since R1-A. R1-A evidence remains 55-migration replay, Recipes pgTAP 51/51, full pgTAP 43 files/1348 assertions, import tests 3/3 and DEV migration 55 at that time. Fresh DEV migration parity: PASS, based on the independently supplied authenticated read-only Supabase project query against `the-lineup-dev`: DEV 55 migrations, latest `20261028140623 / bar_recipes_foundation`; repository 55 migrations, latest `20261028140623_bar_recipes_foundation`. The CLI migration-list HTTP 403 is an access-path limitation.
@@ -167,3 +167,7 @@ Part 2 started: NO
 - Verified DEV identity via the DEV URL and project ID; read-only service-role counts across all six Recipes tables were zero. No synthetic data added during R1-D. Hosted foreign-org and archived detail browser tests remain unrun; prior hosted/pgTAP RLS plus mocked action evidence applies.
 - In-flight local changes: navigation race correction, this handoff, current-task, and the Next-generated AGENTS.md heading update. Nothing committed or pushed. No issue update, PR, CI, merge or final documentation completed.
 - Exact next action: complete documentation, secret scan, tracking and PR only when all GO criteria pass. Fresh hosted foreign-org and archived Staff browser duplication was not run; cross-org isolation has pgTAP and mocked action evidence, and archived Staff denial has pgTAP and server-action behavior evidence. DEV synthetic cleanup: PASS, zero rows across all six Recipes tables. R-2 not started; main unchanged; no PROD database or deployment operation.
+
+## R-1 final merge
+
+R-1, R1-A, R1-B, R1-C and R1-D: COMPLETE. Tablet URL race: FIXED. DEV and repository migrations: 55 each; latest `20261028140623_bar_recipes_foundation`; parity PASS (independent authenticated read-only Supabase project query against `the-lineup-dev`). PR #223 tested feature SHA `92f4503b15345e39fa3390b8ef10cb4b79683d9e`; application, browser-smoke, Database migrations-and-policies and Vercel passed on that SHA. Merge commit `c99b8bacfc46e4ca0c618393a87653d14602f702` became development HEAD before this metadata-only sync. The final development HEAD is the merge commit of this sync PR, obtainable from its merge record. Main unchanged; PROD untouched; real Monks recipe data not imported; R-2 NEXT / NOT STARTED; Part 2 not started. Project #4 issue #220 is In Progress. GitHub secret scanning reported zero open alerts; no separate local scanner was configured.
