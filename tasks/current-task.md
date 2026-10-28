@@ -1,3 +1,16 @@
+# Current task — Recipes V1 R-1
+
+Status: IN PROGRESS. Branch: `feature/recipes-v1-r1-core`; base: `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`. See `docs/features/recipes-v1/R1_HANDOFF.md` for continuation state.
+
+- [x] Fetch, verify clean state, fast-forward development, and create R-1 branch.
+- [ ] Implement and verify database, RLS, and controlled importer.
+- [ ] Implement and verify Recipes navigation, list, search, and detail.
+- [ ] Validate hosted DEV, clean synthetic data, run final gates, and review scope.
+- [ ] Commit, push, open PR, verify exact-head CI, and merge to development.
+
+PROD and main untouched; R-2 and Part 2 not started.
+
+---
 # Current Task Handoff
 
 ## Current cycle
