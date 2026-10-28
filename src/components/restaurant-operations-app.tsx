@@ -644,7 +644,13 @@ function RestaurantOperationsAppInner({
   }
   function setTab(next: AppTab) {
     setRequestedTab(next);
-    const href = tabHref(pathname, window.location.search, next);
+    let href = tabHref(pathname, window.location.search, next);
+    if (next === "recipes") {
+      const url = new URL(href, window.location.origin);
+      url.searchParams.delete("recipe");
+      url.searchParams.delete("mode");
+      href = url.pathname + url.search;
+    }
     if (href !== `${window.location.pathname}${window.location.search}`) {
       window.history.pushState(null, "", href);
     }

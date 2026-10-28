@@ -2,6 +2,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipesModule } from "./recipes-module";
 import { getRecipeIndexAction } from "../actions/recipe-actions";
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("../actions/recipe-actions", () => ({ getRecipeIndexAction: vi.fn() }));
 afterEach(() => {
   cleanup();

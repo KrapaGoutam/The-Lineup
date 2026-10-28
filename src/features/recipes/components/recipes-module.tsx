@@ -1,9 +1,15 @@
 ﻿"use client";
 import { useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { RecipeDetailView } from "./recipe-detail";
+import type { RecipeDetail, DetailVariant } from "../domain/recipe-detail";
 import { TableSkeleton } from "@/features/bar-inventory/components/table-kit/empty-state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { getRecipeIndexAction } from "../actions/recipe-actions";
+import {
+  getRecipeDetailAction,
+  getRecipeIndexAction,
+} from "../actions/recipe-actions";
 import {
   groups,
   search,
@@ -44,19 +50,31 @@ const demoIndex: RecipeIndex = {
     },
   ],
 };
-function Rows({ recipes }: { recipes: Recipe[] }) {
+function Rows({
+  recipes,
+  href,
+  open,
+}: {
+  recipes: Recipe[];
+  href: (slug: string) => string;
+  open: (event: React.MouseEvent<HTMLAnchorElement>, slug: string) => void;
+}) {
   return (
     <ul className="grid gap-1 lg:grid-cols-2">
       {recipes.map((r) => (
-        <li
-          key={r.id}
-          className="flex min-h-12 items-center gap-4 border-b px-2"
-        >
-          <span className="text-muted-foreground w-10 shrink-0 tabular-nums">
-            {String(r.recipe_number).padStart(2, "0")}
-          </span>
-          <span>{r.name}</span>
-          {r.is_popular ? <span aria-label="Popular">&#9733;</span> : null}
+        <li key={r.id}>
+          <a
+            href={href(r.slug)}
+            onClick={(event) => open(event, r.slug)}
+            data-recipe-link={r.slug}
+            className="flex min-h-12 items-center gap-4 border-b px-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <span className="text-muted-foreground w-10 shrink-0 tabular-nums">
+              {String(r.recipe_number).padStart(2, "0")}
+            </span>
+            <span>{r.name}</span>
+            {r.is_popular ? <span aria-label="Popular">&#9733;</span> : null}
+          </a>
         </li>
       ))}
     </ul>
@@ -71,6 +89,15 @@ export function RecipesModule({
   demo: boolean;
   onSessionInvalid: () => void;
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const slug = searchParams.get("recipe")?.trim() || null;
+  const [detail, setDetail] = useState<{
+    slug: string;
+    data?: RecipeDetail | null;
+    error?: string;
+  } | null>(null);
+  const lastOpened = useRef<string | null>(null);
   const [state, setState] = useState<{ data?: RecipeIndex; error?: string }>(
     demo ? { data: demoIndex } : {},
   );
@@ -81,7 +108,7 @@ export function RecipesModule({
     invalidRef.current = onSessionInvalid;
   }, [onSessionInvalid]);
   useEffect(() => {
-    if (demo) return;
+    if (demo || slug) return;
     let live = true;
     getRecipeIndexAction({ restaurantSlug })
       .then((result) => {
@@ -96,7 +123,179 @@ export function RecipesModule({
     return () => {
       live = false;
     };
-  }, [restaurantSlug, demo, attempt]);
+  }, [restaurantSlug, demo, attempt, slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    let live = true;
+    if (demo) {
+      const recipe = demoIndex.recipes.find((r) => r.slug === slug);
+      const variant = (kind: string): DetailVariant => ({
+        id: kind,
+        variant: kind,
+        method: "R1 synthetic method",
+        rim_type: "R1 rim",
+        rim_notes: null,
+        glass: "R1 glass",
+        glass_notes: null,
+        presentation_notes: null,
+        tips: "R1 synthetic notes",
+        batch_notes: null,
+        ingredients: [
+          {
+            id: kind + "i",
+            amount: kind === "house" ? "Top" : "2",
+            unit: kind === "house" ? null : "oz",
+            ingredient_name: "R1 synthetic ingredient",
+            preparation: null,
+            sort_order: 1,
+          },
+        ],
+        steps: [
+          { id: kind + "s", instruction: "R1 synthetic step", sort_order: 1 },
+        ],
+        garnishes: [
+          {
+            id: kind + "g",
+            name: "R1 synthetic garnish",
+            notes: null,
+            sort_order: 1,
+          },
+        ],
+      });
+      const data: RecipeDetail | null = recipe
+        ? {
+            ...recipe,
+            category:
+              demoIndex.categories.find((c) => c.id === recipe.category_id)
+                ?.name ?? "",
+            description: null,
+            is_menu_item: false,
+            variants:
+              recipe.id === "r1"
+                ? [variant("perfect"), variant("house")]
+                : [variant("perfect")],
+          }
+        : null;
+      Promise.resolve().then(() => {
+        if (live) setDetail({ slug, data });
+      });
+    } else {
+      getRecipeDetailAction({ restaurantSlug, slug })
+        .then((result) => {
+          if (!live) return;
+          if (result.ok) setDetail({ slug, data: result.data });
+          else if (result.sessionInvalid) invalidRef.current();
+          else setDetail({ slug, error: result.error });
+        })
+        .catch(() => {
+          if (live) setDetail({ slug, error: "Recipes could not be loaded." });
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [slug, restaurantSlug, demo, attempt]);
+  useEffect(() => {
+    if (slug || !state.data || !lastOpened.current) return;
+    const last = lastOpened.current;
+    const frame = requestAnimationFrame(() => {
+      try {
+        const value = sessionStorage.getItem(
+          `recipes-scroll-${restaurantSlug}`,
+        );
+        if (value !== null) window.scrollTo(0, Number(value) || 0);
+      } catch {
+        /* Storage can be unavailable. */
+      }
+      document
+        .querySelector<HTMLElement>(`[data-recipe-link="${last}"]`)
+        ?.focus({ preventScroll: true });
+      lastOpened.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [slug, state.data, restaurantSlug]);
+  function hrefFor(next: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "recipes");
+    if (next) params.set("recipe", next);
+    else params.delete("recipe");
+    params.delete("mode");
+    return pathname + "?" + params.toString();
+  }
+  function navigate(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    next: string | null,
+  ) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    if (next) {
+      lastOpened.current = next;
+      try {
+        sessionStorage.setItem(
+          `recipes-scroll-${restaurantSlug}`,
+          String(window.scrollY),
+        );
+      } catch {
+        /* Storage can be unavailable. */
+      }
+    }
+    window.history.pushState(null, "", hrefFor(next));
+  }
+  if (slug) {
+    const current = detail?.slug === slug ? detail : null;
+    if (!current)
+      return (
+        <section aria-busy="true">
+          <TableSkeleton />
+        </section>
+      );
+    if (current.error)
+      return (
+        <section role="alert">
+          <p>{current.error}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDetail(null);
+              setAttempt((a) => a + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </section>
+      );
+    if (!current.data)
+      return (
+        <section className="space-y-4">
+          <h1 className="text-2xl font-semibold">Recipe not found</h1>
+          <p>It may have been removed.</p>
+          <a
+            className="inline-flex min-h-11 items-center underline"
+            href={hrefFor(null)}
+            onClick={(e) => navigate(e, null)}
+          >
+            Back to Bar Recipes
+          </a>
+        </section>
+      );
+    return (
+      <RecipeDetailView
+        key={slug}
+        recipe={current.data}
+        backHref={hrefFor(null)}
+        onBack={(e) => navigate(e, null)}
+      />
+    );
+  }
   const results = state.data && query.trim() ? search(state.data, query) : null;
   return (
     <section className="flex flex-col gap-6 pb-24">
@@ -137,7 +336,7 @@ export function RecipesModule({
                 Results ({results.length})
               </h2>
               {results.length ? (
-                <Rows recipes={results} />
+                <Rows recipes={results} href={hrefFor} open={navigate} />
               ) : (
                 <div>
                   <p>No recipes match {query}.</p>
@@ -156,7 +355,7 @@ export function RecipesModule({
                     ({group.recipes.length})
                   </span>
                 </h2>
-                <Rows recipes={group.recipes} />
+                <Rows recipes={group.recipes} href={hrefFor} open={navigate} />
               </section>
             ))
           )}
