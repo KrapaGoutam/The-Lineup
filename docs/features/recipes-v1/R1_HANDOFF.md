@@ -6,7 +6,7 @@ Phase: R-1
 Status: IN PROGRESS
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
-Current HEAD: 7d5d933 (check git for later commits)
+Current HEAD: 0d7d4fa (recovery checkpoint; check git for later commits)
 Main: UNCHANGED
 DEV DB touched: NO
 PROD touched: NO
@@ -21,6 +21,7 @@ R1-A — database, access controls and import foundation.
 - Fetched remote refs; clean local development fast-forwarded to the expected R-0 base.
 - Verified no existing local or remote R-1 branch; created the requested branch.
 - Preflight handoffs committed and pushed as 2c3a7ab and 7d5d933. Local Supabase is running; CLI 2.76.8 is installed.
+- Recovery checkpoint `0d7d4fa` committed and pushed the existing draft migration, test and handoff. Fetch confirmed origin/development remained `c3e44536` and the feature branch matched the checkpoint.
 
 ## In Progress
 
@@ -50,10 +51,12 @@ R1-A — database, access controls and import foundation.
 ## Tests Already Passing
 
 - 16/16 draft pgTAP assertions passed through local Docker psql in a rolled-back transaction with the draft migration. This is not a full migration replay.
+- Reproduced the same 16/16 on 2026-10-28 against local Docker, again in a rolled-back transaction; no clean replay or full database suite has been run in this continuation.
 
 ## Known Failures
 
 - `python` was unavailable; Node fed the local psql transaction instead. Import, replay and hosted validation remain unrun.
+- The continuation request emphasizes create-only import. The locked R-0 contract also describes explicitly selected per-number overwrite; preserve the request's create-only boundary while resolving that contract difference before implementing an overwrite path.
 
 ## Hosted DEV State
 
@@ -63,7 +66,7 @@ R1-A — database, access controls and import foundation.
 
 ## Git State
 
-- Committed and pushed: preflight checkpoints 2c3a7ab and 7d5d933.
+- Committed and pushed: preflight checkpoints 2c3a7ab and 7d5d933; recovery checkpoint 0d7d4fa.
 - Inspect git status for current uncommitted work. PR: none.
 
 ## Exact Next Action

@@ -3,6 +3,8 @@
 Status: IN PROGRESS. Branch: `feature/recipes-v1-r1-core`; base: `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`. See `docs/features/recipes-v1/R1_HANDOFF.md` for continuation state.
 
 - [x] Fetch, verify clean state, fast-forward development, and create R-1 branch.
+- [x] Protect the existing R1-A foundation migration, draft test, and handoff in pushed recovery checkpoint `0d7d4fa`; reproduce the 16 draft assertions in a rolled-back local transaction.
+- [ ] Complete the controlled import and expanded database tests, then run clean local replay and regenerate types before any DEV mutation.
 - [ ] Implement and verify database, RLS, and controlled importer.
 - [ ] Implement and verify Recipes navigation, list, search, and detail.
 - [ ] Validate hosted DEV, clean synthetic data, run final gates, and review scope.
