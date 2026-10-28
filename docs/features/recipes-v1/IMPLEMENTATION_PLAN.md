@@ -176,3 +176,7 @@ Release implications to carry into that audit: both migrations are **additive** 
 ## 7. Scope guard (applies to every phase)
 
 No scope expansion. Out of V1 (all recorded in `tasks/backlog.md`): duplicate recipe (B-RC-1), field-level audit history (B-RC-2), Realtime (B-RC-3), ingredient-name search (B-RC-4), orphan-image repair script (B-RC-5), stable-URL image route (B-RC-6), shell-level unsaved-changes guard (B-RC-7), bulk image upload, structured batch recipes, pricing, per-location recipes, recipe scaling/unit conversion, favorites, print/PDF export, drag-and-drop reorder, organization-configurable labels UI.
+
+## Recipes V1 R-1 checkpoint
+
+R1-A, R1-B and R1-C complete; R1-D local validation complete, PR and exact-head CI/merge pending. R-2 not started.

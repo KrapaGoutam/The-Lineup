@@ -3,7 +3,7 @@
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D NEXT / NOT STARTED
+Status: R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D IN PROGRESS
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
 Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D NEXT / NOT STARTED.
+R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D local validation complete; PR and merge pending.
 
 ## Completed
 
@@ -26,11 +26,13 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D NEXT / NOT STARTED.
 
 ## In Progress
 
-- None; R1-C implementation and validation completed.
+- R1-D started at `a9eb6ff6ed4afa1ba13c2148de2dffac6d184d8c`; origin/development `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`; initial tree clean. PR NOT OPENED; PROD UNTOUCHED.
+- Planned: scope, security, migration parity and evidence audit; check, full Vitest, focused browser matrix and controlled tablet history; DEV-pinned and empty-env builds; DEV cleanup, documentation, tracking and PR.
+- Known gaps: no fresh hosted foreign-org or archived Staff detail test; existing R1-A RLS and R1-C mocked action evidence. The tablet history failure was subsequently reproduced with one worker and fixed; Windows teardown may hang after passing assertions.
 
 ## Not Started
 
-- R1-D final R-1 gate, PR and merge; R-2.
+- R1-D PR and merge; R-2.
 
 ## Locked Decisions
 
@@ -155,3 +157,13 @@ Part 2 started: NO
 - Hosted DEV: guarded synthetic import and real-mode UI passed manager and Staff 2/2, including both variants and refresh; cleanup verified zero fixture recipes, variants, ingredients, steps, garnishes and category. Empty landing passed both roles after cleanup. Cross-organization and archived RLS evidence remains the R1-A hosted/pgTAP validation; R1-C action tests check organization and active filters and inactive/session denial with mocks, not a fresh hosted foreign-organization browser test. No real recipe content.
 - PROD: no database or deployment operation; see build configuration note above. R1-D, R-2 and Part 2 not started; no PR opened.
 - Exact next action: R1-D final R-1 gate, documentation and PR in a new session, same branch. Do not start R-2 or touch main or PROD.
+
+## R1-D in-flight checkpoint
+
+- Starting HEAD and origin feature: `a9eb6ff6ed4afa1ba13c2148de2dffac6d184d8c`; origin/development: `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`. No PR opened.
+- Scope audit: one Recipes migration, `20261028140623_bar_recipes_foundation.sql`; 55 local SQL migration files. No DB/import files changed since R1-A. R1-A evidence remains 55-migration replay, Recipes pgTAP 51/51, full pgTAP 43 files/1348 assertions, import tests 3/3 and DEV migration 55 at that time. Fresh DEV migration parity: PASS, based on the independently supplied authenticated read-only Supabase project query against `the-lineup-dev`: DEV 55 migrations, latest `20261028140623 / bar_recipes_foundation`; repository 55 migrations, latest `20261028140623_bar_recipes_foundation`. The CLI migration-list HTTP 403 is an access-path limitation.
+- Controlled tablet history reproduced the former failure once at one worker. Trace shows Back reached Recipes then the URL was rewritten to Schedule. Local uncommitted correction guards stale router snapshots and normalizes the actual URL. After correction: tablet landing 15/15 across five single-worker repetitions; combined Recipes and default-landing 45/45 across desktop, host-tablet and server-mobile. Separate demo server stopped; assertions and teardown clean. Review retained the fix; a post-review single-worker host-tablet Recipes landing run passed all 3 test assertions (process teardown remained pending).
+- Post-fix `npm run check` PASS; full Vitest 129 files / 1708 tests PASS. DEV-pinned public build PASS and non-production bundle scan PASS. An attempted empty-env build used PowerShell empty assignments, which removed variables rather than passing empty strings; Next loaded .env.production.local and produced a dynamic root. No database operation or deployment was performed by that build. A subsequent build passed explicit empty strings through Node and PASSed with static root. This is an additional build and must not be represented as exactly one build.
+- Verified DEV identity via the DEV URL and project ID; read-only service-role counts across all six Recipes tables were zero. No synthetic data added during R1-D. Hosted foreign-org and archived detail browser tests remain unrun; prior hosted/pgTAP RLS plus mocked action evidence applies.
+- In-flight local changes: navigation race correction, this handoff, current-task, and the Next-generated AGENTS.md heading update. Nothing committed or pushed. No issue update, PR, CI, merge or final documentation completed.
+- Exact next action: complete documentation, secret scan, tracking and PR only when all GO criteria pass. Fresh hosted foreign-org and archived Staff browser duplication was not run; cross-org isolation has pgTAP and mocked action evidence, and archived Staff denial has pgTAP and server-action behavior evidence. DEV synthetic cleanup: PASS, zero rows across all six Recipes tables. R-2 not started; main unchanged; no PROD database or deployment operation.

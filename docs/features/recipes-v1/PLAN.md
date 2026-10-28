@@ -161,3 +161,7 @@ Hard limits: no duplicate-recipe action, ingredient search, audit-history table,
 
 Run the full gate (check, test, both builds, full pgTAP, the existing e2e regression plus the new Recipes specs on desktop and server-mobile, hosted DEV write/storage/UI suites with a tiny generated test image and full cleanup). Return a diff summary, evidence mapped to TEST_MATRIX row ids, DEV/PROD status and remaining risk. Then STOP; the final gate (R-2g) is a separate Claude Code Local Windows session.
 ```
+
+## Recipes V1 R-1 checkpoint
+
+R-1 implementation and local validation are complete; PR and exact-head CI/merge remain pending. R-2 is next and has not started.
