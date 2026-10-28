@@ -6,7 +6,7 @@ Phase: R-1
 Status: IN PROGRESS
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
-Current HEAD: 2c3a7ab (preflight checkpoint; check git for any later commit)
+Current HEAD: 7d5d933 (check git for later commits)
 Main: UNCHANGED
 DEV DB touched: NO
 PROD touched: NO
@@ -20,15 +20,17 @@ R1-A — database, access controls and import foundation.
 
 - Fetched remote refs; clean local development fast-forwarded to the expected R-0 base.
 - Verified no existing local or remote R-1 branch; created the requested branch.
-- Preflight handoff committed and pushed as 2c3a7ab. Local Docker responds; Supabase CLI 2.76.8 is installed.
+- Preflight handoffs committed and pushed as 2c3a7ab and 7d5d933. Local Supabase is running; CLI 2.76.8 is installed.
 
 ## In Progress
 
-- Review the locked R-0 schema and existing database conventions before implementation.
+- Draft migration `20261028140623_bar_recipes_foundation.sql` contains six tables, indexes, read helpers, RLS and grants; import functions remain to be implemented.
+- Draft `0043_bar_recipes_foundation.test.sql` covers 16 schema and authorization assertions.
+- Validate local replay, constraints, grants, isolation and import rollback before considering hosted DEV.
 
 ## Not Started
 
-- Migration, importer, UI, tests, hosted DEV validation, PR and merge.
+- Import RPC and script, synthetic import fixture, generated types, full migration replay, further DB tests, hosted DEV validation, UI, PR and merge.
 
 ## Locked Decisions
 
@@ -39,19 +41,19 @@ R1-A — database, access controls and import foundation.
 
 ## Schema / RPCs Added
 
-- None yet.
+- Draft only: six tables, four private read helpers, six SELECT policies and authenticated SELECT grants. No import RPC yet.
 
 ## Files Changed
 
-- This handoff and tasks/current-task.md: preflight state.
+- Uncommitted: this handoff, draft foundation migration and draft focused pgTAP file.
 
 ## Tests Already Passing
 
-- None run for R-1.
+- 16/16 draft pgTAP assertions passed through local Docker psql in a rolled-back transaction with the draft migration. This is not a full migration replay.
 
 ## Known Failures
 
-- None identified.
+- `python` was unavailable; Node fed the local psql transaction instead. Import, replay and hosted validation remain unrun.
 
 ## Hosted DEV State
 
@@ -61,13 +63,14 @@ R1-A — database, access controls and import foundation.
 
 ## Git State
 
-- Committed and pushed: preflight checkpoint 2c3a7ab.
+- Committed and pushed: preflight checkpoints 2c3a7ab and 7d5d933.
 - Inspect git status for current uncommitted work. PR: none.
 
 ## Exact Next Action
 
-1. Read remaining R-0 contract and relevant existing database patterns, then implement the R-1 foundation with focused policy and importer tests.
-2. Validate local migration replay and tests before any hosted DEV mutation.
+1. Complete `private.recipes_slugify`, `private.recipes_apply`, service-role-only `public.bar_recipes_import`, the guarded importer script and synthetic fixture according to DATA_MODEL.md §6 and SOURCE_MAPPING.md §5.
+2. Expand focused pgTAP for importer atomicity, grants, constraints and actor validation; regenerate types.
+3. Run clean local replay and focused/full required DB tests; only then verify the DEV target and consider hosted migration.
 
 ## Safety
 
