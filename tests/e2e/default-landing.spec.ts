@@ -103,18 +103,74 @@ test("TS-005: a module the role cannot open falls back to Tasks", async ({
   await expect(
     page.getByRole("heading", { name: "Bar Inventory" }),
   ).toHaveCount(0);
+  // The URL must not keep naming a module the viewer is not looking at.
+  await expect(page).not.toHaveURL(/tab=/);
 });
 
-test("TS-005: the same URL opens Bar Inventory for a manager", async ({
+test("TS-002: ?tab=tasks opens Tasks -> Today", async ({ page }) => {
+  await signInAt(page, "/?tab=tasks", "2468");
+  await expect(tasksHeading(page)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
+});
+
+test("TS-006: an invalid ?tab= falls back to Tasks and the URL is corrected", async ({
+  page,
+}) => {
+  await signInAt(page, "/?tab=not-a-module&x=1", "2468");
+  await expect(tasksHeading(page)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
+  // The bad value is dropped; unrelated parameters survive.
+  await expect(page).toHaveURL(/\/\?x=1$/);
+});
+
+test("TS-008: /r/<slug>?tab= keeps the restaurant route and selects the module", async ({
+  page,
+}) => {
+  await signInAt(page, "/r/the-monks?tab=schedule", "2468");
+  await expect(
+    page.getByRole("heading", { name: "Weekly & monthly roster" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/r\/the-monks\?tab=schedule$/);
+
+  // Switching modules keeps the restaurant path.
+  await openModule(page, "Tasks");
+  await expect(tasksHeading(page)).toBeVisible();
+  await expect(page).toHaveURL(/\/r\/the-monks$/);
+  await openModule(page, "Schedule");
+  await expect(page).toHaveURL(/\/r\/the-monks\?tab=schedule$/);
+
+  // Back follows the same path.
+  await page.goBack();
+  await expect(tasksHeading(page)).toBeVisible();
+  await expect(page).toHaveURL(/\/r\/the-monks$/);
+});
+
+test("TS-008: the bare restaurant route lands on Tasks", async ({ page }) => {
+  await signInAt(page, "/r/the-monks", "2468");
+  await expect(tasksHeading(page)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
+});
+
+test("TS-007: ?tab=bar-inventory opens Bar Inventory for a manager and survives a reload", async ({
   page,
 }) => {
   await signInAt(page, "/?tab=bar-inventory", "2468");
   await expect(
     page.getByRole("heading", { name: "Bar Inventory" }),
   ).toBeVisible();
+
+  // Demo state is in memory, so a reload returns to the passcode screen; the
+  // requested module must survive it (same as TS-002).
+  await page.reload();
+  await page.waitForSelector('body[data-hydrated="true"]');
+  await page.getByLabel("Restaurant passcode").fill("2468");
+  await expect(
+    page.getByRole("heading", { name: "Bar Inventory" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/tab=bar-inventory/);
 });
 
-test("TS-001: the mobile dock highlights Tasks on a default launch", async ({
+test("TS-009: the mobile dock highlights Tasks on a default launch", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });

@@ -837,6 +837,42 @@ function RestaurantOperationsAppInner({
     return () => window.clearTimeout(timer);
   }, [pendingAccount, initialUser, onAuthBoundary]);
 
+  // Tasks V1.1 / T-1: back/forward re-select the module straight from the real
+  // location. `useSearchParams` commits lazily after a pushState, so a fast
+  // Back can land before it has caught up (it would still read the old value
+  // and never see a change), leaving the UI on a module the URL no longer names.
+  useEffect(() => {
+    function onPopState() {
+      setRequestedTab(
+        tabFromParam(new URLSearchParams(window.location.search).get("tab")) ??
+          DEFAULT_APP_TAB,
+      );
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Tasks V1.1 / T-1: never leave the URL naming a module other than the one
+  // on screen. An unknown `?tab=` value, or a module this viewer cannot open
+  // (UX fallback only), is rewritten in place -- replaceState, so no extra
+  // history entry and no navigation loop. Only once signed in: before that the
+  // requested module must survive the passcode screen and a reload.
+  useEffect(() => {
+    if (!user) return;
+    const param = new URLSearchParams(window.location.search).get("tab");
+    if (param === null) return;
+    const shown = resolveTab(requestedTab, {
+      isManager: user.role !== "server",
+      demoMode,
+    });
+    if (tabFromParam(param) === shown) return;
+    window.history.replaceState(
+      null,
+      "",
+      tabHref(pathname, window.location.search, shown),
+    );
+  }, [user, requestedTab, demoMode, pathname, searchParams]);
+
   if (!user && pendingAccount) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md items-center px-4">

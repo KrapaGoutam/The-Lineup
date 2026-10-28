@@ -4,7 +4,7 @@ Newest phase last. Plan: `PLAN.md`; matrix: `TEST_MATRIX.md`.
 
 ## T-1 — Default Tasks landing and `?tab=` module addressing (PLAN D-1)
 
-**Branch:** `feature/tasks-v1-1-default-landing` (from `development` @ `126c72d`). No migration, no `supabase/**` change.
+**Branch:** `feature/tasks-v1-1-default-landing` (from `development` @ `126c72d`, reconciled with `development` @ `66d8fc6`). No migration, no `supabase/**` change.
 
 ### What changed
 
@@ -20,15 +20,28 @@ The app has no module routes. "Deep links respected" is delivered by `?tab=`; re
 
 `dashboard.spec.ts` (manager modules, assistant-manager promotion, keypad sign-in), `team-management.spec.ts`, `payroll-timesheet-overhaul.spec.ts` ("lands on Table Allocation by default" became TS-001: lands on Tasks). Each keeps its original coverage by navigating to the module it needs.
 
+### Reconcile with a much newer `development` (2026-10-27)
+
+The parked commit `03d5d45` (based on `126c72d`, 30 commits behind) was classified **still required** and **safe to preserve**: no file it touches had changed on `development`, nothing else implements `?tab=`, and the Vendor Order Drafts specs added since reach Bar Inventory by clicking the nav (they do not depend on the landing module). Reconciled with a normal history-preserving merge of `origin/development` (`66d8fc6`) into the branch: no conflicts, no rebase, no force-push, parked history intact.
+
+### Contract gaps found by audit, and closed
+
+- **URL/UI mismatch.** An unknown `?tab=` (or a module the role cannot open) showed Tasks while the URL kept naming something else. Now, once signed in, the URL is corrected in place with `replaceState` (no extra history entry, no loop; unrelated query parameters survive). Before sign-in the requested module is left alone so it survives the passcode screen and a reload.
+- **Back/forward race (real defect, found by a 2-of-6 intermittent failure on host-tablet WebKit).** `useSearchParams` commits lazily after a `pushState`; a fast Back could land before it caught up, so the observed value never changed and the UI stayed on a module the URL no longer named. Back/forward now re-select the module straight from the real location via a `popstate` listener. After the fix the back/forward specs pass 60/60 with `--retries=0 --repeat-each=10` on all three projects.
+- **Missing tests:** `?tab=tasks`, invalid tab, `/r/<slug>?tab=` (path preserved across module switches and Back), bare `/r/<slug>`, Bar Inventory reload persistence.
+
 ### Tests
 
-| Layer                                   | Result                                                                                                                                                                              |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest                                  | 1415/1415 (+9 in `app-tab.test.ts`: default, parameter round trip, `tabHref`, role fallback)                                                                                        |
-| Playwright new                          | `default-landing.spec.ts`: TS-001 (manager, staff, mobile dock highlight), TS-002 (deep link + reload), TS-003, TS-004 (URL, back, forward), TS-005 (staff fallback, manager opens) |
-| Playwright full (`CI=1`, `--workers=2`) | desktop 248 · host-tablet 248 · server-mobile 246 + 2 skips; 0 failures                                                                                                             |
-| Static                                  | prettier · eslint · tsc clean                                                                                                                                                       |
+| Layer                 | Result                                                                                                                                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest                | 1568/1568 (115 files; +9 in `app-tab.test.ts`)                                                                                                                                                                          |
+| Playwright new        | `default-landing.spec.ts`: TS-001..TS-009, 11 tests x 3 projects = 33/33                                                                                                                                                |
+| Playwright regression | dashboard, team-management, payroll-timesheet-overhaul, tasks, settings, tips-clocked-in-roster, recurring-schedules, bar-inventory, order-drafts, order-drafts-sharing on desktop, host-tablet, server-mobile: 243/243 |
+| Static / build        | prettier, eslint, tsc clean; `next build` green (`/` and `/r/[restaurantSlug]` dynamic, so no Suspense requirement for `useSearchParams`)                                                                               |
+| Not run locally       | The full 750-test Playwright suite (left to exact-head CI); hosted DEV (no database change)                                                                                                                             |
+
+Demo mode keeps its session in memory, so "refresh" there returns to the passcode screen and the requested module is applied on the next sign-in; real-mode refresh keeps the cookie session and the URL carries the module (covered by the same URL logic, not by a hosted browser run).
 
 ### Status
 
-Implemented and validated locally. **Pushed, no PR, not merged:** the owner's order is Vendor Order Drafts (VOD-0..VOD-4) before any Tasks code. Open the PR (and re-run exact-head CI after rebasing onto the then-current `development`) once VOD-4 is complete. The shared handoff (`tasks/current-task.md`) is deliberately not edited on this branch to avoid conflicts with the VOD handoff.
+T-1 implemented and validated locally; PR and exact-head CI recorded in `tasks/current-task.md`. T-2 (Management Today) is next and **not started**.
