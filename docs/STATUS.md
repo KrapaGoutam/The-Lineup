@@ -7,7 +7,7 @@
 
 ---
 
-## Recipes V1 — R-0 planning (docs only) — COMPLETE after merge; R-1 NEXT; R-2 PLANNED; Part 2 ON HOLD
+## Recipes V1 — R-0 planning (docs only) — COMPLETE (PR #221, merge `26cceaf`); R-1 NEXT; R-2 PLANNED; Part 2 ON HOLD
 
 Production release: **COMPLETE** (`main` `9e0be4b`). Recipes V1 starts after it: a categorized, numbered, searchable cocktail recipe book (List View, Picture Book, Perfect vs House detail, management editor, private image storage). **R-0** (Claude Code Cloud, Sonnet 5.5, high; branch `docs/recipes-v1-r0-planning` from `development` `73ebc21`) is documentation only: PRD, DATA_MODEL, SECURITY_AND_ROLES, STORAGE_PLAN, UI_UX_PLAN, SOURCE_MAPPING, TEST_MATRIX (160 scenarios), IMPLEMENTATION_PLAN and PLAN in `docs/features/recipes-v1/`. Locked: organization-wide scope (no `location_id`), categories as rows, stored `recipe_number` unique per organization, variants `perfect`/`house`, structured ingredients with free-text amounts, one atomic save RPC with `version`/`PT409`, archive not delete, private `recipe-images` bucket, `?tab=recipes&recipe=<slug>` routing, import via a reviewed script (never a migration). **No application code, no migration, no Storage bucket, no recipe data; DEV database untouched; PROD untouched; `main` untouched.** The source recipe-book files were not available to R-0 (nothing invented; real import is owner-gated). R-1 = Codex GPT-5.6 Sol (high, NEW session): foundation + read UI. R-2 = Codex GPT-5.6 Sol: management + visual; final gate R-2g = Claude Code Local Windows (Sonnet 5.5, high). Then release-readiness audit and explicit owner approval before any `development -> main`. Part 2 stays ON HOLD.
 

@@ -1,6 +1,6 @@
 # Recipes V1 — Plan
 
-**Status:** R-0 (planning) — documents authored on `docs/recipes-v1-r0-planning`; **R-0 is COMPLETE only after this PR is merged into `development`**. R-1 NEXT · R-2 PLANNED · Part 2 ON HOLD.
+**Status:** R-0 (planning) **COMPLETE** — merged into `development` by PR #221 (merge commit `26cceaf78cda08d20a04cdea16b0978e21626a3b`, tested head `f01ace87c83f412bd450342846aa5ba6021d69b3`). R-1 NEXT · R-2 PLANNED · Part 2 ON HOLD.
 **Safety:** docs only. No application code, no migration, no Storage bucket, no seed or recipe data, DEV database untouched, PROD untouched, `main` untouched.
 **Base:** `development` `73ebc210d97778db238b26acbee82481190560ea` (`main` `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05` = current Production, which already contains Tasks V1.1, Bar Inventory V1, Vendor Order Drafts V1, the same-server repeat-table fix and the dependency/security update). Recipes V1 starts after that release.
 **Branch/PR policy (permanent):** R-0 → PR → `development` (merge commit) · R-1 → PR → `development` (merge commit) · R-2 → PR → `development` (merge commit) · Recipes final audit / release-readiness → explicit owner approval → `development → main` → Production verification. R-0/R-1/R-2 never go straight to `main`; no release PR during R-0.
