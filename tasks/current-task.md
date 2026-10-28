@@ -2,7 +2,7 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (Opening reminder popup + catch-up UX) is COMPLETE** (#154; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`)). **T-6 is NEXT / NOT STARTED**, Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (Opening reminder popup + catch-up UX) is COMPLETE** (#154; PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`)). **T-6 (final gate) is IN PROGRESS** on branch `feature/tasks-v1-1-final-gate` from development `deee02ba740b179279307477a0c32da5e04b0224` (Local Windows, Sonnet 5.5, high), Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
 
@@ -23,7 +23,7 @@ T-4: Claude Code **Local Windows** (Sonnet 5.5, high effort), real local Supabas
 - T-2: branch `feature/tasks-v1-1-management-today` from `c6f309eae5c674e71b3906ff1b26faae0440ca22`; PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents); `development` HEAD after merge `46ea022`
 - T-1 (done): PR #203 tested `1e3e4b1`, merge `cf3ae39`; docs PR #204, merge `c6f309e`
 - Issue: #169 (tracking) · Project #4 (card update not performed: Projects tooling unavailable in this session)
-- Issue: #154 (T-3 tracking) · T-4 COMPLETE · T-5 COMPLETE · T-6 NEXT / NOT STARTED · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
+- Issue: #154 (T-3 tracking) · T-4 COMPLETE · T-5 COMPLETE · T-6 evidence COMPLETE (GO), PR pending · Part 2: ON HOLD · `main`: UNTOUCHED · PROD: UNTOUCHED
 
 ## Phase ledger
 
@@ -33,7 +33,7 @@ Tasks T-0 plan COMPLETE (#189)
 Tasks T-1 COMPLETE (PR #203, tested 1e3e4b1, merge cf3ae39)
 Tasks T-2 COMPLETE (PR #205, tested c2ef864, merge 46ea022)
 Tasks T-3 COMPLETE (PR #207, tested 2fef134, merge 3a442a6)
-Tasks T-4 COMPLETE (PR #209, tested f48ea31, merge 796cff3) · Tasks T-5 COMPLETE (PR #211, tested 9bf2279, merge 53c94d2) · T-6 NEXT / NOT STARTED
+Tasks T-4 COMPLETE (PR #209, tested f48ea31, merge 796cff3) · Tasks T-5 COMPLETE (PR #211, tested 9bf2279, merge 53c94d2) · T-6 GO (PR pending)
 Part 2 (multi-org / multi-location / attendance) ON HOLD
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
@@ -70,7 +70,18 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
   - [x] tests: Vitest 1687/1687 (+58); Playwright `tests/e2e/opening-reminder-popup.spec.ts` (10 tests; `page.clock.install`, `?demoReminders=1`); desktop + server-mobile 134/134 with tasks, management-today, default-landing, dashboard; Chromium iPad emulation 28/28 (not WebKit); host-tablet WebKit NOT RUN (webkit binary absent)
   - [x] check, normal build and empty-Supabase-env build green; docs (PLAN D-5 as built, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog) updated
   - [x] committed, pushed, PR #211 -> development, exact-head CI green on `9bf2279` (browser-smoke was cancelled once by a job timeout on first-test page loads, not reproducible locally (full desktop suite 289/289 cold), passed on the single re-run), MERGE COMMIT `53c94d2`, #154 commented, post-merge docs sync (this change)
-- [ ] T-6 (final gate): NEW session, Local Windows. NOT STARTED. Resume point: read `docs/features/tasks-v1-1/PLAN.md` §4 T-6 and `TEST_MATRIX.md`; run real host-tablet WebKit, hosted DEV (incl. `tests/real` and real-mode UI specs, which may now meet the popup), full three-project run, DB/security verification.
+- [ ] T-6 (final gate): IN PROGRESS (Local Windows) on `feature/tasks-v1-1-final-gate`, base `deee02b`; gate log under `## T-6 progress
+
+- [x] base verified (local = origin/development = `deee02b`), branch created, handoff marked IN PROGRESS
+- [x] real host-tablet WebKit (webkit-2359 present) reproduced the sign-in failure: root cause = `data-hydrated` marker outside the app's Suspense boundary (fast `fill()` reset by hydration on `/r/<slug>`); fixed in `restaurant-operations-app.tsx` / `layout.tsx`, regression test `hydration-marker.test.tsx`; 1 failure in 66 before, 0 in 110 after
+- [x] local Supabase `db reset --local` (54 migrations) + full pgTAP: 42 files / 1297 assertions PASS
+- [x] hosted DEV (target proven DEV, never PROD): migrations identical to repo (54); `tests/real` Tasks 19/19 (12 + 7); TS-050 PASS, 0 leftovers; security-definer / grants audit clean; new real-mode popup spec `tests/real/ui/opening-reminder.real.spec.ts` 3/3 (DEV `opening_local` restored to 11:00, 0 reminder rows) + `tasks.real.spec.ts` 3/3
+- [x] production build, DEV-pinned, demo mode: desktop 289/289, host-tablet WebKit 289/289 (also 289/289 on the default dev-server config), server-mobile 287 + 2 intentional skips
+- [x] `npm run check` clean; Vitest 1689/1689; normal build PASS; empty-Supabase-env build PASS (`/` static); `.next` scans show 0 PROD refs
+- [x] docs: PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT (T-6), ROADMAP, STATUS, backlog
+- [ ] commit explicit paths, push, PR -> development, exact-head CI, MERGE COMMIT, #154 comment, post-merge docs sync
+
+DEV touched: YES (controlled tests: hosted suites, real-mode UI, read-only catalog queries; all cleaned) · PROD touched: NO · PROD migrations: NO · main: UNTOUCHED
 
 ## Exact next command
 

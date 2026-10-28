@@ -1,6 +1,6 @@
 # Tasks V1.1 — Plan
 
-**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 COMPLETE (PR #209, merge `796cff3`); T-5 COMPLETE (PR #211, merge `53c94d2`; see §3 D-5 _As built in T-5_); T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
+**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 COMPLETE (PR #209, merge `796cff3`); T-5 COMPLETE (PR #211, merge `53c94d2`; see §3 D-5 _As built in T-5_); T-6 COMPLETE (final gate: GO; see `IMPLEMENTATION_REPORT.md` T-6) · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only.
 **Sequencing:** Tasks \_code\* (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
 
@@ -99,7 +99,7 @@ Accepted values (kebab-case, URL-facing): `tasks`, `allocation`, `schedule`, `te
 | T-3   | `feature/tasks-v1-1-notification-scope` | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP **(COMPLETE; migration `20261028090000`)**                                                                                                        | yes       |
 | T-4   | `feature/tasks-v1-1-opening-reminders`  | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay) **(COMPLETE; PR #209, merge `796cff3`; branch name as run; migrations `20261028100000`, `20261028100100`)**         | yes (2)   |
 | T-5   | `feature/tasks-v1-1-reminder-popup`     | D-5: shell popup, catch-up (newest actionable only), CTA, dismiss, client wake-up, multi-tab, demo-mode parity, browser tests **(COMPLETE; PR #211, merge `53c94d2`; branch name as run; no migration)** | no        |
-| T-6   | `docs/tasks-v1-1-final-gate`            | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment                                                        | no        |
+| T-6   | `feature/tasks-v1-1-final-gate`         | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment **(COMPLETE; GO; branch name as run; no migration)**   | no        |
 
 T-3 and T-4 touch the same function family; T-3 merges first and T-4 branches from it. Each phase ends with targeted tests, the phase regression, exact-head CI (local head = PR head = CI-tested SHA), a merge commit and a handoff update.
 

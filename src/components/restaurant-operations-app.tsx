@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { AppearanceSwitch } from "@/components/appearance-switch";
+import { ClientHydrationMarker } from "@/components/hydration-marker";
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
 import {
@@ -590,6 +591,10 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
   // `useSearchParams` (the `?tab=` module address) needs a Suspense boundary:
   // without Supabase configured (demo mode, CI) `/` is prerendered statically
   // and the build fails otherwise. Dynamic renders resolve it synchronously.
+  // The hydration marker lives INSIDE the boundary: it must report "the app is
+  // interactive", not "the layout hydrated". Outside, it fired before this
+  // subtree hydrated and a fast `fill()` on the passcode field was reset by
+  // React's hydration (flaky sign-in on the dynamic `/r/[slug]` route).
   return (
     <Suspense fallback={null}>
       <RestaurantOperationsAppInner
@@ -597,6 +602,7 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
         {...props}
         onAuthBoundary={() => setEpoch((current) => current + 1)}
       />
+      <ClientHydrationMarker />
     </Suspense>
   );
 }
