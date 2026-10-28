@@ -2,24 +2,23 @@
 
 ## Current cycle
 
-Vendor Order Drafts V1
+Vendor Order Drafts V1 — **COMPLETE** (VOD-4 GO, 2026-10-27). Next product sequence: Tasks V1.1.
 
 ## Current phase
 
-VOD-3 — Sharing / Export / Mark Sent / Sent History — COMPLETE (merged). VOD-4 NEXT / NOT STARTED.
+VOD-4 — Hosted DEV / Final Vendor Order Drafts Gate — **GO**. Closure PR pending merge (see Current State & Next Step).
 
 ## Execution
 
-Claude Code Cloud (GitHub/origin is the source of truth).
+Local Windows PC (Claude Sonnet 5.5). Hosted DEV only; PROD never targeted.
 
 ## Branch / base
 
-- VOD-3 branch: `feature/bar-order-drafts-v1-sharing-history`
-- Base development SHA: `75d6ae35cfdfda1ba53d4994b067e12b241c9291`
-- Implementation PR: #198 — exact tested head `054355ddd4c049812965cb9d27424a396c3d7667`, merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165` (merge commit method, exact-head CI green)
-- Post-merge docs sync: branch `docs/vod-3-post-merge-sync` from `64e3007` (PR number in GitHub)
-- Issue: #190 (stays OPEN until VOD-4 passes)
-- Project #4: update NOT PERFORMED — Projects tool unavailable. Milestone unchanged: Future Product Backlog.
+- Final-gate branch: `feature/vendor-order-drafts-v1-final-gate` (renamed locally from `test/vendor-order-drafts-v1-final-gate`)
+- Base development SHA: `6b8dcead804a3aa803b2e8e3eb1dfd2c4bf1660c`
+- Defect fix: `fix/sent-history-past-end-page` — PR #200, tested head `652c7652c41ff24869e434525f21dd8209fb37f2`, merge commit `f3b0e0de27b95cdb05961450554cd23a021731f6` (exact-head CI green; merge commit)
+- Final tested development SHA: `f3b0e0de27b95cdb05961450554cd23a021731f6`; the final-gate branch merged it in (no history rewrite)
+- Issue: #190 · Project #4 · Milestone: Future Product Backlog
 
 ## Phase ledger
 
@@ -28,70 +27,63 @@ Dependency #188 COMPLETE · Tasks Plan #189 COMPLETE · VOD-0 #191 COMPLETE
 VOD-1 #193 COMPLETE (876be20) · VOD-1 docs #194 COMPLETE (34c7481)
 VOD-1.1 #195 COMPLETE (tested fa3762b, merge f6bab25)
 VOD-2 #196 COMPLETE (tested f6c3fd0, merge 292ca1a) · VOD-2 docs #197 COMPLETE (merge 75d6ae3)
-VOD-3 #198 COMPLETE (tested 054355d, merge 64e3007) · VOD-4 NEXT / NOT STARTED
+VOD-3 #198 COMPLETE (tested 054355d, merge 64e3007) · VOD-3 docs #199 COMPLETE (merge 6b8dcea)
+VOD-4 COMPLETE — GO · defect fix #200 (merge f3b0e0d) · closure PR: see Current State & Next Step
 Tasks T-1 PARKED (feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED) · T-2..T-6 NOT STARTED
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
 
-## VOD-3 delivered (detail in IMPLEMENTATION_REPORT.md "VOD-3 sharing delivered")
+## VOD-4 result (detail: IMPLEMENTATION_REPORT.md "VOD-4 — hosted DEV final gate", TEST_MATRIX.md "VOD-4 coverage")
 
-- Copy Order + clipboard fallback: `domain/order-draft-share.ts`, `components/order-draft-share.tsx`.
-- Export: new `ExportRequest` kind `order_draft` (draftId only) through `exportDataAction` / `prepareExport`; CSV = Order sheet, XLSX = Order + Summary; existing formula guard.
-- Mark Sent: `markOrderDraftSentAction` (reviewed version, PT409, idempotent), dialog in `order-draft-editor.tsx`, demo twin `markSentDemo`.
-- Drafts | Sent switch + paged (20/page, exact count) newest-first Sent list + read-only Sent order: `order-drafts-view.tsx`, `order-draft-sent.tsx`, `data/order-draft-data.ts`, `domain/order-draft-sent.ts`.
-- No migration; no `supabase/**` change (database workflow path-gated / not required).
-- Tests: Vitest 114 files / 1557 tests; new Playwright spec `tests/e2e/bar-inventory-order-drafts-sharing.spec.ts` (desktop 11/11, server-mobile 11/11); all bar-inventory specs desktop 77/77, server-mobile 75 + 2 intentional skips.
-
-## Known issues / gaps for VOD-4
-
-- host-tablet (WebKit) Playwright has NOT RUN for VOD-2 or VOD-3 (no WebKit in Cloud; CI runs desktop only). Chromium with the iPad viewport passed 19/19 as a supplemental, non-WebKit check. VOD-4 must run host-tablet and server-mobile on a machine with the browsers.
-- Real-database behaviour (RLS for Sent reads and the order export, two-context Mark Sent PT409, no inventory mutation against the real ledger, rename/archive after send in a real browser, paging beyond one real page) is untested until VOD-4 (hosted DEV). pgTAP 0039/0040 cover the RPCs.
-- Not built (backlog): "Add item" UI, in-app guard for leaving Bar Inventory entirely with unsaved draft edits, Realtime for drafts, export audit log (AC-EXP-4, owner decision pending).
-- `next dev` rewrites the `AGENTS.md` heading; never commit that change (`git checkout AGENTS.md`).
+- DEV `opmujepkemwcdxxorhfd` was 2 migrations behind (49 → 51); applied only `20261027195142` and `20261027210000` via the Management API + `schema_migrations` row (hard-coded DEV ref). PROD not touched.
+- New hosted suites: `tests/real/bar-inventory-order-drafts.db.real.test.ts` (38/38) and `tests/real/ui/bar-inventory-order-drafts.real.spec.ts` (15/15, run twice).
+- Demo Playwright order-drafts specs 20/20 on desktop, host-tablet WebKit, server-mobile; whole Bar Inventory regression 78 · 78 · 76 + 2 skips; pgTAP 40 files / 1,171 assertions; Vitest 114 files / 1,559; format, lint, typecheck, `next build` pass.
+- Defect D1 (low): Sent-history page past the end returned null (PostgREST `PGRST103`). Fixed in #200.
+- Intermittent, unrelated: `bar-inventory-realtime-access` failed twice right after the bulk insert, then passed 3/3.
+- Not run (stated in the report): hosted browser spec on tablet/phone; Assistant Manager in a browser (no synthetic passcode user); Staff server-action call from a hosted browser; forged export id from a hosted browser; VOD-077 delivery-after-send on DEV.
+- DEV footprint: two immutable Sent orders tagged `VOD4-1793147896144` and `VOD4-1793150815862` (with the vendors/products/categories they reference) in the `the-monks` org. Cannot be deleted by design. 26 `V2 Harness` orgs untouched.
 
 ## Tasks T-1 PARKED
 
-Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged NO. Do not resume until VOD-4 completes.
+Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged NO. Untouched during VOD-4. A separate session may now reconcile and resume it.
 
 ## Safety ledger
 
 ```text
-development merged: YES — VOD-3 PR #198 / 64e3007 (merge commit); VOD-2 #196 / 292ca1a and docs #197 / 75d6ae3 earlier
+development merged: YES — fix PR #200 / f3b0e0d (merge commit); final-gate PR pending
 main merged: NO
-DEV touched: NO
+DEV touched: YES — two repository migrations applied; synthetic hosted test data; two immutable Sent orders left (see above)
 PROD touched: NO
 PROD migrations: NO
 ```
 
-## Uncommitted files
+## Current State & Next Step
 
-None after the docs-sync commit.
-
-## Running processes
-
-None.
+- [x] Branch renamed; HEAD == origin/development == 6b8dcea at start
+- [x] DEV proven (ref `opmujepkemwcdxxorhfd`), migration parity 51/51
+- [x] Hosted real DB + browser suites, browser matrix, pgTAP, repo gates
+- [x] Defect D1 fixed and merged (#200)
+- [x] Closure docs written (PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog, this file)
+- [ ] Commit closure docs on `feature/vendor-order-drafts-v1-final-gate`, push, open PR to `development`, exact-head CI, merge commit
+- [ ] Comment on and close #190; Project #4 / milestone as tooling allows
+- [ ] Tiny `docs/vod-4-post-merge-sync` PR only to record the final-gate PR number and merge SHA
 
 ## Exact next command
 
 ```bash
-git fetch origin && git rev-parse origin/development
+git status --short && git log --oneline -3
 ```
-
-## Exact next action
-
-STOP. VOD-3 is complete. VOD-4 (hosted DEV / final Vendor Order Drafts gate: real RLS, Staff denial, two-context PT409, no inventory mutation against the real ledger, full browser matrix including host-tablet WebKit and server-mobile, tests/real) starts in a FRESH session from the updated `development`. Keep Tasks T-1 parked. Do not touch `main` or PROD.
 
 ## Read first
 
 1. `tasks/current-task.md`
-2. `docs/features/bar-inventory-vendor-order-drafts-v1/PLAN.md`
-3. `docs/features/bar-inventory-vendor-order-drafts-v1/ACCEPTANCE_CRITERIA.md`
-4. `docs/features/bar-inventory-vendor-order-drafts-v1/TEST_MATRIX.md`
-5. `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md`
+2. `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md` (VOD-4 section)
+3. `docs/features/bar-inventory-vendor-order-drafts-v1/TEST_MATRIX.md` (VOD-4 coverage)
 
 ## DO NOT
 
-- Do not touch `main`, PROD, or the parked Tasks branch.
-- Do not delete or modify hosted DEV product data (including V2 Harness orgs).
+- Do not touch `main`, PROD, or the parked Tasks branch in this phase.
+- Do not delete or modify hosted DEV product data (including V2 Harness orgs and the two Sent orders).
 - Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
 - Do not merge on stale, partial, or red CI.
+- `next dev` rewrites the `AGENTS.md` heading; never commit that change (`git checkout AGENTS.md`).

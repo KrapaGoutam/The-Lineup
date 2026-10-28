@@ -2,7 +2,7 @@
 
 ## Phase status
 
-VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 is complete and merged to `development` via PR #198 at merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165` (see "VOD-3 sharing delivered"); VOD-4 is next and not started.
+VOD-0 planning is complete. VOD-1 database and pure-domain foundation is complete and merged to `development` via PR #193 at merge commit `876be20cf691022093d838dcca8330bbbf03e584`. VOD-2 is complete and merged to `development` via PR #196 at merge commit `292ca1a12ad136ff25d7af57537533fbc3c61209` (see "VOD-2 UI delivered"); VOD-3 is complete and merged to `development` via PR #198 at merge commit `64e3007457c67a1506997dd98c3d2c778f3ca165` (see "VOD-3 sharing delivered"); VOD-4 (hosted DEV final gate) is complete — **GO** (see "VOD-4 — hosted DEV final gate"). Vendor Order Drafts V1 is complete.
 
 Issue: #190. Feature branch: `feature/bar-order-drafts-v1-foundation`. Exact tested head: `dbf608ecfb25133f65c4cc57e2594d482e70ceb8`. Integration target: `development`. `main` and PROD are untouched.
 
@@ -154,13 +154,85 @@ Exact-head GitHub CI on 054355d (run 40603971319): application success, browser-
 
 **Carried to VOD-4:** run the full Playwright matrix including `host-tablet` WebKit and `server-mobile` on a machine with the browsers; real RLS and Staff denial for Sent reads and the order export; two-context `PT409` for Mark Sent; real export of a Sent order with a renamed / archived product; the real-database no-inventory-mutation check; paging against a hosted history larger than one page.
 
+## VOD-4 — hosted DEV final gate (2026-10-27) — **GO**
+
+```text
+Date / environment:        2026-10-27, local Windows PC + hosted DEV (the-lineup-dev)
+Base development SHA:      6b8dcead804a3aa803b2e8e3eb1dfd2c4bf1660c
+Final tested development:  f3b0e0de27b95cdb05961450554cd23a021731f6 (= base + defect fix PR #200)
+Hosted DEV project:        opmujepkemwcdxxorhfd  (.env.development.local; the harness and the pinned build
+                           hard-abort on any other ref; PROD ref ftadewtkjlaotfdvtjcv never targeted;
+                           0 PROD-ref matches in the pinned production build's .next)
+Decision:                  GO
+```
+
+**Migration parity.** Before: 49 migrations, latest `20261027130000`, no `inventory_order_draft*` objects. Applied to DEV only, via the repository's established DEV route (Management API + a `supabase_migrations.schema_migrations` row, hard-coded to the DEV ref): `20261027195142_bar_inventory_order_drafts.sql`, `20261027210000_bar_inventory_order_draft_save_order_qty_fix.sql`. After: 51 migrations, latest `20261027210000`, 6 `inventory_order_draft_*` RPCs present, no local-only or DEV-only version. PROD was not read or changed.
+
+**Defect found and fixed (D1).** `getSentOrderDraftsPage` returned `null` for a page past the end. PostgREST answers a range that starts past the last row with `416 PGRST103 Requested range not satisfiable` and no count (observed on DEV against 1,070 Sent orders), not an empty page, so the existing clamp (written for `data: []`, tested with a fake that returned `[]`) never ran. Fix `fix/sent-history-past-end-page`, PR #200, tested head `652c7652c41ff24869e434525f21dd8209fb37f2`, exact-head CI green (application, browser-smoke, Vercel; Database path-gated), merge commit `f3b0e0de27b95cdb05961450554cd23a021731f6`. A refused range now falls back to the last page via an exact head count; an empty history is an empty first page. Failing-first unit tests (+2: 1559 total) and the hosted real test. Severity low (Sent history never shrinks; only a stale or typed page number could hit it). No other product defect was found.
+
+**What was run, and where.**
+
+```text
+Hosted DEV, real JWTs, disposable harness org (cascade-deleted; nothing left behind):
+  tests/real/bar-inventory-order-drafts.db.real.test.ts  38/38   (new; 38/38 on the first run with the fix and on 5
+                                                                  consecutive runs of the final test code. Four
+                                                                  earlier runs had one failure each, all in the
+                                                                  suite itself and fixed: stock rows were sorted by
+                                                                  product only although each product has a row per
+                                                                  location (nondeterministic order, 3 runs), and one
+                                                                  transient transport error on the bulk-insert
+                                                                  arrangement (retry added). No product failure.)
+  other Bar Inventory real DB suites (catalog 15, import 9, ledger-paging 4, stock 13)  41/41
+  realtime-access 1/1 -- FAILED twice in a row immediately after the 1,050-row bulk insert/teardown, then PASSED 3 of 3
+                         once DEV settled; a 6-second websocket window with three subscribers. Not touched by
+                         order drafts (no draft table is published). Reported as intermittent, not as a clean pass.
+Hosted DEV, DEV-pinned PRODUCTION build, real passcode sign-in (TestOwner, TestManager, TestServer1):
+  tests/real/ui/bar-inventory-order-drafts.real.spec.ts  15/15 (run twice, both green; desktop Chromium only)
+Demo-mode Playwright, Vendor Order Drafts specs (order-drafts + order-drafts-sharing, 20 tests per project):
+  desktop 20/20 · host-tablet (WebKit 26.6, Playwright build 2359, iPad gen 7 landscape) 20/20 · server-mobile 20/20
+Demo-mode Playwright, whole Bar Inventory regression (12 specs):
+  desktop 78/78 · host-tablet WebKit 78/78 · server-mobile 76 passed + 2 intentional skips ("phones use cards")
+pgTAP (local Supabase via scripts/ci/supabase-run.mjs): 51 migrations replay cleanly; 40 files / 1,171 assertions PASS
+  (0039 order drafts 21, 0040 Order Qty save 13).
+Repository gates (final-gate branch code): prettier --check . PASS · eslint --max-warnings=0 PASS · tsc PASS ·
+  Vitest 114 files / 1,559 tests PASS · next build (DEV-pinned production build) PASS.
+```
+
+**Role matrix (real JWTs).** Owner (`owner`), Manager (`general_manager`) and Assistant Manager (`shift_manager`) each ran open → save → Mark Sent on their own vendor: PASS. Staff (two `server` users) and anon: every RPC refused `42501`, `inventory_order_drafts` / `_items` read as zero rows including Sent history, direct table writes refused even for managers (no grant), Suggested Order not writable through the save RPC. In the browser Owner and Manager completed the flow and Staff never see Bar Inventory.
+
+**Isolation.** A foreign organization's owner: org-A ids refused `42501`, own-org with org-A's draft or vendor id refused `22023`, zero rows read. Org A's second location cannot save, fill, clear, sync or send a draft that belongs to the first location (`22023`); a foreign location id is refused. The real data layer returns nothing to Staff or a foreign owner.
+
+**Draft behaviour on the real database.** Seeding (Critical/Low items of the vendor only, no-Par line has a null suggestion and a blank Order Qty); six simultaneous opens by three managers → one active DRAFT and one seeded set; a second active DRAFT by direct insert refused (`23505`); Unassigned and another tenant's vendor refused; Order Qty blank→5, 5→5 (no-op, no version bump), 5→6, 6 vs a hand-written `6.00` (no-op), blank→0, →blank, equal quantities on different lines judged per line (the VOD-1.1 defect), invalid quantities refused with the item name — each confirmed by database read and by a real browser reload; item/vendor notes (trim, inner newlines kept, whitespace/empty → null, 200/1000 accepted, 201/1001 refused); Include off keeps the line and survives reload; Clear keeps lines, snapshots and stock; Fill empty-only copies numeric suggestions and leaves the no-Par line blank, a typed quantity survives empty-only and only `replace_all` overwrites it (it also blanks a typed quantity on a line with no numeric suggestion, as the domain engine does; the UI states the count); Update suggestions re-stamps snapshots and appends new Critical/Low items without touching Order Qty, notes, Included or the vendor note, and stock changes alone never rewrite a stored suggestion.
+
+**Concurrency.** Two managers on the same version: the second save is `PT409` kind `stale` with the current version and writer, nothing is partially applied, and re-sending only the loser's own change on the latest succeeds. Two saves launched at the same version: exactly one wins. Stale Fill, Clear and Update suggestions are `PT409`. Two real browser windows (Owner, Manager): the second save shows the conflict banner naming the writer, keeps the typed value on screen, and "Keep my edits on the latest" applies it on top. Stale Mark Sent: refused `PT409` at the RPC and in the browser ("Reload the latest version before marking it sent."); the draft stays `draft` with no sender or time.
+
+**Mark Sent and inventory isolation.** The confirmation says outside The Lineup, read-only, does not receive inventory or change stock counts, and does not send anything. After Mark Sent: status `sent`, `sent_by`, `sent_at`, version +1, labels frozen. The full stock set for the organization (On Hand, Backup, Total, stock version, last-adjusted, updated-at per product and location), the adjustment-ledger count and highest id, the change-log count and the product rows were identical before and after, in both the database suite and the hosted browser spec. The Sent order is immutable through every RPC (`23514`) and by direct writes as the service role (update, delete, item insert all `23514`). Retry by the same or a second manager (even holding a stale version) returns `changed:false` with the first sender and version and leaves one Sent record. A new draft for the same vendor opens afterwards at version 1, from current stock, with no quantities or notes carried, an archived product excluded, and the renamed vendor name; the old Sent record is unchanged.
+
+**Export, Copy and formula protection (hosted, real draft).** Copy (real Chromium clipboard) = header, `name size — qty (item note)`, `Notes:` block, no Suggested; CSV columns `Vendor, Item, Size, Unit, SKU, Suggested, Order Qty, Item Note` with the re-stamped suggestion or `Order needed` and only Included, Order Qty > 0 lines; XLSX has `Order` and `Summary` (Vendor, Status, Vendor Note, Planned Total …); item note `=SUM(1+1)` and vendor note `@deliver Thursday` are neutralised with a leading apostrophe in CSV and XLSX. Sent-order Copy, CSV and XLSX use the frozen labels and carry Status Sent, Sent By and Sent At. The Clipboard-denied fallback runs in the demo specs on all three projects (the browser clipboard cannot be made to refuse on hosted DEV).
+
+**Sent history, paging, time zone, frozen labels.** Against 1,070 Sent rows in one location, through the real data layer under the manager's RLS: exact count, 20 per page, every order exactly once across all pages, strictly newest first, a page past the end clamps to the last page (the D1 fix), Staff and a foreign owner get an empty history. The hosted browser shows the Sent facts as `MMM d, yyyy, h:mm AM/PM` in the location's zone (America/Chicago) and never the UTC clock time. Renaming the product and the vendor after sending (restored afterwards) leaves the Sent list row, the Sent order, Copy, CSV and XLSX on the frozen labels; the DB suite proves the same for rename, archive and re-labelling.
+
+**Not run / limits, stated plainly.**
+
+- The hosted real-database browser spec ran on desktop Chromium only (`playwright.real.config.ts` has one project). Tablet (WebKit) and phone layouts were exercised in demo mode, where the components are the same but the data is in memory.
+- No synthetic Assistant Manager with a passcode exists in the DEV organization, so Assistant Manager is proven with a real JWT at the RPC/RLS layer, not through the browser.
+- Staff denial is proven at the RPC, RLS and navigation layers on DEV; a direct server-action call by Staff is covered by the VOD-3 action tests (mocked Supabase), not by a hosted browser call.
+- DST and a UTC-midnight boundary for Sent timestamps are covered by the existing unit tests; DEV only shows America/Chicago.
+- The 1,000-row cap is proven with 1,070 real rows through the real data layer; the browser pager itself was exercised with one real Sent order and by the demo/unit tests.
+- No manual accessibility audit beyond the existing keyboard, focus, live-region and target-size assertions in the Playwright specs (all green on three projects).
+
+**DEV footprint.** The hosted browser spec's Mark Sent leaves immutable history by design: two Sent orders (one per green run), tagged `VOD4-1793147896144` and `VOD4-1793150815862`, with the two vendors, four products, two categories and two subcategories they reference, in the `the-monks` DEV organization. All other tagged data was removed. The 26 pre-existing synthetic `V2 Harness` organizations were not touched. The DB suite leaves nothing (disposable organization, cascade teardown).
+
+**Tracking.** `main` untouched, PROD untouched, no PROD migration. Tasks T-1 remains parked at `03d5d45` (no PR, not merged). `next dev` rewrote `AGENTS.md` during Playwright runs; reverted before every commit.
+
 ## Deferred to approved later phases
 
-- VOD-3: delivered, see below (Copy Order, CSV/XLSX, Mark Sent, Sent list/detail).
-- VOD-4: hosted DEV and responsive/role/concurrency final gate.
+- VOD-3: delivered, see above (Copy Order, CSV/XLSX, Mark Sent, Sent list/detail).
+- VOD-4: delivered — GO (see "VOD-4 — hosted DEV final gate").
+- Still deferred (not regressions): "Add item" UI, an in-app guard for leaving Bar Inventory entirely with unsaved draft edits, Realtime for drafts, the export audit log (AC-EXP-4, owner decision).
 
 No automatic email/SMS/WhatsApp/EDI, purchase-order workflow, receiving, invoice matching, pricing, or cost accounting was added.
 
 ## Parked Tasks work
 
-`feature/tasks-v1-1-default-landing` remains parked at `03d5d45`, with no PR and no merge. It must not resume until Vendor Order Drafts reaches VOD-4.
+`feature/tasks-v1-1-default-landing` remains parked at `03d5d45`, with no PR and no merge. Vendor Order Drafts reached VOD-4 GO, so a separate session may now reconcile and resume T-1; it was not touched during VOD-4.
