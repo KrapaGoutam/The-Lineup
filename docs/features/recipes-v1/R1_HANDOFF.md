@@ -3,7 +3,7 @@
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED
+Status: R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D NEXT / NOT STARTED
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
 Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED.
+R1-A COMPLETE; R1-B COMPLETE; R1-C COMPLETE; R1-D NEXT / NOT STARTED.
 
 ## Completed
 
@@ -26,7 +26,7 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED.
 
 ## In Progress
 
-- R1-C preflight completed; implementation and validation remain.
+- None; R1-C implementation and validation completed.
 
 ## Not Started
 
@@ -73,9 +73,9 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED.
 
 ## Exact Next Action
 
-1. Start R1-C in a new session on the same branch: Recipe Detail and Perfect/House; baseline search was completed in R1-B.
-2. Fetch and check branch, local/remote HEAD and status; read this handoff and the relevant R-0 detail sections.
-3. Do not open the final R-1 PR until R1-B, R1-C and R1-D are complete. Do not touch main or PROD.
+1. Start R1-D final R-1 validation, documentation and PR in a new session on this same branch.
+2. Fetch and verify HEAD and status; use this handoff as the starting point.
+3. Do not start R-2 or touch main or PROD.
 
 ## Safety
 
@@ -134,3 +134,24 @@ Part 2 started: NO
 - Focused tests: server authorization and mapping/order, component variants/accessibility, desktop/tablet/mobile Playwright and navigation/search regressions; then check, full Vitest and both builds.
 - DEV schema: 55 migrations. Real recipe data: NONE. PROD: UNTOUCHED.
 - Exact next action: inspect the existing URL-state integration and implement the scoped detail read and synthetic fixture.
+
+### R1-C implementation midpoint
+
+- Starting HEAD `1aefca9d7e20aedccea9020a92ff8d220b2871f0`. Files: Recipes action, detail types and component, module integration, shell navigation, focused tests and synthetic demo fixture.
+- Detail action verifies live session and server-resolved membership, filters active recipe by organization and slug, and batches category, variants and ordered child reads with caller RLS. No schema change.
+- URL uses existing `?tab=recipes&recipe=<slug>` and native history; search state remains in the mounted module. Detail provides comparison on tablet/desktop, accessible House-first mobile tabs and a single-variant fallback.
+- Focused Recipes Vitest: 14/14 passed. Focused desktop Playwright: 1/1 passed with separate demo server. Initial Playwright failures were test locator and demo re-sign-in after reload; fixed. Initial built-in web-server teardown was interrupted after a failure.
+- Remaining: tablet/mobile and regressions, expand security/ordering and accessibility evidence, scroll restoration, review, check, full Vitest, both builds, hosted validation as applicable, final handoff and commit/push.
+- Exact next action: run host-tablet and server-mobile detail specs, fix failures, then complete the remaining gates.
+
+### R1-C complete
+
+- Starting HEAD: `1aefca9d7e20aedccea9020a92ff8d220b2871f0`; implementation commit: `01e502d`; final documentation commit: inspect git HEAD. Branch: `feature/recipes-v1-r1-core`.
+- Detail: `?tab=recipes&recipe=<slug>` preserves the pathname and query context. Links use native history; list/search, Back/Forward, refresh and restaurant path verified. Landing scroll and link focus are restored after opening a recipe.
+- Read: `getRecipeDetailAction` checks live session and active membership, resolves the organization server-side and selects one active recipe with batched organization-scoped variant and ordered child reads. Both roles read both variants. Unknown, foreign and archived slugs return unavailable. No migration or Storage work.
+- UI: Perfect and House comparison at md and above; mobile ARIA tabs default to House and support arrow keys; single variants occupy the full width. Actual stored optional sections are rendered; missing sections are omitted. Placeholder hero only.
+- Evidence: Recipes focused Vitest 15/15; final full Vitest 129 files / 1708 tests. Detail browser 1/1 each desktop, host-tablet WebKit and server-mobile, including keyboard, history, path, refresh and no overflow. Recipes landing: 8/9 in combined run plus isolated host-tablet 3/3 (one tablet history case failed under 12-worker load and passed in isolation); default-landing 33/33. Explicit separate server avoided the known teardown hang; initial Playwright run hung during teardown following a test failure and was interrupted.
+- `npm run check` passed; normal build explicitly pinned to DEV passed and bundle scan passed; empty-public-Supabase-env build passed with static root. First normal build loaded the local production public configuration; it completed without an observed database operation. It was replaced locally with the DEV-pinned build; no PROD migration, data operation or deployment was performed.
+- Hosted DEV: guarded synthetic import and real-mode UI passed manager and Staff 2/2, including both variants and refresh; cleanup verified zero fixture recipes, variants, ingredients, steps, garnishes and category. Empty landing passed both roles after cleanup. Cross-organization and archived RLS evidence remains the R1-A hosted/pgTAP validation; R1-C action tests check organization and active filters and inactive/session denial with mocks, not a fresh hosted foreign-organization browser test. No real recipe content.
+- PROD: no database or deployment operation; see build configuration note above. R1-D, R-2 and Part 2 not started; no PR opened.
+- Exact next action: R1-D final R-1 gate, documentation and PR in a new session, same branch. Do not start R-2 or touch main or PROD.
