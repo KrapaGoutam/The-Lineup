@@ -255,4 +255,4 @@ No migration, no change to T-4's SQL, no change to the T-3 notification gate, no
 
 ### Status
 
-**T-5 implemented and validated locally; PR, exact-head CI and merge are recorded in `tasks/current-task.md` and the PR.** T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.
+**T-5 COMPLETE.** PR #211, tested head `9bf227922174b69f29ce256185b852f52379e305` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; Database path-gated, no `supabase/**` change), merge commit `53c94d2` (two parents: `bfea042` + `9bf2279`). `browser-smoke` was cancelled once by its job timeout on page loads in the very first tests (not reproducible: the full CI-equivalent desktop suite passed 289/289 locally from a cold build) and passed on the single re-run of the same head. T-6 NOT STARTED; Part 2 ON HOLD; Recipes SHELVED; `main` and PROD untouched.
