@@ -4320,6 +4320,57 @@ export type Database = {
       };
     };
     Functions: {
+      bar_recipe_category_reorder: {
+        Args: { p_ordered_ids: string[]; p_organization_id: string };
+        Returns: Json;
+      };
+      bar_recipe_category_save: {
+        Args: {
+          p_category_id: string;
+          p_expected_version: number;
+          p_name: string;
+          p_organization_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_category_set_active: {
+        Args: {
+          p_active: boolean;
+          p_category_id: string;
+          p_expected_version: number;
+          p_organization_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_save: {
+        Args: {
+          p_expected_version: number;
+          p_organization_id: string;
+          p_payload: Json;
+          p_recipe_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_set_archived: {
+        Args: {
+          p_archived: boolean;
+          p_category_id?: string;
+          p_expected_version: number;
+          p_organization_id: string;
+          p_recipe_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_set_image: {
+        Args: {
+          p_expected_version: number;
+          p_image_path: string;
+          p_organization_id: string;
+          p_recipe_id: string;
+          p_thumb_path: string;
+        };
+        Returns: Json;
+      };
       bar_recipes_import: {
         Args: {
           p_actor_profile_id: string;
