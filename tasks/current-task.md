@@ -4,9 +4,9 @@ Status: IN PROGRESS. Branch: `feature/recipes-v1-r1-core`; base: `c3e44536c8dc39
 
 - [x] Fetch, verify clean state, fast-forward development, and create R-1 branch.
 - [x] Protect the existing R1-A foundation migration, draft test, and handoff in pushed recovery checkpoint `0d7d4fa`; reproduce the 16 draft assertions in a rolled-back local transaction.
-- [ ] Complete the controlled import and expanded database tests, then run clean local replay and regenerate types before any DEV mutation.
-- [x] Local Recipes migration replay and generated types; Recipes pgTAP 51/51, full local pgTAP 43 files / 1348 assertions, synthetic importer dry-run/create/repeat and cleanup. Hosted DEV remains unmodified; see R1_HANDOFF for remaining work and CLI dry-run failure.
-- [ ] Implement and verify database, RLS, and controlled importer.
+- [x] Complete controlled import, expanded database tests, clean local replay and generated types.
+- [x] Local Recipes migration replay and generated types; Recipes pgTAP 51/51, full local pgTAP 43 files / 1348 assertions, synthetic importer dry-run/create/repeat and cleanup. DEV migration applied and synthetic validation cleaned; see R1_HANDOFF for details.
+- [x] Implement and verify database, RLS, and controlled importer; DEV migration and rolled-back synthetic security/import validation passed, with zero synthetic residue. R1-A COMPLETE; R1-B NEXT in a new session.
 - [ ] Implement and verify Recipes navigation, list, search, and detail.
 - [ ] Validate hosted DEV, clean synthetic data, run final gates, and review scope.
 - [ ] Commit, push, open PR, verify exact-head CI, and merge to development.
