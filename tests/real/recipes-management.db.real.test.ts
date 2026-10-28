@@ -447,8 +447,16 @@ describe("hosted DEV Storage using tiny synthetic objects", () => {
       ).error,
     ).not.toBeNull();
     expect((await storage(foreign).remove([path])).data ?? []).toHaveLength(0);
-    expect((await storage(manager).remove([path])).error).toBeNull();
-    expect((await storage(manager).download(path)).error).not.toBeNull();
+    const removed = await storage(manager).remove([path]);
+    expect(removed.error).toBeNull();
+    expect(removed.data).toHaveLength(1);
+    // A just-downloaded URL can still serve cached bytes after deletion.
+    // The DELETE response and authoritative listing prove the RLS mutation.
+    const listed = await storage(manager).list(`${org}/${drink.id}`, {
+      search: path.split("/").at(-1),
+    });
+    expect(listed.error).toBeNull();
+    expect(listed.data).toEqual([]);
   });
   it("denies overwrite and archived Staff reads, permits management archived reads", async () => {
     const uuid = randomUUID();
