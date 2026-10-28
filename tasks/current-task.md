@@ -6,7 +6,7 @@ Vendor Order Drafts V1 — **COMPLETE** (VOD-4 GO, 2026-10-27). Next product seq
 
 ## Current phase
 
-VOD-4 — Hosted DEV / Final Vendor Order Drafts Gate — **GO**. Closure PR pending merge (see Current State & Next Step).
+VOD-4 — Hosted DEV / Final Vendor Order Drafts Gate — **GO**. Closure PR #201 merged; this file is synced after the merge.
 
 ## Execution
 
@@ -28,7 +28,7 @@ VOD-1 #193 COMPLETE (876be20) · VOD-1 docs #194 COMPLETE (34c7481)
 VOD-1.1 #195 COMPLETE (tested fa3762b, merge f6bab25)
 VOD-2 #196 COMPLETE (tested f6c3fd0, merge 292ca1a) · VOD-2 docs #197 COMPLETE (merge 75d6ae3)
 VOD-3 #198 COMPLETE (tested 054355d, merge 64e3007) · VOD-3 docs #199 COMPLETE (merge 6b8dcea)
-VOD-4 COMPLETE — GO · defect fix #200 (merge f3b0e0d) · closure PR: see Current State & Next Step
+VOD-4 COMPLETE — GO · defect fix #200 (merge f3b0e0d) · closure #201 (tested 260ffe1, merge 3f6509b)
 Tasks T-1 PARKED (feature/tasks-v1-1-default-landing @ 03d5d45, NO PR, NOT MERGED) · T-2..T-6 NOT STARTED
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 ```
@@ -50,7 +50,7 @@ Branch `feature/tasks-v1-1-default-landing`, commit `03d5d45`, PR none, merged N
 ## Safety ledger
 
 ```text
-development merged: YES — fix PR #200 / f3b0e0d (merge commit); final-gate PR pending
+development merged: YES — fix PR #200 / f3b0e0d (merge commit); final-gate PR #201 / 3f6509b (merge commit, exact-head CI green)
 main merged: NO
 DEV touched: YES — two repository migrations applied; synthetic hosted test data; two immutable Sent orders left (see above)
 PROD touched: NO
@@ -64,9 +64,9 @@ PROD migrations: NO
 - [x] Hosted real DB + browser suites, browser matrix, pgTAP, repo gates
 - [x] Defect D1 fixed and merged (#200)
 - [x] Closure docs written (PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog, this file)
-- [ ] Commit closure docs on `feature/vendor-order-drafts-v1-final-gate`, push, open PR to `development`, exact-head CI, merge commit
-- [ ] Comment on and close #190; Project #4 / milestone as tooling allows
-- [ ] Tiny `docs/vod-4-post-merge-sync` PR only to record the final-gate PR number and merge SHA
+- [x] Closure PR #201: tested head `260ffe1c4760e93233fa5c45e4fb7eb6a956556a` = local = remote = PR head = CI-tested SHA; merge commit `3f6509b770dd2a03ff73792cf179be9dc71fe982`
+- [x] #190 commented with the gate summary and CLOSED; Project #4 card Status = Done; milestone stays Future Product Backlog (no completion semantics, nothing else reorganised)
+- [x] This `docs/vod-4-post-merge-sync` PR records the final-gate PR number and merge SHA (docs only)
 
 ## Exact next command
 
