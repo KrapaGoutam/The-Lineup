@@ -85,4 +85,4 @@ Mutations (complete / reopen / assign / cancel / carry forward / edit, recurrenc
 
 ### Status
 
-T-2 implemented; PR to `development` follows the merge-commit rule. T-3 (notification narrowing) **not started**; Part 2 on hold.
+**T-2 COMPLETE.** PR #205, tested head `c2ef864` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `46ea022` (two parents). Caveat: the `host-tablet` WebKit project was not run (not installable in the cloud container; CI browser-smoke is `desktop` only) — covered by Chromium iPad emulation locally; run real WebKit at T-6. T-3 (notification narrowing) **not started**; Part 2 on hold.
