@@ -45,4 +45,4 @@ Demo mode keeps its session in memory, so "refresh" there returns to the passcod
 
 ### Status
 
-T-1 implemented and validated locally; PR and exact-head CI recorded in `tasks/current-task.md`. T-2 (Management Today) is next and **not started**.
+**T-1 COMPLETE.** PR #203, tested head `1e3e4b1` (= local = remote = PR head = CI-tested SHA; application, browser-smoke and Vercel green; database workflow path-gated, no `supabase/**` change), merge commit `cf3ae39` (merge commit, two parents). T-2 (Management Today) is next and **not started**.
