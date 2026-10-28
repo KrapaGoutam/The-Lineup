@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { RecipeImageSection } from "./recipe-image-section";
+import type { ImageMetadata } from "../domain/image-rules";
 import { copyVariant, variantHasContent } from "../domain/copy-variant";
 import { emptyVariant } from "../domain/recipe-editor-state";
 import {
@@ -37,8 +39,18 @@ export function RecipeEditor({
   onKeepNavigation,
   onLeaveNavigation,
   managementControls,
+  restaurantSlug,
+  demo,
+  onImageChanged,
 }: {
   data: EditorLoad;
+  restaurantSlug?: string;
+  demo?: boolean;
+  onImageChanged?: (
+    version: number,
+    metadata: ImageMetadata,
+    preview?: string,
+  ) => void;
   onSave: (
     payload: RecipePayload,
     recipeId: string | null,
@@ -70,6 +82,8 @@ export function RecipeEditor({
   const [form, setForm] = useState(() => initialize(data));
   const [baseline, setBaseline] = useState(form);
   const [version, setVersion] = useState(data.recipe?.version ?? null);
+  const [image, setImage] = useState(data.recipe);
+  const [imageBusy, setImageBusy] = useState(false);
   const [categories, setCategories] = useState(data.categories);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
@@ -111,7 +125,7 @@ export function RecipeEditor({
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (saving.current || !dirty) return;
+    if (saving.current || imageBusy || !dirty) return;
     const payload = serializeEditorState(form);
     const invalid = payloadErrors(payload);
     setErrors(invalid);
@@ -164,6 +178,7 @@ export function RecipeEditor({
       setBaseline(next);
       setCopied(false);
       setVersion(latest.recipe?.version ?? null);
+      setImage(latest.recipe);
       setCategories(latest.categories);
       setErrors({});
       setMessage("");
@@ -258,7 +273,7 @@ export function RecipeEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || imageBusy}
             onClick={() => {
               if (dirty) {
                 setDiscard(true);
@@ -267,7 +282,7 @@ export function RecipeEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={!dirty || busy}>
+          <Button type="submit" disabled={!dirty || busy || imageBusy}>
             {busy ? "Saving…" : "Save"}
           </Button>
         </div>
@@ -309,7 +324,7 @@ export function RecipeEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || imageBusy}
             onClick={reload}
           >
             Reload latest
@@ -317,7 +332,7 @@ export function RecipeEditor({
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || imageBusy}
             onClick={() => {
               setStale(false);
               setMessage("");
@@ -327,7 +342,10 @@ export function RecipeEditor({
           </Button>
         </div>
       ) : null}
-      <fieldset disabled={busy} className="flex min-w-0 flex-col gap-6">
+      <fieldset
+        disabled={busy || imageBusy}
+        className="flex min-w-0 flex-col gap-6"
+      >
         {managementControls?.(dirty, (next) =>
           setCategories(
             next.filter((c) => c.is_active || c.id === form.category_id),
@@ -443,14 +461,49 @@ export function RecipeEditor({
             ))}
           </fieldset>
         </section>
-        <section className="border-border rounded-xl border p-4">
-          <h2 className="text-lg font-semibold">Image</h2>
-          <p className="text-muted-foreground">
-            {data.recipe
-              ? "Photo editing will be available in a later update."
-              : "Save the recipe first, then add a photo."}
-          </p>
-        </section>
+        <RecipeImageSection
+          recipeId={image?.id}
+          name={form.name}
+          version={version}
+          restaurantSlug={restaurantSlug}
+          demo={demo}
+          disabled={busy}
+          metadata={
+            image
+              ? {
+                  image_path: image.image_path ?? null,
+                  image_thumb_path: image.image_thumb_path ?? null,
+                }
+              : undefined
+          }
+          initial={image?.imageUrls}
+          preview={image?.imagePreview}
+          onBusy={setImageBusy}
+          onSessionInvalid={onSessionInvalid}
+          onStale={(error) => {
+            setMessage(error);
+            setStale(true);
+          }}
+          onChanged={(
+            nextVersion: number,
+            metadata: ImageMetadata,
+            preview?: string,
+          ) => {
+            setVersion(nextVersion);
+            onImageChanged?.(nextVersion, metadata, preview);
+            setImage((current) =>
+              current
+                ? {
+                    ...current,
+                    ...metadata,
+                    imageUrls: undefined,
+                    imagePreview: preview,
+                    version: nextVersion,
+                  }
+                : current,
+            );
+          }}
+        />
         {(["perfect", "house"] as const).map((kind) => (
           <Fragment key={kind}>
             {kind === "house" ? houseControls : null}

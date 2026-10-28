@@ -43,13 +43,13 @@ test("management adds, edits and renumbers a recipe in memory", async ({
     .fill("Synthetic garnish");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: /R2B synthetic drink/ }),
+    page.getByRole("heading", { name: "Edit Recipe", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Recipe saved", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(
-    /\/r\/the-monks\?tab=recipes&recipe=r2b-synthetic-drink$/,
+    /\/r\/the-monks\?tab=recipes&recipe=r2b-synthetic-drink&mode=edit$/,
   );
-  await page.getByRole("button", { name: "Edit Recipe", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add photo" })).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "R2B synthetic drink",
   );

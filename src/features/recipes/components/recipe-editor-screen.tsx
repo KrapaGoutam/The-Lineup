@@ -33,6 +33,7 @@ export function RecipeEditorScreen({
   demoCategories,
   onCategoriesChanged,
   occupiedCategoryIds,
+  onImageChanged,
 }: {
   restaurantSlug: string;
   slug: string | null;
@@ -57,6 +58,12 @@ export function RecipeEditorScreen({
   demoCategories?: ManagementCategory[];
   onCategoriesChanged?: (categories: ManagementCategory[]) => void;
   occupiedCategoryIds?: string[];
+  onImageChanged?: (
+    id: string,
+    version: number,
+    metadata: import("../domain/image-rules").ImageMetadata,
+    preview?: string,
+  ) => void;
 }) {
   const [result, setResult] = useState<{ data?: EditorLoad; error?: string }>(
     demo ? { data: demoLoad } : {},
@@ -127,6 +134,7 @@ export function RecipeEditorScreen({
         <p role="status">Archived — hidden from staff</p>
         {archive(false)}
         <RecipeDetailView
+          restaurantSlug={demo ? undefined : restaurantSlug}
           recipe={result.data.recipe}
           backHref="?tab=recipes"
           onBack={(e) => {
@@ -138,6 +146,28 @@ export function RecipeEditorScreen({
     );
   return (
     <RecipeEditor
+      onImageChanged={(version, metadata, preview) => {
+        const id = result.data?.recipe?.id;
+        if (id) onImageChanged?.(id, version, metadata, preview);
+        setResult((current) =>
+          current.data?.recipe
+            ? {
+                data: {
+                  ...current.data,
+                  recipe: {
+                    ...current.data.recipe,
+                    ...metadata,
+                    imageUrls: undefined,
+                    imagePreview: preview,
+                    version,
+                  },
+                },
+              }
+            : current,
+        );
+      }}
+      restaurantSlug={restaurantSlug}
+      demo={demo}
       data={result.data}
       managementControls={(dirty, updateCategories) => (
         <div className="flex flex-wrap items-start gap-3">
@@ -172,6 +202,7 @@ export function RecipeEditorScreen({
           if (r.sessionInvalid) onSessionInvalid();
           throw new Error("Recipe unavailable");
         }
+        setResult({ data: r.data });
         return r.data;
       }}
       onExit={onExit}

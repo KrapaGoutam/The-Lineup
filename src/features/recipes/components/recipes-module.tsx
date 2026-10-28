@@ -387,128 +387,159 @@ export function RecipesModule({
       return <TableSkeleton />;
     }
     return (
-      <RecipeEditorScreen
-        key={`${mode}-${slug}`}
-        restaurantSlug={restaurantSlug}
-        slug={mode === "edit" ? slug : null}
-        demo={demo}
-        demoCategories={demoCategories}
-        onCategoriesChanged={categoriesChanged}
-        onArchived={archiveChanged}
-        occupiedCategoryIds={index.recipes
-          .filter((r) => r.is_active !== false)
-          .map((r) => r.category_id)}
-        demoLoad={{
-          categories: demoCategories.filter(
-            (c) => c.is_active || c.id === existing?.category_id,
-          ),
-          nextNumber:
-            Math.max(0, ...index.recipes.map((r) => r.recipe_number)) + 1,
-          recipe: existing,
-        }}
-        demoSave={async (payload, id, version): Promise<SaveResult> => {
-          const duplicate = index.recipes.find(
-            (r) => r.recipe_number === payload.recipe_number && r.id !== id,
-          );
-          if (duplicate)
-            return {
-              ok: false,
-              kind: "duplicate",
-              field: "recipe_number",
-              error: `This recipe number is already used by ${duplicate.recipe_number} ${duplicate.name}.`,
-            };
-          const recipeId = id ?? crypto.randomUUID();
-          let nextSlug =
-            existing?.slug ??
-            (payload.name
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "") ||
-              `recipe-${payload.recipe_number}`);
-          if (!id) {
-            const base =
-              nextSlug === "new" || nextSlug === "edit"
-                ? `recipe-${payload.recipe_number}`
-                : nextSlug;
-            nextSlug = base;
-            for (
-              let suffix = 2;
-              index.recipes.some((r) => r.slug === nextSlug);
-              suffix++
-            )
-              nextSlug = `${base}-${suffix}`;
-          }
-          return {
-            ok: true,
-            data: {
-              id: recipeId,
-              slug: nextSlug,
-              version: (version ?? 0) + 1,
-              recipe_number: payload.recipe_number,
-            },
-          };
-        }}
-        onExit={() => {
-          setEditorLock(null);
-          window.history.pushState(
-            null,
-            "",
-            hrefFor(mode === "edit" ? slug : null),
-          );
-        }}
-        onDirtyChange={(dirty) =>
-          setEditorLock((previous) =>
-            dirty
-              ? (previous ?? { mode, slug, href: window.location.href })
-              : null,
-          )
-        }
-        navigationTarget={
-          editorLock &&
-          (requestedMode !== editorLock.mode ||
-            requestedSlug !== editorLock.slug)
-            ? pathname + "?" + searchParams.toString()
-            : null
-        }
-        onKeepNavigation={() => {
-          if (editorLock) window.history.pushState(null, "", editorLock.href);
-        }}
-        onLeaveNavigation={(target) => {
-          setEditorLock(null);
-          window.history.replaceState(null, "", target);
-        }}
-        onSaved={(result, editorState) => {
-          setEditorLock(null);
-          if (demo) {
-            const recipe = demoRecipeFromState(
-              editorState,
-              result.id,
-              result.slug,
-              result.version,
-              index.categories.find((c) => c.id === editorState.category_id)
-                ?.name ?? "",
+      <>
+        {saved && <p role="status">Recipe saved</p>}
+        <RecipeEditorScreen
+          key={`${mode}-${slug}`}
+          restaurantSlug={restaurantSlug}
+          slug={mode === "edit" ? slug : null}
+          demo={demo}
+          demoCategories={demoCategories}
+          onCategoriesChanged={categoriesChanged}
+          onArchived={archiveChanged}
+          occupiedCategoryIds={index.recipes
+            .filter((r) => r.is_active !== false)
+            .map((r) => r.category_id)}
+          demoLoad={{
+            categories: demoCategories.filter(
+              (c) => c.is_active || c.id === existing?.category_id,
+            ),
+            nextNumber:
+              Math.max(0, ...index.recipes.map((r) => r.recipe_number)) + 1,
+            recipe: existing,
+          }}
+          demoSave={async (payload, id, version): Promise<SaveResult> => {
+            const duplicate = index.recipes.find(
+              (r) => r.recipe_number === payload.recipe_number && r.id !== id,
             );
-            setDemoRecords((records) => ({
-              ...records,
-              [result.slug]: recipe,
-            }));
-            setState({
+            if (duplicate)
+              return {
+                ok: false,
+                kind: "duplicate",
+                field: "recipe_number",
+                error: `This recipe number is already used by ${duplicate.recipe_number} ${duplicate.name}.`,
+              };
+            const recipeId = id ?? crypto.randomUUID();
+            let nextSlug =
+              existing?.slug ??
+              (payload.name
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, "") ||
+                `recipe-${payload.recipe_number}`);
+            if (!id) {
+              const base =
+                nextSlug === "new" || nextSlug === "edit"
+                  ? `recipe-${payload.recipe_number}`
+                  : nextSlug;
+              nextSlug = base;
+              for (
+                let suffix = 2;
+                index.recipes.some((r) => r.slug === nextSlug);
+                suffix++
+              )
+                nextSlug = `${base}-${suffix}`;
+            }
+            return {
+              ok: true,
               data: {
-                ...index,
-                recipes: [
-                  ...index.recipes.filter((r) => r.id !== result.id),
-                  { ...recipe, category_id: editorState.category_id },
-                ],
+                id: recipeId,
+                slug: nextSlug,
+                version: (version ?? 0) + 1,
+                recipe_number: payload.recipe_number,
               },
-            });
+            };
+          }}
+          onExit={() => {
+            setEditorLock(null);
+            window.history.pushState(
+              null,
+              "",
+              hrefFor(mode === "edit" ? slug : null),
+            );
+          }}
+          onDirtyChange={(dirty) =>
+            setEditorLock((previous) =>
+              dirty
+                ? (previous ?? { mode, slug, href: window.location.href })
+                : null,
+            )
           }
-          setSaved(true);
-          setDetail(null);
-          setAttempt((a) => a + 1);
-          window.history.pushState(null, "", hrefFor(result.slug));
-        }}
-        onSessionInvalid={onSessionInvalid}
-      />
+          navigationTarget={
+            editorLock &&
+            (requestedMode !== editorLock.mode ||
+              requestedSlug !== editorLock.slug)
+              ? pathname + "?" + searchParams.toString()
+              : null
+          }
+          onKeepNavigation={() => {
+            if (editorLock) window.history.pushState(null, "", editorLock.href);
+          }}
+          onLeaveNavigation={(target) => {
+            setEditorLock(null);
+            window.history.replaceState(null, "", target);
+          }}
+          onSaved={(result, editorState) => {
+            setEditorLock(null);
+            if (demo) {
+              const recipe = demoRecipeFromState(
+                editorState,
+                result.id,
+                result.slug,
+                result.version,
+                index.categories.find((c) => c.id === editorState.category_id)
+                  ?.name ?? "",
+              );
+              setDemoRecords((records) => ({
+                ...records,
+                [result.slug]: {
+                  ...recipe,
+                  imagePreview: demoRecords[result.slug]?.imagePreview,
+                },
+              }));
+              setState({
+                data: {
+                  ...index,
+                  recipes: [
+                    ...index.recipes.filter((r) => r.id !== result.id),
+                    { ...recipe, category_id: editorState.category_id },
+                  ],
+                },
+              });
+            }
+            setSaved(true);
+            setDetail(null);
+            setAttempt((a) => a + 1);
+            window.history.pushState(
+              null,
+              "",
+              hrefFor(result.slug) + (mode === "new" ? "&mode=edit" : ""),
+            );
+          }}
+          onImageChanged={(id, version, metadata, preview) => {
+            if (!demo) {
+              setDetail(null);
+              setAttempt((a) => a + 1);
+            }
+            if (demo && slug)
+              setDemoRecords((records) => {
+                const currentRecipe = records[slug] ?? existing;
+                return currentRecipe
+                  ? {
+                      ...records,
+                      [slug]: {
+                        ...currentRecipe,
+                        ...metadata,
+                        version,
+                        imagePreview: preview,
+                      },
+                    }
+                  : records;
+              });
+          }}
+          onSessionInvalid={onSessionInvalid}
+        />
+      </>
     );
   }
   if (slug) {
@@ -580,6 +611,7 @@ export function RecipesModule({
           </>
         ) : null}
         <RecipeDetailView
+          restaurantSlug={demo ? undefined : restaurantSlug}
           key={slug}
           recipe={current.data}
           backHref={hrefFor(null)}

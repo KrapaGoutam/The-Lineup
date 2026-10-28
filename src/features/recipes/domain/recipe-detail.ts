@@ -40,4 +40,8 @@ export type RecipeDetail = Pick<
   is_active?: boolean;
   version?: number;
   category_id?: string;
+  image_path?: string | null;
+  image_thumb_path?: string | null;
+  imageUrls?: import("./image-rules").ImageUrls;
+  imagePreview?: string;
 };

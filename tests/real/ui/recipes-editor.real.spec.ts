@@ -211,7 +211,7 @@ test("hosted DEV management create/edit/renumber, both variants, stale recovery,
   await page.getByLabel("Amount", { exact: true }).fill("To taste");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: new RegExp(`${prefix} created`) }),
+    page.getByRole("heading", { name: "Edit Recipe", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Recipe saved", { exact: true })).toBeVisible();
   const { admin } = await devLocation();
@@ -223,7 +223,7 @@ test("hosted DEV management create/edit/renumber, both variants, stale recovery,
     .single();
   expect(created.error).toBeNull();
   expect(created.data?.version).toBe(1);
-  await page.getByRole("button", { name: "Edit Recipe", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add photo" })).toBeVisible();
   await expect(page.getByLabel("Recipe number", { exact: true })).toHaveValue(
     "9402",
   );

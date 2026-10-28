@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import type { RecipeIndex } from "../domain/recipe-index";
+import { signRecipeImages } from "../data/recipe-image-data";
 
 export async function getRecipeIndexAction(input: {
   restaurantSlug: string;
@@ -84,7 +85,7 @@ export async function getRecipeDetailAction(input: {
   let recipeQuery = client
     .from("bar_recipes")
     .select(
-      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id,is_active,version",
+      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id,is_active,version,image_path,image_thumb_path",
     )
     .eq("organization_id", org)
     .eq("slug", parsed.data.slug);
@@ -93,6 +94,18 @@ export async function getRecipeDetailAction(input: {
   const recipe = await recipeQuery.maybeSingle();
   if (recipe.error) return { ok: false, error: "Recipes could not be loaded." };
   if (!recipe.data) return { ok: true, data: null };
+  let imageUrls;
+  try {
+    imageUrls = await signRecipeImages(
+      client,
+      org,
+      recipe.data.id,
+      recipe.data,
+    );
+  } catch {
+    /* Image availability never blocks recipe text. */
+  }
+  const imageData = { ...recipe.data, imageUrls };
   const [category, variants] = await Promise.all([
     client
       .from("bar_recipe_categories")
@@ -114,7 +127,7 @@ export async function getRecipeDetailAction(input: {
   if (!ids.length)
     return {
       ok: true,
-      data: { ...recipe.data, category: category.data.name, variants: [] },
+      data: { ...imageData, category: category.data.name, variants: [] },
     };
   const [ingredients, steps, garnishes] = await Promise.all([
     client
@@ -143,7 +156,7 @@ export async function getRecipeDetailAction(input: {
   return {
     ok: true,
     data: {
-      ...recipe.data,
+      ...imageData,
       category: category.data.name,
       variants: variants.data.map((v) => ({
         ...v,

@@ -1,6 +1,6 @@
 ﻿"use client";
 import { useEffect, useRef, useState } from "react";
-import { Martini } from "lucide-react";
+import { RecipeImage } from "./recipe-image";
 import type { DetailVariant, RecipeDetail } from "../domain/recipe-detail";
 
 function Panel({ variant }: { variant: DetailVariant }) {
@@ -101,10 +101,12 @@ export function RecipeDetailView({
   recipe,
   backHref,
   onBack,
+  restaurantSlug,
 }: {
   recipe: RecipeDetail;
   backHref: string;
   onBack: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+  restaurantSlug?: string;
 }) {
   const variants = [
     recipe.variants.find((v) => v.variant === "perfect"),
@@ -146,9 +148,15 @@ export function RecipeDetailView({
             .join(" · ")}
         </p>
       </div>
-      <div className="bg-muted mx-auto flex aspect-[16/10] w-full max-w-[520px] items-center justify-center rounded-lg">
-        <Martini aria-hidden="true" className="text-muted-foreground size-16" />
-      </div>
+      <RecipeImage
+        key={recipe.image_path ?? recipe.imagePreview ?? recipe.id}
+        recipeId={recipe.id}
+        name={recipe.name}
+        restaurantSlug={restaurantSlug}
+        hasImage={!!recipe.image_path}
+        initial={recipe.imageUrls}
+        preview={recipe.imagePreview}
+      />
       {variants.length === 0 ? (
         <p>No recipe details are available yet.</p>
       ) : variants.length === 1 ? (
