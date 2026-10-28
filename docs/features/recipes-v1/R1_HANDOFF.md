@@ -6,7 +6,7 @@ Phase: R-1
 Status: IN PROGRESS
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
-Current HEAD: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
+Current HEAD: 2c3a7ab (preflight checkpoint; check git for any later commit)
 Main: UNCHANGED
 DEV DB touched: NO
 PROD touched: NO
@@ -20,6 +20,7 @@ R1-A — database, access controls and import foundation.
 
 - Fetched remote refs; clean local development fast-forwarded to the expected R-0 base.
 - Verified no existing local or remote R-1 branch; created the requested branch.
+- Preflight handoff committed and pushed as 2c3a7ab. Local Docker responds; Supabase CLI 2.76.8 is installed.
 
 ## In Progress
 
@@ -60,8 +61,8 @@ R1-A — database, access controls and import foundation.
 
 ## Git State
 
-- Committed: no R-1 commits. Uncommitted: handoff and current-task.
-- Pushed: no. PR: none.
+- Committed and pushed: preflight checkpoint 2c3a7ab.
+- Inspect git status for current uncommitted work. PR: none.
 
 ## Exact Next Action
 
