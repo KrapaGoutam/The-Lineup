@@ -1,3 +1,16 @@
+# Current task — Recipes V1 R1-C
+
+Status: IN PROGRESS. Branch: feature/recipes-v1-r1-core; starting HEAD f63c6c7e430e4028db093fb13321851b39e8c46e. See docs/features/recipes-v1/R1_HANDOFF.md.
+
+- [x] Fetch and verify continuation point; read handoff and detail contract.
+- [ ] Implement scoped detail read, navigation, variant display and states.
+- [ ] Verify focused unit, accessibility, routing, browser coverage and required gates.
+- [ ] Review, update handoff, commit and push R1-C. R1-D remains next.
+
+No migration planned; real recipe data absent; PROD and main untouched.
+
+---
+
 # Current task — Recipes V1 R-1
 
 Status: IN PROGRESS. Branch: `feature/recipes-v1-r1-core`; base: `c3e44536c8dc39023eac81b1d5795ce7e145b9a9`. See `docs/features/recipes-v1/R1_HANDOFF.md` for continuation state.

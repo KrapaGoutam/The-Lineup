@@ -3,7 +3,7 @@
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B COMPLETE; R1-C NEXT / NOT STARTED
+Status: R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
 Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE; R1-B COMPLETE; R1-C NEXT / NOT STARTED.
+R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED.
 
 ## Completed
 
@@ -26,11 +26,11 @@ R1-A COMPLETE; R1-B COMPLETE; R1-C NEXT / NOT STARTED.
 
 ## In Progress
 
-- None. R1-B landing, search and navigation complete; R1-C is next.
+- R1-C preflight completed; implementation and validation remain.
 
 ## Not Started
 
-- R1-C detail; R1-D final R-1 gate, PR and merge; R-2.
+- R1-D final R-1 gate, PR and merge; R-2.
 
 ## Locked Decisions
 
@@ -123,3 +123,14 @@ Part 2 started: NO
 - Tests: focused Vitest 19/19; full Vitest 1699/1699 before final focused test additions; nine Recipes demo browser cases reported passing across desktop/tablet/mobile, with Windows server teardown interrupted after the pass lines; 33 default-landing regression cases passed in the earlier combined run. Real-mode DEV empty landing 2/2 passed. Check and both normal/empty-public-env builds passed after the final application changes. The real-mode test was added after these builds.
 - DEV: no migration or recipe data created in R1-B; real-mode sign-in also ran existing Tasks actions. PROD untouched. No R-1 PR opened.
 - Exact next action: start R1-C in a new session on this same branch, beginning with this handoff. Do not merge development or touch main or PROD.
+
+## R1-C execution checkpoint
+
+- Status: R1-A COMPLETE; R1-B COMPLETE; R1-C IN PROGRESS; R1-D NOT STARTED.
+- Starting HEAD: `f63c6c7e430e4028db093fb13321851b39e8c46e`; fetched remote matched; working tree clean.
+- Expected files: Recipes action/read model, module and detail components, focused unit and browser tests, this handoff and current-task. No migration planned.
+- Detail read strategy: validate restaurant and recipe slugs, verify live session and active membership using the R1-B pattern, query a single active recipe scoped to the resolved organization and its ordered variant graph under RLS. Staff and management share active detail; archived management mode is R-2.
+- UI states: direct URL and history, loading, error/retry, missing recipe, missing variants/sections, desktop comparison, mobile accessible House-first tabs. Risks: tenant isolation, stale async responses, path/history and focus restoration, empty-env builds.
+- Focused tests: server authorization and mapping/order, component variants/accessibility, desktop/tablet/mobile Playwright and navigation/search regressions; then check, full Vitest and both builds.
+- DEV schema: 55 migrations. Real recipe data: NONE. PROD: UNTOUCHED.
+- Exact next action: inspect the existing URL-state integration and implement the scoped detail read and synthetic fixture.
