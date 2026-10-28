@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Banknote,
@@ -582,12 +582,17 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
   const identity = props.demoMode
     ? "demo"
     : (props.initialUser?.profileId ?? "signed-out");
+  // `useSearchParams` (the `?tab=` module address) needs a Suspense boundary:
+  // without Supabase configured (demo mode, CI) `/` is prerendered statically
+  // and the build fails otherwise. Dynamic renders resolve it synchronously.
   return (
-    <RestaurantOperationsAppInner
-      key={`${identity}:${epoch}`}
-      {...props}
-      onAuthBoundary={() => setEpoch((current) => current + 1)}
-    />
+    <Suspense fallback={null}>
+      <RestaurantOperationsAppInner
+        key={`${identity}:${epoch}`}
+        {...props}
+        onAuthBoundary={() => setEpoch((current) => current + 1)}
+      />
+    </Suspense>
   );
 }
 
