@@ -65,10 +65,10 @@ describe("XM-024 stale client double-claim", () => {
     expect((await board.claims()).get("6")).toBe(m1);
   });
 
-  it("the same server asking for its own table again is rejected as same_server (no duplicate)", async () => {
+  it("the same server asking for its own table on a later turn gets same_server_repeat (no duplicate until confirmed)", async () => {
     ok(await board.assign(fx.owner, m1, "6"));
     const detail = conflict(await board.assign(fx.owner, m1, "6"));
-    expect(detail.kind).toBe("same_server");
+    expect(detail.kind).toBe("same_server_repeat");
     expect(sorted((await board.activeByMember()).get(m1))).toEqual(["6"]);
     // Confirming cannot bypass it.
     const again = await board.assign(fx.owner, m1, "6", {

@@ -115,11 +115,11 @@ describe("CR-02 conflicts resolve on the canonical identity (stale client / dire
     expect((await board.claims()).get("T31")).toBe(m1);
   });
 
-  it('A typing "31" for the T31 A already holds: same_server, no duplicate, no mutation', async () => {
+  it('A typing "31" for the T31 A already holds: later turn is same_server_repeat (#166), no duplicate, no mutation', async () => {
     ok(await board.assign(fx.owner, m1, "T31"));
     const before = (await board.events()).length;
     const detail = conflict(await board.assign(fx.owner, m1, "31"));
-    expect(detail.kind).toBe("same_server");
+    expect(detail.kind).toBe("same_server_repeat");
     expect(detail.label).toBe("T31");
     expect(sort((await board.activeByMember()).get(m1))).toEqual(["T31"]);
     expect((await board.events()).length).toBe(before);

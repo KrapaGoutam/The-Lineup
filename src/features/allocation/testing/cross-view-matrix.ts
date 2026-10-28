@@ -176,10 +176,32 @@ export function applyDomainStep(
       const verdict = classifyTableClaim(board, {
         label: canonicalInput(step, world),
         columnId: col(step.who),
+        targetRoundId: findEarliestEmptyRoundForColumn(board, col(step.who))
+          ?.id,
       });
       if (verdict.kind !== "same-server")
         throw new Error(`expected same-server, got ${verdict.kind}`);
       return history;
+    }
+    case "repeat": {
+      const label = canonicalInput(step, world);
+      const round = findEarliestEmptyRoundForColumn(board, col(step.who));
+      const verdict = classifyTableClaim(board, {
+        label,
+        columnId: col(step.who),
+        targetRoundId: round?.id,
+      });
+      if (verdict.kind !== "same-server-repeat")
+        throw new Error(`expected same-server-repeat, got ${verdict.kind}`);
+      if (step.choose === "cancel") return history;
+      if (!round) throw new Error("no empty round");
+      return executeBoardAction(history, {
+        type: "assign",
+        roundId: round.id,
+        columnId: col(step.who),
+        tableLabel: label,
+        endPrevious: true,
+      });
     }
     case "conflict": {
       const label = canonicalInput(step, world);

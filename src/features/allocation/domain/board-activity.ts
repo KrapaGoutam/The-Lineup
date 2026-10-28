@@ -131,6 +131,14 @@ function noun(type: unknown): string {
 const DESCRIBE: Record<BoardEventType, Describe> = {
   assign: (p, l) => {
     const displaced = Array.isArray(p.displaced) && p.displaced.length > 0;
+    // Same-server repeat (#166): the server's own earlier assignment of this
+    // table was ended as this turn's assignment began.
+    if (p.repeat === true && displaced) {
+      const when = turn(p, "round_id", l);
+      return `assigned ${tableOrTables(text(p, "table_label"))} to ${server(p, "member_id", l)} again${
+        when ? ` for ${when}` : ""
+      }, ending the previous assignment`;
+    }
     return `assigned ${tableOrTables(text(p, "table_label"))} to ${server(p, "member_id", l)}${
       displaced ? ", ending its previous assignment" : ""
     }`;

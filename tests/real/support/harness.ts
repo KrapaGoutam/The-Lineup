@@ -344,6 +344,11 @@ export async function createFixture(): Promise<Fixture> {
     await admin.from("tip_pools").delete().in("organization_id", orgIds);
     await admin.from("dining_tables").delete().in("organization_id", orgIds);
     await admin.from("dining_areas").delete().in("organization_id", orgIds);
+    // Tenant data with append-only history (Bar Inventory ledger / change log)
+    // clears only by cascade from the organization, and holds actor FKs to
+    // memberships, so remove the organizations (cascade) before memberships.
+    // Everything above that blocks an organization delete is already gone.
+    await admin.from("organizations").delete().in("id", orgIds);
     await admin.from("memberships").delete().in("organization_id", orgIds);
     await admin.from("locations").delete().in("organization_id", orgIds);
     await admin.from("organizations").delete().in("id", orgIds);
@@ -498,20 +503,25 @@ export class Board {
       confirm?: boolean;
       endWhole?: boolean;
       roundId?: number;
+      /** #166: the explicit End Previous + Assign confirmation RPC. */
+      endPrevious?: boolean;
     } = {},
   ): Promise<Rpc> {
     const roundId = options.roundId ?? (await this.freeRound(memberId));
-    return (await as.client.rpc("board_assign", {
-      p_organization_id: this.fx.orgId,
-      p_location_id: this.locationId,
-      p_service_date: this.date,
-      p_round_id: roundId,
-      p_member_id: memberId,
-      p_table_label: label,
-      p_confirm_transfer: options.confirm ?? false,
-      // PostgREST needs every named argument.
-      p_end_whole_assignment: options.endWhole ?? false,
-    })) as Rpc;
+    return (await as.client.rpc(
+      options.endPrevious ? "board_end_previous_and_assign" : "board_assign",
+      {
+        p_organization_id: this.fx.orgId,
+        p_location_id: this.locationId,
+        p_service_date: this.date,
+        p_round_id: roundId,
+        p_member_id: memberId,
+        p_table_label: label,
+        p_confirm_transfer: options.confirm ?? false,
+        // PostgREST needs every named argument.
+        p_end_whole_assignment: options.endWhole ?? false,
+      },
+    )) as Rpc;
   }
 
   async rpc(

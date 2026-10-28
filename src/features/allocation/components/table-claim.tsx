@@ -12,6 +12,7 @@ import {
   classifyTableClaim,
   describeHeldConflict,
   describeSameServer,
+  describeSameServerRepeat,
   verdictFromServerConflict,
   type ClaimVerdict,
   type TableConflictInfo,
@@ -23,25 +24,35 @@ import {
  * rule of its own. Dashboard is read-only and has no assign action.
  *
  *   free         -> the caller's normal assign path runs
- *   same-server  -> a concise notice, no mutation
+ *   same-server  -> a concise notice, no mutation (same or later turn)
+ *   same-server-repeat -> End Previous + Assign / Cancel (#166: the same
+ *                   server reaching a later turn that gets the same table)
  *   held         -> this dialog: Transfer / End + Assign / Cancel
  *
  * Transfer is the existing trusted `transfer` action (the holder's WHOLE
  * assignment moves). End + Assign is a single atomic `assign` with
  * `confirmTransfer` + `endWholeAssignment` (the holder's WHOLE assignment is
  * ended, history kept, then a new active entry is created) -- never two calls
- * with a gap between them.
+ * with a gap between them. End Previous + Assign is the same shape with
+ * `endPrevious` (the server's OWN earlier assignment ends, whole).
  */
 export type ClaimRequest = {
   label: string;
   columnId: string;
   /** The cell being written, when the caller chose one (Grid, Picker). */
   roundId?: string | null;
+  /**
+   * Set when a confirmed End Previous + Assign was refused again by the
+   * database for another table (a mixed repeat): the follow-up decision must
+   * keep ending the server's previous assignment.
+   */
+  endPrevious?: boolean;
 };
 
 type Held = Extract<ClaimVerdict, { kind: "held" }>;
+type Repeat = Extract<ClaimVerdict, { kind: "same-server-repeat" }>;
 
-type Pending = ClaimRequest & { verdict: Held };
+type Pending = ClaimRequest & { verdict: Held | Repeat };
 
 export function useTableClaim({
   board,
@@ -67,6 +78,7 @@ export function useTableClaim({
     roundId: string;
     confirmTransfer: boolean;
     endWholeAssignment: boolean;
+    endPrevious: boolean;
   }) => void;
   onTransfer: (input: {
     sourceRoundId: string;
@@ -83,6 +95,12 @@ export function useTableClaim({
   function present(request: ClaimRequest, verdict: ClaimVerdict): boolean {
     if (verdict.kind === "free") return false;
     if (verdict.kind === "same-server") {
+      onNotice(describeSameServer(verdict.tables, nameOf(request.columnId)));
+      return true;
+    }
+    // A stale confirmation that the database still refuses as blocked would
+    // loop forever as a dialog; only a first-time repeat opens one.
+    if (verdict.kind === "same-server-repeat" && request.endPrevious) {
       onNotice(describeSameServer(verdict.tables, nameOf(request.columnId)));
       return true;
     }
@@ -132,12 +150,32 @@ export function useTableClaim({
       roundId,
       confirmTransfer: true,
       endWholeAssignment: true,
+      endPrevious: pending.endPrevious ?? false,
+    });
+    close();
+  }
+
+  /** Same-server repeat: end this server's previous assignment, then assign. */
+  function endPrevious() {
+    if (!pending || pending.verdict.kind !== "same-server-repeat") return;
+    const roundId =
+      pending.roundId ??
+      findEarliestEmptyRoundForColumn(board, pending.columnId)?.id;
+    if (!roundId) return;
+    onAssign({
+      label: pending.label,
+      columnId: pending.columnId,
+      roundId,
+      confirmTransfer: false,
+      endWholeAssignment: false,
+      endPrevious: true,
     });
     close();
   }
 
   function transfer() {
-    if (!pending || pending.verdict.holders.length !== 1) return;
+    if (!pending || pending.verdict.kind !== "held") return;
+    if (pending.verdict.holders.length !== 1) return;
     const holder = pending.verdict.holders[0];
     onTransfer({
       sourceRoundId: holder.roundId,
@@ -147,13 +185,22 @@ export function useTableClaim({
     close();
   }
 
-  const copy = pending
-    ? describeHeldConflict(pending.verdict, {
-        wantedLabel: pending.label,
-        requesterName: nameOf(pending.columnId),
-        holderName: nameOf,
-      })
-    : null;
+  const repeatCopy =
+    pending?.verdict.kind === "same-server-repeat"
+      ? describeSameServerRepeat(pending.verdict, {
+          wantedLabel: pending.label,
+          serverName: nameOf(pending.columnId),
+        })
+      : null;
+  const heldCopy =
+    pending?.verdict.kind === "held"
+      ? describeHeldConflict(pending.verdict, {
+          wantedLabel: pending.label,
+          requesterName: nameOf(pending.columnId),
+          holderName: nameOf,
+        })
+      : null;
+  const copy = repeatCopy ?? heldCopy;
 
   const dialog = (
     <Dialog
@@ -162,16 +209,30 @@ export function useTableClaim({
       title={copy?.title ?? ""}
       description={copy?.description}
     >
-      {copy ? (
+      {repeatCopy ? (
         <div className="flex flex-col gap-1.5">
-          {copy.transferLabel ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={endPrevious}
+          >
+            {repeatCopy.endPreviousLabel}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={close}>
+            Cancel
+          </Button>
+        </div>
+      ) : heldCopy ? (
+        <div className="flex flex-col gap-1.5">
+          {heldCopy.transferLabel && !pending?.endPrevious ? (
             <Button
               variant="secondary"
               size="sm"
               disabled={disabled}
               onClick={transfer}
             >
-              {copy.transferLabel}
+              {heldCopy.transferLabel}
             </Button>
           ) : null}
           <Button
@@ -180,7 +241,7 @@ export function useTableClaim({
             disabled={disabled}
             onClick={endAndAssign}
           >
-            {copy.endAndAssignLabel}
+            {heldCopy.endAndAssignLabel}
           </Button>
           <Button variant="ghost" size="sm" onClick={close}>
             Cancel

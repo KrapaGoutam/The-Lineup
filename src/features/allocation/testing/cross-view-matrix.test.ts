@@ -31,6 +31,7 @@ describe("cross-view scenario matrix (domain)", () => {
       "assign",
       "conflict",
       "same-server",
+      "repeat",
       "end",
       "transfer",
       "unassign",
@@ -71,19 +72,10 @@ describe("cross-view scenario matrix (domain)", () => {
       expect(
         model.servers.reduce((n, s) => n + s.activeTableLabels.length, 0),
       ).toBe(model.stats.occupiedTables);
-      // Ended history never counts as active.
-      for (const server of model.servers) {
-        const ended = server.sessionHistory
-          .filter((h) => h.status === "ended")
-          .flatMap((h) => h.tables);
-        const stillActive = ended.filter((t) =>
-          model.servers.some((s) => s.activeTableLabels.includes(t)),
-        );
-        // an ended table may be re-held by someone, never by "ended" itself
-        expect(
-          stillActive.every((t) => !server.activeTableLabels.includes(t)),
-        ).toBe(true);
-      }
+      // Ended history never counts as active. A table may be ended AND held
+      // again, by anyone including the same server (#166: a later turn), but
+      // it is held at most once -- the owners check above -- and an ended
+      // entry adds nothing to the active count (the sum check above).
     });
   }
 });

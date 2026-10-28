@@ -52,6 +52,13 @@ export type BoardAction =
       // combined holder is refused, as before. Mirrors board_assign's
       // p_end_whole_assignment.
       endWholeAssignment?: boolean;
+      // Same-server repeat (#166): the explicit confirmation that this
+      // server's own EARLIER-turn assignment of the same table is ended (whole
+      // assignment, history kept) as the new turn's assignment lands. Without
+      // it, a table this server already holds elsewhere is refused. Mirrors
+      // public.board_end_previous_and_assign; the database stays the
+      // authority on whether the turn is a later one.
+      endPrevious?: boolean;
     }
   | { type: "clear-cell"; roundId: string; columnId: string }
   | { type: "add-column"; column: RotationColumn }
@@ -322,17 +329,27 @@ export function applyBoardAction(
       }
       // Cross-view integrity (X2): a server never holds the same physical
       // table twice. Another cell of THIS column already holding one of the
-      // tables is a no-op here, exactly as board_assign refuses it.
+      // tables is a no-op here, exactly as board_assign refuses it --
+      // unless (#166) the caller confirmed a same-server repeat AND every
+      // such cell is an EARLIER turn than this one, in which case those
+      // previous assignments (whole) are ended as this one lands.
       const wantedParts = new Set(labelParts(label));
+      const previousOwn: RotationCell[] = [];
       for (const other of board.rounds) {
         for (const cell of other.cells) {
           if (cell.columnId !== action.columnId || cell.status !== "active")
             continue;
           if (other.id === round.id) continue;
-          if (labelParts(cell.tableLabel).some((part) => wantedParts.has(part)))
+          if (
+            !labelParts(cell.tableLabel).some((part) => wantedParts.has(part))
+          )
+            continue;
+          if (!action.endPrevious || other.sequence >= round.sequence)
             return current;
+          previousOwn.push(cell);
         }
       }
+      for (const cell of previousOwn) cell.status = "ended";
       if (action.confirmTransfer) {
         // Atomic reassign: end the previous owner(s) in the same step the
         // new assignment lands, mirroring board_assign.

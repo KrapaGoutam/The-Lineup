@@ -113,10 +113,16 @@ test("CSV import blocks commit on an unresolved row error", async ({
 test("manager can use all three operational modules", async ({ page }) => {
   await signIn(page, "2468");
 
+  // Tasks V1.1: a normal sign-in lands on Tasks, not Table Allocation.
+  await expect(
+    page.getByRole("heading", { name: "Tasks", exact: true }),
+  ).toBeVisible();
+  await expectAccountRole(page, /manager/i);
+
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(
     page.getByRole("heading", { name: "Table allocation rotation" }),
   ).toBeVisible();
-  await expectAccountRole(page, /manager/i);
 
   await navigateToTab(page, "Schedule");
   await expect(
@@ -273,6 +279,7 @@ test("promoting someone to Assistant Manager gives them full manager-level acces
   await signOut(page);
   await signInOnCurrentPage(page, "1357");
   await expectAccountRole(page, /manager/i);
+  await navigateToTab(page, "Schedule");
   await expect(page.getByRole("button", { name: "Add shift" })).toBeVisible();
   await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
@@ -405,7 +412,7 @@ test("numeric keypad completes a full sign-in via taps alone at phone width", as
   // submit click here would be racing an already-in-flight/-completed
   // sign-in and flakily click a button that's mid-unmount.
   await expect(
-    page.getByRole("heading", { name: "Table allocation rotation" }),
+    page.getByRole("heading", { name: "Tasks", exact: true }),
   ).toBeVisible();
 });
 

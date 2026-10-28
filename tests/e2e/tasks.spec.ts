@@ -50,7 +50,13 @@ test("Table Allocation and Tasks are the primary modules; the rest stay reachabl
       0,
     );
     await dock.getByRole("button", { name: "More" }).click();
-    for (const label of ["Schedule", "Team", "Attendance", "Tip Split"]) {
+    for (const label of [
+      "Schedule",
+      "Team",
+      "Attendance",
+      "Bar Inventory",
+      "Tip Split",
+    ]) {
       await expect(
         page.getByRole("dialog", { name: "More" }).getByRole("button", {
           name: label,
@@ -61,7 +67,13 @@ test("Table Allocation and Tasks are the primary modules; the rest stay reachabl
     const primary = page.locator('[data-nav-tier="primary"]');
     await expect(primary).toHaveText([/Table Allocation/, /Tasks/]);
     const secondary = page.locator('[data-nav-tier="secondary"]');
-    for (const label of ["Schedule", "Team", "Attendance", "Tip Split"]) {
+    for (const label of [
+      "Schedule",
+      "Team",
+      "Attendance",
+      "Bar Inventory",
+      "Tip Split",
+    ]) {
       await expect(secondary.filter({ hasText: label })).toBeVisible();
     }
     await expect(
@@ -448,10 +460,10 @@ test("recurring tasks create independent occurrences that keep their history (TA
   await expect(page.getByText("E2E daily ice check")).toBeVisible();
 });
 
-test("in-app notifications: unread badge, inbox, mark read (TASK-050/053)", async ({
+test("in-app notifications carry Opening / Closing only: badge, inbox, mark read (TASK-050/053, TS-040/041)", async ({
   page,
 }) => {
-  await signIn(page, "2468"); // Maya assigns a fresh task to Mia
+  await signIn(page, "2468"); // Maya starts today's checklists, then assigns Mia a normal task
   await openTasks(page);
   await page.getByRole("button", { name: /New task/ }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
@@ -462,7 +474,8 @@ test("in-app notifications: unread badge, inbox, mark read (TASK-050/053)", asyn
 
   await signOut(page);
   await signInOnCurrentPage(page, "1357"); // Mia
-  // The Tasks tab carries an unread count before she even opens it.
+  // The Tasks tab carries an unread count before she even opens it: the
+  // Opening and Closing checklists are announced.
   await expect(
     page.locator('[data-testid="tasks-unread-badge"]:visible').first(),
   ).toBeVisible();
@@ -474,26 +487,31 @@ test("in-app notifications: unread badge, inbox, mark read (TASK-050/053)", asyn
   await expect(bell).toBeVisible();
   await bell.click();
   const inbox = page.getByRole("dialog", { name: "Notifications" });
-  await expect(inbox.getByText("E2E notify Mia")).toBeVisible();
+  // (The seeded previous-day Opening checklist is announced too.)
+  await expect(
+    inbox.getByText("Opening checklist is ready").first(),
+  ).toBeVisible();
+  await expect(
+    inbox.getByText("Closing checklist is ready").first(),
+  ).toBeVisible();
   await expect(inbox.getByText("New").first()).toBeVisible();
+  // T-3: the ordinary task Maya just assigned adds no inbox noise.
+  await expect(inbox.getByText("E2E notify Mia")).toHaveCount(0);
+  await expect(inbox.getByText("New task for you")).toHaveCount(0);
 
   await inbox.getByRole("button", { name: "Mark all read" }).click();
   await expect(inbox.getByText("You're all caught up.")).toBeVisible();
+  // Read items stay in the history.
+  await expect(
+    inbox.getByText("Opening checklist is ready").first(),
+  ).toBeVisible();
   await inbox.getByRole("button", { name: "Close" }).click();
   await expect(
     page.getByRole("button", { name: "Notifications", exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId("tasks-unread-badge")).toHaveCount(0);
 
-  // Opening a notification jumps to its task.
-  await page
-    .getByRole("button", { name: "Notifications", exact: true })
-    .click();
-  await page
-    .getByRole("dialog", { name: "Notifications" })
-    .getByText("E2E notify Mia")
-    .click();
-  await expect(
-    page.getByRole("dialog", { name: "E2E notify Mia" }),
-  ).toBeVisible();
+  // The assignment itself is still real work: the task is on her list.
+  await page.getByRole("button", { name: "My Tasks", exact: true }).click();
+  await expect(page.getByText("E2E notify Mia").first()).toBeVisible();
 });

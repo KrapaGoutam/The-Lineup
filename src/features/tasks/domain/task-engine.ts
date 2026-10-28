@@ -3,6 +3,10 @@ import {
   zonedWallTimeToInstant,
 } from "@/lib/timezone";
 
+import {
+  openingReminderDedupeKey,
+  type OpeningReminder,
+} from "./opening-reminder";
 import { occurrenceDates, weekdayOf } from "./recurrence";
 import type {
   CommandResult,
@@ -150,7 +154,49 @@ export function validateAssignees(
   return ok(people);
 }
 
-/** Mirrors private.tasks_notify: active recipients only, deduped by key. */
+/**
+ * The notification inbox carries Opening and Closing operational work only
+ * (PLAN D-3 / D-4, #154). Mirrors the gate in private.tasks_notify: a
+ * notification is kept when it announces a generated checklist, when it is a
+ * well-formed Opening reminder (a known stage, its location, service date and
+ * stage encoded in the dedupe key, no task reference), or when its task is an
+ * Opening or Closing item. Anything else -- every `kind = 'task'` event, or a
+ * call that names no task -- is dropped. Audit events are a separate record and
+ * never pass through this gate.
+ */
+export function isOperationalNotification(
+  state: TasksState,
+  input: {
+    type: NotificationType;
+    taskId: string | null;
+    reminder?: OpeningReminder | null;
+    dedupeKey?: string | null;
+  },
+): boolean {
+  if (input.type === "opening_reminder") {
+    const reminder = input.reminder;
+    return (
+      input.taskId === null &&
+      !!reminder &&
+      input.dedupeKey ===
+        openingReminderDedupeKey(
+          reminder.locationId,
+          reminder.serviceDate,
+          reminder.stage,
+        )
+    );
+  }
+  if (input.type === "checklist_available") return true;
+  const task = input.taskId
+    ? state.tasks.find((t) => t.id === input.taskId)
+    : undefined;
+  return task?.kind === "opening" || task?.kind === "closing";
+}
+
+/**
+ * Mirrors private.tasks_notify: operational sources only, active recipients
+ * only, deduped by key.
+ */
 export function notify(
   state: TasksState,
   ctx: EngineContext,
@@ -162,8 +208,10 @@ export function notify(
     title: string;
     body: string | null;
     dedupeKey?: string | null;
+    reminder?: OpeningReminder | null;
   },
 ): TasksState {
+  if (!isOperationalNotification(state, input)) return state;
   if (!ctx.team.some((m) => m.profileId === input.recipientId)) return state;
   const key = input.dedupeKey ?? null;
   if (
@@ -183,6 +231,8 @@ export function notify(
     checklistInstanceId: input.instanceId ?? null,
     createdAt: ctx.now.toISOString(),
     readAt: null,
+    reminder:
+      input.type === "opening_reminder" ? (input.reminder ?? null) : null,
     recipientId: input.recipientId,
     dedupeKey: key,
   };
@@ -193,7 +243,11 @@ export function notify(
   };
 }
 
-/** Mirrors task_notifications_sweep: due within an hour / overdue < 3 days. */
+/**
+ * Mirrors task_notifications_sweep: due within an hour / overdue < 3 days. It
+ * only ever targets `kind = 'task'`, which the operational gate in `notify`
+ * drops, so it is a no-op kept for parity with the RPC.
+ */
 export function sweepNotifications(
   state: TasksState,
   ctx: EngineContext,

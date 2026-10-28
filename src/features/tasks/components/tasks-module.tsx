@@ -15,6 +15,8 @@ export type TasksDemoBinding = {
   team: readonly TaskTeamMember[];
   timeZone: string;
   organizationId: string;
+  /** Run the demo Opening reminder engine (opt-in; see the app shell). */
+  openingReminders?: boolean;
 };
 
 type Props = {

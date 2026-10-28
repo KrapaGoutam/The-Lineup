@@ -70,18 +70,17 @@ function printAreaText(page: Page): Promise<string> {
 }
 
 test.describe("Feature 030: Payroll UI, Option 1k, Timesheet Print & Statements", () => {
-  test("lands on Table Allocation by default upon signing in", async ({
+  test("lands on Tasks by default upon signing in (TS-001)", async ({
     page,
   }) => {
     await signIn(page, "2468");
 
-    const allocationBtn = page.getByRole("button", {
-      name: /Allocation/,
-    });
-    await expect(allocationBtn.first()).toHaveAttribute("aria-current", "page");
+    const tasksBtn = page.getByRole("button", { name: /^Tasks/ });
+    await expect(tasksBtn.first()).toHaveAttribute("aria-current", "page");
     await expect(
-      page.getByRole("heading", { name: "Table Allocation" }),
+      page.getByRole("heading", { name: "Tasks", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("region", { name: "Today" })).toBeVisible();
   });
 
   test("attendance dropdowns have proper dark/light theme contrast styling", async ({

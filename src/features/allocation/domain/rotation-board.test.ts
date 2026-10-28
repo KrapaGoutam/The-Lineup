@@ -1249,6 +1249,100 @@ describe("rotation board — V2 sparse boards, transfer and reassign", () => {
     ).toBe("ended");
   });
 
+  describe("same-server repeat (#166)", () => {
+    const status = (
+      history: ReturnType<typeof executeBoardAction>,
+      round: string,
+      column: string,
+    ) =>
+      history.present.rounds
+        .find(({ id }) => id === round)!
+        .cells.find(({ columnId }) => columnId === column)?.status;
+
+    it("without the confirmation a table the server holds elsewhere is refused (unchanged)", () => {
+      const board = sparseBoard([
+        { round: 1, column: "a", label: "T2", status: "active" },
+      ]);
+      const history = executeBoardAction(createBoardHistory(board), {
+        type: "assign",
+        roundId: "r2",
+        columnId: "a",
+        tableLabel: "T2",
+      });
+      expect(history.present).toEqual(board);
+    });
+
+    it("endPrevious on a LATER turn ends the previous cell (kept as history) and activates the new one", () => {
+      const board = sparseBoard([
+        { round: 1, column: "a", label: "T2", status: "active" },
+      ]);
+      const history = executeBoardAction(createBoardHistory(board), {
+        type: "assign",
+        roundId: "r2",
+        columnId: "a",
+        tableLabel: "T2",
+        endPrevious: true,
+      });
+      expect(status(history, "r1", "a")).toBe("ended");
+      expect(status(history, "r2", "a")).toBe("active");
+      // exactly one active T2
+      const active = history.present.rounds
+        .flatMap((r) => r.cells)
+        .filter((c) => c.status === "active" && c.tableLabel === "T2");
+      expect(active).toHaveLength(1);
+      // Undo / Redo restore the whole snapshot
+      const undone = undoBoard(history);
+      expect(status(undone, "r1", "a")).toBe("active");
+      expect(status(redoBoard(undone), "r2", "a")).toBe("active");
+    });
+
+    it("endPrevious never applies when the held table is in the same or a LATER turn", () => {
+      const board = sparseBoard([
+        { round: 2, column: "a", label: "T2", status: "active" },
+      ]);
+      const history = executeBoardAction(createBoardHistory(board), {
+        type: "assign",
+        roundId: "r1",
+        columnId: "a",
+        tableLabel: "T2",
+        endPrevious: true,
+      });
+      expect(history.present).toEqual(board);
+    });
+
+    it("a combined previous assignment ends as a whole", () => {
+      const board = sparseBoard([
+        { round: 1, column: "a", label: "T2 + T3", status: "active" },
+      ]);
+      const history = executeBoardAction(createBoardHistory(board), {
+        type: "assign",
+        roundId: "r2",
+        columnId: "a",
+        tableLabel: "T2",
+        endPrevious: true,
+      });
+      expect(status(history, "r1", "a")).toBe("ended");
+      expect(history.present.rounds[0].cells[0].tableLabel).toBe("T2 + T3");
+      expect(status(history, "r2", "a")).toBe("active");
+    });
+
+    it("endPrevious never displaces ANOTHER server's table", () => {
+      const board = sparseBoard([
+        { round: 1, column: "a", label: "T2", status: "active" },
+        { round: 1, column: "b", label: "T5", status: "active" },
+      ]);
+      const history = executeBoardAction(createBoardHistory(board), {
+        type: "assign",
+        roundId: "r2",
+        columnId: "a",
+        tableLabel: "T2 + T5",
+        endPrevious: true,
+      });
+      // b's T5 is never displaced by endPrevious (only confirmTransfer does that).
+      expect(status(history, "r1", "b")).toBe("active");
+    });
+  });
+
   it("FRONT-003: a skipped server is not 'next' just because its skipped cell has no label", () => {
     const board = sparseBoard([
       { round: 1, column: "a", label: "1", status: "active" },

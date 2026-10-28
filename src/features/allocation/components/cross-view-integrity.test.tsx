@@ -8,6 +8,7 @@ import type {
   RegistryTable,
 } from "@/features/allocation/domain/floor-layout";
 import type { RotationBoard } from "@/features/allocation/domain/rotation-board";
+import type { TableConflictInfo } from "@/features/allocation/domain/table-conflict";
 import type { TeamMember } from "@/lib/demo-data";
 
 import { FloorView } from "./floor-view";
@@ -237,12 +238,20 @@ describe("Servers keeps ended history (X3)", () => {
 function Harness({
   claimBoard,
   request,
+  serverConflict,
   onAssign,
   onTransfer,
   onNotice,
 }: {
   claimBoard: RotationBoard;
-  request: { label: string; columnId: string; roundId?: string };
+  request: {
+    label: string;
+    columnId: string;
+    roundId?: string;
+    endPrevious?: boolean;
+  };
+  /** A database-reported conflict (stale client), presented on "stale". */
+  serverConflict?: TableConflictInfo;
   onAssign: (input: any) => void;
   onTransfer: (input: any) => void;
   onNotice: (message: string) => void;
@@ -263,6 +272,15 @@ function Harness({
         }}
       >
         go
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (serverConflict)
+            claim.presentServerConflict(request, serverConflict);
+        }}
+      >
+        stale
       </button>
       {claim.dialog}
     </>
@@ -338,6 +356,7 @@ describe("shared occupied-table dialog (X2)", () => {
       roundId: "r1", // Bea has no cell in round 1: her earliest empty round
       confirmTransfer: true,
       endWholeAssignment: true,
+      endPrevious: false,
     });
   });
 
@@ -387,14 +406,26 @@ describe("shared occupied-table dialog (X2)", () => {
     ).toBeVisible();
   });
 
-  it("the same server asking again gets a message and no dialog", async () => {
+  it("a table the same server holds in a LATER turn is a message and no dialog", async () => {
     const user = userEvent.setup();
     const onNotice = vi.fn();
     const onAssign = vi.fn();
+    const later: RotationBoard = {
+      columns,
+      rounds: [
+        { id: "r1", sequence: 1, cells: [] },
+        {
+          id: "r2",
+          sequence: 2,
+          cells: [{ columnId: "a", tableLabel: "T6", status: "active" }],
+        },
+      ],
+      nextRoundNumber: 3,
+    };
     render(
       <Harness
-        claimBoard={boardHolding("T6")}
-        request={{ label: "T6", columnId: "a" }}
+        claimBoard={later}
+        request={{ label: "T6", columnId: "a", roundId: "r1" }}
         onAssign={onAssign}
         onTransfer={vi.fn()}
         onNotice={onNotice}
@@ -404,6 +435,153 @@ describe("shared occupied-table dialog (X2)", () => {
     expect(onNotice).toHaveBeenCalledWith("T6 is already assigned to Ann.");
     expect(onAssign).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Transfer/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "End Previous + Assign" }),
+    ).toBeNull();
+  });
+
+  it("the same server on a LATER turn: End Previous + Assign / Cancel, no Transfer", async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    const onNotice = vi.fn();
+    render(
+      <Harness
+        claimBoard={boardHolding("T6")}
+        request={{ label: "T6", columnId: "a", roundId: "r2" }}
+        onAssign={onAssign}
+        onTransfer={vi.fn()}
+        onNotice={onNotice}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "go" }));
+    expect(onNotice).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        "T6 is already assigned to Ann. End Ann's previous T6 assignment and assign T6 to Ann for this turn?",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Transfer/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "End Previous + Assign" }),
+    );
+    expect(onAssign).toHaveBeenCalledTimes(1);
+    expect(onAssign).toHaveBeenCalledWith({
+      label: "T6",
+      columnId: "a",
+      roundId: "r2",
+      confirmTransfer: false,
+      endWholeAssignment: false,
+      endPrevious: true,
+    });
+  });
+
+  it("the repeat dialog's Cancel makes no assignment", async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    const onTransfer = vi.fn();
+    render(
+      <Harness
+        claimBoard={boardHolding("T6")}
+        request={{ label: "T6", columnId: "a", roundId: "r2" }}
+        onAssign={onAssign}
+        onTransfer={onTransfer}
+        onNotice={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "go" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onAssign).not.toHaveBeenCalled();
+    expect(onTransfer).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "End Previous + Assign" }),
+    ).toBeNull();
+  });
+
+  it("a combined previous assignment is named as a whole in the repeat dialog", async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        claimBoard={boardHolding("T6 + T7")}
+        request={{ label: "T6", columnId: "a", roundId: "r2" }}
+        onAssign={vi.fn()}
+        onTransfer={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "go" }));
+    expect(screen.getByText(/combined assignment T6 \+ T7/)).toBeVisible();
+    expect(
+      screen.getByText(
+        /ends the entire T6 \+ T7 assignment \(T7 will be released too\)/,
+      ),
+    ).toBeVisible();
+  });
+
+  it("a database-reported same_server_repeat (stale client) opens the same dialog", async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    render(
+      <Harness
+        claimBoard={{ columns, rounds: [], nextRoundNumber: 1 }}
+        request={{ label: "T6", columnId: "a", roundId: "r2" }}
+        serverConflict={{
+          kind: "same_server_repeat",
+          label: "T6",
+          holders: [{ columnId: "a", roundId: "7", assignmentLabel: "T6" }],
+        }}
+        onAssign={onAssign}
+        onTransfer={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "stale" }));
+    await user.click(
+      screen.getByRole("button", { name: "End Previous + Assign" }),
+    );
+    expect(onAssign).toHaveBeenCalledWith(
+      expect.objectContaining({ endPrevious: true, roundId: "r2" }),
+    );
+  });
+
+  it("a confirmed repeat that the database still holds for ANOTHER server keeps ending the previous one (no Transfer)", async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    render(
+      <Harness
+        claimBoard={boardHolding("T6")}
+        request={{
+          label: "T6 + T8",
+          columnId: "a",
+          roundId: "r2",
+          endPrevious: true,
+        }}
+        serverConflict={{
+          kind: "held",
+          label: "T6 + T8",
+          holders: [
+            { columnId: "b", roundId: "9", assignmentLabel: "T6 + T8" },
+          ],
+        }}
+        onAssign={onAssign}
+        onTransfer={vi.fn()}
+        onNotice={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "stale" }));
+    expect(screen.queryByRole("button", { name: /^Transfer/ })).toBeNull();
+    await user.click(
+      screen.getByRole("button", {
+        name: "End the entire T6 + T8 assignment, then assign T6 + T8 to Ann",
+      }),
+    );
+    expect(onAssign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmTransfer: true,
+        endWholeAssignment: true,
+        endPrevious: true,
+      }),
+    );
   });
 
   it("a free table is not intercepted", async () => {
