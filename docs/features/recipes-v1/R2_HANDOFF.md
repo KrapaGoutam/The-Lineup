@@ -1,7 +1,7 @@
 # Recipes V1 R-2 handoff
 
 - R2-A: COMPLETE.
-- R2-B: COMPLETE. R2-C: NEXT / NOT STARTED. All R2-D+, R2g and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
+- R2-B: COMPLETE. R2-C: COMPLETE. R2-D: NEXT / NOT STARTED. All later slices and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
 - Branch: feature/recipes-v1-r2-management. Base development: 8f358a422c91275319c9f4479891a54a4cbb21c3. Starting HEAD: cb1fd09823e12c54a2befb8a80e674ec7a122ab5.
 - Canonical migration: 20261028193159_bar_recipes_management_and_images.sql, CLI-created after inspecting migration-new help. Repository migrations: 56. Scratch draft removed after promotion; there is one canonical implementation.
 - Local-GO implementation commit: 4a4c551. Final validated implementation/test SHA: b05569c70426c6974054b620d99b0b7db3bec598. The final branch SHA is the completion documentation commit containing this handoff, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-A handoff'`; final response records it explicitly. Same feature branch, no rebase/reset/merge.
@@ -87,3 +87,42 @@ Every run uses unique synthetic recipe/category names, collision-checks its rese
 ### Next
 
 R2-A COMPLETE. R2-B COMPLETE. Next: **R2-C — Copy Perfect → House + Archive/Restore + Category Management**, NEW session, Codex LOCAL, GPT-6.1 Terra / Medium, Auto-Review, same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R2-D, open the R-2 PR, merge development, touch main or touch PROD. STOP.
+
+## R2-C COMPLETE (2026-10-28)
+
+R2-A COMPLETE. R2-B COMPLETE. R2-C COMPLETE. Starting committed HEAD: `054bfecc7eca325184fdc1e6c4127730d8cf7f21`. The pre-existing uncommitted Copy helper, both original tests and task notes were preserved. Implementation/test commit: `9b6d461c67b7a500fff958c69c221018f2d89d7b`. Final HEAD is the completion-documentation commit containing this section, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-C handoff'`; the final report records its exact SHA. Same feature branch; no reset, clean, stash, rebase, force push or merge.
+
+### Implemented contract
+
+- Copy uses current local Perfect values, including unsaved edits, through the preserved helper. All scalar fields and ingredient/step/garnish rows copy with independent objects/arrays and fresh client keys. Empty Perfect disables Copy. Empty/absent House receives confirmation; populated House receives Replace House / Cancel with the locked overwrite warning. Cancel preserves House. Copy never calls Save and always marks the editor dirty, including an identical replacement. It focuses the House options heading directly before House and announces through `aria-live="polite"`. Normal Save persists House. Add House and confirmed meaningful-House removal are implemented; removal serializes `house: null` and waits for Save.
+- The server-only management data layer calls existing archive/category RPCs with the caller client and maps `22023`, `23505`, `PT409`, `42501`, malformed responses and network/unknown failure to safe typed results. Management actions validate input, require a live session, resolve the organization from server membership and reject Staff before management queries/RPCs. No service-role client in application management paths; no new migration.
+- Active detail/Edit offer confirmed Archive with “Hidden from staff. You can restore it later.” Dirty Edit disables Archive with “Save or discard your changes first”. Success refetches canonical status/version. Archived detail and archived Edit URLs render a management-readable banner and Restore, with no editable form or Save. Restore loads canonical categories and requires an explicit active category when the current category is inactive. Stale Archive/Restore never retries; Reload latest is explicit.
+- Management index reads RLS-visible active and archived rows. Show archived defaults off and filters client-side; enabled rows are dimmed with an Archived badge, including search. Staff has no management controls and retains an explicit active filter plus unchanged RLS. Archived recipes can be grouped under inactive categories.
+- Manage Categories is available from index/editor using the shared Dialog. Add/rename validate 1–80 characters; slugs are never editable. Up/down reorder sends only normal category IDs as required by R2-A; fallback stays last. Active switches deactivate/reactivate. Fallback rename is allowed; move/deactivate are disabled by `is_fallback`, never a literal name. Active-recipe deactivation errors are visible. No delete or drag/drop. Success reloads canonical rows/versions; stale actions preserve local names until explicit Reload latest. Dirty close/Escape asks Discard changes / Keep editing. Focus returns to Manage Categories. Saving one name preserves other pending names, including demo.
+- Demo uses in-memory copy/archive/restore/category behavior, including active-recipe category protection, and never invokes live mutations. The shared Dialog close button now has `type="button"`, preventing confirmation close from submitting the editor form. Keyboard, native focus trap/restoration, Escape and touch behavior are retained. No dependency or animation added.
+
+### Validation evidence
+
+- Original helper tests rerun first: **2/2 PASS**. Expanded copy domain: **11 PASS**, covering all scalar fields/rows, fresh keys, independence, unsaved values and serialization. Final focused Recipes: **14 files / 113 tests PASS** (20 domain, 56 action/data, 37 component tests). New management action/data coverage: 31 tests. Components cover overwrite Cancel/Replace, empty guard, no auto-save, dirty/focus/live announcement, independence, House removal, identical-copy dirty state, archive/stale/category flows and archived Edit read-only state.
+- Final `npm run check`: PASS (format, lint, generated routes, TypeScript). Final full Vitest: **138 files / 1,806 tests PASS**. Broad testing was repeated only when final changes/regressions justified it; this is the final count.
+- Complete Recipes Playwright matrix: **30/30 PASS** across desktop Chromium, real WebKit host-tablet and server-mobile. Final targeted R2-C matrix after narrow editor/demo corrections: **6/6 PASS**. Copy/overwrite, dirty Archive, archived read-only, Show archived, Restore, category add/rename/reorder/toggle/fallback, dirty close and focus restoration pass. Responsive no-overflow assertion passes; mobile screenshot inspected. Initial new-test selector mismatches were fixed. Task-owned Windows Next processes were stopped after assertions so teardown completed successfully.
+- Final DEV-pinned production build: PASS. Final production build with explicitly empty public Supabase URL/publishable/anon values: PASS (static root). Both outputs scanned: **0 PROD references; 0 exact DEV secret/service-role values**. DEV build recreated last. No env change, deployment, screenshot, log or generated build artifact committed.
+- Repository migrations **56**, DEV **56**, full version/name comparison **0 mismatches**, latest `20261028193159_bar_recipes_management_and_images`. No R2-C migration or migration application. Existing SQL/RLS/Storage policies unchanged; no full local database replay was needed for this UI/RPC-caller slice.
+
+### Hosted DEV and cleanup
+
+`PLAYWRIGHT_BASE_URL=http://localhost:3002 npm run test:real:ui -- tests/real/ui/recipes-management.real.spec.ts` against the DEV-pinned production build: **1/1 comprehensive flow PASS**, final run 55.8 seconds (about one minute including setup/teardown). Its guard independently refuses a PROD/non-DEV server. Synthetic manager and Staff use the real application passcode flow; no Recipes authorization mocks.
+
+The flow changes Perfect without saving, copies into existing House, saves, reloads and verifies persisted House. It adds/renames/reorders/deactivates/reactivates a synthetic category, verifies fallback move/deactivate protections, renames the synthetic fallback and surfaces DB rejection of active-recipe category deactivation. A second manager window submits a stale category rename: real `PT409`, retained local name, no retry and explicit canonical reload all pass. Manager archives; Staff direct detail becomes Recipe not found; management Show archived reveals the row/badge. The original category is deactivated while its recipe is archived. Restore requires an explicit active category, then Staff reads the recipe again. Canonical active status, version 4 (copy save → archive → restore) and copied House method are checked in DEV.
+
+Captured archive and category Server Action requests replayed with **Staff's own session** both return permission denial. Staff has no management entry or Show archived. This independently verifies server authorization beyond hidden controls.
+
+Existing real-JWT regression `npm run test:real -- tests/real/recipes-management.db.real.test.ts`: **7/7 PASS**, including management writes, stale/invalid graph rollback, Staff/inactive/foreign/direct-write denial, category/fallback constraints, archive attribution/Staff visibility and existing private Storage rules. No image UI was implemented.
+
+Every attempted hosted run completed synthetic cleanup, including initial selector-only failures. Final browser teardown reports zero recipes, variants, ingredients, steps, garnishes and temporary categories. Independent connector SQL after the final run confirms **all six Recipes tables = 0**, `recipe-images` object metadata **0**, migrations **56**. The RPC suite also reports zero synthetic objects/orphans and graph rows. Existing organizations, V2 Harness data, bucket and Storage policies were retained. No real Monks recipes imported or edited.
+
+### Safety and next
+
+Development/main unchanged. PROD untouched; no PROD migration. No DEV migration applied in R2-C. Images, Picture Book, later filters/sort/preferences, R2-D and subsequent slices NOT STARTED. R-2 PR NOT OPENED. Part 2 NOT STARTED.
+
+**Next: R2-D — Recipe Images + Storage Integration.** Codex, LOCAL, GPT-6.1 Sol / Medium, NEW session, Auto-Review, same `feature/recipes-v1-r2-management` branch, starting from this handoff. Do not start R2-E, open the R-2 PR, merge development, touch main or touch PROD. STOP.

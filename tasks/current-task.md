@@ -1,11 +1,10 @@
-﻿# Current task: Recipes V1 R2-C IN PROGRESS
+# Current task: Recipes V1 R2-C COMPLETE; R2-D NEXT
 
-- [x] Fetch and verify requested branch and starting HEAD; read R2 handoff and locked scope.
-- [x] Add independently tested variant copy and meaningful-content helpers (2 focused tests pass).
-- [x] Connect copy and House management UI; implement archive/restore, archived list, and category management.
-- [x] Run focused and full checks, browser coverage, builds, and hosted DEV validation; clean synthetic data.
-- [ ] Review, update handoff, commit and push. R2-D remains unstarted.
+- [x] Preserve original Copy helper/tests and verify branch/starting HEAD.
+- [x] Complete copy/House, archive/restore, archived index and category workflows.
+- [x] Verify check; focused 113; full Vitest 1,806; browser 30/30 + final 6/6; hosted browser 1/1 and RPC 7/7.
+- [x] Verify both builds/scans, migration parity 56/56 and independent zero synthetic residue.
+- [x] Review and commit implementation 9b6d461; complete R2_HANDOFF documentation.
+- [x] Commit/push completion documentation and verify clean/local=remote as the final session step.
 
-Data: existing R2-A RPCs only, no migration. Authorization: management membership and caller session; staff reads remain RLS-scoped. UI: confirmation, dirty, stale, archived read-only and error states. Risks: concurrent edits, data loss, tenant isolation, focus and demo safety. Tests: domain, action, component, browser and hosted role-boundary coverage.
-
-In-flight: implementation and review complete. Focused Recipes 14 files / 113 tests; full Vitest 138 files / 1,806 tests; full Recipes browser matrix 30/30 and final targeted R2-C 6/6; hosted browser 1/1; hosted RPC regression 7/7. Check, both final builds and zero-PROD/secret scans pass. Independent DEV cleanup is zero across all six tables and Storage; migration version/name parity 56/56 with zero mismatches. Handoff and commit/push pending.
+Detailed evidence: docs/features/recipes-v1/R2_HANDOFF.md. Final HEAD resolves through the docs(recipes): complete R2-C handoff commit. R2-D NEXT / NOT STARTED. No PROD, new migration, main/development merge, real recipe import, R-2 PR or Part 2 work.
