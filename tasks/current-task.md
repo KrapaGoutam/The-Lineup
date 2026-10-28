@@ -172,3 +172,10 @@ git fetch origin && git status -sb && git log --oneline -5 origin/development
 - Do not merge on stale, partial, or red CI.
 - `next dev` rewrites the `AGENTS.md` heading; never commit that change (`git checkout AGENTS.md`).
 - Recipes V1: R-0 is documentation only. Do not start R-1 or R-2 in the R-0 session; no Recipes application code, migration, Storage bucket or seed data. Part 2 stays ON HOLD.
+
+## R1-B active checklist
+
+- [x] Fetch and verify clean starting branch and matching remote at d47bcbe; read R1-A handoff.
+- [ ] Integrate Recipes navigation and organization-scoped list read; preserve default and route behavior.
+- [ ] Verify focused unit/browser/navigation tests, check and both builds.
+- [ ] Review, update handoff, commit and push R1-B; R1-C remains next.

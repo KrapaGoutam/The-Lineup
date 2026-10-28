@@ -1,12 +1,12 @@
-# Recipes V1 — R-1 Handoff
+﻿# Recipes V1 — R-1 Handoff
 
 ## State
 
 Phase: R-1
-Status: R1-A COMPLETE; R1-B NOT STARTED
+Status: R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED
 Branch: feature/recipes-v1-r1-core
 Base development SHA: c3e44536c8dc39023eac81b1d5795ce7e145b9a9
-Current HEAD: c63b70e (implementation checkpoint; check git for later commits)
+Starting R1-B HEAD: d47bcbe7f0b3a09a07ca3f00150be2c4474ca885 (check git for current HEAD)
 Main: UNCHANGED
 DEV DB touched: YES (Recipes migration and rolled-back synthetic tests)
 PROD touched: NO
@@ -14,7 +14,7 @@ R-2 started: NO
 
 ## Current Milestone
 
-R1-A COMPLETE — R1-B is next, in a new session.
+R1-A COMPLETE; R1-B IN PROGRESS; R1-C NOT STARTED.
 
 ## Completed
 
@@ -26,11 +26,11 @@ R1-A COMPLETE — R1-B is next, in a new session.
 
 ## In Progress
 
-- None for R1-A. See Exact Next Action for R1-B.
+- R1-B landing, search and navigation implemented; validation and review in progress.
 
 ## Not Started
 
-- R1-B navigation, read layer and List View; R1-C detail/search; R1-D final R-1 gate, PR and merge; R-2.
+- R1-C detail; R1-D final R-1 gate, PR and merge; R-2.
 
 ## Locked Decisions
 
@@ -86,3 +86,30 @@ PROD touched: NO
 PROD migrations: NO
 R-2 started: NO
 Part 2 started: NO
+
+## R1-B execution checkpoint
+
+- Current milestone: R1-B IN PROGRESS; R1-A COMPLETE; R1-C NOT STARTED.
+- Starting HEAD: `d47bcbe7f0b3a09a07ca3f00150be2c4474ca885`; fetched feature branch matched and working tree clean.
+- DEV schema already at 55 migrations; PROD untouched. No database change planned.
+- Expected files: canonical app-tab/navigation and tests, `src/features/recipes/` read model and list components, focused browser tests, this handoff and `tasks/current-task.md`.
+- Data/security: read organization-scoped categories and active recipe summaries through existing server identity and RLS; no detail graph or elevated client. Staff and management share read access.
+- UI states: grouped list, empty, loading and read error; desktop, tablet, mobile More. Baseline search is included under R1.5; detail remains R1-C.
+- Risks/tests: preserve default Tasks, route and history; verify category/fallback and recipe-number ordering, roles, isolation, focused browser/navigation regressions, check and both builds.
+- Exact first task: inspect canonical app-tab/navigation and existing server read patterns, then add the Recipes tab and compact read layer.
+
+### R1-B working checkpoint
+
+- Navigation wired in `src/lib/app-tab.ts` and `src/components/restaurant-operations-app.tsx`; Recipes appears after Bar Inventory and in More, with no role gate.
+- Added `src/features/recipes/{actions,components,domain}`. The server action validates slug, verifies live session and membership, and reads active categories and paged active summaries scoped by organization through RLS. No detail graph or database changes.
+- Grouped List View, empty/loading/error, and search are implemented. Search belongs here because IMPLEMENTATION_PLAN R1.5 explicitly assigns it; detail remains R1-C.
+- Focused domain and app-tab Vitest: 13/13 passed. TypeScript passed before latest changes.
+- Remaining: focused browser coverage and navigation regressions; component/read security tests; check, normal and empty-env builds; review, handoff, commit and push. Exact next action: add and run Recipes browser tests.
+
+### R1-B verification checkpoint
+
+- Focused Vitest: 19/19 (domain, component, action and canonical tab tests). Full Vitest before the final component/test additions: 126 files, 1699 assertions passed.
+- Recipes browser tests: all 9 cases reported passed across desktop, host-tablet and server-mobile; the Windows Playwright process remained in web-server teardown and was interrupted after the nine pass lines. Earlier combined default-landing and Recipes run: all 33 default-landing cases and 5/6 Recipes cases passed; tablet history case failed before the test waited for the destination heading, and passed on both subsequent tablet runs.
+- `npm run check` passed; normal and empty-public-Supabase-env builds passed after the loading skeleton change.
+- No R1-B migration or hosted data changes. R1-A's existing DEV RLS evidence remains valid; this session's server-action authorization checks are mocked. Browser coverage uses synthetic demo data; empty/error/loading are component-tested, not browser-tested. Actual R1-B authenticated read and browser empty state remain unverified.
+- Exact next action: verify authenticated real-mode landing read and empty browser state using a safe local or DEV test harness, finish any needed corrections, rerun affected gates, then review and finalize R1-B. Do not start R1-C or open a PR.

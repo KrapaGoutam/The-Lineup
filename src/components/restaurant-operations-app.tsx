@@ -12,6 +12,7 @@ import {
   ListChecks,
   LogOut,
   Menu,
+  Martini,
   Settings2,
   SlidersHorizontal,
   Store,
@@ -61,6 +62,7 @@ import {
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
 import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
+import { RecipesModule } from "@/features/recipes/components/recipes-module";
 import { InventoryModule } from "@/features/bar-inventory/components/inventory-module";
 import { emptyCatalogState } from "@/features/bar-inventory/domain/catalog-engine";
 import { buildDemoCatalog } from "@/features/bar-inventory/domain/demo-catalog";
@@ -169,6 +171,7 @@ const barInventoryTab = {
   label: "Bar Inventory",
   icon: Wine,
 };
+const recipesTab = { id: "recipes" as const, label: "Recipes", icon: Martini };
 // Feature 020 Phase 2: manager/owner-only, real mode only -- gated exactly
 // like Team was before Feature 019, plus !demoMode, since this phase has
 // no demo-mode data source built for it yet (deliberately deferred, see
@@ -959,6 +962,7 @@ function RestaurantOperationsAppInner({
     ...(isManager ? [teamTab] : []),
     attendanceTab,
     ...(isManager ? [barInventoryTab] : []),
+    recipesTab,
     tipsTab,
     ...(!demoMode ? [payrollTab] : []),
   ];
@@ -2194,6 +2198,13 @@ function RestaurantOperationsAppInner({
             demo={
               demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null
             }
+          />
+        ) : null}
+        {tab === "recipes" ? (
+          <RecipesModule
+            restaurantSlug={restaurantSlug}
+            demo={demoMode}
+            onSessionInvalid={forceSignOut}
           />
         ) : null}
         {tab === "tips" ? (
