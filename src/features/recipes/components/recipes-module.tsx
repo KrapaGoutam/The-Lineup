@@ -2,6 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { RecipeDetailView } from "./recipe-detail";
+import { RecipeEditorScreen } from "./recipe-editor-screen";
+import { demoRecipeFromState } from "../domain/demo-recipes";
+import type { EditorRecipe } from "../domain/recipe-editor-state";
+import type { SaveResult } from "../domain/recipe-validation";
 import type { RecipeDetail, DetailVariant } from "../domain/recipe-detail";
 import { TableSkeleton } from "@/features/bar-inventory/components/table-kit/empty-state";
 import { Input } from "@/components/ui/input";
@@ -84,14 +88,31 @@ export function RecipesModule({
   restaurantSlug,
   demo,
   onSessionInvalid,
+  isManagement = false,
 }: {
   restaurantSlug: string;
   demo: boolean;
   onSessionInvalid: () => void;
+  isManagement?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const slug = searchParams.get("recipe")?.trim() || null;
+  const requestedSlug = searchParams.get("recipe")?.trim() || null;
+  const requestedMode = searchParams.get("mode");
+  const [editorLock, setEditorLock] = useState<{
+    mode: string | null;
+    slug: string | null;
+    href: string;
+  } | null>(null);
+  // Keep the mounted editor (and all input) until an in-module exit is confirmed.
+  const slug = editorLock ? editorLock.slug : requestedSlug;
+  const mode = editorLock ? editorLock.mode : requestedMode;
+  const editing =
+    isManagement && (mode === "new" || (mode === "edit" && !!slug));
+  const [demoRecords, setDemoRecords] = useState<Record<string, EditorRecipe>>(
+    {},
+  );
+  const [saved, setSaved] = useState(false);
   const [detail, setDetail] = useState<{
     slug: string;
     data?: RecipeDetail | null;
@@ -129,7 +150,7 @@ export function RecipesModule({
     if (!slug) return;
     let live = true;
     if (demo) {
-      const recipe = demoIndex.recipes.find((r) => r.slug === slug);
+      const recipe = state.data?.recipes.find((r) => r.slug === slug);
       const variant = (kind: string): DetailVariant => ({
         id: kind,
         variant: kind,
@@ -163,20 +184,22 @@ export function RecipesModule({
           },
         ],
       });
-      const data: RecipeDetail | null = recipe
-        ? {
-            ...recipe,
-            category:
-              demoIndex.categories.find((c) => c.id === recipe.category_id)
-                ?.name ?? "",
-            description: null,
-            is_menu_item: false,
-            variants:
-              recipe.id === "r1"
-                ? [variant("perfect"), variant("house")]
-                : [variant("perfect")],
-          }
-        : null;
+      const data: RecipeDetail | null =
+        demoRecords[slug] ??
+        (recipe
+          ? {
+              ...recipe,
+              category:
+                demoIndex.categories.find((c) => c.id === recipe.category_id)
+                  ?.name ?? "",
+              description: null,
+              is_menu_item: false,
+              variants:
+                recipe.id === "r1"
+                  ? [variant("perfect"), variant("house")]
+                  : [variant("perfect")],
+            }
+          : null);
       Promise.resolve().then(() => {
         if (live) setDetail({ slug, data });
       });
@@ -195,7 +218,7 @@ export function RecipesModule({
     return () => {
       live = false;
     };
-  }, [slug, restaurantSlug, demo, attempt]);
+  }, [slug, restaurantSlug, demo, attempt, demoRecords, state.data]);
   useEffect(() => {
     if (slug || !state.data || !lastOpened.current) return;
     const last = lastOpened.current;
@@ -250,6 +273,155 @@ export function RecipesModule({
     }
     window.history.pushState(null, "", hrefFor(next));
   }
+  function openEditor(next: "new" | "edit") {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "recipes");
+    params.set("mode", next);
+    if (next === "new") params.delete("recipe");
+    setSaved(false);
+    window.history.pushState(null, "", pathname + "?" + params.toString());
+  }
+  if (editing) {
+    const index = state.data ?? demoIndex;
+    const existing =
+      slug && mode === "edit"
+        ? (demoRecords[slug] ??
+          (detail?.slug === slug && detail.data
+            ? {
+                ...detail.data,
+                category_id:
+                  index.recipes.find((r) => r.slug === slug)?.category_id ??
+                  "c2",
+                alternate_name:
+                  index.recipes.find((r) => r.slug === slug)?.alternate_name ??
+                  null,
+                is_alcoholic: true,
+                version: 1,
+              }
+            : null))
+        : null;
+    if (demo && mode === "edit" && !existing) {
+      if (detail?.slug === slug && detail.data === null)
+        return <p>Recipe not found</p>;
+      return <TableSkeleton />;
+    }
+    return (
+      <RecipeEditorScreen
+        key={`${mode}-${slug}`}
+        restaurantSlug={restaurantSlug}
+        slug={mode === "edit" ? slug : null}
+        demo={demo}
+        demoLoad={{
+          categories: index.categories.map((c) => ({ ...c, is_active: true })),
+          nextNumber:
+            Math.max(0, ...index.recipes.map((r) => r.recipe_number)) + 1,
+          recipe: existing,
+        }}
+        demoSave={async (payload, id, version): Promise<SaveResult> => {
+          const duplicate = index.recipes.find(
+            (r) => r.recipe_number === payload.recipe_number && r.id !== id,
+          );
+          if (duplicate)
+            return {
+              ok: false,
+              kind: "duplicate",
+              field: "recipe_number",
+              error: `This recipe number is already used by ${duplicate.recipe_number} ${duplicate.name}.`,
+            };
+          const recipeId = id ?? crypto.randomUUID();
+          let nextSlug =
+            existing?.slug ??
+            (payload.name
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, "") ||
+              `recipe-${payload.recipe_number}`);
+          if (!id) {
+            const base =
+              nextSlug === "new" || nextSlug === "edit"
+                ? `recipe-${payload.recipe_number}`
+                : nextSlug;
+            nextSlug = base;
+            for (
+              let suffix = 2;
+              index.recipes.some((r) => r.slug === nextSlug);
+              suffix++
+            )
+              nextSlug = `${base}-${suffix}`;
+          }
+          return {
+            ok: true,
+            data: {
+              id: recipeId,
+              slug: nextSlug,
+              version: (version ?? 0) + 1,
+              recipe_number: payload.recipe_number,
+            },
+          };
+        }}
+        onExit={() => {
+          setEditorLock(null);
+          window.history.pushState(
+            null,
+            "",
+            hrefFor(mode === "edit" ? slug : null),
+          );
+        }}
+        onDirtyChange={(dirty) =>
+          setEditorLock((previous) =>
+            dirty
+              ? (previous ?? { mode, slug, href: window.location.href })
+              : null,
+          )
+        }
+        navigationTarget={
+          editorLock &&
+          (requestedMode !== editorLock.mode ||
+            requestedSlug !== editorLock.slug)
+            ? pathname + "?" + searchParams.toString()
+            : null
+        }
+        onKeepNavigation={() => {
+          if (editorLock) window.history.pushState(null, "", editorLock.href);
+        }}
+        onLeaveNavigation={(target) => {
+          setEditorLock(null);
+          window.history.replaceState(null, "", target);
+        }}
+        onSaved={(result, editorState) => {
+          setEditorLock(null);
+          if (demo) {
+            const recipe = demoRecipeFromState(
+              editorState,
+              result.id,
+              result.slug,
+              result.version,
+              index.categories.find((c) => c.id === editorState.category_id)
+                ?.name ?? "",
+            );
+            setDemoRecords((records) => ({
+              ...records,
+              [result.slug]: recipe,
+            }));
+            setState({
+              data: {
+                ...index,
+                recipes: [
+                  ...index.recipes.filter((r) => r.id !== result.id),
+                  { ...recipe, category_id: editorState.category_id },
+                ],
+              },
+            });
+          }
+          setSaved(true);
+          setDetail(null);
+          setAttempt((a) => a + 1);
+          window.history.pushState(null, "", hrefFor(result.slug));
+        }}
+        onSessionInvalid={onSessionInvalid}
+      />
+    );
+  }
   if (slug) {
     const current = detail?.slug === slug ? detail : null;
     if (!current)
@@ -288,18 +460,35 @@ export function RecipesModule({
         </section>
       );
     return (
-      <RecipeDetailView
-        key={slug}
-        recipe={current.data}
-        backHref={hrefFor(null)}
-        onBack={(e) => navigate(e, null)}
-      />
+      <div className="flex flex-col gap-4">
+        {saved ? <p role="status">Recipe saved</p> : null}
+        {isManagement ? (
+          <Button
+            variant="outline"
+            className="self-end"
+            onClick={() => openEditor("edit")}
+          >
+            Edit Recipe
+          </Button>
+        ) : null}
+        <RecipeDetailView
+          key={slug}
+          recipe={current.data}
+          backHref={hrefFor(null)}
+          onBack={(e) => navigate(e, null)}
+        />
+      </div>
     );
   }
   const results = state.data && query.trim() ? search(state.data, query) : null;
   return (
     <section className="flex flex-col gap-6 pb-24">
       <h1 className="text-2xl font-semibold">Bar Recipes</h1>
+      {isManagement ? (
+        <Button className="self-start" onClick={() => openEditor("new")}>
+          Add Recipe
+        </Button>
+      ) : null}
       {!state.data && !state.error ? (
         <TableSkeleton />
       ) : state.error ? (

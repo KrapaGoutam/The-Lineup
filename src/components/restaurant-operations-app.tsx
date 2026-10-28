@@ -2217,6 +2217,7 @@ function RestaurantOperationsAppInner({
           <RecipesModule
             restaurantSlug={restaurantSlug}
             demo={demoMode}
+            isManagement={currentUser.designation !== "staff"}
             onSessionInvalid={forceSignOut}
           />
         ) : null}
