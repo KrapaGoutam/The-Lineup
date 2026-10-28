@@ -227,10 +227,11 @@ async function inventoryState() {
   const stock = await fx.admin
     .from("inventory_stock")
     .select(
-      "product_id, on_hand, backup, total, version, last_adjusted_at, updated_at",
+      "product_id, location_id, on_hand, backup, total, version, last_adjusted_at, updated_at",
     )
     .eq("organization_id", org)
-    .order("product_id");
+    .order("product_id")
+    .order("location_id");
   const ledger = await fx.admin
     .from("inventory_adjustments")
     .select("id")
@@ -252,6 +253,30 @@ async function inventoryState() {
     changeLogCount: changeLog.count,
     products: products.data,
   };
+}
+
+type StockRows = Record<string, unknown>[] | null;
+/** Readable differences between two stock snapshots (empty when identical). */
+function stockDiff(after: StockRows, before: StockRows): string[] {
+  const byId = (rows: StockRows) =>
+    new Map((rows ?? []).map((r) => [`${r.product_id}@${r.location_id}`, r]));
+  const a = byId(after);
+  const b = byId(before);
+  const out: string[] = [];
+  for (const id of new Set([...a.keys(), ...b.keys()])) {
+    const x = a.get(id);
+    const y = b.get(id);
+    if (!x || !y) {
+      out.push(`${id}: ${x ? "appeared" : "disappeared"}`);
+      continue;
+    }
+    for (const key of Object.keys(y)) {
+      if (JSON.stringify(x[key]) !== JSON.stringify(y[key])) {
+        out.push(`${id}.${key}: ${String(y[key])} -> ${String(x[key])}`);
+      }
+    }
+  }
+  return out;
 }
 
 // Main-flow catalog.
@@ -1205,7 +1230,7 @@ describe("Mark Sent: no inventory mutation, immutability, retry, new draft, froz
 
     const after = await inventoryState();
     // On Hand / Backup / Total / stock versions / last-adjusted all identical.
-    expect(after.stock).toEqual(before.stock);
+    expect(stockDiff(after.stock, before.stock)).toEqual([]);
     expect(after.ledgerCount).toBe(before.ledgerCount);
     expect(after.ledgerMaxId).toBe(before.ledgerMaxId);
     expect(after.changeLogCount).toBe(before.changeLogCount);
@@ -1299,7 +1324,7 @@ describe("Mark Sent: no inventory mutation, immutability, retry, new draft, froz
       .eq("vendor_id", vMain)
       .eq("status", "sent");
     expect(sentCount.count).toBe(1);
-    expect((await inventoryState()).stock).toEqual(before.stock);
+    expect(stockDiff((await inventoryState()).stock, before.stock)).toEqual([]);
   });
 
   it("catalog changes after sending leave the Sent order untouched (frozen labels)", async () => {
@@ -1457,10 +1482,19 @@ describe("real data layer: active drafts, draft by id, Sent history + paging (VO
       sent_at: new Date(start + i * 60_000).toISOString(),
     }));
     for (let at = 0; at < rows.length; at += 250) {
-      const ins = await fx.admin
-        .from("inventory_order_drafts")
-        .insert(rows.slice(at, at + 250));
-      expect(ins.error).toBeNull();
+      // Arrangement only: retry a transport hiccup, but never hide a database
+      // error (a retried insert that partly landed would show up in the count).
+      let message: string | null = "not run";
+      for (let attempt = 0; attempt < 3 && message !== null; attempt++) {
+        const ins = await fx.admin
+          .from("inventory_order_drafts")
+          .insert(rows.slice(at, at + 250));
+        message = ins.error
+          ? `${ins.error.code ?? ""} ${ins.error.message}`.trim()
+          : null;
+        if (message && ins.error?.code) break; // a real database error
+      }
+      expect(message).toBeNull();
     }
     const truth = await fx.admin
       .from("inventory_order_drafts")

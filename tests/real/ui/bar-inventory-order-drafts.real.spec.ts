@@ -100,22 +100,6 @@ async function reloadToDrafts(page: Page) {
   });
 }
 
-async function openDraftFromDashboard(page: Page) {
-  await openBarInventory(page);
-  await expect(group(page)).toBeVisible({ timeout: 30_000 });
-  const create = group(page).getByRole("button", {
-    name: "Create Order Draft",
-  });
-  const existing = group(page).getByRole("button", {
-    name: "Open Order Draft",
-  });
-  if (await create.isVisible()) await create.click();
-  else await existing.click();
-  await expect(page.getByTestId("order-draft-editor")).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
 /** The real system clipboard; Windows stores a newline as CRLF, so normalise. */
 const readClipboard = (page: Page) =>
   page.evaluate(async () =>
