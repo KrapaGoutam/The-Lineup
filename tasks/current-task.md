@@ -15,7 +15,7 @@ Local Windows PC (Claude Sonnet 5.5). No database, no hosted DEV, no migration. 
 ## Branch / base
 
 - Branch: `feature/tasks-v1-1-default-landing` (parked commit `03d5d45` preserved; `origin/development` @ `66d8fc6` merged in, no conflicts)
-- PR / tested SHA / merge SHA: recorded in the post-merge sync PR (see Phase ledger)
+- PR #203 · tested head `1e3e4b1bbdddadbd72a3fbcb579a9f56765bb26e` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Vercel green) · merge commit `cf3ae3945cebda981e503eea5f6b91e5a1a720bd` (two parents) · `development` HEAD after merge `cf3ae39`
 - Issue: #169 · Project #4
 
 ## Phase ledger
@@ -23,7 +23,7 @@ Local Windows PC (Claude Sonnet 5.5). No database, no hosted DEV, no migration. 
 ```text
 Vendor Order Drafts V1 COMPLETE (VOD-0..VOD-4, #190 closed)
 Tasks T-0 plan COMPLETE (#189)
-Tasks T-1 COMPLETE (feature/tasks-v1-1-default-landing; PR + merge SHA in sync PR)
+Tasks T-1 COMPLETE (PR #203, tested 1e3e4b1, merge cf3ae39)
 Tasks T-2 NEXT / NOT STARTED · T-3..T-6 NOT STARTED
 Part 2 (multi-org / multi-location / attendance) ON HOLD
 Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
@@ -41,7 +41,7 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
 - [x] Parked T-1 classified (still required / safe to preserve), `origin/development` merged in, no conflicts
 - [x] URL/UI mismatch, popstate race and test gaps closed
 - [x] Local gates green (check, Vitest, build, targeted Playwright x3 projects)
-- [ ] PR -> `development`, exact-head CI, merge commit (see Phase ledger / sync PR)
+- [x] PR #203 -> `development`: first head `2f2299b` failed CI (`useSearchParams` needs Suspense when `/` is static; invisible locally); fixed in `1e3e4b1`, exact-head CI green, merge commit `cf3ae39`
 - [ ] T-2 in a NEW session: `feature/tasks-v1-1-management-today` from the then-current `origin/development`
 
 ## Exact next command
@@ -58,7 +58,8 @@ git fetch origin && git log --oneline -5 origin/development
 
 ## DO NOT
 
-- Do not start T-2 in this session; do not start Part 2.
+- Before pushing any phase, run `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build` too: CI has no env files, so `/` is prerendered statically there but dynamic with the local `.env.development.local`.
+- Do not start Part 2; T-2 only in a new session.
 - Do not touch `main` or PROD.
 - Do not use `git reset --hard`, `git clean -fd`, force-push, squash merge, or rebase merge.
 - Do not merge on stale, partial, or red CI.
