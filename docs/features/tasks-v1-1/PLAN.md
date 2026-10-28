@@ -1,8 +1,8 @@
 # Tasks V1.1 — Plan
 
-**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 built and validated, PR open (see IMPLEMENTATION*REPORT); T-5..T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
+**Status:** T-0 plan merged; T-1 COMPLETE; T-2 COMPLETE (PR #205, merge `46ea022`); T-3 COMPLETE (PR #207, merge `3a442a6`); T-4 COMPLETE (PR #209, merge `796cff3`); T-5..T-6 not started · **Owner decisions 1–4 LOCKED (2026-10-27)** — see §3 · **Issues:** #169 (management Today view), #154 (notification scope) · **Base:** `development` after Bar Inventory V1 and the next/zod security bump (PR #188) · **Companion:** `TEST_MATRIX.md` · **Handoff:** `tasks/current-task.md`
 **Safety:** `main` and PROD untouched. Migrations go to DEV only. One branch and one PR per phase, merge commits only.
-**Sequencing:** Tasks \_code* (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
+**Sequencing:** Tasks \_code\* (T-1 onward) starts only after Bar Inventory — Vendor Order Drafts V1 is complete (owner order, 2026-10-27). This plan is documentation only.
 
 ## 1. Outcome
 
@@ -81,15 +81,15 @@ Accepted values (kebab-case, URL-facing): `tasks`, `allocation`, `schedule`, `te
 
 ## 4. Phases
 
-| Phase | Branch (from latest `development`)        | Scope                                                                                                                                                                        | Migration |
-| ----- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| T-0   | `docs/tasks-v1-1-plan`                    | This plan, `TEST_MATRIX.md`, handoff, roadmap/status                                                                                                                         | no        |
-| T-1   | `feature/tasks-v1-1-default-landing`      | D-1: default Tasks, `?tab=` addressing, e2e helper updates for the new default **(COMPLETE)**                                                                                | no        |
-| T-2   | `feature/tasks-v1-1-management-today`     | D-2: scope selector, staff names, grouped Today, staff-privacy tests **(COMPLETE; branch name as run)**                                                                      | no        |
-| T-3   | `feature/tasks-v1-1-notification-scope`   | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP **(COMPLETE; migration `20261028090000`)**                                                                            | yes       |
-| T-4   | `feature/tasks-v1-1-opening-reminders`    | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay) **(BUILT; PR open; branch name as run; migrations `20261028100000`, `20261028100100`)** | yes (2)   |
-| T-5   | `feature/tasks-v1-1-opening-reminders-ui` | D-5: shell popup, catch-up, CTA, multi-tab, demo-mode parity, browser tests                                                                                                  | no        |
-| T-6   | `docs/tasks-v1-1-final-gate`              | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment                            | no        |
+| Phase | Branch (from latest `development`)        | Scope                                                                                                                                                                                            | Migration |
+| ----- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| T-0   | `docs/tasks-v1-1-plan`                    | This plan, `TEST_MATRIX.md`, handoff, roadmap/status                                                                                                                                             | no        |
+| T-1   | `feature/tasks-v1-1-default-landing`      | D-1: default Tasks, `?tab=` addressing, e2e helper updates for the new default **(COMPLETE)**                                                                                                    | no        |
+| T-2   | `feature/tasks-v1-1-management-today`     | D-2: scope selector, staff names, grouped Today, staff-privacy tests **(COMPLETE; branch name as run)**                                                                                          | no        |
+| T-3   | `feature/tasks-v1-1-notification-scope`   | D-3: `tasks_notify` gate (+ TS mirror), vectors, pgTAP **(COMPLETE; migration `20261028090000`)**                                                                                                | yes       |
+| T-4   | `feature/tasks-v1-1-opening-reminders`    | D-4: enum value, sweep RPC, snapshot wiring, pgTAP (time zones, DST, dedupe, replay) **(COMPLETE; PR #209, merge `796cff3`; branch name as run; migrations `20261028100000`, `20261028100100`)** | yes (2)   |
+| T-5   | `feature/tasks-v1-1-opening-reminders-ui` | D-5: shell popup, catch-up, CTA, multi-tab, demo-mode parity, browser tests                                                                                                                      | no        |
+| T-6   | `docs/tasks-v1-1-final-gate`              | Hosted DEV validation, full three-project run, review, report, roadmap/status; then development integration gate and release-readiness assessment                                                | no        |
 
 T-3 and T-4 touch the same function family; T-3 merges first and T-4 branches from it. Each phase ends with targeted tests, the phase regression, exact-head CI (local head = PR head = CI-tested SHA), a merge commit and a handoff update.
 
