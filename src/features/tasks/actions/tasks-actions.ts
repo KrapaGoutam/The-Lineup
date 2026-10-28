@@ -3,12 +3,14 @@
 import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { getOpeningReminderPrompt } from "@/features/tasks/data/opening-reminder-prompt-data";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
 import {
   taskCommandSchema,
   type SeriesInput,
   type TaskCommand,
 } from "@/features/tasks/domain/task-commands";
+import type { OpeningReminderPromptData } from "@/features/tasks/domain/opening-reminder-popup";
 import type { TasksSnapshot } from "@/features/tasks/domain/task-types";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -296,4 +298,68 @@ export async function getTasksUnreadCountAction(input: {
     .is("read_at", null);
   if (error) return { ok: false };
   return { ok: true, unread: count ?? 0 };
+}
+
+export type OpeningReminderPromptResult =
+  | { ok: true; data: OpeningReminderPromptData }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/**
+ * Client wake-up for the Opening reminder popup. Takes the restaurant only:
+ * the client cannot name a stage, a recipient or a time. The database sweeps
+ * (idempotent, safe from many tabs) and this returns the caller's own reminders
+ * plus whether Opening work in their scope is still incomplete.
+ */
+export async function getOpeningReminderPromptAction(input: {
+  restaurantSlug: string;
+}): Promise<OpeningReminderPromptResult> {
+  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (!caller) return { ok: false, error: "You need to sign in to see tasks." };
+
+  const data = await getOpeningReminderPrompt(
+    caller.organizationId,
+    caller.viewer,
+  );
+  if (!data) return { ok: false, error: "Reminders could not be loaded." };
+  return { ok: true, data };
+}
+
+/**
+ * Acknowledges (marks read) the caller's own reminder notification(s) through
+ * the same RPC as the inbox. Read state only: no task, checklist or
+ * assignment is touched, and the RPC only ever updates the caller's rows.
+ */
+export async function acknowledgeOpeningReminderAction(input: {
+  restaurantSlug: string;
+  ids: number[];
+}): Promise<
+  { ok: true } | { ok: false; error: string; sessionInvalid?: true }
+> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      ids: z.array(z.number().int().positive()).min(1).max(10),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (!caller) return { ok: false, error: "You need to sign in to do that." };
+
+  const { error } = await supabase.rpc("task_notifications_mark_read", {
+    p_ids: parsed.data.ids,
+  });
+  if (error) return { ok: false, error: friendly(error.message) };
+  return { ok: true };
 }

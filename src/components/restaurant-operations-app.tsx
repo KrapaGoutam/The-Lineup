@@ -64,6 +64,11 @@ import { InventoryModule } from "@/features/bar-inventory/components/inventory-m
 import { emptyCatalogState } from "@/features/bar-inventory/domain/catalog-engine";
 import { buildDemoCatalog } from "@/features/bar-inventory/domain/demo-catalog";
 import type { CatalogState } from "@/features/bar-inventory/domain/inventory-types";
+import { OpeningReminderPrompt } from "@/features/tasks/components/opening-reminder-prompt";
+import {
+  createDemoOpeningReminderSource,
+  createRealOpeningReminderSource,
+} from "@/features/tasks/components/opening-reminder-sources";
 import { TasksModule } from "@/features/tasks/components/tasks-module";
 import { createDemoTasksState } from "@/features/tasks/domain/demo-tasks";
 import {
@@ -731,6 +736,11 @@ function RestaurantOperationsAppInner({
   // switches and sign-in as a different demo person. Real mode never reads
   // this -- its source of truth is the database.
   const [realTasksUnread, setRealTasksUnread] = useState(0);
+  // Tasks V1.1 / T-5: the Opening reminder popup's "View Opening Tasks" lands
+  // on a fresh Tasks > Today (a new key remounts the module).
+  const [tasksNavKey, setTasksNavKey] = useState(0);
+  // Bumped when the popup acknowledges a reminder so the Tasks badge re-reads.
+  const [unreadNonce, setUnreadNonce] = useState(0);
   // Bar Inventory (demo mode only): the in-memory catalog, held here so it
   // survives tab switches. Real mode reads and writes the database.
   const [demoCatalog, setDemoCatalog] = useState<CatalogState>(() =>
@@ -762,7 +772,12 @@ function RestaurantOperationsAppInner({
       cancelled = true;
       window.removeEventListener("focus", refresh);
     };
-  }, [demoMode, signedInProfileId, restaurantSlug]);
+  }, [demoMode, signedInProfileId, restaurantSlug, unreadNonce]);
+
+  // The demo Opening reminder engine is opt-in (`?demoReminders=1`) so the
+  // ordinary demo walkthrough, and every unrelated demo test, is never
+  // interrupted by a modal that depends on the time of day.
+  const demoReminders = demoMode && searchParams.get("demoReminders") === "1";
 
   function registerDemoMember(input: {
     displayName: string;
@@ -2144,6 +2159,7 @@ function RestaurantOperationsAppInner({
         ) : null}
         {tab === "tasks" ? (
           <TasksModule
+            key={tasksNavKey}
             restaurantSlug={restaurantSlug}
             user={user}
             onSessionInvalid={forceSignOut}
@@ -2156,6 +2172,7 @@ function RestaurantOperationsAppInner({
                     team: toTasksTeam(activeTeam, demoAccounts),
                     timeZone,
                     organizationId: DEMO_ORGANIZATION_ID,
+                    openingReminders: demoReminders,
                   }
                 : null
             }
@@ -2383,6 +2400,35 @@ function RestaurantOperationsAppInner({
         <PasscodeChangeDialog
           onClose={() => setShowChangePasscode(false)}
           onSubmit={changeMyPasscode}
+        />
+      ) : null}
+
+      {/* Tasks V1.1 / T-5: the one Opening reminder popup, on any module. */}
+      {!demoMode || demoReminders ? (
+        <OpeningReminderPrompt
+          key={`${currentUser.profileId}:${restaurantSlug}`}
+          source={
+            demoMode
+              ? createDemoOpeningReminderSource({
+                  getState: () => demoTasksState,
+                  setState: setDemoTasksState,
+                  team: toTasksTeam(activeTeam, demoAccounts),
+                  timeZone,
+                  viewer: {
+                    profileId: currentUser.profileId,
+                    name: currentUser.name,
+                    designation: currentUser.designation,
+                  },
+                })
+              : createRealOpeningReminderSource(restaurantSlug)
+          }
+          isManagement={currentUser.designation !== "staff"}
+          onViewTasks={() => {
+            setTasksNavKey((key) => key + 1);
+            setTab("tasks");
+          }}
+          onSessionInvalid={forceSignOut}
+          onAcknowledged={() => setUnreadNonce((n) => n + 1)}
         />
       ) : null}
     </div>

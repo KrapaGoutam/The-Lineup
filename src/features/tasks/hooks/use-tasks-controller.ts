@@ -8,6 +8,7 @@ import {
 } from "@/features/tasks/actions/tasks-actions";
 import type { TaskCommand } from "@/features/tasks/domain/task-commands";
 import { generateDailyChecklists } from "@/features/tasks/domain/checklist-engine";
+import { runDemoOpeningReminders } from "@/features/tasks/domain/opening-reminder-engine";
 import {
   applyCommand,
   buildSnapshot,
@@ -44,6 +45,7 @@ type DemoBinding = {
   team: readonly TaskTeamMember[];
   timeZone: string;
   organizationId: string;
+  openingReminders?: boolean;
 };
 
 type Options = {
@@ -159,8 +161,13 @@ export function useTasksController({
     );
     // Same lazy, idempotent top-up as task_recurrence_generate.
     const withSeries = generateRecurringTasks(withChecklists, ctx, today);
+    // Same idempotent Opening reminder sweep as task_opening_reminders_sweep
+    // (opt-in in demo mode, so an ordinary demo is never interrupted).
+    const withReminders = demo.openingReminders
+      ? runDemoOpeningReminders(withSeries, ctx)
+      : withSeries;
     // Same idempotent due-soon / overdue sweep as task_notifications_sweep.
-    const next = sweepNotifications(withSeries, ctx);
+    const next = sweepNotifications(withReminders, ctx);
     if (next !== demo.state) demo.setState(next);
   }, [demo, viewer, now]);
 

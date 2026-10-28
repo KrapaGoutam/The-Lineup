@@ -2,9 +2,13 @@
 
 ## Current cycle
 
-Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (popup + catch-up UX) is NEXT / NOT STARTED**, T-6 NOT STARTED, Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
+Tasks V1.1 — **T-1 COMPLETE**. **T-2 COMPLETE** (Management Today, #169). **T-3 COMPLETE** (Notification narrowing, #154; PR #207, tested head `2fef134e84c6966ea1c60e66d5e390d8c456f283` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `3a442a6` (two parents: `f4f1aae` + `2fef134`)). **T-4 (Opening reminder server/database engine) is COMPLETE** (#154; PR #209, tested head `f48ea31fc58db8c9ae562404de8147ff979d7d5a` (= local = remote = PR head = CI-tested SHA; application, browser-smoke, Database `migrations-and-policies` and Vercel green; `deploy-migrations` skipped on a PR), merge commit `796cff3` (two parents: `175ca05` + `f48ea31`)). **T-5 (popup + catch-up UX) is IN PROGRESS** (branch `feature/tasks-v1-1-reminder-popup`, base `bfea042f40289f42335e1d76e320b820ceeaab21`), T-6 NOT STARTED, Recipes SHELVED. · Part 2 ON HOLD · `main` UNTOUCHED · PROD UNTOUCHED. Vendor Order Drafts V1 is complete (VOD-4 GO, #190 closed).
 
 ## Current phase
+
+T-5 — Opening reminder popup + catch-up UX (#154): **IN PROGRESS** (Claude Code Cloud, Sonnet 5.5). Branch `feature/tasks-v1-1-reminder-popup` from `origin/development` @ `bfea042f40289f42335e1d76e320b820ceeaab21` (verified equal to the expected SHA). T-1..T-4 COMPLETE; T-6 NOT STARTED; Recipes SHELVED; Part 2 ON HOLD; `main` UNTOUCHED; PROD UNTOUCHED. No DB change expected (`supabase/**` unchanged).
+
+Previous phase line (T-4):
 
 T-4 — Opening reminder server/database engine (PLAN D-4, #154): **COMPLETE** (PR #209, merge `796cff3`). Next phase: T-5 popup + catch-up UX, a NEW session. T-5 NOT STARTED, T-6 NOT STARTED, Recipes SHELVED, Part 2 ON HOLD.
 
@@ -57,7 +61,15 @@ Final Development Gate NOT STARTED · main UNTOUCHED · PROD UNTOUCHED
   - [x] tests/real on DEV: `tasks-v1.db.real` 12/12 + new `tasks-opening-reminders.db.real` 7/7 (0 reminder rows left); npm run check, Vitest 1629/1629, normal build (env pinned to DEV, 0 PROD refs) and empty-Supabase-env build green; Playwright desktop + server-mobile 57/57 each; host-tablet WebKit = known sign-in gap (not PASS)
   - [x] docs: PLAN, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog
   - [x] commit explicit paths, push, PR #209 -> development, exact-head CI green (application, browser-smoke, Database, Vercel), MERGE COMMIT `796cff3`, post-merge docs sync PR
-- [ ] T-5 (popup + catch-up UX, client wake-up, demo-mode emitter): NEW session after T-4 merges. NOT STARTED.
+- [ ] T-5 (popup + catch-up UX, client wake-up, demo-mode emitter): IN PROGRESS. Steps: selector (pure) -> server action (sweep + own reminders + authoritative count) -> shell prompt component + wake -> demo fixtures -> tests -> gates -> docs -> PR. Update as each step passes.
+  - [x] base verified, branch created, handoff marked IN PROGRESS
+  - [x] pure selector + copy + live count: `src/features/tasks/domain/opening-reminder-popup.ts` (+ test)
+  - [x] demo twin of the sweep: `domain/opening-reminder-engine.ts` (+ test); demo reminders opt-in via `?demoReminders=1`
+  - [x] server read model + actions: `data/opening-reminder-prompt-data.ts`, `getOpeningReminderPromptAction`, `acknowledgeOpeningReminderAction`
+  - [x] wake gate + hook + dialog + shell mount (`hooks/wake-gate.ts`, `hooks/use-opening-reminder-prompt.ts`, `components/opening-reminder-prompt.tsx`, `opening-reminder-sources.ts`, `restaurant-operations-app.tsx`)
+  - [x] tests: Vitest 1687/1687 (+58); Playwright `tests/e2e/opening-reminder-popup.spec.ts` (10 tests; `page.clock.install`, `?demoReminders=1`); desktop + server-mobile 134/134 with tasks, management-today, default-landing, dashboard; Chromium iPad emulation 28/28 (not WebKit); host-tablet WebKit NOT RUN (webkit binary absent)
+  - [x] check, normal build and empty-Supabase-env build green; docs (PLAN D-5 as built, TEST_MATRIX, IMPLEMENTATION_REPORT, ROADMAP, STATUS, backlog) updated
+  - [ ] RESUME HERE: commit explicit T-5 paths, push `feature/tasks-v1-1-reminder-popup`, open PR -> development, exact-head CI (branch = remote = PR = CI SHA), MERGE COMMIT, comment #154, then post-merge docs sync (`docs/tasks-v1-1-t5-post-merge-sync`) flipping T-5 to COMPLETE, then STOP (T-6 is a NEW LOCAL WINDOWS session)
 
 ## Exact next command
 
