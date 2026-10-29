@@ -16,8 +16,9 @@ Main baseline `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`; migrations: 56.
 - [x] BI-E5 pre-PR gates: focused/full tests, DB suites, browser matrix, both builds/scans.
 - [x] Hosted DEV synthetic validation and independent zero-residue verification.
 - [x] Synchronize docs; review security/accessibility/tenant isolation/scope.
-- [ ] Green commits/push, PR to development, exact-head CI, merge commit.
-- [ ] Verify final development, unchanged main, clean tree; completion report.
+- [x] Green commits/push, PR to development, exact-head CI, merge commit.
+- [x] Verify implementation merged into development, unchanged main and clean tree.
+- [x] Prepare documentation closeout recording the completed implementation gates.
 
 ## Execution state
 
@@ -29,7 +30,13 @@ mobile 82 + 2 established card-layout skips. Hosted new DB suite 10/10 plus
 four-table Realtime authorization PASS; synthetic residue independently zero.
 Final gates: focus 36 files/760; full 155/2,002; pgTAP 48/1,538; browser 250 + 2
 existing skips; hosted UI 4/4 and new DB 10/10; both builds and final PROD-ref/
-secret/path scans PASS. DEV/repository parity 61/61. CI/PR/merge remain pending.
+secret/path scans PASS. DEV/repository parity 61/61. PR #226 merged after exact-head
+application, browser-smoke, migrations-and-policies and Vercel checks passed on
+`6c5b447235c53a18e64403853a0bc4c9253d0f0a`. Merge commit and verified development:
+`12cef00977385563159bb12296868fcdeb1a091b`. Main remains at the recorded baseline.
+The implementation tree was clean after merge. This documentation closeout records
+the completed implementation gates; its own exact-head checks and merge are verified
+before the final owner report. No application or database changes are pending.
 The 10px tablet shell overflow reproduced on baseline e4cffa8 and was fixed with
 secondary-nav width containment; no Recipes implementation change.
 

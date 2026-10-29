@@ -81,8 +81,18 @@ artifacts/bar-inventory-v1-1. A separate read-only scan found zero new V2 Harnes
 organizations or synthetic Auth users since this task began. No Storage objects
 were created. Final hosted browser rerun: 4/4 PASS, all cleanup counts zero.
 
-## Remaining integration gate
+## Completed implementation integration
 
-Push the green feature commit; open the PR to development; require CI for that
-exact head; merge with a merge commit; fetch and verify containment, unchanged
-main and clean working tree. Recipes V1 R-2g must not start in this checkpoint.
+[PR #226](https://github.com/KrapaGoutam/The-Lineup/pull/226) targeted development
+and merged on 2026-10-29 UTC using a merge commit. Its exact head was
+`6c5b447235c53a18e64403853a0bc4c9253d0f0a`: application, browser-smoke,
+migrations-and-policies and Vercel all passed. Production migration deployment
+was correctly skipped on the PR. CI runs: `40805223722` and `40805223481`.
+
+Fetched development was verified at merge commit
+`12cef00977385563159bb12296868fcdeb1a091b`, containing the implementation head.
+Main remained `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`; the implementation working
+tree was clean. This documentation closeout records those completed gates on the
+same feature branch and receives its own exact-head application/browser checks.
+No further application or database change is pending. Recipes V1 R-2g has not
+started and remains the next independent checkpoint.

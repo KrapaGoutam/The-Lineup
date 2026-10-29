@@ -1,6 +1,6 @@
 # Project Status & Milestone Tracker
 
-## Bar Inventory V1.1 — implementation complete, final integration in progress
+## Bar Inventory V1.1 — COMPLETE on development (PR #226)
 
 Bulk Count, personal saved views, scoped column ordering, date groups,
 subcategory freshness rules and separate Dashboard alerts are implemented on
@@ -9,13 +9,18 @@ Five additive migrations have reached verified DEV only (56 → 61). Browser
 matrix: desktop 84, WebKit tablet 84, mobile 82 + 2 established skips; new hosted
 DB suite 10/10 and four-table Realtime authorization pass, zero task-owned
 synthetic residue. Final builds, hosted browser (4/4), full Vitest (2,002), pgTAP
-(1,538), checks and security scans PASS; exact-head CI/merge remain gates. Main/PROD
+(1,538), checks and security scans PASS. Exact-head application, browser-smoke,
+migrations-and-policies and Vercel checks passed on `6c5b447`; PR #226 merged
+with merge commit `12cef009` into development. Main/PROD
 and Recipes implementation are untouched; R-2g has not started. Details:
 [V1.1 validation](features/bar-inventory-v1/V1_1_VALIDATION.md).
 
-**Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** October 28, 2026  
-**Health Gate:** `npm run check` PASS | Vitest 155 files / 2,002 tests PASS | Bar Inventory Playwright 250 PASS + 2 existing phone-card skips across desktop/WebKit tablet/mobile | pgTAP 48 files / 1,538 assertions PASS  
+**Repository:** The Lineup (Restaurant Roster & Floor Management)
+
+**Last Updated:** October 28, 2026 (completion recorded October 29 UTC)
+
+**Health Gate:** `npm run check` PASS | Vitest 155 files / 2,002 tests PASS | Bar Inventory Playwright 250 PASS + 2 existing phone-card skips across desktop/WebKit tablet/mobile | pgTAP 48 files / 1,538 assertions PASS
+
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
