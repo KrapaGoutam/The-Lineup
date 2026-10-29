@@ -131,6 +131,9 @@
   --color-warn: var(--warn);
   --color-ok: var(--ok);
   --font-sans: "Geist Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, ui-serif,
+    serif;
   --font-mono: "Geist Mono", "SFMono-Regular", Consolas, monospace;
 }
 
