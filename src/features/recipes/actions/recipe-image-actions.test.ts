@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   mutate: vi.fn(),
   sign: vi.fn(),
+  signThumbs: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/require-live-session", () => ({
@@ -15,11 +16,13 @@ vi.mock("@/lib/current-user", () => ({ getCurrentUser: mocks.user }));
 vi.mock("../data/recipe-image-data", () => ({
   mutateRecipeImageData: mocks.mutate,
   signRecipeImages: mocks.sign,
+  signRecipeThumbnails: mocks.signThumbs,
 }));
 import {
   uploadRecipeImageAction,
   removeRecipeImageAction,
   getRecipeImageUrlsAction,
+  getRecipeThumbUrlsAction,
 } from "./recipe-image-actions";
 const recipeId = "22222222-2222-4222-8222-222222222222";
 const scope = { restaurantSlug: "the-monks", recipeId, expectedVersion: 5 };
@@ -136,4 +139,84 @@ describe("image server actions", () => {
       expect(mocks.sign).not.toHaveBeenCalled();
     },
   );
+  describe("batched thumbnail signing", () => {
+    const other = "33333333-3333-4333-8333-333333333333";
+    const batchQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(),
+    };
+    beforeEach(() => {
+      client.from.mockReturnValue(batchQuery as unknown as typeof query);
+      batchQuery.in.mockResolvedValue({
+        data: [
+          { id: recipeId, image_thumb_path: "p-thumb" },
+          { id: other, image_thumb_path: null },
+        ],
+        error: null,
+      });
+      mocks.signThumbs.mockResolvedValue({
+        urls: { [recipeId]: "signed-thumb" },
+        expiresAt: 123,
+      });
+    });
+    it("signs all requested thumbnails with one org-scoped read for Staff", async () => {
+      mocks.user.mockResolvedValue({
+        organizationId: "server-org",
+        designation: "staff",
+      });
+      const result = await getRecipeThumbUrlsAction({
+        restaurantSlug: "the-monks",
+        recipeIds: [recipeId, other],
+      });
+      expect(result).toEqual({
+        ok: true,
+        data: { urls: { [recipeId]: "signed-thumb" }, expiresAt: 123 },
+      });
+      expect(batchQuery.eq).toHaveBeenCalledWith(
+        "organization_id",
+        "server-org",
+      );
+      expect(batchQuery.in).toHaveBeenCalledWith("id", [recipeId, other]);
+      expect(mocks.signThumbs).toHaveBeenCalledTimes(1);
+      expect(mocks.signThumbs.mock.calls[0][1]).toBe("server-org");
+    });
+    it("rejects forged ids, oversized batches and invalid slugs before any query", async () => {
+      for (const input of [
+        { restaurantSlug: "the-monks", recipeIds: ["../foreign"] },
+        { restaurantSlug: "the-monks", recipeIds: [] },
+        {
+          restaurantSlug: "the-monks",
+          recipeIds: Array.from({ length: 251 }, () => recipeId),
+        },
+        { restaurantSlug: "Bad Slug", recipeIds: [recipeId] },
+      ])
+        expect((await getRecipeThumbUrlsAction(input)).ok).toBe(false);
+      expect(mocks.client).not.toHaveBeenCalled();
+    });
+    it("requires a live session and never signs on a read error", async () => {
+      mocks.session.mockResolvedValue({
+        ok: false,
+        sessionInvalid: true,
+        error: "Sign in",
+      });
+      expect(
+        await getRecipeThumbUrlsAction({
+          restaurantSlug: "the-monks",
+          recipeIds: [recipeId],
+        }),
+      ).toMatchObject({ sessionInvalid: true });
+      mocks.session.mockResolvedValue(null);
+      batchQuery.in.mockResolvedValue({ data: null, error: { code: "x" } });
+      expect(
+        (
+          await getRecipeThumbUrlsAction({
+            restaurantSlug: "the-monks",
+            recipeIds: [recipeId],
+          })
+        ).ok,
+      ).toBe(false);
+      expect(mocks.signThumbs).not.toHaveBeenCalled();
+    });
+  });
 });

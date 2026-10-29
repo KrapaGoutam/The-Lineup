@@ -30,7 +30,18 @@ export type QuickGlanceData = {
   commonGlass: string | null;
 };
 
-const OUNCE_UNITS = new Set(["oz", "oz.", "ounce", "ounces"]);
+const OUNCE_UNITS = new Set([
+  "oz",
+  "oz.",
+  "ounce",
+  "ounces",
+  "fl oz",
+  "fl oz.",
+  "fl. oz",
+  "fl. oz.",
+]);
+// Longest first so "fl oz" is stripped whole from an amount like "2 fl oz".
+const OUNCE_SUFFIXES = [...OUNCE_UNITS].sort((a, b) => b.length - a.length);
 const CONFLICTING_VOLUME_UNITS = new Set([
   "ml",
   "cl",
@@ -52,6 +63,14 @@ const CONFLICTING_VOLUME_UNITS = new Set([
   "quart",
   "quarts",
 ]);
+
+/** True when any alphabetic token (including "30ml", "1.5cl") is a non-ounce volume unit. */
+function hasConflictingVolumeUnit(text: string): boolean {
+  return text
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .some((token) => CONFLICTING_VOLUME_UNITS.has(token));
+}
 
 /**
  * Derives structured Quick Measure rows from ingredients.
@@ -173,14 +192,11 @@ export function deriveOzRatio(
     const amountRaw = item.amount?.trim() || "";
 
     // Check for conflicting liquid volume units
-    if (CONFLICTING_VOLUME_UNITS.has(unitRaw)) {
+    if (
+      hasConflictingVolumeUnit(unitRaw) ||
+      hasConflictingVolumeUnit(amountRaw)
+    ) {
       return null;
-    }
-    const amountTokens = amountRaw.toLowerCase().split(/\s+/);
-    for (const token of amountTokens) {
-      if (CONFLICTING_VOLUME_UNITS.has(token)) {
-        return null;
-      }
     }
 
     // Check if unit is ounce
@@ -189,7 +205,7 @@ export function deriveOzRatio(
 
     if (!isOz) {
       // Check if amount contains "oz" or "ounce"
-      for (const ozUnit of OUNCE_UNITS) {
+      for (const ozUnit of OUNCE_SUFFIXES) {
         if (amountRaw.toLowerCase().endsWith(ozUnit)) {
           isOz = true;
           cleanAmount = amountRaw.slice(0, -ozUnit.length).trim();

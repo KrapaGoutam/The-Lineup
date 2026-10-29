@@ -8,6 +8,12 @@ import {
 
 describe("useViewPreference", () => {
   beforeEach(() => {
+    // A successful write clears the session fallback left by storage-failure tests.
+    const { result, unmount } = renderHook(() => useViewPreference());
+    act(() => {
+      result.current.setViewMode("list");
+    });
+    unmount();
     window.localStorage.clear();
   });
 
@@ -78,5 +84,39 @@ describe("useViewPreference", () => {
 
     getItemSpy.mockRestore();
     setItemSpy.mockRestore();
+  });
+
+  it("still switches views for the session when storage is unavailable", () => {
+    const getItemSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("SecurityError: Storage disabled");
+      });
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("SecurityError: Storage disabled");
+      });
+
+    const { result } = renderHook(() => useViewPreference());
+    expect(result.current.viewMode).toBe("list");
+
+    act(() => {
+      result.current.setViewMode("picture");
+    });
+    expect(result.current.viewMode).toBe("picture");
+
+    act(() => {
+      result.current.setViewMode("list");
+    });
+    expect(result.current.viewMode).toBe("list");
+
+    getItemSpy.mockRestore();
+    setItemSpy.mockRestore();
+
+    // A later successful write clears the session fallback.
+    act(() => {
+      result.current.setViewMode("list");
+    });
   });
 });

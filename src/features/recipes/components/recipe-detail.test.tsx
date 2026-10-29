@@ -308,4 +308,33 @@ describe("recipe detail", () => {
       screen.queryByRole("heading", { name: "Bartender Tips" }),
     ).toBeNull();
   });
+
+  it("labels the House variant tips House Notes and keeps Bartender Tips for Perfect (UI_UX_PLAN D-LBL)", () => {
+    const perfect = { ...variant("perfect"), tips: "Perfect tip" };
+    const house = { ...variant("house"), tips: "House tip" };
+
+    render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [perfect, house] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    // Each variant is rendered twice (mobile tab panel + desktop column).
+    expect(
+      screen.getAllByRole("heading", { name: "House Notes", hidden: true })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("heading", { name: "Bartender Tips", hidden: true })
+        .length,
+    ).toBeGreaterThan(0);
+    const houseNotes = screen.getAllByRole("heading", {
+      name: "House Notes",
+      hidden: true,
+    })[0];
+    expect(houseNotes.parentElement?.textContent).toContain("House tip");
+    expect(houseNotes.parentElement?.textContent).not.toContain("Perfect tip");
+  });
 });
