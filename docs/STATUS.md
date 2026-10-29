@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## Recipe Detail editorial redesign — design approved, implementation pending
+
+Concept E — Editorial Recipe Book and Presentation behavior: House differs are approved. The [design reference](design-reference/recipes/recipe-detail-concepts/README.md) records desktop side-by-side complete variants, stacked mobile/tablet variants, and shared or distinct presentation as applicable. This documentation phase does not implement the redesign.
+
 ## Recipes V1 R-2g — independent final gate: GO
 
 Independent post-merge gate for Recipes R-2 on development `73a24e1`
