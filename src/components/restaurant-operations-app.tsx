@@ -1816,7 +1816,10 @@ function RestaurantOperationsAppInner({
 
   return (
     <div className="min-h-screen pb-28 lg:pb-0">
-      <header className="border-border bg-background sticky top-0 z-40 border-b">
+      <header
+        data-app-header
+        className="border-border bg-background sticky top-0 z-40 border-b"
+      >
         {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
         <div className="mx-auto hidden min-h-[76px] max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid">
           <button

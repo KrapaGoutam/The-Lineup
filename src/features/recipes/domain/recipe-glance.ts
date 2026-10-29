@@ -322,7 +322,7 @@ export function deriveQuickGlance(recipe: RecipeDetail): QuickGlanceData {
       .map((g) => g.name.trim())
       .filter(Boolean)
       .join(", ");
-    const garnish = garnishes || v.presentation_notes?.trim() || null;
+    const garnish = garnishes || null;
 
     // Concise ingredient measurements (e.g. "2 oz Bourbon or rye")
     const measurements = (v.ingredients || [])

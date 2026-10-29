@@ -22,10 +22,7 @@ import {
 } from "../actions/recipe-write-actions";
 import { RecipesModule } from "./recipes-module";
 import { RecipeEditorScreen } from "./recipe-editor-screen";
-import {
-  serializeEditorState,
-  newEditorState,
-} from "../domain/recipe-editor-state";
+import { newEditorState } from "../domain/recipe-editor-state";
 import { demoRecipeFromState } from "../domain/demo-recipes";
 afterEach(() => {
   cleanup();
@@ -128,9 +125,18 @@ describe("editor access and demo safety", () => {
       />,
     );
     await userEvent.type(screen.getByLabelText("Name"), "Demo");
+    await userEvent.type(
+      screen.getByLabelText("Method", { exact: true }),
+      "Stir",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(demoSave).toHaveBeenCalledWith(
-      { ...serializeEditorState(newEditorState("fallback", 1)), name: "Demo" },
+      expect.objectContaining({
+        name: "Demo",
+        variants: expect.objectContaining({
+          perfect: expect.objectContaining({ method: "Stir" }),
+        }),
+      }),
       null,
       null,
     );

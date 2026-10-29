@@ -7,6 +7,47 @@ async function signIn(page: Page, url: string, pin = "2468") {
     page.getByRole("button", { name: "Account and quick settings" }).first(),
   ).toBeVisible();
 }
+test("creates a House-only recipe without a Perfect placeholder", async ({
+  page,
+}) => {
+  await signIn(page, "/r/the-monks?tab=recipes");
+  await page.getByRole("button", { name: "Add Recipe", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("House only synthetic");
+  await page.getByRole("button", { name: "Add House Recipe" }).click();
+  const house = page
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: "House Recipe" }) });
+  await house.getByLabel("Method", { exact: true }).fill("Stir");
+  await house
+    .getByLabel("Presentation notes", { exact: true })
+    .fill("Large clear cube");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByText("Recipe saved", { exact: true }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByTestId("recipe-single")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "House Recipe", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Perfect Bartending Recipe" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation", { name: "Jump to recipe" }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Quick glance" })
+      .getByText("Garnish", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Perfect Presentation")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
 test("management adds, edits and renumbers a recipe in memory", async ({
   page,
 }) => {

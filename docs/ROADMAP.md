@@ -110,3 +110,7 @@ POS, reservations, payroll, SMS, and native apps require separate product discov
 ## Recipes V1 R-1 checkpoint
 
 Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. R-2 remains next.
+
+## Recipes V1 — owner acceptance checkpoint
+
+Completed: Concept E design reference and implementation (#232); independent audit fixes (#233). Current: owner acceptance QA must-fix ([#234](https://github.com/KrapaGoutam/The-Lineup/issues/234)). Pending: owner browser retest, deferred polish and owner decisions, Staff acceptance, persistent DEV/full Recipes + Inventory review as applicable, release-readiness audit, explicit Production approval, and eventual development → main. Part 2 and Part 3 remain on hold. Release is NO-GO.

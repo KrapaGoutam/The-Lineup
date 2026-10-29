@@ -275,3 +275,7 @@ Button on the House section header ("Copy Perfect Recipe → House Recipe"). Ope
 | `desktop`                                                         | 2-column rows in wide blocks | 4–5 columns  | two columns        | wide form, side-by-side variants stacked |
 
 Tablet landscape is an actual service device (the host stand): the final gate runs `host-tablet` on real WebKit.
+
+## Owner acceptance follow-up
+
+QA [#234](https://github.com/KrapaGoutam/The-Lineup/issues/234) tracks sticky-header jump offsets (RD-E-002), actual garnish semantics (RD-E-003), Light focus visibility (RD-E-004), and House-only creation (RD-E-009). RD-E-001 and RD-E-006 require verification against #233. Deferred: long-token handling (RD-E-005), small-text contrast (RD-E-007), and an owner decision on Perfect-side difference treatment (RD-E-008). Concept E retains stacked variants and jump links, without mobile tabs.

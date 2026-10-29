@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { FinalPresentation } from "./recipe-detail-presentation";
 import { VariantArticle } from "./recipe-detail-variant";
 import type { DetailVariant, RecipeDetail } from "../domain/recipe-detail";
+import { variantHasPersistedContent } from "../domain/variant-content";
 import { deriveGlanceFields, deriveQuickGlance } from "../domain/recipe-glance";
 import {
   deriveVariantDifferences,
@@ -18,6 +19,8 @@ function jumpTo(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
   if (!target) return;
   event.preventDefault();
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const header = document.querySelector<HTMLElement>("[data-app-header]");
+  target.style.scrollMarginTop = `${(header?.getBoundingClientRect().bottom ?? 0) + 16}px`;
   target.scrollIntoView({
     behavior: reduced ? "auto" : "smooth",
     block: "start",
@@ -36,8 +39,12 @@ export function RecipeDetailView({
   onBack: (event: React.MouseEvent<HTMLAnchorElement>) => void;
   restaurantSlug?: string;
 }) {
-  const perfect = recipe.variants.find((v) => v.variant === "perfect");
-  const house = recipe.variants.find((v) => v.variant === "house");
+  const perfect = recipe.variants.find(
+    (v) => v.variant === "perfect" && variantHasPersistedContent(v),
+  );
+  const house = recipe.variants.find(
+    (v) => v.variant === "house" && variantHasPersistedContent(v),
+  );
   const variants = [perfect, house].filter((v): v is DetailVariant => !!v);
   const dual = variants.length === 2;
   const differences = deriveVariantDifferences(perfect, house);
@@ -48,7 +55,9 @@ export function RecipeDetailView({
     heading.current?.focus();
   }, []);
 
-  const glanceFields = deriveGlanceFields(deriveQuickGlance(recipe));
+  const glanceFields = deriveGlanceFields(
+    deriveQuickGlance({ ...recipe, variants }),
+  );
   const meta = [
     recipe.base_spirit,
     recipe.category,
@@ -61,7 +70,7 @@ export function RecipeDetailView({
       <a
         href={backHref}
         onClick={onBack}
-        className="inline-flex min-h-11 items-center underline focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="focus-visible:outline-ring inline-flex min-h-11 items-center underline focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         ‹ Bar Recipes
       </a>
@@ -130,7 +139,7 @@ export function RecipeDetailView({
               key={v.id}
               href={`#recipe-variant-${v.variant}-heading`}
               onClick={(e) => jumpTo(e, `recipe-variant-${v.variant}-heading`)}
-              className="border-border hover:bg-accent inline-flex min-h-11 items-center rounded-full border px-5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="border-border hover:bg-accent focus-visible:outline-ring inline-flex min-h-11 items-center rounded-full border px-5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {v.variant === "house" ? "House" : "Perfect"}{" "}
               <span aria-hidden="true">↓</span>
