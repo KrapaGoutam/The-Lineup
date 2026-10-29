@@ -1,34 +1,35 @@
-﻿# Recipes + Inventory integration sanity — GO; PR/CI next
+# Recipes V1 release-readiness audit — GO to Production preflight; PR/CI next
 
-- Branch: `fix/recipes-inventory-integration-sanity`.
-- Baseline development: `508cab9584bb77aacee89107f2d6940314b47214`; main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`.
-- Worktree: `.tmp/integration-sanity`; original `docs/recipes-owner-retest-handoff` worktree untouched.
-- Scope: IS-01–IS-20, focused demo browser fixtures and static mutation/auth contracts. No database/live operational writes.
-- Data/auth: shared verified membership organization identity; separate module tables/RPCs. Recipes readable by staff, management writes; Inventory management-only.
-- UI states: existing loading/error/empty/success and permission coverage reused; inspect normal responsive shell, light/dark focus and safe cancelled dialogs.
-- Risk: shared Light ring and shell sticky-header attribute from #235; inspect for CSS spillover, query interference and unintended API calls.
-- Tests: focused existing units first, manager navigation and Inventory smoke on Chromium/WebKit/mobile, one cross-module boundary test if existing coverage lacks it. Reuse #235 full CI; no full Vitest/build without application changes.
-- SHELVED / LATER: owner acceptance retest; RD-E-005/007/008; O-1–O-4; Staff TC-19; persistent DEV realistic-data review. #234 and milestone #7 remain open.
+- Branch: `audit/recipes-v1-release-readiness` (from `development`).
+- Starting development: `754b34a5d5860269f2fda48b27efb56fbfb90993`; main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05` (unchanged).
+- Scope: independent, read-first audit; documentation and tracking only. No application, schema, Production, `main`, import or Inventory-injection change.
+- Report: [RELEASE_READINESS_AUDIT](../docs/features/recipes-v1/RELEASE_READINESS_AUDIT.md).
+- Decision: **GO — READY TO ENTER PRODUCTION PREFLIGHT.** No release blocker. Not release approval.
 
 ## Checklist
 
-- [x] Verify remote baseline/auth and preserve shelved work in isolated branch.
-- [x] Discover actual modules, navigation, state, shared shell/theme and authorization contracts.
-- [x] Focused unit/component verification: 11 files / 116 tests.
-- [x] Targeted browser IS-01–IS-20: 15 unique cases pass; IS-17 not applicable; no integration defect.
-- [x] Synchronize TEST_MATRIX, STATUS, ROADMAP, backlog and #220 (GO completion update; release still pending).
-- [ ] Review, commit, push and PR to development; exact-head CI.
-- [ ] Merge commit after GO/green; verify development and unchanged main.
+- [x] Verify baseline (`754b34a`), create audit branch.
+- [x] Areas A–P: features, migrations, RLS/authorization, concurrency, archive, Storage/images, import tooling, numbering, Recipe/Inventory boundary, navigation/responsive/accessibility, tests, CI, secrets, Production preconditions, Bar Inventory data status.
+- [x] Classify #234 and shelved items; Staff and owner-retest decisions.
+- [x] Targeted validation: Recipes Vitest 30 files / 281 tests, typecheck, ESLint, throwaway PostgreSQL reproduction of F-1.
+- [x] Update STATUS, ROADMAP, IMPLEMENTATION_PLAN, TEST_MATRIX, backlog, this file.
+- [ ] Commit, push, PR to `development`, exact-head CI, merge commit, verify development and unchanged main.
+- [ ] Post audit result on #220; verify #234 and milestone #7 remain open.
 
-No application source changes were required. Added only `tests/e2e/recipes-inventory-integration.spec.ts` for the missing cross-module boundary. Canonical IS-01 through IS-20 and limitations: [TEST_MATRIX](../docs/features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29).
+## Findings
 
-Validation executed:
+- No release blocker.
+- Preflight work: import script refuses Production (P-3); canonical 38-Recipe payload not in repository (P-4); 7 pending migrations (2 Recipes + 5 Inventory V1.1).
+- F-1 Low (reproduced): `bar_recipe_category_reorder` unknown-ID validation is vacuous; manager-only, tenant-scoped; fix before Production migration batch recommended (owner decision).
+- Coverage gaps (non-blocking): CI browser smoke desktop-only; no pgTAP run on the combined tree before the release PR; Staff TC-19 manual run shelved (technically covered).
+- Bar Inventory Production data injection source not established by repository evidence.
 
-- `npx vitest run src/lib/app-tab.test.ts src/hooks/use-theme.test.tsx src/features/auth/domain/passcode.test.ts src/features/recipes/actions/recipe-actions.test.ts src/features/recipes/actions/recipe-write-actions.test.ts src/features/recipes/actions/recipe-management-actions.test.ts src/features/recipes/actions/recipe-image-actions.test.ts src/features/recipes/components/recipes-module.test.tsx src/features/bar-inventory/domain/stock-rules.test.ts src/features/bar-inventory/hooks/use-catalog-controller.test.tsx src/features/bar-inventory/components/table-kit/filterable-table.test.tsx` - 116/116 pass.
-- `npx playwright test tests/e2e/recipes-inventory-integration.spec.ts tests/e2e/bar-inventory.spec.ts tests/e2e/bar-inventory-inventory.spec.ts tests/e2e/bar-inventory-responsive.spec.ts --grep 'Recipes and Inventory isolate|a manager reaches|Critical first|item sheet and the add-product' --workers=1` with `PLAYWRIGHT_BASE_URL=http://localhost:3018` - nine existing cases pass; five integration cases pass; one theme-fixture assumption corrected.
-- Final `npx playwright test tests/e2e/recipes-inventory-integration.spec.ts --workers=1` on 3018 - 6/6 pass across Chromium desktop, real WebKit tablet and mobile with persisted Light/Dark preference. Earlier draft RGB serialization assertion corrected; no application fix.
-- `npx.cmd eslint tests/e2e/recipes-inventory-integration.spec.ts --max-warnings=0` - pass. Scoped Prettier and `git diff --check` before commit.
-- Full local check/typecheck/build/Vitest deliberately not repeated under focused checkpoint instructions. Exact-head PR CI runs repository-standard checks.
-- Server: `NEXT_PUBLIC_DEMO_MODE=true npm run dev -- --webpack --port 3018`; existing dependency junction avoids installation; no environment files copied. Initial Turbopack junction resolution failure was tooling only.
+## Tests actually run
 
-GitHub: #220 in-progress update posted; completion/PR/exact-head CI/merge to be recorded there. #234 and milestone #7 verified OPEN; no new issue. PR/head/CI/merge pending. Next: tracking sync, review, push PR to development, require green exact-head checks, merge commit, verify unchanged main. After merge: Recipes V1 release-readiness audit in a new independent session; do not start it here.
+- `npx vitest run src/features/recipes scripts/recipes scripts/check-nonprod-env.test.ts` — 30 files / 281 tests pass.
+- `npm run typecheck` pass; `npx eslint src/features/recipes scripts/recipes` clean.
+- Not run: full Vitest, build, Playwright, pgTAP, hosted suites (recorded evidence and exact-head CI relied on).
+
+## Current State & Next Step
+
+Audit complete; remaining work is Git/GitHub (commit, PR, CI, merge, #220 comment). Next phase after merge: **Release Candidate Validation / Production Preflight Preparation** — new session (Codex Local, GPT-6.1 Sol, high; fallback Claude Code Cloud, Sonnet 5.5, high). Do not start automatically.
