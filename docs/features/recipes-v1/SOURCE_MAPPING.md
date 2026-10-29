@@ -95,14 +95,15 @@ Options evaluated against the brief's priorities — repeatability, reviewabilit
 **The script (built in R-1):**
 
 ```bash
-node scripts/recipes/import-recipes.mjs --file <import.json> --org <organization-slug> --mode dry-run   # default; writes nothing
-node scripts/recipes/import-recipes.mjs --file <import.json> --org <organization-slug> --mode create    # inserts only
+node scripts/recipes/import-recipes.mjs --file <import.json> --org <organization-slug> --actor <manager-profile-uuid> --target dev --mode dry-run
+node scripts/recipes/import-recipes.mjs --file <import.json> --org <organization-slug> --actor <manager-profile-uuid> --target dev --mode create
 ```
 
-- Reads `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SECRET_KEY` from the environment file like `bootstrap-owner.mjs`; **refuses the PROD project ref** unless `--allow-prod` **and** `--confirm <project-ref>` are both given (used only in the owner-approved release phase). Never prints keys.
-- The actor is an existing active management member (the owner's profile, resolved by organization slug and role; recorded as `created_by`).
+- Reads `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SECRET_KEY` from the process environment (does not load an env file automatically). Explicit `--target local|dev|prod` must match its pinned origin. Never prints keys. Dry run is the default and the RPC rolls back its temporary transactional validation writes.
+- Production create additionally requires `--execute --confirm-prod --dry-run-report <reviewed-report.json>`, matching file hash/organization/actor and approved warnings. Production overwrite is forbidden. The executable preflight contract, warning IDs and future Production commands are in [PRODUCTION_RELEASE.md](PRODUCTION_RELEASE.md); the original R-0 `--allow-prod`/`--confirm` proposal is superseded. No Production import was run during preflight.
+- The actor is explicitly supplied with `--actor` and must be an existing active management member (verified by the RPC; recorded as `created_by`). The organization is explicitly supplied by slug and its ID/name are read back before execution; there is no first-organization fallback.
 - Validates the file with a zod schema (the same constraints as `DATA_MODEL.md` §3), then calls `bar_recipes_import`. Prints a per-recipe report (created / skipped-existing / error) and the §4 mapping table.
-- **Idempotent and non-destructive:** `create` inserts a recipe only if its number **and** slug are free; otherwise it reports "skipped (exists)". Re-running after management edited a recipe changes nothing. Overwriting a specific recipe requires `--overwrite <numbers>` **and** that recipe's number in the file; never a blanket overwrite.
+- **Idempotent and non-destructive:** `create` inserts a recipe only if its number **and** slug are free; otherwise it reports "skipped (exists)". Re-running after management edited a recipe changes nothing. Local/DEV overwriting a specific recipe requires `--overwrite <numbers>` **and** that recipe's number in the file; never a blanket overwrite. Production create always skips existing recipes.
 - Categories are created from the file when their slug is missing and never modified when present. The six initial categories (§3) are part of the import file, so nothing about them is hard-coded in app code.
 
 **Import file format** (`format: "the-lineup.bar-recipes.import"`, `version: 1`):
