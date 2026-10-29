@@ -1,22 +1,34 @@
-﻿# Recipes V1 owner acceptance fixes — IN PROGRESS
+﻿# Recipes + Inventory integration sanity — GO; PR/CI next
 
-- Starting development: `21956cf70b43dd4bfa0872b8038bcfd0a3862bce`; main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`.
-- Branch: `fix/recipes-owner-acceptance-must-fix`; canonical QA issue #234; milestone Recipes V1 — Release Readiness.
-- [x] Fetch and verify baseline; preserve pre-existing untracked paths.
-- [x] Investigate preview provenance and reproduce scoped findings before source changes.
-- [x] Implement scoped fixes and targeted regression coverage; no schema change.
-- [x] Record all deferred findings and blocked Staff coverage in #234 and backlog; update #220 and local roadmap/status.
-- [x] Final review, commit and open PR #235.
-- [ ] Require exact-head CI, merge only if GO. Owner retest remains required; release NO-GO.
+- Branch: `fix/recipes-inventory-integration-sanity`.
+- Baseline development: `508cab9584bb77aacee89107f2d6940314b47214`; main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`.
+- Worktree: `.tmp/integration-sanity`; original `docs/recipes-owner-retest-handoff` worktree untouched.
+- Scope: IS-01–IS-20, focused demo browser fixtures and static mutation/auth contracts. No database/live operational writes.
+- Data/auth: shared verified membership organization identity; separate module tables/RPCs. Recipes readable by staff, management writes; Inventory management-only.
+- UI states: existing loading/error/empty/success and permission coverage reused; inspect normal responsive shell, light/dark focus and safe cancelled dialogs.
+- Risk: shared Light ring and shell sticky-header attribute from #235; inspect for CSS spillover, query interference and unintended API calls.
+- Tests: focused existing units first, manager navigation and Inventory smoke on Chromium/WebKit/mobile, one cross-module boundary test if existing coverage lacks it. Reuse #235 full CI; no full Vitest/build without application changes.
+- SHELVED / LATER: owner acceptance retest; RD-E-005/007/008; O-1–O-4; Staff TC-19; persistent DEV realistic-data review. #234 and milestone #7 remain open.
 
-## Baseline and validation
+## Checklist
 
-Preview SHA unverified: Vercel lookup returned 404; GitHub deployment correlation unavailable. Current development was tested. RD-E-001: not reproduced; preparation comparison and regression test from #233 pass. RD-E-002: reproduced at 820/390: targets at 16px beneath a 149px sticky header. RD-E-003: reproduced presentation notes as garnish. RD-E-004: near-white report not reproduced on sampled controls; existing amber ring measured 2.58:1 on Light background. RD-E-006: heading focus and outline present in baseline; #233 verified, though obscured by RD-E-002. RD-E-009: reproduced default empty Perfect serialization and demo rendering. Original focused Vitest 45/45 and existing tablet/mobile browser tests 2/2 passed but missed these edge cases.
+- [x] Verify remote baseline/auth and preserve shelved work in isolated branch.
+- [x] Discover actual modules, navigation, state, shared shell/theme and authorization contracts.
+- [x] Focused unit/component verification: 11 files / 116 tests.
+- [x] Targeted browser IS-01–IS-20: 15 unique cases pass; IS-17 not applicable; no integration defect.
+- [x] Synchronize TEST_MATRIX, STATUS, ROADMAP, backlog and #220 (GO completion update; release still pending).
+- [ ] Review, commit, push and PR to development; exact-head CI.
+- [ ] Merge commit after GO/green; verify development and unchanged main.
 
-Changes: measured shell offset, shared Light ring and explicit semantic outlines, garnish-only glance, omit truly empty variants while retaining rows and all meaningful fields; filter empty legacy variants on detail. Focused Vitest 61/61; full Vitest 2034/2034; targeted browser 9/9 desktop/WebKit tablet/mobile including 820/390 and both themes; build and typecheck pass. `npm run check` blocked at format by preserved untracked `.tmp/recipe-detail-issue.md` and `docs/design-reference/recipes/recipe-detail-concepts/github.md`; full lint separately reports seven pre-existing ignored `artifacts/dev-manual-preview` warnings. Scoped lint passes. Project board unavailable: GitHub token lacks `read:project` scope. PR #235; initial code commit `6a8a252`. Final pushed head and CI are recorded in the PR; recheck after any subsequent commit.
+No application source changes were required. Added only `tests/e2e/recipes-inventory-integration.spec.ts` for the missing cross-module boundary. Canonical IS-01 through IS-20 and limitations: [TEST_MATRIX](../docs/features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29).
 
-Data and authorization unchanged: existing tenant-scoped recipe save and membership/RLS. UI retains responsive single/dual, validation, and reduced-motion behavior. Risks checked: meaningful variant data, sticky header sizing and focus in both themes. Deferred RD-E-005/007/008, Staff TC-19, and O-1 through O-4 remain tracked in #234 and backlog. Main, Production and Part 2/3 untouched.
+Validation executed:
 
-Next: final diff/security/accessibility review, commit and PR to development, exact-head CI. Owner browser acceptance retest is required after merge.
+- `npx vitest run src/lib/app-tab.test.ts src/hooks/use-theme.test.tsx src/features/auth/domain/passcode.test.ts src/features/recipes/actions/recipe-actions.test.ts src/features/recipes/actions/recipe-write-actions.test.ts src/features/recipes/actions/recipe-management-actions.test.ts src/features/recipes/actions/recipe-image-actions.test.ts src/features/recipes/components/recipes-module.test.tsx src/features/bar-inventory/domain/stock-rules.test.ts src/features/bar-inventory/hooks/use-catalog-controller.test.tsx src/features/bar-inventory/components/table-kit/filterable-table.test.tsx` - 116/116 pass.
+- `npx playwright test tests/e2e/recipes-inventory-integration.spec.ts tests/e2e/bar-inventory.spec.ts tests/e2e/bar-inventory-inventory.spec.ts tests/e2e/bar-inventory-responsive.spec.ts --grep 'Recipes and Inventory isolate|a manager reaches|Critical first|item sheet and the add-product' --workers=1` with `PLAYWRIGHT_BASE_URL=http://localhost:3018` - nine existing cases pass; five integration cases pass; one theme-fixture assumption corrected.
+- Final `npx playwright test tests/e2e/recipes-inventory-integration.spec.ts --workers=1` on 3018 - 6/6 pass across Chromium desktop, real WebKit tablet and mobile with persisted Light/Dark preference. Earlier draft RGB serialization assertion corrected; no application fix.
+- `npx.cmd eslint tests/e2e/recipes-inventory-integration.spec.ts --max-warnings=0` - pass. Scoped Prettier and `git diff --check` before commit.
+- Full local check/typecheck/build/Vitest deliberately not repeated under focused checkpoint instructions. Exact-head PR CI runs repository-standard checks.
+- Server: `NEXT_PUBLIC_DEMO_MODE=true npm run dev -- --webpack --port 3018`; existing dependency junction avoids installation; no environment files copied. Initial Turbopack junction resolution failure was tooling only.
 
-CI on `18faed26a30a1852f8a0b19f46b0355bf6e6a624`: application and Vercel passed; browser-smoke failed 1/314 because the image test created a recipe without any variant content. Its fixture now supplies a method; targeted desktop image test passes. Push the fixture correction and require all CI on the new head.
+GitHub: #220 in-progress update posted; completion/PR/exact-head CI/merge to be recorded there. #234 and milestone #7 verified OPEN; no new issue. PR/head/CI/merge pending. Next: tracking sync, review, push PR to development, require green exact-head checks, merge commit, verify unchanged main. After merge: Recipes V1 release-readiness audit in a new independent session; do not start it here.

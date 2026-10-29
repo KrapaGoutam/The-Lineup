@@ -113,4 +113,17 @@ Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merge
 
 ## Recipes V1 — owner acceptance checkpoint
 
-Completed: Concept E design reference and implementation (#232); independent audit fixes (#233). Current: owner acceptance QA must-fix ([#234](https://github.com/KrapaGoutam/The-Lineup/issues/234)). Pending: owner browser retest, deferred polish and owner decisions, Staff acceptance, persistent DEV/full Recipes + Inventory review as applicable, release-readiness audit, explicit Production approval, and eventual development → main. Part 2 and Part 3 remain on hold. Release is NO-GO.
+Completed: Concept E design reference and implementation (#232); independent audit fixes (#233). Owner acceptance QA must-fix merged in PR #235; remaining acceptance work ([#234](https://github.com/KrapaGoutam/The-Lineup/issues/234)) is SHELVED / LATER. Pending: owner browser retest, deferred polish and owner decisions, Staff acceptance, persistent DEV/full Recipes + Inventory review as applicable, release-readiness audit, explicit Production approval, and eventual development → main. Part 2 and Part 3 remain on hold. Release is NO-GO.
+
+## Recipes V1 current phase ordering — 2026-10-29
+
+This ordering supersedes the owner-retest-next ordering above.
+
+- **Current checkpoint: Recipes + Inventory integration sanity pass — COMPLETE / GO** on development `508cab9584bb77aacee89107f2d6940314b47214`; merge after exact-head CI. [Evidence](features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29); #220 tracks PR/CI/merge.
+- **Following: Recipes V1 release-readiness audit — new independent session.** Not started here.
+- **SHELVED / LATER:** owner browser acceptance retest (#234).
+- **SHELVED / LATER:** deferred Recipe Detail RD-E-005/007/008 and owner decisions/polish O-1–O-4.
+- **SHELVED / LATER:** Staff acceptance TC-19.
+- **SHELVED / LATER:** persistent DEV realistic-data owner review.
+
+All shelved items remain tracked; release readiness/Production/main promotion are not approved by this sanity result. Milestone #7 stays open; Part 2/3 remain on hold.

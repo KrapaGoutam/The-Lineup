@@ -177,3 +177,7 @@ Shared golden vectors (already committed in BI-0, consumed by U and P): `tests/f
 | BI-REL-001 | DEV production-build UI has the PROD project ref in 0 files (`.next` grep)              | H      | SEC-4 | BI-10 |
 | BI-REL-002 | Migrations replay from an empty database (CI Database job)                              | P      | SEC-4 | each  |
 | BI-REL-003 | Migrations-first release route; blocked on #111/#113 — **not part of this build cycle** | —      | SEC-4 | BI-11 |
+
+## Recipes coexistence checkpoint — 2026-10-29
+
+Focused Inventory smoke and Recipes round-trip passed across configured desktop Chromium, real WebKit host-tablet and server-mobile; Inventory filter/quantity state remains independent. No Inventory source, authorization, schema or quantity logic changed. Full IS-01–IS-20 and command evidence: [Recipes integration sanity](../recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29). Vendor Order Drafts were not expanded beyond existing navigation-tab coverage.

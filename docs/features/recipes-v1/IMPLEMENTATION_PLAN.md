@@ -180,3 +180,9 @@ No scope expansion. Out of V1 (all recorded in `tasks/backlog.md`): duplicate re
 ## Recipes V1 R-1 checkpoint
 
 R1-A, R1-B and R1-C complete; R1-D local validation complete, PR #223 merged to development after exact-head CI passed. R-2 not started.
+
+## Recipes + Inventory integration checkpoint — 2026-10-29
+
+GO for coexistence on development baseline `508cab9584bb77aacee89107f2d6940314b47214` (PR #235 merged). Focused unit/component and three-device/two-theme browser evidence, actual module boundaries and IS-01–IS-20 are recorded in [TEST_MATRIX.md](TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29). No application or database change required. Exact-head CI/PR/merge tracked under #220.
+
+Next: Recipes V1 release-readiness audit, new independent session; do not start automatically. Owner browser acceptance retest, deferred detail findings/owner decisions, Staff TC-19 and persistent DEV realistic-data review remain SHELVED / LATER. #234 and milestone #7 stay open; this checkpoint does not mark release readiness or authorize Production/main promotion.
