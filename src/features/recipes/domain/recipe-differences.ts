@@ -28,7 +28,37 @@ export type VariantDifferences = {
 };
 
 const ingredientKey = (i: DetailVariant["ingredients"][number]) =>
-  [norm(i.ingredient_name), norm(i.amount), norm(i.unit)].join("|");
+  JSON.stringify([
+    norm(i.ingredient_name),
+    norm(i.amount),
+    norm(i.unit),
+    norm(i.preparation),
+  ]);
+
+/** Match steps in sequence so inserted steps do not mark every later step. */
+function differingSteps(a: string[], b: string[]): [boolean[], boolean[]] {
+  const lengths = Array.from({ length: a.length + 1 }, () =>
+    Array<number>(b.length + 1).fill(0),
+  );
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      lengths[i][j] =
+        a[i] === b[j]
+          ? 1 + lengths[i + 1][j + 1]
+          : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+  const left = a.map(() => true);
+  const right = b.map(() => true);
+  let i = 0,
+    j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      left[i++] = false;
+      right[j++] = false;
+    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) i++;
+    else j++;
+  }
+  return [left, right];
+}
 
 /**
  * Display-only comparison of two variants. A row "differs" when the other
@@ -58,13 +88,18 @@ export function deriveVariantDifferences(
       (flag, index) =>
         flag && result[name].ingredientIds.add(own.ingredients[index].id),
     );
-    differing(
-      own.steps.map((s) => norm(s.instruction)),
-      other.steps.map((s) => norm(s.instruction)),
-    ).forEach(
-      (flag, index) => flag && result[name].stepIds.add(own.steps[index].id),
-    );
   }
+  const [perfectSteps, houseSteps] = differingSteps(
+    perfect.steps.map((s) => norm(s.instruction)),
+    house.steps.map((s) => norm(s.instruction)),
+  );
+  perfectSteps.forEach(
+    (flag, index) =>
+      flag && result.perfect.stepIds.add(perfect.steps[index].id),
+  );
+  houseSteps.forEach(
+    (flag, index) => flag && result.house.stepIds.add(house.steps[index].id),
+  );
   return result;
 }
 

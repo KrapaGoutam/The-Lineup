@@ -35,6 +35,51 @@ const ing = (id: string, name: string, amount: string, unit = "oz") => ({
 });
 
 describe("deriveVariantDifferences", () => {
+  it("detects a change in ingredient preparation", () => {
+    const d = deriveVariantDifferences(
+      make("perfect", {
+        ingredients: [{ ...ing("p", "Mint", "4"), preparation: "muddled" }],
+      }),
+      make("house", {
+        ingredients: [{ ...ing("h", "Mint", "4"), preparation: "slapped" }],
+      }),
+    );
+    expect([...d.house.ingredientIds]).toEqual(["h"]);
+  });
+
+  it("detects reordered instructions", () => {
+    const d = deriveVariantDifferences(
+      make("perfect", {
+        steps: [
+          { id: "p1", instruction: "Shake", sort_order: 1 },
+          { id: "p2", instruction: "Strain", sort_order: 2 },
+        ],
+      }),
+      make("house", {
+        steps: [
+          { id: "h1", instruction: "Strain", sort_order: 1 },
+          { id: "h2", instruction: "Shake", sort_order: 2 },
+        ],
+      }),
+    );
+    expect(d.house.stepIds.size).toBe(1);
+  });
+
+  it("does not mark unchanged steps after an insertion", () => {
+    const d = deriveVariantDifferences(
+      make("perfect", {
+        steps: [{ id: "p", instruction: "Strain", sort_order: 1 }],
+      }),
+      make("house", {
+        steps: [
+          { id: "h1", instruction: "Shake", sort_order: 1 },
+          { id: "h2", instruction: "Strain", sort_order: 2 },
+        ],
+      }),
+    );
+    expect([...d.house.stepIds]).toEqual(["h1"]);
+    expect(d.perfect.stepIds.size).toBe(0);
+  });
   it("flags only rows without an identical counterpart, ignoring case and spacing", () => {
     const perfect = make("perfect", {
       ingredients: [ing("p1", "Rum", "2"), ing("p2", "Syrup", "0.5")],
@@ -130,5 +175,11 @@ describe("deriveGlanceFields", () => {
 
   it("omits fields nobody has and returns nothing for empty data", () => {
     expect(fields([make("perfect")])).toEqual([]);
+  });
+
+  it("omits whitespace-only optional presentation values", () => {
+    expect(
+      fields([make("house", { glass: " ", glass_notes: " ", rim_type: " " })]),
+    ).toEqual([]);
   });
 });

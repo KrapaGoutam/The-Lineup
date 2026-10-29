@@ -1,6 +1,6 @@
 # Project Status & Milestone Tracker
 
-## Recipe Detail editorial redesign (Concept E) — implemented on feature branch, PR to `development` pending merge
+## Recipe Detail editorial redesign (Concept E) — merged to `development` (PR #232)
 
 Concept E — Editorial Recipe Book is implemented for #230 (frontend only; no schema, migration, authorization or Realtime change). Desktop (≥1024px) shows complete Perfect and House recipes side by side on shared grid rows with a centre hairline; tablet/mobile stack Perfect then House with Perfect ↓ / House ↓ jump links (the segmented tabs are removed). House adjustments are derived for display by comparing the two persisted variants and are marked with an accent edge, tint, stronger amount and a "House adjustment" text note. Quick Glance is a compact strip built from persisted values (both values shown only where Perfect and House differ). Final Presentation follows the recipes: one shared block when Glass/Garnish/Rim/notes are equivalent, otherwise separate Perfect/House Presentation specs. **Image limitation:** a recipe has one canonical image (`bar_recipes.image_path`; no per-variant image fields), so the single image is shown once in both presentation states; no schema was added. A single recipe uses a centered reading column. The [design reference](design-reference/recipes/recipe-detail-concepts/README.md) remains the visual target.
 
