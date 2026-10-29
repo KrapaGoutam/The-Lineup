@@ -1,5 +1,5 @@
 ﻿import { expect as baseExpect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import {
   recipePhoto,
@@ -308,6 +308,40 @@ test("hosted R2-D image pipeline persists, replaces, removes; Staff active/archi
       path: "test-results/r2d-hosted-detail.png",
       fullPage: true,
     });
+    // R-2g: Picture Book signs every thumbnail in ONE batched Server Action
+    // and the private thumbnail really renders for management and Staff.
+    for (const viewer of [page, staff]) {
+      const bodies: string[] = [];
+      const record = (request: Request) => {
+        const body = request.postData();
+        if (request.headers()["next-action"] && body) bodies.push(body);
+      };
+      viewer.on("request", record);
+      await viewer.goto("/?tab=recipes");
+      await viewer
+        .getByRole("button", { name: "Picture Book", exact: true })
+        .click();
+      const thumb = viewer.locator(`a[data-recipe-card="${recipe.slug}"] img`);
+      await expect(thumb).toBeVisible();
+      await expect
+        .poll(() =>
+          thumb.evaluate(
+            (img: HTMLImageElement) => img.complete && img.naturalWidth > 0,
+          ),
+        )
+        .toBe(true);
+      viewer.off("request", record);
+      expect(
+        bodies.filter((body) => body.includes('"recipeIds"')).length,
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        bodies.filter(
+          (body) =>
+            body.includes('"recipeId"') && !body.includes('"recipeIds"'),
+        ),
+      ).toHaveLength(0);
+    }
+    await page.goto(detailUrl);
     await page
       .getByRole("button", { name: "Archive Recipe", exact: true })
       .click();
@@ -315,6 +349,11 @@ test("hosted R2-D image pipeline persists, replaces, removes; Staff active/archi
       .getByRole("dialog")
       .getByRole("button", { name: "Archive Recipe", exact: true })
       .click();
+    // R-2g: wait for the committed archive before Staff loads; a read that
+    // straddles the commit would otherwise show a half-empty detail screen.
+    await expect(
+      page.getByRole("button", { name: "Restore Recipe", exact: true }),
+    ).toBeVisible();
     await staff.goto(detailUrl);
     await expect(
       staff.getByText("Recipe not found", { exact: true }),

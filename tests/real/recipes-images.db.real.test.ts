@@ -6,6 +6,7 @@ import type { Database } from "@/types/database.generated";
 import {
   mutateRecipeImageData,
   signRecipeImages,
+  signRecipeThumbnails,
 } from "@/features/recipes/data/recipe-image-data";
 import { imagePaths } from "@/features/recipes/domain/image-rules";
 import { adminClient, env } from "./support/harness";
@@ -204,6 +205,32 @@ describe("R2-D actual application data path, DEV JWT Storage", () => {
       expect((await fetch(signed.hero!)).ok).toBe(true);
     }
   });
+  it("R-2g: batched thumbnail signing works for management and Staff, never foreign", async () => {
+    const metadata = await row();
+    const batchRows = async (client: typeof manager, scopeOrg: string) => {
+      const r = await client
+        .from("bar_recipes")
+        .select("id,image_thumb_path")
+        .eq("organization_id", scopeOrg)
+        .in("id", [id]);
+      expect(r.error).toBeNull();
+      return r.data ?? [];
+    };
+    for (const client of [manager, staff]) {
+      const rows = await batchRows(client, org);
+      expect(rows).toHaveLength(1);
+      const signed = await signRecipeThumbnails(client, org, rows);
+      expect(Object.keys(signed.urls)).toEqual([id]);
+      expect(signed.expiresAt - Date.now()).toBeGreaterThan(3590000);
+      expect((await fetch(signed.urls[id])).ok).toBe(true);
+    }
+    // A foreign JWT reads no row and cannot sign the path even if it is supplied directly.
+    expect(await batchRows(foreign, org)).toHaveLength(0);
+    const forced = await signRecipeThumbnails(foreign, org, [
+      { id, image_thumb_path: metadata.image_thumb_path },
+    ]);
+    expect(forced.urls).toEqual({});
+  });
   it("denies Staff upload and delete and foreign read/mutation", async () => {
     const p = imagePaths(org, id, "image/jpeg");
     expect(
@@ -264,6 +291,29 @@ describe("R2-D actual application data path, DEV JWT Storage", () => {
     await archive(true);
     expect(await listing()).toEqual(before);
     const metadata = await row();
+    // R-2g: the batched path also hides archived thumbnails from Staff.
+    const staffRows = await staff
+      .from("bar_recipes")
+      .select("id,image_thumb_path")
+      .eq("organization_id", org)
+      .in("id", [id]);
+    expect(staffRows.data ?? []).toHaveLength(0);
+    expect(
+      (
+        await signRecipeThumbnails(staff, org, [
+          { id, image_thumb_path: metadata.image_thumb_path },
+        ])
+      ).urls,
+    ).toEqual({});
+    expect(
+      Object.keys(
+        (
+          await signRecipeThumbnails(manager, org, [
+            { id, image_thumb_path: metadata.image_thumb_path },
+          ])
+        ).urls,
+      ),
+    ).toEqual([id]);
     expect(
       (await signRecipeImages(manager, org, id, metadata)).hero,
     ).toBeTruthy();

@@ -722,7 +722,7 @@ export function RecipesModule({
                 onClick={() => setViewMode("list")}
                 aria-pressed={viewMode === "list"}
                 className={cn(
-                  "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition",
+                  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md px-3 text-sm font-medium transition",
                   viewMode === "list"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -735,7 +735,7 @@ export function RecipesModule({
                 onClick={() => setViewMode("picture")}
                 aria-pressed={viewMode === "picture"}
                 className={cn(
-                  "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition",
+                  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md px-3 text-sm font-medium transition",
                   viewMode === "picture"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -757,7 +757,7 @@ export function RecipesModule({
                 onClick={() => setFilterMode("all")}
                 aria-pressed={filterMode === "all"}
                 className={cn(
-                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  "flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1 text-xs font-medium transition",
                   filterMode === "all"
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground",
@@ -770,7 +770,7 @@ export function RecipesModule({
                 onClick={() => setFilterMode("popular")}
                 aria-pressed={filterMode === "popular"}
                 className={cn(
-                  "flex min-h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition",
+                  "flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition",
                   filterMode === "popular"
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground",
@@ -783,7 +783,7 @@ export function RecipesModule({
                 onClick={() => setFilterMode("on_menu")}
                 aria-pressed={filterMode === "on_menu"}
                 className={cn(
-                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  "flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1 text-xs font-medium transition",
                   filterMode === "on_menu"
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground",
@@ -796,7 +796,7 @@ export function RecipesModule({
                 onClick={() => setFilterMode("non_alcoholic")}
                 aria-pressed={filterMode === "non_alcoholic"}
                 className={cn(
-                  "flex min-h-9 shrink-0 cursor-pointer items-center rounded-full border px-3 py-1 text-xs font-medium transition",
+                  "flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1 text-xs font-medium transition",
                   filterMode === "non_alcoholic"
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground",
@@ -816,7 +816,7 @@ export function RecipesModule({
                 onClick={() => setSortMode("book")}
                 aria-pressed={sortMode === "book"}
                 className={cn(
-                  "cursor-pointer rounded-md px-2.5 py-1 font-medium transition",
+                  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md px-3 font-medium transition",
                   sortMode === "book"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -829,7 +829,7 @@ export function RecipesModule({
                 onClick={() => setSortMode("az")}
                 aria-pressed={sortMode === "az"}
                 className={cn(
-                  "cursor-pointer rounded-md px-2.5 py-1 font-medium transition",
+                  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-md px-3 font-medium transition",
                   sortMode === "az"
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",

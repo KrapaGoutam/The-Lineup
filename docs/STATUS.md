@@ -1,5 +1,21 @@
 # Project Status & Milestone Tracker
 
+## Recipes V1 R-2g — independent final gate: GO
+
+Independent post-merge gate for Recipes R-2 on development `73a24e1`
+(branch `feature/recipes-v1-final-gate`). Five small defects were reproduced,
+fixed and covered by regression tests: House Notes label, List/Picture Book toggle
+without `localStorage`, oz-ratio unit edge cases, per-card thumbnail signing
+(now one batched Server Action per STORAGE_PLAN S-9) and sub-44 px browse
+controls (RC-148). Focused Recipes Vitest 28 files / 253 tests; full Vitest 155 /
+2,015; Recipes pgTAP 166 and full pgTAP 48 files / 1,538; two-session
+concurrency harness 5/5; hosted DEV database suites 14/14 and hosted browser
+flows 8/8; Recipes Playwright 48/48 (desktop, WebKit tablet, mobile); DEV-pinned
+and explicit-empty builds and scans PASS. DEV migration parity 61/61 (no
+R-2g migration); independent synthetic residue check zero. PROD, main and Part 2
+untouched; no real import. Next: Recipes V1 release-readiness plus explicit owner
+approval. Evidence: [R-2g final gate](features/recipes-v1/R2G_FINAL_GATE.md).
+
 ## Bar Inventory V1.1 — COMPLETE on development (PR #226)
 
 Bulk Count, personal saved views, scoped column ordering, date groups,
@@ -12,7 +28,7 @@ synthetic residue. Final builds, hosted browser (4/4), full Vitest (2,002), pgTA
 (1,538), checks and security scans PASS. Exact-head application, browser-smoke,
 migrations-and-policies and Vercel checks passed on `6c5b447`; PR #226 merged
 with merge commit `12cef009` into development. Main/PROD
-and Recipes implementation are untouched; R-2g has not started. Details:
+and Recipes implementation are untouched by that enhancement. Details:
 [V1.1 validation](features/bar-inventory-v1/V1_1_VALIDATION.md).
 
 **Repository:** The Lineup (Restaurant Roster & Floor Management)
