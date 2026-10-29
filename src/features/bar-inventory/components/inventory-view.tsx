@@ -1,7 +1,7 @@
 "use client";
 
 import { History, Minus, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatBusinessDateTime } from "@/lib/date-time";
@@ -34,6 +34,15 @@ import {
   type TableColumn,
 } from "./table-kit/filterable-table";
 import { StatusBadge } from "./table-kit/status-badge";
+import { BulkCount } from "./bulk-count";
+import { DateAlert, DateTracking } from "./date-tracking";
+import { DateFilters } from "./date-filters";
+import { businessDate } from "../domain/freshness";
+import { dateCellText } from "../domain/inventory-rows";
+import {
+  hasExplicitInventoryState,
+  readViewPayload,
+} from "../domain/saved-views";
 
 export function InventoryView({
   snapshot,
@@ -43,6 +52,7 @@ export function InventoryView({
   loadHistory,
   onOpenHistory,
   runExport,
+  profileId,
 }: {
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
@@ -51,14 +61,47 @@ export function InventoryView({
   loadHistory: LoadHistory;
   onOpenHistory: () => void;
   runExport: RunExport;
+  profileId: string;
 }) {
   const [exportInfo, onVisibleRows] = useVisibleInfo<InventoryRow>();
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("inv.archived") === "1") return true;
+    if (hasExplicitInventoryState(window.location.search)) return false;
+    const saved = readViewPayload(
+      snapshot.savedViews?.find((v) => v.profileId === profileId && v.isDefault)
+        ?.payload,
+      [...INVENTORY_COLUMNS, ...INVENTORY_SORT_ONLY_COLUMNS],
+    );
+    return !!(saved?.owns.includes("showArchived") && saved.state.showArchived);
+  });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (showArchived) {
+      params.set("inv.archived", "1");
+      params.set("bi.org", restaurantSlug);
+    } else params.delete("inv.archived");
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+  }, [showArchived, restaurantSlug]);
   const [lastReason, setLastReason] = useState<AdjustmentReason>("stock_count");
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [filtered, setFiltered] = useState<InventoryRow[]>([]);
+  const [bulkRows, setBulkRows] = useState<InventoryRow[] | null>(null);
+  const [dateFor, setDateFor] = useState<string | null>(null);
 
-  const allRows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
+  const today = businessDate(new Date(), timeZone);
+  const allRows = useMemo(
+    () => buildInventoryRows(snapshot, today),
+    [snapshot, today],
+  );
   const rows = useMemo(
     () => allRows.filter((row) => showArchived || row.status !== "archived"),
     [allRows, showArchived],
@@ -191,6 +234,33 @@ export function InventoryView({
         sortable: true,
         render: (r) => <span className="font-medium">{r.name}</span>,
       }),
+      {
+        id: "selection",
+        label: "Select",
+        type: "text",
+        get: () => null,
+        noFilter: true,
+        render: (row) => (
+          <label className="flex min-h-11 min-w-11 items-center justify-center">
+            <input
+              type="checkbox"
+              aria-label={`Select ${row.name}`}
+              className="size-4"
+              disabled={row.status === "archived"}
+              checked={
+                selected.includes(row.productId) && row.status !== "archived"
+              }
+              onChange={() =>
+                setSelected((current) =>
+                  current.includes(row.productId)
+                    ? current.filter((id) => id !== row.productId)
+                    : [...current, row.productId],
+                )
+              }
+            />
+          </label>
+        ),
+      },
       col("category", {
         sortable: true,
         tabletHidden: true,
@@ -240,10 +310,46 @@ export function InventoryView({
         tabletHidden: true,
         render: (r) => r.updatedBy ?? "—",
       }),
+      col("manufacture", {
+        sortable: true,
+        render: (r) => (
+          <Button
+            variant="ghost"
+            onClick={() => setDateFor(r.productId)}
+            aria-label={`Manufacture dates for ${r.name}`}
+          >
+            {dateCellText(r, "manufacture")}
+          </Button>
+        ),
+      }),
+      col("expiration", {
+        sortable: true,
+        render: (r) => (
+          <Button
+            variant="ghost"
+            onClick={() => setDateFor(r.productId)}
+            aria-label={`Expiration dates for ${r.name}`}
+          >
+            {dateCellText(r, "expiration")}
+          </Button>
+        ),
+      }),
+      col("dateAlert", { render: (r) => <DateAlert row={r} /> }),
+      col("freshness", { render: (r) => spec.get("freshness")!.get(r) }),
+      col("expirationDays", {
+        sortable: true,
+        align: "right",
+        render: (r) => r.dateInfo?.expiration.days ?? "—",
+      }),
+      col("dateTracking", { render: (r) => spec.get("dateTracking")!.get(r) }),
     ];
     // The save callbacks close over `run` and `lastReason` only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeZone, lastReason, run]);
+  }, [timeZone, lastReason, run, selected]);
+
+  const selection = allRows.filter(
+    (r) => selected.includes(r.productId) && r.status !== "archived",
+  );
 
   return (
     <div className="flex w-full max-w-full min-w-0 flex-col gap-3">
@@ -259,6 +365,17 @@ export function InventoryView({
       ) : null}
       <FilterableTable<InventoryRow>
         tableKey="inv"
+        toolbarState={(state, onChange) => (
+          <DateFilters state={state} onChange={onChange} />
+        )}
+        savedViews={{
+          views: (snapshot.savedViews ?? []).filter(
+            (v) => v.profileId === profileId,
+          ),
+          run,
+          showArchived,
+          setShowArchived,
+        }}
         restaurantSlug={restaurantSlug}
         label="Inventory"
         rows={rows}
@@ -268,10 +385,44 @@ export function InventoryView({
         timeZone={timeZone}
         defaultSort={INVENTORY_DEFAULT_SORT}
         sortPresets={INVENTORY_SORT_PRESETS}
-        onVisibleRows={onVisibleRows}
+        onVisibleRows={(visible, state) => {
+          onVisibleRows(visible, state);
+          setFiltered((current) =>
+            current.length === visible.length &&
+            current.every((r, i) => r === visible[i])
+              ? current
+              : visible,
+          );
+        }}
         emptyMessage="No products yet. Add products under Manage to start counting."
         toolbarExtras={
           <>
+            <span role="status" className="text-sm">
+              {selection.length} selected
+            </span>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setSelected(
+                  filtered
+                    .filter((r) => r.status !== "archived")
+                    .map((r) => r.productId),
+                )
+              }
+            >
+              Select filtered results
+            </Button>
+            <Button
+              disabled={!selection.length}
+              onClick={() => setBulkRows(selection)}
+            >
+              Bulk Edit
+            </Button>
+            {selected.length ? (
+              <Button variant="ghost" onClick={() => setSelected([])}>
+                Clear selection
+              </Button>
+            ) : null}
             <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -290,17 +441,33 @@ export function InventoryView({
               build={(filters) => ({ kind: "inventory", filters })}
               run={runExport}
             />
+            <ExportControl
+              label="Export date groups"
+              info={exportInfo}
+              build={(filters) => ({ kind: "date_groups", filters })}
+              run={runExport}
+            />
           </>
         }
         rowActions={(row) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={`Adjust ${row.name}`}
-            onClick={() => setSheetFor(row.productId)}
-          >
-            Adjust
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Adjust ${row.name}`}
+              onClick={() => setSheetFor(row.productId)}
+            >
+              Adjust
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Date tracking for ${row.name}`}
+              onClick={() => setDateFor(row.productId)}
+            >
+              Dates
+            </Button>
+          </div>
         )}
         renderCard={(row) => (
           <article
@@ -322,6 +489,7 @@ export function InventoryView({
               </div>
               <StatusBadge status={row.status} />
             </div>
+            <DateAlert row={row} />
             <p className="text-sm">
               <span className="font-semibold">
                 Total {formatQuantity(row.total)}
@@ -340,6 +508,33 @@ export function InventoryView({
                 : ""}
             </p>
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                aria-label={`Date tracking for ${row.name}`}
+                onClick={() => setDateFor(row.productId)}
+              >
+                Dates
+              </Button>
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${row.name}`}
+                  className="size-4"
+                  disabled={row.status === "archived"}
+                  checked={
+                    selected.includes(row.productId) &&
+                    row.status !== "archived"
+                  }
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(row.productId)
+                        ? current.filter((id) => id !== row.productId)
+                        : [...current, row.productId],
+                    )
+                  }
+                />
+                Select
+              </label>
               <Button
                 variant="secondary"
                 size="icon"
@@ -376,6 +571,28 @@ export function InventoryView({
         history={{ timeZone, load: loadHistory }}
         onClose={() => setSheetFor(null)}
       />
+      {bulkRows ? (
+        <BulkCount
+          rows={bulkRows}
+          latestRows={allRows}
+          run={run}
+          timeZone={timeZone}
+          onClose={() => {
+            setBulkRows(null);
+            setSelected([]);
+          }}
+        />
+      ) : null}
+      {dateFor && allRows.find((r) => r.productId === dateFor) ? (
+        <DateTracking
+          key={dateFor}
+          row={allRows.find((r) => r.productId === dateFor)!}
+          snapshot={snapshot}
+          run={run}
+          timeZone={timeZone}
+          onClose={() => setDateFor(null)}
+        />
+      ) : null}
     </div>
   );
 }

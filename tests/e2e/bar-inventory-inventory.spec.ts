@@ -348,7 +348,7 @@ test("the column chooser hides a column (desktop/tablet)", async ({ page }) => {
   await page.getByRole("button", { name: "Columns" }).click();
   await page
     .getByRole("dialog", { name: "Choose columns" })
-    .getByLabel("Vendor")
+    .getByRole("checkbox", { name: "Vendor", exact: true })
     .uncheck();
   await expect(
     table.getByRole("columnheader", { name: /^Vendor/ }),

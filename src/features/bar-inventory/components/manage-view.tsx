@@ -27,14 +27,16 @@ import {
   type TableColumn,
 } from "./table-kit/filterable-table";
 import { ImportView, type ImportApi } from "./import-view";
+import { FreshnessRules } from "./freshness-rules";
 
-type Section = "products" | "vendors" | "categories" | "import";
+type Section = "products" | "vendors" | "categories" | "import" | "freshness";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "products", label: "Products" },
   { id: "vendors", label: "Vendors" },
   { id: "categories", label: "Categories" },
   { id: "import", label: "Import" },
+  { id: "freshness", label: "Freshness Rules" },
 ];
 
 const statusText = (active: boolean) => (active ? "Active" : "Archived");
@@ -603,6 +605,9 @@ export function ManageView({
 
       {section === "import" ? (
         <ImportView api={imports} timeZone={timeZone} onImported={onImported} />
+      ) : null}
+      {section === "freshness" ? (
+        <FreshnessRules snapshot={snapshot} run={run} />
       ) : null}
 
       {section === "categories" ? (

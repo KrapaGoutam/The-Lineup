@@ -1,5 +1,11 @@
 import type { CatalogCommand } from "./catalog-commands";
 import {
+  parseInventoryDate,
+  displayInventoryDate,
+  type DateLot,
+  type FreshnessRule,
+} from "./freshness";
+import {
   UNIT_LABEL_MAX,
   type CatalogConflict,
   type CatalogFailure,
@@ -31,6 +37,7 @@ import {
  */
 
 export type CatalogContext = {
+  profileId?: string;
   actorName: string;
   now: Date;
   newId: () => string;
@@ -565,6 +572,206 @@ function apply(
   const state = withSystemVendor(base, ctx);
 
   switch (command.type) {
+    case "savedViewSave": {
+      const profileId = ctx.profileId ?? ctx.actorName;
+      const views = state.savedViews ?? [];
+      const old = views.find(
+        (v) => v.id === command.id && v.profileId === profileId,
+      );
+      if (command.id && !old)
+        throw refuse("That personal view is not available.");
+      if (old && old.version !== command.expectedVersion)
+        throw refuse("This saved view changed. Reload and try again.");
+      const name = cleanText(command.name);
+      if (!name || name.length > 80)
+        throw refuse("Enter a view name of 1–80 characters.");
+      if (
+        views.some(
+          (v) =>
+            v.profileId === profileId &&
+            v.id !== command.id &&
+            v.name.toLowerCase() === name.toLowerCase(),
+        )
+      )
+        throw refuse("You already have a view with that name.");
+      const next = {
+        id: old?.id ?? ctx.newId(),
+        profileId,
+        name,
+        payload: command.payload,
+        isDefault: command.isDefault,
+        version: (old?.version ?? 0) + 1,
+      };
+      return {
+        ...state,
+        savedViews: [
+          ...views
+            .filter((v) => v.id !== old?.id)
+            .map((v) =>
+              command.isDefault && v.profileId === profileId && v.isDefault
+                ? { ...v, isDefault: false, version: v.version + 1 }
+                : v,
+            ),
+          next,
+        ],
+      };
+    }
+    case "savedViewDelete": {
+      const old = state.savedViews?.find(
+        (v) =>
+          v.id === command.id &&
+          v.profileId === (ctx.profileId ?? ctx.actorName),
+      );
+      if (!old) throw refuse("That personal view is not available.");
+      if (old.version !== command.expectedVersion)
+        throw refuse("This saved view changed. Reload and try again.");
+      return {
+        ...state,
+        savedViews: state.savedViews?.filter((v) => v.id !== old.id),
+      };
+    }
+    case "bulkCount": {
+      const ids = new Set<string>();
+      for (const row of command.rows) {
+        if (ids.has(row.productId))
+          throw refuse("Each product may appear only once.");
+        ids.add(row.productId);
+        const stock = state.stock.find((s) => s.productId === row.productId);
+        if (!stock || stock.version !== row.expectedVersion)
+          throw new CatalogRefusal(
+            "This count changed. Nothing was saved. Refresh and review.",
+            {
+              kind: "stale",
+              entity: "stock",
+              id: row.productId,
+              currentVersion: stock?.version ?? 0,
+              updatedAt: stock?.updatedAt ?? null,
+              updatedBy: stock?.updatedByName ?? null,
+              current: stock
+                ? { onHand: stock.onHand, backup: stock.backup }
+                : undefined,
+            },
+          );
+      }
+      // Pure staged state: no caller-visible mutation if a later row fails.
+      return command.rows.reduce(
+        (next, row) =>
+          adjustStock(
+            next,
+            {
+              type: "stockAdjust",
+              productId: row.productId,
+              mode: "set",
+              onHand: row.onHand,
+              backup: row.backup,
+              expectedVersion: row.expectedVersion,
+              reason: command.reason,
+              note: command.note,
+            },
+            ctx,
+          ),
+        state,
+      );
+    }
+    case "dateLotSave": {
+      const product = state.products.find(
+        (p) => p.id === command.productId && p.active,
+      );
+      if (!product)
+        throw refuse("Choose an active product in this restaurant.");
+      if (!command.manufacture && !command.expiration)
+        throw refuse("Enter a manufacture or expiration date.");
+      for (const [kind, date] of [
+        ["manufacture", command.manufacture],
+        ["expiration", command.expiration],
+      ] as const) {
+        if (
+          date &&
+          parseInventoryDate(displayInventoryDate(date), kind)?.date !==
+            date.date
+        )
+          throw refuse("Invalid date precision.");
+      }
+      if (
+        command.manufacture &&
+        command.expiration &&
+        command.manufacture.date > command.expiration.date
+      )
+        throw refuse("Expiration must not precede manufacture.");
+      if (
+        command.quantity !== null &&
+        (!Number.isFinite(command.quantity) ||
+          command.quantity < 0 ||
+          Math.round(command.quantity * 100) / 100 !== command.quantity)
+      )
+        throw refuse("Enter a nonnegative quantity with up to 2 decimals.");
+      const lots = state.dateLots ?? [];
+      const old = lots.find(
+        (l) => l.id === command.id && l.productId === command.productId,
+      );
+      if (command.id && !old)
+        throw refuse("That date entry is not available here.");
+      if (old) checkVersion("date_lot", old, command.expectedVersion ?? 0);
+      const next: DateLot = {
+        id: old?.id ?? ctx.newId(),
+        productId: command.productId,
+        quantity: command.quantity,
+        manufacture: command.manufacture,
+        expiration: command.expiration,
+        notes: command.notes,
+        active: command.active,
+        version: (old?.version ?? 0) + 1,
+        updatedAt: ctx.now.toISOString(),
+        updatedByName: ctx.actorName,
+      };
+      return {
+        ...state,
+        dateLots: old
+          ? lots.map((l) => (l.id === old.id ? next : l))
+          : [...lots, next],
+      };
+    }
+    case "freshnessRuleSave": {
+      if (!state.subcategories.some((s) => s.id === command.subcategoryId))
+        throw refuse("Choose a subcategory in this restaurant.");
+      if (
+        command.warningMonths >= command.maximumMonths ||
+        command.maximumMonths < 1 ||
+        command.maximumMonths > 120 ||
+        command.warningMonths < 0
+      )
+        throw refuse("Warning months must be less than maximum months.");
+      const rules = state.freshnessRules ?? [];
+      const old = rules.find((r) => r.id === command.id);
+      if (command.id && !old)
+        throw refuse("That freshness rule is not available here.");
+      if (old)
+        checkVersion("freshness_rule", old, command.expectedVersion ?? 0);
+      if (
+        rules.some(
+          (r) =>
+            r.subcategoryId === command.subcategoryId && r.id !== command.id,
+        )
+      )
+        throw refuse("This subcategory already has a freshness rule.");
+      const next: FreshnessRule = {
+        id: old?.id ?? ctx.newId(),
+        subcategoryId: command.subcategoryId,
+        trackingEnabled: command.trackingEnabled,
+        maximumMonths: command.maximumMonths,
+        warningMonths: command.warningMonths,
+        active: command.active,
+        version: (old?.version ?? 0) + 1,
+        updatedAt: ctx.now.toISOString(),
+        updatedByName: ctx.actorName,
+      };
+      return {
+        ...state,
+        freshnessRules: old
+          ? rules.map((r) => (r.id === old.id ? next : r))
+          : [...rules, next],
+      };
+    }
     case "vendorCreate": {
       const name = validName("vendor name", command.name, 120);
       const notes = optionalText("vendor notes", command.notes, 500);

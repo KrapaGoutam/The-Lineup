@@ -2,6 +2,8 @@ import type { Designation } from "@/features/auth/domain/passcode";
 
 import type { OrderDraftView } from "./order-draft-view";
 import type { AdjustmentReason, StockStatus } from "./stock-rules";
+import type { DateLot, FreshnessRule } from "./freshness";
+import type { SavedView } from "./saved-views";
 
 /** Curated unit types (owner decision D8). `other` carries a custom label. */
 export const UNIT_TYPES = [
@@ -154,6 +156,9 @@ export type ImportBatchView = {
 
 /** The organization-level catalog (BI-1) plus location stock (BI-2/3). */
 export type CatalogState = {
+  dateLots?: DateLot[];
+  savedViews?: SavedView[];
+  freshnessRules?: FreshnessRule[];
   vendors: VendorView[];
   categories: CategoryView[];
   subcategories: SubcategoryView[];

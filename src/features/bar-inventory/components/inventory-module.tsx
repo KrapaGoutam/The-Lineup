@@ -35,6 +35,7 @@ import { planImport, prepareCommit } from "../domain/import-run";
 import type { ImportApi } from "./import-view";
 import { prepareExport } from "../domain/exports";
 import { isInventoryManager } from "../domain/inventory-types";
+import { INVENTORY_DEFAULT_SORT } from "../domain/inventory-rows";
 import {
   useCatalogController,
   type DemoCatalogBinding,
@@ -62,6 +63,7 @@ import { InventoryView } from "./inventory-view";
 import {
   dropForeignTableState,
   writeTableState,
+  TableProfileContext,
 } from "./table-kit/filterable-table";
 import { ManageView } from "./manage-view";
 import { TableSkeleton } from "./table-kit/empty-state";
@@ -121,7 +123,14 @@ export function InventoryModule(props: Props) {
       </Card>
     );
   }
-  return <ManagerInventory {...props} />;
+  return (
+    <TableProfileContext.Provider value={props.user.profileId}>
+      <ManagerInventory
+        key={`${props.restaurantSlug}.${props.user.profileId}`}
+        {...props}
+      />
+    </TableProfileContext.Provider>
+  );
 }
 
 function ManagerInventory({
@@ -572,6 +581,7 @@ function ManagerInventory({
           />
         ) : view === "inventory" ? (
           <InventoryView
+            profileId={user.profileId}
             snapshot={controller.snapshot}
             run={controller.run}
             restaurantSlug={restaurantSlug}
@@ -609,8 +619,22 @@ function ManagerInventory({
             loadHistory={loadHistory}
             draftCta={draftCta}
             onOpenInventory={(state) => {
+              const params = new URLSearchParams(window.location.search);
+              params.delete("inv.archived");
+              const query = params.toString();
+              window.history.replaceState(
+                window.history.state,
+                "",
+                `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+              );
               // The Inventory table reads its filters from the URL when it mounts.
-              writeTableState("inv", restaurantSlug, state);
+              // An unfiltered Dashboard tile is still an explicit navigation.
+              // Writing its effective sort prevents a personal default from
+              // replacing that intent when Inventory mounts.
+              writeTableState("inv", restaurantSlug, {
+                ...state,
+                sort: state.sort.length ? state.sort : INVENTORY_DEFAULT_SORT,
+              });
               setView("inventory");
             }}
           />

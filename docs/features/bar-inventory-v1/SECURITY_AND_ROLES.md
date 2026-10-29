@@ -66,3 +66,23 @@ Either way **standard staff can never modify inventory in V1**. Not implemented 
 ## 7. Required security tests (see `TEST_STRATEGY.md`)
 
 pgTAP: RLS enabled on all tables; staff/outsider/deactivated denied on select and every RPC (`42501`); anon has no privilege; client DML denied; append-only triggers; `search_path` fixed; composite-FK tenant isolation; helpers not executable by clients. Hosted real: every role (owner, manager, assistant manager, server, outsider) gets the same decision from the same RPC; stale-version `PT409`; concurrent delta adjusts; import commit atomicity.
+
+## V1.1 security boundary
+
+New public RPCs inventory_date_lot_save, inventory_freshness_rule_save,
+inventory_bulk_count, inventory_saved_view_save and inventory_saved_view_delete
+all invoke inventory_begin, pin an empty search_path and revoke public/anon
+execution. Owner/Manager/Assistant Manager retain full access; Staff retain none.
+Authenticated clients cannot directly mutate the three new tables. Each RPC
+checks organization/location/entity ownership. Expected versions reject stale
+writes. Saved-view profile IDs derive exclusively from auth.uid(); RLS exposes
+only the caller's personal views. An advisory transaction lock serializes personal
+name/default changes; unique indexes enforce both invariants.
+
+Date/rule changes reuse the immutable non-quantity audit with old/new state and
+server-derived actor. Bulk Count uses the immutable quantity ledger, normal reason
+vocabulary and normal source derivation. The batch validates/locks before calling
+existing stock adjustment logic in one transaction; no browser-side write loop.
+Realtime publishes dates/rules alongside stock/ledger under the same SELECT RLS;
+events only invalidate and refetch canonical state. Personal views are not
+published. No actor/role metadata supplied by the client is trusted.

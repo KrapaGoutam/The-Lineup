@@ -13,6 +13,7 @@ let fx: Fixture;
 let org: string;
 let loc: string;
 let product: string;
+let subcategory: string;
 
 const base = () => ({ p_organization_id: org, p_location_id: loc });
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,7 +26,12 @@ async function listen(user: Who) {
   const { data } = await user.client.auth.getSession();
   user.client.realtime.setAuth(data.session!.access_token);
   const channel = user.client.channel(`rt-access-${user.id}-${Date.now()}`);
-  for (const table of ["inventory_stock", "inventory_adjustments"]) {
+  for (const table of [
+    "inventory_stock",
+    "inventory_adjustments",
+    "inventory_date_lots",
+    "inventory_freshness_rules",
+  ]) {
     channel.on(
       "postgres_changes",
       { event: "*", schema: "public", table, filter: `location_id=eq.${loc}` },
@@ -72,6 +78,18 @@ beforeAll(async () => {
   });
   expect(made.error).toBeNull();
   product = made.data as string;
+  const category = await fx.manager.client.rpc("inventory_category_create", {
+    ...base(),
+    p_name: "Realtime dates",
+  });
+  expect(category.error).toBeNull();
+  const sub = await fx.manager.client.rpc("inventory_subcategory_create", {
+    ...base(),
+    p_category_id: category.data,
+    p_name: "Realtime IPA",
+  });
+  expect(sub.error).toBeNull();
+  subcategory = sub.data as string;
 }, 120_000);
 
 afterAll(async () => {
@@ -96,6 +114,31 @@ describe("Realtime tells only the people who may read the data (BI-RT, BI-SEC)",
       p_expected_version: null,
     });
     expect(counted.error).toBeNull();
+    const date = await fx.manager.client.rpc("inventory_date_lot_save", {
+      ...base(),
+      p_id: null,
+      p_product_id: product,
+      p_quantity: 1,
+      p_manufacture_date: null,
+      p_manufacture_precision: null,
+      p_expiration_date: "2026-12-31",
+      p_expiration_precision: "month",
+      p_notes: null,
+      p_active: true,
+      p_expected_version: null,
+    });
+    expect(date.error).toBeNull();
+    const rule = await fx.manager.client.rpc("inventory_freshness_rule_save", {
+      ...base(),
+      p_id: null,
+      p_subcategory_id: subcategory,
+      p_tracking_enabled: true,
+      p_maximum_months: 9,
+      p_warning_months: 1,
+      p_active: true,
+      p_expected_version: null,
+    });
+    expect(rule.error).toBeNull();
 
     // Give every subscriber the same generous window.
     await wait(6000);
@@ -103,6 +146,8 @@ describe("Realtime tells only the people who may read the data (BI-RT, BI-SEC)",
     const tables = new Set(manager.seen.map((e) => e.table));
     expect(tables.has("inventory_stock")).toBe(true);
     expect(tables.has("inventory_adjustments")).toBe(true);
+    expect(tables.has("inventory_date_lots")).toBe(true);
+    expect(tables.has("inventory_freshness_rules")).toBe(true);
     expect(staff.seen).toEqual([]);
     expect(outsider.seen).toEqual([]);
 

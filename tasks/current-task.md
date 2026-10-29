@@ -1,4 +1,53 @@
-# Current task: Recipes V1 Combined R2-F + R2-G Final R-2 Implementation
+# Current task: Bar Inventory V1.1 enhancement
+
+Approved owner scope, 2026-10-28. Branch `feature/bar-inventory-bulk-edit-freshness`
+from fetched development `e4cffa8faad478164381899b4588748018c194b6`.
+Main baseline `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`; migrations: 56.
+
+- [x] Fetch, clean-tree/branch preflight, create feature branch.
+- [x] Audit existing inventory architecture and owner scope.
+- [x] Authenticate read-only to expected DEV endpoint `opmujepkemwcdxxorhfd`.
+- [x] Verify live DEV management identity and exact migration parity (56/56, latest `20261028193159`).
+- [x] Lock repository implementation contract and audit decisions in `docs/features/bar-inventory-v1/ENHANCEMENT_V1_1.md`.
+- [x] BI-E1: date groups/rules, migration, secure RPCs, domain and DB tests.
+- [x] BI-E2: atomic Bulk Count, review/conflicts, ledger, responsive selection.
+- [x] BI-E3: scoped column ordering and personal saved views.
+- [x] BI-E4: date detail, Manage rules, filters/sorts, Dashboard alerts.
+- [x] BI-E5 pre-PR gates: focused/full tests, DB suites, browser matrix, both builds/scans.
+- [x] Hosted DEV synthetic validation and independent zero-residue verification.
+- [x] Synchronize docs; review security/accessibility/tenant isolation/scope.
+- [ ] Green commits/push, PR to development, exact-head CI, merge commit.
+- [ ] Verify final development, unchanged main, clean tree; completion report.
+
+## Execution state
+
+Access blocker resolved with owner's `LINEUP_SUPABASE_ACCESS_TOKEN` mapping.
+Independently verified live DEV name/ref/region and 56/56 migration parity.
+BI-E1–E4 implemented and validated. Five additive migrations applied to local and
+verified DEV (61 total). Full browser matrix: desktop 84, WebKit tablet 84,
+mobile 82 + 2 established card-layout skips. Hosted new DB suite 10/10 plus
+four-table Realtime authorization PASS; synthetic residue independently zero.
+Final gates: focus 36 files/760; full 155/2,002; pgTAP 48/1,538; browser 250 + 2
+existing skips; hosted UI 4/4 and new DB 10/10; both builds and final PROD-ref/
+secret/path scans PASS. DEV/repository parity 61/61. CI/PR/merge remain pending.
+The 10px tablet shell overflow reproduced on baseline e4cffa8 and was fixed with
+secondary-nav width containment; no Recipes implementation change.
+
+## Prior preflight blocker (resolved)
+
+Local Supabase CLI login lists only JobQuest projects. Supabase connector requires
+a missing `link_id`. Local DEV credentials successfully read the expected endpoint;
+cached project metadata identifies `the-lineup-dev`. No cloud mutation attempted.
+Correct management connection requested; migration/parity gates remain pending.
+The elevated read-only CLI project listing succeeded but returned only
+`jobquest-dev` and `jobquest-prod`, proving this login does not expose The Lineup.
+Do not infer live migration parity from cached linked-project metadata.
+No application code/schema changes, tests, commits, pushes or PR in this attempt.
+Resume by verifying the correct DEV connection and all 56 migration versions
+before beginning BI-E1. Use an explicit feature-branch push destination.
+Recipes R-2g not started. Production and main remain untouched.
+
+## Previous task record: Recipes V1 Combined R2-F + R2-G Final R-2 Implementation
 
 - [x] Mandatory preflight: verify branch `feature/recipes-v1-r2-management`, clean working tree, record starting HEAD `d1e91da96163a8e202be2044a3caf866db3fbc94`.
 - [x] Verify baseline tests: focused Recipes Vitest (25 files / 217 tests PASS).

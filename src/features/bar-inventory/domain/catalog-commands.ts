@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { UNIT_LABEL_MAX, UNIT_TYPES } from "./inventory-types";
 import { ADJUSTMENT_REASONS } from "./stock-rules";
+import { viewPayloadSchema } from "./saved-views";
 
 const uuid = z.string().uuid();
 const version = z.number().int().min(1);
@@ -30,6 +31,70 @@ export const productInputSchema = z.object({
  * is the authority (these limits only bound the request size).
  */
 export const catalogCommandSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("savedViewSave"),
+    id: uuid.nullable(),
+    name: z.string().trim().min(1).max(80),
+    payload: viewPayloadSchema,
+    isDefault: z.boolean(),
+    expectedVersion: version.nullable(),
+  }),
+  z.object({
+    type: z.literal("savedViewDelete"),
+    id: uuid,
+    expectedVersion: version,
+  }),
+  z.object({
+    type: z.literal("bulkCount"),
+    rows: z
+      .array(
+        z.object({
+          productId: uuid,
+          expectedVersion: version,
+          onHand: z
+            .number()
+            .min(0)
+            .max(9999999999.99)
+            .multipleOf(0.01)
+            .nullable(),
+          backup: z
+            .number()
+            .min(0)
+            .max(9999999999.99)
+            .multipleOf(0.01)
+            .nullable(),
+        }),
+      )
+      .min(1)
+      .max(5000),
+    reason: z.enum(ADJUSTMENT_REASONS),
+    note: optionalText(500),
+  }),
+  z.object({
+    type: z.literal("dateLotSave"),
+    id: uuid.nullable(),
+    productId: uuid,
+    quantity: z.number().min(0).max(9999999999.99).multipleOf(0.01).nullable(),
+    manufacture: z
+      .object({ date: z.iso.date(), precision: z.enum(["day", "month"]) })
+      .nullable(),
+    expiration: z
+      .object({ date: z.iso.date(), precision: z.enum(["day", "month"]) })
+      .nullable(),
+    notes: optionalText(500),
+    active: z.boolean(),
+    expectedVersion: version.nullable(),
+  }),
+  z.object({
+    type: z.literal("freshnessRuleSave"),
+    id: uuid.nullable(),
+    subcategoryId: uuid,
+    trackingEnabled: z.boolean(),
+    maximumMonths: z.number().int().min(1).max(120),
+    warningMonths: z.number().int().min(0).max(119),
+    active: z.boolean(),
+    expectedVersion: version.nullable(),
+  }),
   z.object({
     type: z.literal("vendorCreate"),
     name: z.string().max(400),
