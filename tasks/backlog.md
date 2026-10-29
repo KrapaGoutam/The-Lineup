@@ -78,3 +78,5 @@ Recipes V1 R-1 local validation is complete; PR #223 merged to development. R-2 
 ## Recipes Concept E owner acceptance follow-up
 
 Track in [QA #234](https://github.com/KrapaGoutam/The-Lineup/issues/234): RD-E-005 long-token overlap; RD-E-007 small Light text contrast; RD-E-008 Perfect-side difference treatment (owner decision); TC-19 Staff session acceptance (active read, no management controls, archived denial and private images); O-1 partial ratio (owner review); O-2 iframe Light persistence (unconfirmed; top-level reproduction); O-3 Archive bar weight and O-4 no-photo spacing (polish / owner review).
+
+Checkpoint ordering (2026-10-29): Recipes + Inventory integration sanity COMPLETE / GO; next is a separate release-readiness audit. All #234 findings listed above remain **SHELVED / LATER**, including owner browser acceptance retest and persistent DEV realistic-data owner review. RD-E-005/007/008, TC-19 and O-1–O-4 are not completed or reactivated by this checkpoint.

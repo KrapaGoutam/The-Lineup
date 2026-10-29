@@ -260,4 +260,10 @@ Private recipe image pipeline complete on `feature/recipes-v1-r2-management`: br
 
 ## Concept E owner acceptance — NO-GO (QA #234)
 
-Concept E (#232) and independent audit corrections (#233) are merged to development. Owner/TestOwner browser acceptance reported 15 PASS, 6 FAIL and 1 BLOCKED across TC-01–TC-22; the per-case outcome mapping was not supplied. The fix checkpoint is in progress on `fix/recipes-owner-acceptance-must-fix` (PR #235); owner browser retest and Staff coverage remain pending. Production and main are untouched; release is NO-GO. See [QA issue #234](https://github.com/KrapaGoutam/The-Lineup/issues/234).
+Concept E (#232) and independent audit corrections (#233) are merged to development. Owner/TestOwner browser acceptance reported 15 PASS, 6 FAIL and 1 BLOCKED across TC-01–TC-22; the per-case outcome mapping was not supplied. The fix checkpoint merged in PR #235 at `508cab9`; owner browser retest and Staff coverage remain pending and are now SHELVED / LATER. Production and main are untouched; release is NO-GO. See [QA issue #234](https://github.com/KrapaGoutam/The-Lineup/issues/234).
+
+## Recipes V1 integration checkpoint — 2026-10-29 (current)
+
+PR #235 merged to development at `508cab9584bb77aacee89107f2d6940314b47214`, after final-head application/browser-smoke/Vercel passed. Recipes + Inventory integration sanity: **COMPLETE / GO for this checkpoint**; focused 116 unit/component tests and 15 unique browser cases across desktop Chromium, real WebKit tablet and mobile. No integration defect or application source change. Evidence: [IS-01–IS-20](features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29). Exact-head checkpoint CI/PR/merge: [#220](https://github.com/KrapaGoutam/The-Lineup/issues/220).
+
+Owner browser retest, RD-E-005/007/008 and O-1–O-4, Staff TC-19 and persistent DEV realistic-data owner review are **SHELVED / LATER**. QA #234 and milestone #7 remain open. Next phase is **Recipes V1 release-readiness audit — new independent session**; release readiness remains unapproved. Main remains `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`; Production untouched. No migration, import or new Recipe/Inventory functionality.
