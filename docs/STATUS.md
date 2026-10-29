@@ -260,4 +260,4 @@ Private recipe image pipeline complete on `feature/recipes-v1-r2-management`: br
 
 ## Concept E owner acceptance — NO-GO (QA #234)
 
-Concept E (#232) and independent audit corrections (#233) are merged to development. Owner/TestOwner browser acceptance reported 15 PASS, 6 FAIL and 1 BLOCKED across TC-01–TC-22; the per-case outcome mapping was not supplied. The fix checkpoint is in progress on `fix/recipes-owner-acceptance-must-fix`; owner browser retest and Staff coverage remain pending. Production and main are untouched; release is NO-GO. See [QA issue #234](https://github.com/KrapaGoutam/The-Lineup/issues/234).
+Concept E (#232) and independent audit corrections (#233) are merged to development. Owner/TestOwner browser acceptance reported 15 PASS, 6 FAIL and 1 BLOCKED across TC-01–TC-22; the per-case outcome mapping was not supplied. The fix checkpoint is in progress on `fix/recipes-owner-acceptance-must-fix` (PR #235); owner browser retest and Staff coverage remain pending. Production and main are untouched; release is NO-GO. See [QA issue #234](https://github.com/KrapaGoutam/The-Lineup/issues/234).
