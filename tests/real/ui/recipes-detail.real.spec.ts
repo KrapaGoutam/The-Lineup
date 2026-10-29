@@ -1,4 +1,4 @@
-﻿import { expect, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import {
   assertServerIsDev,
@@ -172,10 +172,16 @@ for (const role of ["TestManager", "TestServer1"] as const) {
       page.getByRole("heading", { name: "House Recipe" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Synthetic citrus").locator("visible=true"),
+      page.getByText("Synthetic citrus").locator("visible=true").first(),
     ).toBeVisible();
     await expect(
-      page.getByText("Synthetic mixer").locator("visible=true"),
+      page.getByText("Synthetic mixer").locator("visible=true").first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Quick glance" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Quick measure" }).first(),
     ).toBeVisible();
     await page.reload();
     await expect(

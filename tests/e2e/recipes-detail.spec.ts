@@ -1,4 +1,4 @@
-﻿import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 async function signIn(page: Page, url: string) {
   await page.goto(url);
   await page.waitForSelector('body[data-hydrated="true"]');
@@ -49,6 +49,33 @@ test("detail links, search, history and direct restaurant URL", async ({
   await expect(
     page.getByText("R1 synthetic ingredient").locator("visible=true").first(),
   ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Quick glance" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Quick measure" }).first(),
+  ).toBeVisible();
+  const detailOrder = await page.evaluate(() => {
+    const heading = document.querySelector("h1");
+    const glance = document.querySelector('section[aria-label="Quick glance"]');
+    const measure = document.querySelector(
+      'section[aria-label="Quick measure"]',
+    );
+    const image = document.querySelector('[data-testid="recipe-image"]');
+    if (!heading || !glance || !measure || !image) return false;
+    return (
+      (heading.compareDocumentPosition(glance) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0 &&
+      (glance.compareDocumentPosition(measure) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0 &&
+      (measure.compareDocumentPosition(image) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0
+    );
+  });
+  expect(detailOrder).toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

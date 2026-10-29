@@ -1,9 +1,10 @@
-﻿"use server";
+"use server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import type { RecipeIndex } from "../domain/recipe-index";
+import { signRecipeImages } from "../data/recipe-image-data";
 
 export async function getRecipeIndexAction(input: {
   restaurantSlug: string;
@@ -31,21 +32,19 @@ export async function getRecipeIndexAction(input: {
   const categories = await client
     .from("bar_recipe_categories")
     .select("id,name,display_order,is_fallback")
-    .eq("organization_id", user.organizationId)
-    .eq("is_active", true);
+    .eq("organization_id", user.organizationId);
   if (categories.error)
     return { ok: false, error: "Recipes could not be loaded." };
   const recipes: RecipeIndex["recipes"] = [];
   for (let offset = 0; ; offset += 1000) {
-    const page = await client
+    let query = client
       .from("bar_recipes")
       .select(
-        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular",
+        "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular,is_menu_item,is_alcoholic,image_thumb_path,is_active",
       )
-      .eq("organization_id", user.organizationId)
-      .eq("is_active", true)
-      .order("recipe_number")
-      .range(offset, offset + 999);
+      .eq("organization_id", user.organizationId);
+    if (user.designation === "staff") query = query.eq("is_active", true);
+    const page = await query.order("recipe_number").range(offset, offset + 999);
     if (page.error) return { ok: false, error: "Recipes could not be loaded." };
     recipes.push(...page.data);
     if (page.data.length < 1000) break;
@@ -83,17 +82,30 @@ export async function getRecipeDetailAction(input: {
   if (!user)
     return { ok: false, error: "You need to sign in to view recipes." };
   const org = user.organizationId;
-  const recipe = await client
+  let recipeQuery = client
     .from("bar_recipes")
     .select(
-      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id",
+      "id,name,slug,recipe_number,base_spirit,description,is_popular,is_menu_item,category_id,is_active,version,image_path,image_thumb_path",
     )
     .eq("organization_id", org)
-    .eq("is_active", true)
-    .eq("slug", parsed.data.slug)
-    .maybeSingle();
+    .eq("slug", parsed.data.slug);
+  if (user.designation === "staff")
+    recipeQuery = recipeQuery.eq("is_active", true);
+  const recipe = await recipeQuery.maybeSingle();
   if (recipe.error) return { ok: false, error: "Recipes could not be loaded." };
   if (!recipe.data) return { ok: true, data: null };
+  let imageUrls;
+  try {
+    imageUrls = await signRecipeImages(
+      client,
+      org,
+      recipe.data.id,
+      recipe.data,
+    );
+  } catch {
+    /* Image availability never blocks recipe text. */
+  }
+  const imageData = { ...recipe.data, imageUrls };
   const [category, variants] = await Promise.all([
     client
       .from("bar_recipe_categories")
@@ -115,7 +127,7 @@ export async function getRecipeDetailAction(input: {
   if (!ids.length)
     return {
       ok: true,
-      data: { ...recipe.data, category: category.data.name, variants: [] },
+      data: { ...imageData, category: category.data.name, variants: [] },
     };
   const [ingredients, steps, garnishes] = await Promise.all([
     client
@@ -144,7 +156,7 @@ export async function getRecipeDetailAction(input: {
   return {
     ok: true,
     data: {
-      ...recipe.data,
+      ...imageData,
       category: category.data.name,
       variants: variants.data.map((v) => ({
         ...v,

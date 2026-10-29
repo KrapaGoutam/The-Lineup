@@ -138,9 +138,15 @@ Tequila · Sweet • Smooth • Citrusy                                         
 └────────────────────────────────────────┘  └───────────────────────────────────────┘
 (Angle-bracket text is layout filler; no recipe content is invented anywhere in these docs.)
 
+* **Detail Layout (Owner-Approved Revision, R2-F)**:
+  - **Recipe-first order**: Recipe Number & Name -> Metadata -> Quick Glance -> Recipe Variant Content -> Hero Image.
+  - **Quick Glance**: Compact summary across variants (method, measurements, common glass, garnish, rim) rendered near top.
+  - **Quick Measure & Oz Ratio**: Structured quick measure rows at the start of each variant card. Conservative optional oz ratio (e.g. `8 : 1` for 2 oz spirit + 0.25 oz syrup) derived client-side for compatible ounce ingredients, with bitters/dashes listed separately.
+  - **Bartender Tips**: Renders existing `variant.tips` with preserved line breaks (`whitespace-pre-wrap`); completely omitted when empty.
+  - **Hero Image Relocation**: Hero image container moved *after* recipe content, centered (`max-w-3xl`, 16:10 aspect ratio).
 * Header: number + name (uppercase via CSS only), badges (Popular, On menu, category chip linking back to that category in the index), base spirit and description as a muted subline. `Archived` management banner when archived.
-* **Hero**: one image only (no gallery). Placeholder when absent. Hero is `alt={recipe name}`.
-* **Two columns** from `md` (≥ 768 px), each a `Card` with the heading **Perfect Bartending Recipe** / **House Recipe** (default wording, D-LBL below). Sections, in order: **Ingredients** · **Method** · **Steps** · **Rim** · **Glass** (with glass notes) · **Garnish** (with presentation notes) · **Bartender Tips** (Perfect) / **House Notes** (House) · **Batch** (only when `batch_notes` exists). **Empty sections are omitted** (no "—" placeholders in the Staff view).
+* **Hero**: one image only (no gallery). Placeholder when absent. Hero is `alt={recipe name}`. Rendered centered at the bottom of the detail view.
+* **Two columns** from `md` (≥ 768 px), each a `Card` with the heading **Perfect Bartending Recipe** / **House Recipe** (default wording, D-LBL below). Sections, in order: **Quick Measure** · **Ingredients** · **Method** · **Steps** · **Rim** · **Glass** (with glass notes) · **Garnish** (with presentation notes) · **Bartender Tips** (Perfect) / **House Notes** (House) · **Batch** (only when `batch_notes` exists). **Empty sections are omitted** (no "—" placeholders in the Staff view).
 * Ingredient line = `amount unit` in a fixed-width left column (so `Top`, `2 dashes`, `¾` align), then name, then muted `preparation`. Order is `sort_order`. Free-text amounts are shown exactly as stored.
 * If a recipe has only one variant, it renders as a single full-width card and there are no tabs (no empty column, no "missing" message for Staff).
 * Back: `‹ Bar Recipes` link and browser Back.

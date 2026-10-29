@@ -1,10 +1,29 @@
-# Current task ? Recipes V1 R1-D
+# Current task: Recipes V1 Combined R2-F + R2-G Final R-2 Implementation
 
-Status: COMPLETE. R-1 PR #223 merged into development at `c99b8bacfc46e4ca0c618393a87653d14602f702`; tested feature SHA `92f4503b15345e39fa3390b8ef10cb4b79683d9e`. Exact-head application, browser-smoke, Database and Vercel checks passed. See `docs/features/recipes-v1/R1_HANDOFF.md` for validation and safety details.
-
-- [x] Review and retain tablet URL race fix; verify focused tablet assertions.
-- [x] Record independent DEV 55-migration parity and prior validation evidence.
-- [x] Commit, push, open PR #223 and merge to development with exact-head CI green.
-- [ ] Merge this metadata-only documentation sync PR to development and verify its final HEAD.
-
-R-2 NEXT / NOT STARTED; Part 2 not started; main unchanged; PROD untouched; no real recipes imported.
+- [x] Mandatory preflight: verify branch `feature/recipes-v1-r2-management`, clean working tree, record starting HEAD `d1e91da96163a8e202be2044a3caf866db3fbc94`.
+- [x] Verify baseline tests: focused Recipes Vitest (25 files / 217 tests PASS).
+- [x] Implement pure domain helpers for Quick Measure, Quick Glance, and conservative optional derived oz ratio in `src/features/recipes/domain/recipe-glance.ts` with unit tests.
+- [x] Update `RecipeDetailView` in `src/features/recipes/components/recipe-detail.tsx`:
+  - Quick Glance section near top (compact, handles partial/empty variants gracefully).
+  - Quick Measure section at the start of each variant card.
+  - Optional conservative oz ratio displayed alongside Quick Measure when trustworthy.
+  - Bartender Tips section labeled `BARTENDER TIPS`, preserving line breaks, omitted when empty.
+  - Move hero `RecipeImage` after recipe content, centered with max-width constraint (16:10).
+  - Responsive mobile tabbed view & desktop 2-column view with touch targets >= 44px.
+- [x] Verify category reassignment in editor and add comprehensive domain/component tests covering management category changes, dirty state, cancel preservation, save persistence, stale conflict handling, and grouping updates.
+- [x] Add accessibility improvements and automated tests: heading hierarchy, buttons/links, WAI-ARIA tabs, image alt, focus states.
+- [x] Run focused Recipes Vitest tests and expand coverage (27 files / 237 tests PASS).
+- [x] Run full Vitest suite (151 files / 1,930 tests PASS).
+- [x] Run `npm run check` (Prettier, ESLint, route types, `tsc --noEmit` PASS).
+- [x] Run Playwright Recipes matrix across desktop Chromium, WebKit `host-tablet`, and `server-mobile` (45/45 PASS).
+- [x] Run production builds: DEV-pinned build and explicit-empty public Supabase build PASS.
+- [x] Run bundle and security scans (`check-nonprod-env.mjs`, `check-tracked-local-paths.mjs` PASS).
+- [x] Run database security regression against DEV database `opmujepkemwcdxxorhfd` (13/13 PASS).
+- [x] Execute Owner Visual Preview flow with Recipe #16 Old Fashioned in a temporary DEV preview org, capture desktop/tablet/mobile/Picture Book screenshots, and clean up with 0 residue.
+- [x] Execute hosted DEV validation with synthetic recipes and verify clean teardown (5/5 PASS, 0 remaining rows, 0 storage orphans).
+- [x] Update documentation: `R2_HANDOFF.md`, `IMPLEMENTATION_PLAN.md`, `UI_UX_PLAN.md`, `TEST_MATRIX.md` (explicitly deferring Realtime under `B-RC-3`).
+- [ ] Push clean commits to `feature/recipes-v1-r2-management`.
+- [ ] Open Recipes R-2 PR to `development`.
+- [ ] Verify exact-head CI passes on PR head SHA.
+- [ ] Merge R-2 into `development` using a merge commit (`--no-ff`).
+- [ ] Verify merged `development` SHA, confirm `main` and PROD are untouched.

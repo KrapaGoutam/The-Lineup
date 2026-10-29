@@ -207,3 +207,15 @@ DEV-only. Merged to `development` with an owner-approved CI exception for PR #13
 ## Recipes V1 R-1 checkpoint
 
 Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.
+
+### Recipes V1 R2-A complete (feature branch only)
+
+Management database and private image Storage foundation complete on `feature/recipes-v1-r2-management`; R2-B next / not started. DEV/repository parity 56/56, latest `20261028193159_bar_recipes_management_and_images`; migration-created hosted Storage policies verified. Final focused database 166 assertions, concurrency harness, hosted real-JWT suite 7/7, app checks, Vitest 1708 and browser regression 45/45 passed. Full pgTAP ran once (45 files / 1462 assertions), followed by final focused checks after a narrow normalization correction. Synthetic DB and Storage residue zero. No R-2 PR or main/development merge; PROD untouched. Evidence and continuation: [R2 handoff](features/recipes-v1/R2_HANDOFF.md).
+
+### Recipes V1 R2-C complete (feature branch only)
+
+R2-A, R2-B and R2-C are complete on feature/recipes-v1-r2-management. R2-C integrates local Perfect-to-House copying/removal, archive/restore, archived index and category management with caller-session authorization and stale recovery. Check, focused Recipes 113 tests, full Vitest 1,806 tests, browser 30/30 plus final targeted 6/6, hosted browser 1/1 and hosted RPC regression 7/7 pass. Both builds and PROD/secret scans pass. Repository/DEV migration parity remains 56/56 with no mismatches or new migration; independent synthetic DB/Storage residue is zero. R2-D next / not started; PROD, main/development and Part 2 untouched; R-2 PR not opened. Evidence: [R2 handoff](features/recipes-v1/R2_HANDOFF.md#r2-c-complete-2026-10-28).
+
+### Recipes V1 R2-D complete (feature branch only)
+
+Private recipe image pipeline complete on `feature/recipes-v1-r2-management`: browser validation/preparation, immutable caller-session Storage uploads, metadata/version updates, compensation, replace/remove, signed-read refresh lifecycle and editor/detail integration. First Save stays in the saved editor for photo addition. List View remains image-free under its locked contract; Picture Book stays R2-E. Check PASS; focused Recipes 20 files / 185 tests; full Vitest 144 / 1,878; browser 15/15 across three devices; hosted data-layer 6/6 and hosted browser image 1/1 plus editor 1/1. Both builds/scans PASS. Repository/DEV parity 56/56, no migration; independent synthetic DB/Auth/Storage residue zero. PROD, main/development and Part 2 untouched; R-2 PR not opened. Implementation `4369d69` pushed. Evidence: [R2 handoff](features/recipes-v1/R2_HANDOFF.md#r2-d-complete-2026-10-28). R2-E NEXT / NOT STARTED.

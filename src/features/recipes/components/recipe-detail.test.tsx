@@ -1,7 +1,8 @@
-﻿import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipeDetailView } from "./recipe-detail";
 import type { DetailVariant, RecipeDetail } from "../domain/recipe-detail";
+
 const variant = (kind: string): DetailVariant => ({
   id: kind,
   variant: kind,
@@ -26,6 +27,7 @@ const variant = (kind: string): DetailVariant => ({
   steps: [{ id: kind, instruction: "Synthetic step", sort_order: 1 }],
   garnishes: [],
 });
+
 const recipe: RecipeDetail = {
   id: "r",
   name: "Synthetic detail",
@@ -38,7 +40,9 @@ const recipe: RecipeDetail = {
   category: "Synthetic category",
   variants: [variant("perfect"), variant("house")],
 };
+
 afterEach(cleanup);
+
 describe("recipe detail", () => {
   it("renders both variants and accessible House-first tabs", () => {
     render(
@@ -61,6 +65,7 @@ describe("recipe detail", () => {
     expect(screen.getAllByText("Synthetic step").length).toBeGreaterThan(0);
     expect(screen.queryByText("Method")).toBeNull();
   });
+
   it("shows stored ordered content and optional fields without inventing values", () => {
     const content = {
       ...variant("perfect"),
@@ -114,14 +119,13 @@ describe("recipe detail", () => {
       /First step.*Second step/,
     );
     expect(container.textContent).toMatch(/First garnish.*Second garnish/);
-    for (const text of [
-      "Synthetic method",
-      "Synthetic rim",
-      "Synthetic glass",
-      "Synthetic tip",
-    ])
+    for (const text of ["Synthetic method", "Synthetic rim", "Synthetic tip"]) {
       expect(screen.getByText(text)).toBeTruthy();
+    }
+    // "Synthetic glass" appears in both Quick Glance and the glass section
+    expect(screen.getAllByText(/Synthetic glass/).length).toBeGreaterThan(0);
   });
+
   it("renders a single variant without tabs and handles no variants", () => {
     const { rerender } = render(
       <RecipeDetailView
@@ -153,5 +157,155 @@ describe("recipe detail", () => {
     expect(
       screen.getByText("No recipe details are available yet."),
     ).toBeTruthy();
+  });
+
+  it("renders detail order: title -> Quick Glance -> recipe content -> hero image", () => {
+    const content = {
+      ...variant("perfect"),
+      method: "Stir",
+      ingredients: [
+        {
+          id: "i1",
+          amount: "2",
+          unit: "oz",
+          ingredient_name: "Bourbon",
+          preparation: null,
+          sort_order: 1,
+        },
+        {
+          id: "i2",
+          amount: ".25",
+          unit: "oz",
+          ingredient_name: "Simple",
+          preparation: null,
+          sort_order: 2,
+        },
+      ],
+    };
+
+    const { container } = render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [content] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    const titleEl = screen.getByRole("heading", { level: 1 });
+    const quickGlanceSection = screen.getByLabelText(/quick glance/i);
+    const quickMeasureSection = screen.getByLabelText(/quick measure/i);
+    const imageContainer = container.querySelector(
+      "[data-testid='recipe-image']",
+    );
+
+    expect(titleEl).toBeTruthy();
+    expect(quickGlanceSection).toBeTruthy();
+    expect(quickMeasureSection).toBeTruthy();
+    expect(imageContainer).toBeTruthy();
+
+    // Verify DOM order: title precedes Quick Glance
+    expect(
+      titleEl.compareDocumentPosition(quickGlanceSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // Quick Glance precedes Quick Measure / Recipe content
+    expect(
+      quickGlanceSection.compareDocumentPosition(quickMeasureSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // Recipe content precedes hero image (hero image must NEVER render before recipe content)
+    expect(
+      quickMeasureSection.compareDocumentPosition(imageContainer!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("renders Quick Measure and derived Oz Ratio when compatible", () => {
+    const content = {
+      ...variant("perfect"),
+      ingredients: [
+        {
+          id: "i1",
+          amount: "2",
+          unit: "oz",
+          ingredient_name: "Bourbon or rye",
+          preparation: null,
+          sort_order: 1,
+        },
+        {
+          id: "i2",
+          amount: "0.25",
+          unit: "oz",
+          ingredient_name: "Simple syrup",
+          preparation: null,
+          sort_order: 2,
+        },
+        {
+          id: "i3",
+          amount: "2",
+          unit: "dashes",
+          ingredient_name: "Orange bitters",
+          preparation: null,
+          sort_order: 3,
+        },
+      ],
+    };
+
+    render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [content] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText(/quick measure/i)).toBeTruthy();
+    const ratioBadge = screen.getByTestId("oz-ratio");
+    expect(ratioBadge.textContent).toBe("Oz Ratio 8 : 1");
+    expect(screen.getByText("+ 2 dashes Orange bitters")).toBeTruthy();
+  });
+
+  it("renders Bartender Tips preserving multiline and omits Tips when empty", () => {
+    const withTips = {
+      ...variant("perfect"),
+      tips: "Line one tip\nLine two tip",
+    };
+
+    const { rerender } = render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [withTips] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Bartender Tips" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        (content) =>
+          content.includes("Line one tip") && content.includes("Line two tip"),
+      ),
+    ).toBeTruthy();
+
+    const withoutTips = {
+      ...variant("perfect"),
+      tips: "   ",
+    };
+
+    rerender(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [withoutTips] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Bartender Tips" }),
+    ).toBeNull();
   });
 });
