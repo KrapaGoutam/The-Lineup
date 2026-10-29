@@ -10,6 +10,7 @@ export function RecipeImage(props: {
   hasImage?: boolean;
   preview?: string;
   thumbnail?: boolean;
+  className?: string;
 }) {
   const { urls, failed, onError, revision } = useRecipeImages({
     restaurantSlug: props.restaurantSlug ?? "",
@@ -22,7 +23,7 @@ export function RecipeImage(props: {
   return (
     <div
       data-testid="recipe-image"
-      className={`bg-muted mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border ${props.thumbnail ? "aspect-[4/5]" : "aspect-[16/10] max-w-[520px]"}`}
+      className={`bg-muted mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border ${props.thumbnail ? "aspect-[4/5]" : "aspect-[16/10] max-w-3xl"} ${props.className || ""}`}
     >
       {source ? (
         // Private, expiring URLs intentionally bypass the Next image optimizer.
