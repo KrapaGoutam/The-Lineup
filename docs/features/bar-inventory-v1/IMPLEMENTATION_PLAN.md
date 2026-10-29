@@ -78,8 +78,8 @@ The owner-approved enhancement accumulates BI-E1 through BI-E5 on
 feature/bar-inventory-bulk-edit-freshness, from development e4cffa8. E1 is the date
 foundation; E2 atomic in-app Bulk Count; E3 personal saved views/column order;
 E4 Inventory/Manage/Dashboard date UI; E5 full regression, hosted DEV, cleanup,
-documentation and exact-head PR CI. E1?E4 are implemented and locally validated;
-E5 remains in progress until the evidence report closes it. Five additive
+documentation and exact-head PR CI. E1 through E5 are complete: PR #226 merged
+after all required checks passed on the exact implementation head. Five additive
 migrations extend the existing architecture; applied migrations are never edited.
-Only DEV is targeted. Integration uses a merge commit into development; main,
+Only DEV is targeted. Integration used merge commit `12cef009` into development; main,
 Production and Recipes R-2g remain untouched.

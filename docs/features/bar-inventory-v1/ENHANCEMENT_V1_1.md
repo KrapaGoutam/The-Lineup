@@ -1,10 +1,11 @@
 # Bar Inventory V1.1 — approved implementation contract
 
-Status: approved owner scope; implementation in progress, not shipped.
+Status: BI-E1 through BI-E5 complete on development; DEV only, not released to Production.
 
 Preflight completed after the owner supplied the local Lineup-token mapping.
 Live DEV identity and initial 56/56 migration parity were independently verified.
-BI-E1–E4 are implemented; final integration evidence is recorded in
+BI-E1–E5 are implemented and validated; PR #226 merged with a merge commit after
+exact-head CI passed. Final integration evidence is recorded in
 [V1_1_VALIDATION.md](V1_1_VALIDATION.md).
 
 ## Outcome and scope

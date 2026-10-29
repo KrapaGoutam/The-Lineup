@@ -122,9 +122,9 @@ A single bar: 150–800 products; a weekly count produces ≤ 800 ledger rows/we
   quantity, manufacture_date/precision, expiration_date/precision, notes, active,
   created/updated actor/time and optimistic version. At least one date is required.
   Month manufacture is day 1; month expiration is month end. Manufacture cannot
-  follow expiration. Explicit four-digit years support 1000?9999; YY is 2000?2099.
+  follow expiration. Explicit four-digit years support 1000 through 9999; YY is 2000 through 2099.
 - inventory_freshness_rules: one per organization/location/subcategory; active,
-  tracking_enabled, maximum_months (1?120), warning_months (0 <= warning < maximum),
+  tracking_enabled, maximum_months (1 through 120), warning_months (0 <= warning < maximum),
   actors/times/version. Category context follows the subcategory relationship.
 - inventory_saved_views: organization/location/profile/table (Inventory), name,
   normalized name key, versioned JSON payload with explicit owned state, default,

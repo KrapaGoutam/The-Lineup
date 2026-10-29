@@ -105,6 +105,6 @@ The V1.1 contract supplements the original V1 checklist; it does not redefine it
       personal server views with explicit owned state and Dashboard URL precedence.
 - [x] BI-E4: date sheets, coverage, Inventory summaries/filters/sorts, Manage rules,
       separate product-count Dashboard KPIs, prioritized alerts and drill-downs.
-- [ ] BI-E5: final hosted browser/cleanup/build/security/CI/integration gate.
+- [x] BI-E5: final hosted browser/cleanup/build/security/CI/integration gate (PR #226).
 
 Evidence and exact counts: [V1_1_VALIDATION.md](V1_1_VALIDATION.md).
