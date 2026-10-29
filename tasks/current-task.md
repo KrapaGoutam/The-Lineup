@@ -7,7 +7,7 @@ Branch `docs/recipe-detail-editorial-reference` from fetched `origin/development
 - [x] Fetch and preflight; preserve the untracked export; create docs branch.
 - [x] Inspect Concept E and export dependencies; document approved behavior.
 - [x] Review the documentation scope and local asset references; incidental export files excluded.
-- [ ] Commit, push, open PR to development, observe required checks and merge if GO.
+- [ ] PR #229: fix export formatting gate, observe required checks and merge if GO.
 - [ ] Verify development, assets, tracking and unchanged main.
 
 Concept E and Presentation behavior: House differs are approved; the reference is
@@ -16,4 +16,7 @@ may be performed by Claude Cloud on a new branch from updated `origin/developmen
 Preserve existing Recipes contracts and do not reopen the previous mobile tabs
 decision. `main` remains untouched; production promotion requires owner approval.
 
-Next: stage and inspect the narrow diff, commit, push and open the development PR.
+Commit `f53f38b` was pushed; PR #229 targets development. CI's formatting
+check flagged the verbatim export, so exclude only its HTML and support script
+from Prettier, following the existing design-export convention. Next: validate,
+commit and push that correction, then observe the new checks before merging.
