@@ -24,15 +24,19 @@ import {
 } from "../domain/recipe-editor-state";
 const category = "11111111-1111-4111-8111-111111111111";
 const recipe = "22222222-2222-4222-8222-222222222222";
-const input = () => ({
-  restaurantSlug: "test",
-  recipeId: null,
-  expectedVersion: null,
-  payload: {
-    ...serializeEditorState(newEditorState(category, 38)),
-    name: "Test",
-  },
-});
+const input = () => {
+  const state = newEditorState(category, 38);
+  state.variants.perfect!.method = "Stir";
+  return {
+    restaurantSlug: "test",
+    recipeId: null,
+    expectedVersion: null,
+    payload: {
+      ...serializeEditorState(state),
+      name: "Test",
+    },
+  };
+};
 beforeEach(() => {
   vi.resetAllMocks();
   client.mockResolvedValue({ from });

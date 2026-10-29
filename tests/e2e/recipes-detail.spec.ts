@@ -7,6 +7,84 @@ async function signIn(page: Page, url: string) {
     page.getByRole("button", { name: "Account and quick settings" }).first(),
   ).toBeVisible();
 }
+test("jump headings clear the shell and retain visible focus in both themes", async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [820, 1180],
+    [390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await signIn(page, "/r/the-monks?tab=recipes&recipe=r1-test-citrus");
+    await expect(
+      page.getByRole("heading", { name: /R1 Test Citrus/ }),
+    ).toBeFocused();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      for (const name of ["House", "Perfect"]) {
+        const jump = page
+          .getByRole("navigation", { name: "Jump to recipe" })
+          .getByRole("link", { name });
+        await jump.focus();
+        await page.keyboard.press("Enter");
+        const target = page.locator(
+          `#recipe-variant-${name.toLowerCase()}-heading`,
+        );
+        await expect(target).toBeFocused();
+        await expect
+          .poll(() =>
+            target.evaluate(
+              (element) => getComputedStyle(element).outlineColor,
+            ),
+          )
+          .toBe(theme === "light" ? "rgb(154, 74, 0)" : "rgb(242, 166, 90)");
+        const result = await target.evaluate((element) => ({
+          top: element.getBoundingClientRect().top,
+          header: document
+            .querySelector("[data-app-header]")!
+            .getBoundingClientRect().bottom,
+          outline: getComputedStyle(element).outlineWidth,
+        }));
+        expect(result.top).toBeGreaterThanOrEqual(result.header);
+        expect(parseFloat(result.outline)).toBeGreaterThan(0);
+      }
+    }
+  }
+});
+
+test("Light theme uses a visible focus color for recipe controls", async ({
+  page,
+}) => {
+  await page.goto("/r/the-monks?tab=recipes&recipe=r1-test-citrus");
+  await page.waitForSelector('body[data-hydrated="true"]');
+  await page.getByLabel("Restaurant passcode").fill("2468");
+  await expect(
+    page.getByRole("heading", { name: /R1 Test Citrus/ }),
+  ).toBeFocused();
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light";
+  });
+  await page.keyboard.press("Tab");
+  for (const name of ["Edit Recipe", "Archive Recipe"]) {
+    const button = page.getByRole("button", { name, exact: true });
+    await button.focus();
+    await expect
+      .poll(() =>
+        button.evaluate((element) => getComputedStyle(element).boxShadow),
+      )
+      .toContain("rgb(154, 74, 0)");
+  }
+  const back = page.getByRole("link", { name: /Bar Recipes/ });
+  await back.focus();
+  await expect
+    .poll(() =>
+      back.evaluate((element) => getComputedStyle(element).outlineColor),
+    )
+    .toBe("rgb(154, 74, 0)");
+});
 test("detail links, search, history and direct restaurant URL", async ({
   page,
 }) => {
@@ -48,10 +126,24 @@ test("detail links, search, history and direct restaurant URL", async ({
   } else {
     // Stacked: Perfect above House, with working jump links.
     expect(houseBox.y).toBeGreaterThan(perfectBox.y);
-    await jump.getByRole("link", { name: /House/ }).click();
-    await expect(houseHeading).toBeFocused();
-    await jump.getByRole("link", { name: /Perfect/ }).click();
-    await expect(perfectHeading).toBeFocused();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const [name, heading] of [
+      ["House", houseHeading],
+      ["Perfect", perfectHeading],
+    ] as const) {
+      await jump.getByRole("link", { name }).focus();
+      await page.keyboard.press("Enter");
+      await expect(heading).toBeFocused();
+      const positions = await heading.evaluate((element) => ({
+        top: element.getBoundingClientRect().top,
+        header: document
+          .querySelector("[data-app-header]")!
+          .getBoundingClientRect().bottom,
+        outline: getComputedStyle(element).outlineWidth,
+      }));
+      expect(positions.top).toBeGreaterThanOrEqual(positions.header);
+      expect(parseFloat(positions.outline)).toBeGreaterThan(0);
+    }
   }
   await expect(
     page.getByText("R1 synthetic ingredient").locator("visible=true").first(),

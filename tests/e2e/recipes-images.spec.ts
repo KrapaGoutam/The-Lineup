@@ -18,6 +18,7 @@ test("R2-D browser preparation, local preview, replace/remove and demo safety", 
   await page
     .getByLabel("Name", { exact: true })
     .fill("R2D synthetic image drink");
+  await page.getByLabel("Method", { exact: true }).fill("Stir");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(/recipe=r2d-synthetic-image-drink&mode=edit$/);
   await expect(page.getByRole("button", { name: "Add photo" })).toBeVisible();

@@ -1,37 +1,22 @@
-# Current task: Recipe Detail Concept E implementation (#230)
+﻿# Recipes V1 owner acceptance fixes — IN PROGRESS
 
-## Independent audit in flight
+- Starting development: `21956cf70b43dd4bfa0872b8038bcfd0a3862bce`; main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`.
+- Branch: `fix/recipes-owner-acceptance-must-fix`; canonical QA issue #234; milestone Recipes V1 — Release Readiness.
+- [x] Fetch and verify baseline; preserve pre-existing untracked paths.
+- [x] Investigate preview provenance and reproduce scoped findings before source changes.
+- [x] Implement scoped fixes and targeted regression coverage; no schema change.
+- [x] Record all deferred findings and blocked Staff coverage in #234 and backlog; update #220 and local roadmap/status.
+- [x] Final review, commit and open PR #235.
+- [ ] Require exact-head CI, merge only if GO. Owner retest remains required; release NO-GO.
 
-- Baseline `development` / `origin/development`: `d7678164ca12ffbd6f96c614f0db04aed5cc9cf9`; branch `fix/recipe-detail-concept-e-final-audit`.
-- [x] Preserve pre-existing untracked files, fetch, fast-forward development, create audit branch.
-- [x] Inspect Concept E implementation and identify comparison and focus concerns; focused existing unit tests pass.
-- [x] Reproduce missing ingredient preparation and step ordering differences; implement display-only corrections and focus outline.
-- [x] Correct whitespace-only Quick Glance values; focused Vitest 39/39, targeted lint and typecheck pass; targeted WebKit 1/1 passes after fixes.
-- [ ] Review and complete fix PR workflow, including exact-head CI.
-- Tablet WebKit: installed already; `npx.cmd playwright test tests/e2e/recipes-detail.spec.ts --project=host-tablet --workers=1` passed 1/1 locally. CI browser-smoke runs desktop Chromium only.
-- Local `npm run check` cannot pass unchanged: format check sees two pre-existing untracked files and lint sees seven warnings in ignored `artifacts/dev-manual-preview`; do not modify or delete those files. Typecheck passes.
+## Baseline and validation
 
-- Branch: `feature/recipe-detail-editorial-concept-e`, from `origin/development` `69391777b2a5b2a2db2a8bca20b04bc7533b226a`.
-- Scope: presentation/interaction only. No schema, migration, authorization, concurrency or Realtime change.
+Preview SHA unverified: Vercel lookup returned 404; GitHub deployment correlation unavailable. Current development was tested. RD-E-001: not reproduced; preparation comparison and regression test from #233 pass. RD-E-002: reproduced at 820/390: targets at 16px beneath a 149px sticky header. RD-E-003: reproduced presentation notes as garnish. RD-E-004: near-white report not reproduced on sampled controls; existing amber ring measured 2.58:1 on Light background. RD-E-006: heading focus and outline present in baseline; #233 verified, though obscured by RD-E-002. RD-E-009: reproduced default empty Perfect serialization and demo rendering. Original focused Vitest 45/45 and existing tablet/mobile browser tests 2/2 passed but missed these edge cases.
 
-## Checklist
+Changes: measured shell offset, shared Light ring and explicit semantic outlines, garnish-only glance, omit truly empty variants while retaining rows and all meaningful fields; filter empty legacy variants on detail. Focused Vitest 61/61; full Vitest 2034/2034; targeted browser 9/9 desktop/WebKit tablet/mobile including 820/390 and both themes; build and typecheck pass. `npm run check` blocked at format by preserved untracked `.tmp/recipe-detail-issue.md` and `docs/design-reference/recipes/recipe-detail-concepts/github.md`; full lint separately reports seven pre-existing ignored `artifacts/dev-manual-preview` warnings. Scoped lint passes. Project board unavailable: GitHub token lacks `read:project` scope. PR #235; initial code commit `6a8a252`. Final pushed head and CI are recorded in the PR; recheck after any subsequent commit.
 
-- [x] Verify state, read Concept E reference and canonical screenshots, audit current detail code and tests.
-- [x] Domain helpers: `recipe-differences.ts` (House differences, shared/split presentation), `deriveGlanceFields` in `recipe-glance.ts`.
-- [x] Components: `recipe-detail.tsx` (header, Quick Glance strip, jump links, spread/single), `recipe-detail-variant.tsx`, `recipe-detail-presentation.tsx`; `--font-serif` token in `globals.css` (no new font dependency).
-- [x] Tests: unit/component updated (tabs replaced by stacked + jump-link coverage), new domain tests, `recipes-detail.spec.ts` updated.
-- [x] Validation: `npm run check`, full `vitest` (2028 pass), `npm run build`, recipes Playwright on desktop + server-mobile (32 pass), manual screenshots at 1440/820/390 light+dark, no horizontal overflow.
-- [x] Docs: STATUS, ROADMAP, UI_UX_PLAN, backlog.
-- [ ] Commit, push, PR to `development`, exact-head CI, merge commit, update/close #230 after merge.
+Data and authorization unchanged: existing tenant-scoped recipe save and membership/RLS. UI retains responsive single/dual, validation, and reduced-motion behavior. Risks checked: meaningful variant data, sticky header sizing and focus in both themes. Deferred RD-E-005/007/008, Staff TC-19, and O-1 through O-4 remain tracked in #234 and backlog. Main, Production and Part 2/3 untouched.
 
-## Locked decisions
+Next: final diff/security/accessibility review, commit and PR to development, exact-head CI. Owner browser acceptance retest is required after merge.
 
-- Desktop breakpoint is `lg` (1024px); below it Perfect then House stack with Perfect ↓ / House ↓ jump links (focus moves to the variant heading; smooth scroll honours reduced motion). Segmented tabs removed from Recipe Detail only.
-- House differences are derived for display (normalized name+amount+unit for ingredients, normalized text for steps); marked by inset accent edge, tint, bolder amount and "House adjustment" text (sr-only note on the Perfect side). Not destructive/warning styling.
-- Presentation specs (Glass, Garnish, Rim, notes) moved out of the variant articles into Final Presentation after the recipes; shared block when equivalent, else Perfect/House Presentation.
-- Known limitation: one canonical image per recipe (`image_path`), so the image is shown once in both states; no per-variant images, no schema added.
-- The authoring container lacked WebKit; PR #232 CI browser-smoke covered desktop Chromium only. The independent local audit ran WebKit as recorded above.
-
-## Current State & Next Step
-
-PR #232 merged into `development` at `d767816`; #230 is closed. Independent audit fixes are in flight on the branch above. Finish targeted validation and review, then commit, push, open a fix PR to `development`, and require exact-head CI before merging. Do not touch `main` or Production.
+CI on `18faed26a30a1852f8a0b19f46b0355bf6e6a624`: application and Vercel passed; browser-smoke failed 1/314 because the image test created a recipe without any variant content. Its fixture now supplies a method; targeted desktop image test passes. Push the fixture correction and require all CI on the new head.

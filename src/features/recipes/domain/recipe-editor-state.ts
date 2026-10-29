@@ -1,4 +1,5 @@
 import type { RecipeDetail } from "./recipe-detail";
+import { variantHasPersistedContent } from "./variant-content";
 
 /** Client-only editor model. Row keys are deliberately excluded from save payloads. */
 export type Ingredient = {
@@ -72,7 +73,7 @@ const normalized = (value: string, multiline = false) =>
 const optional = (value: string, multiline = false) =>
   normalized(value, multiline) || null;
 function serializeVariant(v: Variant | null) {
-  if (!v) return null;
+  if (!v || !variantHasPersistedContent(v)) return null;
   return {
     method: optional(v.method),
     rim_type: optional(v.rim_type),

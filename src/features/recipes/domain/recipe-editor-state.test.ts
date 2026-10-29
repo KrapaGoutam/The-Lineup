@@ -11,6 +11,33 @@ import { demoRecipeFromState } from "./demo-recipes";
 import { payloadErrors } from "./recipe-validation";
 
 describe("recipe editor state", () => {
+  it("omits only truly empty variants on create while preserving minimal content", () => {
+    const state = newEditorState("category", 1);
+    state.name = "House only";
+    state.variants.house = { ...emptyVariant(), method: "Stir" };
+    expect(serializeEditorState(state).variants.perfect).toBeNull();
+    expect(serializeEditorState(state).variants.house?.method).toBe("Stir");
+    const saved = demoRecipeFromState(state, "id", "slug", 1, "category");
+    expect(saved.variants.map((v) => v.variant)).toEqual(["house"]);
+    state.variants.perfect!.tips = "Note";
+    expect(serializeEditorState(state).variants.perfect?.tips).toBe("Note");
+    expect(serializeEditorState(state).variants.house).not.toBeNull();
+    state.variants.house = null;
+    expect(serializeEditorState(state).variants.perfect).not.toBeNull();
+    state.variants.perfect = emptyVariant();
+    expect(payloadErrors(serializeEditorState(state))).toHaveProperty(
+      "variants",
+    );
+    state.variants.perfect.ingredients.push({
+      key: "x",
+      ingredient_name: "",
+      amount: "",
+      unit: "",
+      preparation: "",
+    });
+    expect(serializeEditorState(state).variants.perfect).not.toBeNull();
+    expect(payloadErrors(serializeEditorState(state))).not.toEqual({});
+  });
   it("starts with the fallback category and editable suggested number", () => {
     const state = newEditorState("fallback", 38);
     expect(state.category_id).toBe("fallback");

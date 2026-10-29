@@ -53,7 +53,7 @@ export function VariantArticle({
       <h2
         id={`recipe-variant-${variant.variant}-heading`}
         tabIndex={-1}
-        className="scroll-mt-4 font-serif text-2xl focus:outline-2 focus:outline-offset-2 lg:row-start-1"
+        className="focus:outline-ring scroll-mt-4 font-serif text-2xl focus:outline-2 focus:outline-offset-2 lg:row-start-1"
       >
         {label}
       </h2>

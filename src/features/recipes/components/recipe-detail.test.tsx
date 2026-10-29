@@ -50,6 +50,25 @@ const recipe: RecipeDetail = {
 afterEach(cleanup);
 
 describe("recipe detail", () => {
+  it("treats a legacy empty Perfect variant as absent without hiding meaningful House data", () => {
+    const empty = { ...variant("perfect"), ingredients: [], steps: [] };
+    render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [empty, variant("house")] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("recipe-single")).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Perfect Bartending Recipe" }),
+    ).toBeNull();
+    expect(screen.getByRole("heading", { name: "House Recipe" })).toBeTruthy();
+    expect(
+      screen.queryByRole("navigation", { name: "Jump to recipe" }),
+    ).toBeNull();
+    expect(screen.queryByText("Perfect Presentation")).toBeNull();
+  });
   it("renders both complete recipes stacked Perfect then House with no tabs", () => {
     render(
       <RecipeDetailView

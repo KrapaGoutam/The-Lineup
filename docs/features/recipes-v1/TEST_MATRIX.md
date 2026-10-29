@@ -248,3 +248,9 @@ Created in R-0. Scenario ids `RC-nnn` map to a test layer and the phase that mus
 ## Recipes V1 R-1 checkpoint
 
 R1-D evidence: check PASS; Vitest 1708/1708; controlled single-worker tablet landing 15/15 over five repetitions; combined Recipes/default landing 45/45 across desktop, WebKit tablet and mobile. Post-review tablet assertions 3/3 passed; teardown hung. Cross-org: pgTAP and mocked server actions PASS; archived Staff denial: pgTAP and server-action behavior PASS. Fresh hosted browser duplication of these two security cases NOT RUN. DEV parity: PASS, independent authenticated read-only Supabase project query, 55 migrations, latest 20261028140623_bar_recipes_foundation. DEV synthetic cleanup: PASS, six tables zero.
+
+## Concept E owner browser acceptance — NO-GO
+
+Owner/TestOwner executed TC-01 through TC-22: 15 PASS, 6 FAIL, 1 BLOCKED. The individual case outcome mapping was not supplied. Viewport harness: 1440×900, 820×1180 and 390×844. Staff TC-19 was blocked without a Staff session. Signed-image visual/network smoke was performed; no page-level horizontal overflow across 15 records × 3 widths. Temporary QA records 9901–9904 were reported archived. Retest TC-03, TC-04, TC-07, TC-08, TC-12 House-only creation, TC-22 and relevant overflow after merge.
+
+Findings are tracked in [#234](https://github.com/KrapaGoutam/The-Lineup/issues/234): RD-E-001 preparation difference; 002 sticky header jump; 003 garnish fallback; 004 Light focus; 005 long-token overlap; 006 target focus; 007 small-text contrast; 008 Perfect-side difference treatment; 009 House-only creation. TC-19 and observations O-1 through O-4 remain open. Owner acceptance is not complete.

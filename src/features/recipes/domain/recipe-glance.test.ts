@@ -535,4 +535,13 @@ describe("deriveQuickGlance", () => {
     expect(glance.variants[0].glass).toBeNull();
     expect(glance.variants[0].garnish).toBeNull();
   });
+
+  it("does not treat presentation notes as garnish", () => {
+    const variant = sampleVariant("house", {
+      garnishes: [],
+      presentation_notes: "Large clear cube",
+    });
+    const glance = deriveQuickGlance({ variants: [variant] } as RecipeDetail);
+    expect(glance.variants[0].garnish).toBeNull();
+  });
 });
