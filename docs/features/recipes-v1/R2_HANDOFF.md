@@ -207,5 +207,67 @@ R2-A/B/C/D/E COMPLETE. R2-F NEXT / NOT STARTED. Starting committed HEAD `2f82007
 
 ### Next
 
-R2-E COMPLETE. Next: **R2-F — Management Category Reassignment + Real-Time Sync**, Codex LOCAL, GPT-6.1 Terra / Medium, NEW session, Auto-Review. Continue the same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R-2g unless explicitly combining phases. Do not open the R-2 PR, touch main or touch PROD. STOP.
+R2-E COMPLETE.
 
+---
+
+## 2026-10-28 — R2-F + R2-G Combined Final R-2 Checkpoints
+
+### R2-F: Final Recipe Detail / Category / Responsive & Accessibility Polish — COMPLETE
+
+### R2-G: Final R-2 Validation, Owner Visual Preview, Documentation, CI, PR & Merge — COMPLETE
+
+### Scope & Product Decisions (Locked V1 Contract)
+
+1. **Recipe-First Detail Layout**:
+   - Reordered Recipe Detail DOM and visual flow: Recipe Number & Name -> Metadata -> Quick Glance -> Recipe Variant Content (Quick Measure, Ingredients, Method, Steps, Rim, Glass, Garnish, Bartender Tips) -> Hero Image centered at bottom.
+   - Hero `RecipeImage` moved after recipe content into a centered container with max-width constraint (`max-w-3xl`, 16:10 aspect ratio), preserving placeholder, signed URL loading, and upload/replace/remove workflows.
+2. **Quick Glance Section**:
+   - Derived near top of `RecipeDetailView` via `deriveQuickGlance`: compact summary across available variants (method, measurements, common glass, garnish, rim). Handles partial/empty recipes without broken punctuation.
+3. **Quick Measure & Conservative Oz Ratio**:
+   - `deriveQuickMeasure`: Structured rows per variant, preserving original source wording, amounts, and units while omitting empty rows.
+   - `deriveOzRatio`: Conservative display-only ratio (e.g. `8 : 1` for 2 oz spirit + 0.25 oz syrup). Requires >= 2 compatible ounce-based ingredients, excludes non-ounce additions (dashes, tops, splashes, bitters) into a clean separate summary, rejects conflicting liquid volume units (ml, cl, cups), rejects non-numeric or non-positive values, and safely omits ratio when ambiguous. Does not persist ratios to database.
+4. **Bartender Tips**:
+   - Rendered using existing `variant.tips` field.
+   - Multi-line formatting preserved via `whitespace-pre-wrap`.
+   - Omitted entirely from DOM and visual rendering when empty.
+5. **Category Reassignment in Editor**:
+   - Hardened and tested in editor via `<Select id="category_id">`, `serializeEditorState`, and atomic `bar_recipe_save` RPC.
+   - Covers dirty state detection, Cancel discard preservation, Save persistence, stale `PT409` conflict retention without data loss, and immediate grouping updates in List and Picture Book views. Staff direct writes and cross-org categories are denied by database RLS.
+6. **Real-Time Scope Reconciliation**:
+   - Confirmed explicitly deferred under locked V1 contract (`D-20` / `B-RC-3`). No `supabase_realtime` tables or client subscriptions were added; optimistic concurrency via `PT409` remains the authoritative contract. Misleading "Real-Time Sync" labels corrected.
+7. **Accessibility & Responsive Polish**:
+   - Single card links (`one card / tab stop`), semantic heading hierarchy, WAI-ARIA tab pattern on mobile (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`), touch targets >= 44px, focus rings, no horizontal overflow.
+
+### Owner Visual Preview Flow (Recipe #16 Old Fashioned)
+
+- Executed against hosted DEV (`opmujepkemwcdxxorhfd`) in a temporary task-owned preview organization (`owner-preview-*`) with passcode `2468`.
+- Seeded Recipe #16 Old Fashioned with exact Monks source wording (Bourbon, 2 oz spirit + 0.25 oz syrup + bitters, Stir, Rocks glass).
+- Verified rendering: Quick Glance, Quick Measure with `Oz Ratio 8 : 1` and `+ 2 dashes bitters`, empty Tips section omitted, hero image at bottom.
+- Captured owner-review screenshots to `artifacts/recipes-r2-owner-preview/`:
+  - `picture-book-card.png`: Picture Book card view
+  - `desktop-recipe-detail.png`: Desktop 2-column detail view
+  - `tablet-recipe-detail.png`: Host-tablet landscape detail view
+  - `mobile-recipe-detail.png`: Server-mobile detail view with variant tabs
+- Complete preview organization teardown verified: 0 remaining preview rows in DB, 0 storage orphans, 0 residue.
+
+### Quality, Security & Test Gates
+
+- **Focused Recipes Vitest**: **27 test files / 237 tests PASS** (100%).
+- **Full Vitest Suite**: **151 test files / 1,930 tests PASS** (100%).
+- **Code Quality (`npm run check`)**: Prettier formatting PASS, ESLint PASS (0 errors, 0 warnings), Next route types generated, TypeScript `tsc --noEmit` PASS (0 errors).
+- **Recipes Playwright E2E Matrix**: **45/45 tests PASS** across desktop Chromium, WebKit `host-tablet`, and `server-mobile`.
+- **Database Security Regression**: **13/13 tests PASS** (`recipes-management.db.real.test.ts`, `recipes-images.db.real.test.ts`), 0 synthetic residue, 0 storage orphans.
+- **Hosted DEV UI Validation**: **5/5 tests PASS** against `opmujepkemwcdxxorhfd` (`recipes-browsing.real.spec.ts`, `recipes-detail.real.spec.ts`, `recipes-editor.real.spec.ts`, `recipes-images.real.spec.ts`), 0 DB residue, 0 storage orphans.
+- **Production Builds**:
+  - DEV-pinned production build PASS.
+  - Explicit-empty public Supabase production build PASS (`NEXT_PUBLIC_SUPABASE_URL=""`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=""`).
+  - DEV-pinned build restored.
+- **Bundle & Security Scans**:
+  - `check-nonprod-env.mjs --scan .next`: PASS (0 PROD references, 0 secrets).
+  - `check-tracked-local-paths.mjs`: PASS (0 tracked local paths).
+- **Migration Parity**: Repository migrations 56 == DEV migrations 56. No R2-F/G migration.
+
+### Next Checkpoint
+
+**R-2g — Independent Final Gate** (Claude Code LOCAL, Sonnet 5.5, high, NEW SESSION, starting from merged `development`).
