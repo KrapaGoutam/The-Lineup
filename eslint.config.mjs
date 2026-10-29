@@ -20,6 +20,8 @@ const eslintConfig = defineConfig([
     // reference material we don't own the authoring of, not linted for
     // the same reason .prettierignore excludes this same directory.
     "docs/design/table-rotation/approved-design-export/**",
+    // Verbatim support script for the Recipe Detail design reference.
+    "docs/design-reference/recipes/recipe-detail-concepts/support.js",
   ]),
 ]);
 

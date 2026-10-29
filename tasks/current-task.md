@@ -16,7 +16,7 @@ may be performed by Claude Cloud on a new branch from updated `origin/developmen
 Preserve existing Recipes contracts and do not reopen the previous mobile tabs
 decision. `main` remains untouched; production promotion requires owner approval.
 
-Commit `f53f38b` was pushed; PR #229 targets development. CI's formatting
-check flagged the verbatim export, so exclude only its HTML and support script
-from Prettier, following the existing design-export convention. Next: validate,
-commit and push that correction, then observe the new checks before merging.
+PR #229 targets development. CI flagged the verbatim export in formatting and
+lint; exclude only its HTML and support script from Prettier and the script from
+ESLint, following the existing design-export convention. Next: validate, commit
+and push the lint correction, then observe current checks before merging.
