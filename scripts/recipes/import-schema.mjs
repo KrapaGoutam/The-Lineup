@@ -12,6 +12,27 @@ const ingredient = z
   .strict();
 const step = z.object({ instruction: text(500) }).strict();
 const garnish = z.object({ name: text(120), notes: optional(200) }).strict();
+const importWarning = z
+  .object({
+    id: text(120),
+    message: text(1000),
+    status: z.enum(["unresolved", "resolved", "approved"]),
+    resolution: optional(1000),
+    approved_by: optional(200),
+    approved_on: z.iso.date().optional(),
+  })
+  .strict()
+  .superRefine((warning, ctx) => {
+    if (
+      warning.status !== "unresolved" &&
+      (!warning.resolution || !warning.approved_by || !warning.approved_on)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Resolved/approved warnings require resolution and owner approval",
+      });
+  });
 const variant = z
   .object({
     method: optional(60),
@@ -47,6 +68,7 @@ const recipe = z
       .refine((v) => v.perfect || v.house, "At least one variant is required"),
     source_ref: optional(500),
     source_notes: optional(1000),
+    import_warnings: z.array(importWarning).max(40).optional(),
   })
   .strict();
 const category = z

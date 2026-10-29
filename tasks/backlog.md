@@ -84,9 +84,10 @@ Checkpoint ordering (2026-10-29): Recipes + Inventory integration sanity COMPLET
 
 ## Recipes V1 release-readiness audit follow-ups (2026-10-29)
 
-- [ ] **Preflight P-3:** reviewed Production target for `scripts/recipes/import-recipes.mjs` (currently `local`/`dev` only) with exact-origin check, `--confirm <ref>`, mandatory prior dry run, unit tests — owner approval required.
+- [x] **Preflight P-3 implementation:** guarded Production target, exact-origin/project/environment check, execution acknowledgements, matching prior dry-run report, warning approvals and mocked guard tests implemented in #238; actual Production execution remains owner-gated.
 - [ ] **Preflight P-4:** owner-supplied canonical Recipe payload (38 Recipes / 76 variants), SHA-256, source corrections; resolve or accept `Virgin Coco Margarita Splash` (`0.75 oz or 2 oz`) and `Smoked Vanilla Old Fashioned` (`Absolut Vanilia` / `Vanilla syrup`); decide `Others` fallback category.
-- [ ] **F-1 (Low):** qualify the `id` alias in `bar_recipe_category_reorder` validation (new migration) and add a pgTAP case with a foreign/unknown ID; owner decides before the Production migration batch.
-- [ ] Optional import-payload lint that fails on a reviewed ambiguity list (`" or "` in amount/ingredient).
+- [x] **F-1 (Low):** new migration `20261029194855` qualifies supplied IDs; 12 pgTAP regression checks pass; applied to DEV only (62/62). PROD remains pending.
+- [x] Structured import warnings and explicit approvals now gate Production create; known Recipe ambiguities require named warning records. General semantic ambiguity detection remains a human source-review responsibility.
 - [ ] CI: add tablet/mobile browser projects (or a documented local gate) and consider a dedicated secret scanner.
-- [ ] Preflight question: is real Bar Inventory operational data already in Production, and what is its source? (not established by repository evidence).
+- [ ] **Inventory Production decision (#238):** live read-only operational counts are zero. Approved initialization source not established; owner must supply/review a source or explicitly approve launching empty. Never replace operational data automatically.
+- [ ] **Recovery evidence (#238 / #124):** current token lacks `backups_read`; verify usable PROD backup/PITR point through existing authorized owner access before migrations. No backup/restore/credential operation performed.
