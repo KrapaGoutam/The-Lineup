@@ -1,4 +1,10 @@
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipeDetailView } from "./recipe-detail";
 import type { DetailVariant, RecipeDetail } from "../domain/recipe-detail";
@@ -44,7 +50,7 @@ const recipe: RecipeDetail = {
 afterEach(cleanup);
 
 describe("recipe detail", () => {
-  it("renders both variants and accessible House-first tabs", () => {
+  it("renders both complete recipes stacked Perfect then House with no tabs", () => {
     render(
       <RecipeDetailView
         recipe={recipe}
@@ -55,15 +61,167 @@ describe("recipe detail", () => {
     expect(
       screen.getByRole("heading", { name: /Synthetic detail/ }),
     ).toBeTruthy();
-    const house = screen.getByRole("tab", { name: "House" });
-    expect(house).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(house, { key: "ArrowLeft" });
-    expect(screen.getByRole("tab", { name: "Perfect" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("tab")).toBeNull();
+    const perfect = screen.getByRole("heading", {
+      name: "Perfect Bartending Recipe",
+    });
+    const house = screen.getByRole("heading", { name: "House Recipe" });
+    expect(
+      perfect.compareDocumentPosition(house) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Both recipes are complete and rendered once each (no hidden duplicates).
+    expect(screen.getAllByText("Synthetic step")).toHaveLength(2);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+  });
+
+  it("offers keyboard-accessible Perfect and House jump links only when both exist", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+    }) as unknown as typeof window.matchMedia;
+    const { rerender } = render(
+      <RecipeDetailView recipe={recipe} backHref="/" onBack={vi.fn()} />,
     );
-    expect(screen.getAllByText("Synthetic step").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Method")).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "Jump to recipe" });
+    const house = within(nav).getByRole("link", { name: /House/ });
+    expect(within(nav).getByRole("link", { name: /Perfect/ })).toBeTruthy();
+    fireEvent.click(house);
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "start",
+    });
+    expect(document.activeElement?.id).toBe("recipe-variant-house-heading");
+    rerender(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [variant("perfect")] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("navigation", { name: "Jump to recipe" }),
+    ).toBeNull();
+  });
+
+  it("marks House differences with a text note and leaves unchanged rows plain", () => {
+    const ing = (id: string, name: string, amount: string) => ({
+      id,
+      amount,
+      unit: "oz",
+      ingredient_name: name,
+      preparation: null,
+      sort_order: 1,
+    });
+    const perfect = {
+      ...variant("perfect"),
+      ingredients: [ing("p1", "Rum", "2"), ing("p2", "Syrup", "0.5")],
+      steps: [
+        { id: "ps1", instruction: "Shake", sort_order: 1 },
+        { id: "ps2", instruction: "Strain into ribbed glass", sort_order: 2 },
+      ],
+    };
+    const house = {
+      ...variant("house"),
+      ingredients: [ing("h1", "Rum", "2"), ing("h2", "Syrup", "0.25")],
+      steps: [
+        { id: "hs1", instruction: "Shake", sort_order: 1 },
+        { id: "hs2", instruction: "Strain into rocks glass", sort_order: 2 },
+      ],
+    };
+    render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [perfect, house] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    // Syrup amount and the second step differ; Rum and step 1 do not.
+    expect(screen.getAllByText("House adjustment")).toHaveLength(2);
+    const houseRum = screen.getAllByText("Rum")[1].closest("li")!;
+    expect(houseRum.textContent).not.toContain("House adjustment");
+    const perfectSyrup = screen.getAllByText(/Syrup/)[0].closest("li")!;
+    expect(perfectSyrup.textContent).toContain("differs in House recipe");
+  });
+
+  it("shows a shared Final Presentation once when specs are equivalent", () => {
+    const shared = { glass: "Rocks", rim_type: "None" };
+    render(
+      <RecipeDetailView
+        recipe={{
+          ...recipe,
+          variants: [
+            { ...variant("perfect"), ...shared },
+            { ...variant("house"), ...shared },
+          ],
+        }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getAllByRole("heading", { name: "Final Presentation" }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole("heading", { name: "House Presentation" }),
+    ).toBeNull();
+    const presentation = screen
+      .getByRole("heading", { name: "Final Presentation" })
+      .closest("section")!;
+    expect(within(presentation).getAllByText("Rocks")).toHaveLength(1);
+    expect(screen.getAllByTestId("recipe-image")).toHaveLength(1);
+  });
+
+  it("splits Final Presentation when House specs differ, with one canonical image", () => {
+    render(
+      <RecipeDetailView
+        recipe={{
+          ...recipe,
+          variants: [
+            { ...variant("perfect"), glass: "Ribbed rocks", rim_type: "None" },
+            { ...variant("house"), glass: "Rocks", rim_type: "None" },
+          ],
+        }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Perfect Presentation" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "House Presentation" }),
+    ).toBeTruthy();
+    const section = screen
+      .getByRole("heading", { name: "Final Presentation" })
+      .closest("section")!;
+    expect(within(section).getByText("Ribbed rocks")).toBeTruthy();
+    expect(within(section).getByText("Rocks")).toBeTruthy();
+    // Only unchanged fields (Rim) are not flagged; Glass carries the note.
+    expect(within(section).getAllByText("House adjustment")).toHaveLength(1);
+    expect(screen.getAllByTestId("recipe-image")).toHaveLength(1);
+  });
+
+  it("shows Quick Glance values for both variants only where they differ", () => {
+    render(
+      <RecipeDetailView
+        recipe={{
+          ...recipe,
+          variants: [
+            { ...variant("perfect"), method: "Shake", glass: "Ribbed rocks" },
+            { ...variant("house"), method: "Shake", glass: "Rocks" },
+          ],
+        }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+    const glance = screen.getByLabelText(/quick glance/i);
+    expect(within(glance).getAllByText("Shake")).toHaveLength(1);
+    expect(within(glance).getByText("Ribbed rocks")).toBeTruthy();
+    expect(within(glance).getByText("Rocks")).toBeTruthy();
+    expect(within(glance).queryByText("Garnish")).toBeNull();
   });
 
   it("shows stored ordered content and optional fields without inventing values", () => {
@@ -119,11 +277,11 @@ describe("recipe detail", () => {
       /First step.*Second step/,
     );
     expect(container.textContent).toMatch(/First garnish.*Second garnish/);
-    for (const text of ["Synthetic method", "Synthetic rim", "Synthetic tip"]) {
-      expect(screen.getByText(text)).toBeTruthy();
-    }
-    // "Synthetic glass" appears in both Quick Glance and the glass section
-    expect(screen.getAllByText(/Synthetic glass/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Synthetic tip")).toBeTruthy();
+    expect(screen.getAllByText("Synthetic rim").length).toBe(2);
+    // Method and Glass appear in both the Quick Glance strip and the recipe/presentation
+    expect(screen.getAllByText("Synthetic method").length).toBe(2);
+    expect(screen.getAllByText(/Synthetic glass/).length).toBe(2);
   });
 
   it("renders a single variant without tabs and handles no variants", () => {
@@ -135,6 +293,11 @@ describe("recipe detail", () => {
       />,
     );
     expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getByTestId("recipe-single")).toBeTruthy();
+    expect(screen.queryByTestId("recipe-spread")).toBeNull();
+    expect(
+      screen.queryByRole("navigation", { name: "Jump to recipe" }),
+    ).toBeNull();
     expect(
       screen.getByRole("heading", { name: "Perfect Bartending Recipe" }),
     ).toBeTruthy();
@@ -321,19 +484,13 @@ describe("recipe detail", () => {
       />,
     );
 
-    // Each variant is rendered twice (mobile tab panel + desktop column).
     expect(
-      screen.getAllByRole("heading", { name: "House Notes", hidden: true })
-        .length,
-    ).toBeGreaterThan(0);
+      screen.getAllByRole("heading", { name: "House Notes" }),
+    ).toHaveLength(1);
     expect(
-      screen.getAllByRole("heading", { name: "Bartender Tips", hidden: true })
-        .length,
-    ).toBeGreaterThan(0);
-    const houseNotes = screen.getAllByRole("heading", {
-      name: "House Notes",
-      hidden: true,
-    })[0];
+      screen.getAllByRole("heading", { name: "Bartender Tips" }),
+    ).toHaveLength(1);
+    const houseNotes = screen.getByRole("heading", { name: "House Notes" });
     expect(houseNotes.parentElement?.textContent).toContain("House tip");
     expect(houseNotes.parentElement?.textContent).not.toContain("Perfect tip");
   });

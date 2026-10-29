@@ -4,7 +4,7 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 
 ## Pending Recipe Detail redesign
 
-- [ ] **Recipe Detail Editorial Redesign - Concept E** (#230): implement the [approved reference](design-reference/recipes/recipe-detail-concepts/README.md), including responsive stacked variants, presentation states, centered single-recipe flow, light/dark accessibility and targeted regression tests. Recipes V1 core is complete; this redesign has not started.
+- [x] **Recipe Detail Editorial Redesign - Concept E** (#230; implemented on `feature/recipe-detail-editorial-concept-e`, merge to `development` tracked by its PR): implement the [approved reference](design-reference/recipes/recipe-detail-concepts/README.md), including responsive stacked variants, presentation states, centered single-recipe flow, light/dark accessibility and targeted regression tests. Recipes V1 core is complete; the redesign is implemented (single canonical image limitation noted in STATUS).
 
 ## Phase 0 — Foundation
 

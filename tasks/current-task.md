@@ -1,13 +1,26 @@
-# Current task: finalized Recipe Detail Concept E reference
+# Current task: Recipe Detail Concept E implementation (#230)
 
-Branch `docs/recipe-detail-approved-e-reference` from `origin/development` `9b70b6571b4691a92388fe309d95498d4db084fc`; earlier reference PR #229 is merged.
+- Branch: `feature/recipe-detail-editorial-concept-e`, from `origin/development` `69391777b2a5b2a2db2a8bca20b04bc7533b226a`.
+- Scope: presentation/interaction only. No schema, migration, authorization, concurrency or Realtime change.
 
-- [x] Fetch and preflight; preserve the supplied package and create a fresh docs branch.
-- [x] Inspect approved HTML, screenshots and local support files.
-- [x] Complete targeted validation and review the docs-only diff.
-- [ ] Commit, push, open PR to development and observe required checks.
-- [ ] Merge when green and verify development and unchanged main.
+## Checklist
 
-Concept E is approved; implementation is pending. Perfect and House stack on tablet/mobile, with no segmented tabs. Shared presentation uses one block; differing presentation may use separate specs and images. Single recipes use a centered reading flow. Implementation tracking: #230. Next execution: Claude Code Cloud, High effort, NEW SESSION, on a new branch from updated `origin/development`. Preserve Recipes contracts; no schema or production changes are authorized.
+- [x] Verify state, read Concept E reference and canonical screenshots, audit current detail code and tests.
+- [x] Domain helpers: `recipe-differences.ts` (House differences, shared/split presentation), `deriveGlanceFields` in `recipe-glance.ts`.
+- [x] Components: `recipe-detail.tsx` (header, Quick Glance strip, jump links, spread/single), `recipe-detail-variant.tsx`, `recipe-detail-presentation.tsx`; `--font-serif` token in `globals.css` (no new font dependency).
+- [x] Tests: unit/component updated (tabs replaced by stacked + jump-link coverage), new domain tests, `recipes-detail.spec.ts` updated.
+- [x] Validation: `npm run check`, full `vitest` (2028 pass), `npm run build`, recipes Playwright on desktop + server-mobile (32 pass), manual screenshots at 1440/820/390 light+dark, no horizontal overflow.
+- [x] Docs: STATUS, ROADMAP, UI_UX_PLAN, backlog.
+- [ ] Commit, push, PR to `development`, exact-head CI, merge commit, update/close #230 after merge.
 
-In flight: final README, roadmap, backlog and handoff corrections remain unstaged. The Git staging permission review failed because its selected model was at capacity; no commit or push occurred. Resume by staging these four files, reviewing the staged diff, and completing the PR workflow. Incidental untracked files remain excluded.
+## Locked decisions
+
+- Desktop breakpoint is `lg` (1024px); below it Perfect then House stack with Perfect ↓ / House ↓ jump links (focus moves to the variant heading; smooth scroll honours reduced motion). Segmented tabs removed from Recipe Detail only.
+- House differences are derived for display (normalized name+amount+unit for ingredients, normalized text for steps); marked by inset accent edge, tint, bolder amount and "House adjustment" text (sr-only note on the Perfect side). Not destructive/warning styling.
+- Presentation specs (Glass, Garnish, Rim, notes) moved out of the variant articles into Final Presentation after the recipes; shared block when equivalent, else Perfect/House Presentation.
+- Known limitation: one canonical image per recipe (`image_path`), so the image is shown once in both states; no per-variant images, no schema added.
+- `host-tablet` Playwright project (WebKit) cannot run in this cloud container (browser not installed); it runs in CI.
+
+## Current State & Next Step
+
+Implementation and docs complete locally. Next: commit, push, open PR #230 → `development`, wait for CI on the exact head, merge with a merge commit, verify `development`, then update issue #230. Do not touch `main`.

@@ -363,3 +363,47 @@ export function deriveQuickGlance(recipe: RecipeDetail): QuickGlanceData {
     commonGlass,
   };
 }
+
+export type GlanceFieldKey = "method" | "glass" | "garnish" | "rim";
+
+export type GlanceField = {
+  key: GlanceFieldKey;
+  label: string;
+  /** One entry when every variant agrees, otherwise one per variant. */
+  values: Array<{
+    variant: "perfect" | "house";
+    label: string;
+    text: string | null;
+  }>;
+  shared: boolean;
+};
+
+const GLANCE_FIELDS: Array<[GlanceFieldKey, string]> = [
+  ["method", "Method"],
+  ["glass", "Glass"],
+  ["garnish", "Garnish"],
+  ["rim", "Rim"],
+];
+
+/**
+ * Compact Quick Glance strip fields, from persisted values only. A field is
+ * omitted when no variant has a value; when variants disagree (including one
+ * missing) each variant's value is returned so both can be shown.
+ */
+export function deriveGlanceFields(glance: QuickGlanceData): GlanceField[] {
+  const fields: GlanceField[] = [];
+  for (const [key, label] of GLANCE_FIELDS) {
+    const values = glance.variants.map((v) => ({
+      variant: v.variant,
+      label: v.label,
+      text: v[key],
+    }));
+    if (!values.some((v) => v.text)) continue;
+    const first = values[0].text?.toLowerCase() ?? null;
+    const shared = values.every(
+      (v) => (v.text?.toLowerCase() ?? null) === first,
+    );
+    fields.push({ key, label, values: shared ? [values[0]] : values, shared });
+  }
+  return fields;
+}

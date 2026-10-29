@@ -9,7 +9,7 @@ async function signIn(page: Page, url: string) {
 }
 test("detail links, search, history and direct restaurant URL", async ({
   page,
-}, testInfo) => {
+}) => {
   await signIn(page, "/r/the-monks?tab=recipes");
   await page.getByRole("link", { name: /R1 Test Citrus/ }).click();
   await expect(
@@ -28,23 +28,30 @@ test("detail links, search, history and direct restaurant URL", async ({
   await expect(
     page.getByRole("heading", { name: /R1 Test Citrus/ }),
   ).toBeVisible();
-  if (testInfo.project.name === "server-mobile") {
-    const house = page.getByRole("tab", { name: "House" });
-    await expect(house).toHaveAttribute("aria-selected", "true");
-    await house.focus();
-    await page.keyboard.press("ArrowLeft");
-    await expect(page.getByRole("tab", { name: "Perfect" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await house.click();
+  // Concept E: both complete recipes, Perfect first, never tabs.
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  const perfectHeading = page.getByRole("heading", {
+    name: "Perfect Bartending Recipe",
+  });
+  const houseHeading = page.getByRole("heading", { name: "House Recipe" });
+  await expect(perfectHeading).toBeVisible();
+  await expect(houseHeading).toBeVisible();
+  const perfectBox = (await perfectHeading.boundingBox())!;
+  const houseBox = (await houseHeading.boundingBox())!;
+  const width = page.viewportSize()!.width;
+  const jump = page.getByRole("navigation", { name: "Jump to recipe" });
+  if (width >= 1024) {
+    // Two-column spread: House sits right of Perfect on the same row.
+    expect(houseBox.x).toBeGreaterThan(perfectBox.x + perfectBox.width / 2);
+    expect(Math.abs(houseBox.y - perfectBox.y)).toBeLessThan(4);
+    await expect(jump).toBeHidden();
   } else {
-    await expect(
-      page.getByRole("heading", { name: "Perfect Bartending Recipe" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "House Recipe" }),
-    ).toBeVisible();
+    // Stacked: Perfect above House, with working jump links.
+    expect(houseBox.y).toBeGreaterThan(perfectBox.y);
+    await jump.getByRole("link", { name: /House/ }).click();
+    await expect(houseHeading).toBeFocused();
+    await jump.getByRole("link", { name: /Perfect/ }).click();
+    await expect(perfectHeading).toBeFocused();
   }
   await expect(
     page.getByText("R1 synthetic ingredient").locator("visible=true").first(),
@@ -100,6 +107,13 @@ test("detail links, search, history and direct restaurant URL", async ({
     page.getByRole("heading", { name: "Perfect Bartending Recipe" }),
   ).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByTestId("recipe-single")).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Jump to recipe" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Final Presentation" }),
+  ).toBeVisible();
   await signIn(page, "/r/the-monks?tab=recipes&recipe=unknown");
   await expect(
     page.getByRole("heading", { name: "Recipe not found" }),
