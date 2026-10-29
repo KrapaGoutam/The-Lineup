@@ -18,3 +18,5 @@ Changes: measured shell offset, shared Light ring and explicit semantic outlines
 Data and authorization unchanged: existing tenant-scoped recipe save and membership/RLS. UI retains responsive single/dual, validation, and reduced-motion behavior. Risks checked: meaningful variant data, sticky header sizing and focus in both themes. Deferred RD-E-005/007/008, Staff TC-19, and O-1 through O-4 remain tracked in #234 and backlog. Main, Production and Part 2/3 untouched.
 
 Next: final diff/security/accessibility review, commit and PR to development, exact-head CI. Owner browser acceptance retest is required after merge.
+
+CI on `18faed26a30a1852f8a0b19f46b0355bf6e6a624`: application and Vercel passed; browser-smoke failed 1/314 because the image test created a recipe without any variant content. Its fixture now supplies a method; targeted desktop image test passes. Push the fixture correction and require all CI on the new head.
