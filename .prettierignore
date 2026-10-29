@@ -27,5 +27,6 @@ tasks/backlog.md
 docs/design/table-rotation/approved-design-export/
 
 # Preserve the approved Recipe Detail prototype and its support script verbatim.
-docs/design-reference/recipes/recipe-detail-concepts/Recipe Detail Concepts.dc.html
+docs/design-reference/recipes/recipe-detail-concepts/*.html
 docs/design-reference/recipes/recipe-detail-concepts/support.js
+docs/design-reference/recipes/recipe-detail-concepts/historical/

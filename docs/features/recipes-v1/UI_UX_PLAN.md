@@ -4,7 +4,7 @@ Status: **LOCKED in R-0**. ASCII wireframes are layout contracts, not pixel spec
 
 The feel is **a restaurant cocktail recipe book**, not an admin table: generous type for the drink name, numbers as a printed index, calm cards, no dense grids.
 
-> **Approved pending Recipe Detail redesign:** Concept E — Editorial Recipe Book and Presentation behavior: House differs are selected. The [design reference](../../design-reference/recipes/recipe-detail-concepts/README.md) supersedes this historical plan's detail-layout and segmented mobile variant-tab instructions for the redesign. The existing implementation has not yet been redesigned; other contracts remain in force.
+> **Approved pending Recipe Detail redesign:** Concept E — Editorial Recipe Book and Presentation behavior: House differs are selected. The [design reference](../../design-reference/recipes/recipe-detail-concepts/README.md) supersedes this historical plan's detail-layout and segmented mobile variant-tab instructions for the redesign. The finalized reference defines shared versus House-different presentation and a centered single-recipe reading flow. The existing implementation has not yet been redesigned; other contracts remain in force.
 
 ## 1. Name, navigation, routing
 
