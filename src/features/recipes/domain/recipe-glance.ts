@@ -310,13 +310,13 @@ export function deriveQuickGlance(recipe: RecipeDetail): QuickGlanceData {
     const method = v.method?.trim() || null;
     const glass =
       [v.glass, v.glass_notes]
-        .filter(Boolean)
         .map((s) => s?.trim())
+        .filter(Boolean)
         .join(" · ") || null;
     const rim =
       [v.rim_type, v.rim_notes]
-        .filter(Boolean)
         .map((s) => s?.trim())
+        .filter(Boolean)
         .join(" · ") || null;
     const garnishes = v.garnishes
       .map((g) => g.name.trim())

@@ -1,5 +1,16 @@
 # Current task: Recipe Detail Concept E implementation (#230)
 
+## Independent audit in flight
+
+- Baseline `development` / `origin/development`: `d7678164ca12ffbd6f96c614f0db04aed5cc9cf9`; branch `fix/recipe-detail-concept-e-final-audit`.
+- [x] Preserve pre-existing untracked files, fetch, fast-forward development, create audit branch.
+- [x] Inspect Concept E implementation and identify comparison and focus concerns; focused existing unit tests pass.
+- [x] Reproduce missing ingredient preparation and step ordering differences; implement display-only corrections and focus outline.
+- [x] Correct whitespace-only Quick Glance values; focused Vitest 39/39, targeted lint and typecheck pass; targeted WebKit 1/1 passes after fixes.
+- [ ] Review and complete fix PR workflow, including exact-head CI.
+- Tablet WebKit: installed already; `npx.cmd playwright test tests/e2e/recipes-detail.spec.ts --project=host-tablet --workers=1` passed 1/1 locally. CI browser-smoke runs desktop Chromium only.
+- Local `npm run check` cannot pass unchanged: format check sees two pre-existing untracked files and lint sees seven warnings in ignored `artifacts/dev-manual-preview`; do not modify or delete those files. Typecheck passes.
+
 - Branch: `feature/recipe-detail-editorial-concept-e`, from `origin/development` `69391777b2a5b2a2db2a8bca20b04bc7533b226a`.
 - Scope: presentation/interaction only. No schema, migration, authorization, concurrency or Realtime change.
 
@@ -19,8 +30,8 @@
 - House differences are derived for display (normalized name+amount+unit for ingredients, normalized text for steps); marked by inset accent edge, tint, bolder amount and "House adjustment" text (sr-only note on the Perfect side). Not destructive/warning styling.
 - Presentation specs (Glass, Garnish, Rim, notes) moved out of the variant articles into Final Presentation after the recipes; shared block when equivalent, else Perfect/House Presentation.
 - Known limitation: one canonical image per recipe (`image_path`), so the image is shown once in both states; no per-variant images, no schema added.
-- `host-tablet` Playwright project (WebKit) cannot run in this cloud container (browser not installed); it runs in CI.
+- The authoring container lacked WebKit; PR #232 CI browser-smoke covered desktop Chromium only. The independent local audit ran WebKit as recorded above.
 
 ## Current State & Next Step
 
-Implementation and docs complete locally. Next: commit, push, open PR #230 → `development`, wait for CI on the exact head, merge with a merge commit, verify `development`, then update issue #230. Do not touch `main`.
+PR #232 merged into `development` at `d767816`; #230 is closed. Independent audit fixes are in flight on the branch above. Finish targeted validation and review, then commit, push, open a fix PR to `development`, and require exact-head CI before merging. Do not touch `main` or Production.
