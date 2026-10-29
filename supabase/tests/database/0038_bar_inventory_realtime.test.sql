@@ -33,8 +33,8 @@ select is(
     from pg_publication_tables
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename like 'inventory\_%'
   ),
-  array['inventory_adjustments', 'inventory_stock'],
-  'BI-RT-001 exactly the stock and ledger tables publish; no catalog, batch or change-log table does'
+  array['inventory_adjustments', 'inventory_date_lots', 'inventory_freshness_rules', 'inventory_stock'],
+  'BI-RT-001 stock, ledger, dates and rules publish; catalog, personal views and audit do not'
 );
 
 select ok(

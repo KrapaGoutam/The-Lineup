@@ -91,7 +91,7 @@ Secondary tier (see `UI_UX_PLAN.md` §1): desktop nav **Primary** — Table Allo
 
 - **Purchase orders:** Suggested Order → Purchase Order → Sent → Received → inventory updated (receiving writes Delivery adjustments, source `receiving`). The V1 ledger `source` and `reason` vocabularies already leave room.
 - **Tasks / notifications:** critical stock → create a Task or notify managers. Needs owner approval and the Tasks notification scope (#154) settled first.
-- **Staff read-only access**, multi-location switching, saved filter views, barcode scanning, POS-driven depletion, cost tracking.
+- **Staff read-only access**, multi-location switching, shared restaurant-wide views, barcode scanning, POS-driven depletion, cost tracking.
 
 ## 10. Owner decisions — LOCKED (2026-10-26, recorded in BI-0)
 
@@ -113,3 +113,16 @@ Secondary tier (see `UI_UX_PLAN.md` §1): desktop nav **Primary** — Table Allo
 - **Units (D8):** `inventory_products.unit_type` is a text column with a check constraint (`bottle|can|pack|case|keg|other`) plus `unit_label text null` (required iff `other`); the identity `unit_key` is the type, or `other:<nameKey(label)>`.
 - **Import template minimum** (confirmed, no extra required columns): `Vendor, Name, On Hand, Backup, Cutoff Limit`; `Unit` defaults to **Bottle** on create with an "assumed value" marker in the preview.
 - **Cutoff on manual create** stays optional (blank → "No cutoff set").
+
+## V1.1 enhancement ? Bulk Count, personal views and freshness
+
+V1.1 adds selected-row in-app counts with review and an atomic transaction,
+personal saved Inventory views, scoped column visibility/order/reset, multiple
+manufacture/expiration date groups, configurable subcategory freshness rules,
+and separate Dashboard date KPIs/drill-downs. Existing stock status, Order Soon,
+CSV/XLSX import and movement semantics remain unchanged. Staff still have no
+access. No automatic Tasks, notifications, FIFO, POS or Recipes work.
+
+The approved contract and implementation decisions are in
+[ENHANCEMENT_V1_1.md](ENHANCEMENT_V1_1.md); final evidence is recorded in
+[V1_1_VALIDATION.md](V1_1_VALIDATION.md). Shared views remain future scope.

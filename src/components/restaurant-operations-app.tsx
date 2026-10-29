@@ -1994,7 +1994,7 @@ function RestaurantOperationsAppInner({
         {/* Desktop row 2: weighted nav -- primary (underlined), divider,
             secondary (icon+label), Settings trigger far right. */}
         <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
-          <div className="flex gap-1.5">
+          <div className="flex shrink-0 gap-1.5">
             {primaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -2017,7 +2017,7 @@ function RestaurantOperationsAppInner({
             ))}
           </div>
           <span className="bg-border h-6.5 w-px" />
-          <div className="flex gap-0.5">
+          <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
             {secondaryTabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -2037,7 +2037,7 @@ function RestaurantOperationsAppInner({
           <Button
             variant="secondary"
             size="sm"
-            className="ml-auto"
+            className="ml-auto shrink-0"
             onClick={() => setTab("settings")}
           >
             <Settings2 aria-hidden="true" />

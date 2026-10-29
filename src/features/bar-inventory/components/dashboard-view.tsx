@@ -38,6 +38,8 @@ import {
   type TableColumn,
 } from "./table-kit/filterable-table";
 import { STATUS_LABEL, StatusBadge } from "./table-kit/status-badge";
+import { FreshnessDashboard } from "./freshness-dashboard";
+import { businessDate } from "../domain/freshness";
 
 type Tile = {
   id: DashboardTile;
@@ -180,7 +182,11 @@ export function DashboardView({
   /** Create / Open Order Draft on each vendor of Order soon. */
   draftCta?: OrderDraftCta | null;
 }) {
-  const rows = useMemo(() => buildInventoryRows(snapshot), [snapshot]);
+  const today = businessDate(new Date(), timeZone);
+  const rows = useMemo(
+    () => buildInventoryRows(snapshot, today),
+    [snapshot, today],
+  );
   // Re-read the clock whenever the data refreshes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const ctx = useMemo(() => ({ timeZone, now: new Date() }), [timeZone, rows]);
@@ -273,6 +279,7 @@ export function DashboardView({
         </div>
       </section>
 
+      <FreshnessDashboard rows={rows} onOpenInventory={onOpenInventory} />
       <section aria-labelledby="bi-order-soon" className="flex flex-col gap-2">
         <h2 id="bi-order-soon" className="text-lg font-semibold">
           Order soon

@@ -1,4 +1,13 @@
 import "server-only";
+import type { SavedView } from "../domain/saved-views";
+type SavedViewRow = {
+  id: string;
+  profile_id: string;
+  name: string;
+  is_default: boolean;
+  version: number;
+  payload: unknown;
+};
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
@@ -13,6 +22,37 @@ import type {
   UnitType,
   VendorView,
 } from "../domain/inventory-types";
+import type {
+  DateLot,
+  DatePrecision,
+  FreshnessRule,
+} from "../domain/freshness";
+
+type DateLotRow = {
+  id: string;
+  product_id: string;
+  quantity: number | null;
+  manufacture_date: string | null;
+  manufacture_precision: DatePrecision | null;
+  expiration_date: string | null;
+  expiration_precision: DatePrecision | null;
+  notes: string | null;
+  active: boolean;
+  version: number;
+  updated_at: string;
+  updated_by: string;
+};
+type RuleRow = {
+  id: string;
+  subcategory_id: string;
+  tracking_enabled: boolean;
+  maximum_months: number;
+  warning_months: number;
+  active: boolean;
+  version: number;
+  updated_at: string;
+  updated_by: string;
+};
 
 // PostgREST caps a response at 1,000 rows; the catalog cap is 5,000 products.
 const PAGE = 1000;
@@ -89,7 +129,9 @@ async function readAll<T>(
     if (options.locationId) query = query.eq("location_id", options.locationId);
     const { data, error } = await query
       .order(orderBy, { ascending: true })
-      .order(options.orderBy ? "location_id" : "id", { ascending: true })
+      .order(options.orderBy === "product_id" ? "location_id" : "id", {
+        ascending: true,
+      })
       .range(page * PAGE, page * PAGE + PAGE - 1)
       .overrideTypes<T[], { merge: false }>();
     if (error || !data) {
@@ -123,45 +165,84 @@ export async function getCatalogSnapshot(
     return null;
   }
 
-  const [vendors, categories, subcategories, products, stock, roster] =
-    await Promise.all([
-      readAll<VendorRow>(
-        supabase,
-        "inventory_vendors",
-        VENDOR_COLUMNS,
-        organizationId,
-      ),
-      readAll<CategoryRow>(
-        supabase,
-        "inventory_categories",
-        CATEGORY_COLUMNS,
-        organizationId,
-      ),
-      readAll<SubcategoryRow>(
-        supabase,
-        "inventory_subcategories",
-        SUBCATEGORY_COLUMNS,
-        organizationId,
-      ),
-      readAll<ProductRow>(
-        supabase,
-        "inventory_products",
-        PRODUCT_COLUMNS,
-        organizationId,
-      ),
-      readAll<StockRow>(
-        supabase,
-        "inventory_stock",
-        STOCK_COLUMNS,
-        organizationId,
-        {
-          orderBy: "product_id",
-          locationId: location.id,
-        },
-      ),
-      getOrganizationRoster(organizationId),
-    ]);
-  if (!vendors || !categories || !subcategories || !products || !stock) {
+  const [
+    vendors,
+    categories,
+    subcategories,
+    products,
+    stock,
+    roster,
+    dateLots,
+    freshnessRules,
+    savedViews,
+  ] = await Promise.all([
+    readAll<VendorRow>(
+      supabase,
+      "inventory_vendors",
+      VENDOR_COLUMNS,
+      organizationId,
+    ),
+    readAll<CategoryRow>(
+      supabase,
+      "inventory_categories",
+      CATEGORY_COLUMNS,
+      organizationId,
+    ),
+    readAll<SubcategoryRow>(
+      supabase,
+      "inventory_subcategories",
+      SUBCATEGORY_COLUMNS,
+      organizationId,
+    ),
+    readAll<ProductRow>(
+      supabase,
+      "inventory_products",
+      PRODUCT_COLUMNS,
+      organizationId,
+    ),
+    readAll<StockRow>(
+      supabase,
+      "inventory_stock",
+      STOCK_COLUMNS,
+      organizationId,
+      {
+        orderBy: "product_id",
+        locationId: location.id,
+      },
+    ),
+    getOrganizationRoster(organizationId),
+    readAll<DateLotRow>(
+      supabase,
+      "inventory_date_lots",
+      "id,product_id,quantity,manufacture_date,manufacture_precision,expiration_date,expiration_precision,notes,active,version,updated_at,updated_by",
+      organizationId,
+      { orderBy: "id", locationId: location.id },
+    ),
+    readAll<RuleRow>(
+      supabase,
+      "inventory_freshness_rules",
+      "id,subcategory_id,tracking_enabled,maximum_months,warning_months,active,version,updated_at,updated_by",
+      organizationId,
+      { orderBy: "id", locationId: location.id },
+    ),
+    readAll<SavedViewRow>(
+      supabase,
+      "inventory_saved_views",
+      "id,profile_id,name,is_default,version,payload",
+      organizationId,
+      { orderBy: "id", locationId: location.id },
+    ),
+  ]);
+  if (
+    !vendors ||
+    !categories ||
+    !subcategories ||
+    !products ||
+    !stock ||
+    !dateLots ||
+    !freshnessRules ||
+    !savedViews
+  ) {
     return null;
   }
 
@@ -173,6 +254,49 @@ export async function getCatalogSnapshot(
   });
 
   return {
+    savedViews: savedViews.map(
+      (v): SavedView => ({
+        id: v.id,
+        profileId: v.profile_id,
+        name: v.name,
+        isDefault: v.is_default,
+        version: v.version,
+        payload: v.payload,
+      }),
+    ),
+    dateLots: dateLots.map(
+      (r): DateLot => ({
+        id: r.id,
+        productId: r.product_id,
+        quantity: r.quantity === null ? null : Number(r.quantity),
+        manufacture:
+          r.manufacture_date && r.manufacture_precision
+            ? { date: r.manufacture_date, precision: r.manufacture_precision }
+            : null,
+        expiration:
+          r.expiration_date && r.expiration_precision
+            ? { date: r.expiration_date, precision: r.expiration_precision }
+            : null,
+        notes: r.notes,
+        active: r.active,
+        version: r.version,
+        updatedAt: r.updated_at,
+        updatedByName: names.get(r.updated_by) ?? null,
+      }),
+    ),
+    freshnessRules: freshnessRules.map(
+      (r): FreshnessRule => ({
+        id: r.id,
+        subcategoryId: r.subcategory_id,
+        trackingEnabled: r.tracking_enabled,
+        maximumMonths: r.maximum_months,
+        warningMonths: r.warning_months,
+        active: r.active,
+        version: r.version,
+        updatedAt: r.updated_at,
+        updatedByName: names.get(r.updated_by) ?? null,
+      }),
+    ),
     vendors: vendors.map(
       (row): VendorView => ({
         id: row.id,

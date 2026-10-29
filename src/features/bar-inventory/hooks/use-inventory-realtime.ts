@@ -21,6 +21,11 @@ export function inventoryChannel(locationId: string) {
   return {
     name: `bar-inventory-${locationId}`,
     bindings: [
+      { table: "inventory_date_lots", filter: `location_id=eq.${locationId}` },
+      {
+        table: "inventory_freshness_rules",
+        filter: `location_id=eq.${locationId}`,
+      },
       { table: "inventory_stock", filter: `location_id=eq.${locationId}` },
       {
         table: "inventory_adjustments",

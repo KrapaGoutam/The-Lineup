@@ -115,3 +115,30 @@ A single bar: 150–800 products; a weekly count produces ≤ 800 ledger rows/we
 | Ledger + change log             | One generic event table             | Quantity analytics need typed columns/indexes; admin audit is a different shape    |
 | Server-staged import plan       | Client resends parsed rows          | TOCTOU and tampering; the manager must commit exactly what was reviewed            |
 | Optimistic version + delta mode | Pessimistic locks / last write wins | Lost updates on counts are the failure mode; deliveries commute so need no version |
+
+## V1.1 additive model
+
+- inventory_date_lots: organization/location/product, optional numeric(12,2)
+  quantity, manufacture_date/precision, expiration_date/precision, notes, active,
+  created/updated actor/time and optimistic version. At least one date is required.
+  Month manufacture is day 1; month expiration is month end. Manufacture cannot
+  follow expiration. Explicit four-digit years support 1000?9999; YY is 2000?2099.
+- inventory_freshness_rules: one per organization/location/subcategory; active,
+  tracking_enabled, maximum_months (1?120), warning_months (0 <= warning < maximum),
+  actors/times/version. Category context follows the subcategory relationship.
+- inventory_saved_views: organization/location/profile/table (Inventory), name,
+  normalized name key, versioned JSON payload with explicit owned state, default,
+  timestamps/version. Names are unique per personal scope; a partial unique index
+  allows one default. Server actor determines profile; no shared views.
+
+All tables have tenant-safe composite FKs, supporting scope/actor indexes, RLS
+and SELECT-only authenticated grants. Actor/location membership FKs are deferred
+for tenant cascade teardown. Date entries archive rather than delete. Dates and
+rules audit previous/new values in inventory_change_log. Preferences do not
+create stock or business-audit events. Date quantities do not constrain stock.
+
+inventory_bulk_count validates every row and locks product/stock rows in UUID
+order before any adjustment. Every requested version is checked, including
+otherwise identical values. Existing inventory_stock_adjust runs inside that
+single transaction; unchanged rows create no ledger entry. One invalid/stale row
+aborts all rows. No stock adjustment is stored in the date audit.

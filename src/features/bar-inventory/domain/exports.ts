@@ -35,6 +35,13 @@ import {
 import { recommendationsDocument } from "./order-export";
 import { STATUS_LABEL } from "./stock-rules";
 import {
+  businessDate,
+  displayInventoryDate,
+  expirationStatus,
+  manufactureStatus,
+  MANUFACTURE_LABELS,
+} from "./freshness";
+import {
   activeFilterCount,
   applyFilters,
   parseTableState,
@@ -46,6 +53,7 @@ import {
 /** What to export. `filters` is the table's serialized state, never rows. */
 export type ExportRequest =
   | { kind: "inventory"; filters: string }
+  | { kind: "date_groups"; filters: string }
   | { kind: "history"; filters: string; days: number }
   | { kind: "recommendations"; filters: string }
   /** One order draft, Draft or Sent. Only the id travels; the server loads the rows. */
@@ -63,7 +71,13 @@ export type ExportKind = ExportRequest["kind"];
 export type ExportData = {
   catalog: Pick<
     CatalogState,
-    "vendors" | "categories" | "subcategories" | "products" | "stock"
+    | "vendors"
+    | "categories"
+    | "subcategories"
+    | "products"
+    | "stock"
+    | "dateLots"
+    | "freshnessRules"
   >;
   /** Needed for history and analytics only. */
   entries: readonly HistoryEntry[];
@@ -124,7 +138,10 @@ function inventoryDocument(
   const columns = [...INVENTORY_COLUMNS, ...INVENTORY_SORT_ONLY_COLUMNS];
   const state = stateFor(filters, columns);
   const rows = select(
-    buildInventoryRows(data.catalog).filter((r) => r.status !== "archived"),
+    buildInventoryRows(
+      data.catalog,
+      businessDate(ctx.now, ctx.timeZone),
+    ).filter((r) => r.status !== "archived"),
     columns,
     state,
     INVENTORY_DEFAULT_SORT,
@@ -358,6 +375,78 @@ function orderDraftExport(
  * and the server action: the filters are re-applied here to rows the caller
  * is authorized to read, so a file always equals what the screen shows.
  */
+function dateGroupsDocument(
+  data: ExportData,
+  filters: string,
+  ctx: ExportContext,
+) {
+  const columns = [...INVENTORY_COLUMNS, ...INVENTORY_SORT_ONLY_COLUMNS];
+  const state = stateFor(filters, columns);
+  const today = businessDate(ctx.now, ctx.timeZone);
+  const products = select(
+    buildInventoryRows(data.catalog, today).filter(
+      (r) => r.status !== "archived",
+    ),
+    columns,
+    state,
+    INVENTORY_DEFAULT_SORT,
+    ctx,
+  );
+  const byId = new Map(data.catalog.products.map((p) => [p.id, p]));
+  const rules = new Map(
+    (data.catalog.freshnessRules ?? []).map((r) => [r.subcategoryId, r]),
+  );
+  const lots = data.catalog.dateLots ?? [];
+  const sheet: ExportSheet = {
+    name: "Date Groups",
+    header: [
+      "Vendor",
+      "Name",
+      "Size",
+      "Unit",
+      "Date group ID",
+      "Dated quantity",
+      "Manufactured",
+      "Manufacture precision",
+      "Expires",
+      "Expiration precision",
+      "Expiration status",
+      "Manufacture freshness",
+      "Notes",
+    ],
+    rows: products.flatMap((product) =>
+      lots
+        .filter((l) => l.active && l.productId === product.productId)
+        .map((l) => [
+          product.vendor,
+          product.name,
+          product.size,
+          product.unit,
+          l.id,
+          l.quantity,
+          displayInventoryDate(l.manufacture),
+          l.manufacture?.precision ?? null,
+          displayInventoryDate(l.expiration),
+          l.expiration?.precision ?? null,
+          expirationStatus(l.expiration, today).text,
+          MANUFACTURE_LABELS[
+            manufactureStatus(
+              l.manufacture,
+              rules.get(byId.get(product.productId)?.subcategoryId ?? "") ??
+                null,
+              today,
+            )
+          ],
+          l.notes,
+        ]),
+    ),
+  };
+  return {
+    document: single(sheet),
+    rowCount: sheet.rows.length,
+    filtered: activeFilterCount(state) > 0,
+  };
+}
 export function prepareExport(
   request: ExportRequest,
   data: ExportData,
@@ -365,20 +454,22 @@ export function prepareExport(
   format: ExportFormat,
 ): PreparedExport {
   const built =
-    request.kind === "inventory"
-      ? inventoryDocument(data, request.filters, ctx)
-      : request.kind === "history"
-        ? historyDocument(data, request.filters, request.days, ctx)
-        : request.kind === "analytics"
-          ? analyticsDocument(data, request, ctx)
-          : request.kind === "order_draft"
-            ? orderDraftExport(request.draftId, data, ctx)
-            : recommendationsDocument({
-                rows: buildInventoryRows(data.catalog),
-                filters: request.filters,
-                timeZone: ctx.timeZone,
-                now: ctx.now,
-              });
+    request.kind === "date_groups"
+      ? dateGroupsDocument(data, request.filters, ctx)
+      : request.kind === "inventory"
+        ? inventoryDocument(data, request.filters, ctx)
+        : request.kind === "history"
+          ? historyDocument(data, request.filters, request.days, ctx)
+          : request.kind === "analytics"
+            ? analyticsDocument(data, request, ctx)
+            : request.kind === "order_draft"
+              ? orderDraftExport(request.draftId, data, ctx)
+              : recommendationsDocument({
+                  rows: buildInventoryRows(data.catalog),
+                  filters: request.filters,
+                  timeZone: ctx.timeZone,
+                  now: ctx.now,
+                });
   const what =
     request.kind === "recommendations"
       ? "order-recommendations"

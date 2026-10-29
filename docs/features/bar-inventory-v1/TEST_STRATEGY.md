@@ -41,3 +41,26 @@ Hosted harness fixtures extend `tests/real/support/harness.ts` (`Inventory` help
 ## 6. Out of scope for tests in V1
 
 Load testing beyond the 5,000-row import and 5,000-product catalog; visual regression; real vendor integrations (none exist).
+
+## V1.1 verification additions
+
+Domain tests cover parsing/precision/centuries, month-end and leap years, Chicago
+UTC rollover, every expiration boundary, manufacture warning/limit boundaries,
+multiple/archived groups, informational coverage, stock separation, filtered
+exports, bulk diff/blank/zero, saved payload fallback/ownership and layout
+normalization. Table component tests exercise profile/restaurant isolation,
+server default initialization and explicit Dashboard URL precedence.
+
+Database files 0046/0047/0048 cover RLS, no client DML, manager/staff/foreign-org,
+location boundaries, stale versions, invalid values, audit and ledger separation,
+batch atomicity and personal views/defaults. The existing RPC/publication security
+assertions now include V1.1 objects. Hosted real-JWT tests add a two-manager atomic
+batch race; Realtime access tests cover all four published tables.
+
+bar-inventory-v1-1.spec.ts adds six workflows across Chromium, WebKit tablet and
+mobile. bar-inventory-v1-1.real.spec.ts uses a task-owned synthetic organization,
+users and passcodes; it covers actual server actions, stale re-review, personal
+view persistence, date groups/rules/alerts and Staff UI denial. Cleanup queries
+independently assert zero tenant rows, profiles and Auth users.
+
+See [V1_1_VALIDATION.md](V1_1_VALIDATION.md) for exact final counts and any reruns.

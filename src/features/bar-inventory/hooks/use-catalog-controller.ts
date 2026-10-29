@@ -159,6 +159,7 @@ export function useCatalogController({
     async (command: CatalogCommand): Promise<CatalogRunResult> => {
       if (demo) {
         const result = applyCatalogCommand(demo.state, command, {
+          profileId: viewer.profileId,
           actorName: viewer.name,
           now: new Date(),
           newId: () => crypto.randomUUID(),
@@ -188,10 +189,10 @@ export function useCatalogController({
         return { ok: false, error: result.error };
       }
       // A refused write may mean the screen is stale: show the latest.
-      if (result.conflict?.kind === "stale") void refresh();
+      if (result.conflict?.kind === "stale") await refresh();
       return { ok: false, error: result.error, conflict: result.conflict };
     },
-    [demo, viewer.name, restaurantSlug, refresh],
+    [demo, viewer.name, viewer.profileId, restaurantSlug, refresh],
   );
 
   return {
