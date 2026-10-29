@@ -80,3 +80,13 @@ Recipes V1 R-1 local validation is complete; PR #223 merged to development. R-2 
 Track in [QA #234](https://github.com/KrapaGoutam/The-Lineup/issues/234): RD-E-005 long-token overlap; RD-E-007 small Light text contrast; RD-E-008 Perfect-side difference treatment (owner decision); TC-19 Staff session acceptance (active read, no management controls, archived denial and private images); O-1 partial ratio (owner review); O-2 iframe Light persistence (unconfirmed; top-level reproduction); O-3 Archive bar weight and O-4 no-photo spacing (polish / owner review).
 
 Checkpoint ordering (2026-10-29): Recipes + Inventory integration sanity COMPLETE / GO; next is a separate release-readiness audit. All #234 findings listed above remain **SHELVED / LATER**, including owner browser acceptance retest and persistent DEV realistic-data owner review. RD-E-005/007/008, TC-19 and O-1–O-4 are not completed or reactivated by this checkpoint.
+
+
+## Recipes V1 release-readiness audit follow-ups (2026-10-29)
+
+- [ ] **Preflight P-3:** reviewed Production target for `scripts/recipes/import-recipes.mjs` (currently `local`/`dev` only) with exact-origin check, `--confirm <ref>`, mandatory prior dry run, unit tests — owner approval required.
+- [ ] **Preflight P-4:** owner-supplied canonical Recipe payload (38 Recipes / 76 variants), SHA-256, source corrections; resolve or accept `Virgin Coco Margarita Splash` (`0.75 oz or 2 oz`) and `Smoked Vanilla Old Fashioned` (`Absolut Vanilia` / `Vanilla syrup`); decide `Others` fallback category.
+- [ ] **F-1 (Low):** qualify the `id` alias in `bar_recipe_category_reorder` validation (new migration) and add a pgTAP case with a foreign/unknown ID; owner decides before the Production migration batch.
+- [ ] Optional import-payload lint that fails on a reviewed ambiguity list (`" or "` in amount/ingredient).
+- [ ] CI: add tablet/mobile browser projects (or a documented local gate) and consider a dedicated secret scanner.
+- [ ] Preflight question: is real Bar Inventory operational data already in Production, and what is its source? (not established by repository evidence).

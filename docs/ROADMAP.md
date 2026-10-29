@@ -127,3 +127,14 @@ This ordering supersedes the owner-retest-next ordering above.
 - **SHELVED / LATER:** persistent DEV realistic-data owner review.
 
 All shelved items remain tracked; release readiness/Production/main promotion are not approved by this sanity result. Milestone #7 stays open; Part 2/3 remain on hold.
+
+## Recipes V1 phase ordering after the release-readiness audit — 2026-10-29
+
+This ordering supersedes the "Following" line above.
+
+- **COMPLETE:** Concept E implementation (#232, #233); Concept E must-fix (#235); Recipes + Inventory integration sanity (#236); **release-readiness audit — GO to Production preflight** ([report](features/recipes-v1/RELEASE_READINESS_AUDIT.md)).
+- **SHELVED / LATER:** owner browser acceptance retest (recommended on the release candidate); deferred Recipe Detail polish (RD-E-005/007/008, O-1–O-4); Staff manual acceptance TC-19; persistent DEV realistic-data owner review.
+- **NEXT:** release candidate validation / Production preflight preparation (new session; owner approval required before any Production write).
+- **LATER:** Production DB/Storage changes (7 migrations); Bar Inventory data injection only if actually required; Recipe Production import tooling approval and dry run; Recipe Production injection; `development → main`; Production smoke; release closure.
+
+Part 2/3 remain on hold. #220, #234 and milestone #7 stay open.

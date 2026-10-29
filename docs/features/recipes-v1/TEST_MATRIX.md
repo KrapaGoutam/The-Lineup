@@ -306,3 +306,7 @@ Vendor Order Drafts: navigation tab remains present in the existing manager nav 
 - No new integration defect found. No full accessibility audit, Staff TC-19, real-data owner review, signed-image acceptance retest or production-readiness claim.
 
 Next: Recipes V1 release-readiness audit in a new independent session after green CI/development merge. Owner browser acceptance, RD-E-005/007/008, O-1–O-4, TC-19 and persistent DEV realistic-data review remain SHELVED / LATER.
+
+## Release-readiness audit evidence — 2026-10-29
+
+Audited on `development` `754b34a5d5860269f2fda48b27efb56fbfb90993`. Executed by the audit: `vitest run src/features/recipes scripts/recipes scripts/check-nonprod-env.test.ts` — 30 files / 281 tests pass; `npm run typecheck` pass; ESLint on `src/features/recipes` and `scripts/recipes` clean; one throwaway PostgreSQL 16 reproduction of the `bar_recipe_category_reorder` validator defect (Low, F-1). pgTAP 0043/0044/0045, hosted real suites and Playwright were **not** re-run; their recorded evidence and exact-head CI were relied on. **Coverage gaps (non-blocking):** no pgTAP case for a foreign/unknown ID in `bar_recipe_category_reorder`; CI browser smoke is desktop-only; no pgTAP run on the combined development tree before the release PR; Staff TC-19 manual run shelved (technically covered by RLS/RPC/storage pgTAP, server actions and component tests). Details: [RELEASE_READINESS_AUDIT.md](RELEASE_READINESS_AUDIT.md#11-tests-and-ci-area-m-n).
