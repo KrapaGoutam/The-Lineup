@@ -234,4 +234,32 @@ test.describe("Recipes V1 R2-E Picture Book and Browsing", () => {
       page.getByRole("link", { name: /R1 Test Archived/ }),
     ).toHaveCount(0);
   });
+
+  test("RC-148: view toggle, filter chips and sort controls are at least 44 px", async ({
+    page,
+  }) => {
+    await signIn(page, "/", "2468");
+    await openRecipes(page);
+    const controls = [
+      page.getByRole("button", { name: "List", exact: true }),
+      page.getByRole("button", { name: "Picture Book", exact: true }),
+      page.getByRole("group", { name: "Filter recipes" }).getByRole("button"),
+      page.getByRole("group", { name: "Sort order" }).getByRole("button"),
+    ];
+    for (const control of controls) {
+      const count = await control.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i += 1) {
+        const box = await control.nth(i).boundingBox();
+        const label = await control.nth(i).innerText();
+        expect(box?.height ?? 0, label + " height").toBeGreaterThanOrEqual(44);
+        expect(box?.width ?? 0, label + " width").toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  });
 });

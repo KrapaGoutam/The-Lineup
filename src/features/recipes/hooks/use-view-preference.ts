@@ -7,8 +7,14 @@ export type RecipeViewMode = "list" | "picture";
 export const RECIPES_VIEW_STORAGE_KEY = "recipes-view-preference";
 const PREFERENCE_CHANGE_EVENT = "recipes-view-preference-change";
 
+// Session fallback for browsers where localStorage throws (blocked site data,
+// some private modes): the toggle still works until the page is closed.
+// Set only after a failed write; cleared by the next successful one.
+let sessionPreference: RecipeViewMode | null = null;
+
 export function readStoredViewPreference(): RecipeViewMode {
   if (typeof window === "undefined") return "list";
+  if (sessionPreference) return sessionPreference;
   try {
     const stored = window.localStorage.getItem(RECIPES_VIEW_STORAGE_KEY);
     if (stored === "picture" || stored === "list") return stored;
@@ -52,8 +58,10 @@ export function useViewPreference(): ViewPreferenceResult {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(RECIPES_VIEW_STORAGE_KEY, next);
       }
+      sessionPreference = null;
     } catch {
-      // Storage unavailable; fallback gracefully.
+      // Storage unavailable; keep the choice for this page session.
+      sessionPreference = next;
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));

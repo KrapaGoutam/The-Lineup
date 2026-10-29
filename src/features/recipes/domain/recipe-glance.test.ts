@@ -262,6 +262,54 @@ describe("deriveOzRatio", () => {
     expect(deriveOzRatio(ingredients)).toBeNull();
   });
 
+  it("omits ratio when a metric amount is written without a space (30ml)", () => {
+    const row = (
+      id: string,
+      amount: string,
+      unit: string | null,
+      name: string,
+    ) => ({
+      id,
+      amount,
+      unit,
+      ingredient_name: name,
+      preparation: null,
+      sort_order: 1,
+    });
+    expect(
+      deriveOzRatio([
+        row("1", "2", "oz", "Gin"),
+        row("2", "1", "oz", "Dry vermouth"),
+        row("3", "30ml", null, "Campari"),
+      ]),
+    ).toBeNull();
+    expect(
+      deriveOzRatio([
+        row("1", "2", "oz", "Gin"),
+        row("2", "1", "oz", "Dry vermouth"),
+        row("3", "1.5cl", null, "Campari"),
+      ]),
+    ).toBeNull();
+  });
+
+  it("treats fl oz as an ounce unit instead of silently excluding it", () => {
+    const row = (id: string, amount: string, unit: string, name: string) => ({
+      id,
+      amount,
+      unit,
+      ingredient_name: name,
+      preparation: null,
+      sort_order: 1,
+    });
+    const result = deriveOzRatio([
+      row("1", "2", "fl oz", "Gin"),
+      row("2", "1", "fl oz", "Dry vermouth"),
+      row("3", "1", "oz", "Campari"),
+    ]);
+    expect(result?.ratio).toBe("2 : 1 : 1");
+    expect(result?.excluded).toEqual([]);
+  });
+
   it("omits ratio when less than two ounce ingredients are present", () => {
     const ingredients = [
       {

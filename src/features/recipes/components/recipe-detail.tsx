@@ -133,7 +133,9 @@ function Panel({ variant }: { variant: DetailVariant }) {
 
       {variant.tips && variant.tips.trim().length > 0 && (
         <section>
-          <h3 className="font-semibold">Bartender Tips</h3>
+          <h3 className="font-semibold">
+            {variant.variant === "house" ? "House Notes" : "Bartender Tips"}
+          </h3>
           <p className="whitespace-pre-wrap">{variant.tips.trim()}</p>
         </section>
       )}

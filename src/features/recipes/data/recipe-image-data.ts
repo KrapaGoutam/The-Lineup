@@ -41,6 +41,37 @@ export async function signRecipeImages(
     expiresAt,
   };
 }
+export type ThumbnailUrls = {
+  urls: Record<string, string>;
+  expiresAt: number;
+};
+/** Signs every scoped thumbnail in ONE Storage request (STORAGE_PLAN S-9). */
+export async function signRecipeThumbnails(
+  client: Client,
+  org: string,
+  rows: { id: string; image_thumb_path: string | null }[],
+): Promise<ThumbnailUrls> {
+  const expiresAt = Date.now() + IMAGE_TTL * 1000;
+  const scoped = rows.filter(
+    (row): row is { id: string; image_thumb_path: string } =>
+      !!row.image_thumb_path &&
+      isScopedImagePath(row.image_thumb_path, org, row.id),
+  );
+  if (!scoped.length) return { urls: {}, expiresAt };
+  const { data, error } = await client.storage
+    .from("recipe-images")
+    .createSignedUrls(
+      scoped.map((row) => row.image_thumb_path),
+      IMAGE_TTL,
+    );
+  if (error) throw new Error("Photo could not be loaded.");
+  const urls: Record<string, string> = {};
+  for (const row of scoped) {
+    const signed = data?.find((item) => item.path === row.image_thumb_path);
+    if (signed?.signedUrl) urls[row.id] = signed.signedUrl;
+  }
+  return { urls, expiresAt };
+}
 async function cleanup(client: Client, paths: string[]): Promise<boolean> {
   if (!paths.length) return true;
   try {

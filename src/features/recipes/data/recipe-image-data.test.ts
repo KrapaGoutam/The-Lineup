@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { mutateRecipeImageData, signRecipeImages } from "./recipe-image-data";
+import {
+  mutateRecipeImageData,
+  signRecipeImages,
+  signRecipeThumbnails,
+} from "./recipe-image-data";
 import { imagePaths } from "../domain/image-rules";
 const org = "11111111-1111-4111-8111-111111111111",
   id = "22222222-2222-4222-8222-222222222222";
@@ -152,5 +156,33 @@ describe("caller-session image data", () => {
       thumb: null,
     });
     expect(f.sign).not.toHaveBeenCalled();
+  });
+  it("signs only scoped thumbnails for many recipes in one Storage request", async () => {
+    const f = fixture();
+    const other = "33333333-3333-4333-8333-333333333333";
+    const mine = imagePaths(org, id, "image/webp");
+    const foreignOrg = imagePaths(
+      "44444444-4444-4444-8444-444444444444",
+      other,
+      "image/webp",
+    );
+    const result = await signRecipeThumbnails(f.client, org, [
+      { id, image_thumb_path: mine.image_thumb_path },
+      { id: other, image_thumb_path: foreignOrg.image_thumb_path },
+      { id: "55555555-5555-4555-8555-555555555555", image_thumb_path: null },
+    ]);
+    expect(f.sign).toHaveBeenCalledTimes(1);
+    expect(f.sign.mock.calls[0][0]).toEqual([mine.image_thumb_path]);
+    expect(f.sign.mock.calls[0][1]).toBe(3600);
+    expect(Object.keys(result.urls)).toEqual([id]);
+    expect(result.urls[id]).toContain("token=signed");
+  });
+  it("makes no Storage request when no thumbnail is signable", async () => {
+    const f = fixture();
+    const result = await signRecipeThumbnails(f.client, org, [
+      { id, image_thumb_path: null },
+    ]);
+    expect(f.sign).not.toHaveBeenCalled();
+    expect(result.urls).toEqual({});
   });
 });

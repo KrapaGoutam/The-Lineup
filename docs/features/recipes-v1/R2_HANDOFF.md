@@ -271,3 +271,7 @@ R2-E COMPLETE.
 ### Next Checkpoint
 
 **R-2g — Independent Final Gate** (Claude Code LOCAL, Sonnet 5.5, high, NEW SESSION, starting from merged `development`).
+
+## R-2g independent final gate — GO (2026-10-28)
+
+Run by Claude Code on `feature/recipes-v1-final-gate` from development `73a24e1`. Five small defects fixed with regression tests; no migration; DEV parity 61/61. Full evidence, findings and the GO decision: [R2G_FINAL_GATE.md](R2G_FINAL_GATE.md). Next: Recipes V1 release-readiness plus explicit owner approval (not started).

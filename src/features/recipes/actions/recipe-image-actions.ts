@@ -6,7 +6,9 @@ import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import {
   mutateRecipeImageData,
   signRecipeImages,
+  signRecipeThumbnails,
   type ImageMutation,
+  type ThumbnailUrls,
 } from "../data/recipe-image-data";
 import { validateOutput, type ImageUrls } from "../domain/image-rules";
 import type { ManagementResult } from "../domain/recipe-management";
@@ -17,6 +19,12 @@ const scopeSchema = z.object({
     .max(120)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   recipeId: z.uuid(),
+});
+// One Picture Book screen shows at most the whole index; Server Actions run
+// one at a time, so thumbnails are signed per batch, never per card.
+const thumbBatchSchema = z.object({
+  restaurantSlug: scopeSchema.shape.restaurantSlug,
+  recipeIds: z.array(z.uuid()).min(1).max(250),
 });
 const mutationSchema = scopeSchema.extend({
   expectedVersion: z.number().int().positive(),
@@ -95,6 +103,30 @@ export async function removeRecipeImageAction(
     parsed.data.recipeId,
     parsed.data.expectedVersion,
   );
+}
+export async function getRecipeThumbUrlsAction(
+  input: z.infer<typeof thumbBatchSchema>,
+): Promise<ManagementResult<ThumbnailUrls>> {
+  const parsed = thumbBatchSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Photo unavailable." };
+  const ctx = await context(parsed.data.restaurantSlug, false);
+  if (ctx.error) return ctx.error;
+  try {
+    // Organization-scoped caller-session read: RLS hides archived recipes from Staff.
+    const rows = await ctx.client
+      .from("bar_recipes")
+      .select("id,image_thumb_path")
+      .eq("organization_id", ctx.org)
+      .in("id", parsed.data.recipeIds);
+    if (rows.error || !rows.data)
+      return { ok: false, error: "Photo unavailable." };
+    return {
+      ok: true,
+      data: await signRecipeThumbnails(ctx.client, ctx.org, rows.data),
+    };
+  } catch {
+    return { ok: false, error: "Photo unavailable." };
+  }
 }
 export async function getRecipeImageUrlsAction(
   input: z.infer<typeof scopeSchema>,

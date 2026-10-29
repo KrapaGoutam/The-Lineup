@@ -16,6 +16,7 @@ export function RecipeImage(props: {
     restaurantSlug: props.restaurantSlug ?? "",
     recipeId: props.recipeId,
     initial: props.initial,
+    thumbnail: props.thumbnail,
     enabled: !!props.restaurantSlug && !!props.hasImage,
   });
   const source =
