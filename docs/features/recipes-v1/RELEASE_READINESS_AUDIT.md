@@ -187,3 +187,7 @@ None identified.
 ## 16. Final recommendation
 
 **GO — READY TO ENTER PRODUCTION PREFLIGHT.** Next phase: _Release Candidate Validation / Production Preflight Preparation_ (not started). Recommended agent: Codex Local — GPT-6.1 Sol — HIGH — new session; fallback Claude Code Cloud — Sonnet 5.5 High. The preflight must close P-2 through P-8 before any Production write.
+
+## Post-audit preflight checkpoint — 2026-10-29
+
+Historical findings and audit decision above are retained. PR #237 merged at `dd792f359a77b60ea05115ce8c682b38a5a6d5d8`. Live DEV/PROD access verified: DEV 62/62 after new forward validator fix `20261029194855` (DEV only); PROD remains at 54, head `20261028100100`, now **eight pending**. Importer now supports guarded Production dry-run/create (no real import invoked). Read-only PROD Inventory operational counts are zero; Recipe bucket absent. Canonical payload and approved Inventory source unavailable; backup metadata denied for missing `backups_read`; config names present but values unverified. Separate result, migration review and owner-gated P0–P14 sequence: [PRODUCTION_RELEASE.md](PRODUCTION_RELEASE.md). Tracking #238; exact-head CI/PR decision is recorded there/GitHub. Nothing in this addendum authorizes Production execution.

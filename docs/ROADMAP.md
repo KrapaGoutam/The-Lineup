@@ -134,7 +134,9 @@ This ordering supersedes the "Following" line above.
 
 - **COMPLETE:** Concept E implementation (#232, #233); Concept E must-fix (#235); Recipes + Inventory integration sanity (#236); **release-readiness audit — GO to Production preflight** ([report](features/recipes-v1/RELEASE_READINESS_AUDIT.md)).
 - **SHELVED / LATER:** owner browser acceptance retest (recommended on the release candidate); deferred Recipe Detail polish (RD-E-005/007/008, O-1–O-4); Staff manual acceptance TC-19; persistent DEV realistic-data owner review.
-- **NEXT:** release candidate validation / Production preflight preparation (new session; owner approval required before any Production write).
+- **CURRENT:** Release Candidate Validation + Production Preflight (#238): DEV-only reorder fix and guarded Production importer implemented; live DEV 62/62, PROD 54 with eight pending; [execution plan](features/recipes-v1/PRODUCTION_RELEASE.md). Local validation passed; exact-head PR CI/review pending.
+- **FOLLOWING:** Owner Production approval, after recovery evidence, canonical Recipe payload/warnings and Inventory initialization-or-empty decision are resolved.
+- **THEN:** Production execution (P0–P14); no Production write or main promotion in the current checkpoint.
 - **LATER:** Production DB/Storage changes (7 migrations); Bar Inventory data injection only if actually required; Recipe Production import tooling approval and dry run; Recipe Production injection; `development → main`; Production smoke; release closure.
 
 Part 2/3 remain on hold. #220, #234 and milestone #7 stay open.
