@@ -32,9 +32,17 @@ Owner-approved scope: Production migration execution, manual backup, infrastruct
 - [x] Verify zero persistent writes on PROD after dry run: all 6 recipe table counts remain 0.
 - [x] Maintain CLI linked to DEV (`opmujepkemwcdxxorhfd`).
 - [x] Verify repository quality gates: `npm run check` clean, `npm run test` (157 files, 2,071 tests passed).
-- [ ] GATE C: Explicit owner Recipe import approval of exact payload hash (`ebabe356...`) and dry run before executing `--mode create`.
+- [x] GATE C: Explicit owner Recipe import approval received and executed:
+  - Live create-only import (`--mode create --execute --confirm-prod`) executed with matching dry-run report.
+  - Successfully created 38 recipes, 76 variants across 5 categories in org `the-monks` (`284f0170-05a0-4d60-b171-1b5cb13ae076`) with actor Raj (`4fc73830-14ed-42aa-94b0-e7ec22b196c3`).
+  - Readback verified on PROD: exactly 38 recipes, 76 variants (38 house, 38 perfect), 310 ingredients, 265 steps, 73 garnishes, 0 tips.
+  - Category breakdown verified: 20 Signature Cocktails, 4 Margaritas, 6 Martinis, 7 Mocktails, 1 Shots.
+  - Representative verification passed: Recipes 20 (Vanilla syrup 0.5 oz, Absolut Vanilia/Or absent), 33 (Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz), 35-37 (Simple, Flavored, Mint Lemonade), 38 (Green Tea Shot, Shots category, pricing excluded from DB).
+  - Verified no extra/demo/test recipes exist (distinct numbers 1-38, total 38, org count 1).
+  - Verified Bar Inventory operational tables remain empty (0 rows across all operational tables).
+  - Supabase CLI linkage confirmed restored to DEV (`opmujepkemwcdxxorhfd`).
 - [ ] GATE D: `development -> main` release PR, exact-head CI, merge commit, Vercel deployment verification, and browser smoke.
 
 ## In flight
 
-Production migration batch (8 migrations) is successfully executed and verified on `ftadewtkjlaotfdvtjcv` (parity 62/62 at head `20261029194855`). Recipe storage and database security are verified. Inventory operational state confirmed empty. Canonical 38-recipe source is parsed, normalized with owner-approved decisions (warnings resolved with explicit metadata, 0 tips imported), schema-validated, and verified via transactional rollback dry run on PROD. Pre- and post-dry-run table counts confirmed 0 across all 6 tables (0 persistent writes). CLI safely relinked to DEV. Execution is halted at GATE C awaiting owner approval of the final normalized payload hash to execute `--mode create`.
+GATE C Production Recipe import is complete and verified on `the-lineup` (`ftadewtkjlaotfdvtjcv`). Production database contains exactly 38 recipes, 76 variants (38 house, 38 perfect), and 0 tips. Bar Inventory operational tables confirmed at 0 rows. Supabase CLI is actively linked to DEV (`opmujepkemwcdxxorhfd`). Execution is halted awaiting explicit owner authorization for GATE D (`development -> main` release PR, merge commit, and Vercel deployment).
