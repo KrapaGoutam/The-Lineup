@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -216,6 +216,351 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      bar_recipe_categories: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          display_order: number;
+          id: string;
+          is_active: boolean;
+          is_fallback: boolean;
+          name: string;
+          organization_id: string;
+          slug: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          is_fallback?: boolean;
+          name: string;
+          organization_id: string;
+          slug: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          display_order?: number;
+          id?: string;
+          is_active?: boolean;
+          is_fallback?: boolean;
+          name?: string;
+          organization_id?: string;
+          slug?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipe_categories_creator_fk";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "bar_recipe_categories_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bar_recipe_categories_updater_fk";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
+      bar_recipe_garnishes: {
+        Row: {
+          id: string;
+          name: string;
+          notes: string | null;
+          organization_id: string;
+          sort_order: number;
+          variant_id: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          notes?: string | null;
+          organization_id: string;
+          sort_order: number;
+          variant_id: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          notes?: string | null;
+          organization_id?: string;
+          sort_order?: number;
+          variant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipe_garnishes_variant_fk";
+            columns: ["variant_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "bar_recipe_variants";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      bar_recipe_ingredients: {
+        Row: {
+          amount: string | null;
+          id: string;
+          ingredient_name: string;
+          organization_id: string;
+          preparation: string | null;
+          sort_order: number;
+          unit: string | null;
+          variant_id: string;
+        };
+        Insert: {
+          amount?: string | null;
+          id?: string;
+          ingredient_name: string;
+          organization_id: string;
+          preparation?: string | null;
+          sort_order: number;
+          unit?: string | null;
+          variant_id: string;
+        };
+        Update: {
+          amount?: string | null;
+          id?: string;
+          ingredient_name?: string;
+          organization_id?: string;
+          preparation?: string | null;
+          sort_order?: number;
+          unit?: string | null;
+          variant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipe_ingredients_variant_fk";
+            columns: ["variant_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "bar_recipe_variants";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      bar_recipe_steps: {
+        Row: {
+          id: string;
+          instruction: string;
+          organization_id: string;
+          sort_order: number;
+          variant_id: string;
+        };
+        Insert: {
+          id?: string;
+          instruction: string;
+          organization_id: string;
+          sort_order: number;
+          variant_id: string;
+        };
+        Update: {
+          id?: string;
+          instruction?: string;
+          organization_id?: string;
+          sort_order?: number;
+          variant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipe_steps_variant_fk";
+            columns: ["variant_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "bar_recipe_variants";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      bar_recipe_variants: {
+        Row: {
+          batch_notes: string | null;
+          created_at: string;
+          glass: string | null;
+          glass_notes: string | null;
+          id: string;
+          method: string | null;
+          organization_id: string;
+          presentation_notes: string | null;
+          recipe_id: string;
+          rim_notes: string | null;
+          rim_type: string | null;
+          tips: string | null;
+          updated_at: string;
+          variant: string;
+        };
+        Insert: {
+          batch_notes?: string | null;
+          created_at?: string;
+          glass?: string | null;
+          glass_notes?: string | null;
+          id?: string;
+          method?: string | null;
+          organization_id: string;
+          presentation_notes?: string | null;
+          recipe_id: string;
+          rim_notes?: string | null;
+          rim_type?: string | null;
+          tips?: string | null;
+          updated_at?: string;
+          variant: string;
+        };
+        Update: {
+          batch_notes?: string | null;
+          created_at?: string;
+          glass?: string | null;
+          glass_notes?: string | null;
+          id?: string;
+          method?: string | null;
+          organization_id?: string;
+          presentation_notes?: string | null;
+          recipe_id?: string;
+          rim_notes?: string | null;
+          rim_type?: string | null;
+          tips?: string | null;
+          updated_at?: string;
+          variant?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipe_variants_recipe_fk";
+            columns: ["recipe_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "bar_recipes";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      bar_recipes: {
+        Row: {
+          alternate_name: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
+          base_spirit: string | null;
+          category_id: string;
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          image_path: string | null;
+          image_thumb_path: string | null;
+          is_active: boolean;
+          is_alcoholic: boolean;
+          is_menu_item: boolean;
+          is_popular: boolean;
+          name: string;
+          organization_id: string;
+          recipe_number: number;
+          slug: string;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+        };
+        Insert: {
+          alternate_name?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          base_spirit?: string | null;
+          category_id: string;
+          created_at?: string;
+          created_by: string;
+          description?: string | null;
+          id?: string;
+          image_path?: string | null;
+          image_thumb_path?: string | null;
+          is_active?: boolean;
+          is_alcoholic?: boolean;
+          is_menu_item?: boolean;
+          is_popular?: boolean;
+          name: string;
+          organization_id: string;
+          recipe_number: number;
+          slug: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          alternate_name?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
+          base_spirit?: string | null;
+          category_id?: string;
+          created_at?: string;
+          created_by?: string;
+          description?: string | null;
+          id?: string;
+          image_path?: string | null;
+          image_thumb_path?: string | null;
+          is_active?: boolean;
+          is_alcoholic?: boolean;
+          is_menu_item?: boolean;
+          is_popular?: boolean;
+          name?: string;
+          organization_id?: string;
+          recipe_number?: number;
+          slug?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bar_recipes_archiver_fk";
+            columns: ["organization_id", "archived_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "bar_recipes_category_fk";
+            columns: ["category_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "bar_recipe_categories";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "bar_recipes_creator_fk";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "bar_recipes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "bar_recipes_updater_fk";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
           },
         ];
       };
@@ -900,6 +1245,183 @@ export type Database = {
           },
         ];
       };
+      inventory_date_lots: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          created_by: string;
+          expiration_date: string | null;
+          expiration_precision: string | null;
+          id: string;
+          location_id: string;
+          manufacture_date: string | null;
+          manufacture_precision: string | null;
+          notes: string | null;
+          organization_id: string;
+          product_id: string;
+          quantity: number | null;
+          updated_at: string;
+          updated_by: string;
+          version: number;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          created_by: string;
+          expiration_date?: string | null;
+          expiration_precision?: string | null;
+          id?: string;
+          location_id: string;
+          manufacture_date?: string | null;
+          manufacture_precision?: string | null;
+          notes?: string | null;
+          organization_id: string;
+          product_id: string;
+          quantity?: number | null;
+          updated_at?: string;
+          updated_by: string;
+          version?: number;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          created_by?: string;
+          expiration_date?: string | null;
+          expiration_precision?: string | null;
+          id?: string;
+          location_id?: string;
+          manufacture_date?: string | null;
+          manufacture_precision?: string | null;
+          notes?: string | null;
+          organization_id?: string;
+          product_id?: string;
+          quantity?: number | null;
+          updated_at?: string;
+          updated_by?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "inventory_date_lots_location_id_organization_id_fkey";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "inventory_date_lots_organization_id_created_by_fkey";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "inventory_date_lots_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inventory_date_lots_organization_id_updated_by_fkey";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "inventory_date_lots_product_id_organization_id_fkey";
+            columns: ["product_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "inventory_products";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      inventory_freshness_rules: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          created_by: string;
+          id: string;
+          location_id: string;
+          maximum_months: number;
+          organization_id: string;
+          subcategory_id: string;
+          tracking_enabled: boolean;
+          updated_at: string;
+          updated_by: string;
+          version: number;
+          warning_months: number;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          location_id: string;
+          maximum_months: number;
+          organization_id: string;
+          subcategory_id: string;
+          tracking_enabled?: boolean;
+          updated_at?: string;
+          updated_by: string;
+          version?: number;
+          warning_months: number;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          location_id?: string;
+          maximum_months?: number;
+          organization_id?: string;
+          subcategory_id?: string;
+          tracking_enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string;
+          version?: number;
+          warning_months?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "inventory_freshness_rules_location_id_organization_id_fkey";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "inventory_freshness_rules_organization_id_created_by_fkey";
+            columns: ["organization_id", "created_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "inventory_freshness_rules_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inventory_freshness_rules_organization_id_updated_by_fkey";
+            columns: ["organization_id", "updated_by"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "inventory_freshness_rules_subcategory_id_organization_id_fkey";
+            columns: ["subcategory_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "inventory_subcategories";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
       inventory_import_batches: {
         Row: {
           actor_profile_id: string;
@@ -1284,6 +1806,73 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "inventory_vendors";
             referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      inventory_saved_views: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_default: boolean;
+          location_id: string;
+          name: string;
+          name_key: string | null;
+          organization_id: string;
+          payload: Json;
+          profile_id: string;
+          table_key: string;
+          updated_at: string;
+          version: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_default?: boolean;
+          location_id: string;
+          name: string;
+          name_key?: string | null;
+          organization_id: string;
+          payload: Json;
+          profile_id: string;
+          table_key?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_default?: boolean;
+          location_id?: string;
+          name?: string;
+          name_key?: string | null;
+          organization_id?: string;
+          payload?: Json;
+          profile_id?: string;
+          table_key?: string;
+          updated_at?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "inventory_saved_views_location_id_organization_id_fkey";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "inventory_saved_views_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "inventory_saved_views_organization_id_profile_id_fkey";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
           },
         ];
       };
@@ -3975,6 +4564,67 @@ export type Database = {
       };
     };
     Functions: {
+      bar_recipe_category_reorder: {
+        Args: { p_ordered_ids: string[]; p_organization_id: string };
+        Returns: Json;
+      };
+      bar_recipe_category_save: {
+        Args: {
+          p_category_id: string;
+          p_expected_version: number;
+          p_name: string;
+          p_organization_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_category_set_active: {
+        Args: {
+          p_active: boolean;
+          p_category_id: string;
+          p_expected_version: number;
+          p_organization_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_save: {
+        Args: {
+          p_expected_version: number;
+          p_organization_id: string;
+          p_payload: Json;
+          p_recipe_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_set_archived: {
+        Args: {
+          p_archived: boolean;
+          p_category_id?: string;
+          p_expected_version: number;
+          p_organization_id: string;
+          p_recipe_id: string;
+        };
+        Returns: Json;
+      };
+      bar_recipe_set_image: {
+        Args: {
+          p_expected_version: number;
+          p_image_path: string;
+          p_organization_id: string;
+          p_recipe_id: string;
+          p_thumb_path: string;
+        };
+        Returns: Json;
+      };
+      bar_recipes_import: {
+        Args: {
+          p_actor_profile_id: string;
+          p_mode: string;
+          p_organization_id: string;
+          p_overwrite?: number[];
+          p_payload: Json;
+        };
+        Returns: Json;
+      };
       board_add_column: {
         Args: {
           p_location_id: string;
@@ -4146,6 +4796,16 @@ export type Database = {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: string;
       };
+      inventory_bulk_count: {
+        Args: {
+          p_location_id: string;
+          p_note: string;
+          p_organization_id: string;
+          p_reason: string;
+          p_rows: Json;
+        };
+        Returns: Json;
+      };
       inventory_category_create: {
         Args: {
           p_location_id: string;
@@ -4173,6 +4833,37 @@ export type Database = {
           p_organization_id: string;
         };
         Returns: number;
+      };
+      inventory_date_lot_save: {
+        Args: {
+          p_active: boolean;
+          p_expected_version: number;
+          p_expiration_date: string;
+          p_expiration_precision: string;
+          p_id: string;
+          p_location_id: string;
+          p_manufacture_date: string;
+          p_manufacture_precision: string;
+          p_notes: string;
+          p_organization_id: string;
+          p_product_id: string;
+          p_quantity: number;
+        };
+        Returns: string;
+      };
+      inventory_freshness_rule_save: {
+        Args: {
+          p_active: boolean;
+          p_expected_version: number;
+          p_id: string;
+          p_location_id: string;
+          p_maximum_months: number;
+          p_organization_id: string;
+          p_subcategory_id: string;
+          p_tracking_enabled: boolean;
+          p_warning_months: number;
+        };
+        Returns: string;
       };
       inventory_import_commit: {
         Args: {
@@ -4294,6 +4985,27 @@ export type Database = {
           p_vendor_id: string;
         };
         Returns: number;
+      };
+      inventory_saved_view_delete: {
+        Args: {
+          p_expected_version: number;
+          p_id: string;
+          p_location_id: string;
+          p_organization_id: string;
+        };
+        Returns: undefined;
+      };
+      inventory_saved_view_save: {
+        Args: {
+          p_expected_version: number;
+          p_id: string;
+          p_is_default: boolean;
+          p_location_id: string;
+          p_name: string;
+          p_organization_id: string;
+          p_payload: Json;
+        };
+        Returns: string;
       };
       inventory_stock_adjust: {
         Args: {

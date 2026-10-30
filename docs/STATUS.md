@@ -1,11 +1,63 @@
 # Project Status & Milestone Tracker
 
-**Repository:** The Lineup (Restaurant Roster & Floor Management)  
-**Last Updated:** October 26, 2026  
-**Health Gate:** `npm run check` (Passing) | `npm test` (74/74 files, 715/715 tests passing) | `npm run test:e2e` (demo suite, 507 tests across desktop/host-tablet/server-mobile) | `npm run db:test` (31 pgTAP files, 646 assertions; executed by the CI `Database` job)  
+## Recipes V1 — Production preflight preparation (2026-10-29)
+
+Audit PR #237 is merged at `dd792f359a77b60ea05115ce8c682b38a5a6d5d8` (checkpoint baseline; audit GO to preflight retained). Isolated branch `release/recipes-v1-production-preflight`; tracking [#238](https://github.com/KrapaGoutam/The-Lineup/issues/238). Actual DEV `opmujepkemwcdxxorhfd` and PROD `ftadewtkjlaotfdvtjcv` verified live. DEV **62/62**, head `20261029194855`, after tested DEV-only category-reorder fix; PROD **54**, head `20261028100100`, **eight pending**. Historical PROD naming/serialization variance investigated without repair. Production Inventory operational tables empty; Recipe bucket absent. Production-capable importer guards implemented and mocked; no Production import/dry run invoked. Canonical Recipe payload absent; Inventory source not established; backup evidence unavailable (`backups_read` permission missing); Production config names present, values unverified. These remain future execution gates. Local check, 2,064 unit tests, build, SQL lint and 1,550 pgTAP assertions pass; exact-head PR CI pending. [Execution plan and evidence](features/recipes-v1/PRODUCTION_RELEASE.md), [full parity](features/recipes-v1/MIGRATION_PARITY.md).
+
+Current recovery evidence, canonical Recipe payload/approvals and an Inventory source-or-empty decision are required for the future execution stage, not prerequisites to the safe preparation merge under the owner's explicit checkpoint criteria. PR #239 may merge to development after all required exact-head checks pass; the final head, outcome and development merge SHA are recorded in #238/PR #239. No Production migration/row/import/Storage/deployment change, no main merge; fetched main remains `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`. CLI restored to DEV. #220, shelved #234 and milestone #7 remain open. Next: owner Production approval with all P0–P14 execution gates enforced; no Production authority is inferred from this checkpoint.
+
+## Recipe Detail editorial redesign (Concept E) — merged to `development` (PR #232)
+
+Concept E — Editorial Recipe Book is implemented for #230 (frontend only; no schema, migration, authorization or Realtime change). Desktop (≥1024px) shows complete Perfect and House recipes side by side on shared grid rows with a centre hairline; tablet/mobile stack Perfect then House with Perfect ↓ / House ↓ jump links (the segmented tabs are removed). House adjustments are derived for display by comparing the two persisted variants and are marked with an accent edge, tint, stronger amount and a "House adjustment" text note. Quick Glance is a compact strip built from persisted values (both values shown only where Perfect and House differ). Final Presentation follows the recipes: one shared block when Glass/Garnish/Rim/notes are equivalent, otherwise separate Perfect/House Presentation specs. **Image limitation:** a recipe has one canonical image (`bar_recipes.image_path`; no per-variant image fields), so the single image is shown once in both presentation states; no schema was added. A single recipe uses a centered reading column. The [design reference](design-reference/recipes/recipe-detail-concepts/README.md) remains the visual target.
+
+## Recipes V1 R-2g — independent final gate: GO
+
+Independent post-merge gate for Recipes R-2 on development `73a24e1`
+(branch `feature/recipes-v1-final-gate`). Five small defects were reproduced,
+fixed and covered by regression tests: House Notes label, List/Picture Book toggle
+without `localStorage`, oz-ratio unit edge cases, per-card thumbnail signing
+(now one batched Server Action per STORAGE_PLAN S-9) and sub-44 px browse
+controls (RC-148). Focused Recipes Vitest 28 files / 253 tests; full Vitest 155 /
+2,015; Recipes pgTAP 166 and full pgTAP 48 files / 1,538; two-session
+concurrency harness 5/5; hosted DEV database suites 14/14 and hosted browser
+flows 8/8; Recipes Playwright 48/48 (desktop, WebKit tablet, mobile); DEV-pinned
+and explicit-empty builds and scans PASS. DEV migration parity 61/61 (no
+R-2g migration); independent synthetic residue check zero. PROD, main and Part 2
+untouched; no real import. Next: Recipes V1 release-readiness plus explicit owner
+approval. Evidence: [R-2g final gate](features/recipes-v1/R2G_FINAL_GATE.md).
+
+## Bar Inventory V1.1 — COMPLETE on development (PR #226)
+
+Bulk Count, personal saved views, scoped column ordering, date groups,
+subcategory freshness rules and separate Dashboard alerts are implemented on
+`feature/bar-inventory-bulk-edit-freshness`, based on development `e4cffa8`.
+Five additive migrations have reached verified DEV only (56 → 61). Browser
+matrix: desktop 84, WebKit tablet 84, mobile 82 + 2 established skips; new hosted
+DB suite 10/10 and four-table Realtime authorization pass, zero task-owned
+synthetic residue. Final builds, hosted browser (4/4), full Vitest (2,002), pgTAP
+(1,538), checks and security scans PASS. Exact-head application, browser-smoke,
+migrations-and-policies and Vercel checks passed on `6c5b447`; PR #226 merged
+with merge commit `12cef009` into development. Main/PROD
+and Recipes implementation are untouched by that enhancement. Details:
+[V1.1 validation](features/bar-inventory-v1/V1_1_VALIDATION.md).
+
+**Repository:** The Lineup (Restaurant Roster & Floor Management)
+
+**Last Updated:** October 28, 2026 (completion recorded October 29 UTC)
+
+**Health Gate:** `npm run check` PASS | Vitest 155 files / 2,002 tests PASS | Bar Inventory Playwright 250 PASS + 2 existing phone-card skips across desktop/WebKit tablet/mobile | pgTAP 48 files / 1,538 assertions PASS
+
 **Active Milestone:** Milestone 2 (Floor Operations & Shell Polish)
 
 ---
+
+## Recipes V1 — R-0 planning (docs only) — COMPLETE (PR #221, merge `26cceaf`); R-1 NEXT; R-2 PLANNED; Part 2 ON HOLD
+
+Production release: **COMPLETE** (`main` `9e0be4b`). Recipes V1 starts after it: a categorized, numbered, searchable cocktail recipe book (List View, Picture Book, Perfect vs House detail, management editor, private image storage). **R-0** (Claude Code Cloud, Sonnet 5.5, high; branch `docs/recipes-v1-r0-planning` from `development` `73ebc21`) is documentation only: PRD, DATA_MODEL, SECURITY_AND_ROLES, STORAGE_PLAN, UI_UX_PLAN, SOURCE_MAPPING, TEST_MATRIX (160 scenarios), IMPLEMENTATION_PLAN and PLAN in `docs/features/recipes-v1/`. Locked: organization-wide scope (no `location_id`), categories as rows, stored `recipe_number` unique per organization, variants `perfect`/`house`, structured ingredients with free-text amounts, one atomic save RPC with `version`/`PT409`, archive not delete, private `recipe-images` bucket, `?tab=recipes&recipe=<slug>` routing, import via a reviewed script (never a migration). **No application code, no migration, no Storage bucket, no recipe data; DEV database untouched; PROD untouched; `main` untouched.** The source recipe-book files were not available to R-0 (nothing invented; real import is owner-gated). R-1 = Codex GPT-5.6 Sol (high, NEW session): foundation + read UI. R-2 = Codex GPT-5.6 Sol: management + visual; final gate R-2g = Claude Code Local Windows (Sonnet 5.5, high). Then release-readiness audit and explicit owner approval before any `development -> main`. Part 2 stays ON HOLD.
+
+## Production release 2026-10-28 — DEPLOYED (owner authenticated smoke pending)
+
+Owner approved C1–C6 and authorized the release. **13 additive migrations applied to PROD first** (41 → 54, head `20261028100100`, list identical to `development`; guarded per-migration transactions, dry-run first), then **PR #216 merged by merge commit: `main` `d08eb4e` → `9e0be4b`** (tested head `94e5e3e` = PR head; application, browser-smoke, Database `migrations-and-policies` and Vercel green). Vercel Production deployment of `9e0be4b` succeeded and serves the new build, PROD-pinned (no DEV ref); post-merge CI on `main` green; `deploy-migrations` failed at `supabase link` as expected (#111, no effect). PROD verified read-only: all `inventory_*` tables RLS-on with no client write grants, sweep RPC `authenticated`-only, evaluator not client-callable, no security-definer function without `search_path`. **Not performed:** the authenticated owner smoke (needs the owner's PIN). Record: `docs/releases/release-readiness-2026-10-28/PRODUCTION_RELEASE.md`. Close #169 / #168 after that smoke; Recipes V1 R-0 next after owner sign-off; Part 2 on hold.
 
 ## Release-readiness audit `development` → `main` (2026-10-28) — CONDITIONAL GO (audit only; nothing released)
 
@@ -195,3 +247,33 @@ DEV-only. Merged to `development` with an owner-approved CI exception for PR #13
 3. **No Moving Occupied Tables:** Floor rebalancing must never move seated/occupied tables.
 4. **Overrides Require Auditing:** Any manual assignment or override records user attribution.
 5. **Quality Gate:** Before every commit, run `npm run check`, `npm test`, and `npm run build`.
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. DEV migration parity 55/55, latest 20261028140623_bar_recipes_foundation, independently supplied authenticated read-only project query. R-2 not started.
+
+### Recipes V1 R2-A complete (feature branch only)
+
+Management database and private image Storage foundation complete on `feature/recipes-v1-r2-management`; R2-B next / not started. DEV/repository parity 56/56, latest `20261028193159_bar_recipes_management_and_images`; migration-created hosted Storage policies verified. Final focused database 166 assertions, concurrency harness, hosted real-JWT suite 7/7, app checks, Vitest 1708 and browser regression 45/45 passed. Full pgTAP ran once (45 files / 1462 assertions), followed by final focused checks after a narrow normalization correction. Synthetic DB and Storage residue zero. No R-2 PR or main/development merge; PROD untouched. Evidence and continuation: [R2 handoff](features/recipes-v1/R2_HANDOFF.md).
+
+### Recipes V1 R2-C complete (feature branch only)
+
+R2-A, R2-B and R2-C are complete on feature/recipes-v1-r2-management. R2-C integrates local Perfect-to-House copying/removal, archive/restore, archived index and category management with caller-session authorization and stale recovery. Check, focused Recipes 113 tests, full Vitest 1,806 tests, browser 30/30 plus final targeted 6/6, hosted browser 1/1 and hosted RPC regression 7/7 pass. Both builds and PROD/secret scans pass. Repository/DEV migration parity remains 56/56 with no mismatches or new migration; independent synthetic DB/Storage residue is zero. R2-D next / not started; PROD, main/development and Part 2 untouched; R-2 PR not opened. Evidence: [R2 handoff](features/recipes-v1/R2_HANDOFF.md#r2-c-complete-2026-10-28).
+
+### Recipes V1 R2-D complete (feature branch only)
+
+Private recipe image pipeline complete on `feature/recipes-v1-r2-management`: browser validation/preparation, immutable caller-session Storage uploads, metadata/version updates, compensation, replace/remove, signed-read refresh lifecycle and editor/detail integration. First Save stays in the saved editor for photo addition. List View remains image-free under its locked contract; Picture Book stays R2-E. Check PASS; focused Recipes 20 files / 185 tests; full Vitest 144 / 1,878; browser 15/15 across three devices; hosted data-layer 6/6 and hosted browser image 1/1 plus editor 1/1. Both builds/scans PASS. Repository/DEV parity 56/56, no migration; independent synthetic DB/Auth/Storage residue zero. PROD, main/development and Part 2 untouched; R-2 PR not opened. Implementation `4369d69` pushed. Evidence: [R2 handoff](features/recipes-v1/R2_HANDOFF.md#r2-d-complete-2026-10-28). R2-E NEXT / NOT STARTED.
+
+## Concept E owner acceptance — NO-GO (QA #234)
+
+Concept E (#232) and independent audit corrections (#233) are merged to development. Owner/TestOwner browser acceptance reported 15 PASS, 6 FAIL and 1 BLOCKED across TC-01–TC-22; the per-case outcome mapping was not supplied. The fix checkpoint merged in PR #235 at `508cab9`; owner browser retest and Staff coverage remain pending and are now SHELVED / LATER. Production and main are untouched; release is NO-GO. See [QA issue #234](https://github.com/KrapaGoutam/The-Lineup/issues/234).
+
+## Recipes V1 integration checkpoint — 2026-10-29 (current)
+
+PR #235 merged to development at `508cab9584bb77aacee89107f2d6940314b47214`, after final-head application/browser-smoke/Vercel passed. Recipes + Inventory integration sanity: **COMPLETE / GO for this checkpoint**; focused 116 unit/component tests and 15 unique browser cases across desktop Chromium, real WebKit tablet and mobile. No integration defect or application source change. Evidence: [IS-01–IS-20](features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29). Exact-head checkpoint CI/PR/merge: [#220](https://github.com/KrapaGoutam/The-Lineup/issues/220).
+
+Owner browser retest, RD-E-005/007/008 and O-1–O-4, Staff TC-19 and persistent DEV realistic-data owner review are **SHELVED / LATER**. QA #234 and milestone #7 remain open. Next phase is **Recipes V1 release-readiness audit — new independent session**; release readiness remains unapproved. Main remains `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`; Production untouched. No migration, import or new Recipe/Inventory functionality.
+
+## Recipes V1 release-readiness audit — 2026-10-29: GO to Production preflight
+
+Independent audit of `development` `754b34a5d5860269f2fda48b27efb56fbfb90993` (branch `audit/recipes-v1-release-readiness`; `main` unchanged at `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`). **Decision: GO — READY TO ENTER PRODUCTION PREFLIGHT; no release blocker.** This is not release approval: no Production, migration, import, Inventory injection or `main` action was performed. Application source unchanged. Findings: (1) the import script rejects any target but `local`/`dev`, so a Production import needs a reviewed, owner-approved tooling change; (2) the canonical 38-Recipe payload is not in the repository; (3) Low, reproduced: `bar_recipe_category_reorder` ID validation is vacuous (manager-only, tenant-scoped) — recommended to fix before the Production migration batch, owner decision; (4) CI gaps: browser smoke is desktop-only and pgTAP has not run on the combined tree (the release PR will run it). The release delta carries 7 additive migrations (2 Recipes + 5 Bar Inventory V1.1). Bar Inventory Production data injection source is not established by repository evidence. Shelved #234 items remain shelved and non-blocking; #234 and milestone #7 stay open. Evidence and Production prerequisite checklist: [RELEASE_READINESS_AUDIT](features/recipes-v1/RELEASE_READINESS_AUDIT.md). Next: Release Candidate Validation / Production Preflight Preparation — new session, not started.

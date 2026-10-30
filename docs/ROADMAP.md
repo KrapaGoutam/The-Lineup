@@ -2,6 +2,10 @@
 
 Each item is one or more vertical pull requests. Create `docs/features/<slug>.md` before implementation.
 
+## Pending Recipe Detail redesign
+
+- [x] **Recipe Detail Editorial Redesign - Concept E** (#230; implemented on `feature/recipe-detail-editorial-concept-e`, merge to `development` tracked by its PR): implement the [approved reference](design-reference/recipes/recipe-detail-concepts/README.md), including responsive stacked variants, presentation states, centered single-recipe flow, light/dark accessibility and targeted regression tests. Recipes V1 core is complete; the redesign is implemented (single canonical image limitation noted in STATUS).
+
 ## Phase 0 — Foundation
 
 - [x] Project scaffold, pinned dependencies, agent contracts, CI, and design direction
@@ -79,6 +83,7 @@ Production release **complete** (PR #163, `main` `d08eb4e`). Everything below is
 | 3   | **Bar Inventory — Vendor Order Drafts V1** (#190) — Order Drafts tab, one active draft per vendor and location, Order Qty vs Suggested Order, Copy / CSV / XLSX, Mark Sent, Sent history; Mark Sent never changes inventory | ✅ **VOD-1** (PR #193 `876be20`), **VOD-1.1** (#195) and **VOD-2 UI** (PR #196 `292ca1a`) merged; **VOD-3 sharing / export / Mark Sent / Sent history COMPLETE** (PR #198, merge commit `64e3007`; Copy Order, CSV/XLSX, Mark Sent, paged read-only Sent history; no migration; exact-head CI 3 of 3 green; details in `docs/features/bar-inventory-vendor-order-drafts-v1/IMPLEMENTATION_REPORT.md`); Mark Sent never changes inventory; no automatic email, SMS or vendor transmission exists in V1; ✅ **VOD-4 hosted DEV final gate COMPLETE — GO** (2026-10-27; real RLS, roles, two-context `PT409`, Mark Sent with no inventory mutation, Sent history paging, host-tablet WebKit and server-mobile all green; one low-severity defect fixed in PR #200 at `f3b0e0d`). **Vendor Order Drafts V1 is complete** (#190 closed); Tasks T-1 PARKED at `03d5d45` with no PR — resumes in a separate session                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 4   | **Tasks Today — management staff visibility** (#169) — All Staff / My Tasks / per person, staff name on each task                                                                                                           | 📐 **Tasks V1.1 plan merged** (T-0, PR #189); ✅ **T-1 COMPLETE** (default Tasks landing, `?tab=` module addressing, `/r/<slug>?tab=`; no migration); ✅ **T-2 Management Today COMPLETE** (PR #205, merge commit `46ea022`) (All Staff / My Tasks / person on Today for Owner, Manager, Assistant Manager; staff name on every row; staff unchanged; no migration); ✅ **T-3 Notification narrowing COMPLETE** (#154, PR #207, merge commit `3a442a6`; one migration `20261028090000`, gate in `private.tasks_notify`: ordinary `kind = 'task'` notifications suppressed, Opening/Closing kept, audit untouched); ✅ **T-4 Opening reminder engine COMPLETE** (#154, PR #209, merge commit `796cff3`; two migrations `20261028100000` + `20261028100100`, `public.task_opening_reminders_sweep`, stages open / +15 / +30, applied to hosted DEV; no UI); ✅ **T-5 Opening reminder popup + catch-up UX COMPLETE** (#154, PR #211, merge commit `53c94d2`, no migration; one newest-actionable popup, older catch-up rows stay unread history, wake-up, demo parity); ✅ **T-6 final gate COMPLETE — GO** (real host-tablet WebKit 289/289, desktop 289/289, server-mobile 287 + 2 skips, pgTAP 42 files / 1297, Vitest 1689, hosted DEV 19/19 + real-mode popup 3/3, TS-050 PASS, DEV = repository = local at 54 migrations; one hydration-marker race fixed; no migration). **Next: final Tasks V1.1 audit / release-readiness review; no `development -> main` without explicit owner approval** |
 | 5   | **Tips V2** (#155) — corrections, history, analytics                                                                                                                                                                        | 📋 planned (unchanged)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 6   | **Recipes V1** — categorized, numbered cocktail recipe book: List View, Picture Book, Perfect vs House detail, management editor, images (plan: `docs/features/recipes-v1/`)                                                | 📐 **R-0 planning COMPLETE** (PR #221, merge `26cceaf`) (docs only: architecture, data model, RLS/Storage, UI contract, source mapping, 160-scenario test matrix, R-1/R-2 work order); **R-1 NEXT** (Codex GPT-5.6 Sol, high, NEW session: schema/RLS, categories, numbering, import mechanism, nav, List View, detail, search, read); **R-2 PLANNED** (Codex: editor, Copy Perfect → House, archive/restore, images, Picture Book, filters, polish) then **R-2g** final gate (Claude Code Local Windows); then release-readiness audit and explicit owner approval before `development -> main`. Part 2 ON HOLD. PROD untouched                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 Infrastructure follow-ups (independent of the product order): #111 `deploy-migrations` · #113 migration/app sequencing · #164 deferred Production smoke checks. Bar Inventory's **release phase is blocked on #111/#113**; its build phases are not.
 
@@ -101,3 +106,37 @@ Tracking: parent #133, milestone "Platform / CI Reliability", Project #4, PR #13
 10. CSV/PDF export and configurable restaurant policies
 
 POS, reservations, payroll, SMS, and native apps require separate product discovery after pilot evidence.
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1: R1-A/B/C complete; R1-D local validation complete, PR #223 merged to development. R-2 remains next.
+
+## Recipes V1 — owner acceptance checkpoint
+
+Completed: Concept E design reference and implementation (#232); independent audit fixes (#233). Owner acceptance QA must-fix merged in PR #235; remaining acceptance work ([#234](https://github.com/KrapaGoutam/The-Lineup/issues/234)) is SHELVED / LATER. Pending: owner browser retest, deferred polish and owner decisions, Staff acceptance, persistent DEV/full Recipes + Inventory review as applicable, release-readiness audit, explicit Production approval, and eventual development → main. Part 2 and Part 3 remain on hold. Release is NO-GO.
+
+## Recipes V1 current phase ordering — 2026-10-29
+
+This ordering supersedes the owner-retest-next ordering above.
+
+- **Current checkpoint: Recipes + Inventory integration sanity pass — COMPLETE / GO** on development `508cab9584bb77aacee89107f2d6940314b47214`; merge after exact-head CI. [Evidence](features/recipes-v1/TEST_MATRIX.md#recipes--inventory-integration-sanity--2026-10-29); #220 tracks PR/CI/merge.
+- **Following: Recipes V1 release-readiness audit — new independent session.** Not started here.
+- **SHELVED / LATER:** owner browser acceptance retest (#234).
+- **SHELVED / LATER:** deferred Recipe Detail RD-E-005/007/008 and owner decisions/polish O-1–O-4.
+- **SHELVED / LATER:** Staff acceptance TC-19.
+- **SHELVED / LATER:** persistent DEV realistic-data owner review.
+
+All shelved items remain tracked; release readiness/Production/main promotion are not approved by this sanity result. Milestone #7 stays open; Part 2/3 remain on hold.
+
+## Recipes V1 phase ordering after the release-readiness audit — 2026-10-29
+
+This ordering supersedes the "Following" line above.
+
+- **COMPLETE:** Concept E implementation (#232, #233); Concept E must-fix (#235); Recipes + Inventory integration sanity (#236); **release-readiness audit — GO to Production preflight** ([report](features/recipes-v1/RELEASE_READINESS_AUDIT.md)).
+- **SHELVED / LATER:** owner browser acceptance retest (recommended on the release candidate); deferred Recipe Detail polish (RD-E-005/007/008, O-1–O-4); Staff manual acceptance TC-19; persistent DEV realistic-data owner review.
+- **CURRENT:** Release Candidate Validation + Production Preflight (#238): DEV-only reorder fix and guarded Production importer implemented; live DEV 62/62, PROD 54 with eight pending; [execution plan](features/recipes-v1/PRODUCTION_RELEASE.md). Local validation passed; exact-head PR CI/review pending.
+- **FOLLOWING:** Owner Production approval, after recovery evidence, canonical Recipe payload/warnings and Inventory initialization-or-empty decision are resolved.
+- **THEN:** Production execution (P0–P14); no Production write or main promotion in the current checkpoint.
+- **LATER:** Production DB/Storage changes (7 migrations); Bar Inventory data injection only if actually required; Recipe Production import tooling approval and dry run; Recipe Production injection; `development → main`; Production smoke; release closure.
+
+Part 2/3 remain on hold. #220, #234 and milestone #7 stay open.

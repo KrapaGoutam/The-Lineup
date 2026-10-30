@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import {
   useCallback,
+  createContext,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -44,6 +46,15 @@ import { ColumnFilterControl } from "./column-filter-controls";
 import { EmptyState } from "./empty-state";
 import { Sheet } from "./sheet";
 import { useOutsideDismiss } from "./use-outside-dismiss";
+import {
+  normalizeLayout,
+  readViewPayload,
+  hasExplicitInventoryState,
+  type ViewPayload,
+  type ColumnLayout,
+} from "../../domain/saved-views";
+import { SavedViews, type SavedViewsBinding } from "../saved-views";
+export const TableProfileContext = createContext<string | null>(null);
 
 export type TableColumn<Row> = ColumnSpec<Row> & {
   render: (row: Row) => ReactNode;
@@ -52,6 +63,7 @@ export type TableColumn<Row> = ColumnSpec<Row> & {
   tabletHidden?: boolean;
   /** No filter control (kept sortable if `sortable`). */
   noFilter?: boolean;
+  locked?: boolean;
 };
 
 export type SortPreset = { label: string; keys: SortKey[] };
@@ -83,6 +95,11 @@ type Props<Row> = {
   emptyMessage: string;
   emptyAction?: ReactNode;
   toolbarExtras?: ReactNode;
+  savedViews?: SavedViewsBinding;
+  toolbarState?: (
+    state: TableState,
+    onChange: (state: TableState) => void,
+  ) => ReactNode;
   /** The filtered + sorted rows (exports re-run the spec on the server). */
   onVisibleRows?: (rows: Row[], state: TableState) => void;
   /** Row id to highlight (e.g. just edited). */
@@ -108,7 +125,12 @@ export function dropForeignTableState(slug: string) {
   const owner = params.get(SLUG_PARAM);
   if (!owner || owner === slug) return;
   [...params.keys()]
-    .filter((key) => key === SLUG_PARAM || /.(f.[^.]+|q|sort)$/.test(key))
+    .filter(
+      (key) =>
+        key === SLUG_PARAM ||
+        key.startsWith("inv.") ||
+        /.(f.[^.]+|q|sort)$/.test(key),
+    )
     .forEach((key) => params.delete(key));
   const query = params.toString();
   window.history.replaceState(
@@ -148,13 +170,13 @@ export function writeTableState(
   const params = new URLSearchParams(window.location.search);
   const prefix = `${tableKey}.`;
   [...params.keys()]
-    .filter((key) => key.startsWith(prefix))
+    .filter((key) => key.startsWith(prefix) && key !== `${prefix}archived`)
     .forEach((key) => params.delete(key));
   serializeTableState(state).forEach((value, key) =>
     params.set(`${prefix}${key}`, value),
   );
   const hasOurs = [...params.keys()].some((key) =>
-    /\.(f\.[^.]+|q|sort)$/.test(key),
+    /\.(f\.[^.]+|q|sort|archived)$/.test(key),
   );
   if (hasOurs) params.set(SLUG_PARAM, slug);
   else params.delete(SLUG_PARAM);
@@ -168,26 +190,25 @@ function useTableUrlState(
   tableKey: string,
   slug: string,
   columns: Pick<ColumnSpec<unknown>, "id" | "type">[],
+  initial?: ViewPayload | null,
 ) {
-  const [state, setState] = useState<TableState>(() =>
-    readState(tableKey, slug, columns),
-  );
+  const [state, setState] = useState<TableState>(() => {
+    const read = readState(tableKey, slug, columns);
+    if (!initial) return read;
+    return {
+      search: initial.owns.includes("search")
+        ? initial.state.search
+        : read.search,
+      filters: initial.owns.includes("filters")
+        ? initial.state.filters
+        : read.filters,
+      sort: initial.owns.includes("sort") ? initial.state.sort : read.sort,
+    };
+  });
   useEffect(() => {
     writeTableState(tableKey, slug, state);
   }, [state, tableKey, slug]);
   return [state, setState] as const;
-}
-
-function storedHidden(key: string): string[] {
-  try {
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    return Array.isArray(parsed)
-      ? parsed.filter((v) => typeof v === "string")
-      : [];
-  } catch {
-    return [];
-  }
 }
 
 function HeaderFilter<Row>({
@@ -271,7 +292,12 @@ function HeaderFilter<Row>({
  * sortable headers with presets, a column chooser, URL-synced state, and a
  * card layout below `md`.
  */
-export function FilterableTable<Row>({
+export function FilterableTable<Row>(props: Props<Row>) {
+  const profile = useContext(TableProfileContext);
+  const storageKey = `bi.cols.v2.${props.restaurantSlug}.${profile ?? "anonymous"}.${props.tableKey}`;
+  return <TableBody key={storageKey} {...props} storageKey={storageKey} />;
+}
+function TableBody<Row>({
   tableKey,
   restaurantSlug,
   label,
@@ -288,24 +314,86 @@ export function FilterableTable<Row>({
   emptyMessage,
   emptyAction,
   toolbarExtras,
+  savedViews,
+  toolbarState,
+  storageKey,
   onVisibleRows,
   className,
-}: Props<Row>) {
+}: Props<Row> & { storageKey: string }) {
   const idBase = useId();
   const specColumns = useMemo<ColumnSpec<Row>[]>(
     () => [...columns, ...sortOnlyColumns],
     [columns, sortOnlyColumns],
   );
+  const [initialView] = useState(() => {
+    if (
+      !savedViews ||
+      typeof window === "undefined" ||
+      hasExplicitInventoryState(window.location.search)
+    )
+      return null;
+    return readViewPayload(
+      savedViews.views.find((v) => v.isDefault)?.payload,
+      specColumns,
+    );
+  });
   const [state, setState] = useTableUrlState(
     tableKey,
     restaurantSlug,
     specColumns,
+    initialView,
   );
   const [sheetOpen, setSheetOpen] = useState(false);
-  const storageKey = `bi.cols.${tableKey}`;
-  const [hidden, setHidden] = useState<string[]>(() =>
-    typeof window === "undefined" ? [] : storedHidden(storageKey),
+  const [layout, setLayout] = useState<ColumnLayout>(() => {
+    try {
+      return normalizeLayout(
+        columns.map((c) => c.id),
+        {
+          ...(JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") ??
+            {}),
+          ...(initialView?.owns.includes("hidden")
+            ? { hidden: initialView.state.hidden }
+            : {}),
+          ...(initialView?.owns.includes("order")
+            ? { order: initialView.state.order }
+            : {}),
+        },
+        columns
+          .filter((c) => c.locked || c.id === "name" || c.id === "selection")
+          .map((c) => c.id),
+      );
+    } catch {
+      return normalizeLayout(
+        columns.map((c) => c.id),
+        {
+          ...(initialView?.owns.includes("hidden")
+            ? { hidden: initialView.state.hidden }
+            : {}),
+          ...(initialView?.owns.includes("order")
+            ? { order: initialView.state.order }
+            : {}),
+        },
+        columns
+          .filter((c) => c.locked || c.id === "name" || c.id === "selection")
+          .map((c) => c.id),
+      );
+    }
+  });
+  const normalized = normalizeLayout(
+    columns.map((c) => c.id),
+    layout,
+    columns
+      .filter((c) => c.locked || c.id === "name" || c.id === "selection")
+      .map((c) => c.id),
   );
+  const hidden = normalized.hidden;
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(layout));
+    } catch {
+      /* blocked storage remains usable */
+    }
+  }, [layout, storageKey]);
   const [chooserOpen, setChooserOpen] = useState(false);
   const chooserButton = useRef<HTMLButtonElement>(null);
   const chooserPanel = useRef<HTMLDivElement>(null);
@@ -316,12 +404,7 @@ export function FilterableTable<Row>({
     const next = hidden.includes(id)
       ? hidden.filter((h) => h !== id)
       : [...hidden, id];
-    setHidden(next);
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      // Storage can be blocked (private window); the choice just isn't kept.
-    }
+    setLayout({ ...normalized, hidden: next });
   };
 
   const ctx = useMemo(() => ({ timeZone, now: new Date() }), [timeZone]);
@@ -367,7 +450,12 @@ export function FilterableTable<Row>({
     .filter((chip): chip is { id: string; text: string } => chip !== null);
   const activeCount = activeFilterCount(state);
 
-  const shownColumns = columns.filter((column) => !hidden.includes(column.id));
+  const orderedColumns = normalized.order
+    .map((id) => columns.find((c) => c.id === id)!)
+    .filter(Boolean);
+  const shownColumns = orderedColumns.filter(
+    (column) => !hidden.includes(column.id),
+  );
   const filterable = columns.filter((column) => !column.noFilter);
 
   const clearAll = () =>
@@ -486,10 +574,7 @@ export function FilterableTable<Row>({
           </Select>
         ) : null}
         <span
-          className={cn(
-            "relative",
-            renderGroups ? "hidden" : "hidden md:inline-flex",
-          )}
+          className={cn("relative", renderGroups ? "hidden" : "inline-flex")}
         >
           <button
             ref={chooserButton}
@@ -506,26 +591,85 @@ export function FilterableTable<Row>({
               ref={chooserPanel}
               role="dialog"
               aria-label="Choose columns"
-              className="border-border bg-popover text-popover-foreground absolute top-full right-0 z-30 mt-1 w-56 rounded-xl border p-2 shadow-xl"
+              className="border-border bg-popover text-popover-foreground fixed inset-x-3 top-24 z-50 mt-1 max-h-[65vh] overflow-y-auto rounded-xl border p-2 shadow-xl md:absolute md:inset-x-auto md:top-full md:right-0 md:z-30 md:w-96"
             >
-              {columns.map((column) => (
-                <label
-                  key={column.id}
-                  className="hover:bg-muted flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    className="size-4"
-                    checked={!hidden.includes(column.id)}
-                    onChange={() => toggleColumn(column.id)}
-                  />
-                  {column.label}
-                </label>
+              {orderedColumns.map((column, index) => (
+                <div key={column.id} className="flex items-center gap-1">
+                  <label
+                    key={column.id}
+                    className="hover:bg-muted flex min-h-11 flex-1 items-center gap-2 rounded-lg px-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={!hidden.includes(column.id)}
+                      disabled={
+                        column.locked ||
+                        column.id === "name" ||
+                        column.id === "selection"
+                      }
+                      onChange={() => toggleColumn(column.id)}
+                    />
+                    {column.label}
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Move ${column.label} up`}
+                    disabled={index === 0}
+                    onClick={() => {
+                      const order = [...normalized.order];
+                      [order[index - 1], order[index]] = [
+                        order[index],
+                        order[index - 1],
+                      ];
+                      setLayout({ ...normalized, order });
+                    }}
+                  >
+                    <ArrowUp aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Move ${column.label} down`}
+                    disabled={index === orderedColumns.length - 1}
+                    onClick={() => {
+                      const order = [...normalized.order];
+                      [order[index + 1], order[index]] = [
+                        order[index],
+                        order[index + 1],
+                      ];
+                      setLayout({ ...normalized, order });
+                    }}
+                  >
+                    <ArrowDown aria-hidden="true" />
+                  </Button>
+                </div>
               ))}
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() =>
+                  setLayout({ hidden: [], order: columns.map((c) => c.id) })
+                }
+              >
+                Reset to Default
+              </Button>
             </div>
           ) : null}
         </span>
         {toolbarExtras}
+        {toolbarState?.(state, setState)}
+        {savedViews ? (
+          <SavedViews
+            binding={savedViews}
+            state={{ ...state, sort: sortKeys }}
+            layout={normalized}
+            columns={specColumns}
+            onState={setState}
+            onLayout={setLayout}
+          />
+        ) : null}
       </div>
 
       {chips.length > 0 || state.search.trim() !== "" ? (

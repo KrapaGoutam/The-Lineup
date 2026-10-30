@@ -76,6 +76,63 @@ async function runCommand(
   };
   // PostgREST needs every named argument: always send explicit nulls.
   switch (command.type) {
+    case "savedViewSave":
+      return (
+        await supabase.rpc("inventory_saved_view_save", {
+          ...base,
+          p_id: command.id,
+          p_name: command.name,
+          p_payload: command.payload,
+          p_is_default: command.isDefault,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
+    case "savedViewDelete":
+      return (
+        await supabase.rpc("inventory_saved_view_delete", {
+          ...base,
+          p_id: command.id,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
+    case "bulkCount":
+      return (
+        await supabase.rpc("inventory_bulk_count", {
+          ...base,
+          p_rows: command.rows,
+          p_reason: command.reason,
+          p_note: command.note,
+        })
+      ).error;
+    case "dateLotSave":
+      return (
+        await supabase.rpc("inventory_date_lot_save", {
+          ...base,
+          p_id: command.id,
+          p_product_id: command.productId,
+          p_quantity: command.quantity,
+          p_manufacture_date: command.manufacture?.date ?? null,
+          p_manufacture_precision: command.manufacture?.precision ?? null,
+          p_expiration_date: command.expiration?.date ?? null,
+          p_expiration_precision: command.expiration?.precision ?? null,
+          p_notes: command.notes,
+          p_active: command.active,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
+    case "freshnessRuleSave":
+      return (
+        await supabase.rpc("inventory_freshness_rule_save", {
+          ...base,
+          p_id: command.id,
+          p_subcategory_id: command.subcategoryId,
+          p_tracking_enabled: command.trackingEnabled,
+          p_maximum_months: command.maximumMonths,
+          p_warning_months: command.warningMonths,
+          p_active: command.active,
+          p_expected_version: command.expectedVersion,
+        })
+      ).error;
     case "vendorCreate":
       return (
         await supabase.rpc("inventory_vendor_create", {
@@ -390,6 +447,7 @@ const exportRequestSchema = z.discriminatedUnion("kind", [
       .refine((n) => (HISTORY_RANGES as readonly number[]).includes(n)),
   }),
   z.object({ kind: z.literal("recommendations"), filters: filtersSchema }),
+  z.object({ kind: z.literal("date_groups"), filters: filtersSchema }),
   // Only the draft id: the server loads the draft and its lines itself.
   orderDraftExportRequestSchema,
   z.object({

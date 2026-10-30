@@ -5,6 +5,12 @@ import {
   type StockView,
 } from "./inventory-types";
 import {
+  dateSummary,
+  displayInventoryDate,
+  MANUFACTURE_LABELS,
+  type DateLot,
+} from "./freshness";
+import {
   evaluateStock,
   STATUS_LABEL,
   statusRank,
@@ -14,6 +20,7 @@ import type { ColumnSpec, SortKey } from "./table-filters";
 
 /** One line of the Inventory table: a product joined with its stock. */
 export type InventoryRow = {
+  dateInfo?: ReturnType<typeof dateSummary>;
   productId: string;
   vendor: string;
   name: string;
@@ -88,13 +95,25 @@ export function buildInventoryRow(
   };
 }
 
-export function buildInventoryRows(state: CatalogState): InventoryRow[] {
+export function buildInventoryRows(
+  state: CatalogState,
+  today?: string,
+): InventoryRow[] {
   const vendors = new Map(state.vendors.map((v) => [v.id, v.name]));
   const categories = new Map(state.categories.map((c) => [c.id, c.name]));
   const subcategories = new Map(state.subcategories.map((s) => [s.id, s.name]));
   const stock = new Map(state.stock.map((s) => [s.productId, s]));
-  return state.products.map((product) =>
-    buildInventoryRow(
+  const lots = new Map<string, DateLot[]>();
+  for (const lot of state.dateLots ?? []) {
+    const group = lots.get(lot.productId) ?? [];
+    group.push(lot);
+    lots.set(lot.productId, group);
+  }
+  const rules = new Map(
+    (state.freshnessRules ?? []).map((r) => [r.subcategoryId, r]),
+  );
+  return state.products.map((product) => ({
+    ...buildInventoryRow(
       product,
       stock.get(product.id) ?? ZERO_STOCK(product.id),
       {
@@ -107,7 +126,19 @@ export function buildInventoryRows(state: CatalogState): InventoryRow[] {
           : null,
       },
     ),
-  );
+    ...(today
+      ? {
+          dateInfo: dateSummary(
+            lots.get(product.id) ?? [],
+            rules.get(product.subcategoryId ?? "") ?? null,
+            today,
+            (stock.get(product.id)?.onHand ?? 0) +
+              (stock.get(product.id)?.backup ?? 0),
+            !product.active,
+          ),
+        }
+      : {}),
+  }));
 }
 
 /**
@@ -116,6 +147,48 @@ export function buildInventoryRows(state: CatalogState): InventoryRow[] {
  * export always matches the screen.
  */
 export const INVENTORY_COLUMNS: ColumnSpec<InventoryRow>[] = [
+  {
+    id: "manufacture",
+    label: "Manufacture",
+    type: "select",
+    get: (r) => r.dateInfo?.oldest?.manufacture?.date ?? null,
+  },
+  {
+    id: "expiration",
+    label: "Expiration",
+    type: "select",
+    get: (r) => r.dateInfo?.nearest?.expiration?.date ?? null,
+  },
+  {
+    id: "dateAlert",
+    label: "Date Alert",
+    type: "select",
+    get: (r) => dateAlertLabel(r),
+  },
+  {
+    id: "freshness",
+    label: "Freshness",
+    type: "select",
+    get: (r) =>
+      r.dateInfo?.hasRule || r.dateInfo?.oldest
+        ? MANUFACTURE_LABELS[r.dateInfo!.manufacture]
+        : "Not tracked",
+  },
+  {
+    id: "expirationDays",
+    label: "Days to expiration",
+    type: "number",
+    get: (r) => r.dateInfo?.expiration.days ?? null,
+  },
+  {
+    id: "dateTracking",
+    label: "Date tracking",
+    type: "select",
+    get: (r) =>
+      (r.dateInfo?.lots.length ?? 0) > 0
+        ? "Has date tracking"
+        : "Missing date tracking",
+  },
   {
     id: "vendor",
     label: "Vendor",
@@ -177,9 +250,61 @@ export const INVENTORY_COLUMNS: ColumnSpec<InventoryRow>[] = [
     get: (r) => r.updatedBy,
   },
 ];
+export function dateAlertLabel(row: InventoryRow): string {
+  const info = row.dateInfo;
+  if (!info) return "No date tracking";
+  if (info.manufacture === "limit" && info.expiration.rank > 2.5)
+    return "Freshness Limit";
+  if (info.manufacture === "aging" && info.expiration.rank > 4.5)
+    return "Aging Soon";
+  if (info.expiration.rank < 5)
+    return {
+      expired: "Expired",
+      today: "Expires Today",
+      urgent: "Urgent",
+      warning: "Warning",
+      soon: "Expiring Soon",
+      normal: "Normal",
+      missing: "No expiration entered",
+    }[info.expiration.status];
+  return info.expiration.status === "normal"
+    ? "Normal"
+    : info.oldest
+      ? MANUFACTURE_LABELS[info.manufacture]
+      : "No date tracking";
+}
+export function dateAlertText(row: InventoryRow): string {
+  const label = dateAlertLabel(row);
+  return [
+    "Expired",
+    "Expires Today",
+    "Urgent",
+    "Warning",
+    "Expiring Soon",
+  ].includes(label)
+    ? row.dateInfo!.expiration.text
+    : label;
+}
+export function dateCellText(
+  row: InventoryRow,
+  kind: "manufacture" | "expiration",
+): string {
+  const lots = row.dateInfo?.lots.filter((l) => l[kind]) ?? [];
+  const value =
+    kind === "manufacture"
+      ? row.dateInfo?.oldest?.manufacture
+      : row.dateInfo?.nearest?.expiration;
+  return `${displayInventoryDate(value ?? null)}${lots.length > 1 ? ` +${lots.length - 1}` : ""}`;
+}
 
 /** Sortable but not shown: severity order and distance to the cutoff. */
 export const INVENTORY_SORT_ONLY_COLUMNS: ColumnSpec<InventoryRow>[] = [
+  {
+    id: "dateUrgency",
+    label: "Date urgency",
+    type: "number",
+    get: (r) => r.dateInfo?.rank ?? 6,
+  },
   {
     id: "severity",
     label: "Severity",
@@ -203,6 +328,21 @@ export const INVENTORY_DEFAULT_SORT: SortKey[] = [
 ];
 
 export const INVENTORY_SORT_PRESETS = [
+  {
+    label: "Nearest expiration first",
+    keys: [{ id: "expiration", dir: "asc" as const }],
+  },
+  {
+    label: "Oldest manufacture first",
+    keys: [{ id: "manufacture", dir: "asc" as const }],
+  },
+  {
+    label: "Most urgent date alert",
+    keys: [
+      { id: "dateUrgency", dir: "asc" as const },
+      { id: "expiration", dir: "asc" as const },
+    ],
+  },
   { label: "Critical first", keys: INVENTORY_DEFAULT_SORT },
   { label: "Name A–Z", keys: [{ id: "name", dir: "asc" as const }] },
   {

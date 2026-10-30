@@ -148,3 +148,18 @@ Every batch (staged, committed, cancelled, failed) is listed under Manage → Im
 ## 9. Test vectors (`TEST_STRATEGY.md`)
 
 Header alias mapping; quoted newline cell; BOM; `;` delimiter; `=cmd|' /C calc'!A0` in Name exported as `'=cmd…`; `-2` numeric stays `-2`; `Tito's 750 mL` vs `Tito's 1.75 L`; `Del Papa`/`DelPapa`/`DEL PAPA` → one vendor; `Fuast` → "Did you mean Faust?"; SKU rename flagged; blank On Hand on update = unchanged; `0` = zero; two sheets → sheet picker; `.xlsm` rejected; 5,001 rows rejected; a stock row changed after preview → `conflict`, others commit.
+
+## V1.1 export and import compatibility
+
+The existing Inventory CSV/XLSX format and importer are preserved. No multi-lot
+spreadsheet syntax is invented, and date columns are not added to the stock import
+template. Bulk date import is future work; in-app date entry is authoritative.
+
+Inventory's separate Export date groups control exports CSV/XLSX with one row per
+active date group belonging to matching active products. It carries vendor/name/
+size/unit, stable date-group ID, optional dated quantity, displayed dates and
+explicit day/month precision, expiration/manufacture status and notes. A filtered
+date report includes all active groups of each matching product, so secondary
+groups remain visible. Existing formula-injection escaping applies. Ordinary
+filtered inventory exports re-run the same new date predicates in the restaurant
+business timezone, while keeping their existing stock columns and identity.

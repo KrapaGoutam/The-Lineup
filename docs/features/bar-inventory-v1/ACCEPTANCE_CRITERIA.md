@@ -92,3 +92,19 @@ Status: ⬜ pending (plan). `AC-<area>-<n>`; mapped to tests in `TEST_STRATEGY.m
 - [ ] AC-SEC-3 Every table and RPC carries `organization_id`/`location_id`; no single-restaurant hard-coding; vendors org-level, stock location-level.
 - [ ] AC-SEC-4 Forward-only migrations; DEV before PROD; PROD only through the migrations-first release route.
 - [ ] AC-SEC-5 `npm run check`, unit, pgTAP, demo Playwright, hosted DEV DB and UI suites green before release.
+
+## V1.1 acceptance criteria
+
+The V1.1 contract supplements the original V1 checklist; it does not redefine it.
+
+- [x] BI-E1: multiple scoped date groups, optional quantity, preserved precision,
+      month boundaries/leap years/business date, configurable audited freshness rules.
+- [x] BI-E2: selection, filtered selection, count editor, blank/zero semantics,
+      structured reason/note, review, atomic commit, strict conflict and normal ledger.
+- [x] BI-E3: scoped visibility/order/reset, keyboard reordering, locked identity,
+      personal server views with explicit owned state and Dashboard URL precedence.
+- [x] BI-E4: date sheets, coverage, Inventory summaries/filters/sorts, Manage rules,
+      separate product-count Dashboard KPIs, prioritized alerts and drill-downs.
+- [x] BI-E5: final hosted browser/cleanup/build/security/CI/integration gate (PR #226).
+
+Evidence and exact counts: [V1_1_VALIDATION.md](V1_1_VALIDATION.md).

@@ -8,6 +8,8 @@ This backlog holds upcoming feature specifications and technical debt items queu
 
 | Item | Area | Priority | Spec Link | Description |
 | :--- | :--- | :--- | :--- | :--- |
+| **Recipe Detail Editorial Redesign - Concept E** (#230) | Recipes | Medium | [Approved reference](../docs/design-reference/recipes/recipe-detail-concepts/README.md) | Implemented on feature branch, pending merge: responsive complete variants, restrained House differences, shared/differing presentation, centered single recipe, light/dark accessibility and targeted regression tests. Preserve Recipes contracts. |
+| **Recipes V1** | Recipes | High | #220 | Cocktail recipe book: Index (List View / Picture Book), Detail (Perfect vs House), management Editor, private image storage, reviewed import of *The Monks Cocktail Recipe Book*. **R-0 through R-2g complete on development**; release audit and owner approval remain pending. Part 2 ON HOLD. |
 | **Bar Inventory V1** | Bar Inventory | High | #168 | Dashboard / Inventory / Manage, structured vendors, immutable adjustment history, CSV/XLSX import with preview, per-column filters, vendor-grouped Order Soon, analytics. IN BUILD (BI-0 → BI-10 merged; BI-11 final gate GO in PR; follow-ups below) (`docs/features/bar-inventory-v1/`). Roadmap #2. |
 | **Bar Inventory — Vendor Order Drafts V1** | Bar Inventory | Medium | #190 | VOD-1 database/domain foundation merged via PR #193 at `876be20`: one active DRAFT per vendor + location, Suggested snapshot separate from Order Qty, notes/Included, Fill/Clear, DRAFT/SENT, RLS, concurrency, immutable Sent history, and inventory isolation. VOD-1.1 (#195) fixed the Order Qty save. VOD-2 UI + editing implemented (Order Drafts tab, editor, Dashboard Create/Open CTA, PT409 UI). VOD-3 COMPLETE, merged via PR #198 at `64e3007` (Drafts \| Sent switch, Copy Order, CSV/XLSX, Mark Sent, paged Sent history; no migration); VOD-4 hosted DEV final gate COMPLETE — GO (2026-10-27, one low-severity defect fixed via PR #200 at `f3b0e0d`): Vendor Order Drafts V1 is complete. Deferred from VOD-2 (not scheduled): "Add item" UI for a vendor item that is not low (the RPC already supports it); an in-app guard for leaving Bar Inventory entirely with unsaved draft edits (only `beforeunload` covers it today); Realtime/invalidation for drafts (focus and tab-open re-reads are used). VOD-4 ran the Order Drafts specs on `desktop`, `host-tablet` (WebKit) and `server-mobile` (20/20 each). Still not covered: the hosted browser spec on tablet/phone, an Assistant Manager browser session, a hosted-browser Staff server-action call. Tasks V1.1: T-1 (default landing + `?tab=`) COMPLETE; T-2 Management Today COMPLETE (PR #205, merge `46ea022`); T-3 next, not started. |
 | **Tasks Today — management staff visibility** | Tasks | Medium | #169 | Owner / Manager / Assistant Manager: All Staff / My Tasks / per person in Today, staff name on each task. Planned in `docs/features/tasks-v1-1/`; **T-2 COMPLETE** (PR #205, merge `46ea022`; see `IMPLEMENTATION_REPORT.md`). Roadmap #3. |
@@ -55,3 +57,37 @@ This backlog holds upcoming feature specifications and technical debt items queu
 - [ ] Out-of-order import previews (request sequence guard); analytics custom ranges older than the 365-day lookback; render cost of a 5,000-product table every second (memoise / paginate); table date presets keep a frozen "now".
 - [ ] Low accessibility polish: column chooser focus on Escape, Enter in "New vendor name", polite confirmation for ± buttons, export panel width at 360 px, backdrop-click discarding typed data, `dvh` for dialog height, analytics card heading levels, 44 px primary row actions on touch.
 - [ ] Realtime for catalog edits (rename / archive) if wanted; today they arrive on the next focus re-read or write.
+
+## Recipes V1 deferrals (open — see docs/features/recipes-v1/IMPLEMENTATION_PLAN.md §7)
+
+- [ ] B-RC-1 Duplicate an existing recipe (Classic → Mango/Strawberry/Spicy variants).
+- [ ] B-RC-2 Field-level recipe audit history / change log.
+- [ ] B-RC-3 Realtime refresh of the Recipes index and detail.
+- [ ] B-RC-4 Ingredient-name search (needs ingredient text in the index payload or a denormalized `search_text`).
+- [ ] B-RC-5 Orphan-image repair script (service role, dry-run default, DEV/PROD guard).
+- [ ] B-RC-6 Stable-URL image route if signed-URL caching proves too costly.
+- [ ] B-RC-7 Shell-level unsaved-changes guard for tab switches (also benefits Bar Inventory Order Drafts).
+- [ ] Bulk image upload, structured batch recipes, recipe scaling/unit conversion, print/PDF export, per-location recipe sets (Part 2), organization-configurable Perfect/House labels UI.
+- [ ] Extract the three one-line manager predicates (`isInventoryManager`, `isTasksManager`, `isRecipesManager`) into one shared helper — a separate refactor, not part of any feature.
+
+
+## Recipes V1 R-1 checkpoint
+
+Recipes V1 R-1 local validation is complete; PR #223 merged to development. R-2 remains next and is not started.
+
+## Recipes Concept E owner acceptance follow-up
+
+Track in [QA #234](https://github.com/KrapaGoutam/The-Lineup/issues/234): RD-E-005 long-token overlap; RD-E-007 small Light text contrast; RD-E-008 Perfect-side difference treatment (owner decision); TC-19 Staff session acceptance (active read, no management controls, archived denial and private images); O-1 partial ratio (owner review); O-2 iframe Light persistence (unconfirmed; top-level reproduction); O-3 Archive bar weight and O-4 no-photo spacing (polish / owner review).
+
+Checkpoint ordering (2026-10-29): Recipes + Inventory integration sanity COMPLETE / GO; next is a separate release-readiness audit. All #234 findings listed above remain **SHELVED / LATER**, including owner browser acceptance retest and persistent DEV realistic-data owner review. RD-E-005/007/008, TC-19 and O-1–O-4 are not completed or reactivated by this checkpoint.
+
+
+## Recipes V1 release-readiness audit follow-ups (2026-10-29)
+
+- [x] **Preflight P-3 implementation:** guarded Production target, exact-origin/project/environment check, execution acknowledgements, matching prior dry-run report, warning approvals and mocked guard tests implemented in #238; actual Production execution remains owner-gated.
+- [ ] **Preflight P-4:** owner-supplied canonical Recipe payload (38 Recipes / 76 variants), SHA-256, source corrections; resolve or accept `Virgin Coco Margarita Splash` (`0.75 oz or 2 oz`) and `Smoked Vanilla Old Fashioned` (`Absolut Vanilia` / `Vanilla syrup`); decide `Others` fallback category.
+- [x] **F-1 (Low):** new migration `20261029194855` qualifies supplied IDs; 12 pgTAP regression checks pass; applied to DEV only (62/62). PROD remains pending.
+- [x] Structured import warnings and explicit approvals now gate Production create; known Recipe ambiguities require named warning records. General semantic ambiguity detection remains a human source-review responsibility.
+- [ ] CI: add tablet/mobile browser projects (or a documented local gate) and consider a dedicated secret scanner.
+- [ ] **Inventory Production decision (#238):** live read-only operational counts are zero. Approved initialization source not established; owner must supply/review a source or explicitly approve launching empty. Never replace operational data automatically.
+- [ ] **Recovery evidence (#238 / #124):** current token lacks `backups_read`; verify usable PROD backup/PITR point through existing authorized owner access before migrations. No backup/restore/credential operation performed.

@@ -6,6 +6,7 @@ export type AppTab =
   | "team"
   | "attendance"
   | "barInventory"
+  | "recipes"
   | "payroll"
   | "settings";
 
@@ -24,6 +25,7 @@ const PARAM_BY_TAB: Record<AppTab, string> = {
   team: "team",
   attendance: "attendance",
   barInventory: "bar-inventory",
+  recipes: "recipes",
   payroll: "payroll",
   settings: "settings",
 };
@@ -65,6 +67,10 @@ export function resolveTab(tab: AppTab, access: TabAccess): AppTab {
  */
 export function tabHref(pathname: string, search: string, tab: AppTab): string {
   const params = new URLSearchParams(search);
+  if (tab !== "recipes") {
+    params.delete("recipe");
+    params.delete("mode");
+  }
   if (tab === DEFAULT_APP_TAB) params.delete("tab");
   else params.set("tab", tabToParam(tab));
   const query = params.toString();

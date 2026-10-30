@@ -91,7 +91,7 @@
   --destructive: #dc2626;
   --border: rgba(0, 0, 0, 0.12);
   --input: rgba(0, 0, 0, 0.12);
-  --ring: #d97706;
+  --ring: #9a4a00;
   --surface: #f4f2ee;
   --faint: rgba(28, 26, 23, 0.4);
   --avatar: rgba(0, 0, 0, 0.08);
@@ -131,6 +131,9 @@
   --color-warn: var(--warn);
   --color-ok: var(--ok);
   --font-sans: "Geist Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, ui-serif,
+    serif;
   --font-mono: "Geist Mono", "SFMono-Regular", Consolas, monospace;
 }
 

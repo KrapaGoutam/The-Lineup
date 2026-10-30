@@ -71,3 +71,15 @@ Acceptance criteria for the phase ticked with evidence; all gates green on the e
 ## Next action
 
 BI-1 (catalog foundation) follows BI-0.
+
+## V1.1 checkpoint plan
+
+The owner-approved enhancement accumulates BI-E1 through BI-E5 on
+feature/bar-inventory-bulk-edit-freshness, from development e4cffa8. E1 is the date
+foundation; E2 atomic in-app Bulk Count; E3 personal saved views/column order;
+E4 Inventory/Manage/Dashboard date UI; E5 full regression, hosted DEV, cleanup,
+documentation and exact-head PR CI. E1 through E5 are complete: PR #226 merged
+after all required checks passed on the exact implementation head. Five additive
+migrations extend the existing architecture; applied migrations are never edited.
+Only DEV is targeted. Integration used merge commit `12cef009` into development; main,
+Production and Recipes R-2g remain untouched.

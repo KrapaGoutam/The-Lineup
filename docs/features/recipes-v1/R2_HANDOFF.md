@@ -1,0 +1,277 @@
+# Recipes V1 R-2 handoff
+
+- R2-A: COMPLETE.
+- R2-B: COMPLETE. R2-C: COMPLETE. R2-D: COMPLETE. R2-E: COMPLETE. R2-F: NEXT / NOT STARTED. All later slices and Part 2: NOT STARTED. R-2 PR: NOT OPENED.
+- Branch: feature/recipes-v1-r2-management. Base development: 8f358a422c91275319c9f4479891a54a4cbb21c3. Starting HEAD: cb1fd09823e12c54a2befb8a80e674ec7a122ab5.
+- Canonical migration: 20261028193159_bar_recipes_management_and_images.sql, CLI-created after inspecting migration-new help. Repository migrations: 56. Scratch draft removed after promotion; there is one canonical implementation.
+- Local-GO implementation commit: 4a4c551. Final validated implementation/test SHA: b05569c70426c6974054b620d99b0b7db3bec598. The final branch SHA is the completion documentation commit containing this handoff, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-A handoff'`; final response records it explicitly. Same feature branch, no rebase/reset/merge.
+
+## Implementation
+
+Management save implements its own validated, atomic write path. R-1 bar_recipes_import and private.recipes_apply are unchanged. Every management RPC verifies auth.uid() and active management membership, pins search_path and scopes rows to organization_id. Organization lock is acquired before row locks, matching the import convention. Tables remain SELECT-only; private write helpers are inaccessible to clients.
+
+All four draft defects are fixed: actual number/category UNIQUE violations receive structured existing-record detail; restore shares category serialization; create assigns per-org collision suffixes with reserved/fallback handling; edit can retain its current inactive category while create and category changes require an active category. Slugs remain immutable, renumbering preserves identity, stale versions fail before mutation, and the complete variant graph saves atomically.
+
+Storage bucket recipe-images is private, 2 MiB, JPEG/WebP only. Safe UUID/path parsing plus membership/recipe lookups gate SELECT/INSERT/DELETE; there is no UPDATE policy. Image metadata RPC enforces paired paths, scope and expected version. No UI or R2-B work.
+
+## Local evidence (2026-10-28)
+
+- 0044 focused first pass: 75/75. Six more Staff/archive cases added before the full gate; 0044 reached 81 assertions in the full suite, then 82 after the final whitespace check; final focused PASS.
+- R-1 existing regression: 51/51, including dry-run, create, repeat skip and explicit overwrite; PASS again in full suite.
+- 0045: 33/33. First run hit current Storage protect_delete guard; rollback-only metadata tests now set the API's transaction-local allow_delete_query flag without disabling RLS. No file objects exist in those fixtures.
+- Combined focused run before the six additional 0044 checks: 108/108 PASS.
+- Clean replay: supabase db reset --local PASS, all 56 migrations, including canonical R2-A. Full database gate run ONCE after replay: 45 files, 1,462 assertions, PASS.
+- Types regenerated from local post-replay schema, formatted; diff adds only six management RPC signatures.
+- Real two-session local harness: node scripts/recipes/test-management-concurrency.mjs PASS. Observed pg_stat_activity advisory waits in both restore/deactivate orders; loser revalidates committed category/recipe state. Concurrent creates suffix correctly, concurrent number collision reports committed winner id/label, and same-version saves yield exactly one winner plus PT409. Synthetic fixture cleanup PASS. This is executed concurrency evidence, not static lock inspection.
+- Renumber 23 to 38: same id/slug, version increment, PASS. Duplicate structured detail, stale graph rollback, invalid House-child graph rollback, inactive-current retention and different inactive rejection: PASS.
+- Final diff review found whitespace-only single-line text could reach a raw table check; fixed normalization and added one focused assertion. A second clean replay of all 56 migrations PASS; focused 0043/0044/0045 on final SQL PASS, 3 files / 166 assertions (51 + 82 + 33), concurrency harness PASS again; types regenerated again. The full suite was run once before this narrow correction.
+- Application quality: npm run check PASS; Vitest 129 files / 1708 tests PASS; DEV-pinned normal build PASS and explicit empty-public-Supabase-env build PASS (static root). Non-production bundle scans PASS. Targeted Playwright regression PASS: 45/45 across desktop, real WebKit tablet and mobile; assertions and teardown completed.
+
+## Hosted DEV
+
+Target independently verified via the existing OP1.0 Supabase connector: the-lineup-dev, ref opmujepkemwcdxxorhfd, ACTIVE_HEALTHY. Read-only SQL preflight: current_user/session_user postgres, 55 migrations, latest 20261028140623, zero recipes, zero recipe-images buckets and no storage.objects policies. Existing linked CLI 403 did not block the authorized connector path; no new credential was requested.
+
+- After all local gates, the connector's apply_migration executed the exact canonical SQL successfully. This migration itself created recipe-images plus recipe_images_select, recipe_images_insert and recipe_images_delete on hosted storage.objects (owned by supabase_storage_admin). No privileged manual policy bypass was used. Hosted migration-role policy creation: PASS.
+- Connector-generated history version was 20261028194926. A narrowly scoped history-row UPDATE aligned that one applied entry to repository version 20261028193159, without reapplying SQL. This is metadata reconciliation for the connector's automatic timestamp. Count before 55; after 56; repository 56. A full version/name comparison returned zero mismatches; canonical migration statement content hash matched the repository. Parity PASS; latest 20261028193159_bar_recipes_management_and_images.
+- Hosted suite: `npm run test:real -- tests/real/recipes-management.db.real.test.ts`, 7/7 PASS (five management tests, two Storage tests), real JWTs via PostgREST/Storage. It creates only its own randomly named Recipes R2 organizations/users, never uses or deletes V2 Harness data. Covers create/edit/renumber, number duplicate detail, slug suffix, stale/child rollback, Staff/inactive/foreign denial, direct writes, category rules/current-inactive retention, archive/restore attribution and Staff visibility, image metadata, actual upload/download/sign/delete, foreign and Staff write denial, archive visibility, and overwrite denial.
+- First hosted run passed 6/7, with the final post-delete download still returning cached bytes. Corrected the test to require exactly one object in the DELETE response and an empty authoritative folder listing. Final run 7/7; SQL and policies required no change. Both runs completed cleanup. No claim that cached/signed bytes are revoked immediately.
+- Final independent SQL audit: six RLS tables; zero authenticated direct DML/TRUNCATE privileges; six management RPC grants; zero anonymous RPC grants; zero bad SECURITY DEFINER search paths. Storage UPDATE/ALL policies: zero.
+- Security advisor reviewed: the six authenticated SECURITY DEFINER RPC notices are intentional, authorized RPC boundaries verified above ([advisor explanation](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)); remaining notices concern existing non-Recipes objects/Auth configuration. No new Recipes isolation defect found.
+- Cleanup PASS: Storage API removed this run's exact objects and folder listing was empty. Independent SQL then found 0 rows in each of recipes/categories/variants/ingredients/steps/garnishes, 0 recipe-images object metadata rows, 0 Recipes R2 organizations and 0 synthetic Auth users. Orphan test objects: 0. Bucket and policies retained.
+- Built-output scans: zero PROD project references and zero exact DEV Supabase secret/service-role values. No credentials or generated runtime artifacts committed.
+
+## Safety and next action
+
+DEV touched only for the R2-A migration, its history alignment, controlled security validation and cleanup. PROD untouched; no PROD migration; main/development unchanged; no real Monks recipe import; no editor/image UI; R-2 PR NOT OPENED; Part 2 NOT STARTED.
+
+R2-A COMPLETE. Next: R2-B, management write actions and editor core. Use Codex, LOCAL, GPT-6.1 Terra, Medium, NEW SESSION. Continue SAME branch feature/recipes-v1-r2-management, starting with this handoff. Do not start R2-C, open the R-2 PR, touch main or touch PROD. STOP here.
+
+## R2-B COMPLETE (2026-10-28)
+
+R2-B starting committed HEAD: `cd12f6efc84c383702c983a3dbf71062432721f1`. The existing uncommitted model, serializer, three tests and checkpoint notes were preserved and continued. Implementation/test commit: `723154a2311e9fbca78ebbe3c63bff36ffaf3b83`, pushed on the same branch. Final HEAD is the completion-documentation commit, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-B handoff'`; the final report records its exact SHA. No reset, stash, rebase or merge.
+
+### Application contract
+
+- `domain/recipe-editor-state.ts`: new/existing initialization, fresh client-only row keys, deterministic serialization, normalized snapshot comparison and immutable row reordering. Single-line whitespace normalization matches R2-A; description, steps, tips and batch notes retain multiline prose. Keys, child ids, sort order, slug, archive and image fields never enter the save payload. `recipe-validation.ts` provides shared bounded payload validation and typed outcomes; `demo-recipes.ts` projects saved demo state back into a read graph.
+- `data/recipe-write-data.ts`: server-only caller-session `bar_recipe_save` wrapper. Action input is `{ restaurantSlug, recipeId, expectedVersion, payload }`; organization is resolved server-side. Create uses null id/version; update sends the loaded expected version. Success is `{ id, slug, version, recipe_number }`. Known `22023`, `23505`, `PT409` and `42501` failures map to safe messages; unknown/malformed/network responses use a retryable fallback. Structured duplicate number detail retains the existing recipe label for inline feedback and number-field focus.
+- `actions/recipe-write-actions.ts`: live-session and active server-resolved membership checks, Staff rejection before mutation, strict payload validation, then caller-client RPC. No service-role client in the editor path. The editor read paginates category choices, includes archived rows in max-number suggestion, retains only an existing recipe's current inactive category, and checks the version again after reading the graph to avoid pairing old fields with a newer version.
+- `recipe-editor-screen.tsx`, `recipe-editor.tsx`, `recipe-editor-fields.tsx` and `recipes-module.tsx` connect Add (`?tab=recipes&mode=new`) and Edit (`?tab=recipes&recipe=<slug>&mode=edit`), preserving root and `/r/<slug>` paths. Management-only entry points; Staff manual URLs render the read experience. Demo editing/saving is in memory and never invokes live actions.
+- Basic Info includes editable 1–9999 number, name, category, free-text base spirit, explicit alcoholic flag, alternate name, description, Popular and On menu. Perfect and existing House fields are editable. Ingredient, step and garnish repeaters have add/remove/up/down, caps and stable keys. Native suggestion comboboxes permit arbitrary valid text. Mobile disclosures, single-column fields and fixed bottom actions; wider layouts use columns and top-right sticky actions. Desktop/mobile screenshots inspected; no horizontal overflow in browser coverage.
+
+### State, validation and navigation
+
+Dirty state compares normalized payloads and suppresses no-op saves. Successful writes update snapshot/version and return to the immutable-slug detail with “Recipe saved”. Saving disables controls and guards duplicate submission. Failed saves preserve all input. Client errors have visible labels, inline messages, `aria-invalid`/`aria-describedby`, an alert summary and first-invalid focus.
+
+`PT409` retains the form, never retries automatically and offers Reload latest / Keep editing. Reload explicitly replaces the graph, category choices, version and snapshot and clears dirty/stale state; Keep editing only dismisses the prompt. Failed reload keeps local edits. Dirty Cancel and Recipes history navigation ask Discard changes / Keep editing; the module keeps the editor mounted while confirmation is pending. `beforeunload` protects refresh/close. The documented shell-wide cross-module navigation limitation remains; the global shell was not redesigned.
+
+No Copy, variant-management workflow, Archive/Restore, Show archived, category-management dialog, image processing/storage UI, Picture Book or later filters/sorting/preferences were implemented. The Image block is a placeholder only. R2-C remains unstarted.
+
+### Validation evidence
+
+- Preliminary tests rerun first: 3/3 PASS. Final focused Recipes suite: 10 files / 57 tests PASS, comprising editor domain 6, write data 10, actions 9, editor/access components 17 and existing Recipes regression 15.
+- `npm run check`: PASS (format, lint, generated routes and TypeScript). Full Vitest final run: 134 files / 1,750 tests PASS. The first broad run was 1,749; it was repeated only after final whitespace normalization added its regression test. A validation-helper overload typing issue and format drift were fixed; final TypeScript/check/build gates pass.
+- New editor Playwright first matrix: 12/12 PASS, including completed teardown after stopping its task-owned Next child process on Windows. Adding browser Back coverage exposed a Chromium route/unmount issue; module-level retention fixed it. Final editor + existing Recipes list/detail matrix: 24/24 PASS across desktop Chromium, real WebKit `host-tablet` and `server-mobile`, including all repeater reorder paths, renumbering, custom suggestions, dirty Cancel/Back and Staff URL fallback. No timing-based stale browser test: hosted two-window stale validation below is deterministic.
+- Final DEV-pinned production build PASS; explicit empty-string public-Supabase production build PASS (static root). Public configuration was provided explicitly, despite `.env.production.local` loading; no env file changed. Build scans found zero PROD Supabase references and zero exact DEV secret/service-role values. DEV build was recreated when needed to serve the hosted test after the empty build and final normalization fix. No deployment.
+- No SQL/migration change, no R2-A replay/full pgTAP rerun. Repository 56 / DEV 56; full version/name comparison has zero mismatches; latest remains `20261028193159`.
+
+### Hosted DEV evidence and cleanup
+
+`PLAYWRIGHT_BASE_URL=http://localhost:3002 npm run test:real:ui -- tests/real/ui/recipes-editor.real.spec.ts` ran against the explicitly DEV-pinned production build; the test independently refuses a non-DEV/PROD-referencing server. Final run: 1/1 comprehensive flow PASS (41.0 seconds; 45.6 seconds including fixture/teardown).
+
+The flow signs in as synthetic TestManager through the real passcode path, creates a synthetic recipe, verifies detail, edits/renumbers it and verifies unchanged id/slug with version 1→2 in DEV. It edits both Perfect and pre-existing House content, moves an ingredient and reloads the editor to verify persistence. A second manager window saves a newer version; the first gets the real `PT409` UI with local values retained, Keep editing preserves them, and explicit Reload latest clears dirty state. Staff sees read-only fallback on both Add/Edit URLs; replaying the captured management save request using Staff's own session returns permission denial. The previously created recipe remains at version 2.
+
+The first hosted attempt successfully created a recipe but hit the existing app-wide Opening reminder modal before Edit. Its teardown cleaned every synthetic row. The test now dismisses that prompt normally for the shared synthetic users; no Recipes authorization was mocked. The corrected flow passed, and passed again on the final normalized implementation build.
+
+Every run uses unique synthetic recipe/category names, collision-checks its reserved test numbers and deletes only its own identified graph. Final test teardown reports recipes/variants/ingredients/steps/garnishes/categories all zero. Independent connector SQL after the final run confirms all six Recipes tables contain zero rows; migration count is still 56. Existing organizations, V2 Harness organizations, bucket and Storage policies were retained. No real Monks recipes, PROD connection/migration, main/development change, R-2 PR or Part 2 work.
+
+### Next
+
+R2-A COMPLETE. R2-B COMPLETE. Next: **R2-C — Copy Perfect → House + Archive/Restore + Category Management**, NEW session, Codex LOCAL, GPT-6.1 Terra / Medium, Auto-Review, same branch `feature/recipes-v1-r2-management`, starting with this handoff. Do not start R2-D, open the R-2 PR, merge development, touch main or touch PROD. STOP.
+
+## R2-C COMPLETE (2026-10-28)
+
+R2-A COMPLETE. R2-B COMPLETE. R2-C COMPLETE. Starting committed HEAD: `054bfecc7eca325184fdc1e6c4127730d8cf7f21`. The pre-existing uncommitted Copy helper, both original tests and task notes were preserved. Implementation/test commit: `9b6d461c67b7a500fff958c69c221018f2d89d7b`. Final HEAD is the completion-documentation commit containing this section, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-C handoff'`; the final report records its exact SHA. Same feature branch; no reset, clean, stash, rebase, force push or merge.
+
+### Implemented contract
+
+- Copy uses current local Perfect values, including unsaved edits, through the preserved helper. All scalar fields and ingredient/step/garnish rows copy with independent objects/arrays and fresh client keys. Empty Perfect disables Copy. Empty/absent House receives confirmation; populated House receives Replace House / Cancel with the locked overwrite warning. Cancel preserves House. Copy never calls Save and always marks the editor dirty, including an identical replacement. It focuses the House options heading directly before House and announces through `aria-live="polite"`. Normal Save persists House. Add House and confirmed meaningful-House removal are implemented; removal serializes `house: null` and waits for Save.
+- The server-only management data layer calls existing archive/category RPCs with the caller client and maps `22023`, `23505`, `PT409`, `42501`, malformed responses and network/unknown failure to safe typed results. Management actions validate input, require a live session, resolve the organization from server membership and reject Staff before management queries/RPCs. No service-role client in application management paths; no new migration.
+- Active detail/Edit offer confirmed Archive with “Hidden from staff. You can restore it later.” Dirty Edit disables Archive with “Save or discard your changes first”. Success refetches canonical status/version. Archived detail and archived Edit URLs render a management-readable banner and Restore, with no editable form or Save. Restore loads canonical categories and requires an explicit active category when the current category is inactive. Stale Archive/Restore never retries; Reload latest is explicit.
+- Management index reads RLS-visible active and archived rows. Show archived defaults off and filters client-side; enabled rows are dimmed with an Archived badge, including search. Staff has no management controls and retains an explicit active filter plus unchanged RLS. Archived recipes can be grouped under inactive categories.
+- Manage Categories is available from index/editor using the shared Dialog. Add/rename validate 1–80 characters; slugs are never editable. Up/down reorder sends only normal category IDs as required by R2-A; fallback stays last. Active switches deactivate/reactivate. Fallback rename is allowed; move/deactivate are disabled by `is_fallback`, never a literal name. Active-recipe deactivation errors are visible. No delete or drag/drop. Success reloads canonical rows/versions; stale actions preserve local names until explicit Reload latest. Dirty close/Escape asks Discard changes / Keep editing. Focus returns to Manage Categories. Saving one name preserves other pending names, including demo.
+- Demo uses in-memory copy/archive/restore/category behavior, including active-recipe category protection, and never invokes live mutations. The shared Dialog close button now has `type="button"`, preventing confirmation close from submitting the editor form. Keyboard, native focus trap/restoration, Escape and touch behavior are retained. No dependency or animation added.
+
+### Validation evidence
+
+- Original helper tests rerun first: **2/2 PASS**. Expanded copy domain: **11 PASS**, covering all scalar fields/rows, fresh keys, independence, unsaved values and serialization. Final focused Recipes: **14 files / 113 tests PASS** (20 domain, 56 action/data, 37 component tests). New management action/data coverage: 31 tests. Components cover overwrite Cancel/Replace, empty guard, no auto-save, dirty/focus/live announcement, independence, House removal, identical-copy dirty state, archive/stale/category flows and archived Edit read-only state.
+- Final `npm run check`: PASS (format, lint, generated routes, TypeScript). Final full Vitest: **138 files / 1,806 tests PASS**. Broad testing was repeated only when final changes/regressions justified it; this is the final count.
+- Complete Recipes Playwright matrix: **30/30 PASS** across desktop Chromium, real WebKit host-tablet and server-mobile. Final targeted R2-C matrix after narrow editor/demo corrections: **6/6 PASS**. Copy/overwrite, dirty Archive, archived read-only, Show archived, Restore, category add/rename/reorder/toggle/fallback, dirty close and focus restoration pass. Responsive no-overflow assertion passes; mobile screenshot inspected. Initial new-test selector mismatches were fixed. Task-owned Windows Next processes were stopped after assertions so teardown completed successfully.
+- Final DEV-pinned production build: PASS. Final production build with explicitly empty public Supabase URL/publishable/anon values: PASS (static root). Both outputs scanned: **0 PROD references; 0 exact DEV secret/service-role values**. DEV build recreated last. No env change, deployment, screenshot, log or generated build artifact committed.
+- Repository migrations **56**, DEV **56**, full version/name comparison **0 mismatches**, latest `20261028193159_bar_recipes_management_and_images`. No R2-C migration or migration application. Existing SQL/RLS/Storage policies unchanged; no full local database replay was needed for this UI/RPC-caller slice.
+
+### Hosted DEV and cleanup
+
+`PLAYWRIGHT_BASE_URL=http://localhost:3002 npm run test:real:ui -- tests/real/ui/recipes-management.real.spec.ts` against the DEV-pinned production build: **1/1 comprehensive flow PASS**, final run 55.8 seconds (about one minute including setup/teardown). Its guard independently refuses a PROD/non-DEV server. Synthetic manager and Staff use the real application passcode flow; no Recipes authorization mocks.
+
+The flow changes Perfect without saving, copies into existing House, saves, reloads and verifies persisted House. It adds/renames/reorders/deactivates/reactivates a synthetic category, verifies fallback move/deactivate protections, renames the synthetic fallback and surfaces DB rejection of active-recipe category deactivation. A second manager window submits a stale category rename: real `PT409`, retained local name, no retry and explicit canonical reload all pass. Manager archives; Staff direct detail becomes Recipe not found; management Show archived reveals the row/badge. The original category is deactivated while its recipe is archived. Restore requires an explicit active category, then Staff reads the recipe again. Canonical active status, version 4 (copy save → archive → restore) and copied House method are checked in DEV.
+
+Captured archive and category Server Action requests replayed with **Staff's own session** both return permission denial. Staff has no management entry or Show archived. This independently verifies server authorization beyond hidden controls.
+
+Existing real-JWT regression `npm run test:real -- tests/real/recipes-management.db.real.test.ts`: **7/7 PASS**, including management writes, stale/invalid graph rollback, Staff/inactive/foreign/direct-write denial, category/fallback constraints, archive attribution/Staff visibility and existing private Storage rules. No image UI was implemented.
+
+Every attempted hosted run completed synthetic cleanup, including initial selector-only failures. Final browser teardown reports zero recipes, variants, ingredients, steps, garnishes and temporary categories. Independent connector SQL after the final run confirms **all six Recipes tables = 0**, `recipe-images` object metadata **0**, migrations **56**. The RPC suite also reports zero synthetic objects/orphans and graph rows. Existing organizations, V2 Harness data, bucket and Storage policies were retained. No real Monks recipes imported or edited.
+
+### Safety and next
+
+Development/main unchanged. PROD untouched; no PROD migration. No DEV migration applied in R2-C. Images, Picture Book, later filters/sort/preferences, R2-D and subsequent slices NOT STARTED. R-2 PR NOT OPENED. Part 2 NOT STARTED.
+
+**Next: R2-D — Recipe Images + Storage Integration.** Codex, LOCAL, GPT-6.1 Sol / Medium, NEW session, Auto-Review, same `feature/recipes-v1-r2-management` branch, starting from this handoff. Do not start R2-E, open the R-2 PR, merge development, touch main or touch PROD. STOP.
+
+## R2-D COMPLETE (2026-10-28)
+
+R2-A/B/C/D COMPLETE. R2-E NEXT / NOT STARTED. Starting HEAD `fcaba014aab9a652f0f87f345fd0cc6b5da9007f`, verified clean and equal to fetched remote on `feature/recipes-v1-r2-management`. Implementation/test commit `4369d69eaf5b1be575f41e86f5bce9fa03fdbdc2` is pushed; local=remote and clean verified before this completion documentation. Final HEAD is the completion documentation commit, resolvable with `git log -1 --format=%H --grep='docs(recipes): complete R2-D handoff'`; the final response records its exact SHA. No reset, rebase, force push or merge.
+
+### Processing and application boundary
+
+- `image-rules.ts` owns JPEG/PNG/WebP MIME and signature checks, 8 MiB source cap, decoded short side >=200 px, deterministic aspect-preserving/no-upscale geometry, output MIME/extension and hard byte guards, UUID paired paths and scoped-path checks. Stored WebP/JPEG only. Hero <=1600 px long edge, target 400 KiB/hard 2 MiB; thumbnail <=480 px, target 60 KiB/hard 300 KiB. The browser decodes once, derives both outputs using native canvas, applies bounded quality reduction, strips source metadata by re-encoding and revokes its decoding object URL in `finally`. WebP is primary; JPEG fallback paints a white background for transparency. Demo previews use data URLs in session memory, never live actions/Storage.
+- `recipe-image-actions.ts` validates the request, requires a live Auth session, resolves the active membership/organization server-side and rejects Staff mutations. It independently validates processed MIME, magic bytes, paired format and byte limits. `recipe-image-data.ts` uses only the caller-session client. Recipe lookup is organization-scoped; archived/foreign/unavailable recipes cannot mutate. The server generates fresh UUID paths in `<org>/<recipe>/<uuid>.(webp|jpg)` and paired `-thumb` names. Uploads set `upsert:false`, content type and immutable-name cache control. No UPDATE, public URL, service-role application client, new route, dependency or migration.
+- Hero uploads before thumbnail; both must succeed before `bar_recipe_set_image` with the loaded expected version. Partial failure deletes the uploaded hero. Metadata rejection (including PT409) compensates both new objects, preserves old metadata/objects and returns the safe original failure. Cleanup failure emits a safe server warning without hiding the original failure. Replacement switches metadata first, then best-effort deletes old scoped paths. Removal clears paired metadata first, then best-effort deletes old objects. A successful switch remains authoritative if old cleanup fails. Archive never deletes images.
+
+### Reads and UI
+
+- Detail reads include metadata and caller-session signed URLs; image-read failure never blocks recipe text. The signed-read action accepts a recipe id, re-reads its metadata through own-org RLS and signs only scoped paths. Hero/thumb are signed together, TTL 3600 seconds. `use-recipe-images.ts` refreshes five minutes before expiry and when visible near expiry, suppresses duplicate refreshes, ignores unmounted responses, retries a failing image once (including remount when the freshly signed URL happens to be identical), then permanently uses the placeholder for that mounted image. Fake-time tests prove the lifecycle without waiting an hour.
+- Plain `<img>` with recipe-name alt, async decode, eager detail hero and lazy thumbnail support. Reserved 16:10 hero/4:5 thumbnail boxes, token borders/background and decorative Martini placeholder; no layout redesign. The existing normal **List View deliberately loads no images**, as locked in STORAGE_PLAN S-9/S-11 and UI_UX_PLAN; thumbnail processing, storage, signing and reusable display support are complete. Picture Book display/batched index reads remain R2-E.
+- New recipe Image section says "Save the recipe first, then add a photo." Its first successful Save now remains in the saved editor with a success message and real id. Saved management editor supports immediate Add/Replace/confirmed Remove, accessible preparation/upload-save/status/error feedback and duplicate-operation disabling. Previous photo survives failures. Image saves update the editor and parent versions without discarding dirty text. Stale results use existing Reload latest / Keep editing recovery; reloading synchronizes parent controls as well. Image changes invalidate cached detail so Cancel/back shows the current photo/placeholder without a reload. Archived recipes show their read-only hero and restore control; Staff never get editor mutation controls.
+- Demo previews persist in module memory across edit/detail and text saves; refresh discards demo state by convention. No live demo request. No R2-E toggle, Picture Book, preference, chips or sorting.
+
+### Validation
+
+- New image domain: **25 tests** (18 rules + 7 pipeline). Actions/data: **26** (12 actions + 14 data). Components/hooks: **21** (15 UI + 6 lifecycle). Final focused Recipes: **20 files / 185 tests PASS**. `npm run check` PASS. Full Vitest: **144 files / 1,878 tests PASS**; repeated after the final detail-cache/reload fix, same result.
+- Local Playwright: **15/15 PASS**, editor regression plus image pipeline flow across desktop Chromium, real WebKit host-tablet and server-mobile. Actual native browser PNG/JPEG/WebP decode, resize, WebP output, simulated unavailable-WebP JPEG fallback, no-upscale, tiny/invalid rejection, Add/Replace/confirmed Remove, responsive placeholder and zero demo live actions/Storage requests. Existing new-save expectations were updated to the locked R2-D stay-in-editor flow.
+- Final DEV-pinned production build PASS; explicit-empty-string public Supabase build PASS (static root); DEV build restored for hosted testing. Both final server/static bundle scans: **0 PROD project references, 0 exact private DEV secret values**. Environment files unchanged. No deployment.
+- Hosted application data-layer suite `tests/real/recipes-images.db.real.test.ts`: **6/6 PASS**. Its actual management/Staff/foreign JWTs exercise the shipped data functions and private Storage: paired upload, metadata/version, real signed download, Staff insert/delete denial, foreign read/mutation denial, immutable replacement with authoritative listing of only the new pair, real PT409 after new uploads followed by exact listing equality/old metadata and signed-read preservation, archive retention/management read/Staff signing denial, restore read, and metadata removal/object deletion. Small repository fixture is a 1,131-byte synthetic canvas JPEG. Admin is restricted to fixture setup/cleanup, never the application operation.
+- Hosted browser editor regression **1/1 PASS**. Final `tests/real/ui/recipes-images.real.spec.ts` on the rebuilt DEV-pinned production server: **1/1 PASS** (45.4 seconds; 50.1 seconds including setup/teardown). Real passcode management creates a synthetic recipe, uploads processed native canvas pixels, verifies persisted hero and <=480 thumbnail, reloads, replaces with fresh paths, verifies old-object deletion, exercises detail hero, Staff active image/editor fallback, archive/restore visibility and management archived hero, confirmed remove and reload placeholder. Replaying the captured remove Server Action using Staff's own session returns management denial. Final Cancel navigation confirms cache invalidation without a page reload. Detail screenshot visually inspected; hero is centered above recipe content.
+- Test-only defects were corrected and rerun: selectors scoped away from shell images/Next route announcer; image decode awaited rather than assuming element visibility means decoded; request capture uses the plain remove payload because Chromium does not expose the upload multipart body; real hosted assertion timeout allows its multiple network round trips. One misplaced capture hook interrupted teardown for run `mvsn3vrr`; that exact synthetic prefix was explicitly cleaned through the Storage API and scoped graph/category deletion before retry. Later runs each completed teardown. No application authorization was mocked in hosted tests.
+
+### Independent cleanup, database and safety
+
+Final OP1.0 connector audit against DEV `opmujepkemwcdxxorhfd`: recipes/categories/variants/ingredients/steps/garnishes **0 rows each**; `recipe-images` **0 objects**, R2-D synthetic organizations **0**, R2-D synthetic Auth users **0**. Each hosted suite also inspected its exact synthetic recipe folders through the Storage API, including failed-operation leftovers: **0 orphan test objects**. Bucket retained and private, hard cap 2,097,152 bytes, allowed MIME WebP/JPEG. SELECT/INSERT/DELETE policies retained, UPDATE/ALL policies **0**.
+
+Full repository-versus-DEV version/name comparison: **56 / 56, zero mismatches**, latest `20261028193159_bar_recipes_management_and_images`. No R2-D migration, no migration applied, no schema/type changes, no R2-A pgTAP replay. Security/accessibility/tenant-isolation/scope diff review PASS. Only intentional synthetic fixture bytes are committed; no env/build/trace/log/screenshot/temp artifacts.
+
+PROD untouched; main/development unchanged; no real Monks or web-sourced images; no R-2 PR; no Part 2.
+
+## R2-E COMPLETE (2026-10-28)
+
+R2-A/B/C/D/E COMPLETE. R2-F NEXT / NOT STARTED. Starting committed HEAD `2f8200783f207c7f94e809c9d2fd7fe18a8315a5`, verified clean and equal to fetched remote on `feature/recipes-v1-r2-management`. Implemented and verified end-to-end in Antigravity. Same feature branch; no rebase, reset, force push, or merge.
+
+### Implemented contract
+
+- `use-view-preference.ts`: SSR-safe `useSyncExternalStore` hook managing `recipes-view-preference` in `localStorage`. Defaults to `"list"`. Dispatches custom window events across listeners to keep parallel components synchronized. Safely catches `localStorage` read/write exceptions (private browsing / disabled storage) with silent fallback to `"list"`.
+- `recipe-filters.ts`: Pure functional browsing pipeline containing:
+  - `filterRecipes`: single-selection filter chips supporting `All`, `Popular` (`is_popular === true`), `On menu` (`is_menu_item === true`), and `Non-alcoholic` (`is_alcoholic === false` explicit boolean, never inferred).
+  - `sortRecipes`: sort modes `Book order` (`recipe_number` asc, default) and `A–Z` (`name` asc, case-insensitive).
+  - `groupRecipes`: groups recipes under categories ordered by fallback-last (`is_fallback === true`), `display_order`, then `name`. Omit empty categories. Active recipe count per category excludes archived recipes (`activeCount`).
+  - `deriveBrowsingData`: memoized pipeline producing filtered recipes, search results, and category groups. When a search query is active, the layout transforms into flat `Results (n)` sorted by the chosen sort mode, where each card displays a category caption.
+- `recipe-card.tsx`: Picture book card rendered as a single `<a>` tag (single keyboard tab stop / click target) containing `RecipeImage` in thumbnail mode (`thumbnail={true}` with lazy loading), zero-padded recipe number, name, Popular star badge (`★`), and Archived badge with parent dimming (`opacity-60`). Supports optional category caption in flat search results.
+- `recipe-picture-book.tsx`: Picture Book browsing component rendering responsive grid (2 columns on mobile, up to 5 on wide screens), category headings with active recipe counts, search-flat Results mode with category captions, and accessible empty states for search and filters.
+- `recipes-module.tsx`: Integrated `[ List | Picture Book ]` view toggle button group (`aria-pressed`), single-select filter chips (`aria-pressed`), and sort toggle button group (`aria-pressed`). Preserves search query, active filter chip, and sort mode seamlessly across view switches. List View deliberately loads no images, preserving performance.
+- `recipe-actions.ts` & `recipe-index.ts`: Updated `getRecipeIndexAction` and `Recipe` type to fetch `is_menu_item`, `is_alcoholic`, and `image_thumb_path` for both Staff and Management. Staff query maintains server-level `is_active: true` filter.
+
+### Validation evidence
+
+- Focused Recipes Vitest suite: **25 test files / 217 tests PASS** (baseline was 20 files / 185 tests). Added:
+  - `use-view-preference.test.tsx` (6 tests): default list, picture persistence, reload restoration, list restoration, invalid storage value fallback, storage exceptions.
+  - `recipe-filters.test.ts` (14 tests): all filter modes, sorting, grouping, active count calculation, search flattening.
+  - `recipe-card.test.tsx` (4 tests): single tab stop, onNavigate navigation, category caption, archived dimming.
+  - `recipe-picture-book.test.tsx` (4 tests): grouped layout, search-flat mode, clear search, clear filters.
+  - `recipes-browse.test.tsx` (4 tests): view switching, filter chips, sort order, Staff vs Management controls.
+- Full Vitest suite: **149 test files / 1,910 tests PASS** (100%).
+- Code quality & style: `npm run check` PASS (Prettier formatting, ESLint 0 errors / 0 warnings, Next route types generation, and TypeScript `tsc --noEmit`).
+- Playwright E2E matrix: **36 tests PASS** across desktop Chromium, WebKit `host-tablet`, and `server-mobile`, including 4 new tests in `recipes-picture-book.spec.ts` covering view toggle, card thumbnail placeholders, filter chips, sort toggle, search flattening, back navigation state preservation, reload persistence, and role isolation.
+- Production builds: DEV-pinned production build PASS; explicit-empty public Supabase build PASS (static root). Server and static bundle scans (`check-nonprod-env.mjs --scan .next`) confirmed **0 PROD references and 0 private secrets**. Migrations remain 56 in repository and DEV.
+
+### Hosted DEV evidence and cleanup
+
+- Hosted browser suite `tests/real/ui/recipes-browsing.real.spec.ts` executed against the DEV-pinned production build: **1/1 comprehensive flow PASS** (17.6s, 21.2s including setup/teardown) against real DEV (`opmujepkemwcdxxorhfd`).
+- Real passcode management signed in as synthetic TestManager, imported synthetic recipes (citrus, highball, and archived candidate), and validated:
+  - Initial default List View and switch to Picture Book view.
+  - Category sections and cards rendering with thumbnail placeholders and Popular star.
+  - Filter chips (`Popular`, `Non-alcoholic`, `On menu`, `All`).
+  - Sort toggle (`Book order`, `A–Z`).
+  - Picture Book search flattening to `Results (1)` with category caption.
+  - Recipe archiving in UI, verifying `Show archived` defaults off, toggles on with dimmed card and `Archived` badge, and toggles off.
+  - View preference persistence across page reloads (Picture Book preserved; List View preserved).
+  - Staff role isolation: synthetic TestServer1 signed in, toggled Picture Book, viewed active cards, and confirmed `Show archived` and archived recipe are completely inaccessible.
+- Teardown in `afterAll` deleted all synthetic recipes, categories, and image storage folders. Verified **0 remaining synthetic rows** in DEV database.
+
+### Next
+
+R2-E COMPLETE.
+
+---
+
+## 2026-10-28 — R2-F + R2-G Combined Final R-2 Checkpoints
+
+### R2-F: Final Recipe Detail / Category / Responsive & Accessibility Polish — COMPLETE
+
+### R2-G: Final R-2 Validation, Owner Visual Preview, Documentation, CI, PR & Merge — COMPLETE
+
+### Scope & Product Decisions (Locked V1 Contract)
+
+1. **Recipe-First Detail Layout**:
+   - Reordered Recipe Detail DOM and visual flow: Recipe Number & Name -> Metadata -> Quick Glance -> Recipe Variant Content (Quick Measure, Ingredients, Method, Steps, Rim, Glass, Garnish, Bartender Tips) -> Hero Image centered at bottom.
+   - Hero `RecipeImage` moved after recipe content into a centered container with max-width constraint (`max-w-3xl`, 16:10 aspect ratio), preserving placeholder, signed URL loading, and upload/replace/remove workflows.
+2. **Quick Glance Section**:
+   - Derived near top of `RecipeDetailView` via `deriveQuickGlance`: compact summary across available variants (method, measurements, common glass, garnish, rim). Handles partial/empty recipes without broken punctuation.
+3. **Quick Measure & Conservative Oz Ratio**:
+   - `deriveQuickMeasure`: Structured rows per variant, preserving original source wording, amounts, and units while omitting empty rows.
+   - `deriveOzRatio`: Conservative display-only ratio (e.g. `8 : 1` for 2 oz spirit + 0.25 oz syrup). Requires >= 2 compatible ounce-based ingredients, excludes non-ounce additions (dashes, tops, splashes, bitters) into a clean separate summary, rejects conflicting liquid volume units (ml, cl, cups), rejects non-numeric or non-positive values, and safely omits ratio when ambiguous. Does not persist ratios to database.
+4. **Bartender Tips**:
+   - Rendered using existing `variant.tips` field.
+   - Multi-line formatting preserved via `whitespace-pre-wrap`.
+   - Omitted entirely from DOM and visual rendering when empty.
+5. **Category Reassignment in Editor**:
+   - Hardened and tested in editor via `<Select id="category_id">`, `serializeEditorState`, and atomic `bar_recipe_save` RPC.
+   - Covers dirty state detection, Cancel discard preservation, Save persistence, stale `PT409` conflict retention without data loss, and immediate grouping updates in List and Picture Book views. Staff direct writes and cross-org categories are denied by database RLS.
+6. **Real-Time Scope Reconciliation**:
+   - Confirmed explicitly deferred under locked V1 contract (`D-20` / `B-RC-3`). No `supabase_realtime` tables or client subscriptions were added; optimistic concurrency via `PT409` remains the authoritative contract. Misleading "Real-Time Sync" labels corrected.
+7. **Accessibility & Responsive Polish**:
+   - Single card links (`one card / tab stop`), semantic heading hierarchy, WAI-ARIA tab pattern on mobile (`role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`), touch targets >= 44px, focus rings, no horizontal overflow.
+
+### Owner Visual Preview Flow (Recipe #16 Old Fashioned)
+
+- Executed against hosted DEV (`opmujepkemwcdxxorhfd`) in a temporary task-owned preview organization (`owner-preview-*`) with passcode `2468`.
+- Seeded Recipe #16 Old Fashioned with exact Monks source wording (Bourbon, 2 oz spirit + 0.25 oz syrup + bitters, Stir, Rocks glass).
+- Verified rendering: Quick Glance, Quick Measure with `Oz Ratio 8 : 1` and `+ 2 dashes bitters`, empty Tips section omitted, hero image at bottom.
+- Captured owner-review screenshots to `artifacts/recipes-r2-owner-preview/`:
+  - `picture-book-card.png`: Picture Book card view
+  - `desktop-recipe-detail.png`: Desktop 2-column detail view
+  - `tablet-recipe-detail.png`: Host-tablet landscape detail view
+  - `mobile-recipe-detail.png`: Server-mobile detail view with variant tabs
+- Complete preview organization teardown verified: 0 remaining preview rows in DB, 0 storage orphans, 0 residue.
+
+### Quality, Security & Test Gates
+
+- **Focused Recipes Vitest**: **27 test files / 237 tests PASS** (100%).
+- **Full Vitest Suite**: **151 test files / 1,930 tests PASS** (100%).
+- **Code Quality (`npm run check`)**: Prettier formatting PASS, ESLint PASS (0 errors, 0 warnings), Next route types generated, TypeScript `tsc --noEmit` PASS (0 errors).
+- **Recipes Playwright E2E Matrix**: **45/45 tests PASS** across desktop Chromium, WebKit `host-tablet`, and `server-mobile`.
+- **Database Security Regression**: **13/13 tests PASS** (`recipes-management.db.real.test.ts`, `recipes-images.db.real.test.ts`), 0 synthetic residue, 0 storage orphans.
+- **Hosted DEV UI Validation**: **5/5 tests PASS** against `opmujepkemwcdxxorhfd` (`recipes-browsing.real.spec.ts`, `recipes-detail.real.spec.ts`, `recipes-editor.real.spec.ts`, `recipes-images.real.spec.ts`), 0 DB residue, 0 storage orphans.
+- **Production Builds**:
+  - DEV-pinned production build PASS.
+  - Explicit-empty public Supabase production build PASS (`NEXT_PUBLIC_SUPABASE_URL=""`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=""`).
+  - DEV-pinned build restored.
+- **Bundle & Security Scans**:
+  - `check-nonprod-env.mjs --scan .next`: PASS (0 PROD references, 0 secrets).
+  - `check-tracked-local-paths.mjs`: PASS (0 tracked local paths).
+- **Migration Parity**: Repository migrations 56 == DEV migrations 56. No R2-F/G migration.
+
+### Next Checkpoint
+
+**R-2g — Independent Final Gate** (Claude Code LOCAL, Sonnet 5.5, high, NEW SESSION, starting from merged `development`).
+
+## R-2g independent final gate — GO (2026-10-28)
+
+Run by Claude Code on `feature/recipes-v1-final-gate` from development `73a24e1`. Five small defects fixed with regression tests; no migration; DEV parity 61/61. Full evidence, findings and the GO decision: [R2G_FINAL_GATE.md](R2G_FINAL_GATE.md). Next: Recipes V1 release-readiness plus explicit owner approval (not started).

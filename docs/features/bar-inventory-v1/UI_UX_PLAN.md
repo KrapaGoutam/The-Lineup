@@ -179,3 +179,37 @@ Keyboard: full table navigation, popovers trap/restore focus, `Esc` cancels edit
 1. Is a fourth primary tab (Analytics) preferable to the Dashboard section + sub-view? (Default: no.)
 2. Should quantity edits always ask for a reason, or default silently to "Stock Count" with the reason editable afterwards? (Default: popover with remembered last reason.)
 3. Is "Unit" required on manual create (default proposed: required with `bottle` preselected)?
+
+## V1.1 interaction contract
+
+Inventory offers individual active-row checkboxes, Select filtered results,
+selection count, Clear selection and Bulk Edit. Sorting/filtering preserve selected
+product IDs; archived products are excluded. The editor is a compact multi-column
+count form on desktop and stacked fields on phones. Blank means unchanged; zero
+means zero. Review lists changed products, old/new counts and deltas, reason and
+note. A stale conflict shows reviewed/latest counts plus available actor/time;
+Refresh counts and re-review is required. Existing cell/quick adjustments remain.
+
+Columns preserve product Name and the selection control; row actions remain
+outside customizable columns. Move Up/Down buttons support keyboard and touch;
+Reset to Default resets only order/visibility. Phone cards keep their own layout.
+Local cache keys include restaurant slug, profile ID and table key; unscoped V1
+hidden-column preferences are intentionally not imported across users.
+
+Saved Views are personal and server-persisted. Create, apply, update, save as,
+rename, delete, make/remove default and reset to standard are available. Explicit
+ownership covers search, filters, sort, visible columns, order and Show archived.
+Unowned settings remain unchanged. Defaults initialize on Inventory entry only;
+explicit URL state, including Dashboard drill-downs, takes precedence. Unknown
+columns are dropped; new columns append. Unsupported payloads show a recoverable
+error. Stale select values can yield the existing no-results state with removable
+chips and Clear all. Archived visibility also survives URL reload.
+
+Date Tracking summarizes nearest active expiration and oldest manufacture date,
+with +N for additional groups. The sheet lists all groups, add/edit/archive,
+quantity coverage and nonblocking overcoverage/unknown-quantity information.
+Manage > Freshness Rules configures month limits per subcategory, with no assumed
+beer policy. Expiration and manufacture statuses use text plus icons. Dashboard
+cards count products, explicitly label overlapping expiration windows, and use
+the most urgent group per product; archived groups/products never alert. Expired
+items precede today/urgent/warning/soon. Stock KPIs remain independent.

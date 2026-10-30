@@ -129,7 +129,7 @@ select is(
      and p.proname not like 'inventory_order_draft_%'
      and has_function_privilege('authenticated', p.oid, 'execute')
      and not has_function_privilege('anon', p.oid, 'execute')),
-  13, 'BI-SEC-003 all 13 catalog RPCs are executable by authenticated and not anon'
+  18, 'BI-SEC-003 catalog and V1.1 management RPCs are executable by authenticated and not anon'
 );
 
 -- 2. Role matrix --------------------------------------------------------

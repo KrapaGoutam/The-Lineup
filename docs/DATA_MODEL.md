@@ -151,3 +151,13 @@ npm run db:types
 ```
 
 Generated output is committed at `src/types/database.generated.ts`. Hand-written domain types may narrow or compose generated shapes but must not duplicate the database schema manually.
+
+## Bar Inventory V1.1
+
+Additive inventory_date_lots, inventory_freshness_rules and personal
+inventory_saved_views extend the V1 tenant/location model. SELECT-only client
+grants, management-only RPCs, optimistic versions and deferred composite actor/
+location FKs preserve authorization and cascade teardown. Dates/rules use the
+existing non-quantity audit; Bulk Count uses the unchanged immutable ledger.
+Detailed fields, precision, constraints and defaults are documented in
+[Bar Inventory DATA_MODEL](features/bar-inventory-v1/DATA_MODEL.md#v11-additive-model).

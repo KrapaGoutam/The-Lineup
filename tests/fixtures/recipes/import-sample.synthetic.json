@@ -1,0 +1,84 @@
+﻿{
+  "format": "the-lineup.bar-recipes.import",
+  "version": 1,
+  "source": {
+    "title": "Synthetic R1 test fixture",
+    "document": "synthetic",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "approved_by": "Synthetic test",
+    "approved_on": "2026-01-01",
+    "corrections": []
+  },
+  "categories": [
+    { "slug": "r1-test-drinks", "name": "R1 Test Drinks", "display_order": 10 },
+    {
+      "slug": "others",
+      "name": "Others",
+      "display_order": 999,
+      "is_fallback": true
+    }
+  ],
+  "recipes": [
+    {
+      "recipe_number": 9001,
+      "name": "R1 Test Citrus",
+      "category_slug": "r1-test-drinks",
+      "alternate_name": null,
+      "description": null,
+      "base_spirit": null,
+      "is_alcoholic": false,
+      "is_popular": false,
+      "is_menu_item": false,
+      "variants": {
+        "perfect": {
+          "method": "Shake",
+          "ingredients": [
+            {
+              "ingredient_name": "Synthetic citrus",
+              "amount": "Splash",
+              "unit": null,
+              "preparation": null
+            }
+          ],
+          "steps": [{ "instruction": "Combine synthetic ingredients." }],
+          "garnishes": [{ "name": "Synthetic peel", "notes": null }]
+        },
+        "house": {
+          "method": "Stir",
+          "ingredients": [
+            {
+              "ingredient_name": "Synthetic mixer",
+              "amount": "Top",
+              "unit": null,
+              "preparation": null
+            }
+          ],
+          "steps": [{ "instruction": "Stir synthetic ingredients." }],
+          "garnishes": []
+        }
+      },
+      "source_ref": "synthetic",
+      "source_notes": "Test content only"
+    },
+    {
+      "recipe_number": 9002,
+      "name": "R1 Test Highball",
+      "category_slug": "r1-test-drinks",
+      "is_alcoholic": false,
+      "is_popular": false,
+      "is_menu_item": false,
+      "variants": {
+        "perfect": {
+          "ingredients": [
+            { "ingredient_name": "Synthetic water", "amount": "To taste" }
+          ],
+          "steps": [],
+          "garnishes": []
+        },
+        "house": null
+      },
+      "source_ref": "synthetic",
+      "source_notes": "Test content only"
+    }
+  ]
+}

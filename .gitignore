@@ -53,4 +53,5 @@ next-env.d.ts
 
 # local DEV validation evidence and editor workspace -- never committed (public repo)
 /docs/testing/
+/artifacts/
 *.code-workspace

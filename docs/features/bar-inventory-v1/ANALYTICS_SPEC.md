@@ -93,3 +93,15 @@ Vendor, Category, Subcategory, Item, Date range (with the presets above), Moveme
 | 2 depletion events                                            | "Not enough history yet"                                              |
 | cutoff changed 10 → 6 after a crossing                        | historical crossing still counted at the cutoff recorded at that time |
 | item time zone boundary (event 11:30 pm local = next UTC day) | counted on the local service date                                     |
+
+## V1.1 separation of stock movement and freshness
+
+Bulk Count uses existing reasons and source derivation (stock_count -> count,
+delivery_restock -> delivery). Each changed product produces one normal ledger
+entry; unchanged products produce none. Negative Stock Count remains Observed
+Depletion, not a confirmed sale. Date/rule mutations never touch stock or the
+quantity ledger. Freshness/expiration Dashboard cards count distinct active
+products using their nearest expiration/oldest manufacture and configured rule.
+Expiration windows overlap and are labelled; do not sum the cards as unique
+products. No dates change stock status, Order Soon or usage analytics. No FIFO,
+automatic depletion, Tasks or notifications are introduced.

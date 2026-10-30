@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap">
+<style>
+body{margin:0;background:#0b0b0d}
+:root{--background:#0b0b0d;--foreground:#f6f3ed;--card:#141416;--primary:#f2a65a;--primary-foreground:#1c1007;--secondary:#1b1b1e;--muted:#202024;--muted-foreground:#aaa7a1;--border:rgba(255,255,255,.12);--ring:#f2a65a;--surface:#141416;--faint:#666460}
+[data-theme="light"]{--background:#e9e7e2;--foreground:#1c1a17;--card:#ffffff;--primary:#d97706;--primary-foreground:#ffffff;--secondary:#f1efe9;--muted:#ede9e2;--muted-foreground:rgba(28,26,23,.6);--border:rgba(0,0,0,.12);--ring:#d97706;--surface:#f4f2ee;--faint:rgba(28,26,23,.4)}
+a{color:var(--foreground)}a:hover{color:var(--primary)}
+button{font-family:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--surface);color:var(--foreground);font-family:Geist,Inter,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased">
+
+<div style="width:1520px;margin:0 auto;padding:28px 40px 8px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em">The Lineup · Recipe detail reference</h1>
+      <span style="{{ badgeS }}">{{ badgeT }}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <sc-if value="{{ efOn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;margin-right:20px"><span style="{{ S.eb }}">Presentation specs</span>
+      <sc-for list="{{ presBtns }}" as="b" hint-placeholder-count="2"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}">{{ b.label }}</button></sc-for></div></sc-if>
+      <span style="{{ S.eb }}">Theme</span>
+      <sc-for list="{{ themes }}" as="b" hint-placeholder-count="2"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}">{{ b.label }}</button></sc-for>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px">
+    <sc-for list="{{ concepts }}" as="b" hint-placeholder-count="4"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}"><span style="font-size:16px;font-weight:600">{{ b.label }}</span><span style="font-size:13px;font-weight:400;color:var(--muted-foreground)">{{ b.sub }}</span></button></sc-for>
+  </div>
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;align-items:center;gap:8px"><span style="{{ S.eb }}">Recipe</span>
+      <sc-for list="{{ states }}" as="b" hint-placeholder-count="2"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}">{{ b.label }}</button></sc-for></div>
+    <sc-if value="{{ single }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px"><span style="{{ S.eb }}">Example</span>
+      <sc-for list="{{ singles }}" as="b" hint-placeholder-count="2"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}">{{ b.label }}</button></sc-for></div></sc-if>
+    <div style="display:flex;align-items:center;gap:8px"><span style="{{ S.eb }}">Viewport</span>
+      <sc-for list="{{ vps }}" as="b" hint-placeholder-count="3"><button aria-pressed="{{ b.pressed }}" onClick="{{ b.click }}" style="{{ b.style }}">{{ b.label }}</button></sc-for></div>
+  </div>
+</div>
+
+<div style="width:1520px;margin:0 auto;padding:4px 40px 0;box-sizing:border-box"><div style="{{ bannerS }}"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:700 12px/1.3 Geist,Inter,system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase">{{ bannerT }}</span><span style="font-size:13px;line-height:1.4;color:var(--muted-foreground)">{{ bannerSub }}</span></div><sc-if value="{{ notE }}" hint-placeholder-val="{{ false }}"><button onClick="{{ showE }}" style="{{ showEStyle }}">Show approved Concept E</button></sc-if></div></div>
+<div style="width:1520px;margin:0 auto;padding:12px 40px 40px;box-sizing:border-box;display:flex;justify-content:center">
+<div id="reference-frame" data-screen-label="Recipe detail reference frame" style="width:{{ frameW }}px;flex:none;box-sizing:border-box;border:1px solid var(--border);border-radius:16px;overflow:hidden;color:var(--foreground);background:radial-gradient(circle at 88% -10%,rgba(242,166,90,.14),transparent 28rem),radial-gradient(circle at 8% 38%,rgba(125,211,252,.05),transparent 24rem),var(--background)">
+<div style="padding:{{ pad }}">
+
+<!-- ================= A — MODERN RECIPE BOOK ================= -->
+<sc-if value="{{ cA }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:28px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;padding-bottom:24px;border-bottom:1px solid var(--border);margin-top:4px">
+      <div style="min-width:0">
+        <div style="{{ S.eb }}"><span style="{{ S.mono }}">No. 14</span> · Mojito &amp; Refreshers</div>
+        <h1 style="margin:8px 0 0;font-size:{{ titleA }}px;line-height:1.02;font-weight:600;letter-spacing:-.025em">Coco Mojito</h1>
+        <p style="margin:10px 0 0;font-size:17px;color:var(--muted-foreground)">Coconut water, mint and lime over rum</p>
+      </div>
+      <dl aria-label="Quick glance" style="margin:0;display:grid;grid-template-columns:{{ qgCols }};gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;{{ qgW }}">
+        <sc-for list="{{ glance }}" as="g" hint-placeholder-count="3"><div style="background:var(--card);padding:10px 16px"><dt style="{{ S.eb }}">{{ g.k }}</dt><dd style="margin:5px 0 0;font-size:15px;font-weight:600;white-space:nowrap">{{ g.v }}</dd></div></sc-for>
+      </dl>
+    </div>
+  </div>
+
+  <sc-if value="{{ aTabsOn }}" hint-placeholder-val="{{ false }}">
+    <div role="tablist" aria-label="Recipe variants" style="display:flex;gap:8px">
+      <sc-for list="{{ aTabs }}" as="t" hint-placeholder-count="2"><button role="tab" id="{{ t.id }}" aria-selected="{{ t.sel }}" tabIndex="{{ t.tab }}" onClick="{{ t.click }}" onKeyDown="{{ t.key }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+    </div>
+  </sc-if>
+
+  <div role="{{ aPanelRole }}" style="{{ S.card }};overflow:hidden">
+    <div style="display:grid;grid-template-columns:{{ aCols }}">
+      <sc-for list="{{ aVs }}" as="v" hint-placeholder-count="2">
+      <article style="min-width:0;box-sizing:border-box;padding:{{ colPad }};border-left:{{ v.divider }};display:flex;flex-direction:column;gap:26px">
+        <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">{{ v.label }}</h2>
+
+        <section aria-label="Ingredients">
+          <h3 style="{{ S.eb }}">Ingredients</h3>
+          <ul style="list-style:none;margin:8px 0 0;padding:0">
+            <sc-for list="{{ v.ing }}" as="r" hint-placeholder-count="6">
+            <li style="display:flex;align-items:center;gap:14px;min-height:48px;box-sizing:border-box;padding:6px 12px;margin:0 -12px;border-radius:10px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 var(--border)">
+              <span style="{{ S.mono }};width:{{ amtW }}px;flex:none;font-size:18px;font-weight:600">{{ r.amount }}</span>
+              <span style="flex:1;min-width:0;font-size:17px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></span>
+              <sc-if value="{{ r.showWas }}"><span style="font-size:13px;color:var(--muted-foreground);white-space:nowrap">was {{ r.was }}</span></sc-if>
+              <sc-if value="{{ r.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions" title="Differs between versions">Δ</span></sc-if>
+            </li></sc-for>
+          </ul>
+          <section aria-label="Quick measure" style="{{ S.note }};margin-top:14px;padding:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px">
+              <h3 style="{{ S.eb }}">Quick Measure</h3>
+              <sc-if value="{{ v.hasRatio }}"><span style="{{ S.mono }};background:var(--background);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:500">Oz Ratio {{ v.ratio }}</span></sc-if>
+            </div>
+            <div style="{{ S.mono }};margin-top:8px;font-size:15px">{{ v.qm }}</div>
+            <p style="margin:6px 0 0;font-size:13px;color:var(--muted-foreground)">{{ v.qmExtra }}</p>
+          </section>
+        </section>
+
+        <section aria-label="Method">
+          <h3 style="{{ S.eb }}">Method</h3>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-size:26px;font-weight:600;letter-spacing:-.01em">{{ v.method }}<sc-if value="{{ v.methodChanged }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if></div>
+        </section>
+
+        <section aria-label="Steps">
+          <h3 style="{{ S.eb }}">Steps</h3>
+          <ol style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px">
+            <sc-for list="{{ v.steps }}" as="st" hint-placeholder-count="5">
+            <li style="display:flex;align-items:flex-start;gap:14px;padding:10px 12px;margin:0 -12px;border-radius:10px;background:{{ st.bg }}">
+              <span style="{{ S.mono }};flex:none;width:28px;height:28px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;font-size:13px;font-weight:600">{{ st.n }}</span>
+              <span style="flex:1;min-width:0;font-size:16px;line-height:1.5;padding-top:2px">{{ st.text }}</span>
+              <sc-if value="{{ st.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if>
+            </li></sc-for>
+          </ol>
+        </section>
+      </article></sc-for>
+    </div>
+  </div>
+
+  <section aria-label="Final presentation">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px"><h2 style="{{ S.eb }}">Final Presentation</h2><div style="flex:1;height:1px;background:var(--border)"></div></div>
+    <div style="display:grid;grid-template-columns:{{ aPresCols }};gap:28px;align-items:start">
+      <sc-for list="{{ aVs }}" as="v" hint-placeholder-count="2">
+      <div style="order:{{ v.order }};min-width:0;display:flex;flex-direction:column;gap:14px">
+        <h3 style="margin:0;font-size:16px;font-weight:600">{{ v.label }}</h3>
+        <dl style="margin:0;display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ v.pres }}" as="p" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:44px;box-sizing:border-box;padding:6px 12px;margin:0 -12px;border-radius:10px;background:{{ p.bg }};box-shadow:inset 0 -1px 0 var(--border)">
+            <dt style="{{ S.eb }}">{{ p.label }}</dt><dd style="margin:0;font-size:16px">{{ p.value }}</dd>
+            <sc-if value="{{ p.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if>
+          </div></sc-for>
+        </dl>
+        <sc-if value="{{ v.hasTips }}"><div style="{{ S.note }}"><h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3><p style="margin:6px 0 0;font-size:15px;line-height:1.5">{{ v.tips }}</p></div></sc-if>
+        <sc-if value="{{ v.hasBatch }}"><div style="{{ S.note }}"><h3 style="{{ S.eb }}">Batch</h3><p style="margin:6px 0 0;font-size:15px;line-height:1.5">{{ v.batch }}</p></div></sc-if>
+      </div></sc-for>
+      <figure style="order:{{ imgOrder }};grid-column:{{ imgSpan }};margin:0;justify-self:center;width:100%;max-width:{{ imgMax }}">
+        <div style="{{ S.ph1610 }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></svg><span style="{{ S.mono }};font-size:11px">finished drink photo · 16:10</span></div>
+        <figcaption style="{{ S.mono }};margin-top:8px;font-size:12px;color:var(--muted-foreground);text-align:center">Coco Mojito, as served</figcaption>
+      </figure>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= B — SERVICE SHEET ================= -->
+<sc-if value="{{ cB }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="display:grid;grid-template-columns:{{ bHead }};gap:20px;align-items:end;margin-top:2px">
+      <div style="min-width:0">
+        <div style="{{ S.eb }}"><span style="{{ S.mono }}">No. 14</span> · Mojito &amp; Refreshers</div>
+        <h1 style="margin:6px 0 0;font-size:{{ titleB }}px;line-height:1.05;font-weight:600;letter-spacing:-.02em">Coco Mojito</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:22px;justify-content:space-between;border:1px solid var(--border);border-radius:12px;background:var(--card);padding:12px 18px">
+        <div><div style="{{ S.eb }}">Method</div><div style="font-size:30px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;line-height:1.1;margin-top:4px">{{ bMethod }}</div></div>
+        <dl aria-label="Quick glance" style="margin:0;display:grid;grid-template-columns:auto auto;gap:4px 14px;font-size:14px">
+          <sc-for list="{{ glanceNoMethod }}" as="g" hint-placeholder-count="3"><dt style="color:var(--muted-foreground)">{{ g.k }}</dt><dd style="margin:0;font-weight:600">{{ g.v }}</dd></sc-for>
+        </dl>
+      </div>
+    </header>
+  </div>
+
+  <div style="display:grid;grid-template-columns:{{ bMain }};gap:20px;align-items:start">
+    <section aria-label="Ingredients" style="{{ S.card }};border-radius:12px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:{{ bIngCols }};gap:8px;align-items:end;padding:12px 16px;border-bottom:1px solid var(--border)">
+        <h2 style="{{ S.eb }}">Ingredients</h2>
+        <sc-if value="{{ dual }}"><span style="{{ S.eb }};text-align:right">Perfect</span><span style="{{ S.eb }};text-align:right">House</span></sc-if>
+        <sc-if value="{{ single }}"><span style="{{ S.eb }};text-align:right;color:var(--foreground)">{{ bSingleLabel }}</span></sc-if>
+      </div>
+      <sc-for list="{{ bRows }}" as="r" hint-placeholder-count="6">
+      <div style="display:grid;grid-template-columns:{{ bIngCols }};gap:8px;align-items:center;min-height:58px;box-sizing:border-box;padding:8px 16px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 var(--border)">
+        <div style="min-width:0;font-size:17px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></div>
+        <div style="{{ S.mono }};text-align:right;font-size:{{ bAmt }}px;font-weight:600">{{ r.p }}</div>
+        <sc-if value="{{ dual }}"><div style="{{ S.mono }};display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:{{ bAmt }}px;font-weight:{{ r.hw }};color:{{ r.hc }}"><sc-if value="{{ r.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs from Perfect">Δ</span></sc-if><span>{{ r.h }}</span></div></sc-if>
+      </div></sc-for>
+      <sc-if value="{{ bRatioOn }}">
+      <div style="display:grid;grid-template-columns:{{ bIngCols }};gap:8px;align-items:center;padding:10px 16px;background:color-mix(in srgb,var(--muted) 40%,transparent)">
+        <span style="{{ S.eb }}">Oz ratio</span>
+        <span style="{{ S.mono }};text-align:right;font-size:13px;font-weight:500">{{ bRatioP }}</span>
+        <sc-if value="{{ dual }}"><span style="{{ S.mono }};text-align:right;font-size:13px;font-weight:500">{{ bRatioH }}</span></sc-if>
+      </div></sc-if>
+    </section>
+
+    <section aria-label="Steps" style="{{ S.card }};border-radius:12px;padding:16px 18px">
+      <h2 style="{{ S.eb }}">Steps</h2>
+      <ol style="list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px">
+        <sc-for list="{{ bSteps }}" as="st" hint-placeholder-count="5">
+        <li style="display:flex;gap:14px;align-items:flex-start;padding:10px 12px;margin:0 -12px;border-radius:10px;background:{{ st.bg }}">
+          <span style="{{ S.mono }};flex:none;width:26px;font-size:22px;font-weight:600;line-height:1.2;color:var(--muted-foreground)">{{ st.n }}</span>
+          <div style="flex:1;min-width:0;font-size:17px;line-height:1.5">
+            <sc-if value="{{ st.same }}">{{ st.text }}</sc-if>
+            <sc-if value="{{ st.fork }}"><div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;gap:10px;align-items:baseline"><span style="{{ S.tag }}">Perfect</span><span>{{ st.p }}</span></div>
+              <div style="display:flex;gap:10px;align-items:baseline"><span style="{{ S.tag }}">House</span><span>{{ st.h }}</span></div>
+            </div></sc-if>
+          </div>
+          <sc-if value="{{ st.fork }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if>
+        </li></sc-for>
+      </ol>
+    </section>
+  </div>
+
+  <section aria-label="Final presentation" style="{{ S.card }};border-radius:12px;display:grid;grid-template-columns:{{ bPresCols }};overflow:hidden">
+    <figure style="margin:0;padding:16px;box-sizing:border-box;{{ bFigB }}">
+      <div style="{{ S.ph43 }}"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></svg><span style="{{ S.mono }};font-size:11px">finished drink photo · 4:3</span></div>
+    </figure>
+    <div style="padding:16px 18px;min-width:0;display:flex;flex-direction:column;gap:14px">
+      <div style="display:grid;grid-template-columns:{{ bPresRow }};gap:8px;align-items:end">
+        <h2 style="{{ S.eb }}">Final Presentation</h2>
+        <sc-if value="{{ dual }}"><span style="{{ S.eb }}">Perfect</span><span style="{{ S.eb }}">House</span></sc-if>
+        <sc-if value="{{ single }}"><span style="{{ S.eb }};color:var(--foreground)">{{ bSingleLabel }}</span></sc-if>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <sc-for list="{{ bPres }}" as="r" hint-placeholder-count="3">
+        <div style="display:grid;grid-template-columns:{{ bPresRow }};gap:8px;align-items:center;min-height:48px;box-sizing:border-box;padding:6px 10px;margin:0 -10px;border-radius:8px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 var(--border);font-size:16px">
+          <span style="{{ S.eb }}">{{ r.label }}</span><span>{{ r.p }}</span>
+          <sc-if value="{{ dual }}"><span style="display:flex;align-items:center;gap:8px">{{ r.h }}<sc-if value="{{ r.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs from Perfect">Δ</span></sc-if></span></sc-if>
+        </div></sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:{{ bNoteCols }};gap:12px">
+        <sc-for list="{{ vs }}" as="v" hint-placeholder-count="2">
+        <div style="{{ S.note }}"><h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3><p style="margin:6px 0 0;font-size:15px;line-height:1.5">{{ v.tips }}</p><sc-if value="{{ v.hasBatch }}"><p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if></div></sc-for>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= C — EDITORIAL ================= -->
+<sc-if value="{{ cC }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:{{ cMax }};margin:0 auto;display:flex;flex-direction:column;gap:{{ cGap }}px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="margin-top:{{ cTop }}px;text-align:center">
+      <div style="{{ S.eb }}"><span style="{{ S.mono }}">No. 14</span> · Mojito &amp; Refreshers</div>
+      <h1 style="margin:14px 0 0;font-size:{{ titleC }}px;line-height:1;font-weight:300;letter-spacing:-.035em">Coco Mojito</h1>
+      <p style="margin:16px auto 0;max-width:520px;font-size:19px;line-height:1.5;color:var(--muted-foreground)">Coconut water, mint and lime over rum</p>
+    </header>
+    <dl aria-label="Quick glance" style="margin:{{ cTop }}px 0 0;display:grid;grid-template-columns:{{ qgCCols }};border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+      <sc-for list="{{ glance }}" as="g" hint-placeholder-count="4"><div style="padding:16px 12px;text-align:center"><dt style="{{ S.eb }}">{{ g.k }}</dt><dd style="margin:6px 0 0;font-size:17px;font-weight:500">{{ g.v }}</dd></div></sc-for>
+    </dl>
+    <div style="{{ S.eb }};margin-top:16px;text-align:center;color:var(--foreground)">{{ cLabel }}<sc-if value="{{ dual }}"><span style="color:var(--muted-foreground)"> · House Recipe differences noted beside each line</span></sc-if></div>
+  </div>
+
+  <section aria-label="Ingredients" style="max-width:{{ cText }};width:100%;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cGrid }};column-gap:56px;align-items:baseline;border-bottom:1px solid var(--border);padding-bottom:10px">
+      <h2 style="{{ S.eb }}"><span style="{{ S.mono }};color:var(--faint)">01</span>&nbsp;&nbsp;Ingredients</h2>
+      <sc-if value="{{ cMargin }}"><span style="{{ S.eb }}">House Recipe</span></sc-if>
+    </div>
+    <sc-for list="{{ cIng }}" as="r" hint-placeholder-count="6">
+    <div style="display:grid;grid-template-columns:{{ cGrid }};column-gap:56px;align-items:baseline;padding:11px 0">
+      <div style="display:flex;align-items:baseline;gap:12px;min-width:0">
+        <span style="font-size:20px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="color:var(--muted-foreground);font-size:15px"> · {{ r.prep }}</span></sc-if></span>
+        <span style="flex:1;min-width:16px;align-self:flex-end;margin-bottom:6px;border-bottom:1px dotted var(--faint)"></span>
+        <span style="{{ S.mono }};font-size:20px;font-weight:500">{{ r.amount }}</span>
+      </div>
+      <sc-if value="{{ r.hasNote }}"><div style="display:flex;align-items:center;gap:8px;font-size:15px;padding-top:{{ cNoteTop }}px"><span style="{{ S.delta }}" role="img" aria-label="Differs in House Recipe">Δ</span><span><strong>House Recipe</strong> · <span style="{{ S.mono }}">{{ r.note }}</span></span></div></sc-if>
+    </div></sc-for>
+    <div style="{{ S.mono }};margin-top:10px;font-size:13px;color:var(--muted-foreground)">Quick measure {{ cQm }}<sc-if value="{{ cHasRatio }}"> · Oz ratio {{ cRatio }}</sc-if></div>
+  </section>
+
+  <section aria-label="Method" style="max-width:{{ cText }};width:100%;margin:0 auto">
+    <div style="border-bottom:1px solid var(--border);padding-bottom:10px"><h2 style="{{ S.eb }}"><span style="{{ S.mono }};color:var(--faint)">02</span>&nbsp;&nbsp;Method</h2></div>
+    <div style="margin-top:14px;font-size:{{ cMethodSize }}px;font-weight:300;letter-spacing:-.025em;line-height:1.1">{{ cMethod }}</div>
+  </section>
+
+  <section aria-label="Steps" style="max-width:{{ cText }};width:100%;margin:0 auto">
+    <div style="display:grid;grid-template-columns:{{ cGrid }};column-gap:56px;align-items:baseline;border-bottom:1px solid var(--border);padding-bottom:10px">
+      <h2 style="{{ S.eb }}"><span style="{{ S.mono }};color:var(--faint)">03</span>&nbsp;&nbsp;Steps</h2>
+      <sc-if value="{{ cMargin }}"><span style="{{ S.eb }}">House Recipe</span></sc-if>
+    </div>
+    <ol style="list-style:none;margin:0;padding:0">
+      <sc-for list="{{ cSteps }}" as="st" hint-placeholder-count="5">
+      <li style="display:grid;grid-template-columns:{{ cGrid }};column-gap:56px;align-items:start;padding:14px 0">
+        <div style="display:flex;gap:18px;min-width:0"><span style="{{ S.mono }};flex:none;width:34px;font-size:28px;font-weight:300;line-height:1.1;color:var(--faint)">{{ st.n }}</span><span style="font-size:19px;line-height:1.55">{{ st.text }}</span></div>
+        <sc-if value="{{ st.hasNote }}"><div style="display:flex;align-items:flex-start;gap:8px;font-size:15px;line-height:1.5;padding-top:{{ cStepNoteTop }}px;padding-left:{{ cStepNoteLeft }}px"><span style="{{ S.delta }}" role="img" aria-label="Differs in House Recipe">Δ</span><span><strong>House Recipe</strong> · {{ st.note }}</span></div></sc-if>
+      </li></sc-for>
+    </ol>
+  </section>
+
+  <section aria-label="Presentation" style="max-width:{{ cText }};width:100%;margin:0 auto">
+    <div style="border-bottom:1px solid var(--border);padding-bottom:10px"><h2 style="{{ S.eb }}"><span style="{{ S.mono }};color:var(--faint)">04</span>&nbsp;&nbsp;Final Presentation</h2></div>
+    <div style="display:grid;grid-template-columns:{{ cPresCols }};margin-top:6px">
+      <sc-for list="{{ cPres }}" as="p" hint-placeholder-count="3">
+      <div style="padding:16px {{ cPresPad }}px;border-left:{{ p.bl }};min-width:0"><div style="{{ S.eb }}">{{ p.label }}</div><div style="margin-top:8px;font-size:20px">{{ p.value }}</div>
+        <sc-if value="{{ p.hasNote }}"><div style="margin-top:8px;display:flex;gap:8px;align-items:center;font-size:15px"><span style="{{ S.delta }}" role="img" aria-label="Differs in House Recipe">Δ</span><span><strong>House Recipe</strong> · {{ p.note }}</span></div></sc-if></div></sc-for>
+    </div>
+  </section>
+
+  <figure style="margin:0">
+    <div style="{{ cPh }}"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></svg><span style="{{ S.mono }};font-size:11px">finished drink photo · wide</span></div>
+    <figcaption style="{{ S.mono }};margin-top:10px;font-size:12px;color:var(--muted-foreground)">Coco Mojito, as served</figcaption>
+  </figure>
+
+  <section aria-label="Notes" style="max-width:{{ cText }};width:100%;margin:0 auto;display:grid;grid-template-columns:{{ cNoteCols }};gap:28px;border-top:1px solid var(--border);padding-top:22px">
+    <sc-for list="{{ vs }}" as="v" hint-placeholder-count="2">
+    <div><h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3><p style="margin:8px 0 0;font-size:17px;line-height:1.6">{{ v.tips }}</p><sc-if value="{{ v.hasBatch }}"><p style="margin:12px 0 0;font-size:15px;line-height:1.55;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if></div></sc-for>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= G — BARTENDER RECIPE BOOK ================= -->
+<sc-if value="{{ cG }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:{{ gGap }}px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="margin-top:{{ eTop }}px;text-align:center">
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:300;font-size:{{ titleG }}px;line-height:1;letter-spacing:-.02em">Coco Mojito</h1>
+      <div style="{{ S.eb }};margin-top:14px;letter-spacing:.1em">#14 · Mojito · Popular · On Menu</div>
+    </header>
+    <ul aria-label="Quick glance" style="{{ gStrip }}">
+      <sc-for list="{{ gGlance }}" as="g" hint-placeholder-count="4"><li style="display:inline-flex;align-items:center;justify-content:center;gap:12px"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">{{ g.k }}: </span><span style="font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">{{ g.v }}</span><sc-if value="{{ g.diff }}"><span role="img" aria-label="Differs between versions" title="Differs between versions" style="display:inline-flex"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg></span></sc-if><sc-if value="{{ g.sep }}"><span aria-hidden="true" style="color:var(--faint)">·</span></sc-if></li></sc-for>
+    </ul>
+  </div>
+
+  <sc-if value="{{ jumpOn }}"><nav aria-label="Jump to section" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><sc-for list="{{ gJump }}" as="j" hint-placeholder-count="3"><a href="{{ j.href }}" onClick="{{ j.click }}" style="{{ jumpS }}">{{ j.label }}</a></sc-for></nav></sc-if>
+
+  <div style="{{ gWrap }}">
+    <div style="{{ gPanel }}">
+      <sc-for list="{{ gV }}" as="v" hint-placeholder-count="2">
+      <article id="{{ v.id }}" style="{{ v.art }}">
+        <h2 style="{{ gR.head }};margin:0;padding-bottom:14px;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:{{ gH2 }}px;line-height:1.1;letter-spacing:-.01em">{{ v.label }}</h2>
+        <sc-if value="{{ v.hasAdj }}"><div style="{{ gR.adj }};padding-bottom:22px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:14px;line-height:1.4">
+          <span style="display:inline-flex;align-items:center;gap:8px"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg><h3 style="{{ S.eb }};color:var(--foreground)">House adjustments</h3></span>
+          <sc-for list="{{ gAdj }}" as="a" hint-placeholder-count="1"><span><span style="font-weight:600">{{ a.label }}</span><span style="{{ S.mono }};margin-left:8px">{{ a.t }}</span></span></sc-for>
+        </div></sc-if>
+        <section aria-label="Ingredients" style="{{ gR.ing }};border-top:1px solid var(--border);padding:16px 0 12px;min-width:0">
+          <h3 style="{{ S.eb }}">Ingredients</h3>
+          <ul style="list-style:none;margin:8px 0 0;padding:0">
+            <sc-for list="{{ v.rows }}" as="r" hint-placeholder-count="6">
+            <li style="display:grid;grid-template-columns:minmax(0,1fr) auto 22px;align-items:center;column-gap:10px;min-height:46px;box-sizing:border-box;{{ r.pad }};background:{{ r.bg }};box-shadow:{{ r.sh }}">
+              <span style="font-size:17px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="font-size:15px;color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></span>
+              <span style="{{ S.mono }};text-align:right;font-size:19px;font-weight:{{ r.aw }}">{{ r.amountF }}</span>
+              <span style="display:flex;align-items:center;justify-content:center"><sc-if value="{{ r.mark }}"><span role="img" aria-label="House adjustment" title="House adjustment" style="display:inline-flex"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg></span></sc-if></span>
+            </li></sc-for>
+          </ul>
+        </section>
+        <div style="{{ gR.qm }};padding:0 0 28px;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px">
+          <div><span style="{{ S.eb }}">Quick Measure</span><span style="{{ S.mono }};margin-left:12px;font-size:15px;font-weight:500;white-space:nowrap">{{ v.qmF }} oz</span></div>
+          <sc-if value="{{ v.hasRatio }}"><span style="{{ S.mono }};font-size:13px;white-space:nowrap;color:var(--muted-foreground)">Ratio {{ v.ratio }}</span></sc-if>
+        </div>
+        <section aria-label="Method" style="{{ gR.meth }};border-top:1px solid var(--border);padding:16px 0 28px">
+          <h3 style="{{ S.eb }};color:var(--foreground)">Method</h3>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:10px;font-size:28px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;line-height:1.1">{{ v.method }}<sc-if value="{{ v.methodAdj }}"><span role="img" aria-label="House adjustment" title="House adjustment" style="display:inline-flex"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg></span></sc-if></div>
+        </section>
+        <section aria-label="Steps" style="{{ gR.steps }};border-top:1px solid var(--border);padding:16px 0 28px;min-width:0">
+          <h3 style="{{ S.eb }}">Steps</h3>
+          <ol style="list-style:none;margin:8px 0 0;padding:0">
+            <sc-for list="{{ v.steps }}" as="st" hint-placeholder-count="5">
+            <li style="display:grid;grid-template-columns:34px minmax(0,1fr) 22px;column-gap:8px;align-items:start;{{ st.pad }};background:{{ st.bg }};box-shadow:{{ st.sh }}">
+              <span style="{{ S.mono }};padding-top:3px;font-size:15px;font-weight:600;color:var(--muted-foreground)">{{ st.n2 }}</span>
+              <span style="font-size:17px;line-height:1.5">{{ st.text }}</span>
+              <span style="display:flex;justify-content:center;padding-top:4px"><sc-if value="{{ st.mark }}"><span role="img" aria-label="House adjustment" title="House adjustment" style="display:inline-flex"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg></span></sc-if></span>
+            </li></sc-for>
+          </ol>
+        </section>
+        <sc-if value="{{ v.hasTips }}"><section aria-label="{{ v.tipsLabel }}" style="{{ gR.notes }};border-top:1px solid var(--border);padding:16px 0 0">
+          <h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3>
+          <p style="margin:8px 0 0;font-size:15px;line-height:1.6">{{ v.tips }}</p>
+          <sc-if value="{{ v.hasBatch }}"><p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if>
+        </section></sc-if>
+      </article></sc-for>
+    </div>
+  </div>
+
+  <section id="g-pres" aria-label="Final presentation" style="border-top:1px solid var(--border);padding-top:{{ gPresPad }}px">
+    <h2 style="margin:0;text-align:center;font-family:Newsreader,Georgia,serif;font-weight:300;font-size:{{ gPresH }}px;letter-spacing:-.01em">Final Presentation</h2>
+    <div style="display:grid;grid-template-columns:{{ gPresCols }};gap:{{ gPresGap }}px;margin-top:32px;justify-items:center">
+      <sc-for list="{{ gPresVs }}" as="pv" hint-placeholder-count="1">
+      <div style="min-width:0;width:100%;display:flex;flex-direction:column;align-items:center;gap:28px">
+        <sc-if value="{{ pv.hasTitle }}"><h3 style="{{ S.eb }};color:var(--foreground);order:0">{{ pv.title }}</h3></sc-if>
+        <dl style="margin:0;display:grid;grid-template-columns:{{ pv.cols }};gap:12px 32px;text-align:center;order:{{ pv.dlOrder }};width:100%;max-width:640px">
+          <sc-for list="{{ pv.rows }}" as="p" hint-placeholder-count="3"><div style="padding:8px 10px;min-width:0;background:{{ p.bg }}"><dt style="{{ S.eb }}">{{ p.label }}</dt><dd style="margin:6px 0 0;font-size:18px;font-weight:600;line-height:1.35">{{ p.value }}<sc-if value="{{ p.changed }}"><span role="img" aria-label="House adjustment" title="House adjustment" style="display:inline-flex;margin-left:8px;vertical-align:middle"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="display:block"><path d="M6 1 11 6 6 11 1 6Z" fill="var(--primary)" fill-opacity=".35" stroke="var(--foreground)" stroke-width="1.4"/></svg></span></sc-if></dd></div></sc-for>
+        </dl>
+        <figure style="margin:0;width:100%;max-width:{{ pv.phMax }};order:{{ pv.figOrder }}">
+          <div style="aspect-ratio:{{ gPhA }};width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--primary) 14%,transparent),transparent 64%),var(--card);overflow:hidden">
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Placeholder illustration of a Coco Mojito in a ribbed rocks glass with ice and mint" style="display:block;width:100%;height:100%">
+              <ellipse cx="200" cy="462" rx="104" ry="10" fill="#000" opacity=".28"/>
+              <path d="M122 140 L278 140 L262 440 Q261 454 247 454 L153 454 Q139 454 138 440 Z" fill="#fff" fill-opacity=".07" stroke="var(--muted-foreground)" stroke-width="2.5"/>
+              <path d="M126 190 L274 190 L262 440 Q261 450 247 450 L153 450 Q139 450 138 440 Z" fill="#d6ecc8" fill-opacity=".26"/>
+              <g stroke="#fff" stroke-opacity=".2" stroke-width="3" stroke-linecap="round"><path d="M143.8 140 L155.4 440"/><path d="M167.2 140 L174 440"/><path d="M189.1 140 L191.3 440"/><path d="M210.9 140 L208.7 440"/><path d="M232.8 140 L226 440"/><path d="M256.2 140 L244.6 440"/></g>
+              <g fill="#fff" fill-opacity=".2" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"><rect x="150" y="212" width="48" height="48" rx="9" transform="rotate(-12 174 236)"/><rect x="204" y="246" width="46" height="46" rx="9" transform="rotate(10 227 269)"/><rect x="156" y="302" width="46" height="46" rx="9" transform="rotate(8 179 325)"/><rect x="208" y="344" width="44" height="44" rx="9" transform="rotate(-8 230 366)"/><rect x="160" y="388" width="42" height="40" rx="9" transform="rotate(14 181 408)"/></g>
+              <g><path d="M205 150 Q200 120 198 92" stroke="#3b7a4a" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="180" cy="108" rx="32" ry="15" transform="rotate(-38 180 108)" fill="#3f8a52"/><ellipse cx="222" cy="98" rx="32" ry="15" transform="rotate(34 222 98)" fill="#5fb06e"/><ellipse cx="200" cy="72" rx="30" ry="14" transform="rotate(-92 200 72)" fill="#4a9a5c"/><ellipse cx="166" cy="138" rx="28" ry="13" transform="rotate(-18 166 138)" fill="#5fb06e"/><ellipse cx="238" cy="132" rx="28" ry="13" transform="rotate(24 238 132)" fill="#3f8a52"/></g>
+              <sc-if value="{{ pv.lime }}"><g transform="translate(270 140) rotate(-14)"><circle r="40" fill="#b9d04a"/><circle r="34" fill="#eef5b8"/><g stroke="#cfdd7a" stroke-width="2"><path d="M0 0 L0 -34"/><path d="M0 0 L29 -17"/><path d="M0 0 L29 17"/><path d="M0 0 L0 34"/><path d="M0 0 L-29 17"/><path d="M0 0 L-29 -17"/></g><circle r="5" fill="#cfdd7a"/></g></sc-if>
+            </svg>
+          </div>
+          <figcaption style="{{ S.mono }};margin-top:10px;font-size:12px;color:var(--muted-foreground);text-align:center">Coco Mojito, as served · placeholder</figcaption>
+        </figure>
+      </div></sc-for>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= E — EDITORIAL RECIPE BOOK ================= -->
+<sc-if value="{{ cE }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:{{ eMax }};margin:0 auto;display:flex;flex-direction:column;gap:{{ eGap }}px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="margin-top:{{ eTop }}px;text-align:center">
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:300;font-size:{{ titleE }}px;line-height:1;letter-spacing:-.02em">Coco Mojito</h1>
+      <div style="{{ S.eb }};margin-top:16px">Signature · Rum · On Menu · Popular</div>
+    </header>
+    <sc-if value="{{ eStrip }}"><dl aria-label="Quick glance" style="margin:{{ eTop }}px auto 0;max-width:{{ eStripW }};display:grid;grid-template-columns:{{ eStripCols }};border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+      <sc-for list="{{ eGlance }}" as="g" hint-placeholder-count="4"><div style="padding:14px 16px;text-align:center;border-left:{{ g.bl }};border-top:{{ g.bt }}"><dt style="{{ S.eb }}">{{ g.k }}</dt><dd style="margin:5px 0 0;font-family:Newsreader,Georgia,serif;font-size:19px">{{ g.v }}</dd></div></sc-for>
+    </dl></sc-if>
+  </div>
+
+  <sc-if value="{{ jumpOn }}"><nav aria-label="Jump to recipe" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><sc-for list="{{ eJump }}" as="j" hint-placeholder-count="2"><a href="{{ j.href }}" onClick="{{ j.click }}" style="{{ jumpS }}">{{ j.label }}</a></sc-for></nav></sc-if>
+
+  <div style="display:grid;grid-template-columns:{{ eWrap }};column-gap:72px;justify-content:center;align-items:start">
+    <div style="{{ ePanel }}">
+      <sc-for list="{{ eV }}" as="v" hint-placeholder-count="2">
+      <article id="{{ v.id }}" style="{{ v.art }}">
+        <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:{{ eH2 }}px;line-height:1.1;letter-spacing:-.01em">{{ v.label }}</h2>
+        <section aria-label="Ingredients">
+          <h3 style="{{ S.eb }};padding-bottom:10px;border-bottom:1px solid var(--border)">Ingredients</h3>
+          <ul style="list-style:none;margin:0;padding:0">
+            <sc-for list="{{ v.rows }}" as="r" hint-placeholder-count="6">
+            <li style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:12px;padding:11px 12px;margin:0 -12px;background:{{ r.bg }};box-shadow:{{ r.mark }}">
+              <div style="display:flex;align-items:baseline;gap:12px;min-width:0"><span style="font-family:Newsreader,Georgia,serif;font-size:21px;white-space:nowrap">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="font-size:16px;font-style:italic;color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></span><span style="flex:1;min-width:14px;align-self:flex-end;margin-bottom:6px;border-bottom:1px dotted var(--faint)"></span></div>
+              <span style="{{ S.mono }};font-size:20px;font-weight:{{ r.aw }}">{{ r.amount }}</span>
+              <sc-if value="{{ r.adj }}"><span style="grid-column:1 / -1;margin-top:2px;font-family:Newsreader,Georgia,serif;font-size:14px;font-style:italic;color:var(--muted-foreground)">House adjustment</span></sc-if>
+            </li></sc-for>
+          </ul>
+          <sc-if value="{{ v.qmInline }}"><div style="margin-top:16px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px">
+            <span><span style="{{ S.eb }}">Quick Measure</span><span style="{{ S.mono }};margin-left:12px;font-size:16px;font-weight:500">{{ v.qmF }}</span><span style="font-size:13px;color:var(--muted-foreground)"> oz</span></span>
+            <sc-if value="{{ v.hasRatio }}"><span style="{{ S.mono }};font-size:13px;color:var(--muted-foreground)">Ratio {{ v.ratio }}</span></sc-if>
+          </div></sc-if>
+        </section>
+        <section aria-label="Method">
+          <h3 style="{{ S.eb }};padding-bottom:10px;border-bottom:1px solid var(--border)">Method</h3>
+          <div style="margin-top:12px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;font-family:Newsreader,Georgia,serif;font-weight:300;font-size:{{ eMeth }}px;line-height:1.1;letter-spacing:-.02em">{{ v.method }}<sc-if value="{{ v.methodAdj }}"><span style="font-size:14px;font-style:italic;letter-spacing:0;font-weight:400;color:var(--muted-foreground)">House adjustment</span></sc-if></div>
+        </section>
+        <section aria-label="Steps">
+          <h3 style="{{ S.eb }};padding-bottom:10px;border-bottom:1px solid var(--border)">Steps</h3>
+          <ol style="list-style:none;margin:0;padding:0">
+            <sc-for list="{{ v.steps }}" as="st" hint-placeholder-count="5">
+            <li style="display:grid;grid-template-columns:40px minmax(0,1fr);column-gap:6px;align-items:baseline;padding:14px 12px;margin:0 -12px;background:{{ st.bg }};box-shadow:{{ st.mark }}">
+              <span style="font-family:Newsreader,Georgia,serif;font-style:italic;font-weight:300;font-size:28px;line-height:1;color:var(--muted-foreground)">{{ st.n }}</span>
+              <div><span style="font-family:Newsreader,Georgia,serif;font-size:19px;line-height:1.55">{{ st.text }}</span><sc-if value="{{ st.adj }}"><div style="margin-top:4px;font-family:Newsreader,Georgia,serif;font-size:14px;font-style:italic;color:var(--muted-foreground)">House adjustment</div></sc-if></div>
+            </li></sc-for>
+          </ol>
+        </section>
+        <sc-if value="{{ v.hasTips }}"><section aria-label="{{ v.tipsLabel }}" style="border-left:1px solid var(--muted-foreground);padding:2px 0 2px 18px">
+          <h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3>
+          <p style="margin:8px 0 0;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:17px;line-height:1.6">{{ v.tips }}</p>
+          <sc-if value="{{ v.hasBatch }}"><p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if>
+        </section></sc-if>
+      </article></sc-for>
+    </div>
+    <sc-if value="{{ railOn }}"><aside style="display:flex;flex-direction:column;gap:28px">
+      <dl aria-label="Quick glance" style="margin:0;border-top:1px solid var(--border)">
+        <sc-for list="{{ eGlance }}" as="g" hint-placeholder-count="4"><div style="padding:12px 0;border-bottom:1px solid var(--border)"><dt style="{{ S.eb }}">{{ g.k }}</dt><dd style="margin:5px 0 0;font-family:Newsreader,Georgia,serif;font-size:19px">{{ g.v }}</dd></div></sc-for>
+      </dl>
+      <section aria-label="Quick measure">
+        <h3 style="{{ S.eb }}">Quick Measure</h3>
+        <div style="{{ S.mono }};margin-top:8px;font-size:20px;font-weight:500">{{ eQm }}<span style="font-size:13px;font-weight:400;color:var(--muted-foreground)"> oz</span></div>
+        <sc-if value="{{ eHasRatio }}"><div style="{{ S.mono }};margin-top:8px;font-size:13px;color:var(--muted-foreground)">Ratio {{ eRatio }}</div></sc-if>
+      </section>
+    </aside></sc-if>
+  </div>
+
+  <section aria-label="Final presentation" style="margin-top:24px">
+    <div style="display:flex;align-items:center;gap:20px"><div style="flex:1;height:1px;background:var(--border)"></div><h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:300;font-size:{{ ePresH }}px;letter-spacing:-.01em">Final Presentation</h2><div style="flex:1;height:1px;background:var(--border)"></div></div>
+    <div style="display:grid;grid-template-columns:{{ ePresCols }};gap:{{ ePresGap }}px;align-items:center;margin-top:36px">
+      <div style="min-width:0;display:grid;grid-template-columns:{{ ePresBlocks }};gap:{{ ePresBlockGap }}px 56px;align-content:center">
+        <sc-for list="{{ ePresVs }}" as="pv" hint-placeholder-count="1">
+        <div style="min-width:0">
+          <sc-if value="{{ pv.hasTitle }}"><h3 style="margin:0 0 6px;font-family:Newsreader,Georgia,serif;font-weight:400;font-size:24px">{{ pv.title }}</h3></sc-if><sc-if value="{{ pv.hasFig }}"><figure style="margin:0 0 20px;width:100%;max-width:{{ pv.phMax }}"><div style="aspect-ratio:{{ pv.phA }};width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:radial-gradient(circle at 50% 38%,color-mix(in srgb,var(--primary) 16%,transparent),transparent 62%),var(--card);overflow:hidden"><svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Placeholder illustration of a Coco Mojito in a ribbed rocks glass" style="display:block;width:100%;height:100%"><ellipse cx="200" cy="462" rx="104" ry="10" fill="#000" opacity=".28"/><path d="M122 140 L278 140 L262 440 Q261 454 247 454 L153 454 Q139 454 138 440 Z" fill="#fff" fill-opacity=".07" stroke="var(--muted-foreground)" stroke-width="2.5"/><path d="M126 190 L274 190 L262 440 Q261 450 247 450 L153 450 Q139 450 138 440 Z" fill="#d6ecc8" fill-opacity=".26"/><g stroke="#fff" stroke-opacity=".2" stroke-width="3" stroke-linecap="round"><path d="M143.8 140 L155.4 440"/><path d="M167.2 140 L174 440"/><path d="M189.1 140 L191.3 440"/><path d="M210.9 140 L208.7 440"/><path d="M232.8 140 L226 440"/><path d="M256.2 140 L244.6 440"/></g><g fill="#fff" fill-opacity=".2" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"><rect x="150" y="212" width="48" height="48" rx="9" transform="rotate(-12 174 236)"/><rect x="204" y="246" width="46" height="46" rx="9" transform="rotate(10 227 269)"/><rect x="156" y="302" width="46" height="46" rx="9" transform="rotate(8 179 325)"/><rect x="208" y="344" width="44" height="44" rx="9" transform="rotate(-8 230 366)"/><rect x="160" y="388" width="42" height="40" rx="9" transform="rotate(14 181 408)"/></g><g><path d="M205 150 Q200 120 198 92" stroke="#3b7a4a" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="180" cy="108" rx="32" ry="15" transform="rotate(-38 180 108)" fill="#3f8a52"/><ellipse cx="222" cy="98" rx="32" ry="15" transform="rotate(34 222 98)" fill="#5fb06e"/><ellipse cx="200" cy="72" rx="30" ry="14" transform="rotate(-92 200 72)" fill="#4a9a5c"/><ellipse cx="166" cy="138" rx="28" ry="13" transform="rotate(-18 166 138)" fill="#5fb06e"/><ellipse cx="238" cy="132" rx="28" ry="13" transform="rotate(24 238 132)" fill="#3f8a52"/></g><sc-if value="{{ pv.lime }}"><g transform="translate(270 140) rotate(-14)"><circle r="40" fill="#b9d04a"/><circle r="34" fill="#eef5b8"/><g stroke="#cfdd7a" stroke-width="2"><path d="M0 0 L0 -34"/><path d="M0 0 L29 -17"/><path d="M0 0 L29 17"/><path d="M0 0 L0 34"/><path d="M0 0 L-29 17"/><path d="M0 0 L-29 -17"/></g><circle r="5" fill="#cfdd7a"/></g></sc-if></svg></div><figcaption style="{{ S.mono }};margin-top:10px;font-size:12px;color:var(--muted-foreground)">Placeholder · {{ pv.title }}</figcaption></figure></sc-if>
+          <dl style="margin:0;display:grid;grid-template-columns:{{ pv.cols }};column-gap:24px">
+            <sc-for list="{{ pv.rows }}" as="p" hint-placeholder-count="3"><div style="padding:14px 12px;border-bottom:1px solid var(--border);background:{{ p.bg }};box-shadow:{{ p.mark }}"><dt style="{{ S.eb }}">{{ p.label }}</dt><dd style="margin:6px 0 0;font-family:Newsreader,Georgia,serif;font-size:23px">{{ p.value }}</dd></div></sc-for>
+          </dl>
+        </div></sc-for>
+        <sc-if value="{{ presShared }}"><p style="grid-column:1 / -1;margin:0;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:18px;line-height:1.5;color:var(--muted-foreground)">Tall mint crown · lime wheel at rim · clean clear finish</p></sc-if>
+      </div>
+      <sc-if value="{{ presShared }}"><figure style="margin:0;min-width:0;width:100%;max-width:{{ ePhMax }};justify-self:center">
+        <div style="aspect-ratio:{{ ePhA }};width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;background:radial-gradient(circle at 50% 38%,color-mix(in srgb,var(--primary) 16%,transparent),transparent 62%),var(--card);overflow:hidden">
+          <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Placeholder illustration of a Coco Mojito in a ribbed rocks glass with ice, mint and lime" style="display:block;width:100%;height:100%">
+            <ellipse cx="200" cy="462" rx="104" ry="10" fill="#000" opacity=".28"/>
+            <path d="M122 140 L278 140 L262 440 Q261 454 247 454 L153 454 Q139 454 138 440 Z" fill="#fff" fill-opacity=".07" stroke="var(--muted-foreground)" stroke-width="2.5"/>
+            <path d="M126 190 L274 190 L262 440 Q261 450 247 450 L153 450 Q139 450 138 440 Z" fill="#d6ecc8" fill-opacity=".26"/>
+            <g stroke="#fff" stroke-opacity=".2" stroke-width="3" stroke-linecap="round"><path d="M143.8 140 L155.4 440"/><path d="M167.2 140 L174 440"/><path d="M189.1 140 L191.3 440"/><path d="M210.9 140 L208.7 440"/><path d="M232.8 140 L226 440"/><path d="M256.2 140 L244.6 440"/></g>
+            <g fill="#fff" fill-opacity=".2" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"><rect x="150" y="212" width="48" height="48" rx="9" transform="rotate(-12 174 236)"/><rect x="204" y="246" width="46" height="46" rx="9" transform="rotate(10 227 269)"/><rect x="156" y="302" width="46" height="46" rx="9" transform="rotate(8 179 325)"/><rect x="208" y="344" width="44" height="44" rx="9" transform="rotate(-8 230 366)"/><rect x="160" y="388" width="42" height="40" rx="9" transform="rotate(14 181 408)"/></g>
+            <g fill="#fff" fill-opacity=".35"><circle cx="196" cy="230" r="3"/><circle cx="256" cy="320" r="2.5"/><circle cx="150" cy="280" r="2.5"/><circle cx="240" cy="210" r="2"/><circle cx="212" cy="400" r="3"/></g>
+            <g><path d="M205 150 Q200 120 198 92" stroke="#3b7a4a" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="180" cy="108" rx="32" ry="15" transform="rotate(-38 180 108)" fill="#3f8a52"/><ellipse cx="222" cy="98" rx="32" ry="15" transform="rotate(34 222 98)" fill="#5fb06e"/><ellipse cx="200" cy="72" rx="30" ry="14" transform="rotate(-92 200 72)" fill="#4a9a5c"/><ellipse cx="166" cy="138" rx="28" ry="13" transform="rotate(-18 166 138)" fill="#5fb06e"/><ellipse cx="238" cy="132" rx="28" ry="13" transform="rotate(24 238 132)" fill="#3f8a52"/></g>
+            <g transform="translate(270 140) rotate(-14)"><circle r="40" fill="#b9d04a"/><circle r="34" fill="#eef5b8"/><g stroke="#cfdd7a" stroke-width="2"><path d="M0 0 L0 -34"/><path d="M0 0 L29 -17"/><path d="M0 0 L29 17"/><path d="M0 0 L0 34"/><path d="M0 0 L-29 17"/><path d="M0 0 L-29 -17"/></g><circle r="5" fill="#cfdd7a"/></g>
+          </svg>
+        </div>
+        <figcaption style="{{ S.mono }};margin-top:10px;font-size:12px;color:var(--muted-foreground);text-align:center">Coco Mojito, as served · placeholder</figcaption>
+      </figure></sc-if>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= F — BARTENDER COMPARE ================= -->
+<sc-if value="{{ cF }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="display:grid;grid-template-columns:{{ fHead }};gap:20px;align-items:end;margin-top:2px">
+      <div style="min-width:0">
+        <h1 style="margin:0;font-size:{{ titleF }}px;line-height:1.02;font-weight:600;letter-spacing:-.025em">Coco Mojito</h1>
+        <div style="{{ S.eb }};margin-top:10px">Signature · Rum · On Menu · Popular</div>
+      </div>
+      <dl aria-label="Quick glance" style="margin:0;display:grid;grid-template-columns:{{ fGlanceCols }};gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <sc-for list="{{ eGlance }}" as="g" hint-placeholder-count="4"><div style="background:var(--card);padding:10px 16px"><dt style="{{ S.eb }}">{{ g.k }}</dt><dd style="margin:5px 0 0;font-size:15px;font-weight:600">{{ g.v }}</dd></div></sc-for>
+      </dl>
+    </header>
+  </div>
+
+  <sc-if value="{{ jumpOn }}"><nav aria-label="Jump to section" style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ fJump }}" as="j" hint-placeholder-count="3"><a href="{{ j.href }}" onClick="{{ j.click }}" style="{{ jumpS }}">{{ j.label }}</a></sc-for></nav></sc-if>
+
+  <sc-if value="{{ fChangesOn }}">
+  <section aria-label="What changes" style="border:1px solid color-mix(in srgb,var(--primary) 30%,transparent);background:color-mix(in srgb,var(--primary) 9%,var(--card));border-radius:12px;padding:12px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 32px">
+    <h2 style="{{ S.eb }};color:var(--foreground)">What changes?</h2>
+    <sc-if value="{{ fNoChange }}"><span style="font-size:15px;color:var(--muted-foreground)">Same build · House specification matches Perfect</span></sc-if>
+    <sc-for list="{{ fChanges }}" as="c" hint-placeholder-count="1">
+    <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px"><span style="font-size:16px;font-weight:600">{{ c.label }}</span><span style="font-size:15px"><span style="font-size:13px;margin-right:6px;color:var(--muted-foreground)">Perfect</span><strong style="{{ S.mono }};font-weight:600">{{ c.p }}</strong><span style="margin:0 8px;color:var(--muted-foreground)">→</span><span style="font-size:13px;margin-right:6px;color:var(--muted-foreground)">House</span><strong style="{{ S.mono }};font-weight:700">{{ c.h }}</strong></span></div></sc-for>
+  </section></sc-if>
+
+  <div style="display:grid;grid-template-columns:{{ fGrid }};gap:0 20px;align-items:start">
+    <sc-for list="{{ fV }}" as="v" hint-placeholder-count="2">
+    <article id="{{ v.id }}" style="{{ v.art }}">
+      <div style="{{ fAH }};padding:{{ fPad }};background:var(--secondary)"><h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">{{ v.label }}</h2></div>
+      <section aria-label="Ingredients" style="{{ fAI }};padding:{{ fPad }};border-top:1px solid var(--border);min-width:0">
+        <h3 style="{{ S.eb }}">Ingredients</h3>
+        <ul style="list-style:none;margin:6px 0 0;padding:0">
+          <sc-for list="{{ v.rows }}" as="r" hint-placeholder-count="6">
+          <li style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;min-height:56px;box-sizing:border-box;padding:6px 12px;margin:0 -12px;background:{{ r.bg }};box-shadow:{{ r.fmark }}">
+            <span style="font-size:18px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="font-size:15px;color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></span>
+            <span style="display:flex;align-items:center;gap:8px"><sc-if value="{{ r.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if><span style="{{ S.mono }};font-size:26px;font-weight:700;letter-spacing:-.01em">{{ r.amountF }}</span></span>
+          </li></sc-for>
+        </ul>
+        <div style="{{ S.note }};margin-top:14px;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px">
+          <span><span style="{{ S.eb }}">Quick Measure</span><span style="{{ S.mono }};margin-left:12px;font-size:16px;font-weight:600">{{ v.qmF }} oz</span></span>
+          <sc-if value="{{ v.hasRatio }}"><span style="{{ S.mono }};font-size:13px;color:var(--muted-foreground)">Ratio {{ v.ratio }}</span></sc-if>
+        </div>
+      </section>
+      <section aria-label="Method" style="{{ fAM }};padding:{{ fPad }};border-top:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <h3 style="{{ S.eb }}">Method</h3><span style="font-size:24px;font-weight:700;letter-spacing:.02em;text-transform:uppercase">{{ v.method }}</span>
+        <sc-if value="{{ v.methodChanged }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if>
+      </section>
+      <section aria-label="Steps" style="{{ fAS }};padding:{{ fPad }};border-top:1px solid var(--border);min-width:0">
+        <h3 style="{{ S.eb }}">Steps</h3>
+        <ol style="list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ v.steps }}" as="st" hint-placeholder-count="5">
+          <li style="display:flex;align-items:flex-start;gap:14px;padding:10px 12px;margin:0 -12px;background:{{ st.bg }};box-shadow:{{ st.mark }}">
+            <span style="{{ S.mono }};flex:none;width:28px;height:28px;border-radius:6px;background:var(--muted);display:grid;place-items:center;font-size:14px;font-weight:600">{{ st.n }}</span>
+            <span style="flex:1;min-width:0;font-size:16px;line-height:1.5;padding-top:2px">{{ st.text }}</span>
+            <sc-if value="{{ st.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs between versions">Δ</span></sc-if>
+          </li></sc-for>
+        </ol>
+      </section>
+      <sc-if value="{{ v.hasTips }}"><section aria-label="{{ v.tipsLabel }}" style="{{ fAN }};padding:{{ fPad }};border-top:1px solid var(--border)">
+        <div style="{{ S.note }}"><h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3><p style="margin:6px 0 0;font-size:15px;line-height:1.5">{{ v.tips }}</p><sc-if value="{{ v.hasBatch }}"><p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if></div>
+      </section></sc-if>
+    </article></sc-for>
+  </div>
+
+  <section id="f-pres" aria-label="Final presentation" style="{{ S.card }};border-radius:12px;padding:{{ fPad }};display:grid;grid-template-columns:{{ fImgCols }};gap:24px;align-items:center">
+    <div style="min-width:0;display:flex;flex-direction:column;gap:12px">
+      <h2 style="{{ S.eb }};color:var(--foreground)">Final Presentation</h2>
+      <div style="display:grid;grid-template-columns:{{ fBlocks }};gap:20px">
+        <sc-for list="{{ fPresVs }}" as="pv" hint-placeholder-count="1">
+        <div style="min-width:0">
+          <sc-if value="{{ pv.hasTitle }}"><h3 style="margin:0 0 4px;font-size:16px;font-weight:600">{{ pv.title }}</h3></sc-if>
+          <dl style="margin:0;display:grid;grid-template-columns:{{ pv.cols }};column-gap:16px">
+            <sc-for list="{{ pv.rows }}" as="p" hint-placeholder-count="3"><div style="padding:10px 12px;border-bottom:1px solid var(--border);background:{{ p.bg }};box-shadow:{{ p.mark }}"><dt style="{{ S.eb }}">{{ p.label }}</dt><dd style="margin:4px 0 0;font-size:17px;font-weight:600">{{ p.value }}</dd></div></sc-for>
+          </dl>
+        </div></sc-for>
+      </div>
+    </div>
+    <figure style="margin:0;width:100%;max-width:{{ fPhMax }};justify-self:center">
+      <div style="aspect-ratio:4/3;width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:12px;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--primary) 14%,transparent),transparent 65%),var(--muted);overflow:hidden">
+        <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Placeholder illustration of a Coco Mojito in a ribbed rocks glass with ice, mint and lime" style="display:block;width:100%;height:100%">
+          <ellipse cx="200" cy="462" rx="104" ry="10" fill="#000" opacity=".28"/>
+          <path d="M122 140 L278 140 L262 440 Q261 454 247 454 L153 454 Q139 454 138 440 Z" fill="#fff" fill-opacity=".07" stroke="var(--muted-foreground)" stroke-width="2.5"/>
+          <path d="M126 190 L274 190 L262 440 Q261 450 247 450 L153 450 Q139 450 138 440 Z" fill="#d6ecc8" fill-opacity=".26"/>
+          <g stroke="#fff" stroke-opacity=".2" stroke-width="3" stroke-linecap="round"><path d="M143.8 140 L155.4 440"/><path d="M167.2 140 L174 440"/><path d="M189.1 140 L191.3 440"/><path d="M210.9 140 L208.7 440"/><path d="M232.8 140 L226 440"/><path d="M256.2 140 L244.6 440"/></g>
+          <g fill="#fff" fill-opacity=".2" stroke="#fff" stroke-opacity=".4" stroke-width="1.5"><rect x="150" y="212" width="48" height="48" rx="9" transform="rotate(-12 174 236)"/><rect x="204" y="246" width="46" height="46" rx="9" transform="rotate(10 227 269)"/><rect x="156" y="302" width="46" height="46" rx="9" transform="rotate(8 179 325)"/><rect x="208" y="344" width="44" height="44" rx="9" transform="rotate(-8 230 366)"/><rect x="160" y="388" width="42" height="40" rx="9" transform="rotate(14 181 408)"/></g>
+          <g><path d="M205 150 Q200 120 198 92" stroke="#3b7a4a" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="180" cy="108" rx="32" ry="15" transform="rotate(-38 180 108)" fill="#3f8a52"/><ellipse cx="222" cy="98" rx="32" ry="15" transform="rotate(34 222 98)" fill="#5fb06e"/><ellipse cx="200" cy="72" rx="30" ry="14" transform="rotate(-92 200 72)" fill="#4a9a5c"/><ellipse cx="166" cy="138" rx="28" ry="13" transform="rotate(-18 166 138)" fill="#5fb06e"/><ellipse cx="238" cy="132" rx="28" ry="13" transform="rotate(24 238 132)" fill="#3f8a52"/></g>
+          <g transform="translate(270 140) rotate(-14)"><circle r="40" fill="#b9d04a"/><circle r="34" fill="#eef5b8"/><g stroke="#cfdd7a" stroke-width="2"><path d="M0 0 L0 -34"/><path d="M0 0 L29 -17"/><path d="M0 0 L29 17"/><path d="M0 0 L0 34"/><path d="M0 0 L-29 17"/><path d="M0 0 L-29 -17"/></g><circle r="5" fill="#cfdd7a"/></g>
+        </svg>
+      </div>
+      <figcaption style="{{ S.mono }};margin-top:8px;font-size:12px;color:var(--muted-foreground);text-align:center">Coco Mojito, as served · placeholder</figcaption>
+    </figure>
+  </section>
+</div>
+</sc-if>
+
+<!-- ================= D — FOCUS & COMPARE ================= -->
+<sc-if value="{{ cD }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+  <div>
+    <a href="#" onClick="{{ noop }}" style="display:inline-flex;min-height:44px;align-items:center;font-size:15px">‹ Bar Recipes</a>
+    <header style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-top:2px">
+      <div style="min-width:0">
+        <h1 style="margin:0;font-size:{{ titleD }}px;line-height:1.05;font-weight:600;letter-spacing:-.02em"><span style="{{ S.mono }};margin-right:12px;font-weight:500;color:var(--muted-foreground)">14</span>Coco Mojito</h1>
+        <p style="margin:8px 0 0;font-size:16px;color:var(--muted-foreground)">White Rum · Coconut water, mint and lime</p>
+      </div>
+      <sc-if value="{{ dual }}" hint-placeholder-val="{{ false }}">
+        <div role="tablist" aria-label="Recipe view" style="display:flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--secondary);width:{{ dTabsW }};box-sizing:border-box">
+          <sc-for list="{{ dTabs }}" as="t" hint-placeholder-count="3"><button role="tab" id="{{ t.id }}" aria-selected="{{ t.sel }}" tabIndex="{{ t.tab }}" onClick="{{ t.click }}" onKeyDown="{{ t.key }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+        </div>
+      </sc-if>
+    </header>
+    <div aria-label="Quick glance" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px">
+      <sc-for list="{{ glance }}" as="g" hint-placeholder-count="4"><span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--border);background:var(--muted);padding:4px 11px;font-size:13px"><span style="color:var(--muted-foreground)">{{ g.k }}</span><strong>{{ g.v }}</strong></span></sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{ dual }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <p style="margin:0;font-size:15px;color:var(--muted-foreground)">{{ dCtx }}</p>
+      <sc-if value="{{ dCompare }}"><button role="switch" aria-checked="{{ dSwitchAria }}" onClick="{{ toggleDiff }}" style="min-height:44px;display:inline-flex;align-items:center;gap:10px;padding:0 14px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font:600 14px/1 Geist,Inter,system-ui,sans-serif;cursor:pointer"><span style="{{ dTrack }}"><span style="{{ dKnob }}"></span></span>Hide identical rows</button></sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ dFocus }}" hint-placeholder-val="{{ true }}">
+  <div role="{{ dPanelRole }}" style="display:grid;grid-template-columns:{{ dFocusCols }};gap:20px;align-items:start">
+    <section aria-label="Ingredients" style="{{ S.card }};border-radius:12px;padding:20px;min-width:0">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 style="margin:0;font-size:22px;font-weight:600">{{ fv.label }}</h2></div>
+      <h3 style="{{ S.eb }};margin-top:18px">Ingredients</h3>
+      <ul style="list-style:none;margin:8px 0 0;padding:0">
+        <sc-for list="{{ fv.ing }}" as="r" hint-placeholder-count="6">
+        <li style="display:flex;align-items:center;gap:14px;min-height:50px;box-sizing:border-box;padding:6px 12px;margin:0 -12px;border-radius:10px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 var(--border)">
+          <span style="{{ S.mono }};width:{{ amtW }}px;flex:none;font-size:19px;font-weight:600">{{ r.amount }}</span>
+          <span style="flex:1;min-width:0;font-size:17px">{{ r.name }}<sc-if value="{{ r.hasPrep }}"><span style="color:var(--muted-foreground)"> · {{ r.prep }}</span></sc-if></span>
+          <sc-if value="{{ r.showWas }}"><span style="font-size:13px;color:var(--muted-foreground);white-space:nowrap">was {{ r.was }}</span></sc-if>
+          <sc-if value="{{ r.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs from Perfect">Δ</span></sc-if>
+        </li></sc-for>
+      </ul>
+      <section aria-label="Quick measure" style="{{ S.note }};margin-top:14px;padding:12px">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px"><h3 style="{{ S.eb }}">Quick Measure</h3>
+          <sc-if value="{{ fv.hasRatio }}"><span style="{{ S.mono }};background:var(--background);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:500">Oz Ratio {{ fv.ratio }}</span></sc-if></div>
+        <div style="{{ S.mono }};margin-top:8px;font-size:15px">{{ fv.qm }}</div>
+        <p style="margin:6px 0 0;font-size:13px;color:var(--muted-foreground)">{{ fv.qmExtra }}</p>
+      </section>
+    </section>
+    <section aria-label="Method and steps" style="{{ S.card }};border-radius:12px;padding:20px;min-width:0">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span style="{{ S.eb }}">Method</span><span style="display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--primary) 30%,transparent);background:color-mix(in srgb,var(--primary) 12%,transparent);padding:6px 16px;font-size:20px;font-weight:700;letter-spacing:.02em;text-transform:uppercase">{{ fv.method }}</span></div>
+      <h3 style="{{ S.eb }};margin-top:20px">Steps</h3>
+      <ol style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px">
+        <sc-for list="{{ fv.steps }}" as="st" hint-placeholder-count="5">
+        <li style="display:flex;align-items:flex-start;gap:16px;padding:12px;margin:0 -12px;border-radius:10px;background:{{ st.bg }}">
+          <span style="{{ S.mono }};flex:none;width:30px;height:30px;border-radius:50%;background:var(--muted);display:grid;place-items:center;font-size:14px;font-weight:600">{{ st.n }}</span>
+          <span style="flex:1;min-width:0;font-size:18px;line-height:1.5;padding-top:2px">{{ st.text }}</span>
+          <sc-if value="{{ st.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs from Perfect">Δ</span></sc-if>
+        </li></sc-for>
+      </ol>
+    </section>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ dCompare }}" hint-placeholder-val="{{ false }}">
+  <section aria-label="Comparison" role="tabpanel" aria-labelledby="dm-compare" style="{{ S.card }};border-radius:12px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:{{ dCmpCols }};background:var(--secondary);border-bottom:1px solid var(--border)">
+      <div></div>
+      <h2 style="margin:0;padding:12px;font-size:{{ dCmpHead }}px;font-weight:600">{{ dCmpP }}</h2>
+      <h2 style="margin:0;padding:12px;font-size:{{ dCmpHead }}px;font-weight:600">{{ dCmpH }}</h2>
+    </div>
+    <sc-for list="{{ cmp }}" as="sec" hint-placeholder-count="4">
+      <div style="padding:9px 12px;background:color-mix(in srgb,var(--muted) 40%,transparent);box-shadow:inset 0 -1px 0 var(--border)"><h3 style="{{ S.eb }}">{{ sec.title }}</h3></div>
+      <sc-if value="{{ sec.empty }}"><div style="padding:12px;font-size:14px;color:var(--muted-foreground);box-shadow:inset 0 -1px 0 var(--border)">No differences in this section.</div></sc-if>
+      <sc-for list="{{ sec.rows }}" as="r" hint-placeholder-count="3">
+      <div style="display:grid;grid-template-columns:{{ dCmpCols }};box-shadow:inset 0 -1px 0 var(--border);background:{{ r.bg }}">
+        <div style="display:grid;place-items:center;font-size:14px;font-weight:700;color:{{ r.gc }}" role="img" aria-label="{{ r.gl }}">{{ r.g }}</div>
+        <div style="display:flex;gap:10px;align-items:baseline;padding:11px 12px;min-width:0;font-size:{{ dCmpFont }}px;line-height:1.45"><span style="{{ S.mono }};flex:none;width:{{ sec.leadW }}px;font-weight:600;font-size:{{ dCmpLead }}px">{{ r.pa }}</span><span style="min-width:0">{{ r.pb }}</span></div>
+        <div style="display:flex;gap:10px;align-items:baseline;padding:11px 12px;min-width:0;font-size:{{ dCmpFont }}px;line-height:1.45;color:{{ r.hc }}"><span style="{{ S.mono }};flex:none;width:{{ sec.leadW }}px;font-weight:{{ r.hw }};font-size:{{ dCmpLead }}px">{{ r.ha }}</span><span style="min-width:0">{{ r.hb }}</span></div>
+      </div></sc-for>
+    </sc-for>
+  </section>
+  </sc-if>
+
+  <section aria-label="Final presentation" style="{{ S.card }};border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div style="width:80px;flex:none"><div style="{{ S.phThumb }}"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></svg></div></div>
+      <div style="flex:1;min-width:200px">
+        <h2 style="{{ S.eb }}">Final Presentation</h2>
+        <sc-if value="{{ dFocus }}"><dl style="margin:8px 0 0;display:grid;grid-template-columns:{{ dFactCols }};gap:8px 20px">
+          <sc-for list="{{ fv.pres }}" as="p" hint-placeholder-count="3"><div style="display:flex;gap:8px;align-items:baseline;min-width:0"><dt style="color:var(--muted-foreground);font-size:14px">{{ p.label }}</dt><dd style="margin:0;font-size:16px;font-weight:500;display:flex;gap:6px;align-items:center">{{ p.value }}<sc-if value="{{ p.changed }}"><span style="{{ S.delta }}" role="img" aria-label="Differs from Perfect">Δ</span></sc-if></dd></div></sc-for>
+        </dl></sc-if>
+        <sc-if value="{{ dCompare }}"><p style="margin:8px 0 0;font-size:15px;color:var(--muted-foreground)">Glass, rim and garnish are compared above.</p></sc-if>
+      </div>
+      <button aria-expanded="{{ imgAria }}" onClick="{{ toggleImg }}" style="min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font:600 14px/1 Geist,Inter,system-ui,sans-serif;cursor:pointer">{{ imgBtn }}</button>
+    </div>
+    <sc-if value="{{ imgOpen }}" hint-placeholder-val="{{ false }}"><figure style="margin:0;width:100%;max-width:760px;align-self:center">
+      <div style="{{ S.ph1610 }}"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 22h8"/><path d="M12 11v11"/><path d="m19 3-7 8-7-8Z"/></svg><span style="{{ S.mono }};font-size:11px">finished drink photo · 16:10</span></div>
+      <figcaption style="{{ S.mono }};margin-top:8px;font-size:12px;color:var(--muted-foreground);text-align:center">Coco Mojito, as served</figcaption>
+    </figure></sc-if>
+  </section>
+
+  <div style="display:grid;grid-template-columns:{{ dNoteCols }};gap:12px">
+    <sc-for list="{{ dNotes }}" as="v" hint-placeholder-count="1">
+    <div style="{{ S.note }}"><h3 style="{{ S.eb }}">{{ v.tipsLabel }}</h3><p style="margin:6px 0 0;font-size:15px;line-height:1.5">{{ v.tips }}</p><sc-if value="{{ v.hasBatch }}"><p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--muted-foreground)"><strong style="color:var(--foreground)">Batch · </strong>{{ v.batch }}</p></sc-if></div></sc-for>
+  </div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+<div style="width:1520px;margin:0 auto;padding:8px 40px 0;box-sizing:border-box"><section aria-label="Implementation notes" style="{{ S.card }};padding:20px 24px"><h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">Implementation notes</h2><ul style="margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.6;columns:2;column-gap:48px"><sc-for list="{{ implNotes }}" as="n" hint-placeholder-count="12"><li style="margin-bottom:6px;break-inside:avoid">{{ n.t }}</li></sc-for></ul></section></div>
+<div style="width:1520px;margin:0 auto;padding:40px 40px 72px;box-sizing:border-box">
+  <h2 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em">Design review · historical exploration</h2>
+  <p style="margin:8px 0 0;max-width:900px;font-size:15px;line-height:1.55;color:var(--muted-foreground)">Decision: Concept E (Editorial Recipe Book), with the House presentation differs state, is the approved implementation reference. The other concepts are exploration history. Static mock data, no Supabase. Tokens, Badge, Button, Card and RecipeImage conventions, the Perfect | House tab pattern and Quick Glance / Quick Measure / Oz Ratio rules come from <span style="font-family:'Geist Mono',monospace">globals.css</span> and <span style="font-family:'Geist Mono',monospace">src/features/recipes</span> on <span style="font-family:'Geist Mono',monospace">development</span>. The printed reference image was not attached, so Concept A follows your description of it.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px">
+    <sc-for list="{{ reviews }}" as="rv" hint-placeholder-count="4">
+    <article style="{{ S.card }};padding:20px;border-color:{{ rv.bc }};display:flex;flex-direction:column;gap:14px">
+      <h3 style="margin:0;font-size:17px;font-weight:600">{{ rv.title }}</h3>
+      <div><div style="{{ S.eb }}">Strengths</div><ul style="margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.5"><sc-for list="{{ rv.strengths }}" as="x" hint-placeholder-count="3"><li style="margin-bottom:4px">{{ x.t }}</li></sc-for></ul></div>
+      <div><div style="{{ S.eb }}">Tradeoffs</div><ul style="margin:6px 0 0;padding-left:18px;font-size:14px;line-height:1.5"><sc-for list="{{ rv.tradeoffs }}" as="x" hint-placeholder-count="3"><li style="margin-bottom:4px">{{ x.t }}</li></sc-for></ul></div>
+      <div style="font-size:14px;line-height:1.5"><div style="{{ S.eb }}">Best for</div>{{ rv.best }}</div>
+      <div style="font-size:14px;line-height:1.5"><div style="{{ S.eb }}">Image strategy</div>{{ rv.image }}</div>
+      <div style="font-size:14px;line-height:1.5"><div style="{{ S.eb }}">Dual variant strategy</div>{{ rv.dual }}</div>
+      <div style="font-size:14px;line-height:1.5"><div style="{{ S.eb }}">Mobile strategy</div>{{ rv.mobile }}</div>
+    </article></sc-for>
+  </div>
+  <h2 style="margin:48px 0 0;font-size:22px;font-weight:600;letter-spacing:-.01em">At a glance</h2>
+  <div role="table" aria-label="Concept comparison" style="{{ S.card }};margin-top:16px;overflow:hidden">
+    <div role="row" style="display:grid;grid-template-columns:{{ gCols }};background:var(--secondary);box-shadow:inset 0 -1px 0 var(--border)">
+      <div role="columnheader" style="{{ S.eb }};padding:12px 14px">Concept</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Recipe Speed</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Full Dual Recipes</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Comparison</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Single Recipe</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Image Balance</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Mobile</div><div role="columnheader" style="{{ S.eb }};padding:12px 14px">Visual Refinement</div>
+    </div>
+    <sc-for list="{{ glanceRows }}" as="row" hint-placeholder-count="6">
+    <div role="row" style="display:grid;grid-template-columns:{{ gCols }};box-shadow:inset 0 -1px 0 var(--border)">
+      <div role="rowheader" style="padding:12px 14px;font-size:14px;font-weight:600;line-height:1.45">{{ row.name }}</div>
+      <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="6"><div role="cell" style="padding:12px 14px;font-size:14px;line-height:1.45">{{ c.t }}</div></sc-for>
+    </div></sc-for>
+  </div>
+  <h2 style="margin:48px 0 0;font-size:22px;font-weight:600;letter-spacing:-.01em">Historical review questions</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:16px">
+    <sc-for list="{{ questions }}" as="q" hint-placeholder-count="2">
+    <article style="{{ S.card }};padding:20px"><h3 style="margin:0;font-size:17px;font-weight:600">{{ q.title }}</h3><ol style="margin:10px 0 0;padding-left:20px;font-size:14px;line-height:1.55"><sc-for list="{{ q.items }}" as="x" hint-placeholder-count="6"><li style="margin-bottom:4px">{{ x.t }}</li></sc-for></ol></article></sc-for>
+  </div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { concept: 'E', mode: 'dual', single: 'perfect', vp: 'desktop', theme: 'light', sel: 'perfect', dMode: 'perfect', onlyDiff: false, imgOpen: false, pres: 'differs' };
+
+  tabs(prefix, items, cur, apply) {
+    const ids = items.map((i) => i.id), L = ids.length;
+    return items.map((it, i) => {
+      const on = it.id === cur;
+      return {
+        id: prefix + '-' + it.id, label: it.label, sel: on ? 'true' : 'false', tab: on ? 0 : -1,
+        click: () => apply(it.id),
+        key: (e) => {
+          let n = i;
+          if (e.key === 'ArrowRight') n = (i + 1) % L; else if (e.key === 'ArrowLeft') n = (i + L - 1) % L;
+          else if (e.key === 'Home') n = 0; else if (e.key === 'End') n = L - 1; else return;
+          e.preventDefault(); apply(ids[n]);
+          setTimeout(() => { const el = document.getElementById(prefix + '-' + ids[n]); if (el) el.focus(); }, 0);
+        },
+        style: 'flex:1;min-height:44px;padding:0 16px;border-radius:10px;border:1px solid ' + (on ? 'var(--primary)' : 'transparent') + ';background:' + (on ? 'var(--primary)' : 'transparent') + ';color:' + (on ? 'var(--primary-foreground)' : 'var(--foreground)') + ';font:600 15px/1 Geist,Inter,system-ui,sans-serif;cursor:pointer',
+      };
+    });
+  }
+
+  jump(id) {
+    return (e) => {
+      e.preventDefault();
+      const el = document.getElementById(id);
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset - 12, behavior: 'smooth' });
+    };
+  }
+
+  renderVals() {
+    const s = this.state, set = (o) => () => this.setState(o);
+    const F = 'Geist,Inter,system-ui,sans-serif';
+    const M = s.vp === 'mobile', T = s.vp === 'tablet', DK = s.vp === 'desktop';
+    const dual = s.mode === 'dual';
+    const TINT = 'color-mix(in srgb,var(--primary) 14%,transparent)';
+    const pick = (a, b, c) => (DK ? a : T ? b : c);
+
+    const P = {
+      key: 'perfect', label: 'Perfect Bartending Recipe', short: 'Perfect', tipsLabel: 'Bartender Tips', method: 'Shake',
+      ing: [['2 oz', 'White Rum', ''], ['2 oz', 'Coconut Water', 'chilled'], ['8', 'Fresh Mint Leaves', ''], ['0.75 oz', 'Lime Juice', 'fresh'], ['0.50 oz', 'Simple Syrup', ''], ['Top', 'Soda Water', '']],
+      steps: ['Muddle mint leaves with lime juice and simple syrup.', 'Add rum, coconut water and ice.', 'Shake well.', 'Strain into a ribbed rocks glass with ice.', 'Top with soda water and stir gently.'],
+      rim: 'None', garnish: 'Mint sprig and lime wheel', glass: 'Ribbed rocks glass',
+      tips: 'Slap the mint once before garnishing. Muddle gently so the leaves bruise without tearing.',
+      batch: 'Batch of 10: 20 oz rum, 20 oz coconut water, 7.5 oz lime juice, 5 oz simple syrup. Add mint, ice and soda to order.',
+    };
+    const H = {
+      key: 'house', label: 'House Recipe', short: 'House', tipsLabel: 'House Notes', method: 'Shake',
+      ing: [['2 oz', 'White Rum', ''], ['2 oz', 'Coconut Water', 'chilled'], ['8', 'Fresh Mint Leaves', ''], ['0.75 oz', 'Lime Juice', 'fresh'], ['0.25 oz', 'Simple Syrup', ''], ['Top', 'Soda Water', '']],
+      steps: [P.steps[0], P.steps[1], P.steps[2], 'Strain into a rocks glass with ice.', P.steps[4]],
+      rim: 'None', garnish: 'Mint sprig', glass: 'Rocks glass',
+      tips: 'Coconut water already adds sweetness, so syrup is cut to 0.25 oz. Skip the lime wheel on the house pour.',
+      batch: '',
+    };
+
+    const FR = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+    const fr = (a) => {
+      const m = a.match(/^([\d.]+) oz$/);
+      if (!m) return a;
+      const n = parseFloat(m[1]), w = Math.floor(n), f = +(n - w).toFixed(2);
+      if (f && !FR[f]) return a;
+      return (w || '') + (f ? FR[f] : '') + ' oz';
+    };
+    const g = (a, b) => (b ? g(b, a % b) : a);
+    const ratioOf = (ing) => {
+      const oz = ing.filter((r) => / oz$/.test(r[0]));
+      if (oz.length < 2) return null;
+      const vals = oz.map((r) => parseFloat(r[0]));
+      for (const m of [1, 2, 3, 4, 6, 8, 12, 16]) {
+        const c = vals.map((v) => Math.round(v * m));
+        if (vals.every((v, i) => Math.abs(v * m - c[i]) < 0.01) && c.every((x) => x > 0)) {
+          const d = c.reduce(g); const r = c.map((x) => x / d);
+          if (Math.max(...r) <= 20) return r.join(' : ');
+        }
+      }
+      return null;
+    };
+
+    const mk = (v, o) => {
+      const ch = (a, b) => !!o && a !== b;
+      const ratio = ratioOf(v.ing);
+      const oz = v.ing.filter((r) => / oz$/.test(r[0]));
+      return {
+        key: v.key, label: v.label, short: v.short, tipsLabel: v.tipsLabel,
+        method: v.method, methodChanged: ch(v.method, o && o.method),
+        tips: v.tips, hasTips: !!v.tips, batch: v.batch, hasBatch: !!v.batch,
+        ratio: ratio || '', hasRatio: !!ratio,
+        qm: oz.map((r) => r[0].replace(' oz', '')).join(' · ') + ' oz',
+        qmF: oz.map((r) => fr(r[0]).replace(' oz', '')).join(' · '),
+        qmExtra: v.ing.length > oz.length ? '+ other ingredients as listed' : '',
+        ing: v.ing.map((r, i) => {
+          const c = ch(r[0], o && o.ing[i][0]);
+          return { id: v.key + i, amountF: fr(r[0]), amount: r[0], name: r[1], prep: r[2], hasPrep: !!r[2], changed: c, bg: c ? TINT : 'transparent', was: o ? o.ing[i][0] : '', showWas: c && v.key === 'house' };
+        }),
+        steps: v.steps.map((t, i) => {
+          const c = ch(t, o && o.steps[i]);
+          return { id: v.key + 's' + i, n: i + 1, text: t, changed: c, bg: c ? TINT : 'transparent' };
+        }),
+        pres: [['Glass', 'glass'], ['Rim', 'rim'], ['Garnish', 'garnish']].map(([l, k]) => {
+          const c = ch(v[k], o && o[k]);
+          return { id: v.key + k, label: l, value: v[k], changed: c, bg: c ? TINT : 'transparent' };
+        }),
+      };
+    };
+
+    const sv = s.single === 'house' ? H : P;
+    const vs = dual ? [mk(P, H), mk(H, P)] : [mk(sv, null)];
+
+    // ---------- shared styles ----------
+    const mono = "font-family:'Geist Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums";
+    const ph = (a) => 'aspect-ratio:' + a + ';width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:12px;background:repeating-linear-gradient(135deg,var(--muted) 0 14px,color-mix(in srgb,var(--muted) 60%,var(--card)) 14px 28px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted-foreground);overflow:hidden';
+    const S = {
+      eb: 'margin:0;font:600 12px/1.2 ' + F + ';letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)',
+      mono,
+      delta: 'display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;box-sizing:border-box;padding:0 6px;border-radius:999px;border:1px solid color-mix(in srgb,var(--primary) 45%,transparent);background:color-mix(in srgb,var(--primary) 20%,transparent);color:var(--foreground);font:600 12px/1 ' + F + ';flex:none',
+      card: 'background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 60px -36px rgba(0,0,0,.65)',
+      note: 'border:1px solid var(--border);border-radius:8px;padding:12px 14px;background:color-mix(in srgb,var(--muted) 40%,transparent)',
+      tag: 'flex:none;display:inline-block;border-radius:999px;border:1px solid var(--border);background:var(--muted);padding:2px 9px;font:600 12px/1.4 ' + F,
+      ph1610: ph('16/10'), ph43: ph('4/3'), phThumb: ph('4/5'),
+    };
+
+    // ---------- toolbar ----------
+    const bs = (on) => 'white-space:nowrap;min-height:40px;padding:0 14px;border-radius:12px;border:1px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'color-mix(in srgb,var(--primary) 15%,transparent)' : 'var(--secondary)') + ';color:var(--foreground);font:600 14px/1 ' + F + ';cursor:pointer';
+    const btn = (label, on, click) => ({ label, pressed: on ? 'true' : 'false', click, style: bs(on) });
+    const concepts = [['A', 'A — Recipe Book', 'Reference-inspired, two columns'], ['B', 'B — Service Sheet', 'Dense, one comparison table'], ['C', 'C — Editorial', 'Premium, margin annotations'], ['D', 'D — Focus & Compare', 'One recipe, compare on demand'], ['E', 'E — Editorial Recipe Book', 'Two full recipes, book spread'], ['F', 'F — Bartender Compare', 'What changes, then two full recipes'], ['G', 'G — Bartender Recipe Book', 'One spread, aligned sections']].map(([id, label, sub]) => {
+      const on = s.concept === id;
+      return { label, sub: id === 'E' ? 'Approved reference' : 'Exploration, not selected', pressed: on ? 'true' : 'false', click: set({ concept: id }), style: 'display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:64px;padding:12px 16px;border-radius:14px;border:1px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'color-mix(in srgb,var(--primary) 12%,var(--card))' : 'var(--card)') + ';color:var(--foreground);font-family:' + F + ';cursor:pointer' };
+    });
+
+    // ---------- glance ----------
+    const glance = [{ k: 'Method', v: 'Shake' }, { k: 'Base', v: 'White Rum' }, { k: 'Type', v: 'Alcoholic' }, { k: 'Category', v: 'Refreshers' }];
+    const glanceA = glance.slice(0, 3);
+
+    // ---------- A ----------
+    const aTabsOn = dual && M;
+    const aVsRaw = aTabsOn ? vs.filter((v) => v.key === s.sel) : vs;
+    const desk2 = dual && DK;
+    const aVs = aVsRaw.map((v, i) => ({ ...v, divider: dual && !M && i === 1 ? '1px solid var(--border)' : 'none', order: desk2 ? (i ? 3 : 1) : i + 1 }));
+    const aTabs = this.tabs('atab', [{ id: 'perfect', label: 'Perfect' }, { id: 'house', label: 'House' }], s.sel, (id) => this.setState({ sel: id })).map((t) => ({ ...t, style: t.style.replace('transparent;', 'var(--border);').replace('background:transparent', 'background:transparent') }));
+
+    // ---------- B ----------
+    const pairIng = dual ? P.ing.map((r, i) => { const c = r[0] !== H.ing[i][0]; return { id: 'pi' + i, name: r[1], prep: r[2], hasPrep: !!r[2], p: r[0], h: H.ing[i][0], changed: c, bg: c ? TINT : 'transparent', hc: c ? 'var(--foreground)' : 'var(--muted-foreground)', hw: c ? 700 : 400 }; })
+      : vs[0].ing.map((r) => ({ id: r.id, name: r.name, prep: r.prep, hasPrep: r.hasPrep, p: r.amount, h: '', changed: false, bg: 'transparent', hc: '', hw: 400 }));
+    const bSteps = dual ? P.steps.map((t, i) => { const c = t !== H.steps[i]; return { id: 'bs' + i, n: i + 1, text: t, p: t, h: H.steps[i], same: !c, fork: c, bg: c ? TINT : 'transparent' }; })
+      : vs[0].steps.map((x) => ({ id: x.id, n: x.n, text: x.text, p: '', h: '', same: true, fork: false, bg: 'transparent' }));
+    const bPres = dual ? ['Glass', 'Rim', 'Garnish'].map((l) => { const k = l.toLowerCase(); const c = P[k] !== H[k]; return { id: 'bp' + k, label: l, p: P[k], h: H[k], changed: c, bg: c ? TINT : 'transparent' }; })
+      : vs[0].pres.map((x) => ({ id: x.id, label: x.label, p: x.value, h: '', changed: false, bg: 'transparent' }));
+
+    // ---------- C ----------
+    const cb = dual ? P : sv;
+    const cIng = cb.ing.map((r, i) => { const c = dual && r[0] !== H.ing[i][0]; return { id: 'ci' + i, name: r[1], prep: r[2], hasPrep: !!r[2], amount: r[0], hasNote: c, note: dual ? H.ing[i][0] : '' }; });
+    const cSteps = cb.steps.map((t, i) => { const c = dual && t !== H.steps[i]; return { id: 'cs' + i, n: i + 1, text: t, hasNote: c, note: dual ? H.steps[i] : '' }; });
+    const cPres = ['Glass', 'Rim', 'Garnish'].map((l, i) => { const k = l.toLowerCase(); const c = dual && P[k] !== H[k]; return { id: 'cp' + k, label: l, value: cb[k], hasNote: c, note: dual ? H[k] : '', bl: DK || T ? (i ? '1px solid var(--border)' : 'none') : 'none' }; });
+    const cvm = vs[0];
+    const cDeskMargin = dual && DK;
+
+    // ---------- D ----------
+    const dMode = dual ? s.dMode : 'perfect';
+    const dFocus = dMode !== 'compare';
+    const fv = !dual ? vs[0] : dMode === 'house' ? vs[1] : mk(P, null);
+    const diffCount = pairIng.filter((r) => r.changed).length + (dual ? bSteps.filter((x) => x.fork).length + bPres.filter((x) => x.changed).length : 0);
+    const hide = s.onlyDiff;
+    const secOf = (title, rows, leadW) => { const shown = hide ? rows.filter((r) => r.changed) : rows; return { title, rows: shown, leadW, empty: shown.length === 0, hid: rows.length - shown.length }; };
+    const row = (id, ch, pa, pb, ha, hb) => ({ id, changed: ch, pa, pb, ha, hb, g: ch ? 'Δ' : '=', gl: ch ? 'Differs' : 'Same', gc: ch ? 'var(--foreground)' : 'var(--faint)', bg: ch ? TINT : 'transparent', hc: ch ? 'var(--foreground)' : 'var(--muted-foreground)', hw: ch ? 700 : 400 });
+    const nm = (r) => r[1] + (r[2] ? ' · ' + r[2] : '');
+    const cmp = dual ? [
+      secOf('Ingredients', P.ing.map((r, i) => row('ci' + i, r[0] !== H.ing[i][0], r[0], nm(r), H.ing[i][0], nm(H.ing[i]))), M ? 62 : 84),
+      secOf('Method', [row('cm', P.method !== H.method, 'Method', P.method, 'Method', H.method)], M ? 62 : 84),
+      secOf('Steps', P.steps.map((t, i) => row('cst' + i, t !== H.steps[i], String(i + 1), t, String(i + 1), H.steps[i])), 22),
+      secOf('Final Presentation', ['glass', 'rim', 'garnish'].map((k) => row('cpr' + k, P[k] !== H[k], k[0].toUpperCase() + k.slice(1), P[k], k[0].toUpperCase() + k.slice(1), H[k])), M ? 52 : 72),
+    ] : [];
+    const hiddenTotal = cmp.reduce((a, x) => a + x.hid, 0);
+    const dCtx = dMode === 'compare' ? 'Δ marks rows that differ; = marks identical rows.' + (hide && hiddenTotal ? ' ' + hiddenTotal + ' identical rows hidden.' : '') : dMode === 'house' ? 'House Recipe · ' + diffCount + ' differences from Perfect are marked Δ.' : 'Perfect Bartending Recipe · switch to Compare to see all ' + diffCount + ' differences.';
+    const dTabs = this.tabs('dm', [{ id: 'perfect', label: 'Perfect' }, { id: 'compare', label: 'Compare' }, { id: 'house', label: 'House' }], dMode, (id) => this.setState({ dMode: id }));
+    const dNotes = dMode === 'compare' ? vs : [fv];
+
+    // ---------- E / F ----------
+    const diffPres = s.pres === 'differs';
+    const HE = diffPres ? H : { ...H, steps: P.steps, glass: P.glass, garnish: P.garnish, rim: P.rim, tips: 'Coconut water already adds sweetness, so syrup is cut to 0.25 oz.' };
+    const one = s.single === 'house' ? HE : P;
+    const efv = dual ? [mk(P, HE), mk(HE, P)] : [mk(one, null)];
+    const railMode = !dual && DK;
+    const MARK = 'inset 3px 0 0 var(--primary)';
+    const gl = (v) => (v === H ? 'Rocks' : 'Ribbed Rocks'), ga = (v) => (v === H ? 'Mint' : 'Mint + Lime');
+    const gv = (f) => (dual ? (f(P) === f(HE) ? f(P) : f(P) + ' / ' + f(HE)) : f(one));
+    const bd = '1px solid var(--border)';
+    const eGlance = [['Method', 'Shake'], ['Glass', gv(gl)], ['Garnish', gv(ga)], ['Style', 'Refreshing']].map(([k, v], i) => ({ id: 'eg' + i, k, v, bl: M ? (i % 2 ? bd : 'none') : (i ? bd : 'none'), bt: M && i > 1 ? bd : 'none' }));
+    const presShared = !dual || !diffPres;
+    const presRows = (v, o) => [['Ideal Glass', 'glass'], ['Garnish', 'garnish'], ['Rim', 'rim']].map(([l, k]) => { const c = !!o && v[k] !== o[k]; return { id: v.key + k, label: l, value: v[k], bg: c ? TINT : 'transparent', mark: c ? MARK : 'none' }; });
+    const presFor = (cols) => (presShared ? [{ id: 'pv', title: '', hasTitle: false, cols, rows: presRows(dual ? P : one, null) }] : [{ id: 'pvp', title: 'Perfect', hasTitle: true, cols: '1fr', rows: presRows(P, null) }, { id: 'pvh', title: 'House', hasTitle: true, cols: '1fr', rows: presRows(HE, P) }]);
+    const jl = (items) => items.map(([id, label]) => ({ id, label: label + ' ↓', href: '#' + id, click: this.jump(id) }));
+    const jumpS = 'white-space:nowrap;flex:none;display:inline-flex;align-items:center;box-sizing:border-box;min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--border);background:var(--secondary);color:var(--foreground);font:600 14px/1 ' + F + ';text-decoration:none';
+    const adj = (c, house) => c && house;
+    const rowsOf = (v, house) => v.ing.map((r) => ({ id: r.id, name: r.name, prep: r.prep, hasPrep: r.hasPrep, amount: r.amount, amountF: r.amountF, changed: r.changed, bg: r.changed ? TINT : 'transparent', mark: r.changed ? MARK : 'none', fmark: r.changed ? MARK + ',inset 0 -1px 0 var(--border)' : 'inset 0 -1px 0 var(--border)', aw: r.changed ? 700 : 500, adj: adj(r.changed, house) }));
+    const stepsOf = (v, house) => v.steps.map((st) => ({ id: st.id, n: st.n, text: st.text, changed: st.changed, bg: st.bg, mark: st.changed ? MARK : 'none', adj: adj(st.changed, house) }));
+    const common = (v) => { const house = v.key === 'house'; return { key: v.key, id: (s.concept === 'F' ? 'f-' : s.concept === 'G' ? 'g-' : 'e-') + v.key, label: v.label, rows: rowsOf(v, house), steps: stepsOf(v, house), qmF: v.qmF, hasRatio: v.hasRatio, ratio: v.ratio, method: v.method, methodChanged: v.methodChanged, methodAdj: adj(v.methodChanged, house), tipsLabel: v.tipsLabel, tips: v.tips, hasTips: v.hasTips, batch: v.batch, hasBatch: v.hasBatch }; };
+    const eV = efv.map((v, i) => ({
+      ...common(v), qmInline: !railMode,
+      art: 'min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);grid-row:span 5;grid-template-rows:subgrid;' + (dual ? (DK ? 'padding:0 56px;border-left:' + (i ? bd : 'none') : 'padding:' + (i ? '44px' : '0') + ' ' + pick(0, 36, 18) + 'px 0;' + (i ? 'border-top:' + bd : '')) : 'padding:0'),
+    }));
+    const fSingleDK = !dual && DK;
+    const ar = (a) => (fSingleDK ? 'grid-area:' + a : 'order:0');
+    const fV = efv.map((v, i) => ({
+      ...common(v),
+      art: 'min-width:0;box-sizing:border-box;display:grid;border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden;box-shadow:0 18px 60px -36px rgba(0,0,0,.65);' + (dual ? 'grid-template-columns:minmax(0,1fr);grid-row:span 5;grid-template-rows:subgrid;' + (!DK && i ? 'margin-top:16px;' : '') : fSingleDK ? 'grid-template-columns:minmax(0,5fr) minmax(0,7fr);grid-template-rows:auto auto 1fr auto;' : 'grid-template-columns:minmax(0,1fr);'),
+    }));
+    const chg = [];
+    if (dual) {
+      P.ing.forEach((r, i) => { if (r[0] !== HE.ing[i][0]) chg.push({ label: r[1], p: fr(r[0]), h: fr(HE.ing[i][0]) }); });
+      if (P.method !== HE.method) chg.push({ label: 'Method', p: P.method, h: HE.method });
+      [['Glass', 'glass'], ['Garnish', 'garnish'], ['Rim', 'rim']].forEach(([l, k]) => { if (P[k] !== HE[k]) chg.push({ label: l, p: P[k], h: HE[k] }); });
+    }
+    const fChanges = chg.slice(0, 3).map((c, i) => ({ id: 'fc' + i, ...c }));
+    const e0 = efv[0];
+    const glanceRows = [
+      ['A · Modern Recipe Book', 'Medium', 'Desktop and tablet; mobile tabs show one at a time', 'Tinted rows with Δ markers', 'Single column inside the book card', 'After the recipe, beside presentation facts', 'Perfect | House tabs', 'Medium'],
+      ['B · Service Sheet', 'High', 'No. One merged table with forked steps', 'Shared rows, two amount columns', 'Single amount column, plainer', 'Panel after the steps', 'No tabs, narrow amount columns', 'Low'],
+      ['C · Editorial Recipe', 'Medium', 'No. House shown as margin notes', 'Margin notes on changed lines', 'Centered column', 'Wide image with the most weight', 'Single column, inline notes', 'High'],
+      ['D · Focus & Compare', 'Medium', 'Not together. One recipe or a compare grid', 'Compare grid with a Δ gutter', 'Full-width recipe, no controls', 'Thumbnail, opens on request', 'Segmented control', 'Medium'],
+      ['E · Editorial Recipe Book', 'Medium', 'Yes, at every viewport', 'Aligned sections, marker on changed lines', 'Main column plus Quick Glance rail', 'Large, after both recipes', 'Stacked, jump links', 'High'],
+      ['F · Bartender Compare', 'High', 'Yes, at every viewport', 'What Changes summary plus marked rows', 'Two-column operational layout', 'Compact, after both recipes', 'Stacked, jump links', 'Medium'],
+      ['G · Bartender Recipe Book', 'High', 'Yes, at every viewport', 'Aligned rows, ◇ marker, one-line House adjustments', 'Wide reading column, no divider or rail', 'Large; shared, or one per version when specs differ', 'Stacked, jump links', 'High'],
+    ].map((r, i) => ({ id: 'gr' + i, name: r[0], cells: r.slice(1).map((t, j) => ({ id: 'gc' + i + j, t })) }));
+    const questions = [
+      { title: 'E — Editorial Recipe Book', items: ['Does this feel like a modern version of the printed recipe-book reference?', 'Are Perfect and House equally readable?', 'Can I compare them without making House incomplete?', 'Is there too much duplicated information?', 'Does the duplication actually help behind the bar?', 'Is the Final Presentation image large enough?', 'Is the image too dominant?', 'Does tablet stacking feel natural?', 'Does mobile stacking become too long?'] },
+      { title: 'F — Bartender Compare', items: ['Does What Changes save meaningful time?', 'Is it redundant once both full recipes are visible?', 'Are measurements faster to scan than E?', 'Does F feel too technical?', 'Is it still visually polished?', 'Is the mobile page easier to use than E?'] },
+      { title: 'G — Bartender Recipe Book', items: ['Do the aligned Perfect/House sections make comparison faster than E?', 'Are ingredient measurements prominent enough without becoming as aggressive as F?', 'Should the small House Adjustments summary remain, move under the House heading, or disappear?', 'Does Final Presentation come at the correct point?', 'Is the finished-drink image large enough to judge presentation without overpowering the recipe?', 'On mobile, is scrolling through both complete recipes preferable to tabs?', 'Should G become the production foundation, or should specific E/F elements still be brought into it?'] },
+    ].map((q, i) => ({ id: 'q' + i, title: q.title, items: q.items.map((t, j) => ({ id: 'qi' + i + j, t })) }));
+    // ---------- G ----------
+    const gDD = dual && DK, gSingleDK = !dual && DK;
+    const gHasAdj = dual && chg.length > 0;
+    const rn = {}; let rc = 1;
+    rn.head = rc++; if (gHasAdj) rn.adj = rc++;
+    rn.ing = rc++; rn.qm = rc++; rn.meth = rc++; rn.steps = rc++; rn.notes = rc++;
+    const gN = rc - 1;
+    const gR = {};
+    ['head', 'adj', 'ing', 'qm', 'meth', 'steps', 'notes'].forEach((k) => { gR[k] = gDD && rn[k] ? 'grid-row:' + rn[k] : 'order:0'; });
+    const sh = (on) => (on ? MARK + ',inset 0 -1px 0 var(--border)' : 'inset 0 -1px 0 var(--border)');
+    const cmpTxt = (c) => (/ oz$/.test(c.p) && / oz$/.test(c.h) ? c.p.replace(' oz', '') + ' → ' + c.h : c.p + ' → ' + c.h);
+    const gAdj = chg.slice(0, 3).map((c, i) => ({ id: 'ga' + i, label: c.label, t: cmpTxt(c) }));
+    const gV = efv.map((v, i) => {
+      const house = v.key === 'house', c0 = common(v);
+      return {
+        ...c0, id: 'g-' + v.key, hasAdj: gHasAdj && house,
+        rows: v.ing.map((r) => { const m = house && r.changed; return { id: r.id, name: r.name, prep: r.prep, hasPrep: r.hasPrep, amountF: r.amountF, mark: m, bg: m ? TINT : 'transparent', sh: sh(m), pad: m ? 'padding:6px 0 6px 12px;margin-left:-12px' : 'padding:6px 0', aw: m ? 700 : 600 }; }),
+        steps: v.steps.map((st) => { const m = house && st.changed; return { id: st.id, n2: String(st.n).padStart(2, '0'), text: st.text, mark: m, bg: m ? TINT : 'transparent', sh: sh(m), pad: m ? 'padding:10px 0 10px 12px;margin-left:-12px' : 'padding:10px 0' }; }),
+        methodAdj: house && v.methodChanged,
+        art: 'min-width:0;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);' + (gDD ? 'grid-row:span ' + gN + ';grid-template-rows:subgrid;' + (i ? 'padding:0 0 0 56px;border-left:' + bd : 'padding:0 56px 0 0') : (dual && i ? 'border-top:' + bd + ';padding-top:44px;margin-top:44px' : '')),
+      };
+    });
+    const limeOf = (v) => /lime/i.test(v.garnish);
+    const gPresRows = (v, o) => [['Glass', 'glass'], ['Garnish', 'garnish'], ['Rim', 'rim']].map(([l, k]) => { const c = !!o && v[k] !== o[k]; return { id: v.key + k, label: l, value: v[k], changed: c, bg: c ? TINT : 'transparent' }; });
+    const gShared = !dual || !diffPres;
+    const gPresVs = gShared
+      ? [{ id: 'gpv', hasTitle: false, title: '', cols: M ? '1fr' : 'repeat(3,minmax(0,1fr))', rows: gPresRows(dual ? P : one, null), lime: limeOf(dual ? P : one), dlOrder: 1, figOrder: 2, phMax: pick('480px', '440px', '100%') }]
+      : [{ id: 'gpp', hasTitle: true, title: 'Perfect', cols: '1fr', rows: gPresRows(P, null), lime: limeOf(P), dlOrder: 2, figOrder: 1, phMax: pick('400px', '340px', '100%') }, { id: 'gph', hasTitle: true, title: 'House', cols: '1fr', rows: gPresRows(HE, P), lime: limeOf(HE), dlOrder: 2, figOrder: 1, phMax: pick('400px', '340px', '100%') }];
+    const gGlance = [['Method', 'Shake', false], ['Glass', gv(gl), dual && gl(P) !== gl(HE)], ['Garnish', gv(ga), dual && ga(P) !== ga(HE)], ['Rim', 'No Rim', false]].map(([k, v, d], i, a) => ({ id: 'gg' + i, k, v, diff: d, sep: !M && i < a.length - 1 }));
+    const GG = {
+      cG: s.concept === 'G', gGap: pick(48, 40, 32), titleG: pick(76, 60, 46), gH2: pick(30, 30, 26),
+      gStrip: 'list-style:none;padding:0;margin:' + pick(28, 24, 20) + 'px 0 0;' + (M ? 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;text-align:center' : 'display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 14px'),
+      gGlance, gJump: jl([['g-perfect', 'Perfect'], ['g-house', 'House'], ['g-pres', 'Presentation']]),
+      gWrap: 'width:100%;margin:0 auto;' + (gSingleDK ? 'max-width:840px' : ''),
+      gPanel: gDD ? 'display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-top:' + bd + ';padding:44px 0 0' : 'display:grid;grid-template-columns:minmax(0,1fr)',
+      gR, gV, gAdj,
+      gPresPad: pick(48, 40, 32), gPresH: pick(36, 32, 28), gPresCols: gShared ? '1fr' : (M ? '1fr' : 'repeat(2,minmax(0,1fr))'), gPresGap: pick(56, 40, 48), gPresVs, gPhA: pick('1/1', '1/1', '4/5'),
+    };
+    const ePresVsB = presShared
+      ? [{ id: 'pv', title: '', hasTitle: false, hasFig: false, cols: T ? 'repeat(3,minmax(0,1fr))' : '1fr', rows: presRows(dual ? P : one, null), lime: true, phA: '1/1', phMax: '440px' }]
+      : [{ id: 'pvp', title: 'Perfect Presentation', hasTitle: true, hasFig: true, cols: '1fr', rows: presRows(P, null), lime: limeOf(P), phA: M ? '4/5' : '1/1', phMax: pick('440px', '100%', '100%') }, { id: 'pvh', title: 'House Presentation', hasTitle: true, hasFig: true, cols: '1fr', rows: presRows(HE, P), lime: limeOf(HE), phA: M ? '4/5' : '1/1', phMax: pick('440px', '100%', '100%') }];
+    const isE = s.concept === 'E';
+    const APP = {
+      notE: !isE, showE: set({ concept: 'E' }), showEStyle: bs(true),
+      badgeT: isE ? 'Approved · Concept E' : 'Exploration · not selected',
+      badgeS: 'display:inline-flex;align-items:center;border-radius:999px;border:1px solid ' + (isE ? 'color-mix(in srgb,var(--primary) 45%,transparent)' : 'var(--border)') + ';background:' + (isE ? 'color-mix(in srgb,var(--primary) 16%,transparent)' : 'var(--secondary)') + ';padding:4px 10px;font-size:12px;font-weight:600;white-space:nowrap',
+      bannerS: 'display:flex;align-items:center;justify-content:space-between;gap:16px;box-sizing:border-box;padding:12px 18px;border-radius:12px;border:1px solid ' + (isE ? 'color-mix(in srgb,var(--primary) 45%,transparent)' : 'var(--border)') + ';background:' + (isE ? 'color-mix(in srgb,var(--primary) 12%,var(--card))' : 'var(--secondary)') + ';color:var(--foreground)',
+      bannerT: isE ? 'Approved implementation reference · Concept E' : 'Exploration / not selected · Concept ' + s.concept,
+      bannerSub: isE ? 'Editorial Recipe Book, with House presentation differs as an approved state. Design reference only; build it in the existing React application.' : 'Kept as design history. The approved implementation reference is Concept E.',
+      implNotes: ['Design reference only. Do not copy the prototype HTML into production.', 'Build with the existing TheLineup React components, design tokens and architecture.', 'Selected: Concept E, Editorial Recipe Book. House presentation differs is an approved state.', 'Perfect and House are both complete recipes. Never reduce House to differences only.', 'Desktop is a two-column spread. Tablet and mobile stack Perfect, then House, with jump links. No Perfect / House tabs.', 'Final Presentation follows the recipe. Identical specs: one shared block and image. Differing specs: separate Perfect and House blocks, each with its own image.', 'A recipe with one variant uses the single layout: no empty column and no divider.', 'Preserve existing Recipes data contracts, permissions, tenant isolation, optimistic concurrency and recipe persistence.', 'Preserve image security. The placeholder illustration is not an asset.', 'Do not invent recipe data. Metadata such as Signature, On Menu and Style is mock content.', 'Quick Measure is derived for display from ingredient amounts. Ratio is optional and only shown when it can be derived safely.', 'Preserve accessibility: 44 px targets, visible focus, heading order, and the non-color House adjustment marker.'].map((t, i) => ({ id: 'in' + i, t })),
+    };
+    const EF = {
+      efOn: s.concept === 'E' || s.concept === 'F' || s.concept === 'G', gCols: '1.5fr repeat(7,minmax(0,1.15fr))', glanceRows, questions,
+      presBtns: [btn('Identical', !diffPres, set({ pres: 'same' })), btn('House differs', diffPres, set({ pres: 'differs' }))],
+      cE: s.concept === 'E', cF: s.concept === 'F', eGlance, jumpS, jumpOn: dual && !DK,
+      // E
+      eMax: pick('1344px', '764px', '100%'), eGap: pick(56, 48, 40), eTop: pick(20, 16, 10), titleE: pick(84, 64, 46),
+      eStrip: !railMode, eStripW: DK ? '800px' : '100%', eStripCols: M ? 'repeat(2,minmax(0,1fr))' : 'repeat(4,minmax(0,1fr))',
+      eJump: jl([['e-perfect', 'Perfect'], ['e-house', 'House']]),
+      eWrap: railMode ? 'minmax(0,840px) 260px' : 'minmax(0,1fr)', railOn: railMode,
+      ePanel: 'display:grid;grid-template-columns:' + (dual && DK ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)') + ';row-gap:36px;' + (dual ? 'border:1px solid var(--border);border-radius:6px;background:color-mix(in srgb,var(--card) 60%,transparent);padding:' + pick('52px 0 56px', '40px 0 44px', '28px 0 32px') : ''),
+      eV, eH2: pick(32, 30, 26), eMeth: pick(44, 40, 36),
+      eQm: e0.qmF, eHasRatio: e0.hasRatio, eRatio: e0.ratio,
+      ePresH: pick(40, 34, 28), ePresCols: DK && presShared ? 'minmax(0,5fr) minmax(0,7fr)' : 'minmax(0,1fr)', ePresGap: pick(64, 36, 28),
+      ePresBlocks: presShared ? '1fr' : (M ? '1fr' : 'repeat(2,minmax(0,1fr))'), ePresBlockGap: 28,
+      ePresVs: ePresVsB, presShared,
+      ePhA: pick('1/1', '16/10', '4/5'), ePhMax: pick('560px', '680px', '100%'),
+      // F
+      titleF: pick(52, 44, 34), fHead: M ? 'minmax(0,1fr)' : 'minmax(0,1fr) auto', fGlanceCols: M ? 'repeat(2,minmax(0,1fr))' : 'repeat(4,auto)',
+      fJump: jl([['f-perfect', 'Perfect'], ['f-house', 'House'], ['f-pres', 'Presentation']]),
+      fChangesOn: dual, fChanges, fNoChange: dual && fChanges.length === 0,
+      fGrid: dual && DK ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)', fV, fPad: pick('20px 24px', '20px 24px', '16px 16px'),
+      fAH: ar('1 / 1 / 2 / 3'), fAI: ar('2 / 1 / 4 / 2'), fAM: ar('2 / 2 / 3 / 3'), fAS: ar('3 / 2 / 4 / 3'), fAN: ar('4 / 1 / 5 / 3'),
+      fImgCols: M ? 'minmax(0,1fr)' : 'minmax(0,1fr) ' + (T ? '260px' : '340px'), fBlocks: presShared ? '1fr' : (M ? '1fr' : 'repeat(2,minmax(0,1fr))'),
+      fPresVs: presFor(M ? '1fr' : 'repeat(3,minmax(0,1fr))'), fPhMax: M ? '100%' : T ? '260px' : '340px',
+    };
+
+    // ---------- reviews ----------
+    const R = (title, id, st, tr, best, image, dualS, mob) => ({ title, bc: s.concept === id ? 'var(--primary)' : 'var(--border)', strengths: st.map((t) => ({ t })), tradeoffs: tr.map((t) => ({ t })), best, image, dual: dualS, mobile: mob });
+    const reviews = [
+      R('A — Modern Recipe Book', 'A', ['Closest to the printed reference: title first, two columns, ingredients, numbered steps, presentation last', 'Ingredient rows line up across versions, so the changed measurement is visible at a glance', 'Final Presentation band groups glass, rim, garnish and the finished drink'], ['Needs width; below about 700 px it falls back to Perfect | House tabs', 'Step text wraps differently per side, so lower rows can drift', 'Longest vertical read of the four'], 'Reading a recipe end to end on a desktop or station tablet.', 'Centered between the two presentation columns after the recipe, beneath both on tablet.', 'Two columns with a center divider; changed values get a tinted row and a Δ marker.', 'Perfect | House tabs with measurements in the first screen; Δ markers persist in the House tab.'),
+      R('B — Service Sheet', 'B', ['Measurements are the largest type and sit in one table', 'Perfect and House amounts share a row, so changes need no scrolling', 'Steps merge into one list and fork only where text differs'], ['Densest layout with the least visual character', 'Forked steps read slower than two clean lists', 'Single recipes look plainer than in other concepts'], 'Quick lookups mid-service when the bartender mostly needs numbers.', 'Beside a Glass / Rim / Garnish table in a presentation panel after the steps.', 'One table with Perfect and House amount columns and forked steps.', 'Same table with narrow amount columns; no tabs, so both versions stay visible.'),
+      R('C — Editorial', 'C', ['Calm hierarchy with generous spacing', 'House Recipe appears as margin notes beside the Perfect text, never repeating unchanged lines', 'The wide finished-drink image gets the most visual weight'], ['Margin notes become inline lines on tablet and mobile', 'House Recipe is not readable as a standalone list when both exist', 'Longest scroll before the tips'], 'Training and review, where the recipe is read rather than glanced at.', 'Full-width wide image after glass, rim and garnish.', 'Perfect is the main text; House values appear as annotations beside changed lines only.', 'Single column; House differences sit directly under the line they change.'),
+      R('D — Focus & Compare', 'D', ['Opens on one recipe at full reading width', 'Compare aligns every row and can hide identical ones', 'Single-version recipes show no controls'], ['Comparing takes a tap', 'Three modes add state to remember', 'Full-size image needs a tap to see'], 'Teams that mostly make one version and occasionally check the other.', 'Compact thumbnail beside presentation facts, expanding inline on request.', 'Perfect | Compare | House control; Compare is a row-aligned grid with a Δ gutter and a hide-identical switch.', 'Full-width segmented control; Compare keeps two narrow columns with a slim Δ gutter.'),
+      R('E — Editorial Recipe Book', 'E', ['Both complete recipes sit in one book spread with equal weight; sections align across the spread', 'Serif headings, dotted-leader ingredient lines and quiet notes read as a recipe book', 'Changed lines get a thin marker and a House adjustment note; nothing is struck through or colored as an error', 'Final Presentation follows both recipes with a large image'], ['Every unchanged line appears twice', 'Stacked tablet and mobile pages are the longest of the six', 'Quick Measure and ratio add a line to each recipe'], 'Reading and checking either version in full, on a station tablet or a desktop.', 'Large image after both recipes, beside glass, garnish and rim; shared specs when both versions match.', 'Two full recipes side by side on desktop, stacked Perfect then House on tablet and mobile with jump links.', 'Stacked recipes with Perfect ↓ House ↓ links; no tabs.'),
+      R('F — Bartender Compare', 'F', ['What Changes lists up to three differences before the recipes, as a shortcut only', 'Measurements are the largest type in every row, in fractions', 'Both complete recipes follow, with aligned sections and a Δ marker on changed rows', 'Compact image keeps the page short'], ['What Changes repeats what the marked rows show', 'Denser and more technical than E', 'Fractions differ from the decimals shown in A–E'], 'Fast checks during service, when the question is what differs from Perfect.', 'Compact 4:3 image beside glass, garnish and rim after both recipes.', 'What Changes, then two full recipes in cards; single recipes drop the summary.', 'Title, Quick Glance, What Changes, Perfect, House, Presentation, with jump links.'),
+      R('G — Bartender Recipe Book', 'G', ['Both complete recipes share one spread; ingredients, Quick Measure, method, steps and notes start on the same line', 'A changed House value shows a tinted row, a thin edge and a ◇ marker, plus a one-line House adjustments summary under the heading', 'Amounts are right-aligned and heavier than names, without the oversized type of F', 'Hairlines and spacing replace most cards, so the recipe reads as a page', 'Final Presentation is one shared block when specs match and splits into Perfect and House when they differ'], ['Side by side needs desktop width; stacked on mobile the page is about 3,300 px tall', 'Every unchanged line still appears twice', 'Row alignment relies on a shared grid, so a much longer House step makes the Perfect side taller too', 'The same placeholder illustration serves both versions in the split view'], 'Operational recipe reference where speed and presentation both matter.', 'Large image after both recipes, centered under glass, garnish and rim; one per version when presentation differs.', 'Two complete aligned recipes in one spread with a center hairline; single recipes drop the divider and use an 840 px column.', 'Complete recipes stacked with Perfect ↓ House ↓ Presentation ↓ links; no tabs.'),
+    ];
+
+    return {
+      theme: s.theme, S, vs, glance, single: !dual, dual, noop: (e) => e.preventDefault(),
+      themes: [btn('Dark', s.theme === 'dark', set({ theme: 'dark' })), btn('Light', s.theme === 'light', set({ theme: 'light' }))],
+      concepts,
+      states: [btn('Single recipe', !dual, set({ mode: 'single' })), btn('Perfect + House', dual, set({ mode: 'dual' }))],
+      singles: [btn('Perfect only', s.single === 'perfect', set({ single: 'perfect' })), btn('House only', s.single === 'house', set({ single: 'house' }))],
+      vps: [btn('Desktop 1440', DK, set({ vp: 'desktop' })), btn('Tablet 820', T, set({ vp: 'tablet' })), btn('Mobile 390', M, set({ vp: 'mobile' }))],
+      frameW: pick(1440, 820, 390), pad: pick('36px 48px 56px', '28px 28px 48px', '12px 16px 40px'),
+      cA: s.concept === 'A', cB: s.concept === 'B', cC: s.concept === 'C', cD: s.concept === 'D', ...EF, ...GG, ...APP,
+      amtW: M ? 68 : 84, reviews,
+      // A
+      titleA: pick(60, 48, 38), qgCols: M ? 'repeat(3,1fr)' : 'repeat(3,auto)', qgW: M ? 'width:100%' : '',
+      glance: glanceA, aTabsOn, aTabs, aPanelRole: aTabsOn ? 'tabpanel' : 'group', aVs,
+      aCols: dual && !M ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)', colPad: pick('30px 34px 32px', '26px 24px 28px', '22px 18px 24px'),
+      aPresCols: M ? 'minmax(0,1fr)' : dual ? (DK ? 'minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1fr)') : 'minmax(0,1fr) minmax(0,1.2fr)',
+      imgOrder: dual && T ? 3 : 2, imgSpan: dual && T ? '1 / -1' : 'auto', imgMax: dual && T ? '560px' : 'none',
+      // B
+      titleB: pick(46, 40, 34), bHead: M ? 'minmax(0,1fr)' : 'minmax(0,1fr) auto', bMethod: 'Shake', glanceNoMethod: glance.slice(1),
+      bMain: M ? 'minmax(0,1fr)' : 'minmax(0,1.1fr) minmax(0,1fr)',
+      bIngCols: dual ? (M ? 'minmax(0,1fr) 74px 82px' : T ? 'minmax(0,1fr) 84px 96px' : 'minmax(0,1fr) 110px 130px') : 'minmax(0,1fr) 110px',
+      bAmt: M ? 17 : 21, bRows: pairIng, bSteps, bSingleLabel: vs[0].short,
+      bRatioOn: vs[0].hasRatio && (!dual || vs[1].hasRatio), bRatioP: vs[0].ratio, bRatioH: dual ? vs[1].ratio : '',
+      bPresCols: M ? 'minmax(0,1fr)' : T ? '260px minmax(0,1fr)' : '340px minmax(0,1fr)',
+      bFigB: M ? 'border-bottom:1px solid var(--border)' : 'border-right:1px solid var(--border)',
+      bPresRow: dual ? (M ? '64px minmax(0,1fr) minmax(0,1fr)' : '88px minmax(0,1fr) minmax(0,1fr)') : '88px minmax(0,1fr)',
+      bPres, bNoteCols: dual && !M ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)',
+      // C
+      cMax: dual || DK ? (DK ? '1040px' : '760px') : '760px', cGap: pick(44, 38, 32), cTop: pick(28, 24, 18), titleC: pick(88, 68, 48),
+      qgCCols: M ? 'repeat(2,1fr)' : 'repeat(4,1fr)', cLabel: cb.label,
+      cText: cDeskMargin ? 'none' : (DK ? '680px' : 'none'), cGrid: cDeskMargin ? 'minmax(0,1fr) 280px' : 'minmax(0,1fr)', cMargin: cDeskMargin,
+      cIng, cNoteTop: cDeskMargin ? 0 : 2, cQm: cvm.qm, cHasRatio: cvm.hasRatio, cRatio: cvm.ratio,
+      cMethod: cb.method, cMethodSize: pick(44, 40, 34), cSteps,
+      cStepNoteTop: cDeskMargin ? 4 : 0, cStepNoteLeft: cDeskMargin ? 0 : 52,
+      cPres, cPresCols: M ? 'minmax(0,1fr)' : 'repeat(3,minmax(0,1fr))', cPresPad: M ? 0 : 24,
+      cPh: ph(pick('21/9', '16/9', '4/3')), cNoteCols: dual && !M ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)',
+      // D
+      titleD: pick(46, 40, 32), dTabs, dTabsW: M ? '100%' : '420px', dCtx, dFocus, dCompare: !dFocus, fv, dPanelRole: dual ? 'tabpanel' : 'group',
+      dFocusCols: DK ? 'minmax(0,5fr) minmax(0,7fr)' : 'minmax(0,1fr)', dFactCols: M ? 'minmax(0,1fr)' : 'repeat(3,auto)',
+      cmp, dCmpCols: M ? '26px minmax(0,1fr) minmax(0,1fr)' : '40px minmax(0,1fr) minmax(0,1fr)', dCmpHead: M ? 14 : 16, dCmpFont: M ? 14 : 16, dCmpLead: M ? 13 : 15,
+      dCmpP: M ? 'Perfect' : P.label, dCmpH: M ? 'House' : H.label,
+      toggleDiff: () => this.setState((x) => ({ onlyDiff: !x.onlyDiff })), dSwitchAria: hide ? 'true' : 'false',
+      dTrack: 'position:relative;flex:none;width:38px;height:22px;border-radius:11px;background:' + (hide ? 'var(--primary)' : 'var(--faint)'),
+      dKnob: 'position:absolute;top:3px;left:' + (hide ? 19 : 3) + 'px;width:16px;height:16px;border-radius:50%;background:#fff',
+      imgOpen: s.imgOpen, imgAria: s.imgOpen ? 'true' : 'false', imgBtn: s.imgOpen ? 'Hide finished drink' : 'View finished drink', toggleImg: () => this.setState((x) => ({ imgOpen: !x.imgOpen })),
+      dNotes, dNoteCols: dMode === 'compare' && !M ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)',
+    };
+  }
+}
+</script>
+</body>
+</html>

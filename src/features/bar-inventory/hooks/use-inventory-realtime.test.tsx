@@ -28,10 +28,15 @@ const settle = async () => {
 };
 
 describe("inventoryChannel", () => {
-  it("listens to exactly the stock and ledger tables of the one location", () => {
+  it("listens to stock, ledger, dates and rules for one location", () => {
     expect(inventoryChannel(LOCATION)).toEqual({
       name: `bar-inventory-${LOCATION}`,
       bindings: [
+        { table: "inventory_date_lots", filter: `location_id=eq.${LOCATION}` },
+        {
+          table: "inventory_freshness_rules",
+          filter: `location_id=eq.${LOCATION}`,
+        },
         { table: "inventory_stock", filter: `location_id=eq.${LOCATION}` },
         {
           table: "inventory_adjustments",
@@ -51,7 +56,7 @@ describe("startInventoryRealtime (BI-RT-002/003/004)", () => {
     expect(fake.raw.realtime.setAuth).not.toHaveBeenCalled();
   });
 
-  it("applies the JWT, then joins one channel with both bindings", async () => {
+  it("applies the JWT, then joins one channel with all bindings", async () => {
     const fake = fakeSupabase({ session: { access_token: "jwt-1" } });
     startInventoryRealtime(fake.client, LOCATION, vi.fn());
     await settle();
@@ -60,18 +65,24 @@ describe("startInventoryRealtime (BI-RT-002/003/004)", () => {
     );
     expect(fake.channelsCreated()).toBe(1);
     expect(fake.bindings.map((b) => b.table)).toEqual([
+      "inventory_date_lots",
+      "inventory_freshness_rules",
       "inventory_stock",
       "inventory_adjustments",
     ]);
   });
 
-  it("a change asks for one re-read; the payload is never used (forged payloads change nothing)", async () => {
+  it.each([
+    "inventory_stock",
+    "inventory_date_lots",
+    "inventory_freshness_rules",
+  ])("%s invalidates without applying a payload", async (table) => {
     const fake = fakeSupabase({ session: { access_token: "jwt-1" } });
     const onInvalidate = vi.fn();
     startInventoryRealtime(fake.client, LOCATION, onInvalidate);
     await settle();
 
-    fake.emitChange("inventory_stock", {
+    fake.emitChange(table, {
       new: { on_hand: 99999, product_id: "forged" },
     });
     expect(onInvalidate).not.toHaveBeenCalled(); // folded, not immediate
