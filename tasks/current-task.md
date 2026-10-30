@@ -41,8 +41,15 @@ Owner-approved scope: Production migration execution, manual backup, infrastruct
   - Verified no extra/demo/test recipes exist (distinct numbers 1-38, total 38, org count 1).
   - Verified Bar Inventory operational tables remain empty (0 rows across all operational tables).
   - Supabase CLI linkage confirmed restored to DEV (`opmujepkemwcdxxorhfd`).
-- [ ] GATE D: `development -> main` release PR, exact-head CI, merge commit, Vercel deployment verification, and browser smoke.
+- [x] GATE D: `development -> main` release PR, exact-head CI, merge commit, Vercel deployment verification, and browser smoke:
+  - Integration PR #240 (`release/recipes-v1-production-execution -> development`) merged to `development` at `2fdeab4915ab2b56aca2f0027718c3dc82c017a7`.
+  - Release candidate delta `origin/main..origin/development` reviewed (195 files, Recipes V1 + Inventory V1.1 compatibility).
+  - Release PR #241 (`development -> main`) opened and validated with exact-head CI (5/5 checks passed).
+  - PR #241 merged to `main` with merge commit `7ebe9b95334c3a9290087cc51bc2f0081a290c43`.
+  - Automatic Vercel Production deployment `dpl_Dgmy4FTBZnrFxfCD5tm7iPEy7LQZ` succeeded (Ready, 1m 4s).
+  - Production smoke verified: login, shell, navigation, 38 catalog recipes, picture book, detail view (Perfect/House), Recipe 20, Recipe 33, Recipes 35-38, zero tips, image security, inventory empty state, zero console/network errors.
+  - Production data safety confirmed: 38 recipes, 76 variants, 0 inventory operational rows, migration head `20261029194855`.
 
 ## In flight
 
-GATE C Production Recipe import is complete and verified on `the-lineup` (`ftadewtkjlaotfdvtjcv`). Production database contains exactly 38 recipes, 76 variants (38 house, 38 perfect), and 0 tips. Bar Inventory operational tables confirmed at 0 rows. Supabase CLI is actively linked to DEV (`opmujepkemwcdxxorhfd`). Execution is halted awaiting explicit owner authorization for GATE D (`development -> main` release PR, merge commit, and Vercel deployment).
+Recipes V1 Production release is COMPLETE. All gates (A, B, C, D) are finished and verified in live Production. No further operations required.
