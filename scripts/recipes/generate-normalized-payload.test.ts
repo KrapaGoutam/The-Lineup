@@ -4,7 +4,7 @@ import { parseCanonicalMarkdown } from "./generate-normalized-payload.mjs";
 import { importSchema } from "./import-schema.mjs";
 
 const CANONICAL_PATH =
-  "C:\\Users\\krapa\\Downloads\\monks_cocktail_recipes_db_ready.md";
+  "artifacts/recipes-prod-execution/canonical_monks_recipes.md";
 
 describe("canonical recipe markdown parsing and validation", () => {
   const rawText = readFileSync(CANONICAL_PATH, "utf8");
@@ -44,7 +44,7 @@ describe("canonical recipe markdown parsing and validation", () => {
     }
   });
 
-  it("includes the two required unresolved warnings", () => {
+  it("includes the two owner-approved resolved warnings", () => {
     const virginCoco = recipes.find(
       (r) => r.name.toLowerCase() === "virgin coco margarita splash",
     );
@@ -53,7 +53,11 @@ describe("canonical recipe markdown parsing and validation", () => {
         id: "virgin-coco-quantity",
         message:
           "House quantities are ambiguous in the source (0.75 oz or 2 oz). Do not choose one automatically.",
-        status: "unresolved",
+        status: "resolved",
+        resolution:
+          "Owner approved standard balanced House build: Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz.",
+        approved_by: "Owner (Raj)",
+        approved_on: "2026-10-29",
       },
     ]);
 
@@ -65,9 +69,37 @@ describe("canonical recipe markdown parsing and validation", () => {
         id: "smoked-vanilla-alternative",
         message:
           "The house build presents Absolut Vanilia - 0.5 oz or Vanilla syrup - 0.5 oz as alternatives.",
-        status: "unresolved",
+        status: "resolved",
+        resolution:
+          "Owner approved House build using Vanilla syrup 0.5 oz (syrup modifier profile).",
+        approved_by: "Owner (Raj)",
+        approved_on: "2026-10-29",
       },
     ]);
+  });
+
+  it("verifies owner decisions on ingredients for recipes 20 and 33", () => {
+    const virginCoco = recipes.find(
+      (r) => r.name.toLowerCase() === "virgin coco margarita splash",
+    );
+    const cocoCream = virginCoco?.variants.house?.ingredients.find((i) =>
+      i.ingredient_name.toLowerCase().includes("coconut cream"),
+    );
+    const sourMix = virginCoco?.variants.house?.ingredients.find((i) =>
+      i.ingredient_name.toLowerCase().includes("sweet and sour"),
+    );
+    expect(cocoCream?.amount).toBe("0.75 oz");
+    expect(sourMix?.amount).toBe("0.75 oz");
+
+    const smokedVanilla = recipes.find(
+      (r) => r.name.toLowerCase() === "smoked vanilla old fashioned",
+    );
+    const names = smokedVanilla?.variants.house?.ingredients.map(
+      (i) => i.ingredient_name,
+    );
+    expect(names).toContain("Vanilla syrup");
+    expect(names).not.toContain("Absolut Vanilia");
+    expect(names).not.toContain("Or");
   });
 
   it("validates the entire structure against importSchema", () => {
@@ -81,7 +113,20 @@ describe("canonical recipe markdown parsing and validation", () => {
           "f3a82e5b448da2ad6b8006dffec30a0a7ef1bcfe82044f42fe9774772c45bced",
         approved_by: "Canonical source import",
         approved_on: "2026-10-29",
-        corrections: [],
+        corrections: [
+          {
+            recipe_number: 20,
+            field: "variants.house.ingredients",
+            note: "Owner approved House build using Vanilla syrup 0.5 oz; excluded alternative Absolut Vanilia.",
+            approved_on: "2026-10-29",
+          },
+          {
+            recipe_number: 33,
+            field: "variants.house.ingredients",
+            note: "Owner approved standard balanced House build: Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz.",
+            approved_on: "2026-10-29",
+          },
+        ],
       },
       categories: [
         {

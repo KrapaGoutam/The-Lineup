@@ -22,15 +22,19 @@ Owner-approved scope: Production migration execution, manual backup, infrastruct
 - [x] Restore Supabase CLI link to DEV (`the-lineup-dev` / `opmujepkemwcdxxorhfd`).
 - [x] Locate canonical Recipe Markdown (`monks_cocktail_recipes_db_ready.md`), compute SHA-256 (`f3a82e5b448da2ad6b8006dffec30a0a7ef1bcfe82044f42fe9774772c45bced`).
 - [x] Parse 38 recipes, 76 variants, 5 categories (20 Signature, 4 Margaritas, 6 Martinis, 7 Mocktails, 1 Shots), DB numbers 1-38; validate with `importSchema`.
-- [x] Generate normalized JSON artifact (`monks_cocktail_recipes_prod_normalized.json`, SHA-256 `f41a803217ae730bf81a433c3cc91fc37e3c762488774d403b0776f0fa74d08b`).
-- [x] Exclude suggested tips (47 tips across 38 recipes) by default pending owner decision.
-- [x] Track unresolved import warnings: Virgin Coco Margarita Splash (0.75 oz vs 2 oz), Smoked Vanilla Old Fashioned (Absolut Vanilia vs vanilla syrup).
-- [x] Execute PROD Recipe dry run (`--mode dry-run`) targeting `ftadewtkjlaotfdvtjcv` with owner actor `4fc73830-14ed-42aa-94b0-e7ec22b196c3` and org `the-monks`: 38 creates, exit code 0.
-- [x] Verify zero persistent writes on PROD after dry run: all recipe counts remain 0.
-- [x] Maintain CLI linked to DEV.
-- [ ] GATE C: Explicit owner Recipe import approval (pending owner decisions on warnings and suggested tips).
+- [x] Apply owner decisions to normalized release payload:
+  - Recipe 33 (Virgin Coco Margarita Splash): Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz; warning resolved.
+  - Recipe 20 (Smoked Vanilla Old Fashioned): Vanilla syrup 0.5 oz (Absolut Vanilia / Or omitted); warning resolved.
+  - Suggested Bartender Tips: Excluded all 47 tips from import (0 tips imported).
+  - Green Tea Shot (Recipe 38): Pricing omitted from DB fields, preserved in canonical source.
+- [x] Regenerate normalized JSON artifact (`monks_cocktail_recipes_prod_normalized.json`, SHA-256 `ebabe35668487de6ca04b56a9db5c2fe0c1f720c7f901bb66516fcdf75c85b7a`).
+- [x] Execute PROD Recipe dry run (`--mode dry-run`) with resolved payload targeting `ftadewtkjlaotfdvtjcv` with owner actor `4fc73830-14ed-42aa-94b0-e7ec22b196c3` and org `the-monks`: 38 creates, exit code 0.
+- [x] Verify zero persistent writes on PROD after dry run: all 6 recipe table counts remain 0.
+- [x] Maintain CLI linked to DEV (`opmujepkemwcdxxorhfd`).
+- [x] Verify repository quality gates: `npm run check` clean, `npm run test` (157 files, 2,071 tests passed).
+- [ ] GATE C: Explicit owner Recipe import approval of exact payload hash (`ebabe356...`) and dry run before executing `--mode create`.
 - [ ] GATE D: `development -> main` release PR, exact-head CI, merge commit, Vercel deployment verification, and browser smoke.
 
 ## In flight
 
-Production migration batch (8 migrations) is successfully executed and verified on `ftadewtkjlaotfdvtjcv`. Parity is 62/62 at head `20261029194855`. Recipe storage and database security are verified. Inventory operational state confirmed empty. Canonical 38-recipe source is parsed, normalized, schema-validated, and verified via transactional rollback dry run on PROD. Zero persistent rows written. CLI safely relinked to DEV. Execution is halted at the Recipe Import Approval Gate awaiting owner decisions.
+Production migration batch (8 migrations) is successfully executed and verified on `ftadewtkjlaotfdvtjcv` (parity 62/62 at head `20261029194855`). Recipe storage and database security are verified. Inventory operational state confirmed empty. Canonical 38-recipe source is parsed, normalized with owner-approved decisions (warnings resolved with explicit metadata, 0 tips imported), schema-validated, and verified via transactional rollback dry run on PROD. Pre- and post-dry-run table counts confirmed 0 across all 6 tables (0 persistent writes). CLI safely relinked to DEV. Execution is halted at GATE C awaiting owner approval of the final normalized payload hash to execute `--mode create`.
