@@ -121,23 +121,27 @@ PROD backup metadata GET returned **403: Missing required permission(s): backups
 
 Before P3 the owner/operator must verify an actual usable recovery point, retention and restore procedure through existing authorized access. A pre-release logical backup to an owner-controlled private destination is recommended if a suitable recovery point cannot be verified; Storage objects need separate recovery consideration. Never commit a dump. Additive migration compatibility makes application rollback feasible but does not replace data recovery.
 
-## Future execution — P0–P14 (none performed)
+## Execution results — P0–P8 completed; P9–P14 pending owner approval
 
-- [ ] **P0** Owner explicit Production GO for exact candidate, migration batch and sequencing; this checkpoint does not supply GO on the owner's behalf.
-- [ ] **P1** Verify `the-lineup` / `ftadewtkjlaotfdvtjcv`, organization identity and actor; re-query live heads/counts; stop if state changed. Confirm release PR candidate checks and intended branch before writes.
-- [ ] **P2** Verify usable backup/PITR or approved private logical backup and recovery plan. Stop if unverified. Preserve secrets and record only safe recovery metadata.
-- [ ] **P3** Explicitly link PROD; confirm ref; run `supabase db push --linked --dry-run` and compare exactly the eight filenames above. Apply approved batch with bounded lock/statement timeouts using the repository workflow; stop on error. Restore DEV link in `finally` even if any later gate fails. No migration repair.
-- [ ] **P4** Verify PROD migration history is 62 versions through `20261029194855` (or re-approved newer exact batch), no pending/remote-only versions; verify changed RPC/grants/RLS. Record results safely.
-- [ ] **P5** Verify private Recipe bucket, MIME/size, three object policies and role/tenant permissions. No separate manual Storage change without explicit scope/approval if migration failed.
-- [ ] **P6** Recheck Inventory counts. If still empty, require owner decision: launch empty OR approved canonical Inventory payload, reviewed dry run and explicit injection approval. Use existing manager CSV/XLSX workflow; do not invent a script or use fixtures. Never replace operational data automatically.
-- [ ] **P7** Inventory readback: org/location categories/products/stock/ledger and draft state as applicable; retain safe counts and no unrelated changes. If launch empty was approved, verify empty state.
-- [ ] **P8** Supply canonical Recipe source and normalized JSON, validate provenance/hash, **38/76** and category split, explicit org/actor; run PROD rollback-only Recipe dry run and review mapping/report. No real content currently available.
-- [ ] **P9** Owner resolves/explicitly approves known warning records and all remaining import warnings; record correction decisions. Changed payload means repeat P8 and review new hash/report.
-- [ ] **P10** Separate explicit owner Recipe import approval for exact file SHA, dry-run report, organization ID and actor. This is not implied by access credentials or a prior generic release GO.
-- [ ] **P11** Execute guarded create-only Recipe import with all acknowledgements and matching report. No truncate/reset/deletes/Production overwrite. Stop on any error.
-- [ ] **P12** Read back categories/38 Recipes/76 variants, numbers/slugs, full Perfect/House children, warning resolutions, active/archive state and private image behavior. Confirm no Inventory coupling or unintended stock mutation.
-- [ ] **P13** Prepare `development → main` release PR and require exact-head application, browser-smoke, Database and Vercel checks; merge with a merge commit only under owner approval. Stop if head changes; no main merge in this checkpoint.
-- [ ] **P14** Verify Production deploy uses approved main SHA/PROD configuration with no DEV ref; authenticated owner/Staff smoke Recipes/List/Picture Book/search/detail/management/archive/images and Inventory as applicable. Keep #220/#234/milestone #7 open until owner accepts release/deferred status. Record final DEV linkage.
+- [x] **P0** Owner explicit Production GO for candidate execution and canonical Markdown source override.
+- [x] **P1** Target verified: `the-lineup` / `ftadewtkjlaotfdvtjcv`, organization `the-monks` (`284f0170-05a0-4d60-b171-1b5cb13ae076`), actor `4fc73830-14ed-42aa-94b0-e7ec22b196c3` (Raj, owner). Release candidate baseline: `3954041eabf9f3b3be98e0ca2c5ad6ab71444f8f`.
+- [x] **P2** Verified manual logical backup created in `C:\Users\krapa\Documents\Projects\Restaurent\Backups\The-Lineup\`:
+  - `prod_backup_20261029_155043_schema.sql` (530,578 bytes, SHA256 `38A8A67826AA7AFC0088ACCFF4E0390148AA84A727EFF66055BDF2D902B10C79`)
+  - `prod_backup_20261029_155043_data.sql` (499,000 bytes, SHA256 `DA435DA2DC7C99B3A5A7AB64711EA24C0622807AD05C5B5E727185F1BB9AABB2`)
+  - `prod_backup_20261029_155043_roles.sql` (370 bytes, SHA256 `168A95A9C745AF5ED4679751F90419AC9DC434240A213B03E32A06D5664C2308`)
+  - Restore procedure documented: data dump header `SET session_replication_role = replica;` resolves `payroll_payments` circular FKs.
+- [x] **P3** `supabase db push --linked --dry-run` and live push applied all 8 migrations (`20261028140623` through `20261029194855`) atomically without error. CLI restored to DEV immediately.
+- [x] **P4** PROD migration history verified at 62 versions through `20261029194855` (parity 62/62). `bar_recipe_category_reorder` qualified fix verified (`c.id=ordered.id`, `SECURITY DEFINER`, search_path ''). All 6 recipe tables have RLS enabled.
+- [x] **P5** Recipe storage verified: private `recipe-images` bucket exists, 2 MiB, WebP/JPEG allowed, 3 authenticated policies (`recipe_images_select`, `recipe_images_insert`, `recipe_images_delete`), no UPDATE, no public access.
+- [x] **P6** Rechecked Inventory counts on PROD: all 10 operational tables have 0 rows. Launch decision: EMPTY INITIAL STATE. No operational data injected.
+- [x] **P7** Inventory readback verified: 0 products, 0 categories, 0 stock, 0 adjustments, 0 drafts, 0 draft items, 0 saved views, 0 date lots, 0 freshness rules.
+- [x] **P8** Canonical Recipe payload located (`monks_cocktail_recipes_db_ready.md`, SHA-256 `f3a82e5b448da2ad6b8006dffec30a0a7ef1bcfe82044f42fe9774772c45bced`). Normalized JSON generated (`monks_cocktail_recipes_prod_normalized.json`, SHA-256 `f41a803217ae730bf81a433c3cc91fc37e3c762488774d403b0776f0fa74d08b`), 38 recipes, 76 variants, 5 categories (20/4/6/7/1), DB numbers 1-38. Suggested tips excluded (47 tips). Rollback-only PROD dry run executed: 38 creates, report saved, zero persistent rows written (all counts remain 0).
+- [ ] **P9** Owner resolves/explicitly approves known warning records: Virgin Coco Margarita Splash (0.75 oz vs 2 oz) and Smoked Vanilla Old Fashioned (Absolut Vanilia vs vanilla syrup); decision on suggested tips.
+- [ ] **P10** Separate explicit owner Recipe import approval for exact normalized file SHA-256 (`f41a803217ae730bf81a433c3cc91fc37e3c762488774d403b0776f0fa74d08b`), dry-run report, organization `the-monks` (`284f0170-05a0-4d60-b171-1b5cb13ae076`) and actor `4fc73830-14ed-42aa-94b0-e7ec22b196c3`.
+- [ ] **P11** Execute guarded create-only Recipe import with all acknowledgements and matching report. No truncate/reset/deletes/Production overwrite.
+- [ ] **P12** Read back categories/38 Recipes/76 variants on PROD.
+- [ ] **P13** Prepare `development → main` release PR; require exact-head CI and owner approval before merge.
+- [ ] **P14** Verify Production deploy on Vercel; authenticated smoke; close tracking. CLI stays linked to DEV.
 
 ## Validation and remaining evidence
 

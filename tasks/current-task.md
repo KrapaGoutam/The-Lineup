@@ -1,33 +1,48 @@
-﻿# Recipes V1 — Release Candidate Validation + Production Preflight
+# Recipes V1 — Production Execution (Migrations + Canonical Dry Run)
 
-Owner-approved scope: attached execution profile, 2026-10-29. Production is read-only; no imports, Storage mutation, deployment or main merge.
+Owner-approved scope: Production migration execution, manual backup, infrastructure verification, empty inventory launch confirmation, canonical recipe parsing, and rollback-only dry run. Production Recipe writes, Inventory data injection, and `development -> main` merge are explicitly NOT authorized in this checkpoint.
 
-- Baseline / PR #237 merge: `dd792f359a77b60ea05115ce8c682b38a5a6d5d8`.
+- Baseline / Release Candidate: `3954041eabf9f3b3be98e0ca2c5ad6ab71444f8f` (`origin/development`).
 - Main: `9e0be4b4eb7b7be2f32a6e57c9b773d7cf776b05`.
-- Branch: `release/recipes-v1-production-preflight`; worktree: `.tmp/recipes-prod-preflight`.
-- DEV: `the-lineup-dev`, `opmujepkemwcdxxorhfd`; PROD: `the-lineup`, `ftadewtkjlaotfdvtjcv`; both East US (Ohio), verified by CLI project listing.
-- Existing parent-worktree changes and shelved worktrees preserved.
-
-## Contract
-
-Data: new forward migration only for category ID validation; no changed table shape. Authorization: retain active manager membership, organization scope, grants and pinned search path. UI: unchanged. Import: explicit prod origin, organization, default dry run, deliberate execution acknowledgement and resolved warnings; create/upsert only. Risks: environment selection, hidden writes in dry run, warning bypass, unknown category IDs. Tests: focused importer unit tests and pgTAP first, repository check/test/build, exact-head CI; no browser rerun for unchanged UI.
+- Branch: `release/recipes-v1-production-execution`; worktree: `.tmp/recipes-prod-execution`.
+- DEV: `the-lineup-dev`, `opmujepkemwcdxxorhfd`; PROD: `the-lineup`, `ftadewtkjlaotfdvtjcv`.
+- Root worktree preserved untouched.
 
 ## Checklist
 
-- [x] Verify #237 already merged, expected head and CI #238 success through GitHub connector; fetch latest development and verify main.
-- [x] Create isolated worktree; verify both exact Supabase project refs; keep CLI 2.76.8 (available 2.122.0).
-- [x] Link DEV explicitly; inspect actual DEV and PROD history; restore DEV immediately.
-- [x] Reproduce and fix category reorder; test locally; apply reviewed fix to DEV only and verify parity.
-- [x] Implement and test Production importer safeguards with mocked writes.
-- [x] Inspect pending migrations, PROD Inventory/Storage/recovery, canonical payload/source, app configuration.
-- [x] Write exact future Production plan and update release tracking/docs.
-- [x] Local validation, security/accessibility/tenant/scope review and secret/artifact scan (12 intended files) pass.
-- [x] Commit, push and open [PR #239](https://github.com/KrapaGoutam/The-Lineup/pull/239); exact-head CI is the enforced gate. Final observed head/check results are recorded in #238 and the PR (avoids a self-changing commit SHA in this file).
-- [x] Establish authorized merge gate: only merge to development after exact-head CI passes; record actual outcome/SHA in #238. Owner data/recovery decisions stay mandatory future execution gates, not extra conditions on the safe preparation merge.
-- [x] Record unchanged development/main and DEV linkage; final read-only recheck and owner handoff evidence is recorded in #238 and the final report.
+- [x] Verify release candidate baseline (`3954041eabf9f3b3be98e0ca2c5ad6ab71444f8f`), clean worktree, and DEV link.
+- [x] Analyze `origin/main..origin/development` dependency matrix: confirmed all 8 pending migrations required by final app release.
+- [x] Create manual logical Production backup outside repo (`C:\Users\krapa\Documents\Projects\Restaurent\Backups\The-Lineup\`); verify schema, data, roles, non-zero sizes, SHA-256 hashes, and restore procedure accounting for `payroll_payments` circular FKs.
+- [x] Link PROD and verify pre-migration head (`20261028100100`, 54 applied, 8 pending).
+- [x] Run `supabase db push --linked --dry-run` to preview exact 8 migrations.
+- [x] Apply 8 approved migrations to PROD; verify post-migration head (`20261029194855`, 62 applied, parity 62/62).
+- [x] Verify Recipe Storage on PROD: `recipe-images` private, 2 MiB, image/webp & image/jpeg, 3 authenticated policies (SELECT, INSERT, DELETE), no UPDATE, no public access.
+- [x] Verify Recipe database security on PROD: all 6 tables have RLS enabled; `bar_recipe_category_reorder` qualified fix verified (`c.id=ordered.id`, `SECURITY DEFINER`, search_path '').
+- [x] Verify Inventory tables on PROD: 0 operational rows across all tables. Launch decision recorded: EMPTY INITIAL STATE. Zero operational data injected.
+- [x] Restore Supabase CLI link to DEV (`the-lineup-dev` / `opmujepkemwcdxxorhfd`).
+- [x] Locate canonical Recipe Markdown (`monks_cocktail_recipes_db_ready.md`), compute SHA-256 (`f3a82e5b448da2ad6b8006dffec30a0a7ef1bcfe82044f42fe9774772c45bced`).
+- [x] Parse 38 recipes, 76 variants, 5 categories (20 Signature, 4 Margaritas, 6 Martinis, 7 Mocktails, 1 Shots), DB numbers 1-38; validate with `importSchema`.
+- [x] Apply owner decisions to normalized release payload:
+  - Recipe 33 (Virgin Coco Margarita Splash): Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz; warning resolved.
+  - Recipe 20 (Smoked Vanilla Old Fashioned): Vanilla syrup 0.5 oz (Absolut Vanilia / Or omitted); warning resolved.
+  - Suggested Bartender Tips: Excluded all 47 tips from import (0 tips imported).
+  - Green Tea Shot (Recipe 38): Pricing omitted from DB fields, preserved in canonical source.
+- [x] Regenerate normalized JSON artifact (`monks_cocktail_recipes_prod_normalized.json`, SHA-256 `ebabe35668487de6ca04b56a9db5c2fe0c1f720c7f901bb66516fcdf75c85b7a`).
+- [x] Execute PROD Recipe dry run (`--mode dry-run`) with resolved payload targeting `ftadewtkjlaotfdvtjcv` with owner actor `4fc73830-14ed-42aa-94b0-e7ec22b196c3` and org `the-monks`: 38 creates, exit code 0.
+- [x] Verify zero persistent writes on PROD after dry run: all 6 recipe table counts remain 0.
+- [x] Maintain CLI linked to DEV (`opmujepkemwcdxxorhfd`).
+- [x] Verify repository quality gates: `npm run check` clean, `npm run test` (157 files, 2,071 tests passed).
+- [x] GATE C: Explicit owner Recipe import approval received and executed:
+  - Live create-only import (`--mode create --execute --confirm-prod`) executed with matching dry-run report.
+  - Successfully created 38 recipes, 76 variants across 5 categories in org `the-monks` (`284f0170-05a0-4d60-b171-1b5cb13ae076`) with actor Raj (`4fc73830-14ed-42aa-94b0-e7ec22b196c3`).
+  - Readback verified on PROD: exactly 38 recipes, 76 variants (38 house, 38 perfect), 310 ingredients, 265 steps, 73 garnishes, 0 tips.
+  - Category breakdown verified: 20 Signature Cocktails, 4 Margaritas, 6 Martinis, 7 Mocktails, 1 Shots.
+  - Representative verification passed: Recipes 20 (Vanilla syrup 0.5 oz, Absolut Vanilia/Or absent), 33 (Coconut cream 0.75 oz, Sweet & sour mix 0.75 oz), 35-37 (Simple, Flavored, Mint Lemonade), 38 (Green Tea Shot, Shots category, pricing excluded from DB).
+  - Verified no extra/demo/test recipes exist (distinct numbers 1-38, total 38, org count 1).
+  - Verified Bar Inventory operational tables remain empty (0 rows across all operational tables).
+  - Supabase CLI linkage confirmed restored to DEV (`opmujepkemwcdxxorhfd`).
+- [ ] GATE D: `development -> main` release PR, exact-head CI, merge commit, Vercel deployment verification, and browser smoke.
 
 ## In flight
 
-GitHub and Vercel local credentials work outside the sandbox; connectors lacked write/team access, so local CLI provides authorized tracking/inspection. PR #237 already merged; issue #238 created, #220 updated in progress, #234/milestone #7 open. DEV fix `20261029194855` applied and verified, parity 62/62; PROD 54 through `20261028100100`, exact eight pending in PRODUCTION_RELEASE.md. Seven historical PROD name/statement-serialization differences investigated: SQL tokens match DEV, no repair. Reorder baseline failed 3/12 assertions; fixed 12/12. Combined local pgTAP 49 files / 1550 assertions; SQL lint pass. Focused importer 29/29, check pass, full unit 2061/2061, build pass after isolated locked npm ci. No types shape change. Local browser suite not rerun (no UI change); exact-head CI required.
-
-PROD Inventory operational tables empty; no approved Inventory source found. Canonical Recipe source not found (expected 38/76); two content warnings left for owner. Recipe bucket absent (migration creates it). Vercel Production branch main and required variable names verified; values unverified. Backup metadata returns 403 for missing backups_read, so usable recovery point remains a mandatory execution gate. See docs/features/recipes-v1/PRODUCTION_RELEASE.md for P0–P14, pending migration reviews and decisions. No Production migration, row/import/Storage write, deployment or main merge. Tokens never printed/stored. Focused final importer 32/32; final full unit 2064/2064. PR #239 prepared; final GO requires exact-head CI and authorized development merge. An earlier NO-GO classification incorrectly treated future data/recovery gates as extra preparation-merge conditions; corrected to the owner's explicit GO checklist. Post-push exact-head CI, merge result and final remote verification are recorded in #238/PR #239. Next owner action after checkpoint GO: explicit Production execution approval plus verified recovery, canonical Recipe payload/decisions and an approved Inventory source or empty-launch decision before their respective execution steps.
+GATE C Production Recipe import is complete and verified on `the-lineup` (`ftadewtkjlaotfdvtjcv`). Production database contains exactly 38 recipes, 76 variants (38 house, 38 perfect), and 0 tips. Bar Inventory operational tables confirmed at 0 rows. Supabase CLI is actively linked to DEV (`opmujepkemwcdxxorhfd`). Execution is halted awaiting explicit owner authorization for GATE D (`development -> main` release PR, merge commit, and Vercel deployment).
