@@ -1,0 +1,391 @@
+<!doctype html>
+<!--
+  VIEW I — THE BARTENDER'S BOOK · semantic markup reference
+  Shows the intended DOM hierarchy for #20 Smoked Vanilla Old Fashioned (Perfect + House).
+  All text is mockup data. Tips are mockup data and are NOT persisted Production content.
+  Styling: view-i-reference.css (scoped under .book). Open this file directly; no build step.
+  The two buttons at the very top are for previewing only and are not part of the design.
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>#20 Smoked Vanilla Old Fashioned · The Monk's · The Lineup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap"
+    />
+    <link rel="stylesheet" href="view-i-reference.css" />
+    <style>
+      /* preview chrome only */
+      html {
+        background: #1b1612;
+      }
+      :root[data-theme="light"] {
+        background: #e9e7e2;
+      }
+      body {
+        margin: 0;
+      }
+      .preview-bar {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        font: 600 12px system-ui;
+      }
+      .preview-bar button {
+        font: inherit;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid #8884;
+        background: #fff8;
+        cursor: pointer;
+      }
+      .app-header {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        font:
+          700 15px "Geist",
+          system-ui;
+        background: #efe7d7;
+        color: #2a2018;
+        border-bottom: 1px solid #0002;
+      }
+      :root:not([data-theme="light"]) .app-header {
+        background: #0f0a08;
+        color: #f1e6d4;
+        border-color: #fff1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="preview-bar">
+      <button
+        type="button"
+        onclick="document.documentElement.dataset.theme='light'"
+      >
+        Light
+      </button>
+      <button
+        type="button"
+        onclick="document.documentElement.dataset.theme='dark'"
+      >
+        Dark
+      </button>
+    </div>
+    <!-- Stand-in for the real app header. Production header height must be 48px or less at 1366x768 to keep the zero-scroll contract. -->
+    <div class="app-header" data-app-header>The Lineup</div>
+
+    <!-- Add class "book--long" when either variant has more than 5 ingredients or more than 5 steps.
+     Add class "book--single" (and the single markup variant described in IMPLEMENTATION_SPEC.md) for one variant. -->
+    <main class="book" aria-labelledby="recipe-title">
+      <!-- ===== Recipe header ===== -->
+      <header class="book-head">
+        <a class="book-back" href="#" rel="up">&larr; Recipes</a>
+        <div class="book-titleblock">
+          <p class="book-no">No. <b>20</b></p>
+          <h1 class="book-title" id="recipe-title" tabindex="-1">
+            Smoked Vanilla Old Fashioned
+          </h1>
+          <p class="book-chapter">Signature Cocktails</p>
+        </div>
+        <a class="book-edit" href="#">Edit</a>
+      </header>
+
+      <!-- ===== Spread: Perfect | spine | House ===== -->
+      <div class="book-spread" data-testid="recipe-spread">
+        <!-- Perfect page -->
+        <article
+          class="book-page book-page--perfect"
+          id="recipe-variant-perfect"
+          aria-labelledby="recipe-variant-perfect-heading"
+        >
+          <header class="book-page__head">
+            <div class="book-page__titleline">
+              <span
+                class="book-marker book-marker--hollow"
+                aria-hidden="true"
+              ></span>
+              <h2
+                class="book-page__title"
+                id="recipe-variant-perfect-heading"
+                tabindex="-1"
+              >
+                Perfect
+              </h2>
+            </div>
+            <p class="book-page__sub"><span>Reference Build</span></p>
+          </header>
+
+          <section aria-labelledby="perfect-ing">
+            <div class="book-sec">
+              <h3 id="perfect-ing">Ingredients</h3>
+              <div
+                class="book-units"
+                role="group"
+                aria-label="Measurement units"
+              >
+                <button type="button" aria-pressed="true">oz</button>
+                <button type="button" aria-pressed="false">ml</button>
+              </div>
+            </div>
+            <ul class="book-ingredients">
+              <li class="book-ing">
+                <span class="book-ing__name">Bourbon</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">2</span
+                  ><span class="book-qty__f"></span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Demerara syrup</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">0</span
+                  ><span class="book-qty__f">.25</span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Vanilla syrup</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">0</span
+                  ><span class="book-qty__f">.25</span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Aromatic bitters</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">1</span
+                  ><span class="book-qty__f"></span
+                  ><span class="book-qty__u">dash</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Walnut bitters</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">1</span
+                  ><span class="book-qty__f"></span
+                  ><span class="book-qty__u">dash</span></span
+                >
+              </li>
+            </ul>
+          </section>
+
+          <dl class="book-meta" aria-label="Perfect build details">
+            <div>
+              <dt>Method</dt>
+              <dd>Stir</dd>
+            </div>
+            <div>
+              <dt>Garnish</dt>
+              <dd>Orange peel and cherry</dd>
+            </div>
+          </dl>
+
+          <section aria-labelledby="perfect-prep">
+            <div class="book-sec"><h3 id="perfect-prep">Preparation</h3></div>
+            <ol class="book-steps">
+              <li class="book-step">
+                <span><b>Add</b> all ingredients to mixing glass.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Add</b> ice.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Stir</b> until chilled and diluted.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Strain</b> over a large cube.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Smoke</b> if desired.</span>
+              </li>
+            </ol>
+          </section>
+
+          <!-- Rendered only when a persisted tip exists. No placeholder otherwise. -->
+          <aside class="book-note" aria-labelledby="perfect-note">
+            <p class="book-note__label" id="perfect-note">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                />
+                <path d="M9 18h6" />
+                <path d="M10 22h4" />
+              </svg>
+              BARTENDER NOTE
+            </p>
+            <p>
+              Express the orange peel over the finished drink before garnishing.
+            </p>
+          </aside>
+        </article>
+
+        <!-- Spine: one shared image + shared presentation values -->
+        <figure class="book-spine">
+          <div class="book-mat">
+            <div
+              class="book-photo"
+              role="img"
+              aria-label="Smoked Vanilla Old Fashioned, finished drink (placeholder)"
+            >
+              <!-- Production: <RecipeImage> renders <img alt="{recipe.name}"> or the Martini fallback here -->
+            </div>
+          </div>
+          <figcaption>
+            <span class="book-glass">Old Fashioned / Rocks</span>
+            <span class="book-rim">No rim</span>
+          </figcaption>
+          <!-- Shared note (only when one tip applies to both builds): <aside class="book-note">...</aside> -->
+        </figure>
+
+        <!-- House page -->
+        <article
+          class="book-page book-page--house"
+          id="recipe-variant-house"
+          aria-labelledby="recipe-variant-house-heading"
+        >
+          <header class="book-page__head">
+            <div class="book-page__titleline">
+              <span
+                class="book-marker book-marker--filled"
+                aria-hidden="true"
+              ></span>
+              <h2
+                class="book-page__title"
+                id="recipe-variant-house-heading"
+                tabindex="-1"
+              >
+                House
+              </h2>
+            </div>
+            <p class="book-page__sub">
+              <span>The Monk's Build</span
+              ><span
+                class="book-diff"
+                tabindex="0"
+                title="Differs from Perfect: ingredients, garnish, steps"
+                >3 differences</span
+              >
+            </p>
+          </header>
+
+          <section aria-labelledby="house-ing">
+            <div class="book-sec"><h3 id="house-ing">Ingredients</h3></div>
+            <ul class="book-ingredients">
+              <li class="book-ing">
+                <span class="book-ing__name">Buffalo Trace</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">1</span
+                  ><span class="book-qty__f">.50</span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Vanilla syrup</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">0</span
+                  ><span class="book-qty__f">.50</span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Simple syrup</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">0</span
+                  ><span class="book-qty__f">.25</span
+                  ><span class="book-qty__u">oz</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Cocoa bitters</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">1</span
+                  ><span class="book-qty__f"></span
+                  ><span class="book-qty__u">dash</span></span
+                >
+              </li>
+              <li class="book-ing">
+                <span class="book-ing__name">Aromatic bitters</span
+                ><span class="book-qty"
+                  ><span class="book-qty__w">1</span
+                  ><span class="book-qty__f"></span
+                  ><span class="book-qty__u">dash</span></span
+                >
+              </li>
+            </ul>
+          </section>
+
+          <dl class="book-meta" aria-label="House build details">
+            <div>
+              <dt>Method</dt>
+              <dd>Stir</dd>
+            </div>
+            <div>
+              <dt>Garnish</dt>
+              <dd>Orange peel or cherry</dd>
+            </div>
+          </dl>
+
+          <section aria-labelledby="house-prep">
+            <div class="book-sec"><h3 id="house-prep">Preparation</h3></div>
+            <ol class="book-steps">
+              <li class="book-step">
+                <span><b>Add</b> all ingredients to mixing glass.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Add</b> ice.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Stir</b> well.</span>
+              </li>
+              <li class="book-step">
+                <span><b>Strain</b> over a large cube.</span>
+              </li>
+            </ol>
+          </section>
+
+          <aside class="book-note" aria-labelledby="house-note">
+            <p class="book-note__label" id="house-note">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                />
+                <path d="M9 18h6" />
+                <path d="M10 22h4" />
+              </svg>
+              BARTENDER NOTE
+            </p>
+            <p>
+              Smoke briefly so the aroma complements rather than overwhelms the
+              vanilla.
+            </p>
+          </aside>
+        </article>
+      </div>
+    </main>
+  </body>
+</html>
