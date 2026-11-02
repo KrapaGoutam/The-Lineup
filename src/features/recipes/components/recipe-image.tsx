@@ -10,21 +10,24 @@ export function RecipeImage(props: {
   hasImage?: boolean;
   preview?: string;
   thumbnail?: boolean;
+  aspect?: "portrait" | "landscape";
   className?: string;
 }) {
+  const isThumbnail = props.thumbnail;
+  const isPortrait = props.aspect === "portrait" || isThumbnail;
   const { urls, failed, onError, revision } = useRecipeImages({
     restaurantSlug: props.restaurantSlug ?? "",
     recipeId: props.recipeId,
     initial: props.initial,
-    thumbnail: props.thumbnail,
+    thumbnail: isThumbnail,
     enabled: !!props.restaurantSlug && !!props.hasImage,
   });
   const source =
-    !failed && (props.preview || (props.thumbnail ? urls?.thumb : urls?.hero));
+    !failed && (props.preview || (isThumbnail ? urls?.thumb : urls?.hero));
   return (
     <div
       data-testid="recipe-image"
-      className={`bg-muted mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border ${props.thumbnail ? "aspect-[4/5]" : "aspect-[16/10] max-w-3xl"} ${props.className || ""}`}
+      className={`bg-muted mx-auto flex w-full items-center justify-center overflow-hidden rounded-lg border ${isPortrait ? "aspect-[4/5]" : "aspect-[16/10] max-w-3xl"} ${props.className || ""}`}
     >
       {source ? (
         // Private, expiring URLs intentionally bypass the Next image optimizer.

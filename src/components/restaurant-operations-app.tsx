@@ -637,6 +637,12 @@ function RestaurantOperationsAppInner({
     urlTab ?? DEFAULT_APP_TAB,
   );
   const [seenUrlTab, setSeenUrlTab] = useState<AppTab | null>(urlTab);
+  const [recipeDetailActive, setRecipeDetailActive] = useState<boolean>(
+    () =>
+      urlTab === "recipes" &&
+      !!searchParams.get("recipe")?.trim() &&
+      !searchParams.get("mode"),
+  );
   // The router snapshot can lag a popstate; never apply it over the current URL.
   if (
     urlTab !== seenUrlTab &&
@@ -957,6 +963,7 @@ function RestaurantOperationsAppInner({
   // What is actually on screen: the requested module unless this viewer
   // cannot open it (UX fallback only; the server enforces access).
   const tab = resolveTab(requestedTab, { isManager, demoMode });
+  const isRecipeDetail = tab === "recipes" && recipeDetailActive;
   // Unread Tasks notifications for the tab badge. Demo mode derives it from
   // the in-memory state; real mode from the last fetch / the inbox itself.
   const tasksUnread = demoMode
@@ -1815,24 +1822,42 @@ function RestaurantOperationsAppInner({
   }
 
   return (
-    <div className="min-h-screen pb-28 lg:pb-0">
+    <div
+      className={cn("min-h-screen", isRecipeDetail ? "pb-0" : "pb-28 lg:pb-0")}
+    >
       <header
         data-app-header
-        className="border-border bg-background sticky top-0 z-40 border-b"
+        className={cn(
+          "border-border bg-background sticky top-0 z-40 border-b",
+          isRecipeDetail && "h-12 max-h-12",
+        )}
       >
         {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
-        <div className="mx-auto hidden min-h-[76px] max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid">
+        <div
+          className={cn(
+            "mx-auto hidden max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid",
+            isRecipeDetail ? "h-12 min-h-12 py-0" : "min-h-[76px]",
+          )}
+        >
           <button
             onClick={() => setTab("allocation")}
-            className="flex min-h-11 items-center gap-3 justify-self-start"
+            className={cn(
+              "flex items-center justify-self-start",
+              isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
+            )}
             aria-label="Home"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-black">
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-xl bg-black",
+                isRecipeDetail ? "h-7 w-7" : "h-10 w-10",
+              )}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="https://www.monkswebster.com/assets/img/logo-light.png"
                 alt="The Monk's Logo"
-                className="h-6 object-contain"
+                className={cn("object-contain", isRecipeDetail ? "h-4" : "h-6")}
               />
             </span>
             <span className="text-left">
@@ -1842,7 +1867,7 @@ function RestaurantOperationsAppInner({
             </span>
           </button>
 
-          <CountdownPill clock={clock} />
+          <CountdownPill clock={clock} compact={isRecipeDetail} />
 
           <div
             className="relative justify-self-end"
@@ -1853,9 +1878,19 @@ function RestaurantOperationsAppInner({
               aria-expanded={showAvatarPanel}
               aria-haspopup="true"
               aria-label="Account and quick settings"
-              className="border-border bg-surface flex items-center gap-2.5 rounded-full border py-1.5 pr-3.5 pl-1.5"
+              className={cn(
+                "border-border bg-surface flex items-center rounded-full border",
+                isRecipeDetail
+                  ? "gap-2 py-0.5 pr-2.5 pl-1"
+                  : "gap-2.5 py-1.5 pr-3.5 pl-1.5",
+              )}
             >
-              <span className="bg-avatar grid size-10 place-items-center rounded-full text-sm font-bold">
+              <span
+                className={cn(
+                  "bg-avatar grid place-items-center rounded-full font-bold",
+                  isRecipeDetail ? "size-7 text-xs" : "size-10 text-sm",
+                )}
+              >
                 {initials}
               </span>
               <span className="text-left">
@@ -1996,64 +2031,71 @@ function RestaurantOperationsAppInner({
 
         {/* Desktop row 2: weighted nav -- primary (underlined), divider,
             secondary (icon+label), Settings trigger far right. */}
-        <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
-          <div className="flex shrink-0 gap-1.5">
-            {primaryTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                data-nav-tier="primary"
-                onClick={() => setTab(id)}
-                aria-current={tab === id ? "page" : undefined}
-                className={cn(
-                  "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
-                  tab === id
-                    ? "border-primary text-foreground"
-                    : "text-foreground/80 hover:text-foreground border-transparent",
-                )}
-              >
-                <Icon className="size-[18px]" aria-hidden="true" />
-                {label}
-                {id === "tasks" && tasksUnread > 0 ? (
-                  <TasksBadge count={tasksUnread} />
-                ) : null}
-              </button>
-            ))}
+        {!isRecipeDetail && (
+          <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
+            <div className="flex shrink-0 gap-1.5">
+              {primaryTabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  data-nav-tier="primary"
+                  onClick={() => setTab(id)}
+                  aria-current={tab === id ? "page" : undefined}
+                  className={cn(
+                    "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
+                    tab === id
+                      ? "border-primary text-foreground"
+                      : "text-foreground/80 hover:text-foreground border-transparent",
+                  )}
+                >
+                  <Icon className="size-[18px]" aria-hidden="true" />
+                  {label}
+                  {id === "tasks" && tasksUnread > 0 ? (
+                    <TasksBadge count={tasksUnread} />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <span className="bg-border h-6.5 w-px" />
+            <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
+              {secondaryTabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  data-nav-tier="secondary"
+                  onClick={() => setTab(id)}
+                  aria-current={tab === id ? "page" : undefined}
+                  className={cn(
+                    "flex h-14 items-center gap-1.5 px-3.5 text-[13px] font-medium whitespace-nowrap",
+                    tab === id ? "text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto shrink-0"
+              onClick={() => setTab("settings")}
+            >
+              <Settings2 aria-hidden="true" />
+              Settings
+            </Button>
           </div>
-          <span className="bg-border h-6.5 w-px" />
-          <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
-            {secondaryTabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                data-nav-tier="secondary"
-                onClick={() => setTab(id)}
-                aria-current={tab === id ? "page" : undefined}
-                className={cn(
-                  "flex h-14 items-center gap-1.5 px-3.5 text-[13px] font-medium whitespace-nowrap",
-                  tab === id ? "text-primary" : "text-muted-foreground",
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </button>
-            ))}
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="ml-auto shrink-0"
-            onClick={() => setTab("settings")}
-          >
-            <Settings2 aria-hidden="true" />
-            Settings
-          </Button>
-        </div>
+        )}
 
         {/* Mobile header: brand + avatar row, then the countdown pill. */}
         <div
-          className="flex flex-col gap-3.5 px-4 py-3.5 lg:hidden"
+          className={cn(
+            "px-4 lg:hidden",
+            isRecipeDetail
+              ? "flex h-12 items-center py-0"
+              : "flex flex-col gap-3.5 py-3.5",
+          )}
           ref={avatarPanelMobileRef}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center gap-3">
             <button
               onClick={() => setTab("allocation")}
               className="flex min-h-11 items-center gap-2.5"
@@ -2095,7 +2137,7 @@ function RestaurantOperationsAppInner({
               />
             </button>
           </div>
-          <CountdownPill clock={clock} compact />
+          {!isRecipeDetail && <CountdownPill clock={clock} compact />}
           {showAvatarPanel ? (
             <div
               data-testid="account-menu"
@@ -2152,7 +2194,12 @@ function RestaurantOperationsAppInner({
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-[1540px] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
+      <main
+        className={cn(
+          "mx-auto max-w-[1540px]",
+          isRecipeDetail ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-10",
+        )}
+      >
         {tab === "schedule" ? (
           <ScheduleWorkspace
             user={user}
@@ -2222,6 +2269,7 @@ function RestaurantOperationsAppInner({
             demo={demoMode}
             isManagement={currentUser.designation !== "staff"}
             onSessionInvalid={forceSignOut}
+            onRecipeDetailActive={setRecipeDetailActive}
           />
         ) : null}
         {tab === "tips" ? (

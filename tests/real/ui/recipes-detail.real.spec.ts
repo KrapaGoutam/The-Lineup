@@ -165,24 +165,15 @@ for (const role of ["TestManager", "TestServer1"] as const) {
     await expect(
       page.getByRole("heading", { name: /R1 Test Citrus/ }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Perfect Bartending Recipe" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "House Recipe" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Perfect" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "House" })).toBeVisible();
     await expect(
       page.getByText("Synthetic citrus").locator("visible=true").first(),
     ).toBeVisible();
     await expect(
       page.getByText("Synthetic mixer").locator("visible=true").first(),
     ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Quick glance" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Quick measure" }).first(),
-    ).toBeVisible();
+    await expect(page.locator(".book-spread")).toBeVisible();
     await page.reload();
     await expect(
       page.getByRole("heading", { name: /R1 Test Citrus/ }),

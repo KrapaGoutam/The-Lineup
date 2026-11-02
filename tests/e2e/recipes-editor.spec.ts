@@ -28,10 +28,10 @@ test("creates a House-only recipe without a Perfect placeholder", async ({
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByTestId("recipe-single")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "House Recipe", exact: true }),
+    page.getByRole("heading", { name: "House", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Perfect Bartending Recipe" }),
+    page.getByRole("heading", { name: "Perfect", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("navigation", { name: "Jump to recipe" }),

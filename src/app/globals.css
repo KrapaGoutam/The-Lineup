@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../features/recipes/components/recipe-book.css";
 
 /*
  * Feature 012: this app was built dark-only, and every gradient/shadow was

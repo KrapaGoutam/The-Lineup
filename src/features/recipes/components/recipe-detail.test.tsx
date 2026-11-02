@@ -49,8 +49,8 @@ const recipe: RecipeDetail = {
 
 afterEach(cleanup);
 
-describe("recipe detail", () => {
-  it("treats a legacy empty Perfect variant as absent without hiding meaningful House data", () => {
+describe("recipe detail - View I (The Bartender's Book)", () => {
+  it("treats a legacy empty Perfect variant as absent and renders single House build", () => {
     const empty = { ...variant("perfect"), ingredients: [], steps: [] };
     render(
       <RecipeDetailView
@@ -60,16 +60,12 @@ describe("recipe detail", () => {
       />,
     );
     expect(screen.getByTestId("recipe-single")).toBeTruthy();
-    expect(
-      screen.queryByRole("heading", { name: "Perfect Bartending Recipe" }),
-    ).toBeNull();
-    expect(screen.getByRole("heading", { name: "House Recipe" })).toBeTruthy();
-    expect(
-      screen.queryByRole("navigation", { name: "Jump to recipe" }),
-    ).toBeNull();
-    expect(screen.queryByText("Perfect Presentation")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Perfect" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "House" })).toBeTruthy();
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
-  it("renders both complete recipes stacked Perfect then House with no tabs", () => {
+
+  it("renders both complete recipes in open-book spread with Perfect and House and no tabs", () => {
     render(
       <RecipeDetailView
         recipe={recipe}
@@ -82,49 +78,47 @@ describe("recipe detail", () => {
     ).toBeTruthy();
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
-    const perfect = screen.getByRole("heading", {
-      name: "Perfect Bartending Recipe",
-    });
-    const house = screen.getByRole("heading", { name: "House Recipe" });
+
+    const perfect = screen.getByRole("heading", { name: "Perfect" });
+    const house = screen.getByRole("heading", { name: "House" });
     expect(
       perfect.compareDocumentPosition(house) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    // Both recipes are complete and rendered once each (no hidden duplicates).
+
+    // Both recipes are complete and rendered once each (no hidden duplicates)
     expect(screen.getAllByText("Synthetic step")).toHaveLength(2);
     expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByTestId("recipe-spread")).toBeTruthy();
   });
 
-  it("offers keyboard-accessible Perfect and House jump links only when both exist", () => {
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: true,
-    }) as unknown as typeof window.matchMedia;
-    const { rerender } = render(
-      <RecipeDetailView recipe={recipe} backHref="/" onBack={vi.fn()} />,
-    );
-    const nav = screen.getByRole("navigation", { name: "Jump to recipe" });
-    const house = within(nav).getByRole("link", { name: /House/ });
-    expect(within(nav).getByRole("link", { name: /Perfect/ })).toBeTruthy();
-    fireEvent.click(house);
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      behavior: "auto",
-      block: "start",
-    });
-    expect(document.activeElement?.id).toBe("recipe-variant-house-heading");
-    rerender(
+  it("provides header back button and accessible headings for both pages", () => {
+    const onBack = vi.fn();
+    render(
       <RecipeDetailView
-        recipe={{ ...recipe, variants: [variant("perfect")] }}
-        backHref="/"
-        onBack={vi.fn()}
+        recipe={recipe}
+        backHref="/?tab=recipes"
+        onBack={onBack}
       />,
     );
-    expect(
-      screen.queryByRole("navigation", { name: "Jump to recipe" }),
-    ).toBeNull();
+
+    const backLink = screen.getByRole("link", { name: /back to bar recipes/i });
+    expect(backLink).toBeTruthy();
+    fireEvent.click(backLink);
+    expect(onBack).toHaveBeenCalled();
+
+    const perfectHeading = document.getElementById(
+      "recipe-variant-perfect-heading",
+    );
+    const houseHeading = document.getElementById(
+      "recipe-variant-house-heading",
+    );
+    expect(perfectHeading).toBeTruthy();
+    expect(houseHeading).toBeTruthy();
+    expect(perfectHeading?.getAttribute("tabindex")).toBe("-1");
+    expect(houseHeading?.getAttribute("tabindex")).toBe("-1");
   });
 
-  it("marks House differences with a text note and leaves unchanged rows plain", () => {
+  it("marks House differences in header badge with difference count and tooltip", () => {
     const ing = (id: string, name: string, amount: string) => ({
       id,
       amount,
@@ -156,16 +150,17 @@ describe("recipe detail", () => {
         onBack={vi.fn()}
       />,
     );
-    // Syrup amount and the second step differ; Rum and step 1 do not.
-    expect(screen.getAllByText("House adjustment")).toHaveLength(2);
-    const houseRum = screen.getAllByText("Rum")[1].closest("li")!;
-    expect(houseRum.textContent).not.toContain("House adjustment");
-    const perfectSyrup = screen.getAllByText(/Syrup/)[0].closest("li")!;
-    expect(perfectSyrup.textContent).toContain("differs in House recipe");
+
+    // Syrup amount and step 2 differ (2 differences: ingredients, steps)
+    const diffBadge = screen.getByText("2 differences");
+    expect(diffBadge).toBeTruthy();
+    const diffContainer = diffBadge.closest(".book-diff");
+    expect(diffContainer?.getAttribute("title")).toContain("ingredients");
+    expect(diffContainer?.getAttribute("title")).toContain("steps");
   });
 
-  it("shows a shared Final Presentation once when specs are equivalent", () => {
-    const shared = { glass: "Rocks", rim_type: "None" };
+  it("shows a shared center spine caption once when glass and rim are equivalent", () => {
+    const shared = { glass: "Rocks", rim_type: "Salt", rim_notes: null };
     render(
       <RecipeDetailView
         recipe={{
@@ -179,20 +174,16 @@ describe("recipe detail", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(
-      screen.getAllByRole("heading", { name: "Final Presentation" }),
-    ).toHaveLength(1);
-    expect(
-      screen.queryByRole("heading", { name: "House Presentation" }),
-    ).toBeNull();
-    const presentation = screen
-      .getByRole("heading", { name: "Final Presentation" })
-      .closest("section")!;
-    expect(within(presentation).getAllByText("Rocks")).toHaveLength(1);
+
+    expect(screen.getByTestId("recipe-spread")).toBeTruthy();
     expect(screen.getAllByTestId("recipe-image")).toHaveLength(1);
+    const spine = document.querySelector(".book-spine");
+    expect(spine).toBeTruthy();
+    expect(within(spine as HTMLElement).getByText("Salt rim")).toBeTruthy();
+    expect(within(spine as HTMLElement).getByText("Rocks")).toBeTruthy();
   });
 
-  it("splits Final Presentation when House specs differ, with one canonical image", () => {
+  it("displays per-page metadata when House glass specs differ", () => {
     render(
       <RecipeDetailView
         recipe={{
@@ -206,41 +197,10 @@ describe("recipe detail", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(
-      screen.getByRole("heading", { name: "Perfect Presentation" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("heading", { name: "House Presentation" }),
-    ).toBeTruthy();
-    const section = screen
-      .getByRole("heading", { name: "Final Presentation" })
-      .closest("section")!;
-    expect(within(section).getByText("Ribbed rocks")).toBeTruthy();
-    expect(within(section).getByText("Rocks")).toBeTruthy();
-    // Only unchanged fields (Rim) are not flagged; Glass carries the note.
-    expect(within(section).getAllByText("House adjustment")).toHaveLength(1);
-    expect(screen.getAllByTestId("recipe-image")).toHaveLength(1);
-  });
 
-  it("shows Quick Glance values for both variants only where they differ", () => {
-    render(
-      <RecipeDetailView
-        recipe={{
-          ...recipe,
-          variants: [
-            { ...variant("perfect"), method: "Shake", glass: "Ribbed rocks" },
-            { ...variant("house"), method: "Shake", glass: "Rocks" },
-          ],
-        }}
-        backHref="/"
-        onBack={vi.fn()}
-      />,
-    );
-    const glance = screen.getByLabelText(/quick glance/i);
-    expect(within(glance).getAllByText("Shake")).toHaveLength(1);
-    expect(within(glance).getByText("Ribbed rocks")).toBeTruthy();
-    expect(within(glance).getByText("Rocks")).toBeTruthy();
-    expect(within(glance).queryByText("Garnish")).toBeNull();
+    expect(screen.getByText("Ribbed rocks")).toBeTruthy();
+    expect(screen.getByText("Rocks")).toBeTruthy();
+    expect(screen.getAllByTestId("recipe-image")).toHaveLength(1);
   });
 
   it("shows stored ordered content and optional fields without inventing values", () => {
@@ -297,10 +257,10 @@ describe("recipe detail", () => {
     );
     expect(container.textContent).toMatch(/First garnish.*Second garnish/);
     expect(screen.getByText("Synthetic tip")).toBeTruthy();
-    expect(screen.getAllByText("Synthetic rim").length).toBe(2);
-    // Method and Glass appear in both the Quick Glance strip and the recipe/presentation
-    expect(screen.getAllByText("Synthetic method").length).toBe(2);
-    expect(screen.getAllByText(/Synthetic glass/).length).toBe(2);
+    expect(screen.getByText("Synthetic method")).toBeTruthy();
+    expect(
+      screen.getAllByText("Synthetic glass").length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("renders a single variant without tabs and handles no variants", () => {
@@ -314,12 +274,8 @@ describe("recipe detail", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.getByTestId("recipe-single")).toBeTruthy();
     expect(screen.queryByTestId("recipe-spread")).toBeNull();
-    expect(
-      screen.queryByRole("navigation", { name: "Jump to recipe" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Perfect Bartending Recipe" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Perfect" })).toBeTruthy();
+
     rerender(
       <RecipeDetailView
         recipe={{ ...recipe, variants: [variant("house")] }}
@@ -327,8 +283,9 @@ describe("recipe detail", () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByRole("heading", { name: "House Recipe" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "House" })).toBeTruthy();
     expect(screen.queryByRole("tablist")).toBeNull();
+
     rerender(
       <RecipeDetailView
         recipe={{ ...recipe, variants: [] }}
@@ -341,7 +298,7 @@ describe("recipe detail", () => {
     ).toBeTruthy();
   });
 
-  it("renders detail order: title -> Quick Glance -> recipe content -> hero image", () => {
+  it("renders open-book structure: book header -> dual spread with left page, center spine image, right page", () => {
     const content = {
       ...variant("perfect"),
       method: "Stir",
@@ -354,57 +311,47 @@ describe("recipe detail", () => {
           preparation: null,
           sort_order: 1,
         },
-        {
-          id: "i2",
-          amount: ".25",
-          unit: "oz",
-          ingredient_name: "Simple",
-          preparation: null,
-          sort_order: 2,
-        },
       ],
     };
 
     const { container } = render(
       <RecipeDetailView
-        recipe={{ ...recipe, variants: [content] }}
+        recipe={{ ...recipe, variants: [content, variant("house")] }}
         backHref="/"
         onBack={vi.fn()}
       />,
     );
 
     const titleEl = screen.getByRole("heading", { level: 1 });
-    const quickGlanceSection = screen.getByLabelText(/quick glance/i);
-    const quickMeasureSection = screen.getByLabelText(/quick measure/i);
-    const imageContainer = container.querySelector(
-      "[data-testid='recipe-image']",
-    );
+    const spreadEl = screen.getByTestId("recipe-spread");
+    const perfectPage = container.querySelector("#recipe-variant-perfect");
+    const spineEl = container.querySelector(".book-spine");
+    const housePage = container.querySelector("#recipe-variant-house");
 
     expect(titleEl).toBeTruthy();
-    expect(quickGlanceSection).toBeTruthy();
-    expect(quickMeasureSection).toBeTruthy();
-    expect(imageContainer).toBeTruthy();
+    expect(spreadEl).toBeTruthy();
+    expect(perfectPage).toBeTruthy();
+    expect(spineEl).toBeTruthy();
+    expect(housePage).toBeTruthy();
 
-    // Verify DOM order: title precedes Quick Glance
+    // Verify DOM structure: title precedes spread
     expect(
-      titleEl.compareDocumentPosition(quickGlanceSection) &
+      titleEl.compareDocumentPosition(spreadEl) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
-    // Quick Glance precedes Quick Measure / Recipe content
+    // Within spread: perfect precedes spine, spine precedes house
     expect(
-      quickGlanceSection.compareDocumentPosition(quickMeasureSection) &
+      perfectPage!.compareDocumentPosition(spineEl!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-
-    // Recipe content precedes hero image (hero image must NEVER render before recipe content)
     expect(
-      quickMeasureSection.compareDocumentPosition(imageContainer!) &
+      spineEl!.compareDocumentPosition(housePage!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
-  it("renders Quick Measure and derived Oz Ratio when compatible", () => {
+  it("renders Quick Measure and derived Oz Ratio inside Details disclosure", () => {
     const content = {
       ...variant("perfect"),
       ingredients: [
@@ -445,8 +392,10 @@ describe("recipe detail", () => {
 
     expect(screen.getByLabelText(/quick measure/i)).toBeTruthy();
     const ratioBadge = screen.getByTestId("oz-ratio");
-    expect(ratioBadge.textContent).toBe("Oz Ratio 8 : 1");
-    expect(screen.getByText("+ 2 dashes Orange bitters")).toBeTruthy();
+    expect(ratioBadge.textContent?.trim()).toBe("Oz Ratio 8 : 1");
+    const qmSection = screen.getByLabelText(/quick measure/i);
+    expect(within(qmSection).getByText("2 dashes")).toBeTruthy();
+    expect(within(qmSection).getByText("Orange bitters")).toBeTruthy();
   });
 
   it("renders Bartender Tips preserving multiline and omits Tips when empty", () => {
@@ -463,9 +412,7 @@ describe("recipe detail", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("heading", { name: "Bartender Tips" }),
-    ).toBeTruthy();
+    expect(screen.getByText(/BARTENDER NOTE/)).toBeTruthy();
     expect(
       screen.getByText(
         (content) =>
@@ -486,14 +433,13 @@ describe("recipe detail", () => {
       />,
     );
 
-    expect(
-      screen.queryByRole("heading", { name: "Bartender Tips" }),
-    ).toBeNull();
+    expect(screen.queryByText(/BARTENDER NOTE/)).toBeNull();
   });
 
-  it("labels the House variant tips House Notes and keeps Bartender Tips for Perfect (UI_UX_PLAN D-LBL)", () => {
-    const perfect = { ...variant("perfect"), tips: "Perfect tip" };
-    const house = { ...variant("house"), tips: "House tip" };
+  it("renders shared Bartender Tip in spine caption when Perfect and House tips match", () => {
+    const sharedTip = "Shared bartender technique tip";
+    const perfect = { ...variant("perfect"), tips: sharedTip };
+    const house = { ...variant("house"), tips: sharedTip };
 
     render(
       <RecipeDetailView
@@ -503,14 +449,46 @@ describe("recipe detail", () => {
       />,
     );
 
-    expect(
-      screen.getAllByRole("heading", { name: "House Notes" }),
-    ).toHaveLength(1);
-    expect(
-      screen.getAllByRole("heading", { name: "Bartender Tips" }),
-    ).toHaveLength(1);
-    const houseNotes = screen.getByRole("heading", { name: "House Notes" });
-    expect(houseNotes.parentElement?.textContent).toContain("House tip");
-    expect(houseNotes.parentElement?.textContent).not.toContain("Perfect tip");
+    const spine = document.querySelector(".book-spine");
+    expect(spine).toBeTruthy();
+    expect(within(spine as HTMLElement).getByText(sharedTip)).toBeTruthy();
+  });
+
+  it("supports unit toggle between oz and ml", () => {
+    const content = {
+      ...variant("perfect"),
+      ingredients: [
+        {
+          id: "i1",
+          amount: "2",
+          unit: "oz",
+          ingredient_name: "Bourbon",
+          preparation: null,
+          sort_order: 1,
+        },
+      ],
+    };
+
+    render(
+      <RecipeDetailView
+        recipe={{ ...recipe, variants: [content, variant("house")] }}
+        backHref="/"
+        onBack={vi.fn()}
+      />,
+    );
+
+    // Initial state is oz
+    const ozButton = screen.getByRole("button", { name: "oz" });
+    const mlButton = screen.getByRole("button", { name: "ml" });
+    expect(ozButton.getAttribute("aria-pressed")).toBe("true");
+    expect(mlButton.getAttribute("aria-pressed")).toBe("false");
+
+    // Click ml
+    fireEvent.click(mlButton);
+    expect(mlButton.getAttribute("aria-pressed")).toBe("true");
+    expect(ozButton.getAttribute("aria-pressed")).toBe("false");
+    // 2 oz = 60 ml
+    expect(screen.getByText("60")).toBeTruthy();
+    expect(screen.getAllByText("ml").length).toBeGreaterThanOrEqual(1);
   });
 });
