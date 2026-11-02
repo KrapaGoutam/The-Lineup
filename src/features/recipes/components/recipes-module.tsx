@@ -117,11 +117,13 @@ export function RecipesModule({
   demo,
   onSessionInvalid,
   isManagement = false,
+  onRecipeDetailActive,
 }: {
   restaurantSlug: string;
   demo: boolean;
   onSessionInvalid: () => void;
   isManagement?: boolean;
+  onRecipeDetailActive?: (active: boolean) => void;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -137,6 +139,10 @@ export function RecipesModule({
   const mode = editorLock ? editorLock.mode : requestedMode;
   const editing =
     isManagement && (mode === "new" || (mode === "edit" && !!slug));
+  const isDetail = !!slug && !editing;
+  useEffect(() => {
+    onRecipeDetailActive?.(isDetail);
+  }, [isDetail, onRecipeDetailActive]);
   const [demoRecords, setDemoRecords] = useState<Record<string, EditorRecipe>>(
     {},
   );
@@ -613,42 +619,47 @@ export function RecipesModule({
         </section>
       );
     return (
-      <div className="flex flex-col gap-4">
-        {saved ? <p role="status">Recipe saved</p> : null}
-        {isManagement && current.data.is_active !== false ? (
-          <Button
-            variant="outline"
-            className="self-end"
-            onClick={() => openEditor("edit")}
+      <div className="flex flex-col">
+        {saved ? (
+          <div
+            role="status"
+            className="pointer-events-none fixed top-14 right-6 z-50 rounded border border-emerald-500/30 bg-emerald-950/90 px-3 py-1.5 text-xs text-emerald-200 shadow-lg backdrop-blur"
           >
-            Edit Recipe
-          </Button>
+            Recipe saved
+          </div>
         ) : null}
-        {isManagement ? (
-          <>
-            {current.data.is_active === false ? (
-              <p role="status">Archived — hidden from staff</p>
-            ) : null}
-            <RecipeArchiveControl
-              recipe={current.data}
-              restaurantSlug={restaurantSlug}
-              demo={demo}
-              demoCategories={demoCategories}
-              onSessionInvalid={onSessionInvalid}
-              onChanged={archiveChanged}
-              onReload={() => {
-                setDetail(null);
-                setAttempt((a) => a + 1);
-              }}
-            />
-          </>
-        ) : null}
+        {current.data.is_active === false && (
+          <div
+            role="status"
+            className="bg-muted text-muted-foreground border-b px-4 py-1 text-center text-xs"
+          >
+            Archived — hidden from staff
+          </div>
+        )}
         <RecipeDetailView
           restaurantSlug={demo ? undefined : restaurantSlug}
           key={slug}
           recipe={current.data}
           backHref={hrefFor(null)}
           onBack={(e) => navigate(e, null)}
+          canEdit={isManagement && current.data.is_active !== false}
+          onEdit={() => openEditor("edit")}
+          actions={
+            isManagement ? (
+              <RecipeArchiveControl
+                recipe={current.data}
+                restaurantSlug={restaurantSlug}
+                demo={demo}
+                demoCategories={demoCategories}
+                onSessionInvalid={onSessionInvalid}
+                onChanged={archiveChanged}
+                onReload={() => {
+                  setDetail(null);
+                  setAttempt((a) => a + 1);
+                }}
+              />
+            ) : null
+          }
         />
       </div>
     );
