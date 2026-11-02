@@ -1,0 +1,2194 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet>
+        <meta name="design_doc_mode" content="canvas" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap"
+        />
+        <style>
+          body {
+            margin: 0;
+            background: #0b0b0d;
+          }
+          :root {
+            --background: #0b0b0d;
+            --foreground: #f6f3ed;
+            --card: #141416;
+            --primary: #f2a65a;
+            --primary-foreground: #1c1007;
+            --secondary: #1b1b1e;
+            --muted: #202024;
+            --muted-foreground: #aaa7a1;
+            --border: rgba(255, 255, 255, 0.12);
+            --ring: #f2a65a;
+            --surface: #141416;
+            --faint: #666460;
+          }
+          [data-theme="light"] {
+            --background: #e9e7e2;
+            --foreground: #1c1a17;
+            --card: #ffffff;
+            --primary: #d97706;
+            --primary-foreground: #ffffff;
+            --secondary: #f1efe9;
+            --muted: #ede9e2;
+            --muted-foreground: rgba(28, 26, 23, 0.6);
+            --border: rgba(0, 0, 0, 0.12);
+            --ring: #d97706;
+            --surface: #f4f2ee;
+            --faint: rgba(28, 26, 23, 0.4);
+          }
+          a {
+            color: var(--foreground);
+          }
+          a:hover {
+            color: var(--primary);
+          }
+          button {
+            font-family: inherit;
+          }
+          [data-skin] {
+            --k-bg: #121214;
+            --k-hd: #0c0c0e;
+            --k-p: #19191c;
+            --k-h: #211a13;
+            --k-mid: #0e0e10;
+            --k-line: rgba(255, 255, 255, 0.1);
+            --k-line2: rgba(255, 255, 255, 0.2);
+            --k-ink: #f4f0e9;
+            --k-ink2: #d6d1c7;
+            --k-mute: #a9a59d;
+            --k-acc: #f2a65a;
+            --k-accs: rgba(242, 166, 90, 0.11);
+            --k-hl: rgba(255, 255, 255, 0.04);
+            --k-onacc: #1c1007;
+          }
+          [data-theme="light"] [data-skin] {
+            --k-bg: #efece5;
+            --k-hd: #faf8f4;
+            --k-p: #f6f3ec;
+            --k-h: #f8ecd8;
+            --k-mid: #ebe6dc;
+            --k-line: rgba(40, 30, 15, 0.12);
+            --k-line2: rgba(40, 30, 15, 0.24);
+            --k-ink: #1c1a17;
+            --k-ink2: #3a3631;
+            --k-mute: #6b655c;
+            --k-acc: #a8530a;
+            --k-accs: rgba(168, 83, 10, 0.09);
+            --k-hl: rgba(0, 0, 0, 0.03);
+            --k-onacc: #fff;
+          }
+          [data-skin="I"] {
+            --k-bg: #140e0b;
+            --k-hd: #0f0a08;
+            --k-p: #1d1511;
+            --k-h: #271b13;
+            --k-mid: #120c09;
+            --k-line: rgba(235, 210, 175, 0.12);
+            --k-line2: rgba(235, 210, 175, 0.24);
+            --k-ink: #f1e6d4;
+            --k-ink2: #d9cbb5;
+            --k-mute: #b0a08c;
+            --k-acc: #d6a062;
+            --k-accs: rgba(214, 160, 98, 0.1);
+            --k-hl: rgba(235, 210, 175, 0.05);
+            --k-onacc: #1b0f07;
+            --gut: rgba(0, 0, 0, 0.2);
+          }
+          [data-theme="light"] [data-skin="I"] {
+            --k-bg: #e9e0cf;
+            --k-hd: #efe7d7;
+            --k-p: #f8f3e7;
+            --k-h: #f3e8d2;
+            --k-mid: #efe6d4;
+            --k-line: rgba(60, 40, 20, 0.14);
+            --k-line2: rgba(60, 40, 20, 0.28);
+            --k-ink: #2a2018;
+            --k-ink2: #4a3b2d;
+            --k-mute: #6a5a49;
+            --k-acc: #8f5513;
+            --k-accs: rgba(143, 85, 19, 0.08);
+            --k-hl: rgba(60, 40, 20, 0.04);
+            --k-onacc: #fff;
+            --gut: rgba(60, 40, 20, 0.045);
+          }
+          [data-skin="I"][data-dev="s"] ::-webkit-scrollbar {
+            display: none;
+          }
+          [data-skin="I"][data-dev="s"] * {
+            scrollbar-width: none;
+          }
+          [data-skin] ::-webkit-scrollbar {
+            width: 10px;
+          }
+          [data-skin] ::-webkit-scrollbar-thumb {
+            background: var(--k-line2);
+            border-radius: 5px;
+          }
+          button:focus-visible,
+          a:focus-visible {
+            outline: 2px solid var(--ring);
+            outline-offset: 2px;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            * {
+              transition: none !important;
+              animation: none !important;
+            }
+          }
+        </style>
+      </helmet>
+      <div
+        data-theme="{{ theme }}"
+        style="
+          min-height: 100vh;
+          background: var(--surface);
+          color: var(--foreground);
+          font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+          -webkit-font-smoothing: antialiased;
+        "
+      >
+        <div
+          style="
+            width: 1520px;
+            margin: 0 auto;
+            padding: 28px 40px 8px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              flex-wrap: wrap;
+            "
+          >
+            <h1
+              style="
+                margin: 0;
+                font-size: 20px;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+              "
+            >
+              The Lineup · View I — The Bartender's Book
+            </h1>
+            <span
+              style="
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid
+                  color-mix(in srgb, var(--primary) 30%, transparent);
+                background: color-mix(in srgb, var(--primary) 12%, transparent);
+                padding: 4px 10px;
+                font-size: 12px;
+                font-weight: 600;
+                white-space: nowrap;
+              "
+              >Final approved design · reference only · not implemented</span
+            >
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 12px 28px;
+              flex-wrap: wrap;
+              align-items: center;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  margin: 0;
+                  font:
+                    600 12px/1.2 Geist,
+                    sans-serif;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: var(--muted-foreground);
+                "
+                >Theme</span
+              ><sc-for list="{{ themes }}" as="b" hint-placeholder-count="2"
+                ><button
+                  aria-pressed="{{ b.pressed }}"
+                  onClick="{{ b.click }}"
+                  style="{{ b.style }}"
+                >
+                  {{ b.label }}
+                </button></sc-for
+              >
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  margin: 0;
+                  font:
+                    600 12px/1.2 Geist,
+                    sans-serif;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: var(--muted-foreground);
+                "
+                >Drink</span
+              ><sc-for list="{{ hRecBtns }}" as="b" hint-placeholder-count="2"
+                ><button
+                  aria-pressed="{{ b.pressed }}"
+                  onClick="{{ b.click }}"
+                  style="{{ b.style }}"
+                >
+                  {{ b.label }}
+                </button></sc-for
+              >
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  margin: 0;
+                  font:
+                    600 12px/1.2 Geist,
+                    sans-serif;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: var(--muted-foreground);
+                "
+                >Tips</span
+              ><sc-for list="{{ hTipBtns }}" as="b" hint-placeholder-count="2"
+                ><button
+                  aria-pressed="{{ b.pressed }}"
+                  onClick="{{ b.click }}"
+                  style="{{ b.style }}"
+                >
+                  {{ b.label }}
+                </button></sc-for
+              >
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  margin: 0;
+                  font:
+                    600 12px/1.2 Geist,
+                    sans-serif;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: var(--muted-foreground);
+                "
+                >Builds</span
+              ><sc-for list="{{ states }}" as="b" hint-placeholder-count="2"
+                ><button
+                  aria-pressed="{{ b.pressed }}"
+                  onClick="{{ b.click }}"
+                  style="{{ b.style }}"
+                >
+                  {{ b.label }}
+                </button></sc-for
+              >
+            </div>
+            <sc-if value="{{ single }}" hint-placeholder-val="{{ false }}"
+              ><div style="display: flex; align-items: center; gap: 8px">
+                <span
+                  style="
+                    margin: 0;
+                    font:
+                      600 12px/1.2 Geist,
+                      sans-serif;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: var(--muted-foreground);
+                  "
+                  >Example</span
+                ><sc-for list="{{ singles }}" as="b" hint-placeholder-count="2"
+                  ><button
+                    aria-pressed="{{ b.pressed }}"
+                    onClick="{{ b.click }}"
+                    style="{{ b.style }}"
+                  >
+                    {{ b.label }}
+                  </button></sc-for
+                >
+              </div></sc-if
+            >
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  margin: 0;
+                  font:
+                    600 12px/1.2 Geist,
+                    sans-serif;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: var(--muted-foreground);
+                "
+                >Device</span
+              ><sc-for list="{{ hDevBtns }}" as="b" hint-placeholder-count="2"
+                ><button
+                  aria-pressed="{{ b.pressed }}"
+                  onClick="{{ b.click }}"
+                  style="{{ b.style }}"
+                >
+                  {{ b.label }}
+                </button></sc-for
+              ><sc-if value="{{ hHasSub }}"
+                ><span
+                  style="width: 1px; height: 22px; background: var(--border)"
+                ></span
+                ><sc-for list="{{ hSubBtns }}" as="b" hint-placeholder-count="2"
+                  ><button
+                    aria-pressed="{{ b.pressed }}"
+                    onClick="{{ b.click }}"
+                    style="{{ b.style }}"
+                  >
+                    {{ b.label }}
+                  </button></sc-for
+                ></sc-if
+              >
+            </div>
+          </div>
+        </div>
+        <div
+          style="
+            width: 1520px;
+            margin: 0 auto;
+            padding: 12px 40px 40px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+          "
+        >
+          <div data-skin="I" data-dev="{{ hDev }}" style="{{ hFrame }}">
+            <div
+              style="
+                flex: none;
+                height: var(--hd);
+                box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 0 var(--hpad);
+                background: var(--k-hd);
+                border-bottom: 1px solid var(--k-line);
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: var(--hgap);
+                  min-width: 0;
+                "
+              >
+                <span
+                  style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                    font-size: 15px;
+                    letter-spacing: -0.01em;
+                  "
+                  ><span
+                    style="
+                      width: 22px;
+                      height: 22px;
+                      border-radius: 6px;
+                      background: var(--k-acc);
+                      color: var(--k-onacc);
+                      display: grid;
+                      place-items: center;
+                      font-size: 12px;
+                      font-weight: 800;
+                    "
+                    >L</span
+                  >The Lineup</span
+                >
+                <nav
+                  aria-label="Primary"
+                  style="
+                    display: var(--navD);
+                    gap: 4px;
+                    font-size: 13.5px;
+                    font-weight: 500;
+                  "
+                >
+                  <span
+                    style="
+                      padding: 6px 12px;
+                      border-radius: 7px;
+                      background: var(--k-hl);
+                      color: var(--k-ink);
+                    "
+                    >Recipes</span
+                  ><span style="padding: 6px 12px; color: var(--k-mute)"
+                    >Menu</span
+                  ><span style="padding: 6px 12px; color: var(--k-mute)"
+                    >Prep</span
+                  >
+                </nav>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  font-size: 13px;
+                  color: var(--k-mute);
+                "
+              >
+                <span style="display: var(--navD); white-space: nowrap"
+                  >The Monk&#39;s</span
+                ><span
+                  style="
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    border: 1px solid var(--k-line2);
+                    display: var(--navD);
+                    place-items: center;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: var(--k-ink);
+                  "
+                  >M</span
+                ><svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--k-ink)"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  style="display: var(--menuD)"
+                  aria-label="Menu"
+                >
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </div>
+            </div>
+
+            <div
+              ref="{{ hBodyRef }}"
+              style="
+                flex: 1;
+                min-height: 0;
+                overflow: auto;
+                display: flex;
+                flex-direction: column;
+              "
+            >
+              <!-- ===== I — The Bartender's Book ===== -->
+              <sc-if value="{{ hIsI }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ iWide }}" hint-placeholder-val="{{ true }}">
+                  <div
+                    style="
+                      flex: none;
+                      display: grid;
+                      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                      align-items: center;
+                      gap: 16px;
+                      padding: var(--tI) var(--iM) 12px;
+                    "
+                  >
+                    <div>
+                      <a
+                        href="#"
+                        onClick="{{ noop }}"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          min-height: var(--tap);
+                          color: var(--k-mute);
+                          text-decoration: none;
+                          font-size: 11.5px;
+                          font-weight: 600;
+                          letter-spacing: 0.16em;
+                          text-transform: uppercase;
+                        "
+                        >&larr; Recipes</a
+                      >
+                    </div>
+                    <div style="text-align: center; min-width: 0">
+                      <div
+                        style="
+                          font-family: Newsreader, Georgia, serif;
+                          font-style: italic;
+                          font-size: 15px;
+                          color: var(--k-acc);
+                        "
+                      >
+                        No.
+                        <span
+                          style="
+                            font-family: Geist, sans-serif;
+                            font-style: normal;
+                            font-weight: 600;
+                            font-size: 13px;
+                            letter-spacing: 0.1em;
+                          "
+                          >{{ hNum }}</span
+                        >
+                      </div>
+                      <h1
+                        style="
+                          margin: 2px 0 0;
+                          font-family: Newsreader, Georgia, serif;
+                          font-weight: 400;
+                          font-size: var(--ttlI);
+                          line-height: 1.04;
+                          letter-spacing: -0.015em;
+                        "
+                      >
+                        {{ hName }}
+                      </h1>
+                      <div
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 14px;
+                          margin: 9px auto 0;
+                          max-width: 540px;
+                        "
+                      >
+                        <span
+                          style="
+                            flex: 1;
+                            height: 3px;
+                            border-top: 1px solid var(--k-line2);
+                            border-bottom: 1px solid var(--k-line2);
+                          "
+                        ></span
+                        ><span
+                          style="
+                            font:
+                              600 10.5px/1 Geist,
+                              sans-serif;
+                            letter-spacing: 0.26em;
+                            text-transform: uppercase;
+                            color: var(--k-mute);
+                            white-space: nowrap;
+                          "
+                          >{{ hCat }}</span
+                        ><span
+                          style="
+                            flex: 1;
+                            height: 3px;
+                            border-top: 1px solid var(--k-line2);
+                            border-bottom: 1px solid var(--k-line2);
+                          "
+                        ></span>
+                      </div>
+                    </div>
+                    <div style="justify-self: end">
+                      <a
+                        href="#"
+                        onClick="{{ noop }}"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          min-height: var(--tap);
+                          color: var(--k-mute);
+                          text-decoration: none;
+                          font-size: 11.5px;
+                          font-weight: 600;
+                          letter-spacing: 0.16em;
+                          text-transform: uppercase;
+                          color: var(--k-ink);
+                        "
+                        >Edit</a
+                      >
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ iMobile }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex: none; padding: 0 12px 4px">
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <a
+                        href="#"
+                        onClick="{{ noop }}"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          min-height: var(--tap);
+                          color: var(--k-mute);
+                          text-decoration: none;
+                          font-size: 11.5px;
+                          font-weight: 600;
+                          letter-spacing: 0.16em;
+                          text-transform: uppercase;
+                        "
+                        >&larr; Recipes</a
+                      ><a
+                        href="#"
+                        onClick="{{ noop }}"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          min-height: var(--tap);
+                          color: var(--k-mute);
+                          text-decoration: none;
+                          font-size: 11.5px;
+                          font-weight: 600;
+                          letter-spacing: 0.16em;
+                          text-transform: uppercase;
+                          color: var(--k-ink);
+                          padding: 0 2px;
+                        "
+                        >Edit</a
+                      >
+                    </div>
+                    <div style="text-align: center">
+                      <div
+                        style="
+                          font-family: Newsreader, Georgia, serif;
+                          font-style: italic;
+                          font-size: 15px;
+                          color: var(--k-acc);
+                        "
+                      >
+                        No.
+                        <span
+                          style="
+                            font-family: Geist, sans-serif;
+                            font-style: normal;
+                            font-weight: 600;
+                            font-size: 13px;
+                            letter-spacing: 0.1em;
+                          "
+                          >{{ hNum }}</span
+                        >
+                      </div>
+                      <h1
+                        style="
+                          margin: 2px 0 0;
+                          font-family: Newsreader, Georgia, serif;
+                          font-weight: 400;
+                          font-size: var(--ttlI);
+                          line-height: 1.05;
+                          letter-spacing: -0.01em;
+                          text-wrap: balance;
+                        "
+                      >
+                        {{ hName }}
+                      </h1>
+                      <div
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 14px;
+                          margin: 9px auto 0;
+                          max-width: 540px;
+                        "
+                      >
+                        <span
+                          style="
+                            flex: 1;
+                            height: 3px;
+                            border-top: 1px solid var(--k-line2);
+                            border-bottom: 1px solid var(--k-line2);
+                          "
+                        ></span
+                        ><span
+                          style="
+                            font:
+                              600 10.5px/1 Geist,
+                              sans-serif;
+                            letter-spacing: 0.26em;
+                            text-transform: uppercase;
+                            color: var(--k-mute);
+                            white-space: nowrap;
+                          "
+                          >{{ hCat }}</span
+                        ><span
+                          style="
+                            flex: 1;
+                            height: 3px;
+                            border-top: 1px solid var(--k-line2);
+                            border-bottom: 1px solid var(--k-line2);
+                          "
+                        ></span>
+                      </div>
+                    </div>
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 16px;
+                        padding: 14px 0 14px;
+                      "
+                    >
+                      <div
+                        role="img"
+                        aria-label="Finished drink photo placeholder"
+                        style="
+                          width: 88px;
+                          box-sizing: border-box;
+                          padding: 5px;
+                          border: 1px solid var(--k-line2);
+                          border-radius: 3px;
+                          background: var(--k-p);
+                          flex: none;
+                        "
+                      >
+                        <div
+                          style="
+                            aspect-ratio: 4/5;
+                            box-sizing: border-box;
+                            border: 1px solid var(--k-line);
+                            background:
+                              radial-gradient(
+                                circle at 50% 42%,
+                                var(--k-accs),
+                                transparent 72%
+                              ),
+                              var(--k-hl);
+                            display: grid;
+                            place-items: center;
+                            position: relative;
+                            overflow: hidden;
+                          "
+                        >
+                          <svg
+                            viewBox="0 0 60 76"
+                            style="width: 58%; display: block"
+                            fill="none"
+                            stroke="var(--k-mute)"
+                            stroke-width="1.4"
+                            stroke-linejoin="round"
+                          >
+                            <path
+                              d="M15 33h30l-2 27a2.5 2.5 0 0 1-2.5 2.3H19.5A2.5 2.5 0 0 1 17 60z"
+                              fill="var(--k-acc)"
+                              fill-opacity=".24"
+                              stroke="none"
+                            />
+                            <path
+                              d="M13 22h34l-3.2 40a3 3 0 0 1-3 2.8H19.2a3 3 0 0 1-3-2.8z"
+                            />
+                            <rect
+                              x="23"
+                              y="35"
+                              width="14"
+                              height="14"
+                              rx="2"
+                              stroke-opacity=".7"
+                            />
+                            <path
+                              d="M38 20c3-6 9-8 12-5-2 4-7 6-12 5z"
+                              stroke="var(--k-acc)"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                      <div
+                        style="
+                          min-width: 0;
+                          max-width: 210px;
+                          display: flex;
+                          flex-direction: column;
+                          gap: 10px;
+                        "
+                      >
+                        <sc-if
+                          value="{{ iPres }}"
+                          hint-placeholder-val="{{ true }}"
+                          ><div style="text-align: center">
+                            <div
+                              style="
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: 16px;
+                                line-height: 1.25;
+                              "
+                            >
+                              {{ iGlass }}
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font:
+                                  600 10.5px/1 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.2em;
+                                text-transform: uppercase;
+                                color: var(--k-mute);
+                              "
+                            >
+                              {{ iRim }}
+                            </div>
+                          </div></sc-if
+                        ><sc-if
+                          value="{{ iSharedOn }}"
+                          hint-placeholder-val="{{ false }}"
+                          ><div
+                            style="
+                              width: 100%;
+                              box-sizing: border-box;
+                              padding: 8px 12px 9px;
+                              border-radius: 4px;
+                              background: var(--k-accs);
+                              box-shadow: inset 0 1px 0
+                                color-mix(
+                                  in srgb,
+                                  var(--k-acc) 50%,
+                                  transparent
+                                );
+                            "
+                          >
+                            <div
+                              style="
+                                display: flex;
+                                align-items: center;
+                                gap: 7px;
+                              "
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="var(--k-acc)"
+                                stroke-width="1.9"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                                style="flex: none"
+                              >
+                                <path
+                                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                                />
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" /></svg
+                              ><span
+                                style="
+                                  font:
+                                    600 10px/1 Geist,
+                                    sans-serif;
+                                  letter-spacing: 0.2em;
+                                  color: var(--k-acc);
+                                "
+                                >BARTENDER NOTE</span
+                              >
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: calc(var(--ts) + 1.5px);
+                                line-height: 1.35;
+                              "
+                            >
+                              {{ iTip }}
+                            </div>
+                          </div></sc-if
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <!-- dual spread -->
+                <sc-if value="{{ iDualOn }}" hint-placeholder-val="{{ false }}">
+                  <div
+                    style="flex:1 0 auto;display:grid;grid-template-columns:{{ iCols }};grid-template-rows:auto auto auto auto auto minmax(0,1fr);margin:0 var(--iM) var(--iM);border:1px solid var(--k-line2);border-radius:{{ iRad }}px;overflow:hidden"
+                  >
+                    <sc-for list="{{ iBs }}" as="b" hint-placeholder-count="2">
+                      <article
+                        data-build="{{ b.key }}"
+                        style="grid-column:{{ b.col }};grid-row:1 / span 6;display:grid;grid-template-rows:subgrid;grid-template-columns:minmax(0,1fr);min-width:0;box-sizing:border-box;padding:var(--padY) var(--pad);background:{{ b.bg }}"
+                      >
+                        <header style="padding-bottom: var(--g1)">
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                            "
+                          >
+                            <span style="{{ b.dot }}"></span>
+                            <h2
+                              style="
+                                margin: 0;
+                                font:
+                                  700 12.5px/1 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.24em;
+                                text-transform: uppercase;
+                              "
+                            >
+                              {{ b.label }}
+                            </h2>
+                            <span
+                              style="
+                                flex: 1;
+                                height: 1px;
+                                background: var(--k-line);
+                              "
+                            ></span>
+                          </div>
+                          <div
+                            style="
+                              margin: 3px 0 0 20px;
+                              display: flex;
+                              flex-wrap: wrap;
+                              justify-content: space-between;
+                              gap: 0 10px;
+                              font-family: Newsreader, Georgia, serif;
+                              font-style: italic;
+                              font-size: 15px;
+                              line-height: 1.3;
+                            "
+                          >
+                            <span style="color: var(--k-mute)">{{ b.sub }}</span
+                            ><sc-if
+                              value="{{ b.diffOn }}"
+                              hint-placeholder-val="{{ false }}"
+                              ><span
+                                title="{{ b.diffTitle }}"
+                                tabIndex="0"
+                                style="color: var(--k-acc); cursor: help"
+                                >{{ b.diffText }}</span
+                              ></sc-if
+                            >
+                          </div>
+                        </header>
+                        <section aria-label="Ingredients">
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                              min-height: 26px;
+                              padding-bottom: 2px;
+                            "
+                          >
+                            <h3
+                              style="
+                                margin: 0;
+                                font:
+                                  600 10.5px/1.2 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.2em;
+                                text-transform: uppercase;
+                                color: var(--k-mute);
+                                white-space: nowrap;
+                              "
+                            >
+                              Ingredients
+                            </h3>
+                            <span
+                              style="
+                                flex: 1;
+                                height: 1px;
+                                background: var(--k-line);
+                              "
+                            ></span
+                            ><sc-if
+                              value="{{ b.showUnit }}"
+                              hint-placeholder-val="{{ true }}"
+                              ><div
+                                role="group"
+                                aria-label="Units"
+                                style="
+                                  display: flex;
+                                  align-items: center;
+                                  gap: 10px;
+                                "
+                              >
+                                <sc-for
+                                  list="{{ iUnit }}"
+                                  as="u"
+                                  hint-placeholder-count="2"
+                                  ><button
+                                    aria-pressed="{{ u.pressed }}"
+                                    onClick="{{ u.click }}"
+                                    style="{{ u.style }}"
+                                  >
+                                    {{ u.label }}
+                                  </button></sc-for
+                                >
+                              </div></sc-if
+                            >
+                          </div>
+                          <ul style="list-style: none; margin: 0; padding: 0">
+                            <sc-for
+                              list="{{ b.rows }}"
+                              as="r"
+                              hint-placeholder-count="5"
+                            >
+                              <li
+                                style="display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:var(--row);box-sizing:border-box;border-top:{{ r.bt }}"
+                              >
+                                <span
+                                  style="
+                                    font-size: var(--fi);
+                                    min-width: 0;
+                                    line-height: 1.25;
+                                  "
+                                  >{{ r.name }}</span
+                                >
+                                <span
+                                  style="display:flex;align-items:baseline;flex:none;font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fi);color:{{ b.amt }}"
+                                  ><span
+                                    style="
+                                      min-width: var(--aW);
+                                      text-align: right;
+                                    "
+                                    >{{ r.w }}</span
+                                  ><span
+                                    style="
+                                      min-width: var(--aF);
+                                      text-align: left;
+                                    "
+                                    >{{ r.f }}</span
+                                  ><span
+                                    style="
+                                      min-width: var(--uW);
+                                      margin-left: var(--aG);
+                                      font-weight: 500;
+                                      font-size: 0.8em;
+                                      color: var(--k-mute);
+                                    "
+                                    >{{ r.u }}</span
+                                  ></span
+                                >
+                              </li></sc-for
+                            >
+                          </ul>
+                        </section>
+                        <dl
+                          style="
+                            display: grid;
+                            grid-template-columns: minmax(0, 1fr) minmax(
+                                0,
+                                1.5fr
+                              );
+                            gap: 6px 16px;
+                            margin: 0;
+                            padding: var(--g2) 0;
+                            align-content: start;
+                          "
+                        >
+                          <sc-for
+                            list="{{ b.meta }}"
+                            as="m"
+                            hint-placeholder-count="2"
+                            ><div style="min-width: 0">
+                              <dt
+                                style="
+                                  margin: 0;
+                                  font:
+                                    600 10.5px/1.3 Geist,
+                                    sans-serif;
+                                  letter-spacing: 0.16em;
+                                  text-transform: uppercase;
+                                  color: var(--k-mute);
+                                "
+                              >
+                                {{ m.k }}
+                              </dt>
+                              <dd
+                                style="
+                                  margin: 1px 0 0;
+                                  font-size: var(--fs);
+                                  font-weight: 500;
+                                  line-height: 1.25;
+                                "
+                              >
+                                {{ m.v }}
+                              </dd>
+                            </div></sc-for
+                          >
+                        </dl>
+                        <section aria-label="Preparation">
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                              min-height: 26px;
+                              padding-bottom: 2px;
+                            "
+                          >
+                            <h3
+                              style="
+                                margin: 0;
+                                font:
+                                  600 10.5px/1.2 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.2em;
+                                text-transform: uppercase;
+                                color: var(--k-mute);
+                                white-space: nowrap;
+                              "
+                            >
+                              Preparation
+                            </h3>
+                            <span
+                              style="
+                                flex: 1;
+                                height: 1px;
+                                background: var(--k-line);
+                              "
+                            ></span>
+                          </div>
+                          <ol
+                            style="
+                              list-style: none;
+                              margin: 0;
+                              padding: 0;
+                              display: flex;
+                              flex-direction: column;
+                              gap: var(--sg);
+                            "
+                          >
+                            <sc-for
+                              list="{{ b.steps }}"
+                              as="st"
+                              hint-placeholder-count="5"
+                            >
+                              <li
+                                style="
+                                  display: flex;
+                                  gap: 12px;
+                                  align-items: baseline;
+                                  line-height: var(--lh);
+                                "
+                              >
+                                <span style="{{ st.numS }}">{{ st.n }}</span
+                                ><span
+                                  style="
+                                    font-size: var(--fs);
+                                    color: var(--k-ink2);
+                                    min-width: 0;
+                                  "
+                                  ><span>{{ st.pre }}</span
+                                  ><span
+                                    style="
+                                      font-weight: 700;
+                                      color: var(--k-ink);
+                                    "
+                                    >{{ st.verb }}</span
+                                  ><span>{{ st.post }}</span></span
+                                >
+                              </li></sc-for
+                            >
+                          </ol>
+                        </section>
+                        <sc-if
+                          value="{{ b.hasTip }}"
+                          hint-placeholder-val="{{ true }}"
+                        >
+                          <div
+                            role="{{ b.tipRole }}"
+                            tabindex="{{ b.tipTab }}"
+                            aria-expanded="{{ b.tipExp }}"
+                            onClick="{{ b.tipClick }}"
+                            style="{{ b.tipBox }}"
+                          >
+                            <div
+                              style="
+                                display: flex;
+                                align-items: center;
+                                gap: 7px;
+                              "
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="var(--k-acc)"
+                                stroke-width="1.9"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                                style="flex: none"
+                              >
+                                <path
+                                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                                />
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" /></svg
+                              ><span
+                                style="
+                                  font:
+                                    600 10px/1 Geist,
+                                    sans-serif;
+                                  letter-spacing: 0.2em;
+                                  color: var(--k-acc);
+                                "
+                                >{{ b.tipLabel }}</span
+                              >
+                            </div>
+                            <div style="{{ b.tipTxt }}">{{ b.tip }}</div>
+                          </div>
+                        </sc-if>
+                      </article></sc-for
+                    >
+                    <sc-if
+                      value="{{ iWide }}"
+                      hint-placeholder-val="{{ true }}"
+                    >
+                      <aside
+                        style="grid-column:2;grid-row:1 / span 6;box-sizing:border-box;padding:var(--padY) 16px;background:{{ iSpine }};display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0"
+                      >
+                        <div
+                          role="img"
+                          aria-label="Finished drink photo placeholder"
+                          style="
+                            width: 100%;
+                            box-sizing: border-box;
+                            padding: 5px;
+                            border: 1px solid var(--k-line2);
+                            border-radius: 3px;
+                            background: var(--k-p);
+                            flex: none;
+                          "
+                        >
+                          <div
+                            style="
+                              aspect-ratio: 4/5;
+                              box-sizing: border-box;
+                              border: 1px solid var(--k-line);
+                              background:
+                                radial-gradient(
+                                  circle at 50% 42%,
+                                  var(--k-accs),
+                                  transparent 72%
+                                ),
+                                var(--k-hl);
+                              display: grid;
+                              place-items: center;
+                              position: relative;
+                              overflow: hidden;
+                            "
+                          >
+                            <svg
+                              viewBox="0 0 60 76"
+                              style="width: 58%; display: block"
+                              fill="none"
+                              stroke="var(--k-mute)"
+                              stroke-width="1.4"
+                              stroke-linejoin="round"
+                            >
+                              <path
+                                d="M15 33h30l-2 27a2.5 2.5 0 0 1-2.5 2.3H19.5A2.5 2.5 0 0 1 17 60z"
+                                fill="var(--k-acc)"
+                                fill-opacity=".24"
+                                stroke="none"
+                              />
+                              <path
+                                d="M13 22h34l-3.2 40a3 3 0 0 1-3 2.8H19.2a3 3 0 0 1-3-2.8z"
+                              />
+                              <rect
+                                x="23"
+                                y="35"
+                                width="14"
+                                height="14"
+                                rx="2"
+                                stroke-opacity=".7"
+                              />
+                              <path
+                                d="M38 20c3-6 9-8 12-5-2 4-7 6-12 5z"
+                                stroke="var(--k-acc)"
+                              /></svg
+                            ><span
+                              style="
+                                position: absolute;
+                                left: 0;
+                                right: 0;
+                                bottom: 7px;
+                                text-align: center;
+                                font:
+                                  500 9px &quot;Geist Mono&quot;,
+                                  ui-monospace,
+                                  monospace;
+                                letter-spacing: 0.1em;
+                                color: var(--k-mute);
+                              "
+                              >DRINK PHOTO</span
+                            >
+                          </div>
+                        </div>
+                        <sc-if
+                          value="{{ iPres }}"
+                          hint-placeholder-val="{{ true }}"
+                          ><div style="text-align: center">
+                            <div
+                              style="
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: 16px;
+                                line-height: 1.25;
+                              "
+                            >
+                              {{ iGlass }}
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font:
+                                  600 10.5px/1 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.2em;
+                                text-transform: uppercase;
+                                color: var(--k-mute);
+                              "
+                            >
+                              {{ iRim }}
+                            </div>
+                          </div></sc-if
+                        >
+                        <sc-if
+                          value="{{ iSharedOn }}"
+                          hint-placeholder-val="{{ false }}"
+                          ><div
+                            style="
+                              width: 100%;
+                              box-sizing: border-box;
+                              padding: 8px 12px 9px;
+                              border-radius: 4px;
+                              background: var(--k-accs);
+                              box-shadow: inset 0 1px 0
+                                color-mix(
+                                  in srgb,
+                                  var(--k-acc) 50%,
+                                  transparent
+                                );
+                            "
+                          >
+                            <div
+                              style="
+                                display: flex;
+                                align-items: center;
+                                gap: 7px;
+                              "
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="var(--k-acc)"
+                                stroke-width="1.9"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                                style="flex: none"
+                              >
+                                <path
+                                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                                />
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" /></svg
+                              ><span
+                                style="
+                                  font:
+                                    600 10px/1 Geist,
+                                    sans-serif;
+                                  letter-spacing: 0.2em;
+                                  color: var(--k-acc);
+                                "
+                                >BARTENDER NOTE</span
+                              >
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: calc(var(--ts) + 1.5px);
+                                line-height: 1.35;
+                              "
+                            >
+                              {{ iTip }}
+                            </div>
+                          </div></sc-if
+                        >
+                      </aside>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <!-- single recipe -->
+                <sc-if
+                  value="{{ iSingleOn }}"
+                  hint-placeholder-val="{{ false }}"
+                >
+                  <div
+                    style="flex:1 0 auto;display:grid;grid-template-columns:{{ iSingleWrap }};grid-template-rows:minmax(0,1fr);width:calc(100% - 2 * var(--iM));max-width:1120px;margin:0 auto var(--iM);box-sizing:border-box;border:1px solid var(--k-line2);border-radius:{{ iRad }}px;overflow:hidden"
+                  >
+                    <sc-for list="{{ iBs }}" as="b" hint-placeholder-count="1">
+                      <article
+                        data-build="{{ b.key }}"
+                        style="grid-column:1;min-width:0;box-sizing:border-box;padding:calc(var(--padY) + 4px) calc(var(--pad) * 1.5);background:{{ b.bg }}"
+                      >
+                        <header style="padding-bottom: var(--g1)">
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                            "
+                          >
+                            <span style="{{ b.dot }}"></span>
+                            <h2
+                              style="
+                                margin: 0;
+                                font:
+                                  700 12.5px/1 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.24em;
+                                text-transform: uppercase;
+                              "
+                            >
+                              {{ b.label }}
+                            </h2>
+                            <span
+                              style="
+                                flex: 1;
+                                height: 1px;
+                                background: var(--k-line);
+                              "
+                            ></span>
+                          </div>
+                          <div
+                            style="
+                              margin: 3px 0 0 20px;
+                              display: flex;
+                              flex-wrap: wrap;
+                              justify-content: space-between;
+                              gap: 0 10px;
+                              font-family: Newsreader, Georgia, serif;
+                              font-style: italic;
+                              font-size: 15px;
+                              line-height: 1.3;
+                            "
+                          >
+                            <span style="color: var(--k-mute)">{{ b.sub }}</span
+                            ><sc-if
+                              value="{{ b.diffOn }}"
+                              hint-placeholder-val="{{ false }}"
+                              ><span
+                                title="{{ b.diffTitle }}"
+                                tabIndex="0"
+                                style="color: var(--k-acc); cursor: help"
+                                >{{ b.diffText }}</span
+                              ></sc-if
+                            >
+                          </div>
+                        </header>
+                        <div
+                          style="display:grid;grid-template-columns:{{ iSingleCols }};gap:0 40px;align-items:start"
+                        >
+                          <div style="min-width: 0">
+                            <section aria-label="Ingredients">
+                              <div
+                                style="
+                                  display: flex;
+                                  align-items: center;
+                                  gap: 10px;
+                                  min-height: 26px;
+                                  padding-bottom: 2px;
+                                "
+                              >
+                                <h3
+                                  style="
+                                    margin: 0;
+                                    font:
+                                      600 10.5px/1.2 Geist,
+                                      sans-serif;
+                                    letter-spacing: 0.2em;
+                                    text-transform: uppercase;
+                                    color: var(--k-mute);
+                                    white-space: nowrap;
+                                  "
+                                >
+                                  Ingredients
+                                </h3>
+                                <span
+                                  style="
+                                    flex: 1;
+                                    height: 1px;
+                                    background: var(--k-line);
+                                  "
+                                ></span
+                                ><sc-if
+                                  value="{{ b.showUnit }}"
+                                  hint-placeholder-val="{{ true }}"
+                                  ><div
+                                    role="group"
+                                    aria-label="Units"
+                                    style="
+                                      display: flex;
+                                      align-items: center;
+                                      gap: 10px;
+                                    "
+                                  >
+                                    <sc-for
+                                      list="{{ iUnit }}"
+                                      as="u"
+                                      hint-placeholder-count="2"
+                                      ><button
+                                        aria-pressed="{{ u.pressed }}"
+                                        onClick="{{ u.click }}"
+                                        style="{{ u.style }}"
+                                      >
+                                        {{ u.label }}
+                                      </button></sc-for
+                                    >
+                                  </div></sc-if
+                                >
+                              </div>
+                              <ul
+                                style="list-style: none; margin: 0; padding: 0"
+                              >
+                                <sc-for
+                                  list="{{ b.rows }}"
+                                  as="r"
+                                  hint-placeholder-count="5"
+                                >
+                                  <li
+                                    style="display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:var(--row);box-sizing:border-box;border-top:{{ r.bt }}"
+                                  >
+                                    <span
+                                      style="
+                                        font-size: var(--fi);
+                                        min-width: 0;
+                                        line-height: 1.25;
+                                      "
+                                      >{{ r.name }}</span
+                                    >
+                                    <span
+                                      style="display:flex;align-items:baseline;flex:none;font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fi);color:{{ b.amt }}"
+                                      ><span
+                                        style="
+                                          min-width: var(--aW);
+                                          text-align: right;
+                                        "
+                                        >{{ r.w }}</span
+                                      ><span
+                                        style="
+                                          min-width: var(--aF);
+                                          text-align: left;
+                                        "
+                                        >{{ r.f }}</span
+                                      ><span
+                                        style="
+                                          min-width: var(--uW);
+                                          margin-left: var(--aG);
+                                          font-weight: 500;
+                                          font-size: 0.8em;
+                                          color: var(--k-mute);
+                                        "
+                                        >{{ r.u }}</span
+                                      ></span
+                                    >
+                                  </li></sc-for
+                                >
+                              </ul>
+                            </section>
+                            <dl
+                              style="
+                                display: grid;
+                                grid-template-columns: minmax(0, 1fr) minmax(
+                                    0,
+                                    1fr
+                                  );
+                                gap: 6px 16px;
+                                margin: 0;
+                                padding: var(--g2) 0;
+                                align-content: start;
+                              "
+                            >
+                              <sc-for
+                                list="{{ b.meta }}"
+                                as="m"
+                                hint-placeholder-count="2"
+                                ><div style="min-width: 0">
+                                  <dt
+                                    style="
+                                      margin: 0;
+                                      font:
+                                        600 10.5px/1.3 Geist,
+                                        sans-serif;
+                                      letter-spacing: 0.16em;
+                                      text-transform: uppercase;
+                                      color: var(--k-mute);
+                                    "
+                                  >
+                                    {{ m.k }}
+                                  </dt>
+                                  <dd
+                                    style="
+                                      margin: 1px 0 0;
+                                      font-size: var(--fs);
+                                      font-weight: 500;
+                                      line-height: 1.25;
+                                    "
+                                  >
+                                    {{ m.v }}
+                                  </dd>
+                                </div></sc-for
+                              >
+                            </dl>
+                          </div>
+                          <div style="min-width: 0">
+                            <section aria-label="Preparation">
+                              <div
+                                style="
+                                  display: flex;
+                                  align-items: center;
+                                  gap: 10px;
+                                  min-height: 26px;
+                                  padding-bottom: 2px;
+                                "
+                              >
+                                <h3
+                                  style="
+                                    margin: 0;
+                                    font:
+                                      600 10.5px/1.2 Geist,
+                                      sans-serif;
+                                    letter-spacing: 0.2em;
+                                    text-transform: uppercase;
+                                    color: var(--k-mute);
+                                    white-space: nowrap;
+                                  "
+                                >
+                                  Preparation
+                                </h3>
+                                <span
+                                  style="
+                                    flex: 1;
+                                    height: 1px;
+                                    background: var(--k-line);
+                                  "
+                                ></span>
+                              </div>
+                              <ol
+                                style="
+                                  list-style: none;
+                                  margin: 0;
+                                  padding: 0;
+                                  display: flex;
+                                  flex-direction: column;
+                                  gap: var(--sg);
+                                "
+                              >
+                                <sc-for
+                                  list="{{ b.steps }}"
+                                  as="st"
+                                  hint-placeholder-count="5"
+                                >
+                                  <li
+                                    style="
+                                      display: flex;
+                                      gap: 12px;
+                                      align-items: baseline;
+                                      line-height: var(--lh);
+                                    "
+                                  >
+                                    <span style="{{ st.numS }}">{{ st.n }}</span
+                                    ><span
+                                      style="
+                                        font-size: var(--fs);
+                                        color: var(--k-ink2);
+                                        min-width: 0;
+                                      "
+                                      ><span>{{ st.pre }}</span
+                                      ><span
+                                        style="
+                                          font-weight: 700;
+                                          color: var(--k-ink);
+                                        "
+                                        >{{ st.verb }}</span
+                                      ><span>{{ st.post }}</span></span
+                                    >
+                                  </li></sc-for
+                                >
+                              </ol>
+                            </section>
+                            <sc-if
+                              value="{{ b.hasTip }}"
+                              hint-placeholder-val="{{ true }}"
+                            >
+                              <div
+                                role="{{ b.tipRole }}"
+                                tabindex="{{ b.tipTab }}"
+                                aria-expanded="{{ b.tipExp }}"
+                                onClick="{{ b.tipClick }}"
+                                style="{{ b.tipBox }}"
+                              >
+                                <div
+                                  style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 7px;
+                                  "
+                                >
+                                  <svg
+                                    width="13"
+                                    height="13"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="var(--k-acc)"
+                                    stroke-width="1.9"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                    style="flex: none"
+                                  >
+                                    <path
+                                      d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                                    />
+                                    <path d="M9 18h6" />
+                                    <path d="M10 22h4" /></svg
+                                  ><span
+                                    style="
+                                      font:
+                                        600 10px/1 Geist,
+                                        sans-serif;
+                                      letter-spacing: 0.2em;
+                                      color: var(--k-acc);
+                                    "
+                                    >{{ b.tipLabel }}</span
+                                  >
+                                </div>
+                                <div style="{{ b.tipTxt }}">{{ b.tip }}</div>
+                              </div>
+                            </sc-if>
+                          </div>
+                        </div>
+                      </article></sc-for
+                    >
+                    <sc-if
+                      value="{{ iWide }}"
+                      hint-placeholder-val="{{ true }}"
+                    >
+                      <aside
+                        style="grid-column:2;box-sizing:border-box;padding:calc(var(--padY) + 4px) 18px;background:{{ iSpine }};display:flex;flex-direction:column;align-items:center;gap:12px;min-width:0"
+                      >
+                        <div
+                          role="img"
+                          aria-label="Finished drink photo placeholder"
+                          style="
+                            width: 100%;
+                            box-sizing: border-box;
+                            padding: 5px;
+                            border: 1px solid var(--k-line2);
+                            border-radius: 3px;
+                            background: var(--k-p);
+                            flex: none;
+                          "
+                        >
+                          <div
+                            style="
+                              aspect-ratio: 4/5;
+                              box-sizing: border-box;
+                              border: 1px solid var(--k-line);
+                              background:
+                                radial-gradient(
+                                  circle at 50% 42%,
+                                  var(--k-accs),
+                                  transparent 72%
+                                ),
+                                var(--k-hl);
+                              display: grid;
+                              place-items: center;
+                              position: relative;
+                              overflow: hidden;
+                            "
+                          >
+                            <svg
+                              viewBox="0 0 60 76"
+                              style="width: 58%; display: block"
+                              fill="none"
+                              stroke="var(--k-mute)"
+                              stroke-width="1.4"
+                              stroke-linejoin="round"
+                            >
+                              <path
+                                d="M15 33h30l-2 27a2.5 2.5 0 0 1-2.5 2.3H19.5A2.5 2.5 0 0 1 17 60z"
+                                fill="var(--k-acc)"
+                                fill-opacity=".24"
+                                stroke="none"
+                              />
+                              <path
+                                d="M13 22h34l-3.2 40a3 3 0 0 1-3 2.8H19.2a3 3 0 0 1-3-2.8z"
+                              />
+                              <rect
+                                x="23"
+                                y="35"
+                                width="14"
+                                height="14"
+                                rx="2"
+                                stroke-opacity=".7"
+                              />
+                              <path
+                                d="M38 20c3-6 9-8 12-5-2 4-7 6-12 5z"
+                                stroke="var(--k-acc)"
+                              /></svg
+                            ><span
+                              style="
+                                position: absolute;
+                                left: 0;
+                                right: 0;
+                                bottom: 7px;
+                                text-align: center;
+                                font:
+                                  500 9px &quot;Geist Mono&quot;,
+                                  ui-monospace,
+                                  monospace;
+                                letter-spacing: 0.1em;
+                                color: var(--k-mute);
+                              "
+                              >DRINK PHOTO</span
+                            >
+                          </div>
+                        </div>
+                        <sc-if
+                          value="{{ iPres }}"
+                          hint-placeholder-val="{{ true }}"
+                          ><div style="text-align: center">
+                            <div
+                              style="
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: 16px;
+                                line-height: 1.25;
+                              "
+                            >
+                              {{ iGlass }}
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font:
+                                  600 10.5px/1 Geist,
+                                  sans-serif;
+                                letter-spacing: 0.2em;
+                                text-transform: uppercase;
+                                color: var(--k-mute);
+                              "
+                            >
+                              {{ iRim }}
+                            </div>
+                          </div></sc-if
+                        >
+                        <sc-if
+                          value="{{ iSharedOn }}"
+                          hint-placeholder-val="{{ false }}"
+                          ><div
+                            style="
+                              width: 100%;
+                              box-sizing: border-box;
+                              padding: 8px 12px 9px;
+                              border-radius: 4px;
+                              background: var(--k-accs);
+                              box-shadow: inset 0 1px 0
+                                color-mix(
+                                  in srgb,
+                                  var(--k-acc) 50%,
+                                  transparent
+                                );
+                            "
+                          >
+                            <div
+                              style="
+                                display: flex;
+                                align-items: center;
+                                gap: 7px;
+                              "
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="var(--k-acc)"
+                                stroke-width="1.9"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                                style="flex: none"
+                              >
+                                <path
+                                  d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+                                />
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" /></svg
+                              ><span
+                                style="
+                                  font:
+                                    600 10px/1 Geist,
+                                    sans-serif;
+                                  letter-spacing: 0.2em;
+                                  color: var(--k-acc);
+                                "
+                                >BARTENDER NOTE</span
+                              >
+                            </div>
+                            <div
+                              style="
+                                margin-top: 3px;
+                                font-family: Newsreader, Georgia, serif;
+                                font-style: italic;
+                                font-size: calc(var(--ts) + 1.5px);
+                                line-height: 1.35;
+                              "
+                            >
+                              {{ iTip }}
+                            </div>
+                          </div></sc-if
+                        >
+                      </aside>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </sc-if>
+            </div>
+          </div>
+
+          <div
+            style="width:{{ hW }}px;max-width:100%;display:flex;flex-direction:column;gap:2px"
+          >
+            <div style="font-size: 14px; font-weight: 600">{{ hStripA }}</div>
+            <div
+              style="
+                font:
+                  500 13px/1.5 &quot;Geist Mono&quot;,
+                  ui-monospace,
+                  monospace;
+                color: var(--muted-foreground);
+              "
+            >
+              {{ hStripB }}
+            </div>
+            <div
+              style="
+                font-size: 12.5px;
+                line-height: 1.5;
+                color: var(--muted-foreground);
+              "
+            >
+              Mockup data: Bartender Tips, the #01 glass, rim and garnish
+              values, and all House and Perfect text are examples. Tips render
+              only when persisted; with none, the tip row is removed and space
+              is reclaimed.
+            </div>
+          </div>
+        </div>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script>
+      class Component extends DCLogic {
+        state = { hd: 'lap', hsz: '1366', hori: 'land', rec: 'of', tips: 'each', unit: 'oz', tipOpen: {}, ovf: null, mode: 'dual', single: 'perfect', theme: 'light' };
+
+        measure() {
+          const el = this.body;
+          if (!el) return;
+          const o = el.scrollHeight - el.clientHeight;
+          if (o !== this.state.ovf) this.setState({ ovf: o });
+        }
+        componentDidMount() { this.measure(); setTimeout(() => this.measure(), 600); }
+        componentDidUpdate() { this.measure(); setTimeout(() => this.measure(), 400); }
+
+        hiVals(s, set, btn) {
+          const isI = true, sk = 'I', hiOn = true;
+          const lap = s.hd === 'lap', tab = s.hd === 'tab', mob = s.hd === 'mob', dual = s.mode === 'dual';
+          const st = (a) => a.map((x, i) => ({ id: i, n: x }));
+          const REC = {
+            of: {
+              num: '20', name: 'Smoked Vanilla Old Fashioned', cat: 'Signature Cocktails',
+              P: { method: 'Stir', glass: 'Old Fashioned / Rocks', rim: 'None', garnish: 'Orange peel and cherry',
+                ing: [[2, 'oz', 'Bourbon'], [0.25, 'oz', 'Demerara syrup'], [0.25, 'oz', 'Vanilla syrup'], [1, 'dash', 'Aromatic bitters'], [1, 'dash', 'Walnut bitters']],
+                steps: ['Add all ingredients to mixing glass.', 'Add ice.', 'Stir until chilled and diluted.', 'Strain over a large cube.', 'Smoke if desired.'],
+                tip: 'Express the orange peel over the finished drink before garnishing.' },
+              H: { method: 'Stir', glass: 'Old Fashioned / Rocks', rim: 'None', garnish: 'Orange peel or cherry',
+                ing: [[1.5, 'oz', 'Buffalo Trace'], [0.5, 'oz', 'Vanilla syrup'], [0.25, 'oz', 'Simple syrup'], [1, 'dash', 'Cocoa bitters'], [1, 'dash', 'Aromatic bitters']],
+                steps: ['Add all ingredients to mixing glass.', 'Add ice.', 'Stir well.', 'Strain over a large cube.'],
+                tip: 'Smoke briefly so the aroma complements rather than overwhelms the vanilla.' },
+            },
+            mj: {
+              num: '01', name: 'Monks Ala Carte Mojito', cat: 'Mojito & Refreshers',
+              P: { method: 'Shake', glass: 'Highball', rim: 'None', garnish: 'Mint sprig and lime wheel',
+                ing: [[2, 'oz', 'White rum'], ['8–10', '', 'Mint leaves'], [1, 'oz', 'Fresh lime juice'], [0.75, 'oz', 'Simple syrup'], ['', 'top', 'Club soda']],
+                steps: ['Gently muddle mint.', 'Add lime juice and syrup.', 'Add rum and ice.', 'Shake lightly.', 'Pour into ice-filled glass.', 'Top with soda.'],
+                tip: 'Muddle mint gently to avoid bitterness.' },
+              H: { method: 'Shake', glass: 'Highball', rim: 'None', garnish: 'Mint sprig',
+                ing: [[2, 'oz', 'Bacardi Superior'], ['8–10', '', 'Mint leaves'], [3, '', 'Lime wedges'], [0.75, 'oz', 'Sweet & Sour'], [0.25, 'oz', 'Simple syrup'], ['', 'top', 'Soda']],
+                steps: ['Gently muddle mint and lime.', 'Add Bacardi.', 'Add Sweet & Sour and simple.', 'Add ice and shake.', 'Pour.', 'Top with soda.'],
+                tip: 'Add soda after shaking and stir once gently.' },
+            },
+          };
+          const rec = REC[s.rec], P = rec.P, Hh = rec.H;
+          const keys = dual ? ['P', 'H'] : [s.single === 'house' ? 'H' : 'P'];
+          const flds = [['ingredients', (x) => x.ing], ['method', (x) => x.method], ['glass', (x) => x.glass], ['rim', (x) => x.rim], ['garnish', (x) => x.garnish], ['steps', (x) => x.steps]];
+          const diffs = flds.filter(([, f]) => JSON.stringify(f(P)) !== JSON.stringify(f(Hh))).map(([k]) => k);
+          const tipMode = s.tips === 'shared' && mob ? 'each' : s.tips;
+          const fmtN = (n) => String(+(+n).toFixed(2));
+          const amt = (n, u) => (typeof n === 'number' ? (u === 'oz' && s.unit === 'ml' ? { n: fmtN(n * 30), u: 'ml' } : { n: fmtN(n), u }) : { n, u });
+          const VERBS = ['add', 'shake', 'stir', 'strain', 'top', 'muddle', 'pour', 'smoke', 'serve', 'garnish', 'express'];
+          const stepOf = (t, i) => {
+            const w = t.split(' '), j = w.findIndex((x, k) => k < 2 && VERBS.includes(x.replace(/[^a-z]/gi, '').toLowerCase()));
+            const numS = isI ? "flex:none;width:20px;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:15px;color:var(--k-acc)" : "flex:none;width:18px;font:500 11px 'Geist Mono',ui-monospace,monospace;color:var(--k-mute)";
+            const n = isI ? String(i + 1) : String(i + 1).padStart(2, '0');
+            if (j < 0) return { id: i, n, numS, pre: '', verb: '', post: t };
+            return { id: i, n, numS, pre: j ? w.slice(0, j).join(' ') + ' ' : '', verb: w[j], post: ' ' + w.slice(j + 1).join(' ') };
+          };
+          const bs = keys.map((k, i) => {
+            const v = rec[k], house = k === 'H', open = !!s.tipOpen[k];
+            const hasTip = tipMode === 'each' && !!v.tip;
+            return {
+              key: k, col: isI && dual && !mob ? i * 2 + 1 : i + 1,
+              label: house ? 'House' : 'Perfect', sub: house ? "The Monk's Build" : 'Reference Build',
+              bg: house ? 'var(--k-h)' : 'var(--k-p)',
+              edge: 'inset 0 2px 0 ' + (house ? 'var(--k-acc)' : 'var(--k-line2)'),
+              bl: !isI && dual && i === 1 ? '1px solid var(--k-line2)' : 'none',
+              dot: 'flex:none;box-sizing:border-box;width:10px;height:10px;border-radius:50%;' + (house ? 'background:var(--k-acc)' : 'border:2px solid var(--k-mute)'),
+              amt: house ? 'var(--k-acc)' : 'var(--k-ink)',
+              method: v.method, showUnit: i === 0,
+              rows: v.ing.map(([n, u, name], r) => ({ id: r, name, ...amt(n, u) })),
+              meta: (isI ? [['Method', v.method], ['Glass', v.glass], ['Rim', v.rim], ['Garnish', v.garnish]] : [['Glass', v.glass], ['Rim', v.rim], ['Garnish', v.garnish]]).map(([a, b], q) => ({ id: q, k: a, v: b })),
+              steps: v.steps.map(stepOf),
+              diffOn: dual && house, diffText: diffs.length + (diffs.length === 1 ? ' difference' : ' differences'), diffTitle: 'Differs from Perfect: ' + diffs.join(', '),
+              hasTip, tip: v.tip, tipLabel: mob ? (open ? 'TIP −' : 'TIP +') : 'TIP',
+              tipRole: mob ? 'button' : 'note', tipTab: mob ? 0 : -1, tipExp: mob ? (open ? 'true' : 'false') : undefined,
+              tipClick: mob ? () => this.setState((x) => ({ tipOpen: { ...x.tipOpen, [k]: !x.tipOpen[k] } })) : () => {},
+              tipBox: 'display:flex;gap:8px;align-items:flex-start;padding:8px 10px;margin-top:var(--g2);border-radius:8px;background:var(--k-accs);align-self:start' + (mob ? ';cursor:pointer' : ''),
+              tipTxt: 'min-width:0;font-size:var(--ts);line-height:1.4;color:var(--k-ink)' + (mob && !open ? ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden' : ''),
+              tipFont: isI ? 'font-family:Newsreader,Georgia,serif;font-size:calc(var(--ts) + 1.5px);font-style:italic' : '',
+            };
+          });
+
+          const K = lap ? (s.hsz === '1440' ? 'l' : 'm') : tab ? (s.hori === 'port' ? 'p' : 'm') : 's';
+          const dev = { l: [1440, 900], m: lap ? [1366, 768] : [1180, 820], p: [820, 1180], s: [390, 844] }[K];
+          const Z = {
+            m: { pad: 22, padY: 14, row: 30, fi: 15, fs: 14, lh: 24, ts: 13.5, hd: 48, hpad: 20, tap: 32, ttlH: 24, ttlI: 38, g1: 10, g2: 10, sg: 0, tY: 10, tI: 10, cc: lap ? 250 : 210 },
+            l: { pad: 28, padY: 16, row: 34, fi: 16, fs: 15, lh: 27, ts: 14.5, hd: 52, hpad: 24, tap: 36, ttlH: 26, ttlI: 44, g1: 12, g2: 12, sg: 0, tY: 12, tI: 12, cc: 270 },
+            p: { pad: 16, padY: 16, row: 34, fi: 15, fs: 14, lh: 21, ts: 13.5, hd: 52, hpad: 20, tap: 36, ttlH: 26, ttlI: 40, g1: 12, g2: 12, sg: 4, tY: 12, tI: 14, cc: 160 },
+            s: { pad: 12, padY: 12, row: 36, fi: 13.5, fs: 13, lh: 18, ts: 12.5, hd: 52, hpad: 14, tap: 44, ttlH: 21, ttlI: 27, g1: 10, g2: 10, sg: 6, tY: 4, tI: 4, cc: 0 },
+          }[K];
+          const vars = {
+            pad: Z.pad + 'px', padY: Z.padY + 'px', row: Z.row + 'px', fi: Z.fi + 'px', fs: Z.fs + 'px', lh: Z.lh + 'px', ts: Z.ts + 'px', hd: Z.hd + 'px', hpad: Z.hpad + 'px', hgap: mob ? '0' : '28px',
+            tap: Z.tap + 'px', tap2: mob ? '44px' : '0', ttlH: Z.ttlH + 'px', ttlI: Z.ttlI + 'px', g1: Z.g1 + 'px', g2: Z.g2 + 'px', sg: Z.sg + 'px', tY: Z.tY + 'px', tI: Z.tI + 'px',
+            navD: mob ? 'none' : 'flex', menuD: mob ? 'block' : 'none', sepD: mob ? 'none' : 'block', tg: mob ? '8px' : '14px', h1b: mob ? '100%' : 'auto', h1o: mob ? 5 : 0,
+            nW: '4ch', uW: mob ? '3.6ch' : '4ch',
+            mc: mob ? 'minmax(0,1fr)' : isI ? 'minmax(0,1fr) minmax(0,1.3fr)' : 'minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr)',
+            mg: mob ? '6px' : '8px 14px', md: mob ? 'row' : 'column', mgap: mob ? '8px' : '2px', ml: mob ? '50px' : '0', mai: mob ? 'baseline' : 'stretch',
+            band: mob ? '0 0 150px' : '1 1 0%', bandMin: mob ? '0' : '104px',
+          };
+          const long = s.rec === 'mj';
+          const ZI = { m: { pad: 24, padY: 14, row: 30, fi: 15, fs: 14, lh: 24, ts: 14, ttlI: lap ? 44 : 38, iM: 18, tI: 10, g1: 8, g2: 10, sg: 0 }, l: { pad: 30, padY: 16, row: 34, fi: 16, fs: 15, lh: 27, ts: 15, ttlI: 50, iM: 22, tI: 12, g1: 10, g2: 12, sg: 0 }, p: { pad: 20, padY: 22, row: 42, fi: 16, fs: 15, lh: 26, ts: 14.5, ttlI: 50, iM: 14, tI: 18, g1: 12, g2: 16, sg: 6 }, s: { pad: 12, padY: 12, row: 36, fi: 13.5, fs: 13, lh: 18, ts: 13, ttlI: 25, iM: 0, tI: 4, g1: 8, g2: 10, sg: 6 } }[K];
+          if (isI) Object.assign(vars, { pad: ZI.pad + 'px', padY: ZI.padY + 'px', row: ZI.row + 'px', fi: ZI.fi + 'px', fs: ZI.fs + 'px', lh: ZI.lh + 'px', ts: ZI.ts + 'px', ttlI: ZI.ttlI + 'px', iM: ZI.iM + 'px', tI: ZI.tI + 'px', g1: ZI.g1 + 'px', g2: ZI.g2 + 'px', sg: ZI.sg + 'px', aW: mob ? '1.4ch' : '2.2ch', aF: mob ? '2.4ch' : '2.7ch', aG: mob ? '4px' : '6px', uW: mob ? '3.2ch' : '4ch' });
+          if (isI && !dual && (K === 'm' || K === 'l')) Object.assign(vars, { padY: '22px', row: '40px', fi: (ZI.fi + 2) + 'px', fs: (ZI.fs + 2) + 'px', lh: (ZI.lh + 4) + 'px', ts: (ZI.ts + 1) + 'px', g2: '14px' });
+          const ccI = { m: lap ? (long ? 216 : 256) : (long ? 188 : 216), l: long ? 240 : 280, p: long ? 172 : 192, s: 0 }[K];
+          const ccS = { m: lap ? 300 : 260, l: 320, p: 230, s: 0 }[K];
+          const presInSpine = !dual || (P.glass === Hh.glass && P.rim === Hh.rim);
+          const capSrc = dual ? P : rec[keys[0]];
+          const stepI = (t, i) => ({ ...stepOf(t, i), n: String(i + 1).padStart(2, '0'), numS: 'flex:none;width:28px;font-family:Newsreader,Georgia,serif;font-size:' + (mob ? 17 : 20) + 'px;line-height:var(--lh);color:var(--k-acc)' });
+          const splitN = (n, u) => {
+            if (typeof n !== 'number') return { w: String(n), f: '', u };
+            let v = n, uu = u;
+            if (u === 'oz' && s.unit === 'ml') { v = n * 30; uu = 'ml'; }
+            const str = Number.isInteger(v) ? String(v) : (uu === 'oz' ? v.toFixed(2) : String(+v.toFixed(1)));
+            const [w, f] = str.split('.');
+            return { w, f: f ? '.' + f : '', u: uu };
+          };
+          const iBs = keys.map((k, i) => {
+            const v = rec[k], house = k === 'H', open = !!s.tipOpen[k], b0 = bs[i];
+            const gut = dual && !mob ? (i === 0 ? 'linear-gradient(to left,var(--gut),transparent 34px),' : 'linear-gradient(to right,var(--gut),transparent 34px),') : '';
+            return {
+              key: k, col: dual && !mob ? i * 2 + 1 : i + 1, label: b0.label, sub: b0.sub, bg: gut + (house ? 'var(--k-h)' : 'var(--k-p)'), dot: b0.dot, amt: b0.amt, showUnit: i === 0,
+              rows: v.ing.map(([n, u, name], r) => ({ id: r, name, bt: r ? '1px solid var(--k-line)' : 'none', ...splitN(n, u) })),
+              meta: (presInSpine ? [['Method', v.method], ['Garnish', v.garnish]] : [['Method', v.method], ['Glass', v.glass], ['Rim', v.rim], ['Garnish', v.garnish]]).map(([a, b], q) => ({ id: q, k: a, v: b })),
+              steps: v.steps.map(stepI),
+              diffOn: dual && house, diffText: b0.diffText, diffTitle: b0.diffTitle,
+              hasTip: s.tips === 'each' && !!v.tip, tip: v.tip, tipLabel: mob ? (open ? 'NOTE \u2212' : 'NOTE +') : 'BARTENDER NOTE',
+              tipRole: mob ? 'button' : 'note', tipTab: mob ? 0 : -1, tipExp: mob ? (open ? 'true' : 'false') : undefined,
+              tipClick: mob ? () => this.setState((x) => ({ tipOpen: { ...x.tipOpen, [k]: !x.tipOpen[k] } })) : () => {},
+              tipBox: 'margin-top:var(--g2);padding:8px 12px 9px;border-radius:4px;background:var(--k-accs);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--k-acc) 50%,transparent);align-self:start' + (mob ? ';cursor:pointer' : ''),
+              tipTxt: 'margin-top:3px;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:calc(var(--ts) + 1.5px);line-height:1.35;color:var(--k-ink)' + (mob && !open ? ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden' : ''),
+            };
+          });
+          const iUnit = ['oz', 'ml'].map((u) => { const on = s.unit === u; return { label: u, pressed: on ? 'true' : 'false', click: set({ unit: u }), style: "border:0;background:transparent;cursor:pointer;padding:0 3px;min-height:" + (mob ? 36 : 22) + 'px;' + (mob ? 'margin:-5px 0;' : '') + "font:600 12px/1 'Geist Mono',ui-monospace,monospace;color:" + (on ? 'var(--k-acc)' : 'var(--k-mute)') + ';text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:1.5px;text-decoration-color:' + (on ? 'var(--k-acc)' : 'transparent') }; });
+          const IX = {
+            iBs, iUnit, iWide: !mob, iMobile: mob, iDualOn: isI && dual, iSingleOn: isI && !dual, iPres: presInSpine, iGlass: capSrc.glass, iRim: capSrc.rim === 'None' ? 'No rim' : capSrc.rim + ' rim',
+            iSharedOn: s.tips === 'shared' && !!P.tip, iTip: P.tip, iRad: mob ? 0 : 6,
+            iCols: mob ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr) ' + ccI + 'px minmax(0,1fr)',
+            iSingleWrap: mob ? 'minmax(0,1fr)' : 'minmax(0,1fr) ' + ccS + 'px', iSingleCols: mob ? 'minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1fr)',
+            iSpine: 'linear-gradient(var(--k-line2),var(--k-line2)) 3px 0/1px 100% no-repeat,linear-gradient(var(--k-line2),var(--k-line2)) right 3px top 0/1px 100% no-repeat,var(--k-mid)',
+          };
+          const hFrame = 'width:' + dev[0] + 'px;max-width:100%;height:' + dev[1] + 'px;flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:' + (mob ? 28 : 12) + 'px;background:var(--k-bg);color:var(--k-ink);font-family:Geist,Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;' + Object.entries(vars).map(([a, b]) => '--' + a + ':' + b).join(';');
+
+          const cc = Z.cc;
+          const hCols = isI
+            ? (mob ? (dual ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)') : dual ? 'minmax(0,1fr) ' + cc + 'px minmax(0,1fr)' : 'minmax(0,1fr) ' + cc + 'px')
+            : (dual ? 'minmax(0,1fr) minmax(0,1fr)' : mob ? 'minmax(0,1fr)' : 'minmax(0,860px)');
+          const hMax = isI ? (dual ? 'none' : '1000px') : (dual || mob ? 'none' : '860px');
+          const sharedOn = tipMode === 'shared' && !!P.tip;
+          const segS = (on) => "border:0;cursor:pointer;border-radius:5px;padding:0 9px;min-height:" + (mob ? 36 : 22) + "px;" + (mob ? 'margin:-5px 0;' : '') + "font:600 11px/1 'Geist Mono',ui-monospace,monospace;background:" + (on ? 'var(--k-acc)' : 'transparent') + ';color:' + (on ? 'var(--k-onacc)' : 'var(--k-mute)');
+          const hUnit = ['oz', 'ml'].map((u) => ({ label: u, pressed: s.unit === u ? 'true' : 'false', click: set({ unit: u }), style: segS(s.unit === u) }));
+          const noTip = tipMode === 'none';
+          const ovfTxt = s.ovf == null ? 'measuring' : s.ovf <= 0 ? 'document scroll 0 px' : (mob ? s.ovf + ' px internal scroll' : s.ovf + ' px OVERFLOW');
+          const devName = lap ? 'Laptop' : tab ? 'Tablet ' + (s.hori === 'port' ? 'portrait' : 'landscape') : 'Mobile';
+          return {
+            ...IX, hDev: K, hiOn, classic: !hiOn, hSkin: sk, hIsH: !isI, hIsI: isI, hFrame, hBs: bs, hCols, hMax, hUnit,
+            hNum: rec.num, hName: rec.name, hCat: rec.cat,
+            hCenter: isI && !mob, hThumb: isI && mob, hSharedOn: sharedOn, hShared: P.tip,
+            hBandCols: mob ? 'minmax(0,1fr)' : '1fr auto 1fr', hBandImg: mob ? 1 : 2, hW: dev[0],
+            hBodyRef: (el) => { this.body = el; },
+            hRecBtns: [btn('#20 Old Fashioned', s.rec === 'of', set({ rec: 'of' })), btn('#01 Mojito (long)', s.rec === 'mj', set({ rec: 'mj' }))],
+            hTipBtns: [btn('Per build', s.tips === 'each', set({ tips: 'each' })), btn('Shared', s.tips === 'shared', set({ tips: 'shared' })), btn('None (null)', s.tips === 'none', set({ tips: 'none' }))],
+            hDevBtns: [btn('Laptop', lap, set({ hd: 'lap' })), btn('Tablet', tab, set({ hd: 'tab' })), btn('Mobile', mob, set({ hd: 'mob' }))],
+            hHasSub: !mob,
+            hSubBtns: lap ? [btn('1366×768', s.hsz === '1366', set({ hsz: '1366' })), btn('1440×900', s.hsz === '1440', set({ hsz: '1440' }))] : [btn('Landscape 1180×820', s.hori === 'land', set({ hori: 'land' })), btn('Portrait 820×1180', s.hori === 'port', set({ hori: 'port' }))],
+            hStripA: isI ? "View I · The Bartender's Book" : 'View H · Precision Bartender Board',
+            hStripB: devName + ' ' + dev[0] + '×' + dev[1] + ' · ' + ovfTxt + ' · ' + (dual ? 'Perfect + House' : 'Single build') + ' · ' + (noTip ? 'No tips (null)' : tipMode === 'shared' ? 'Shared tip' : 'Tips visible') + ' · ' + (isI ? (mob ? 'Image in header' : 'Center image') : 'Image below'),
+          };
+        }
+
+
+        renderVals() {
+          const s = this.state, set = (o) => () => this.setState(o);
+          const F = 'Geist,Inter,system-ui,sans-serif';
+          const bs = (on) => 'white-space:nowrap;min-height:40px;padding:0 14px;border-radius:12px;border:1px solid ' + (on ? 'var(--primary)' : 'var(--border)') + ';background:' + (on ? 'color-mix(in srgb,var(--primary) 15%,transparent)' : 'var(--secondary)') + ';color:var(--foreground);font:600 14px/1 ' + F + ';cursor:pointer';
+          const btn = (label, on, click) => ({ label, pressed: on ? 'true' : 'false', click, style: bs(on) });
+          return {
+            ...this.hiVals(s, set, btn),
+            theme: s.theme, noop: (e) => e.preventDefault(), single: s.mode === 'single',
+            themes: [btn('Light', s.theme === 'light', set({ theme: 'light' })), btn('Dark', s.theme === 'dark', set({ theme: 'dark' }))],
+            states: [btn('Perfect + House', s.mode === 'dual', set({ mode: 'dual' })), btn('Single recipe', s.mode === 'single', set({ mode: 'single' }))],
+            singles: [btn('Perfect only', s.single === 'perfect', set({ single: 'perfect' })), btn('House only', s.single === 'house', set({ single: 'house' }))],
+          };
+        }
+      }
+    </script>
+  </body>
+</html>

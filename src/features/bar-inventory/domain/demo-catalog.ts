@@ -40,7 +40,7 @@ const DEMO_HISTORY: Record<string, DemoEvent[]> = {
     [10, "usage", -2],
   ],
   "Casamigos Blanco": [
-    [30, "delivery_restock", 6],
+    [31, "delivery_restock", 6],
     [26, "usage", -1],
     [19, "usage", -1],
     [12, "stock_count", -1],
