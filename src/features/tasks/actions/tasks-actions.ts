@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOpeningReminderPrompt } from "@/features/tasks/data/opening-reminder-prompt-data";
+import { getTaskHistory } from "@/features/tasks/data/task-history-data";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
 import {
   taskCommandSchema,
@@ -11,6 +12,7 @@ import {
   type TaskCommand,
 } from "@/features/tasks/domain/task-commands";
 import type { OpeningReminderPromptData } from "@/features/tasks/domain/opening-reminder-popup";
+import type { TaskHistoryData } from "@/features/tasks/domain/task-history";
 import type { TasksSnapshot } from "@/features/tasks/domain/task-types";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -277,6 +279,32 @@ export async function runTaskCommandAction(input: {
   const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
   return { ok: true, data: snapshot };
+}
+
+export type TaskHistoryActionResult =
+  | { ok: true; data: TaskHistoryData }
+  | { ok: false; error: string; sessionInvalid?: true };
+
+/** Read-only: completed tasks for Tasks → History, scoped by the caller's RLS. */
+export async function getTaskHistoryAction(input: {
+  restaurantSlug: string;
+}): Promise<TaskHistoryActionResult> {
+  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (!caller) {
+    return { ok: false, error: "You need to sign in to see task history." };
+  }
+
+  const history = await getTaskHistory(caller.organizationId);
+  if (!history)
+    return { ok: false, error: "Task history could not be loaded." };
+  return { ok: true, data: history };
 }
 
 /**

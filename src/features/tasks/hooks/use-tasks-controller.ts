@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  getTaskHistoryAction,
   getTasksSnapshotAction,
   runTaskCommandAction,
 } from "@/features/tasks/actions/tasks-actions";
@@ -16,6 +17,10 @@ import {
   sweepNotifications,
   type TasksState,
 } from "@/features/tasks/domain/task-engine";
+import {
+  demoHistoryEntries,
+  type TaskHistoryData,
+} from "@/features/tasks/domain/task-history";
 import type {
   TaskTeamMember,
   TaskViewer,
@@ -24,6 +29,10 @@ import type {
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 export type TaskRunResult = { ok: true } | { ok: false; error: string };
+
+export type TaskHistoryLoadResult =
+  | { ok: true; data: TaskHistoryData }
+  | { ok: false; error: string };
 
 export type TasksController = {
   snapshot: TasksSnapshot | null;
@@ -37,6 +46,8 @@ export type TasksController = {
   viewer: TaskViewer;
   run: (command: TaskCommand) => Promise<TaskRunResult>;
   refresh: () => Promise<void>;
+  /** Read-only completed-task history for Tasks → History. */
+  loadHistory: () => Promise<TaskHistoryLoadResult>;
 };
 
 type DemoBinding = {
@@ -228,6 +239,34 @@ export function useTasksController({
     [demo, viewer, restaurantSlug, onSessionInvalid, refresh],
   );
 
+  const loadHistory = useCallback(async (): Promise<TaskHistoryLoadResult> => {
+    if (demo) {
+      // Same rows the Today / Opening / Closing screens already show this
+      // viewer, completed ones only (demo mode keeps everything in memory).
+      const visible = demoSnapshot
+        ? [
+            ...demoSnapshot.tasks,
+            ...demoSnapshot.checklists.flatMap((c) => c.items),
+          ]
+        : [];
+      return {
+        ok: true,
+        data: {
+          entries: demoHistoryEntries(visible, demo.state.events),
+          truncated: false,
+        },
+      };
+    }
+    try {
+      const result = await getTaskHistoryAction({ restaurantSlug });
+      if (result.ok) return { ok: true, data: result.data };
+      if (result.sessionInvalid) onSessionInvalid?.();
+      return { ok: false, error: result.error };
+    } catch {
+      return { ok: false, error: "Task history could not be loaded." };
+    }
+  }, [demo, demoSnapshot, restaurantSlug, onSessionInvalid]);
+
   return {
     snapshot: demo ? demoSnapshot : remote,
     now,
@@ -237,5 +276,6 @@ export function useTasksController({
     viewer,
     run,
     refresh,
+    loadHistory,
   };
 }
