@@ -18,6 +18,7 @@ import type { TasksController } from "../hooks/use-tasks-controller";
 import { AssignedView } from "./assigned-view";
 import { ChecklistView } from "./checklist-view";
 import { HandoffPanel } from "./handoff-panel";
+import { HistoryView } from "./history-view";
 import { NotificationsDialog } from "./notifications-dialog";
 import { MyTasksView } from "./my-tasks-view";
 import { SeriesPanel } from "./series-panel";
@@ -32,7 +33,8 @@ export type TasksTab =
   | "opening"
   | "closing"
   | "assigned"
-  | "manage";
+  | "manage"
+  | "history";
 
 type Props = {
   controller: TasksController;
@@ -45,6 +47,7 @@ const TAB_LABELS: Record<TasksTab, string> = {
   closing: "Closing",
   assigned: "Assigned",
   manage: "Manage",
+  history: "History",
 };
 
 /**
@@ -106,8 +109,8 @@ export function TasksWorkspace({ controller }: Props) {
   }, [snapshot, openTaskId]);
 
   const tabs: TasksTab[] = manager
-    ? ["today", "mine", "opening", "closing", "assigned", "manage"]
-    : ["today", "mine", "opening", "closing"];
+    ? ["today", "mine", "opening", "closing", "assigned", "manage", "history"]
+    : ["today", "mine", "opening", "closing", "history"];
 
   return (
     <section aria-label="Tasks" className="space-y-5">
@@ -272,6 +275,7 @@ export function TasksWorkspace({ controller }: Props) {
               onGoToManage={() => setTab("manage")}
             />
           ) : null}
+          {tab === "history" ? <HistoryView controller={controller} /> : null}
           {tab === "mine" ? (
             <MyTasksView
               controller={controller}
