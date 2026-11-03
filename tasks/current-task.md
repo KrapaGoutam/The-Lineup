@@ -1,30 +1,31 @@
-# V2-001.004 — Per-Location Roles Foundation
+# V2-001.005 — Multi-Location / Multi-Role Assignment
 
-Approved Subfeature: establish explicit location-scoped roles (`manager`, `assistant_manager`, `staff`), allowing a user to hold different roles across branches without cross-branch role leakage (e.g. John is Manager at NASA, Assistant Manager at League City, Manager at Webster).
-Canonical docs: `docs/v2.0/features/001-access-foundation/004-per-location-roles/`
+Approved Subfeature: establish explicit multi-location assignment workflow and server-authoritative mutation contract, allowing a person to be safely assigned across multiple locations/organizations with one explicit role per location (`manager`, `assistant_manager`, `staff`), with atomic validation, fail-closed authorization, explicit change sets, and deactivate/reactivate semantics.
+Canonical docs: `docs/v2.0/features/001-access-foundation/005-multi-location-multi-role-assignment/`
 Parent Feature: Issue #249 (`V2-001: Access & Role Foundation`)
 Parent Milestone: Issue #248 (`The Lineup V2.0`)
-Subfeature Issue: Issue #265 (`[V2-001.004] Per-Location Roles`)
-Branch: `feature/v2.0-001.004-per-location-roles` (from `origin/development`)
-Worktree: `.tmp/v2-location-roles`
+Subfeature Issue: Issue #267 (`[V2-001.005] Multi-Location / Multi-Role Assignment`)
+Branch: `feature/v2.0-001.005-multi-location-multi-role` (from `origin/development`)
+Worktree: `.tmp/v2-multi-location-roles`
 
 ## Implementation Checklist
 
-- [x] Pre-flight checks: baseline SHAs recorded (`1ae02516a1d7aa6df606d1672d27f9c9a006db55`), isolated worktree created (`.tmp/v2-location-roles`)
-- [x] Hosted DEV baseline verified (`overall_roles`, `memberships`, `location_memberships` present on `opmujepkemwcdxxorhfd`)
-- [x] Subfeature issue created: #265
+- [x] Pre-flight checks: baseline SHAs recorded (`7065d397fd52e923a1f40913fec6b9d9d5d6b6cc`), isolated worktree created (`.tmp/v2-multi-location-roles`)
+- [x] Hosted DEV baseline verified (`overall_roles`, `memberships`, `location_memberships`, `location_role` through migration `20261103010000` on `opmujepkemwcdxxorhfd`)
+- [x] Subfeature issue created: #267
 - [x] Architecture plan & test matrix documented (`PLAN.md`, `TEST_MATRIX.md`, `STATUS.md`, `EVIDENCE.md`)
-- [ ] Forward-only migration adding `public.location_role` enum and `role` column to `public.location_memberships` (`20261103010000_location_roles_foundation.sql`)
-- [ ] Local DB reset and migration verification
-- [ ] Database type generation (`src/types/database.generated.ts`)
-- [ ] Domain types and pure predicates (`src/features/auth/domain/location-role.ts`)
-- [ ] Server-authoritative data readers (`src/features/auth/data/location-role.ts`)
-- [ ] Database/pgTAP tests (`supabase/tests/database/0053_location_roles.test.sql`, DB-001 through DB-020)
-- [ ] Domain and data reader unit tests (`location-role.test.ts`)
-- [ ] Local validation: format, lint, typecheck, unit tests, pgTAP, Next.js build
+- [x] Forward migration `20261103020000_multi_location_assignment_workflow.sql` adding narrow RPC `public.apply_location_assignment_changes`
+- [x] Local DB reset and migration verification
+- [x] Database type generation (`src/types/database.generated.ts`)
+- [x] Domain types and pure validation (`src/features/auth/domain/location-assignment.ts`)
+- [x] Server-authoritative data readers & mutation contract (`src/features/auth/data/location-assignment.ts`)
+- [x] Database/pgTAP tests (`supabase/tests/database/0054_location_assignment.test.sql`, DB-001 through DB-024)
+- [x] Domain and data layer unit tests (`location-assignment.test.ts`)
+- [x] Full test regression runs (001.001, 001.002, 001.003, 001.004, operational modules)
+- [x] Local quality gate: format, lint, typecheck, full unit tests, full pgTAP, Next.js build
 - [ ] Hosted DEV dry run & push (`opmujepkemwcdxxorhfd`)
-- [ ] Hosted DEV schema & policy verification
-- [ ] Update evidence and documentation
+- [ ] Hosted DEV validation
+- [ ] Update documentation and evidence
 - [ ] Git commit and push to remote
 - [ ] Open PR to `development`
 - [ ] Exact-head CI green
@@ -32,4 +33,4 @@ Worktree: `.tmp/v2-location-roles`
 
 ## Current State & Next Step
 
-Pre-flight and documentation complete. Next: author migration `20261103010000_location_roles_foundation.sql`.
+Local implementation and quality gates complete. Next: stage files, commit, push branch, open PR, and execute hosted DEV dry-run and push following the migration gate.

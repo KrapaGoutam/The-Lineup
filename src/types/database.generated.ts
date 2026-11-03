@@ -4651,6 +4651,24 @@ export type Database = {
       };
     };
     Functions: {
+      apply_location_assignment_changes: {
+        Args: { p_changes: Json; p_target_profile_id: string };
+        Returns: {
+          active: boolean;
+          created_at: string;
+          id: number;
+          location_id: string;
+          profile_id: string;
+          role: Database["public"]["Enums"]["location_role"];
+          updated_at: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "location_memberships";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       bar_recipe_category_reorder: {
         Args: { p_ordered_ids: string[]; p_organization_id: string };
         Returns: Json;
