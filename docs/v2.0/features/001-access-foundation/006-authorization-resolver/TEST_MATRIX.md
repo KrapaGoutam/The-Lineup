@@ -9,8 +9,8 @@ Status: `IN_PROGRESS`
 
 ## 1. Overall Role Tests (OVR)
 
-| Test ID     | Scenario                                                                | Expected Evaluation                                                                    | Status  |
-| ----------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| Test ID     | Scenario                                                                | Expected Evaluation                                                                    | Status          |
+| ----------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------- |
 | **OVR-001** | Overall Owner evaluated in valid organization context                   | `allowed: true`, `effectiveLevel: 'owner'`, has `overall:owner`                        | PASS (Verified) |
 | **OVR-002** | Overall Owner evaluated in valid location context                       | `allowed: true`, `effectiveLevel: 'owner'`, has `location:manage` & `overall:owner`    | PASS (Verified) |
 | **OVR-003** | Overall Owner has no synthetic org or location membership rows          | `allowed: true`, sources: `['overall']`                                                | PASS (Verified) |
@@ -28,8 +28,8 @@ Status: `IN_PROGRESS`
 
 ## 2. Organization Role Tests (ORG)
 
-| Test ID     | Scenario                                                                     | Expected Evaluation                                                          | Status  |
-| ----------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------- |
+| Test ID     | Scenario                                                                     | Expected Evaluation                                                          | Status          |
+| ----------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------- |
 | **ORG-001** | Active organization membership considered in tenant context                  | `allowed: true` for org-level query, has `org:member`                        | PASS (Verified) |
 | **ORG-002** | Inactive organization membership grants no organization-scoped authority     | `allowed: false`, `denialReason: 'INACTIVE_ORGANIZATION_MEMBERSHIP'`         | PASS (Verified) |
 | **ORG-003** | Membership in Monks does not grant Liquor Tap authority                      | `allowed: false`, `denialReason: 'NO_ORGANIZATION_MEMBERSHIP'`               | PASS (Verified) |
@@ -43,8 +43,8 @@ Status: `IN_PROGRESS`
 
 ## 3. Location Role Tests (LOC)
 
-| Test ID     | Scenario                                                                    | Expected Evaluation                                                                     | Status  |
-| ----------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------- |
+| Test ID     | Scenario                                                                    | Expected Evaluation                                                                     | Status          |
+| ----------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------- |
 | **LOC-001** | Active org membership + active location assignment + staff role             | `allowed: true`, `effectiveLevel: 'staff'`, has `location:operate`                      | PASS (Verified) |
 | **LOC-002** | Active org membership + active location assignment + manager role           | `allowed: true`, `effectiveLevel: 'manager'`, has `location:manage`                     | PASS (Verified) |
 | **LOC-003** | Active org membership + active location assignment + assistant_manager role | `allowed: true`, `effectiveLevel: 'assistant_manager'`, has `location:assistant_manage` | PASS (Verified) |
@@ -60,8 +60,8 @@ Status: `IN_PROGRESS`
 
 ## 4. Role Combination Tests (COMBO)
 
-| Test ID       | Scenario                                                                                    | Expected Evaluation                                                       | Status  |
-| ------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------- |
+| Test ID       | Scenario                                                                                    | Expected Evaluation                                                       | Status          |
+| ------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------- |
 | **COMBO-001** | Overall Assistant Manager + NASA Manager explicit role                                      | At NASA: `effectiveLevel: 'manager'`, has `location:manage` (elevation)   | PASS (Verified) |
 | **COMBO-002** | Overall Assistant Manager at unassigned League City                                         | At League City: `effectiveLevel: 'assistant_manager'` (baseline persists) | PASS (Verified) |
 | **COMBO-003** | Overall Manager + explicit Staff at NASA                                                    | At NASA: `effectiveLevel: 'manager'` (baseline dominates, no downgrade)   | PASS (Verified) |
@@ -75,8 +75,8 @@ Status: `IN_PROGRESS`
 
 ## 5. Tenant Safety Tests (TENANT)
 
-| Test ID        | Scenario                                        | Expected Evaluation                                                   | Status  |
-| -------------- | ----------------------------------------------- | --------------------------------------------------------------------- | ------- |
+| Test ID        | Scenario                                        | Expected Evaluation                                                   | Status          |
+| -------------- | ----------------------------------------------- | --------------------------------------------------------------------- | --------------- |
 | **TENANT-001** | Monks org + NASA location mismatch              | `allowed: false`, `denialReason: 'TENANT_MISMATCH'`                   | PASS (Verified) |
 | **TENANT-002** | Liquor Tap org + Webster location mismatch      | `allowed: false`, `denialReason: 'TENANT_MISMATCH'`                   | PASS (Verified) |
 | **TENANT-003** | Nonexistent location ID                         | `allowed: false`, `denialReason: 'LOCATION_NOT_FOUND'`                | PASS (Verified) |
@@ -92,8 +92,8 @@ Status: `IN_PROGRESS`
 
 ## 6. Canonical Permanent Acceptance Matrix (Jack, Sam, Tom, Jerry)
 
-| User      | Target Org | Target Location | Scoped Assignment                             | Expected Evaluation                     | Status  |
-| --------- | ---------- | --------------- | --------------------------------------------- | --------------------------------------- | ------- |
+| User      | Target Org | Target Location | Scoped Assignment                             | Expected Evaluation                     | Status          |
+| --------- | ---------- | --------------- | --------------------------------------------- | --------------------------------------- | --------------- |
 | **Jack**  | Monks      | Webster         | Monks Member + Webster Staff                  | **ALLOW** (`effectiveLevel: 'staff'`)   | PASS (Verified) |
 | **Jack**  | Liquor Tap | NASA            | Liquor Tap Member + NASA Staff                | **ALLOW** (`effectiveLevel: 'staff'`)   | PASS (Verified) |
 | **Jack**  | Liquor Tap | League City     | Liquor Tap Member + League City Staff         | **ALLOW** (`effectiveLevel: 'staff'`)   | PASS (Verified) |
@@ -110,8 +110,8 @@ Status: `IN_PROGRESS`
 
 ## 7. John Mixed-Role Matrix
 
-| User                         | Target Org | Target Location | Explicit Role     | Expected Evaluation                                                          | Status  |
-| ---------------------------- | ---------- | --------------- | ----------------- | ---------------------------------------------------------------------------- | ------- |
+| User                         | Target Org | Target Location | Explicit Role     | Expected Evaluation                                                          | Status          |
+| ---------------------------- | ---------- | --------------- | ----------------- | ---------------------------------------------------------------------------- | --------------- |
 | **John**                     | Liquor Tap | NASA            | Manager           | `allowed: true`, `effectiveLevel: 'manager'`                                 | PASS (Verified) |
 | **John**                     | Liquor Tap | League City     | Assistant Manager | `allowed: true`, `effectiveLevel: 'assistant_manager'`                       | PASS (Verified) |
 | **John**                     | Monks      | Webster         | Manager           | `allowed: true`, `effectiveLevel: 'manager'`                                 | PASS (Verified) |
