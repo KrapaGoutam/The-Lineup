@@ -1,16 +1,16 @@
 # Feature V2-001: Access & Role Foundation — Status
 
 ```text
-Status:               NOT STARTED
-Current Subfeature:   None (Awaiting Phase 0 completion and owner approval)
+Status:               IN_PROGRESS
+Current Subfeature:   V2-001.001 Overall Roles
 GitHub Issue:         #249
 Target Branch:        development
-Blockers:             Phase 0 Planning PR must be merged first
+Blockers:             None
 ```
 
 ## Subfeature Progress
 
-- [ ] V2-001.001 Overall Roles
+- [ ] V2-001.001 Overall Roles (In Progress)
 - [ ] V2-001.002 Organization Membership
 - [ ] V2-001.003 Location Access
 - [ ] V2-001.004 Per-Location Roles

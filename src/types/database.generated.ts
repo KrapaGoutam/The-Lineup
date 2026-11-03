@@ -2257,6 +2257,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      overall_roles: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: number;
+          profile_id: string;
+          role: Database["public"]["Enums"]["overall_role"];
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: never;
+          profile_id: string;
+          role: Database["public"]["Enums"]["overall_role"];
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: never;
+          profile_id?: string;
+          role?: Database["public"]["Enums"]["overall_role"];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "overall_roles_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "overall_roles_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       passcode_credentials: {
         Row: {
           active: boolean;
@@ -5251,6 +5293,7 @@ export type Database = {
         | "skip"
         | "end_and_assign";
       checklist_kind: "opening" | "closing";
+      overall_role: "owner" | "manager" | "assistant_manager";
       recurrence_end_type: "never" | "on_date" | "after_count";
       recurrence_frequency:
         | "daily"
@@ -5459,6 +5502,7 @@ export const Constants = {
         "end_and_assign",
       ],
       checklist_kind: ["opening", "closing"],
+      overall_role: ["owner", "manager", "assistant_manager"],
       recurrence_end_type: ["never", "on_date", "after_count"],
       recurrence_frequency: [
         "daily",
