@@ -41,12 +41,12 @@ development → main (Production)
 ### V2-001 — Access & Role Foundation
 
 - **GitHub Issue:** [#249](https://github.com/KrapaGoutam/The-Lineup/issues/249)
-- **Status:** In Progress (V2-001.002 active)
+- **Status:** In Progress (V2-001.003 active)
 - **Directory:** `docs/v2.0/features/001-access-foundation/`
 - **Subfeatures:**
-  - [x] **V2-001.001**: Overall Roles (PR #260 Merged; hosted DEV repair pending)
-  - [x] **V2-001.002**: Organization Membership (#261 — Multi-tenant profile-to-organization relational bindings)
-  - [ ] **V2-001.003**: Location Access (Profile-to-location access mapping within organization boundaries)
+  - [x] **V2-001.001**: Overall Roles (PR #260 Merged; hosted DEV migration verified)
+  - [x] **V2-001.002**: Organization Membership (PR #262 Merged)
+  - [ ] **V2-001.003**: Location Access (#263 — Profile-to-location access mapping within organization boundaries; Implementation complete, ready for PR)
   - [ ] **V2-001.004**: Per-Location Roles (Location-scoped roles and management capabilities)
   - [ ] **V2-001.005**: Multi-Location / Multi-Role Assignment (Staff assignment across multiple branches with distinct roles)
   - [ ] **V2-001.006**: Canonical Authorization Resolver (Unified pure resolver calculating effective capability union)
