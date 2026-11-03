@@ -4,23 +4,23 @@
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
 Current Feature:          V2-001 — Access & Role Foundation
-Current Subfeature:       V2-001.004 — Per-Location Roles
-Branch:                   feature/v2.0-001.004-per-location-roles
-Starting dev SHA:         1ae02516a1d7aa6df606d1672d27f9c9a006db55
+Current Subfeature:       V2-001.005 — Multi-Location / Multi-Role Assignment
+Branch:                   feature/v2.0-001.005-multi-location-multi-role
+Starting dev SHA:         7065d397fd52e923a1f40913fec6b9d9d5d6b6cc
 Starting main SHA:        5e5b7747693b6e81014eafdf299b87e56c3f033d
-Worktree Path:            .tmp/v2-location-roles
+Worktree Path:            .tmp/v2-multi-location-roles
 Target Branch:            development
 GitHub Milestone:         The Lineup V2.0 (Milestone #8)
 GitHub Parent Issue:      #248
 Feature Issue:            #249
-Subfeature Issue:         #265
+Subfeature Issue:         #267
 PR:                       (Pending)
 Head SHA:                 (Pending)
-Migration:                20261103010000_location_roles_foundation.sql (Outcome A)
+Migration:                20261103020000_multi_location_assignment_workflow.sql
 DEV Migration Status:     PENDING (opmujepkemwcdxxorhfd)
 CI Status:                Pending
 Blockers:                 NONE
-Next Expected Subfeature: V2-001.005 — Multi-Location / Multi-Role Assignment
+Next Expected Subfeature: V2-001.006 — Canonical Authorization Resolver
 Production Changes:       NONE
 Main Branch Merge:        NONE
 ```
