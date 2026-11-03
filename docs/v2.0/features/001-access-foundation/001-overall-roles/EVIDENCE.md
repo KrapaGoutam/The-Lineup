@@ -57,13 +57,17 @@ Status: `IN_PROGRESS`
 ## 4. Hosted DEV Verification
 
 - Project Ref: `opmujepkemwcdxxorhfd`
-- Verification Steps & SQL outputs: (Pending)
+- Read-only verification check executed during V2-001.002 preflight:
+  - `public.overall_roles` query returned: `{"code":"PGRST205","message":"Could not find the table 'public.overall_roles' in the schema cache"}`
+  - Result: `public.overall_roles` is NOT present on hosted DEV.
+  - Direct execution via Supabase CLI (`db push`) requires `SUPABASE_DB_PASSWORD` or elevated access token credentials, which are not configured in the local non-interactive environment.
+  - Status: Documented as an active hosted DEV blocker for V2-001.001 closeout repair.
 
 ---
 
 ## 5. Pull Request & CI Gate
 
-- PR Number: (Pending)
-- Exact Head SHA: (Pending)
-- CI Checks: (Pending)
-- Merge Commit SHA: (Pending)
+- PR Number: #260
+- Head Commit SHA: `a4a69ef2c56a84c98f822e1b1d7d066b553adcf6`
+- Merge Commit SHA: `5367581300cbfec18b3146c7c96b6e81012163c2`
+- CI Checks: Passed on exact head
