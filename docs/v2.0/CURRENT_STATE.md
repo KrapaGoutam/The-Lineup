@@ -1,26 +1,28 @@
 # The Lineup V2.0 — Current Operational State
 
 ```text
-Program:               The Lineup V2.0
-State:                 PLANNING (Phase 0)
-Current Feature:       Phase 0 — Planning Foundation, Architecture Audit & Roadmap Setup
-Implementation:        NOT STARTED
-Starting dev SHA:      26cd067b1904143fabec18bc3b2316d053eb39f5
-Starting main SHA:     5e5b7747693b6e81014eafdf299b87e56c3f033d
-Working Branch:        docs/v2.0-planning
-Current Branch SHA:    cb45defa13e25c2184d05886573feba08c9f0ea4
-PR:                    #258 (https://github.com/KrapaGoutam/The-Lineup/pull/258)
-Worktree Path:         .tmp/v2-planning
-Target Branch:         development
-GitHub Milestone:      The Lineup V2.0 (Milestone #8)
-GitHub Parent Issue:   #248
-GitHub Feature Issues: #249 through #257
-Database Changes:      NONE
-DEV DB Mutations:      NONE
-Production Changes:    NONE
-Main Branch Merge:     NONE
-Next Approved Phase:   V2-001 — Access & Role Foundation
-Blockers:              None
+Program:                  The Lineup V2.0
+State:                    IN_PROGRESS
+Current Feature:          V2-001 — Access & Role Foundation
+Current Subfeature:       V2-001.001 — Overall Roles
+Branch:                   feature/v2.0-001.001-overall-roles
+Starting dev SHA:         fec8eefcc74e388313414101ed67d2eba13635c3
+Starting main SHA:        5e5b7747693b6e81014eafdf299b87e56c3f033d
+Worktree Path:            .tmp/v2-overall-roles
+Target Branch:            development
+GitHub Milestone:         The Lineup V2.0 (Milestone #8)
+GitHub Parent Issue:      #248
+Feature Issue:            #249
+Subfeature Issue:         #259
+PR:                       (Pending)
+Head SHA:                 (Pending)
+Migration:                20261102213000_overall_roles_foundation.sql
+DEV Migration Status:     Pending
+CI Status:                Pending
+Blockers:                 None
+Next Expected Subfeature: V2-001.002 — Organization Membership
+Production Changes:       NONE
+Main Branch Merge:        NONE
 ```
 
 ---
@@ -28,20 +30,16 @@ Blockers:              None
 ## Operational Summary
 
 1. **Safety Baseline**:
-   - The primary working tree (`docs/recipes-owner-retest-handoff`) contained uncommitted owner documentation and design references.
-   - An isolated Git worktree was established at `.tmp/v2-planning` tracking `origin/development` (`26cd067b1904143fabec18bc3b2316d053eb39f5`).
-   - Starting `origin/main` SHA is recorded as `5e5b7747693b6e81014eafdf299b87e56c3f033d`.
-   - No resets, stashes, clean operations, or force pushes have been executed.
+   - Starting `origin/development` SHA: `fec8eefcc74e388313414101ed67d2eba13635c3`.
+   - Starting `origin/main` SHA: `5e5b7747693b6e81014eafdf299b87e56c3f033d`.
+   - Isolated worktree active at `.tmp/v2-overall-roles` on branch `feature/v2.0-001.001-overall-roles`.
+   - Primary working tree preserved without modifications or stashes.
 
-2. **Phase 0 Scope & Execution**:
-   - Repository audit completed across organizations, memberships, locations, authorization helpers, passcode auth, attendance, tips, payroll, tasks, bar inventory, and recipes.
-   - Canonical documentation established under `docs/v2.0/`.
-   - GitHub tracking initialized: Milestone #8 (`The Lineup V2.0`), Parent tracking issue #248, and Feature issues #249 through #257.
-   - Issue #106 (organization creator bypass debt in `private.has_org_role`) reconciled and linked to subfeature V2-001.007.
-   - Product code, migrations, RPCs, and RLS policies remain completely untouched.
-
-3. **Next Phase Recommendation**:
-   - **Recommended Phase**: `V2-001 — Access & Role Foundation`
-   - **First Subfeature**: `V2-001.001 Overall Roles` & `V2-001.002 Organization Membership`
-   - **Agent Recommendation**: Antigravity Local / Gemini 3.8 Flash / High / New Local Session (LOCAL REQUIRED).
-   - **Strict Constraint**: Implementation must not proceed until Phase 0 PR is reviewed, verified green by CI, and merged into `development`.
+2. **V2-001.001 Implementation & Local Validation**:
+   - Migration `20261102213000_overall_roles_foundation.sql` creates `overall_role` enum and `overall_roles` table with `constraint overall_roles_profile_id_key unique (profile_id)`.
+   - RLS enabled with `overall_roles_select_self` policy; direct client writes fail closed.
+   - Generated database types updated in `src/types/database.generated.ts`.
+   - Domain model and reader contract implemented in `src/features/auth/domain/overall-role.ts` and `src/features/auth/data/overall-role.ts`.
+   - pgTAP test suite `0050_overall_roles.test.sql` (22 subtests) passing. Full database test suite: 50 files, 1572 tests passed.
+   - Vitest unit tests: 163 files, 2143 tests passed.
+   - Prettier, ESLint, and TypeScript typecheck all passed with 0 warnings/errors.
