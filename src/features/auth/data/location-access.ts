@@ -11,7 +11,7 @@ import { getOrganizationMembership } from "@/features/auth/data/organization-mem
 import { createClient } from "@/lib/supabase/server";
 
 const LOCATION_MEMBERSHIP_COLUMNS =
-  "id, location_id, profile_id, active, created_at, updated_at, locations(organization_id)" as const;
+  "id, location_id, profile_id, role, active, created_at, updated_at, locations(organization_id)" as const;
 
 /**
  * Server-authoritative reader for a specific (profile, location) assignment pair.
