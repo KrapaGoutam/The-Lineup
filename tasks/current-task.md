@@ -1,28 +1,30 @@
-# V2-001.003 — Location Access Foundation
+# V2-001.004 — Per-Location Roles Foundation
 
-Approved Subfeature: establish explicit user -> location access, constrained by organization membership (Active Org Membership + Explicit Active Location Assignment = Scoped Location Access).
-Canonical docs: `docs/v2.0/features/001-access-foundation/003-location-access/`
+Approved Subfeature: establish explicit location-scoped roles (`manager`, `assistant_manager`, `staff`), allowing a user to hold different roles across branches without cross-branch role leakage (e.g. John is Manager at NASA, Assistant Manager at League City, Manager at Webster).
+Canonical docs: `docs/v2.0/features/001-access-foundation/004-per-location-roles/`
 Parent Feature: Issue #249 (`V2-001: Access & Role Foundation`)
 Parent Milestone: Issue #248 (`The Lineup V2.0`)
-Subfeature Issue: Issue #263 (`[V2-001.003] Location Access`)
-Branch: `feature/v2.0-001.003-location-access` (from `origin/development`)
+Subfeature Issue: Issue #265 (`[V2-001.004] Per-Location Roles`)
+Branch: `feature/v2.0-001.004-per-location-roles` (from `origin/development`)
+Worktree: `.tmp/v2-location-roles`
 
 ## Implementation Checklist
 
-- [x] Pre-flight checks and isolated worktree creation (`.tmp/v2-location-access`)
-- [x] Audit existing schema models and verify `public.location_memberships` does not exist (Outcome B)
-- [x] Hosted DEV prerequisite V2-001.001 migration `20261102213000` applied & verified on `opmujepkemwcdxxorhfd`
-- [x] GitHub subfeature issue #263 created
-- [x] Forward-only migration adding `public.location_memberships` with unique constraint, indexes, RLS, and grants (`20261103001500_location_access_foundation.sql`)
-- [x] Forward migration pushed to hosted DEV (`opmujepkemwcdxxorhfd`) and verified
-- [x] Database type generation (`src/types/database.generated.ts`)
-- [x] Domain types and pure predicates (`src/features/auth/domain/location-access.ts`)
-- [x] Server-authoritative data readers and effective access evaluator (`src/features/auth/data/location-access.ts`)
-- [x] Database/pgTAP tests (`supabase/tests/database/0052_location_access.test.sql`, 24 tests passing)
-- [x] Domain and data unit tests (`location-access.test.ts`, 33 tests passing)
-- [x] Local validation: format, lint, typecheck, unit tests (2,202 tests), pgTAP (1,618 tests), Next.js build
-- [x] Documentation authored (`PLAN.md`, `STATUS.md`, `TEST_MATRIX.md`, `EVIDENCE.md`, `ROADMAP.md`, `CURRENT_STATE.md`)
-- [ ] Pre-commit quality checks (tracked local paths, format, lint, typecheck)
+- [x] Pre-flight checks: baseline SHAs recorded (`1ae02516a1d7aa6df606d1672d27f9c9a006db55`), isolated worktree created (`.tmp/v2-location-roles`)
+- [x] Hosted DEV baseline verified (`overall_roles`, `memberships`, `location_memberships` present on `opmujepkemwcdxxorhfd`)
+- [x] Subfeature issue created: #265
+- [x] Architecture plan & test matrix documented (`PLAN.md`, `TEST_MATRIX.md`, `STATUS.md`, `EVIDENCE.md`)
+- [ ] Forward-only migration adding `public.location_role` enum and `role` column to `public.location_memberships` (`20261103010000_location_roles_foundation.sql`)
+- [ ] Local DB reset and migration verification
+- [ ] Database type generation (`src/types/database.generated.ts`)
+- [ ] Domain types and pure predicates (`src/features/auth/domain/location-role.ts`)
+- [ ] Server-authoritative data readers (`src/features/auth/data/location-role.ts`)
+- [ ] Database/pgTAP tests (`supabase/tests/database/0053_location_roles.test.sql`, DB-001 through DB-020)
+- [ ] Domain and data reader unit tests (`location-role.test.ts`)
+- [ ] Local validation: format, lint, typecheck, unit tests, pgTAP, Next.js build
+- [ ] Hosted DEV dry run & push (`opmujepkemwcdxxorhfd`)
+- [ ] Hosted DEV schema & policy verification
+- [ ] Update evidence and documentation
 - [ ] Git commit and push to remote
 - [ ] Open PR to `development`
 - [ ] Exact-head CI green
@@ -30,4 +32,4 @@ Branch: `feature/v2.0-001.003-location-access` (from `origin/development`)
 
 ## Current State & Next Step
 
-Implementation, tests, hosted DEV migration, and documentation complete. Next: pre-commit quality check, commit, push, and open PR to `development`.
+Pre-flight and documentation complete. Next: author migration `20261103010000_location_roles_foundation.sql`.

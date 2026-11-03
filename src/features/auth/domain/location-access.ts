@@ -1,6 +1,12 @@
 import type { Database } from "@/types/database.generated";
 import type { OrganizationMembership } from "@/features/auth/domain/organization-membership";
 
+import type {
+  LocationRole,
+  DatabaseLocationRole,
+} from "@/features/auth/domain/location-role";
+import { isLocationRole } from "@/features/auth/domain/location-role";
+
 export type DatabaseLocationMembership =
   Database["public"]["Tables"]["location_memberships"]["Row"];
 
@@ -15,6 +21,7 @@ export interface LocationAccess {
   readonly profileId: string;
   readonly locationId: string;
   readonly organizationId?: string;
+  readonly role?: LocationRole;
   readonly active: boolean;
   readonly createdAt?: string;
   readonly updatedAt?: string;
@@ -73,6 +80,7 @@ export function mapLocationMembershipRow(row: {
   id: number;
   location_id: string;
   profile_id: string;
+  role?: DatabaseLocationRole | string;
   active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -82,11 +90,13 @@ export function mapLocationMembershipRow(row: {
   organization_id?: string;
 }): LocationAccess {
   const orgId = row.organization_id ?? row.locations?.organization_id;
+  const role = isLocationRole(row.role) ? row.role : undefined;
   return {
     id: row.id,
     locationId: row.location_id,
     profileId: row.profile_id,
     organizationId: orgId,
+    role,
     active: Boolean(row.active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

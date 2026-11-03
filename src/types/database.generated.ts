@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2094,6 +2094,7 @@ export type Database = {
           id: number;
           location_id: string;
           profile_id: string;
+          role: Database["public"]["Enums"]["location_role"];
           updated_at: string;
         };
         Insert: {
@@ -2102,6 +2103,7 @@ export type Database = {
           id?: never;
           location_id: string;
           profile_id: string;
+          role?: Database["public"]["Enums"]["location_role"];
           updated_at?: string;
         };
         Update: {
@@ -2110,6 +2112,7 @@ export type Database = {
           id?: never;
           location_id?: string;
           profile_id?: string;
+          role?: Database["public"]["Enums"]["location_role"];
           updated_at?: string;
         };
         Relationships: [
@@ -5335,6 +5338,7 @@ export type Database = {
         | "skip"
         | "end_and_assign";
       checklist_kind: "opening" | "closing";
+      location_role: "manager" | "assistant_manager" | "staff";
       overall_role: "owner" | "manager" | "assistant_manager";
       recurrence_end_type: "never" | "on_date" | "after_count";
       recurrence_frequency:
@@ -5544,6 +5548,7 @@ export const Constants = {
         "end_and_assign",
       ],
       checklist_kind: ["opening", "closing"],
+      location_role: ["manager", "assistant_manager", "staff"],
       overall_role: ["owner", "manager", "assistant_manager"],
       recurrence_end_type: ["never", "on_date", "after_count"],
       recurrence_frequency: [
