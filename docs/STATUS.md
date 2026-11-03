@@ -1,5 +1,11 @@
 # Project Status & Milestone Tracker
 
+## The Lineup V2.0
+
+The Lineup V2.0 planning initialized.
+Implementation has not started.
+Canonical state: `docs/v2.0/CURRENT_STATE.md`
+
 ## Recipes V1 — Production preflight preparation (2026-10-29)
 
 Audit PR #237 is merged at `dd792f359a77b60ea05115ce8c682b38a5a6d5d8` (checkpoint baseline; audit GO to preflight retained). Isolated branch `release/recipes-v1-production-preflight`; tracking [#238](https://github.com/KrapaGoutam/The-Lineup/issues/238). Actual DEV `opmujepkemwcdxxorhfd` and PROD `ftadewtkjlaotfdvtjcv` verified live. DEV **62/62**, head `20261029194855`, after tested DEV-only category-reorder fix; PROD **54**, head `20261028100100`, **eight pending**. Historical PROD naming/serialization variance investigated without repair. Production Inventory operational tables empty; Recipe bucket absent. Production-capable importer guards implemented and mocked; no Production import/dry run invoked. Canonical Recipe payload absent; Inventory source not established; backup evidence unavailable (`backups_read` permission missing); Production config names present, values unverified. These remain future execution gates. Local check, 2,064 unit tests, build, SQL lint and 1,550 pgTAP assertions pass; exact-head PR CI pending. [Execution plan and evidence](features/recipes-v1/PRODUCTION_RELEASE.md), [full parity](features/recipes-v1/MIGRATION_PARITY.md).
