@@ -56,12 +56,15 @@ Status: `IN_PROGRESS`
 
 ## 4. Hosted DEV Verification
 
-- Project Ref: `opmujepkemwcdxxorhfd`
-- Read-only verification check executed during V2-001.002 preflight:
-  - `public.overall_roles` query returned: `{"code":"PGRST205","message":"Could not find the table 'public.overall_roles' in the schema cache"}`
-  - Result: `public.overall_roles` is NOT present on hosted DEV.
-  - Direct execution via Supabase CLI (`db push`) requires `SUPABASE_DB_PASSWORD` or elevated access token credentials, which are not configured in the local non-interactive environment.
-  - Status: Documented as an active hosted DEV blocker for V2-001.001 closeout repair.
+- Project Ref: `opmujepkemwcdxxorhfd` (`the-lineup-dev`)
+- Migration Execution: Applied `20261102213000_overall_roles_foundation.sql` via Supabase CLI (`db push`) authenticated with `LINEUP_SUPABASE_ACCESS_TOKEN`.
+- Verification Results:
+  - Enum `public.overall_role` verified present.
+  - Table `public.overall_roles` verified present.
+  - Policy `overall_roles_select_self` verified present.
+  - Migration record `20261102213000` verified in `supabase_migrations.schema_migrations`.
+  - Production environment untouched.
+- Status: V2-001.001 hosted DEV prerequisite: SATISFIED.
 
 ---
 
