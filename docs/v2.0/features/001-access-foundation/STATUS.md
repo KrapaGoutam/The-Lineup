@@ -9,6 +9,7 @@ Blockers:             Phase 0 Planning PR must be merged first
 ```
 
 ## Subfeature Progress
+
 - [ ] V2-001.001 Overall Roles
 - [ ] V2-001.002 Organization Membership
 - [ ] V2-001.003 Location Access

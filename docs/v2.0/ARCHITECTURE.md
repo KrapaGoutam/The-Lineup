@@ -65,6 +65,7 @@ flowchart TD
 ```
 
 ### Invariants:
+
 1. **Profile**: Stable across organizations. Tied to `auth.users (id)`.
 2. **Overall Access**: Baseline capabilities across all present and future organizations and locations.
 3. **Organization Membership**: Validates that a person is an active affiliate of the organization (`memberships.active = true`).
@@ -99,6 +100,7 @@ sequenceDiagram
 ```
 
 ### Context Rules:
+
 - Context is hydrated server-side.
 - If a user changes location in one tab, cross-tab synchronization alerts or syncs active operational state.
 - Client-supplied context is **untrusted**: every mutation RPC verifies that the caller actually possesses valid membership and role at the target location.
@@ -143,6 +145,7 @@ flowchart TD
 ```
 
 ### Kiosk Trust Principles:
+
 1. **Device Binding**: Kiosk device is bound to an exact `organization_id` and `location_id` in database record `kiosk_devices`.
 2. **Zero Physical Geolocation**: Strictly prohibits browser geolocation, GPS, IP allowlists, or Wi-Fi scanning.
 3. **Server-Derivation**: The client sends only employee PIN and device token. The server derives the location from the device binding.
@@ -154,8 +157,8 @@ flowchart TD
 
 Every location maintains an explicit `attendance_mode`:
 
-| Mode | Behavior | Data Source |
-|---|---|---|
-| `EXTERNAL` | Reads and reports attendance from the external Neon database; internal kiosk clocking is disabled. | External Neon Postgres |
-| `INTERNAL_THE_LINEUP` | Native Lineup clock-in/out records via Kiosk and manager adjustment tools. | Supabase `attendance_events` |
-| `DISABLED` | All attendance features and navigation are hidden and backend endpoints fail-closed. | None |
+| Mode                  | Behavior                                                                                           | Data Source                  |
+| --------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `EXTERNAL`            | Reads and reports attendance from the external Neon database; internal kiosk clocking is disabled. | External Neon Postgres       |
+| `INTERNAL_THE_LINEUP` | Native Lineup clock-in/out records via Kiosk and manager adjustment tools.                         | Supabase `attendance_events` |
+| `DISABLED`            | All attendance features and navigation are hidden and backend endpoints fail-closed.               | None                         |

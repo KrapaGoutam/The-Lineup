@@ -22,20 +22,22 @@ flowchart TD
 
 ## 2. Test Layers and Tooling
 
-| Test Layer | Framework / Runner | Scope & Targets | Execution Frequency |
-|---|---|---|---|
-| **1. Domain Unit** | Vitest | Pure capability resolver, role precedence, timezone conversion, kiosk token hash functions. | Every file edit / Pre-commit |
-| **2. Database & RLS** | pgTAP + Supabase CLI | `private.has_org_role`, `location_assignments`, RLS select/insert/update/delete policies across tenants. | Every migration / PR CI |
-| **3. Server Actions & RPCs** | Vitest (node environment) | Server Actions, Zod validation schemas, idempotency tokens, error handling. | Local gate / PR CI |
-| **4. Hosted DEV Suites** | Vitest (`--testPathPattern=hosted`) | Verification against real hosted Supabase DEV database (`opmujepkemwcdxxorhfd`). | Subfeature completion |
-| **5. Playwright E2E** | Playwright (Chromium, WebKit, Mobile Safari) | Complete multi-user workflows: login, context switcher, allocation board, kiosk PIN clocking. | Feature completion / Release gate |
+| Test Layer                   | Framework / Runner                           | Scope & Targets                                                                                          | Execution Frequency               |
+| ---------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **1. Domain Unit**           | Vitest                                       | Pure capability resolver, role precedence, timezone conversion, kiosk token hash functions.              | Every file edit / Pre-commit      |
+| **2. Database & RLS**        | pgTAP + Supabase CLI                         | `private.has_org_role`, `location_assignments`, RLS select/insert/update/delete policies across tenants. | Every migration / PR CI           |
+| **3. Server Actions & RPCs** | Vitest (node environment)                    | Server Actions, Zod validation schemas, idempotency tokens, error handling.                              | Local gate / PR CI                |
+| **4. Hosted DEV Suites**     | Vitest (`--testPathPattern=hosted`)          | Verification against real hosted Supabase DEV database (`opmujepkemwcdxxorhfd`).                         | Subfeature completion             |
+| **5. Playwright E2E**        | Playwright (Chromium, WebKit, Mobile Safari) | Complete multi-user workflows: login, context switcher, allocation board, kiosk PIN clocking.            | Feature completion / Release gate |
 
 ---
 
 ## 3. Mandatory Acceptance Scenarios
 
 ### 3.1. The Canonical User Access Matrix
+
 Must be covered by both pgTAP policies and Playwright browser tests:
+
 1. **Jack**: Allow Monks/Webster, Allow Liquor Tap/NASA, Allow Liquor Tap/League City.
 2. **Sam**: Allow Liquor Tap/NASA; Deny Liquor Tap/League City; Deny Monks/Webster.
 3. **Tom**: Allow Monks/Webster; Deny Liquor Tap/NASA.
@@ -43,7 +45,9 @@ Must be covered by both pgTAP policies and Playwright browser tests:
 5. **John (Mixed Branch Roles)**: Manager at NASA, Assistant Manager at League City, Manager at Webster.
 
 ### 3.2. Critical Security & Edge-Case Test Scenarios
+
 Every feature touching authorization or state must include automated assertions for:
+
 - [ ] **Inactive Membership**: When `memberships.active = false`, user is denied everywhere in that organization immediately.
 - [ ] **Inactive Location**: When `locations.active = false`, non-owner access is rejected.
 - [ ] **Revoked Location Assignment**: When `location_assignments.active = false`, user loses access to that specific location while retaining access to other assigned locations.

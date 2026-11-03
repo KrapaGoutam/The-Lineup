@@ -9,6 +9,7 @@ This document establishes the mandatory operational rules for AI agents executin
 To preserve context window budget and maintain execution precision, agents executing V2 tasks must **NOT** read historic V1 feature documents or the entire repository.
 
 An agent session should read **ONLY**:
+
 1. Root agent instructions (`AGENTS.md` / `GEMINI.md`).
 2. `docs/v2.0/README.md`.
 3. `docs/v2.0/CURRENT_STATE.md`.
@@ -25,6 +26,7 @@ Do not load `docs/PRD.md`, `docs/STATUS.md`, or historic `docs/features/001-035`
 ## 2. Subagent Rules & Limits
 
 When an implementation task benefits from parallel exploration:
+
 1. **Maximum Two Subagents**: Do not launch fleets of speculative agents.
 2. **Focused & Specialized**:
    - **Security Subagent**: Read-only audit of RLS policies, `SECURITY DEFINER` RPCs, and tenant isolation.
@@ -42,6 +44,7 @@ Every implementation prompt generated for V2 subfeatures must contain an explici
 # AGENT RECOMMENDATION
 
 ## 1st — IDEAL
+
 - **Agent:** Antigravity Local
 - **Model:** Gemini 3.8 Flash
 - **Effort:** High
@@ -50,6 +53,7 @@ Every implementation prompt generated for V2 subfeatures must contain an explici
 - **Rationale:** [Specific reason why this model/agent is ideal]
 
 ## 2nd
+
 - **Agent:** Claude Code
 - **Model:** Claude Sonnet 4.5
 - **Effort:** High
@@ -58,6 +62,7 @@ Every implementation prompt generated for V2 subfeatures must contain an explici
 - **Rationale:** [Fallback rationale]
 
 ## 3rd
+
 - **Agent:** Codex
 - **Model:** GPT-5.6 Sol
 - **Effort:** High
@@ -67,6 +72,7 @@ Every implementation prompt generated for V2 subfeatures must contain an explici
 ```
 
 ### Model Selection Principle:
+
 Always evaluate **Antigravity with Gemini 3.8 Flash (High effort)** first. If the subfeature consists of bounded code modifications, targeted tests, or focused schema work, prefer Flash for speed and token efficiency. Do not automatically escalate to larger frontier models unless complex multi-system refactoring requires it.
 
 ---
@@ -76,6 +82,7 @@ Always evaluate **Antigravity with Gemini 3.8 Flash (High effort)** first. If th
 Immediately upon completing any subfeature, the agent must synchronize documentation across local files and GitHub:
 
 ### Local Updates:
+
 - Update active subfeature `STATUS.md` &rarr; `DONE`.
 - Check off the completed subfeature `[x]` in the feature `README.md`.
 - Update the parent feature `STATUS.md`.
@@ -84,6 +91,7 @@ Immediately upon completing any subfeature, the agent must synchronize documenta
 - Record evidence and test results in the feature directory.
 
 ### GitHub Updates:
+
 - Create pull request targeting `development`.
 - Link parent and feature issue numbers in PR description.
 - Await exact-head CI green status.

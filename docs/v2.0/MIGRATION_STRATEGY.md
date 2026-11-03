@@ -7,6 +7,7 @@
 ## 1. Existing Data Inventory & Baseline State
 
 ### 1.1. Monks Pilot Baseline
+
 - **Organization**: Monks (slug `monks`).
 - **Primary Location**: Webster (UUID mapped in `locations` with `time_zone = 'America/Chicago'`).
 - **Identity & Roles**: Staff have `profiles`, `memberships` with `roles public.app_role[]`, and `passcode_credentials`.
@@ -30,7 +31,9 @@
 When V2-008 executes, the migration script will perform the following safe, idempotent backfills:
 
 ### 2.1. Location Assignment Backfill
+
 For every active row in `public.memberships`:
+
 ```sql
 insert into public.location_assignments (
   organization_id,
@@ -49,19 +52,25 @@ from public.memberships m
 join public.locations l on l.organization_id = m.organization_id
 on conflict (location_id, profile_id) do nothing;
 ```
-*Rationale:* Every existing staff member at Monks automatically receives an assignment to the Webster location matching their existing operational role.
+
+_Rationale:_ Every existing staff member at Monks automatically receives an assignment to the Webster location matching their existing operational role.
 
 ### 2.2. Attendance Mode Backfill
+
 All existing locations default to `EXTERNAL`:
+
 ```sql
 update public.locations
 set attendance_mode = 'external'
 where attendance_mode is null;
 ```
-*Rationale:* Monks' existing Neon attendance reporting and timesheets continue functioning without disruption.
+
+_Rationale:_ Monks' existing Neon attendance reporting and timesheets continue functioning without disruption.
 
 ### 2.3. Location Module Config Backfill
+
 Seed `location_module_configs` with all modules enabled for existing locations:
+
 ```sql
 insert into public.location_module_configs (
   organization_id,
@@ -114,6 +123,7 @@ Merge Commit into development
 ```
 
 ### Invariants:
+
 1. **Never edit an applied migration**: If a mistake is discovered, write an additive forward migration.
 2. **Never apply migrations to Production during normal subfeature work**: Production migrations occur strictly at V2-009 with explicit owner sign-off.
 3. **Hosted DEV is the rehearsal sandbox**: All migrations must be rehearsed on the hosted DEV database before declaring any subfeature complete.

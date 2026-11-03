@@ -22,6 +22,7 @@ erDiagram
 ## 2. Core V2.0 Entities and Schemas
 
 ### 2.1. `overall_roles`
+
 Stores baseline system-wide role assignments that apply across all organizations and locations.
 
 ```sql
@@ -42,6 +43,7 @@ create table public.overall_roles (
 ```
 
 ### 2.2. `locations` (Enhanced for V2)
+
 Represents physical restaurant branches under an organization.
 
 ```sql
@@ -57,6 +59,7 @@ alter table public.locations
 ```
 
 ### 2.3. `location_assignments`
+
 Maps an employee profile to a specific location with a scoped role and designation.
 
 ```sql
@@ -78,6 +81,7 @@ create table public.location_assignments (
 ```
 
 ### 2.4. `location_module_configs`
+
 Configures enabled/disabled states and module-specific settings per location.
 
 ```sql
@@ -97,6 +101,7 @@ create table public.location_module_configs (
 ```
 
 ### 2.5. `kiosk_devices`
+
 Tracks physical tablet devices provisioned in-app for Clock In / Clock Out.
 
 ```sql
@@ -128,6 +133,7 @@ create table public.kiosk_devices (
 ```
 
 ### 2.6. `attendance_events` (Native Lineup Attendance)
+
 Stores immutable employee clock in, clock out, and break events.
 
 ```sql

@@ -21,12 +21,14 @@ Person (auth.users / profiles)
 ## 2. Example Organizations & Locations
 
 ### Monks
+
 ```text
 Monks (Organization)
 └── Webster (Location)
 ```
 
 ### Liquor Tap
+
 ```text
 Liquor Tap (Organization)
 ├── NASA (Location)
@@ -43,40 +45,45 @@ Liquor Tap (Organization)
 
 The following scenarios constitute the mandatory, permanent test matrix for V2.0 authorization verification.
 
-| User | Target Organization | Target Location | Expected Evaluation | Rule Rationale |
-|---|---|---|---|---|
-| **Jack** | Monks | Webster | **ALLOW** | Assigned to Monks &rarr; Webster |
-| **Jack** | Liquor Tap | NASA | **ALLOW** | Assigned to Liquor Tap &rarr; NASA |
-| **Jack** | Liquor Tap | League City | **ALLOW** | Assigned to Liquor Tap &rarr; League City |
-| **Sam** | Liquor Tap | NASA | **ALLOW** | Explicitly assigned to NASA |
-| **Sam** | Liquor Tap | League City | **DENY** | Belonging to Liquor Tap does NOT grant access to other locations |
-| **Sam** | Monks | Webster | **DENY** | No membership or assignment in Monks |
-| **Tom** | Monks | Webster | **ALLOW** | Explicitly assigned to Webster |
-| **Tom** | Liquor Tap | NASA | **DENY** | No assignment in Liquor Tap |
-| **Jerry** | Monks | Webster | **ALLOW** | Assigned to Monks &rarr; Webster |
-| **Jerry** | Liquor Tap | NASA | **ALLOW** | Assigned to Liquor Tap &rarr; NASA |
-| **Jerry** | Liquor Tap | League City | **DENY** | No assignment to League City despite Liquor Tap membership |
+| User      | Target Organization | Target Location | Expected Evaluation | Rule Rationale                                                   |
+| --------- | ------------------- | --------------- | ------------------- | ---------------------------------------------------------------- |
+| **Jack**  | Monks               | Webster         | **ALLOW**           | Assigned to Monks &rarr; Webster                                 |
+| **Jack**  | Liquor Tap          | NASA            | **ALLOW**           | Assigned to Liquor Tap &rarr; NASA                               |
+| **Jack**  | Liquor Tap          | League City     | **ALLOW**           | Assigned to Liquor Tap &rarr; League City                        |
+| **Sam**   | Liquor Tap          | NASA            | **ALLOW**           | Explicitly assigned to NASA                                      |
+| **Sam**   | Liquor Tap          | League City     | **DENY**            | Belonging to Liquor Tap does NOT grant access to other locations |
+| **Sam**   | Monks               | Webster         | **DENY**            | No membership or assignment in Monks                             |
+| **Tom**   | Monks               | Webster         | **ALLOW**           | Explicitly assigned to Webster                                   |
+| **Tom**   | Liquor Tap          | NASA            | **DENY**            | No assignment in Liquor Tap                                      |
+| **Jerry** | Monks               | Webster         | **ALLOW**           | Assigned to Monks &rarr; Webster                                 |
+| **Jerry** | Liquor Tap          | NASA            | **ALLOW**           | Assigned to Liquor Tap &rarr; NASA                               |
+| **Jerry** | Liquor Tap          | League City     | **DENY**            | No assignment to League City despite Liquor Tap membership       |
 
 ---
 
 ## 4. Role Hierarchy and Precedence
 
 ### 4.1. Overall Roles
+
 Overall roles grant system-wide capabilities across **all existing and future organizations and locations**:
+
 1. **Overall Owner**: Full administrative, configuration, and operational authority everywhere.
 2. **Overall Manager**: Managerial authority across all organizations and locations. Owner-exclusive actions (e.g., destructive purges, tenant creation) remain owner-only.
 3. **Overall Assistant Manager**: Assistant manager capabilities across all organizations and locations.
 
 ### 4.2. Location-Scoped Roles
+
 A user without an Overall role holds independent roles scoped to specific locations.
 
 #### Example: John (Mixed Branch Roles)
+
 ```text
 John
 ├── Liquor Tap / NASA         → Manager
 ├── Liquor Tap / League City  → Assistant Manager
 └── Monks / Webster           → Manager
 ```
+
 - At **NASA**, John operates with full `Manager` capabilities.
 - At **League City**, John operates with `Assistant Manager` capabilities (cannot alter manager designations or delete historical records).
 - At **Webster**, John operates with full `Manager` capabilities.

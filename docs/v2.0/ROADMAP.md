@@ -39,6 +39,7 @@ development → main (Production)
 ## 2. Top-Level Feature Breakdown
 
 ### V2-001 — Access & Role Foundation
+
 - **GitHub Issue:** [#249](https://github.com/KrapaGoutam/The-Lineup/issues/249)
 - **Status:** Planned (Next Phase)
 - **Directory:** `docs/v2.0/features/001-access-foundation/`
@@ -52,6 +53,7 @@ development → main (Production)
   - [ ] **V2-001.007**: RLS / Server Security Hardening (Eliminate #106 creator bypass from `private.has_org_role`, enforce active memberships)
 
 ### V2-002 — Organizations & Locations
+
 - **GitHub Issue:** [#250](https://github.com/KrapaGoutam/The-Lineup/issues/250)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/002-organizations-locations/`
@@ -63,6 +65,7 @@ development → main (Production)
   - [ ] **V2-002.005**: Location Lifecycle Integrity (Safe deactivation, archive rules, and operational cascade protection)
 
 ### V2-003 — Active Organization / Location Context
+
 - **GitHub Issue:** [#251](https://github.com/KrapaGoutam/The-Lineup/issues/251)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/003-active-context/`
@@ -74,6 +77,7 @@ development → main (Production)
   - [ ] **V2-003.005**: Multi-Tab / Stale Context Safety (Cross-tab broadcast channel sync and invalidation guards)
 
 ### V2-004 — Per-Location Module Configuration
+
 - **GitHub Issue:** [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/004-location-module-configuration/`
@@ -84,6 +88,7 @@ development → main (Production)
   - [ ] **V2-004.004**: Backend Enforcement (Server Actions and RPCs fail-closed if module is disabled at target location)
 
 ### V2-005 — Existing Module Location Scoping
+
 - **GitHub Issue:** [#253](https://github.com/KrapaGoutam/The-Lineup/issues/253)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/005-module-location-scoping/`
@@ -98,6 +103,7 @@ development → main (Production)
   - [ ] **V2-005.008**: Team / Settings (Hybrid scoping: org-level memberships vs location-specific staff rosters)
 
 ### V2-006 — Attendance V2
+
 - **GitHub Issue:** [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/006-attendance-v2/`
@@ -111,6 +117,7 @@ development → main (Production)
   - [ ] **V2-006.007**: External Attendance Compatibility (Preserve Neon integration for locations configured in `EXTERNAL` mode)
 
 ### V2-007 — Clock In / Clock Out Kiosk
+
 - **GitHub Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/007-clock-kiosk/`
@@ -124,6 +131,7 @@ development → main (Production)
   - [ ] **V2-007.007**: Kiosk Security & Validation (Device token rotation, fail-closed revocation check, tamper resistance)
 
 ### V2-008 — Migration & Compatibility
+
 - **GitHub Issue:** [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/008-migration-compatibility/`
@@ -137,6 +145,7 @@ development → main (Production)
   - [ ] **V2-008.007**: Recovery / Forward-Fix Strategy (Deterministic rollback and forward-fix runbooks for migration safety)
 
 ### V2-009 — Final Security / Release Gate
+
 - **GitHub Issue:** [#257](https://github.com/KrapaGoutam/The-Lineup/issues/257)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/009-final-gate-release/`
