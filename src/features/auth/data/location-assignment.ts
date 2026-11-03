@@ -133,11 +133,10 @@ export async function applyLocationAssignmentChanges(
       };
     }
 
-    const assignments = (data ?? []).map((row) =>
-      mapLocationRoleRow(
-        row as unknown as Parameters<typeof mapLocationRoleRow>[0],
-      ),
-    );
+    const rawRows = (data ?? []) as Array<
+      Parameters<typeof mapLocationRoleRow>[0]
+    >;
+    const assignments = rawRows.map((row) => mapLocationRoleRow(row));
 
     return {
       success: true,
