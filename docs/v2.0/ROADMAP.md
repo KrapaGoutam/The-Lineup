@@ -41,15 +41,15 @@ development → main (Production)
 ### V2-001 — Access & Role Foundation
 
 - **GitHub Issue:** [#249](https://github.com/KrapaGoutam/The-Lineup/issues/249)
-- **Status:** In Progress (V2-001.005 active)
+- **Status:** In Progress (V2-001.006 active)
 - **Directory:** `docs/v2.0/features/001-access-foundation/`
 - **Subfeatures:**
   - [x] **V2-001.001**: Overall Roles (PR #260 Merged; hosted DEV migration verified)
   - [x] **V2-001.002**: Organization Membership (PR #262 Merged)
   - [x] **V2-001.003**: Location Access (PR #264 Merged; hosted DEV migration verified)
   - [x] **V2-001.004**: Per-Location Roles (PR #266 Merged; hosted DEV migration verified)
-  - [ ] **V2-001.005**: Multi-Location / Multi-Role Assignment (#267 — Staff assignment across multiple branches with distinct roles; In Progress)
-  - [ ] **V2-001.006**: Canonical Authorization Resolver (Unified pure resolver calculating effective capability union)
+  - [x] **V2-001.005**: Multi-Location / Multi-Role Assignment (PR #268 Merged; hosted DEV migration verified)
+  - [ ] **V2-001.006**: Canonical Authorization Resolver (#269 — Unified pure resolver calculating effective capability union; In Progress)
   - [ ] **V2-001.007**: RLS / Server Security Hardening (Eliminate #106 creator bypass from `private.has_org_role`, enforce active memberships)
 
 ### V2-002 — Organizations & Locations
