@@ -8,6 +8,8 @@ Implementation:        NOT STARTED
 Starting dev SHA:      26cd067b1904143fabec18bc3b2316d053eb39f5
 Starting main SHA:     5e5b7747693b6e81014eafdf299b87e56c3f033d
 Working Branch:        docs/v2.0-planning
+Current Branch SHA:    cb45defa13e25c2184d05886573feba08c9f0ea4
+PR:                    #258 (https://github.com/KrapaGoutam/The-Lineup/pull/258)
 Worktree Path:         .tmp/v2-planning
 Target Branch:         development
 GitHub Milestone:      The Lineup V2.0 (Milestone #8)
