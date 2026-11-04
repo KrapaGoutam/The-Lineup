@@ -90,8 +90,9 @@ export async function provisionNewOrganization(
     const { data, error } = await supabase.rpc("provision_organization", {
       p_name: name,
       p_slug: slug,
-      p_initial_owner_profile_id: params.initialOwnerProfileId ?? null,
-      p_settings: finalSettings,
+      p_initial_owner_profile_id: params.initialOwnerProfileId ?? undefined,
+      p_settings:
+        finalSettings as unknown as Database["public"]["Tables"]["organizations"]["Insert"]["settings"],
     });
 
     if (error) {
@@ -170,7 +171,7 @@ export async function updateOrganizationMetadata(
 
   const updates: {
     name?: string;
-    settings?: OrganizationSettings;
+    settings?: Database["public"]["Tables"]["organizations"]["Update"]["settings"];
   } = {};
 
   if (params.name !== undefined) {
@@ -222,7 +223,8 @@ export async function updateOrganizationMetadata(
           code: "INVALID_SETTINGS",
         };
       }
-      updates.settings = merged;
+      updates.settings =
+        merged as unknown as Database["public"]["Tables"]["organizations"]["Update"]["settings"];
     }
 
     if (Object.keys(updates).length === 0) {
