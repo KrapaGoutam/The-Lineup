@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Building2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Building2, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
@@ -9,6 +9,13 @@ import { Select } from "@/components/ui/select";
 import { LocationList } from "./location-list";
 import { LocationForm } from "./location-form";
 import { LocationOperatingHoursEditor } from "./location-operating-hours-editor";
+import { LocationStaffManagement } from "./location-staff-management";
+import { OrganizationStaffAssignments } from "./organization-staff-assignments";
+import {
+  createLiveStaffAssignmentSource,
+  type StaffAssignmentSource,
+} from "./staff-assignment-source";
+import { createDemoStaffAssignmentSource } from "./staff-assignment-demo";
 import type {
   DayOperatingHours,
   Location,
@@ -146,8 +153,19 @@ export function LocationAdministration({
   const [isAddingLocation, setIsAddingLocation] = React.useState(false);
   const [managingLocation, setManagingLocation] =
     React.useState<Location | null>(null);
-  const [manageTab, setManageTab] = React.useState<"details" | "hours">(
-    "details",
+  const [manageTab, setManageTab] = React.useState<
+    "details" | "hours" | "staff"
+  >("details");
+  const [showStaffOverview, setShowStaffOverview] = React.useState(false);
+
+  // Demo mode uses an isolated in-memory source that never reaches the
+  // real assignment RPC; live mode uses the server-action-backed source.
+  const staffSource = React.useMemo<StaffAssignmentSource>(
+    () =>
+      demoMode
+        ? createDemoStaffAssignmentSource()
+        : createLiveStaffAssignmentSource(),
+    [demoMode],
   );
 
   const [loadingHours, setLoadingHours] = React.useState(false);
@@ -219,6 +237,7 @@ export function LocationAdministration({
     setSelectedOrgId(newOrgId);
     setIsAddingLocation(false);
     setManagingLocation(null);
+    setShowStaffOverview(false);
     setSearchQuery("");
   };
 
@@ -468,6 +487,17 @@ export function LocationAdministration({
             <span>{selectedOrg.name}</span>
           </div>
         ) : null}
+        {canAdminister && !loadingContext && selectedOrg ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5 self-start sm:self-auto"
+            onClick={() => setShowStaffOverview(true)}
+          >
+            <Users aria-hidden="true" />
+            Staff Assignments
+          </Button>
+        ) : null}
       </div>
 
       {demoMode && (
@@ -590,6 +620,17 @@ export function LocationAdministration({
               >
                 Operating Hours
               </button>
+              <button
+                type="button"
+                onClick={() => setManageTab("staff")}
+                className={`-mb-px border-b-2 px-4 py-2 text-xs font-semibold transition ${
+                  manageTab === "staff"
+                    ? "border-primary text-primary"
+                    : "text-muted-foreground hover:text-foreground border-transparent"
+                }`}
+              >
+                Staff
+              </button>
             </div>
 
             {manageTab === "details" ? (
@@ -600,6 +641,19 @@ export function LocationAdministration({
                 initialLocation={managingLocation}
                 onSubmit={handleUpdateLocationDetails}
                 onCancel={() => setManagingLocation(null)}
+              />
+            ) : manageTab === "staff" ? (
+              <LocationStaffManagement
+                source={staffSource}
+                organizationId={selectedOrgId}
+                organizationName={selectedOrg?.name ?? "Restaurant"}
+                location={managingLocation}
+                organizationLocations={locations.map((l) => ({
+                  id: l.id,
+                  name: l.name,
+                  active: l.active,
+                }))}
+                canManage={canAdminister}
               />
             ) : loadingHours ? (
               <div className="text-muted-foreground py-8 text-center text-xs">
@@ -614,6 +668,21 @@ export function LocationAdministration({
             )}
           </div>
         </Dialog>
+      )}
+
+      {/* Employee-centric Staff Assignments overview */}
+      {showStaffOverview && selectedOrg && (
+        <OrganizationStaffAssignments
+          source={staffSource}
+          organizationId={selectedOrgId}
+          organizationName={selectedOrg.name}
+          locations={locations.map((l) => ({
+            id: l.id,
+            name: l.name,
+            active: l.active,
+          }))}
+          onClose={() => setShowStaffOverview(false)}
+        />
       )}
     </div>
   );
