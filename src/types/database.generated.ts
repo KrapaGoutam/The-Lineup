@@ -5201,6 +5201,20 @@ export type Database = {
         };
         Returns: number;
       };
+      list_organization_staff: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_organization_id: string;
+          p_profile_id?: string;
+        };
+        Returns: {
+          active: boolean;
+          display_name: string;
+          profile_id: string;
+          roles: Database["public"]["Enums"]["app_role"][];
+        }[];
+      };
       provision_location: {
         Args: {
           p_address?: Json;

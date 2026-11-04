@@ -16,8 +16,8 @@ Feature Issue:            #250
 Subfeature Issue:         #279
 PR:                       #280 (open, against development)
 Head SHA:                 (see PR)
-Migration:                NONE (reuses apply_location_assignment_changes + existing tables)
-DEV Migration Status:     N/A (no migration); hosted DEV NOT VERIFIED IN CLOUD
+Migration:                20261104010000_staff_roster_reader.sql (additive, read-only RPC)
+DEV Migration Status:     NOT APPLIED to hosted DEV (PENDING_CODEX_LOCAL)
 CI Status:                see PR
 Status:                   IN PROGRESS / PR OPEN / AWAITING LOCAL VERIFICATION
 Blockers:                 pgTAP + hosted DEV verification require Codex Local

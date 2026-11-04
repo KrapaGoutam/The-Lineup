@@ -8,7 +8,7 @@ Execution environment: Claude Code Cloud (no Supabase credentials, no Docker dae
 
 ## 1. Mission
 
-Let authorized management assign **existing, active organization members** to specific locations, change their per-location role, deactivate/reactivate assignments, and edit several locations for one employee in one atomic change set — with **no schema change**.
+Let authorized management assign **existing, active organization members** to specific locations, change their per-location role, deactivate/reactivate assignments, and edit several locations for one employee in one atomic change set — with **one additive, read-only migration** (`20261104010000_staff_roster_reader.sql`, added during closeout) and no change to any existing table or policy.
 
 ## 2. Role taxonomy (never interchangeable)
 
@@ -47,6 +47,8 @@ Each action: `requireLiveSession` → actor from `supabase.auth.getUser()` (neve
 
 ## 7. Roster source
 
+> Closeout update: the roster is now read through `public.list_organization_staff` (see §13). The description below of the returned shape still holds.
+
 `public.memberships` ⨝ `public.profiles(display_name)` for the administered organization, keyed by `profile_id`, ordered by `created_at,id`, paged in 500-row pages (hard bound 20 pages), **active and inactive** members returned so the UI can show _Not Assigned_ vs _Organization Membership Inactive_. Exposed fields: `profileId, displayName, organizationRoles, membershipActive` only.
 
 ## 8. Change-set generation (multi-location)
@@ -70,10 +72,21 @@ Loading, load error with Retry, empty ("No staff assigned to this location yet."
 
 Org-membership creation/invite, organization-role or overall-role editing, location lifecycle (V2-002.005), active-context switching (V2-003), module scoping, attendance/kiosk, multi-person bulk changes (no atomic backend contract), schema migrations.
 
-## 13. Known limitation — handed to Codex Local
+## 13. Overall-admin roster visibility — root cause and fix (closeout)
 
-RLS on `public.memberships` / `public.profiles` exposes rows only to active members of the organization (`private.has_org_role`, `private.can_view_profile`). An **Overall Owner/Manager who is not a member of the administered organization** can pass the authority check and execute the RPC, but the RLS-bound roster read will return no members for that organization. Org Owners/General Managers (the common case) are unaffected. This is a pre-existing backend read-policy gap, not introduced here; the correct fix is a policy/migration change that must be validated against a database, so it was **not** attempted in Cloud and no service-role workaround was added. See `EVIDENCE.md` handoff.
+**Root cause (audited from migrations).** `memberships_select_member` (→ `private.has_org_role`) and `profiles_select_shared_org` (→ `private.can_view_profile`) were defined in `20260905065702_initial_schema.sql` and never revised. `has_org_role` was hardened in `20261103030000` to "active membership with one of the roles" and neither helper consults `public.overall_roles`. Therefore only **active members of the organization** can read its `memberships` rows and the members' `profiles`. Effects: (a) an Overall Owner/Manager with no local membership — authorized by the assignment RPC — read an empty roster; (b) even org owners/GMs could not read profile names of _inactive_ members (`can_view_profile` requires an active target), so those showed as "Unnamed member"; (c) the TS pre-check that read the target's membership under RLS would have wrongly rejected an Overall administrator with "not a member".
+
+**Fix (narrowest).** New forward-only migration `supabase/migrations/20261104010000_staff_roster_reader.sql` adds `public.list_organization_staff(p_organization_id, p_profile_id default null, p_limit default 500, p_offset default 0)`:
+
+- `SECURITY DEFINER`, `search_path = ''`, fully qualified names, `STABLE`; `EXECUTE` revoked from `public`/`anon`, granted to `authenticated` only.
+- Requires `auth.uid()` (no actor parameter). Authority is **identical to `apply_location_assignment_changes`**: Overall Owner/Manager, or active Org Owner/General Manager of _that_ organization. Overall Assistant Manager alone, shift managers, host/server, other-org managers and inactive/revoked members (including a revoked creator) get `42501`.
+- Returns only `profile_id, display_name, roles, active` for the requested organization (no avatar/email/credentials); page size clamped to 1..1000.
+- No existing policy or applied migration was modified; mutation authority is unchanged (read visibility ≠ mutation authority).
+
+`staff-assignment-actions.ts` reads the roster and single-member lookups through this RPC (`readOrganizationRoster`, `readOrganizationMember`). Generated types updated by hand (`list_organization_staff`) because no database was available in Cloud to regenerate them — Codex Local should confirm with `supabase gen types` that the diff is empty.
+
+pgTAP: `supabase/tests/database/0058_staff_roster_reader.test.sql` (25 assertions, SEC-01…SEC-10).
 
 ## 14. Cloud testing constraints / handoff
 
-Cloud has no Supabase credentials and no Docker daemon: pgTAP (`supabase test db`) and hosted DEV verification are **NOT RUN** and must be completed by Codex Local before merge (see `EVIDENCE.md`).
+Cloud has no Supabase credentials, no Docker daemon and its network allowlist blocks the Playwright WebKit download (HTTP 403). Database tests are run by the repository's `Database` workflow (isolated CI Supabase instance — not hosted DEV). Hosted DEV verification and the WebKit/iPad project remain for Codex Local.

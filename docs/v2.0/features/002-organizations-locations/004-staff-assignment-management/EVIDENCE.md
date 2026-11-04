@@ -35,7 +35,7 @@ Docs: this folder, `docs/v2.0/CURRENT_STATE.md`, `tasks/current-task.md`.
 
 ## Migration decision
 
-No schema migration. Reuses `memberships`, `profiles`, `locations`, `location_memberships`, `apply_location_assignment_changes`.
+Closeout added ONE additive forward-only migration, `20261104010000_staff_roster_reader.sql` (read-only `public.list_organization_staff`; see PLAN §13). No existing table, policy or applied migration changed. Otherwise reuses `memberships`, `profiles`, `locations`, `location_memberships`, `apply_location_assignment_changes`.
 
 ## Codex Local handoff (required before merge)
 
@@ -46,3 +46,9 @@ No schema migration. Reuses `memberships`, `profiles`, `locations`, `location_me
 5. **Verify roster visibility for an Overall Owner/Manager who is not a member of the administered organization** (PLAN §13). If RLS returns an empty roster, document the defect, add a regression test and fix on the SAME branch with a verified policy change.
 6. Run the iPad (WebKit) Playwright project.
 7. Re-run exact-head CI if the branch changes; merge with a merge commit only after all gates pass; leave `main`/Production untouched.
+
+## Closeout (roster visibility fix)
+
+- WebKit: `npx playwright install --with-deps webkit` fails in Cloud — download of `webkit-ubuntu-24.04.zip` from `playwright.download.prss.microsoft.com` is rejected with HTTP 403 by the environment network allowlist. No workaround attempted. iPad/WebKit project: **NOT RUN** (retained for Codex Local); Chromium 1024×768 tablet coverage unchanged.
+- Hosted DEV: no approved DEV-only workflow or credentials exist in Cloud (`database.yml` only deploys to production on push to `main`, which is not touched). **PENDING_CODEX_LOCAL**.
+- Cloud gates after the fix: `git diff --check`, format, lint, typecheck clean; `npm test` 188 files / 2,555 passed / 7 skipped; `next build --webpack` compiled; `check:local-paths` ok; `check-nonprod-env --scan .next` passed.

@@ -7,7 +7,6 @@ import type { LocationRoleAssignment } from "@/features/auth/domain/location-rol
 import { mapLocationRoleRow } from "@/features/auth/domain/location-role";
 import type { LocationAssignmentAction } from "@/features/auth/domain/location-assignment";
 import { validateLocationAssignmentChanges } from "@/features/auth/domain/location-assignment";
-import { getOrganizationMembership } from "@/features/auth/data/organization-membership";
 import { listProfileLocationAssignments } from "@/features/auth/data/location-assignment";
 import { applyLocationAssignmentChanges } from "@/features/auth/data/location-assignment";
 import {
@@ -97,11 +96,36 @@ function failure(err: unknown, fallback: string): ActionResult<never> {
   return { ok: false, error: err instanceof Error ? err.message : fallback };
 }
 
+type RosterRpcRow = {
+  profile_id: string;
+  display_name: string | null;
+  roles: readonly string[] | null;
+  active: boolean;
+};
+
+function mapRosterRow(row: RosterRpcRow): StaffRosterMember {
+  return {
+    profileId: row.profile_id,
+    displayName: row.display_name?.trim() || "Unnamed member",
+    organizationRoles: Array.isArray(row.roles) ? [...row.roles] : [],
+    membershipActive: Boolean(row.active),
+  };
+}
+
 /**
- * Bounded, deterministic roster read from real organization memberships.
+ * Bounded, deterministic roster read from real organization memberships via
+ * `public.list_organization_staff`.
+ *
+ * Why an RPC and not a direct `memberships`/`profiles` select: RLS on those
+ * tables only shows an organization's rows to its own active members, so an
+ * Overall Owner/Manager (who is authorized but has no local membership) would
+ * read an empty roster, and inactive members' names would be hidden. The RPC
+ * re-checks the actor's authority in the database (same rule as the assignment
+ * RPC) and returns only profile_id, display_name, org roles and active flag.
+ *
  * Returns active AND inactive members so the UI can distinguish
- * "Not Assigned" from "Organization Membership Inactive".
- * Reads run under RLS; a read error is surfaced (never silently empty).
+ * "Not Assigned" from "Organization Membership Inactive". A read error is
+ * surfaced (never silently empty).
  */
 async function readOrganizationRoster(
   supabase: SupabaseClient<Database>,
@@ -109,31 +133,32 @@ async function readOrganizationRoster(
 ): Promise<{ ok: true; roster: StaffRosterMember[] } | { ok: false }> {
   const roster: StaffRosterMember[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await supabase
-      .from("memberships")
-      .select("profile_id, roles, active, created_at, profiles(display_name)")
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
+    const { data, error } = await supabase.rpc("list_organization_staff", {
+      p_organization_id: organizationId,
+      p_limit: PAGE_SIZE,
+      p_offset: page * PAGE_SIZE,
+    });
     if (error || !data) return { ok: false };
-
-    for (const row of data) {
-      const profile = row.profiles as unknown as {
-        display_name: string;
-      } | null;
-      roster.push({
-        profileId: row.profile_id,
-        displayName: profile?.display_name?.trim() || "Unnamed member",
-        organizationRoles: Array.isArray(row.roles) ? [...row.roles] : [],
-        membershipActive: Boolean(row.active),
-      });
-    }
+    for (const row of data as RosterRpcRow[]) roster.push(mapRosterRow(row));
     if (data.length < PAGE_SIZE) break;
   }
   return { ok: true, roster: sortRoster(roster) };
+}
+
+/** Single-member lookup through the same authorized RPC (null = not a member). */
+async function readOrganizationMember(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  profileId: string,
+): Promise<{ ok: true; member: StaffRosterMember | null } | { ok: false }> {
+  const { data, error } = await supabase.rpc("list_organization_staff", {
+    p_organization_id: organizationId,
+    p_profile_id: profileId,
+    p_limit: 1,
+  });
+  if (error || !data) return { ok: false };
+  const row = (data as RosterRpcRow[])[0];
+  return { ok: true, member: row ? mapRosterRow(row) : null };
 }
 
 /**
@@ -246,11 +271,15 @@ export async function getEmployeeLocationAssignmentsAction(
     const auth = await authorize(supabase, organizationId);
     if (!auth.ok) return auth;
 
-    const rosterResult = await readOrganizationRoster(supabase, auth.orgId);
-    if (!rosterResult.ok) {
+    const memberResult = await readOrganizationMember(
+      supabase,
+      auth.orgId,
+      profileId,
+    );
+    if (!memberResult.ok) {
       return { ok: false, error: "Failed to load organization staff." };
     }
-    const member = rosterResult.roster.find((m) => m.profileId === profileId);
+    const member = memberResult.member;
     if (!member) {
       return {
         ok: false,
@@ -287,8 +316,10 @@ export async function getEmployeeLocationAssignmentsAction(
  * other property (e.g. actorProfileId, isManager, overallRole) is ignored.
  * Defense-in-depth pre-checks (the RPC remains the final authority):
  *  - every location exists, belongs to the claimed organization and is active;
- *  - the target holds an active membership in that organization (needed for
- *    assign / update / reactivate; deactivation is permitted for historical cleanup).
+ *  - the target holds a membership in that organization (read through the
+ *    authorized roster RPC, so it also works for Overall administrators), and
+ *    an ACTIVE one for assign / update / reactivate (deactivation is permitted
+ *    for historical cleanup).
  */
 export async function applyStaffLocationChangesAction(
   params: {
@@ -355,11 +386,15 @@ export async function applyStaffLocationChangesAction(
     const needsActiveMember = validation.changes.some(
       (c) => c.action !== "deactivate",
     );
-    const membership = await getOrganizationMembership(
-      profileId,
-      auth.orgId,
+    const memberResult = await readOrganizationMember(
       supabase,
+      auth.orgId,
+      profileId,
     );
+    if (!memberResult.ok) {
+      return { ok: false, error: "Failed to verify organization membership." };
+    }
+    const membership = memberResult.member;
     if (!membership) {
       return {
         ok: false,
@@ -367,7 +402,7 @@ export async function applyStaffLocationChangesAction(
         code: "NOT_ORGANIZATION_MEMBER",
       };
     }
-    if (needsActiveMember && !membership.active) {
+    if (needsActiveMember && !membership.membershipActive) {
       return {
         ok: false,
         error:

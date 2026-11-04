@@ -102,6 +102,32 @@ function createClientMock(opts: {
     return b;
   });
 
+  // Emulates public.list_organization_staff data shaping (authorization is
+  // enforced by the real database function and covered by pgTAP 0058).
+  const rosterRpc = vi.fn(
+    async (args: {
+      p_organization_id: string;
+      p_profile_id?: string;
+      p_limit?: number;
+    }) => {
+      const src = tables.memberships;
+      const filters: Filters = { organization_id: args.p_organization_id };
+      if (args.p_profile_id) filters.profile_id = args.p_profile_id;
+      const rows = typeof src === "function" ? src(filters) : (src ?? []);
+      return {
+        data: (rows as Array<Record<string, unknown>>)
+          .slice(0, args.p_limit ?? 500)
+          .map((r) => ({
+            profile_id: r.profile_id,
+            display_name: (r.profiles as { display_name: string }).display_name,
+            roles: r.roles,
+            active: r.active,
+          })),
+        error: null,
+      };
+    },
+  );
+
   const client = {
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -110,9 +136,15 @@ function createClientMock(opts: {
       }),
     },
     from,
-    rpc,
+    rpc: (name: string, args: never) =>
+      name === "list_organization_staff" ? rosterRpc(args) : rpc(name, args),
   };
-  return { client: client as unknown as SupabaseClient<Database>, rpc, from };
+  return {
+    client: client as unknown as SupabaseClient<Database>,
+    rpc,
+    rosterRpc,
+    from,
+  };
 }
 
 /** Membership table keyed by (profile_id, organization_id). */
@@ -644,5 +676,67 @@ describe("staff assignment server actions — reads", () => {
       client,
     );
     expect(res).toMatchObject({ ok: false, code: "NOT_ORGANIZATION_MEMBER" });
+  });
+
+  it("SEC-01/02: Overall Owner and Manager without a local membership read the roster through the RPC", async () => {
+    for (const overallRole of ["owner", "manager"]) {
+      const { client, rosterRpc } = createClientMock({
+        overallRole,
+        // No membership row for the actor in this organization.
+        tables: { memberships: membershipsTable([TARGET_ACTIVE]) },
+      });
+      const res = await listOrganizationStaffAction(ORG_LIQUOR, client);
+      expect(res.ok).toBe(true);
+      expect(res.ok && res.data.map((m) => m.profileId)).toEqual([TARGET]);
+      expect(rosterRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ p_organization_id: ORG_LIQUOR }),
+      );
+    }
+  });
+
+  it("SEC-08: Overall administrator without membership can assign an active member through the RPC", async () => {
+    const { client, rpc } = createClientMock({
+      overallRole: "manager",
+      tables: {
+        locations: locationsTable(),
+        memberships: membershipsTable([TARGET_ACTIVE]),
+      },
+      rpc: { data: [lmRow(1, TARGET, LOC_NASA, ORG_LIQUOR, "manager")] },
+    });
+    const res = await applyStaffLocationChangesAction(
+      { organizationId: ORG_LIQUOR, targetProfileId: TARGET, changes: CHANGE },
+      client,
+    );
+    expect(res.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("employee read works for an Overall administrator without a local membership", async () => {
+    const { client } = createClientMock({
+      overallRole: "owner",
+      tables: {
+        locations: locationsTable(),
+        memberships: membershipsTable([TARGET_ACTIVE]),
+        location_memberships: [lmRow(1, TARGET, LOC_NASA, ORG_LIQUOR, "staff")],
+      },
+    });
+    const res = await getEmployeeLocationAssignmentsAction(
+      ORG_LIQUOR,
+      TARGET,
+      client,
+    );
+    expect(res.ok && res.data.member.displayName).toBe("Sam");
+  });
+
+  it("surfaces a roster RPC failure instead of returning an empty roster", async () => {
+    const { client, rosterRpc } = createClientMock({
+      tables: { memberships: membershipsTable([ACTOR_GM]) },
+    });
+    rosterRpc.mockResolvedValueOnce({
+      data: null as never,
+      error: { message: "boom" } as never,
+    });
+    const res = await listOrganizationStaffAction(ORG_LIQUOR, client);
+    expect(res).toMatchObject({ ok: false });
   });
 });
