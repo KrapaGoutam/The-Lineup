@@ -1,5 +1,4 @@
-import { RestaurantOperationsApp } from "@/components/restaurant-operations-app";
-import { loadPageData } from "@/lib/page-data";
+import { RestaurantEntry } from "@/components/restaurant-entry";
 
 export default async function RestaurantPage({
   params,
@@ -7,22 +6,5 @@ export default async function RestaurantPage({
   params: Promise<{ restaurantSlug: string }>;
 }) {
   const { restaurantSlug } = await params;
-  const {
-    demoMode,
-    initialUser,
-    scheduleContext,
-    tipsContext,
-    allocationContext,
-  } = await loadPageData(restaurantSlug);
-
-  return (
-    <RestaurantOperationsApp
-      demoMode={demoMode}
-      restaurantSlug={restaurantSlug}
-      initialUser={initialUser}
-      initialScheduleContext={scheduleContext}
-      initialTipsContext={tipsContext}
-      initialAllocationContext={allocationContext}
-    />
-  );
+  return <RestaurantEntry restaurantSlug={restaurantSlug} />;
 }

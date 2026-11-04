@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { DayHours } from "@/hooks/use-restaurant-clock";
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import {
+  getPrimaryLocation,
+  locationForLoader,
+} from "@/features/locations/data/primary-location";
 import {
   getMonthDates,
   getWeekDates,
@@ -145,9 +149,10 @@ async function getShiftsInRange(
 
 export async function getScheduleContext(
   organizationId: string,
+  verifiedLocation?: VerifiedLocationScope,
 ): Promise<ScheduleContext | null> {
   const supabase = await createClient();
-  const location = await getPrimaryLocation(organizationId);
+  const location = await locationForLoader(organizationId, verifiedLocation);
   if (!location) return null;
 
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
