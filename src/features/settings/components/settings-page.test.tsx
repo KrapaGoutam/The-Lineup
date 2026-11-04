@@ -50,6 +50,9 @@ describe("SettingsPage", () => {
     expect(
       screen.getByRole("heading", { name: "Schedule" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Locations" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("pay-rates-section")).toBeInTheDocument();
     expect(screen.getByText("Change your passcode")).toBeInTheDocument();
     expect(
@@ -59,6 +62,36 @@ describe("SettingsPage", () => {
     // Manager sees an edit trigger on the store hours card.
     expect(
       screen.getByRole("button", { name: "Edit hours" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens Location Administration subview when Locations card is clicked, and returns on Back", async () => {
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(<SettingsPage {...baseProps()} isManager demoMode />);
+    const locationsHeading = screen.getByRole("heading", { name: "Locations" });
+    const locationsBtn = locationsHeading.closest("button")!;
+    expect(locationsBtn).toBeInTheDocument();
+
+    await user.click(locationsBtn);
+
+    // In demoMode, LocationAdministration renders with title "Locations" and description
+    expect(
+      screen.getByRole("heading", { name: "Locations", level: 1 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Manage restaurant branches, addresses, time zones and operating hours.",
+      ),
+    ).toBeInTheDocument();
+
+    // Clicking back in LocationAdministration returns to main Settings view
+    const backBtn = screen.getByRole("button", { name: "Back to Settings" });
+    await user.click(backBtn);
+
+    expect(
+      screen.getByRole("heading", { name: "Settings", level: 1 }),
     ).toBeInTheDocument();
   });
 
@@ -73,6 +106,9 @@ describe("SettingsPage", () => {
     );
     expect(
       screen.queryByRole("heading", { name: "Shift hours" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Locations" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Team" }),

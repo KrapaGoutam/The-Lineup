@@ -55,12 +55,12 @@ development → main (Production)
 ### V2-002 — Organizations & Locations
 
 - **GitHub Issue:** [#250](https://github.com/KrapaGoutam/The-Lineup/issues/250)
-- **Status:** In Progress (V2-002.002 active)
+- **Status:** In Progress (V2-002.003 complete; V2-002.004 next)
 - **Directory:** `docs/v2.0/features/002-organizations-locations/`
 - **Subfeatures:**
   - [x] **V2-002.001**: Organization Model (Tenant lifecycle, branding, slug management, and settings — Complete; PR #274)
-  - [/] **V2-002.002**: Location Model (Branch entity, addresses, timezones, and operating metadata — In Progress; Issue #275)
-  - [ ] **V2-002.003**: Location Administration (Manager/Owner UI for provisioning and configuring branches)
+  - [x] **V2-002.002**: Location Model (Branch entity, addresses, timezones, and operating metadata — Complete; PR #276)
+  - [x] **V2-002.003**: Location Administration (Manager/Owner UI for provisioning and configuring branches — Complete; Issue #277)
   - [ ] **V2-002.004**: Staff Assignment Management (Assigning staff to locations, designating roles, and revoking access)
   - [ ] **V2-002.005**: Location Lifecycle Integrity (Safe deactivation, archive rules, and operational cascade protection)
 
