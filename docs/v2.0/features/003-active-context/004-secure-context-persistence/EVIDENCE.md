@@ -22,7 +22,7 @@ The V2-003.002/.003 hosted tests encoded "the Referer selects the location". Tha
 
 ## Claude Local handoff
 
-- **Fetch the existing Cloud branch** `feature/v2.0-003.004-secure-context-persistence` and the existing PR (see the PR). Do not duplicate the PR or implementation. Final head SHA: the PR head at hand-off (re-read it; do not trust a stale value).
+- **Fetch the existing Cloud branch** `feature/v2.0-003.004-secure-context-persistence` and the existing PR #291. Do not duplicate the PR or implementation. Final head SHA: the PR head at hand-off (re-read it; do not trust a stale value).
 - Hosted DEV only (`opmujepkemwcdxxorhfd`); Production `ftadewtkjlaotfdvtjcv` and `main` are strictly out of bounds. Synthetic fixtures only; clean them all up.
 - No migration, so no `db:types` / pgTAP change is expected.
 

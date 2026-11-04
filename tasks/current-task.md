@@ -18,7 +18,8 @@ Environment: Claude Code Cloud
 - [x] Playwright demo desktop + server-mobile 26/26
 - [x] Hosted-test files updated/added for Local (not executed in Cloud)
 - [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE; ROADMAP, CURRENT_STATE, 003 README/STATUS
-- [ ] Commit, push, open PR into `development`; exact-head CI green
+- [x] Commit, push, open PR #291 into `development`
+- [ ] Exact-head CI green (verify on the final PR head)
 - [ ] **Claude Local**: hosted DEV real-JWT A–G + Chromium/WebKit browser verification, then merge decision
 
 ## Current State & Next Step
