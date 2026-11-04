@@ -193,7 +193,7 @@ export async function updateLocationMetadata(
     const { data: current, error: fetchError } = await supabase
       .from("locations")
       .select(
-        "id, organization_id, name, time_zone, address, cover_weight, active, opening_local, closing_local, created_at, updated_at",
+        "id, organization_id, name, time_zone, address, cover_weight, active, archived_at, opening_local, closing_local, created_at, updated_at",
       )
       .eq("id", params.locationId.trim())
       .maybeSingle();
@@ -314,7 +314,7 @@ export async function updateLocationMetadata(
       .update(updates)
       .eq("id", params.locationId.trim())
       .select(
-        "id, organization_id, name, time_zone, address, cover_weight, active, opening_local, closing_local, created_at, updated_at",
+        "id, organization_id, name, time_zone, address, cover_weight, active, archived_at, opening_local, closing_local, created_at, updated_at",
       )
       .single();
 

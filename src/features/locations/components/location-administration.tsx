@@ -16,6 +16,17 @@ import {
   type StaffAssignmentSource,
 } from "./staff-assignment-source";
 import { createDemoStaffAssignmentSource } from "./staff-assignment-demo";
+import { createDemoLocationLifecycleSource } from "./location-lifecycle-demo";
+import {
+  createLiveLocationLifecycleSource,
+  type LocationLifecycleSource,
+} from "./location-lifecycle-source";
+import { LocationLifecycleDialog } from "./location-lifecycle-dialog";
+import { LocationLifecycleHistoryDialog } from "./location-lifecycle-history-dialog";
+import {
+  describeLifecycleAction,
+  type LocationLifecycleAction,
+} from "@/features/locations/domain/location-lifecycle";
 import type {
   DayOperatingHours,
   Location,
@@ -168,6 +179,26 @@ export function LocationAdministration({
     [demoMode],
   );
 
+  // V2-002.005: same isolation rule for lifecycle changes. Demo transitions
+  // are in-memory only and never reach the lifecycle RPC.
+  const lifecycleSource = React.useMemo<LocationLifecycleSource>(
+    () =>
+      demoMode
+        ? createDemoLocationLifecycleSource()
+        : createLiveLocationLifecycleSource(),
+    [demoMode],
+  );
+  const [lifecycleRequest, setLifecycleRequest] = React.useState<{
+    readonly location: Location;
+    readonly action: LocationLifecycleAction;
+  } | null>(null);
+  const [historyLocation, setHistoryLocation] = React.useState<Location | null>(
+    null,
+  );
+  const [lifecycleNotice, setLifecycleNotice] = React.useState<string | null>(
+    null,
+  );
+
   const [loadingHours, setLoadingHours] = React.useState(false);
   const [operatingHours, setOperatingHours] = React.useState<
     DayOperatingHours[]
@@ -238,8 +269,29 @@ export function LocationAdministration({
     setIsAddingLocation(false);
     setManagingLocation(null);
     setShowStaffOverview(false);
+    setLifecycleRequest(null);
+    setHistoryLocation(null);
+    setLifecycleNotice(null);
     setSearchQuery("");
   };
+
+  function handleLifecycleCompleted(
+    updated: Location,
+    action: LocationLifecycleAction,
+  ) {
+    setLocations((prev) =>
+      prev.map((l) => (l.id === updated.id ? updated : l)),
+    );
+    setManagingLocation((current) =>
+      current && current.id === updated.id ? updated : current,
+    );
+    setLifecycleRequest(null);
+    setLifecycleNotice(
+      `${updated.name}: ${describeLifecycleAction(action).toLowerCase()} completed.`,
+    );
+    // Refresh from persisted data (live mode only; demo state is in-memory).
+    if (!demoMode) setReloadKey((k) => k + 1);
+  }
 
   // 2. Fetch locations whenever selectedOrgId or reloadKey changes
   React.useEffect(() => {
@@ -565,8 +617,53 @@ export function LocationAdministration({
           }}
           onAddLocation={() => setIsAddingLocation(true)}
           canManage={canAdminister}
+          onLifecycleAction={(location, action) => {
+            setLifecycleNotice(null);
+            setLifecycleRequest({ location, action });
+          }}
+          onViewHistory={(location) => setHistoryLocation(location)}
         />
       )}
+
+      {lifecycleNotice ? (
+        <div
+          role="status"
+          data-testid="lifecycle-notice"
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-800 dark:text-emerald-300"
+        >
+          {lifecycleNotice}
+        </div>
+      ) : null}
+
+      {/* Lifecycle confirmation (deactivate / reactivate / archive / restore) */}
+      {lifecycleRequest && selectedOrg ? (
+        <LocationLifecycleDialog
+          key={`${lifecycleRequest.location.id}:${lifecycleRequest.action}`}
+          source={lifecycleSource}
+          organizationId={selectedOrgId}
+          organizationName={selectedOrg.name}
+          location={lifecycleRequest.location}
+          action={lifecycleRequest.action}
+          onClose={() => setLifecycleRequest(null)}
+          onCompleted={(updated) =>
+            handleLifecycleCompleted(updated, lifecycleRequest.action)
+          }
+          onStale={() => {
+            setLifecycleRequest(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      ) : null}
+
+      {historyLocation && selectedOrg ? (
+        <LocationLifecycleHistoryDialog
+          source={lifecycleSource}
+          organizationId={selectedOrgId}
+          organizationName={selectedOrg.name}
+          location={historyLocation}
+          onClose={() => setHistoryLocation(null)}
+        />
+      ) : null}
 
       {/* Create Location Dialog */}
       {isAddingLocation && (
