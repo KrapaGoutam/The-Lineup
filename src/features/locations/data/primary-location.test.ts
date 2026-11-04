@@ -6,6 +6,24 @@ const state = vi.hoisted(() => ({
   assigned: [] as { location_id: string }[],
   inFilter: null as string[] | null,
   filters: [] as string[],
+  referer: null as string | null,
+  resolved: null as unknown,
+  resolveArgs: [] as unknown[],
+}));
+
+vi.mock("next/headers", () => ({
+  headers: async () =>
+    new Headers({
+      host: "app.test",
+      ...(state.referer ? { referer: state.referer } : {}),
+    }),
+}));
+
+vi.mock("@/features/context/data/active-context", () => ({
+  resolveCurrentActiveContext: async (options: unknown) => {
+    state.resolveArgs.push(options);
+    return state.resolved;
+  },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -56,6 +74,9 @@ describe("locationForLoader (V2-003.001)", () => {
     state.assigned = [];
     state.inFilter = null;
     state.filters = [];
+    state.referer = null;
+    state.resolved = null;
+    state.resolveArgs = [];
   });
 
   it("CTX-19: with a verified scope it uses exactly that location and time zone and never queries a primary location", async () => {
@@ -107,5 +128,75 @@ describe("locationForLoader (V2-003.001)", () => {
     state.user = { id: "user-1" };
     await getPrimaryLocation("org-1");
     expect(state.inFilter).toBeNull();
+  });
+
+  describe("selected-location follow-ups (V2-003.002)", () => {
+    const LOC_B = "22222222-2222-4222-8222-222222222222";
+    const resolvedB = {
+      status: "resolved",
+      context: {
+        organizationId: "org-1",
+        locationId: LOC_B,
+        timeZone: "America/Chicago",
+      },
+    };
+
+    it("SW-OPS-01: a verified ?location= referer makes follow-ups use that SAME location, not the oldest assigned one", async () => {
+      state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
+      state.resolved = resolvedB;
+      const location = await getPrimaryLocation("org-1");
+      expect(location).toEqual({ id: LOC_B, time_zone: "America/Chicago" });
+      expect(state.calls).toBe(0);
+      expect(state.resolveArgs[0]).toMatchObject({
+        routeSlug: "the-monks",
+        explicitSelection: { status: "present", locationId: LOC_B },
+      });
+    });
+
+    it("SW-OPS-02: an unverifiable selection is a safe denial (null), never a substitute location", async () => {
+      state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
+      state.resolved = {
+        status: "invalid_context",
+        reason: "selection_location_unavailable",
+      };
+      expect(await getPrimaryLocation("org-1")).toBeNull();
+      expect(state.calls).toBe(0);
+    });
+
+    it("SW-OPS-03: a selection that resolves to a different organization is denied", async () => {
+      state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
+      state.resolved = resolvedB;
+      expect(await getPrimaryLocation("org-2")).toBeNull();
+    });
+
+    it("SW-OPS-04: malformed or repeated location params fail closed", async () => {
+      state.resolved = {
+        status: "invalid_context",
+        reason: "selection_malformed",
+      };
+      state.referer = "https://app.test/r/the-monks?location=nope";
+      expect(await getPrimaryLocation("org-1")).toBeNull();
+      state.referer = `https://app.test/r/the-monks?location=${LOC_B}&location=${LOC_B}`;
+      expect(await getPrimaryLocation("org-1")).toBeNull();
+      expect(state.resolveArgs[1]).toMatchObject({
+        explicitSelection: { status: "malformed" },
+      });
+    });
+
+    it("SW-OPS-05: no selection, a cross-origin referer, or a non-/r/ page keeps the legacy path", async () => {
+      for (const referer of [
+        null,
+        "https://app.test/r/the-monks",
+        `https://evil.test/r/the-monks?location=${LOC_B}`,
+        `https://app.test/other?location=${LOC_B}`,
+      ]) {
+        state.referer = referer;
+        expect(await getPrimaryLocation("org-1")).toEqual({
+          id: "legacy-oldest",
+          time_zone: "America/New_York",
+        });
+      }
+      expect(state.resolveArgs).toHaveLength(0);
+    });
   });
 });

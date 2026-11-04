@@ -1,5 +1,10 @@
 import "server-only";
 
+import { headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
+
+import { resolveCurrentActiveContext } from "@/features/context/data/active-context";
+import { parseExplicitLocationSelection } from "@/features/context/domain/active-context";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,6 +23,12 @@ import { createClient } from "@/lib/supabase/server";
  * into every initial loader via `locationForLoader`.
  */
 export async function getPrimaryLocation(organizationId: string) {
+  // V2-003.002: when the request comes from a page the user switched with
+  // `?location=`, follow-up reads/writes must use that SAME verified location
+  // (never a different branch than the header shows).
+  const selected = await selectedLocationForRequest(organizationId);
+  if (selected !== undefined) return selected;
+
   const supabase = await createClient();
   const eligible = () =>
     supabase
@@ -77,4 +88,68 @@ export async function locationForLoader(
     return { id: scope.locationId, time_zone: scope.timeZone };
   }
   return getPrimaryLocation(organizationId);
+}
+
+/**
+ * V2-003.002 safety boundary. Server Actions and client-triggered refetches are
+ * POSTed from the page URL, so the browser's same-origin `Referer` carries the
+ * user's temporary `?location=` choice. That value is an untrusted PREFERENCE:
+ * it is verified here by the canonical context resolver (RLS-bound, assignment
+ * and lifecycle checked) and used only when it resolves to the organization
+ * being operated on.
+ *
+ * Returns:
+ *  - `undefined` — the request carries no explicit selection (legacy path);
+ *  - `null`      — an explicit selection exists but cannot be verified for this
+ *                  organization: SAFE DENIAL, never a substitute location;
+ *  - location    — the verified selected location.
+ */
+async function selectedLocationForRequest(
+  organizationId: string,
+): Promise<LoaderLocation | null | undefined> {
+  let referer: string | null;
+  let host: string | null;
+  try {
+    const requestHeaders = await headers();
+    referer = requestHeaders.get("referer");
+    host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  } catch (error) {
+    unstable_rethrow(error);
+    return undefined;
+  }
+  if (!referer) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(referer);
+  } catch {
+    return undefined;
+  }
+  if (host && url.host !== host) return undefined;
+  const route = /^\/r\/([^/]+)\/?$/.exec(url.pathname);
+  if (!route) return undefined;
+
+  const values = url.searchParams.getAll("location");
+  if (values.length === 0) return undefined;
+  const explicitSelection = parseExplicitLocationSelection(
+    values.length === 1 ? values[0] : values,
+  );
+
+  let routeSlug: string;
+  try {
+    routeSlug = decodeURIComponent(route[1]);
+  } catch {
+    return null;
+  }
+  const result = await resolveCurrentActiveContext({
+    routeSlug,
+    explicitSelection,
+  });
+  if (
+    result.status !== "resolved" ||
+    result.context.organizationId !== organizationId
+  ) {
+    return null;
+  }
+  return { id: result.context.locationId, time_zone: result.context.timeZone };
 }

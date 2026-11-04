@@ -85,11 +85,11 @@ display-safe (ids, names, slug, time zone only).
   Location-B-only manager reading Location-A tip-pool rows via PostgREST). The
   switcher only governs what is _offered and initially hydrated_; it does not
   provide database-level isolation and the UI makes no such claim.
-- **Write path:** existing Server Actions/loaders outside the three initial
-  loaders still resolve their location through the legacy primary-location
-  path, not the explicit selection. Making module actions follow the active
-  location belongs with V2-003.004/V2-005; until then, the selected location
-  governs the hydrated Schedule/Tips/Allocation data and display.
+- **Follow-up reads/writes (fixed in this PR):** `getPrimaryLocation()`
+  verifies the request's `?location=` (via Referer) with the canonical resolver
+  and uses that exact location, or denies. Residual: no-Referer requests fall
+  back to the legacy path until V2-003.004; client-supplied `locationId` on
+  Schedule/Tips/Allocation writes is not server-bound until V2-005.
 - **V2-008:** location-assignment backfill for legacy staff.
 - Selection is not persisted: a reload keeps it (URL) but a fresh visit to
   `/r/<slug>` re-resolves (V2-003.004/.003).
