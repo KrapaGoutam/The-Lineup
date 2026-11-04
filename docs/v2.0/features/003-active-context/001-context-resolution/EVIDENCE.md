@@ -34,18 +34,18 @@ Exact-head CI result and the merge/handoff decision are recorded in the PR and t
 
 Environment: DEV `opmujepkemwcdxxorhfd` only (harness hard-aborts otherwise); Production not contacted; `main` untouched. Suite: `tests/real/active-context.db.real.test.ts` (`npm run test:real` config), **15/15 passed**. The REAL loader + REAL canonical resolver ran with real Supabase Auth JWTs against real RLS/PostgREST over synthetic organizations/users; teardown verified (0 organizations / profiles / auth users left).
 
-| # | Check | Result |
-| - | ----- | ------ |
-| 1 | Overall Owner without membership | authorized; two eligible locations → `selection_required`; cookie → `resolved` |
-| 2/3 | Overall Manager / Assistant | `resolved`, tiered capabilities differ (manager has `overall:manage`, `org:admin`, `location:manage`; assistant does not) |
-| 4 | Scoped user, one assignment (B; A is oldest) | `resolved` to **B** |
-| 5/6 | Multi-location, no cookie / valid cookie | `selection_required` / `resolved` to the cookie location |
-| 7 | Cookie org ≠ route org (authorized in both) / cookie location from another org | `invalid_context` |
-| 8–11 | Inactive org membership, inactive assignment, inactive location, archived location, revoked creator (Issue #106) | `no_access` (also stale cookie to C/D → denied) |
-| 12 | Malformed (not-JSON, `{}`, wrong version, oversize), stale (random location / org) cookies | `invalid_context` |
-| 13 | Session revoked via `auth.admin.signOut(jwt,"global")`; never-signed-in client | `unauthenticated` |
-| 14 | Org Owner/GM with no location assignment | `no_access` (canonical resolver; V2-008 backfill dependency) |
-| – | Unknown / other-org route slug | `no_access` (no enumeration) |
+| #    | Check                                                                                                            | Result                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Overall Owner without membership                                                                                 | authorized; two eligible locations → `selection_required`; cookie → `resolved`                                            |
+| 2/3  | Overall Manager / Assistant                                                                                      | `resolved`, tiered capabilities differ (manager has `overall:manage`, `org:admin`, `location:manage`; assistant does not) |
+| 4    | Scoped user, one assignment (B; A is oldest)                                                                     | `resolved` to **B**                                                                                                       |
+| 5/6  | Multi-location, no cookie / valid cookie                                                                         | `selection_required` / `resolved` to the cookie location                                                                  |
+| 7    | Cookie org ≠ route org (authorized in both) / cookie location from another org                                   | `invalid_context`                                                                                                         |
+| 8–11 | Inactive org membership, inactive assignment, inactive location, archived location, revoked creator (Issue #106) | `no_access` (also stale cookie to C/D → denied)                                                                           |
+| 12   | Malformed (not-JSON, `{}`, wrong version, oversize), stale (random location / org) cookies                       | `invalid_context`                                                                                                         |
+| 13   | Session revoked via `auth.admin.signOut(jwt,"global")`; never-signed-in client                                   | `unauthenticated`                                                                                                         |
+| 14   | Org Owner/GM with no location assignment                                                                         | `no_access` (canonical resolver; V2-008 backfill dependency)                                                              |
+| –    | Unknown / other-org route slug                                                                                   | `no_access` (no enumeration)                                                                                              |
 
 Denied contexts never reach `loadPageData`'s schedule/tips/allocation loaders (only `resolved` hydrates; covered by the integration tests).
 
@@ -58,4 +58,5 @@ Findings before the fix: (a) the helper returned the oldest location regardless 
 Residual limitation (documented for V2-005): org-level RLS still permits direct cross-location access inside a user's organization, and a user whose assignments were all revoked is indistinguishable from a legacy org-level member (falls back to oldest active) until V2-005/V2-008.
 
 ### Gates after the fix
+
 format, lint (`--max-warnings=0`), typecheck pass; Vitest **200 files / 2,736 passed / 7 skipped**. WebKit `host-tablet` (default-landing, dashboard, location-administration, location-lifecycle, staff-assignment-management, settings): 58 passed + 2 flaky-on-retry; `default-landing TS-004` flake reproduces on the `development` base (2/12 failures at `cacdd7c`) so it is pre-existing.
