@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { ContextUnavailableNotice } from "@/components/context-unavailable-notice";
 import { RestaurantOperationsApp } from "@/components/restaurant-operations-app";
 import type { ExplicitLocationSelection } from "@/features/context/domain/active-context";
@@ -13,12 +15,18 @@ import { loadPageData } from "@/lib/page-data";
 export async function RestaurantEntry({
   restaurantSlug,
   explicitSelection,
+  globalEntry = false,
 }: {
   restaurantSlug: string;
   /** V2-003.002 `?location=` input (only the `/r/[slug]` route supplies it). */
   explicitSelection?: ExplicitLocationSelection;
+  /** V2-003.003: the default-tenant `/` route (may redirect to the user's own org). */
+  globalEntry?: boolean;
 }) {
-  const data = await loadPageData(restaurantSlug, explicitSelection);
+  const data = await loadPageData(restaurantSlug, explicitSelection, {
+    globalEntry,
+  });
+  if (data.redirectTo) redirect(data.redirectTo);
 
   if (
     data.contextStatus === "selection_required" ||

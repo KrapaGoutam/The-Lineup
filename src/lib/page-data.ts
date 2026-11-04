@@ -15,6 +15,7 @@ import type {
   ExplicitLocationSelection,
 } from "@/features/context/domain/active-context";
 import { toVerifiedLocationScope } from "@/features/context/domain/active-context";
+import { contextSwitchHref } from "@/features/context/domain/context-navigation";
 import {
   getScheduleContext,
   type ScheduleContext,
@@ -62,6 +63,13 @@ export type PageData = {
    * unavailable instead of silently empty.
    */
   availableContextsFailed: boolean;
+  /**
+   * V2-003.003: server-built canonical destination (`/r/<verified-slug>
+   * ?location=<verified-id>`) for the global `/` entry when the caller is
+   * not in the default tenant but has exactly one verified context elsewhere.
+   * Never derived from input; null otherwise.
+   */
+  redirectTo: string | null;
 };
 
 const EMPTY_OPERATIONAL = {
@@ -73,6 +81,7 @@ const EMPTY_OPERATIONAL = {
   availableContexts: [],
   contextReason: null,
   availableContextsFailed: false,
+  redirectTo: null,
 } as const;
 
 /**
@@ -90,6 +99,7 @@ const EMPTY_OPERATIONAL = {
 export async function loadPageData(
   restaurantSlug: string,
   explicitSelection?: ExplicitLocationSelection,
+  options: { globalEntry?: boolean } = {},
 ): Promise<PageData> {
   const demoMode =
     process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
@@ -144,6 +154,24 @@ export async function loadPageData(
     };
   }
 
+  if (resolution.status === "no_access" && options.globalEntry) {
+    // V2-003.003: `/` is scoped to the configured default tenant. A signed-in
+    // user with no access there may still have exactly ONE verified context
+    // in their own organization; send them to that canonical route. Only a
+    // fully `resolved` result (unique eligibility, or a valid stored
+    // preference) redirects; ambiguity, stale/malformed input and errors keep
+    // the existing presentation. The destination is built from verified data.
+    const global = await resolveCurrentActiveContext({ routeSlug: null });
+    if (global.status === "resolved") {
+      return {
+        demoMode,
+        ...EMPTY_OPERATIONAL,
+        contextStatus: "no_access",
+        redirectTo: contextSwitchHref(global.context, ""),
+      };
+    }
+  }
+
   if (resolution.status !== "resolved") {
     return {
       demoMode,
@@ -193,5 +221,6 @@ export async function loadPageData(
     availableContexts: switcher.status === "ok" ? switcher.contexts : [],
     contextReason: null,
     availableContextsFailed: switcher.status !== "ok",
+    redirectTo: null,
   };
 }
