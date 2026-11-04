@@ -3,7 +3,7 @@
 ```text
 Status:             IN_PROGRESS
 Completed Subfeature: V2-002.004 Staff Assignment Management
-Next Subfeature:    V2-002.005 Location Lifecycle Integrity (NOT STARTED)
+Next Subfeature:    V2-002.005 Location Lifecycle Integrity (READY_FOR_CODEX_LOCAL_VALIDATION — Issue #281)
 GitHub Issue:       #250
 Target Branch:      development
 Blockers:           NONE
@@ -15,4 +15,4 @@ Blockers:           NONE
 - [x] **V2-002.002**: Location Model (Branch entity, addresses, timezones, operating metadata) — Complete (#275, PR #276)
 - [x] **V2-002.003**: Location Administration (Manager/Owner UI for provisioning and configuring branches) — Complete (#277)
 - [x] **V2-002.004**: Staff Assignment Management (Assigning staff to branches and setting designations) — Complete (#279, PR #280, merge `b08efeee`)
-- [ ] **V2-002.005**: Location Lifecycle Integrity (Safe deactivation, archive rules, and operational cascade protection) — Not Started
+- [ ] **V2-002.005**: Location Lifecycle Integrity (Safe deactivation, archive rules, and operational cascade protection) — Implemented in Cloud (#281); READY_FOR_CODEX_LOCAL_VALIDATION, hosted DEV verification and merge pending

@@ -1,25 +1,27 @@
-# V2-002.004 — Staff Assignment Management
+# V2-002.005 — Location Lifecycle Integrity
 
-Canonical docs: `docs/v2.0/features/002-organizations-locations/004-staff-assignment-management/`
-Parent Feature: Issue #250 · Program: Issue #248 · Milestone #8
-Branch: `feature/v2.0-002.004-staff-assignment-management` (from `origin/development` `4d78eba63ec846198bd3cd654d99221f3f8b7c71`)
-Environment: Codex Local (Windows)
+Canonical docs: `docs/v2.0/features/002-organizations-locations/005-location-lifecycle-integrity/`
+Parent Feature: Issue #250 · Program: Issue #248 · Subfeature Issue: #281 · Milestone #8
+Branch: `feature/v2.0-002.005-location-lifecycle-integrity` (from `origin/development` `6aa61760ca8bbe8a643fae8ca8c27958dbd31a69`)
+Environment: Claude Code Cloud (no Supabase credentials)
 
 ## Implementation Checklist
 
-- [x] Baseline recorded; PR #278 verified merged
-- [x] Domain: `domain/staff-assignment.ts` (+ tests DOM-001…012)
-- [x] Server actions: `actions/staff-assignment-actions.ts` (+ tests ACT-001…017, SEC-001/005/006/010/011)
-- [x] UI: Staff tab, Staff Assignments dialog, multi-location editor, role select, badges
-- [x] Demo-isolated source (`staff-assignment-demo.ts`)
-- [x] Component tests (UI-001…019) and mocked Playwright spec
-- [x] format:check, lint, typecheck, `npm test`, `next build --webpack`, check:local-paths
+- [x] Pre-flight: SHAs recorded; PR #280 verified merged
+- [x] Audit of location FKs, grants, write paths (PLAN §7–8)
+- [x] Migration `20261104020000_location_lifecycle_integrity.sql`
+- [x] pgTAP `0059_location_lifecycle_integrity.test.sql` (96 assertions; local PG16 run + prior suites unaffected)
+- [x] Real two-session race verification (local PG16)
+- [x] Domain `location-lifecycle.ts`, data wrappers, server actions
+- [x] UI: badges, per-state actions, archived section, confirmation + history dialogs, demo source
+- [x] Vitest (192 files / 2,617 passed), Playwright desktop + mobile
+- [x] format:check, lint, typecheck, `next build --webpack`, check:local-paths
 - [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE, CURRENT_STATE
-- [x] Commit, push, open PR into `development`
-- [x] Exact-head CI green on `242ba18e78201ca299fb55554db96e7ec7de2e5f`
-- [x] **Codex Local**: hosted DEV migration + 149 targeted pgTAP assertions, Overall-admin roster RLS, atomicity/tenant isolation, WebKit tablet 12/12
-- [x] Merge commit into `development`: `b08efeee933507dcd4d7e475f2ebab957d47453e`
+- [x] Issue #281 created under #250 (milestone #8)
+- [ ] Commit, push, open PR into `development`; exact-head CI green
+- [ ] **Codex Local**: hosted DEV migration + real-DB verification + WebKit tablet + `supabase gen types` diff check
+- [ ] Merge commit into `development` (only after hosted DEV verification)
 
 ## Current State & Next Step
 
-V2-002.004 is complete. PR #280 merged into `development` at `b08efeee933507dcd4d7e475f2ebab957d47453e`; hosted DEV and all required gates are verified. V2-002 remains `IN_PROGRESS`; V2-002.005 is next but was not started in this closeout.
+Cloud implementation is complete; status `READY_FOR_CODEX_LOCAL_VALIDATION`. Next step belongs to Codex Local: follow the "Hosted DEV checklist" in the subfeature `STATUS.md`. Do not merge in Cloud. Do not start V2-003.

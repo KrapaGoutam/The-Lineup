@@ -229,6 +229,7 @@ describe("Location Domain Model (V2-002.002)", () => {
       },
       cover_weight: 0.35,
       active: true,
+      archived_at: null,
       opening_local: "11:00",
       closing_local: "23:00",
       created_at: "2026-11-03T12:00:00Z",

@@ -46,6 +46,11 @@ export interface Location {
   readonly address: LocationAddress;
   readonly coverWeight: number;
   readonly active: boolean;
+  /**
+   * V2-002.005: non-null only for ARCHIVED locations (`active` is then false).
+   * Optional for backward compatibility; use `getLocationLifecycleStatus`.
+   */
+  readonly archivedAt?: string | null;
   readonly openingLocal: string;
   readonly closingLocal: string;
   readonly createdAt: string;
@@ -355,6 +360,7 @@ export function mapLocationRow(row: DatabaseLocationRow): Location {
     },
     coverWeight: Number(row.cover_weight),
     active: Boolean(row.active),
+    archivedAt: (row as { archived_at?: string | null }).archived_at ?? null,
     openingLocal: row.opening_local,
     closingLocal: row.closing_local,
     createdAt: row.created_at,

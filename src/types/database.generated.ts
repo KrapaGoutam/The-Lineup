@@ -2087,6 +2087,53 @@ export type Database = {
           },
         ];
       };
+      location_lifecycle_events: {
+        Row: {
+          action: string;
+          actor_profile_id: string;
+          blockers_snapshot: Json;
+          changed_at: string;
+          id: number;
+          location_id: string;
+          new_state: string;
+          organization_id: string;
+          previous_state: string;
+          reason: string;
+        };
+        Insert: {
+          action: string;
+          actor_profile_id: string;
+          blockers_snapshot?: Json;
+          changed_at?: string;
+          id?: never;
+          location_id: string;
+          new_state: string;
+          organization_id: string;
+          previous_state: string;
+          reason: string;
+        };
+        Update: {
+          action?: string;
+          actor_profile_id?: string;
+          blockers_snapshot?: Json;
+          changed_at?: string;
+          id?: never;
+          location_id?: string;
+          new_state?: string;
+          organization_id?: string;
+          previous_state?: string;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "location_lifecycle_events_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
       location_memberships: {
         Row: {
           active: boolean;
@@ -2136,6 +2183,7 @@ export type Database = {
         Row: {
           active: boolean;
           address: Json;
+          archived_at: string | null;
           closing_local: string;
           cover_weight: number;
           created_at: string;
@@ -2149,6 +2197,7 @@ export type Database = {
         Insert: {
           active?: boolean;
           address?: Json;
+          archived_at?: string | null;
           closing_local?: string;
           cover_weight?: number;
           created_at?: string;
@@ -2162,6 +2211,7 @@ export type Database = {
         Update: {
           active?: boolean;
           address?: Json;
+          archived_at?: string | null;
           closing_local?: string;
           cover_weight?: number;
           created_at?: string;
@@ -4900,6 +4950,10 @@ export type Database = {
         Args: { p_active: boolean; p_template_id: string };
         Returns: undefined;
       };
+      get_location_lifecycle_readiness: {
+        Args: { p_location_id: string };
+        Returns: Json;
+      };
       inventory_bootstrap: {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: string;
@@ -5392,6 +5446,15 @@ export type Database = {
           p_title: string;
         };
         Returns: undefined;
+      };
+      transition_location_lifecycle: {
+        Args: {
+          p_action: string;
+          p_expected_status?: string;
+          p_location_id: string;
+          p_reason: string;
+        };
+        Returns: Database["public"]["Tables"]["locations"]["Row"];
       };
       unconfirm_payroll_payment: {
         Args: { p_payment_id: number; p_reason: string };
