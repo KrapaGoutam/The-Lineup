@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -5197,6 +5197,29 @@ export type Database = {
           p_vendor_id: string;
         };
         Returns: number;
+      };
+      provision_organization: {
+        Args: {
+          p_initial_owner_profile_id?: string;
+          p_name: string;
+          p_settings?: Json;
+          p_slug: string;
+        };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          settings: Json;
+          slug: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organizations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };

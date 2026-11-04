@@ -3,24 +3,24 @@
 ```text
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
-Current Feature:          V2-001 — Access & Role Foundation
-Current Subfeature:       V2-001.006 — Canonical Authorization Resolver
-Branch:                   feature/v2.0-001.006-authorization-resolver
-Starting dev SHA:         773ac7e8ee28fd0d99422f7a561709338a8a2755
+Current Feature:          V2-002 — Organizations & Locations
+Current Subfeature:       V2-002.001 — Organization Model
+Branch:                   feature/v2.0-002.001-organization-model
+Starting dev SHA:         c152d9d6b48ab8cec5fee6d999b99705748c2a4d
 Starting main SHA:        5e5b7747693b6e81014eafdf299b87e56c3f033d
-Worktree Path:            .tmp/v2-auth-resolver
+Worktree Path:            .tmp/v2-organization-model
 Target Branch:            development
 GitHub Milestone:         The Lineup V2.0 (Milestone #8)
 GitHub Parent Issue:      #248
-Feature Issue:            #249
-Subfeature Issue:         #269
+Feature Issue:            #250
+Subfeature Issue:         #273
 PR:                       (Pending)
 Head SHA:                 (Pending)
-Migration:                NO NEW SCHEMA MIGRATION REQUIRED
-DEV Migration Status:     VERIFIED BASELINE (opmujepkemwcdxxorhfd)
+Migration:                supabase/migrations/20261103040000_organization_model_foundation.sql
+DEV Migration Status:     BASELINE VERIFIED (opmujepkemwcdxxorhfd)
 CI Status:                Pending
 Blockers:                 NONE
-Next Expected Subfeature: V2-001.007 — RLS / Server Security Hardening
+Next Expected Subfeature: V2-002.002 — Location Model
 Production Changes:       NONE
 Main Branch Merge:        NONE
 ```
@@ -30,15 +30,16 @@ Main Branch Merge:        NONE
 ## Operational Summary
 
 1. **Safety Baseline**:
-   - Starting `origin/development` SHA: `773ac7e8ee28fd0d99422f7a561709338a8a2755`.
+   - Starting `origin/development` SHA: `c152d9d6b48ab8cec5fee6d999b99705748c2a4d`.
    - Starting `origin/main` SHA: `5e5b7747693b6e81014eafdf299b87e56c3f033d`.
-   - Isolated worktree active at `.tmp/v2-auth-resolver` on branch `feature/v2.0-001.006-authorization-resolver`.
+   - Isolated worktree active at `.tmp/v2-organization-model` on branch `feature/v2.0-002.001-organization-model`.
    - Primary working tree preserved without modifications or stashes.
 
 2. **Hosted DEV Verification**:
-   - Verified read-only that hosted DEV (`opmujepkemwcdxxorhfd`) contains `overall_roles`, `memberships`, `locations`, `location_memberships`, `location_role`, and `apply_location_assignment_changes` through migration `20261103020000`.
+   - Verified read-only that hosted DEV (`opmujepkemwcdxxorhfd`) contains all 66 migrations through `20261103030000`.
+   - 30 existing organizations audited; all conform to schema constraints.
 
-3. **V2-001.006 Scope & Plan**:
-   - Issue #269 created under Milestone 8.
-   - Pure domain resolver `src/features/auth/domain/access-resolver.ts` and server data loader `src/features/auth/data/access-resolver.ts`.
-   - No schema changes needed. No broad RLS rewrites or UI components.
+3. **V2-002.001 Scope & Plan**:
+   - Issue #273 created under Milestone 8.
+   - Establish canonical organization model, branding, settings, slug validation, atomic provisioning, and hardened RLS.
+   - Forward migration: `20261103040000_organization_model_foundation.sql`.

@@ -1,34 +1,32 @@
-# V2-001.007 — RLS / Server Security Hardening
+# V2-002.001 — Organization Model
 
-Approved Subfeature: Eliminate the organization creator bypass from `private.has_org_role` (closing Issue #106 debt), audit and harden `public.apply_location_assignment_changes` for Overall Roles and target profile active membership prerequisites, and align `public.location_memberships` RLS policies.
-Canonical docs: `docs/v2.0/features/001-access-foundation/007-rls-security-hardening/`
-Parent Feature: Issue #249 (`[V2-001] Access & Role Foundation`)
+Approved Subfeature: Canonical organization model, tenant lifecycle, branding, slug management, and organization settings.
+Canonical docs: `docs/v2.0/features/002-organizations-locations/001-organization-model/`
+Parent Feature: Issue #250 (`[V2-002] Organizations & Locations`)
 Parent Milestone: Issue #248 (`The Lineup V2.0`)
-Subfeature Issue: Issue #271 (`[V2-001.007] RLS / Server Security Hardening`)
-Linked Debt Issue: Issue #106 (`[Security] Remove organization-creator bypass from private.has_org_role`)
-Branch: `feature/v2.0-001.007-rls-security-hardening` (from `origin/development` at `fe31d1a003361845a9fb8500d0c60ead31fc0aec`)
-Worktree: `.tmp/v2-rls-hardening`
+Subfeature Issue: Issue #273 (`[V2-002.001] Organization Model`)
+Prerequisite: V2-001 Access & Role Foundation (PR #272 merged at `c152d9d6b48ab8cec5fee6d999b99705748c2a4d`)
+Branch: `feature/v2.0-002.001-organization-model` (from `origin/development` at `c152d9d6b48ab8cec5fee6d999b99705748c2a4d`)
+Worktree: `.tmp/v2-organization-model`
 
 ## Implementation Checklist
 
-- [x] Pre-flight checks: baseline SHAs recorded (`fe31d1a003361845a9fb8500d0c60ead31fc0aec` dev, `5e5b7747693b6e81014eafdf299b87e56c3f033d` main), isolated worktree created (`.tmp/v2-rls-hardening`), branch `feature/v2.0-001.007-rls-security-hardening`
-- [x] Subfeature issue created: #271 under Milestone #8, linked to #106 and #249
-- [x] Document PLAN.md, TEST_MATRIX.md, STATUS.md, EVIDENCE.md in `docs/v2.0/features/001-access-foundation/007-rls-security-hardening/`
-- [x] Forward-only migration written: `supabase/migrations/20261103030000_rls_security_hardening.sql` (eliminating `organizations.created_by` bypass in `private.has_org_role`, auditing `public.apply_location_assignment_changes`, hardening `public.location_memberships` RLS policies)
-- [x] Update assertion in `supabase/tests/database/0008_member_deactivation.test.sql` to verify deactivated creator loses access
-- [x] Dedicated pgTAP security acceptance test suite written: `supabase/tests/database/0055_rls_security_hardening.test.sql` (28 tests)
-- [x] Local database reset and migration execution (`npx supabase db reset`)
-- [x] Focused pgTAP security acceptance tests passing (28/28 assertions)
-- [x] Full pgTAP regression passing: 55/55 test files, 1,696 assertions passed
-- [x] Full Vitest regression passing: 173 test files, 2,339 tests passed
-- [x] Local quality gates passing: `git diff --check`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npx next build --webpack`, `npm run check:local-paths`, `npm run check:env`
-- [x] Hosted DEV migration dry-run and apply (`opmujepkemwcdxxorhfd`, migration `20261103030000` applied)
-- [x] Hosted DEV live verification: `has_org_role` definition lacks `created_by`, `apply_location_assignment_changes` and `location_memberships` policies verified live
-- [ ] Commit with `feat(v2.0): harden RLS and eliminate organization creator bypass (#106)`
-- [ ] Push branch to remote and open PR targeting `development`
+- [x] Pre-flight checks: baseline SHAs recorded (`c152d9d6b48ab8cec5fee6d999b99705748c2a4d` dev, `5e5b7747693b6e81014eafdf299b87e56c3f033d` main), isolated worktree created (`.tmp/v2-organization-model`), branch `feature/v2.0-002.001-organization-model`
+- [x] Subfeature issue created: #273 under Milestone #8, linked to #250 and #248
+- [x] Hosted DEV baseline verified: linked to `opmujepkemwcdxxorhfd`, 66 migrations in sync through `20261103030000`, 30 organizations audited
+- [x] Full baseline test verification: 173 Vitest files (2,339 tests) and 55 pgTAP files (1,696 assertions) passing
+- [x] Initialize canonical feature documentation: `PLAN.md`, `STATUS.md`, `TEST_MATRIX.md`, `EVIDENCE.md` in `docs/v2.0/features/002-organizations-locations/001-organization-model/`
+- [x] Forward-only database migration: `supabase/migrations/20261103040000_organization_model_foundation.sql` (hardened RLS on `public.organizations`, immutability guard trigger, atomic `public.provision_organization` RPC)
+- [x] TypeScript types regeneration: `npm run db:types`
+- [x] Domain implementation & unit tests: `src/features/organizations/domain/organization.ts`, `organization.test.ts`
+- [x] Data loader & mutation implementation: `src/features/organizations/data/organization-reader.ts`, `organization-mutation.ts`, and Vitest test suites
+- [x] Dedicated pgTAP database security test suite: `supabase/tests/database/0056_organization_model.test.sql`
+- [x] Local database reset and test run: `npx supabase db reset` and `npx supabase test db` (56 files, 1,727 assertions)
+- [x] Full Vitest test suite run: `npm test` (176 files, 2,384 tests)
+- [x] Local quality gates: `git diff --check`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npx next build --webpack`, `npm run check:local-paths`, `npm run check:env`
+- [x] Hosted DEV migration dry-run and apply (`opmujepkemwcdxxorhfd`)
+- [x] Hosted DEV live verification: schema, constraints, RLS, provisioning, owner bootstrap
+- [ ] Stage, commit, push branch `feature/v2.0-002.001-organization-model`
+- [ ] Open Pull Request targeting `development`
 - [ ] Exact-head green CI verification
-- [ ] Merge commit into `development` and closeout tracking (#271, #106, #249 checklist)
-
-## Current State & Next Step
-
-All database migrations, tests, quality gates, and hosted DEV deployment/verification are complete. Next step: stage feature files, commit, push branch, open PR targeting `development`, and monitor CI checks.
+- [ ] Merge commit into `development` and closeout tracking
