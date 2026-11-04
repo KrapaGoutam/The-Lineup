@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2144,6 +2144,7 @@ export type Database = {
           opening_local: string;
           organization_id: string;
           time_zone: string;
+          updated_at: string;
         };
         Insert: {
           active?: boolean;
@@ -2156,6 +2157,7 @@ export type Database = {
           opening_local?: string;
           organization_id: string;
           time_zone?: string;
+          updated_at?: string;
         };
         Update: {
           active?: boolean;
@@ -2168,6 +2170,7 @@ export type Database = {
           opening_local?: string;
           organization_id?: string;
           time_zone?: string;
+          updated_at?: string;
         };
         Relationships: [
           {
@@ -5197,6 +5200,36 @@ export type Database = {
           p_vendor_id: string;
         };
         Returns: number;
+      };
+      provision_location: {
+        Args: {
+          p_address?: Json;
+          p_closing_local?: string;
+          p_cover_weight?: number;
+          p_name: string;
+          p_opening_local?: string;
+          p_organization_id: string;
+          p_time_zone?: string;
+        };
+        Returns: {
+          active: boolean;
+          address: Json;
+          closing_local: string;
+          cover_weight: number;
+          created_at: string;
+          id: string;
+          name: string;
+          opening_local: string;
+          organization_id: string;
+          time_zone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "locations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       provision_organization: {
         Args: {
