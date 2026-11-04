@@ -1,9 +1,11 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
   ChevronRight,
   KeyRound,
   LogOut,
+  MapPin,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -11,6 +13,7 @@ import {
 import { AppearanceSwitch } from "@/components/appearance-switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { LocationAdministration } from "@/features/locations/components/location-administration";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
 import type { DayHours } from "@/hooks/use-restaurant-clock";
 
@@ -54,13 +57,24 @@ export function SettingsPage({
   onSignOut: () => void;
   onBack: () => void;
 }) {
+  const [subview, setSubview] = useState<"main" | "locations">("main");
   const showPayRates = isManager && !demoMode;
+
+  if (subview === "locations") {
+    return (
+      <LocationAdministration
+        onBack={() => setSubview("main")}
+        demoMode={demoMode}
+      />
+    );
+  }
 
   const navItems = [
     ...(isManager
       ? [{ href: "#settings-shift-hours", label: "Shift hours" }]
       : []),
     { href: "#settings-store-hours", label: "Store hours" },
+    ...(isManager ? [{ href: "#settings-locations", label: "Locations" }] : []),
     ...(isManager ? [{ href: "#settings-schedule", label: "Schedule" }] : []),
     ...(isManager ? [{ href: "#settings-team", label: "Team" }] : []),
     ...(showPayRates
@@ -138,6 +152,13 @@ export function SettingsPage({
 
           {isManager ? (
             <div className="grid gap-5 sm:grid-cols-2">
+              <QuickLinkCard
+                id="settings-locations"
+                icon={MapPin}
+                title="Locations"
+                description="Manage restaurant branches, addresses, time zones and operating hours."
+                onClick={() => setSubview("locations")}
+              />
               <QuickLinkCard
                 id="settings-team"
                 icon={Users}

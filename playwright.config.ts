@@ -15,7 +15,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: "npm run dev",
+        command: "npm run dev -- --webpack",
         url: "http://localhost:3000",
         reuseExistingServer: !process.env.CI,
         // The checked-in scenarios use the deterministic demo passcodes and
