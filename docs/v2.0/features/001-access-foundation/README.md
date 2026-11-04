@@ -21,9 +21,9 @@ Feature V2-001 constructs the authoritative multi-tenant and multi-location acce
 | **V2-001.002** | `002-organization-membership/`              | Profile-to-organization membership relationship and active status enforcement.                 | Complete                      |
 | **V2-001.003** | `003-location-access/`                      | Location access bindings ensuring staff access only assigned branches.                         | Complete                      |
 | **V2-001.004** | `004-per-location-roles/`                   | Location-scoped roles (`Manager`, `Assistant Manager`, `Staff`) per assigned branch.           | Complete                      |
-| **V2-001.005** | `005-multi-location-multi-role-assignment/` | Multi-branch and multi-role assignment for flexible staff allocation.                          | In Progress                   |
-| **V2-001.006** | `006-authorization-resolver/`               | Canonical pure capability resolver unifying baseline and location-specific roles.              | Not Started                   |
-| **V2-001.007** | `007-security-hardening/`                   | Permanent elimination of #106 creator bypass from `private.has_org_role` and policy hardening. | Not Started                   |
+| **V2-001.005** | `005-multi-location-multi-role-assignment/` | Multi-branch and multi-role assignment for flexible staff allocation.                          | Complete                      |
+| **V2-001.006** | `006-authorization-resolver/`               | Canonical pure capability resolver unifying baseline and location-specific roles.              | Complete                      |
+| **V2-001.007** | `007-rls-security-hardening/`               | Permanent elimination of #106 creator bypass from `private.has_org_role` and policy hardening. | In Progress                   |
 
 ---
 
