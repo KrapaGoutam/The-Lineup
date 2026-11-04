@@ -102,22 +102,19 @@ select ok(
   'has_org_role remains SECURITY DEFINER, as its own comment in the migration requires'
 );
 
--- Named explicitly, not left as a surprise someone has to rediscover:
--- deactivating the org's own creator does NOT block their has_org_role
--- result, because of the bypass clause above -- confirmed here as a
--- known, currently-accepted gap (see the build notes), not a bug this
--- test failed to catch.
+-- Issue #106 resolved (V2-001.007): creator bypass permanently eliminated.
+-- A creator without an active membership row fails has_org_role.
 select set_config(
   'request.jwt.claim.sub',
   '00000000-0000-0000-0000-0000000170a1',
   true
 );
 select ok(
-  private.has_org_role(
+  not private.has_org_role(
     '00000000-0000-0000-0000-0000000170b1'::uuid,
     array['owner']::public.app_role[]
   ),
-  'known gap, confirmed on purpose: the org''s creator passes has_org_role even with no membership row at all, via the created_by bypass'
+  'Issue #106 resolved: the org''s creator without an active membership row fails has_org_role'
 );
 
 select * from finish();
