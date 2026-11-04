@@ -5,7 +5,8 @@ import type {
   TipsAuditEntry,
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { locationForLoader } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
@@ -24,9 +25,10 @@ export type TipsContext = {
 
 export async function getTipsContext(
   organizationId: string,
+  verifiedLocation?: VerifiedLocationScope,
 ): Promise<TipsContext | null> {
   const supabase = await createClient();
-  const location = await getPrimaryLocation(organizationId);
+  const location = await locationForLoader(organizationId, verifiedLocation);
   if (!location) return null;
 
   const serviceDate = zonedWallTimeFromInstant(

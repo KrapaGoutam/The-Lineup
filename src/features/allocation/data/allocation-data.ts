@@ -17,7 +17,8 @@ import type {
   ColumnStatus,
   RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { locationForLoader } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TeamMember } from "@/lib/demo-data";
@@ -153,9 +154,10 @@ export function diningAreaName(
 export async function getAllocationContext(
   organizationId: string,
   requestedServiceDate?: string,
+  verifiedLocation?: VerifiedLocationScope,
 ): Promise<AllocationContext | null> {
   const supabase = await createClient();
-  const location = await getPrimaryLocation(organizationId);
+  const location = await locationForLoader(organizationId, verifiedLocation);
   if (!location) return null;
 
   const team = await getOrganizationRoster(organizationId);

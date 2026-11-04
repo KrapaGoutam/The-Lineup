@@ -94,14 +94,14 @@ sequenceDiagram
   else Multi-context with valid cookie
     R-->>S: Cookie context (Liquor Tap, NASA)
   else Multi-context without cookie / invalid
-    R-->>S: Default to primary active location
+    R-->>S: selection_required (never default to a primary/first location)
   end
   S-->>B: Render page within validated context
 ```
 
 ### Context Rules:
 
-- Context is hydrated server-side.
+- Context is hydrated server-side (V2-003.001: `src/features/context/`; precedence contract in `features/003-active-context/001-context-resolution/PLAN.md`).
 - If a user changes location in one tab, cross-tab synchronization alerts or syncs active operational state.
 - Client-supplied context is **untrusted**: every mutation RPC verifies that the caller actually possesses valid membership and role at the target location.
 

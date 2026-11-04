@@ -67,10 +67,10 @@ development → main (Production)
 ### V2-003 — Active Organization / Location Context
 
 - **GitHub Issue:** [#251](https://github.com/KrapaGoutam/The-Lineup/issues/251)
-- **Status:** Planned
+- **Status:** In progress (V2-003.001 in review; .002–.005 not started)
 - **Directory:** `docs/v2.0/features/003-active-context/`
 - **Subfeatures:**
-  - [ ] **V2-003.001**: Context Resolution (Server-side hydration of active organization and location from session/cookies)
+  - [~] **V2-003.001**: Context Resolution (Server-side hydration of active organization and location from session/cookies — Issue #283; implemented on `feature/v2.0-003.001-context-resolution`, PR pending merge; see its STATUS.md)
   - [ ] **V2-003.002**: Organization / Location Switcher (Header/App Shell interactive selector with visible active indicator)
   - [ ] **V2-003.003**: Single-Context Auto Resolution (Zero-friction auto-select for single-org / single-location staff)
   - [ ] **V2-003.004**: Context Persistence (Reliable server cookie persistence honoring security boundaries)

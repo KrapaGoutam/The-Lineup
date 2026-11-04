@@ -1,44 +1,26 @@
-# V2-002.005 — Location Lifecycle Integrity
+# V2-003.001 — Active Organization / Location Context Resolution
 
-Canonical docs: `docs/v2.0/features/002-organizations-locations/005-location-lifecycle-integrity/`
-Parent Feature: Issue #250 · Program: Issue #248 · Subfeature Issue: #281 · Milestone #8
-Branch: `feature/v2.0-002.005-location-lifecycle-integrity` (from `origin/development` `6aa61760ca8bbe8a643fae8ca8c27958dbd31a69`)
-Environment: Codex Local closeout (2026-11-04); hosted DEV only
+Canonical docs: `docs/v2.0/features/003-active-context/001-context-resolution/`
+Parent Feature: Issue #251 · Program: Issue #248 · Subfeature Issue: #283 · Milestone #8
+Branch: `feature/v2.0-003.001-context-resolution` (from `origin/development` `cacdd7c9dc5bebdd4434c779f7d146ca4ab4230e`)
+Environment: Claude Code Cloud (implementation explicitly assigned by the owner)
 
 ## Implementation Checklist
 
-- [x] Pre-flight: SHAs recorded; PR #280 verified merged
-- [x] Audit of location FKs, grants, write paths (PLAN §7–8)
-- [x] Migration `20261104020000_location_lifecycle_integrity.sql`
-- [x] pgTAP `0059_location_lifecycle_integrity.test.sql` (96 assertions; local PG16 run + prior suites unaffected)
-- [x] Real two-session race verification (local PG16)
-- [x] Domain `location-lifecycle.ts`, data wrappers, server actions
-- [x] UI: badges, per-state actions, archived section, confirmation + history dialogs, demo source
-- [x] Vitest (192 files / 2,617 passed), Playwright desktop + mobile
-- [x] format:check, lint, typecheck, `next build --webpack`, check:local-paths
-- [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE, CURRENT_STATE
-- [x] Issue #281 created under #250 (milestone #8)
-- [x] Commit, push, open PR into `development`; exact-head CI green
-- [x] **Codex Local**: hosted DEV migration + real-DB verification + WebKit tablet + `supabase gen types` diff check
-- [x] Merge commit into `development` (only after hosted DEV verification)
+- [x] Pre-flight: SHAs recorded; PR #282 verified merged; Issue #250 closed
+- [x] Issue #283 created under #251 (milestone #8)
+- [x] Audit: resolver/readers/RLS/loaders; role-authority divergence found (PLAN §6)
+- [x] Domain: `context-cookie.ts`, `active-context.ts` (pure, over canonical resolver)
+- [x] Data: `active-context.ts` loader (RLS client, `auth.getUser()`, error-discriminating), read-only cookie reader
+- [x] Loaders: `locationForLoader`; schedule/tips/allocation accept a verified scope; legacy helper isolated
+- [x] Entry: `loadPageData` integration, `getEntryUser`, `RestaurantEntry`, `ContextUnavailableNotice`
+- [x] Tests: CTX-01…27 (Vitest, 115 new; full suite 2,732 passed / 7 skipped)
+- [x] format:check, lint, typecheck, check:local-paths, `next build --webpack`
+- [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE; CURRENT_STATE, ROADMAP, 003 STATUS/README
+- [ ] Playwright desktop + mobile regressions (demo)
+- [ ] Commit, push, open PR into `development`; exact-head CI green
+- [ ] Merge (only if all gates pass; otherwise Codex Local handoff on the same PR)
 
 ## Current State & Next Step
 
-### Local closeout checklist
-
-- [x] Fetch Cloud branch first; isolated worktree HEAD = PR #282 = `db56889ff7a5f791d14201e8ebd143c2e5dc9d8c`; unrelated main-checkout work preserved.
-- [x] Confirm publication gap: `publishScheduleAction` updates an existing draft; original lifecycle migration guards INSERT only.
-- [x] Add narrow forward publication trigger and dedicated pgTAP regression.
-- [x] Verify DEV identity, ledger and exact approved pending set; dry run then apply.
-- [x] Hosted transactional authorization, lifecycle, audit, preservation and operational guard tests.
-- [x] Independent-session concurrency races A–D.
-- [x] Generate canonical DEV types to temporary file and reconcile.
-- [x] Actual WebKit `host-tablet`: lifecycle, location administration, staff assignments and settings.
-- [x] Check, unit tests, builds/environment checks and security/scope review.
-- [x] Push same branch; all required CI green on final exact head.
-- [x] Merge PR #282 with merge commit into development; verify main unchanged.
-- [x] Close #281/#250 and update #248, milestone #8 and roadmap/current state.
-
-Data/authorization: reuse trusted `schedule_periods.location_id`, existing RLS/grants and `private.guard_location_operational_write` with FOR SHARE. No history/schema model rewrite or client permission changes. UI unchanged; verify existing lifecycle states on WebKit. Risks: concurrent deactivation, direct-update bypass and generated-type drift. Tests: focused pgTAP, hosted synthetic rolled-back suites, true independent sessions, WebKit and exact-head CI. No Production access.
-
-Local verification complete: hosted DEV 72/72 migrations, 362 pgTAP assertions, actual JWT role matrix, races A–D, canonical types, WebKit 16/16, check/unit/build gates pass. Final corrected head 87e727cd808058da0ca9852dc1c7fbf5bce35854; required exact-head checks passed; merged #282 as c543856a767b9f55452bf5f1c26bf5449d2e624b; tracking and docs closed out. V2-002.005 and V2-002 COMPLETE. Main/Production untouched. Do not start V2-003.
+All code and unit/boundary tests are complete and green locally. Remaining: Playwright demo regressions, commit/push/PR, exact-head CI, then merge-or-handoff decision (see PLAN §10 and the owner-decision flag on Org Owner/GM without a location assignment). Do NOT start V2-003.002.
