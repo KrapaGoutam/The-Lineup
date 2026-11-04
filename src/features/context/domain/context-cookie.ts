@@ -1,11 +1,12 @@
 /**
- * V2-003.001 — Active-context cookie contract (READ-ONLY in this subfeature).
+ * V2-003.001 / V2-003.004 — Active-context cookie contract.
  *
  * The cookie stores an UNTRUSTED selection preference — never authority.
  * Anything parsed here must still be validated against authenticated database
- * facts by `resolveActiveContext`. Writing / renewing / clearing the cookie is
- * V2-003.004; `serializeActiveContextCookie` exists only so the wire format is
- * defined in exactly one place (and round-trip tested), not to set cookies.
+ * facts by `resolveActiveContext`. V2-003.004 adds the (server-only) writer in
+ * `data/context-cookie-writer.ts`; the wire format and the cookie attributes
+ * are defined here, in exactly one place, so every write / clear path shares
+ * them.
  *
  * Wire format (JSON, version 1):
  *   {"v":1,"o":"<organization uuid>","l":"<location uuid>"}
@@ -99,4 +100,94 @@ export function serializeActiveContextCookie(
     o: selection.organizationId,
     l: selection.locationId,
   });
+}
+
+// ── V2-003.004 cookie attributes (single source of truth) ───────────────────
+
+/**
+ * Preference lifetime: 7 days FIXED from the last verified selection (or
+ * verified deep-link reconciliation). It is deliberately not sliding: renewing
+ * it from unrelated requests would race with a concurrent selection and could
+ * resurrect a superseded preference. Expiry only costs the user a re-selection
+ * (or nothing, for a single-context user); it never affects authentication.
+ */
+export const ACTIVE_CONTEXT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+export interface ActiveContextCookieOptions {
+  readonly httpOnly: true;
+  readonly secure: boolean;
+  readonly sameSite: "lax";
+  readonly path: "/";
+  readonly maxAge: number;
+}
+
+/** No `domain` attribute on purpose: host-only, never shared with subdomains. */
+function baseOptions(
+  secure: boolean,
+): Omit<ActiveContextCookieOptions, "maxAge"> {
+  return { httpOnly: true, secure, sameSite: "lax", path: "/" };
+}
+
+function hostname(host: string | null | undefined): string {
+  const value = (host ?? "").trim().toLowerCase();
+  if (value.startsWith("[")) return value.slice(0, value.indexOf("]") + 1);
+  return value.split(":")[0] ?? "";
+}
+
+export function isLoopbackHost(host: string | null | undefined): boolean {
+  const name = hostname(host);
+  return name === "localhost" || name === "127.0.0.1" || name === "[::1]";
+}
+
+/**
+ * `Secure` is ALWAYS on for production traffic. The only exception is a
+ * LOOPBACK host (localhost / 127.0.0.1 / [::1]) that is not explicitly HTTPS
+ * (local `next start`, CI browser tests send no `x-forwarded-proto`): browsers
+ * such as WebKit refuse to store a `Secure` cookie there, and a loopback host
+ * can never be a real deployment (proxies always set the forwarded protocol
+ * and a real hostname). Any non-loopback host, and any HTTPS request, keeps
+ * the strict value. Development builds get `secure: false` so `next dev` over
+ * HTTP works. The exemption is derived from the request, not from a flag a
+ * deployment could leave switched on.
+ */
+export function shouldUseSecureCookie(input: {
+  readonly nodeEnv: string | undefined;
+  readonly host: string | null | undefined;
+  readonly forwardedProto: string | null | undefined;
+}): boolean {
+  if (input.nodeEnv !== "production") return false;
+  const proto = (input.forwardedProto ?? "")
+    .split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  if (isLoopbackHost(input.host) && proto !== "https") return false;
+  return true;
+}
+
+export function activeContextWriteOptions(
+  secure: boolean,
+): ActiveContextCookieOptions {
+  return {
+    ...baseOptions(secure),
+    maxAge: ACTIVE_CONTEXT_COOKIE_MAX_AGE_SECONDS,
+  };
+}
+
+/** Same scope/attributes as the write (otherwise the browser keeps the old one). */
+export function activeContextClearOptions(
+  secure: boolean,
+): ActiveContextCookieOptions {
+  return { ...baseOptions(secure), maxAge: 0 };
+}
+
+/** True when the parsed cookie names exactly this (organization, location). */
+export function cookieNamesPair(
+  cookie: ActiveContextCookieParseResult,
+  pair: ActiveContextCookieSelection,
+): boolean {
+  return (
+    cookie.status === "present" &&
+    cookie.selection.organizationId === pair.organizationId.toLowerCase() &&
+    cookie.selection.locationId === pair.locationId.toLowerCase()
+  );
 }

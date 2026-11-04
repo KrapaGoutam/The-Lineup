@@ -24,6 +24,7 @@ import {
   isValidContact,
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
+import { settleSignOut } from "@/lib/client-sign-out";
 import { demoAccounts as staticDemoAccounts } from "@/lib/demo-data";
 
 export type SignedInUser = {
@@ -188,6 +189,8 @@ export function LoginScreen({
     }
     setPending(true);
     try {
+      // V2-003.004: never let a delayed sign-out land after this sign-in.
+      await settleSignOut();
       const response = await fetch("/api/auth/passcode", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -279,6 +282,7 @@ export function LoginScreen({
 
     setPending(true);
     try {
+      await settleSignOut();
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "content-type": "application/json" },

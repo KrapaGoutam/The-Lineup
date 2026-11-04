@@ -312,3 +312,54 @@ test("Server Action POSTs carry the selected ?location= in Referer (follow-up wr
     expect(post.referer).toContain(`location=${ids.nasa}`);
   }
 });
+
+test("V2-003.004: the verified selection is persisted in an HttpOnly cookie, survives reload / new navigation, and sign-out clears it", async ({
+  page,
+  context,
+}) => {
+  const named = async () =>
+    (await context.cookies()).find((c) => c.name === "lineup_active_context");
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await open(page, multiCookies, `?location=${ids.nasa}`);
+  await expect(trigger(page)).toHaveAttribute("aria-label", /NASA/, {
+    timeout: 60_000,
+  });
+
+  // Written by the server after verification (reconciliation of the deep link).
+  await expect.poll(async () => (await named())?.httpOnly).toBe(true);
+  const stored = (await named())!;
+  expect(stored.sameSite).toBe("Lax");
+  expect(stored.path).toBe("/");
+  expect(stored.expires).toBeGreaterThan(Date.now() / 1000 + 6 * 24 * 3600);
+  if (BASE.startsWith("https://")) expect(stored.secure).toBe(true);
+  expect(JSON.parse(decodeURIComponent(stored.value))).toEqual({
+    v: 1,
+    o: ids.org,
+    l: ids.nasa,
+  });
+  // Not readable by client JavaScript.
+  expect(await page.evaluate(() => document.cookie)).not.toContain(
+    "lineup_active_context",
+  );
+
+  // The bare organization route (no ?location=) resolves from the cookie.
+  await page.goto(`/r/${slug}`);
+  await page.waitForSelector('body[data-hydrated="true"]');
+  await expect(trigger(page)).toHaveAttribute("aria-label", /NASA/, {
+    timeout: 60_000,
+  });
+
+  // A brand-new page in the same browser context keeps the preference.
+  const second = await context.newPage();
+  await second.goto(`/r/${slug}?tab=tasks`);
+  await second.waitForSelector('body[data-hydrated="true"]');
+  await expect(trigger(second)).toHaveAttribute("aria-label", /NASA/, {
+    timeout: 60_000,
+  });
+  await second.close();
+
+  // Sign-out expires the preference together with the session.
+  const response = await page.request.post("/api/auth/signout");
+  expect(response.status()).toBe(200);
+  expect(await named()).toBeUndefined();
+});

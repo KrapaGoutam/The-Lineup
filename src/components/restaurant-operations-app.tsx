@@ -24,7 +24,10 @@ import {
 } from "lucide-react";
 
 import { AppearanceSwitch } from "@/components/appearance-switch";
+import { requestSignOut } from "@/lib/client-sign-out";
 import { ContextScopeBoundary } from "@/features/context/components/context-scope-boundary";
+import { ContextReconcileGate } from "@/features/context/components/context-reconcile-gate";
+import type { ContextReconcileTarget } from "@/features/context/components/context-reconcile-gate";
 import { ContextSwitcher } from "@/features/context/components/context-switcher";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
@@ -579,6 +582,8 @@ type RestaurantOperationsAppProps = {
   activeContext?: (AvailableContextSummary & { selectedBy: string }) | null;
   availableContexts?: readonly AvailableContextSummary[];
   availableContextsFailed?: boolean;
+  /** V2-003.004: see `PageData.contextReconcile`. */
+  contextReconcile?: ContextReconcileTarget | null;
 };
 
 /**
@@ -620,10 +625,15 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
         locationId={props.activeContext?.locationId ?? "none"}
         extraKey={epoch}
       >
-        <RestaurantOperationsAppInner
-          {...props}
-          onAuthBoundary={() => setEpoch((current) => current + 1)}
-        />
+        <ContextReconcileGate
+          target={props.contextReconcile ?? null}
+          activeLocationId={props.activeContext?.locationId ?? null}
+        >
+          <RestaurantOperationsAppInner
+            {...props}
+            onAuthBoundary={() => setEpoch((current) => current + 1)}
+          />
+        </ContextReconcileGate>
       </ContextScopeBoundary>
       <ClientHydrationMarker />
     </Suspense>
@@ -643,7 +653,8 @@ function RestaurantOperationsAppInner({
   onAuthBoundary,
 }: RestaurantOperationsAppProps & { onAuthBoundary: () => void }) {
   const router = useRouter();
-  const { switchingTo, switchTo } = useContextSwitch();
+  const { switchingTo, switchTo, switchError, dismissSwitchError } =
+    useContextSwitch();
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   // Real mode: a successful passcode sign-in is only *pending* until the
   // Server Component re-renders with the authenticated person's real data.
@@ -1033,7 +1044,7 @@ function RestaurantOperationsAppInner({
    * depends on it finishing before the UI switches to the login screen.
    */
   function forceSignOut() {
-    if (!demoMode) void fetch("/api/auth/signout", { method: "POST" });
+    if (!demoMode) void requestSignOut();
     setUser(null);
     resetTab();
   }
@@ -1794,7 +1805,7 @@ function RestaurantOperationsAppInner({
   }
 
   async function signOut() {
-    if (!demoMode) await fetch("/api/auth/signout", { method: "POST" });
+    if (!demoMode) await requestSignOut();
     setUser(null);
     resetTab();
     // Bug fix: signing out always happens from inside this open menu --
@@ -2232,6 +2243,23 @@ function RestaurantOperationsAppInner({
             type="button"
             className="text-muted-foreground hover:text-foreground ml-3 text-xs underline"
             onClick={() => setActionError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {switchError ? (
+        <div
+          role="alert"
+          data-testid="context-switch-error"
+          className="border-destructive/30 bg-destructive/10 text-destructive mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 text-sm"
+        >
+          <span>{switchError}</span>
+          <button
+            type="button"
+            onClick={dismissSwitchError}
+            className="min-h-11 shrink-0 underline"
           >
             Dismiss
           </button>

@@ -22,6 +22,7 @@ import {
   createRequestFingerprint,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
 import { createClient } from "@/lib/supabase/server";
 
 type LoginBody = { restaurantSlug?: string; passcode?: string };
@@ -209,6 +210,16 @@ export async function POST(request: Request) {
       { error: "This account is not active." },
       { status: 403 },
     );
+  }
+
+  // V2-003.004: a fresh sign-in never inherits a previously saved workspace
+  // (shared devices): the person selects, or the single-context rule applies.
+  try {
+    await clearActiveContextCookie();
+  } catch (error) {
+    // Never turn an already-established sign-in into a failure; the cookie is
+    // only a preference and is re-validated on every request.
+    console.error("sign-in: could not clear the saved workspace", error);
   }
 
   return NextResponse.json({

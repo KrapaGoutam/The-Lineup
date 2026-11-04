@@ -7,45 +7,96 @@ import {
   listCurrentEligibleContexts,
   resolveCurrentActiveContext,
 } from "@/features/context/data/active-context";
-import { parseExplicitLocationSelection } from "@/features/context/domain/active-context";
+import { readActiveContextCookieValue } from "@/features/context/data/context-cookie-reader";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { parseActiveContextCookie } from "@/features/context/domain/context-cookie";
+import {
+  hintAgreesWithContext,
+  parseRequestWorkspaceHint,
+} from "@/features/context/domain/request-consistency";
+import type { RequestWorkspaceHint } from "@/features/context/domain/request-consistency";
 
 /**
- * LEGACY follow-up location helper for module server actions / follow-up
- * reads whose full location scoping belongs to V2-005.
+ * V2-003.004 — which location does a module Server Action / follow-up read
+ * operate on? (Legacy helper name; full module scoping is V2-005.)
  *
- * V2-003.003: no longer picks the oldest location. It returns a verified
- * `?location=` selection (Referer), else the caller's single canonical
- * eligible location in the organization, else null (ambiguous/none).
+ * The operational context is the SERVER-VERIFIED PERSISTED context, never the
+ * browser's `Referer`:
  *
- * The application-ENTRY data path (`loadPageData`) never calls this: it
- * resolves a verified context (V2-003.001) and passes that exact location
- * into every initial loader via `locationForLoader`.
+ *  1. Cookie present and well-formed → it must name THIS organization and
+ *     resolve, right now, through the canonical resolver (authenticated user,
+ *     active membership/assignment or Overall role, active, non-archived
+ *     location). A cookie for another organization, a stale/revoked pair or a
+ *     malformed value is a SAFE DENIAL (`null`) -- never a substitute location.
+ *  2. No cookie → the caller's single canonical eligible location in this
+ *     organization (V2-003.003); zero or several is ambiguous → `null`.
+ *  3. Consistency: the same-origin `Referer` (what the user is looking at) may
+ *     only make a request FAIL CLOSED when it names an explicit location that
+ *     differs from the verified one. It never selects a location and its
+ *     absence changes nothing, so a request with no `Referer` still resolves
+ *     from the persisted context.
+ *
+ * Time zone always comes from the verified location row.
+ *
+ * The application-ENTRY path (`loadPageData`) does not call this: it resolves
+ * a verified context once and passes the exact location to every initial
+ * loader through `locationForLoader`.
  */
 export async function getPrimaryLocation(organizationId: string) {
-  // V2-003.002: when the request comes from a page the user switched with
-  // `?location=`, follow-up reads/writes must use that SAME verified location
-  // (never a different branch than the header shows).
-  const selected = await selectedLocationForRequest(organizationId);
-  if (selected !== undefined) return selected;
+  const signals = await readRequestSignals();
 
-  // V2-003.003: with no verifiable explicit selection, the ONLY acceptable
-  // location is the caller's single server-verified eligible location in this
-  // organization (canonical resolver, same facts as the entry path). Zero or
-  // several eligible locations is ambiguous: fail closed (null) rather than
-  // picking the oldest/first-created branch. A missing `Referer` therefore can
-  // never redirect an action to a different location. V2-003.004 replaces
-  // this Referer dependency with persisted context.
+  const cookie = parseActiveContextCookie(signals.rawCookie);
+  if (cookie.status === "malformed") return null;
+
+  if (cookie.status === "present") {
+    // A persisted context for another organization can never operate this one.
+    if (cookie.selection.organizationId !== organizationId) return null;
+    const result = await resolveCurrentActiveContext({
+      routeSlug: null,
+      cookieValue: signals.rawCookie,
+    });
+    if (
+      result.status !== "resolved" ||
+      result.context.organizationId !== organizationId ||
+      result.context.locationId !== cookie.selection.locationId
+    ) {
+      return null;
+    }
+    if (!hintAgreesWithContext(signals.hint, result.context)) return null;
+    return {
+      id: result.context.locationId,
+      time_zone: result.context.timeZone,
+    };
+  }
+
+  // No persisted context: only a single, server-verified eligible location in
+  // THIS organization may be used (same facts + resolver as the entry path).
   const list = await listCurrentEligibleContexts();
   if (list.status !== "ok") return null;
   const inOrganization = list.contexts.filter(
     (context) => context.organizationId === organizationId,
   );
   if (inOrganization.length !== 1) return null;
-  return {
-    id: inOrganization[0].locationId,
-    time_zone: inOrganization[0].timeZone,
-  };
+  const sole = inOrganization[0];
+  if (!hintAgreesWithContext(signals.hint, sole)) return null;
+  return { id: sole.locationId, time_zone: sole.timeZone };
+}
+
+async function readRequestSignals(): Promise<{
+  rawCookie: string | null;
+  hint: RequestWorkspaceHint;
+}> {
+  const rawCookie = await readActiveContextCookieValue();
+  let referer: string | null = null;
+  let host: string | null = null;
+  try {
+    const requestHeaders = await headers();
+    referer = requestHeaders.get("referer");
+    host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  } catch (error) {
+    unstable_rethrow(error);
+  }
+  return { rawCookie, hint: parseRequestWorkspaceHint({ referer, host }) };
 }
 
 export type LoaderLocation = { id: string; time_zone: string };
@@ -69,68 +120,4 @@ export async function locationForLoader(
     return { id: scope.locationId, time_zone: scope.timeZone };
   }
   return getPrimaryLocation(organizationId);
-}
-
-/**
- * V2-003.002 safety boundary. Server Actions and client-triggered refetches are
- * POSTed from the page URL, so the browser's same-origin `Referer` carries the
- * user's temporary `?location=` choice. That value is an untrusted PREFERENCE:
- * it is verified here by the canonical context resolver (RLS-bound, assignment
- * and lifecycle checked) and used only when it resolves to the organization
- * being operated on.
- *
- * Returns:
- *  - `undefined` — the request carries no explicit selection (legacy path);
- *  - `null`      — an explicit selection exists but cannot be verified for this
- *                  organization: SAFE DENIAL, never a substitute location;
- *  - location    — the verified selected location.
- */
-async function selectedLocationForRequest(
-  organizationId: string,
-): Promise<LoaderLocation | null | undefined> {
-  let referer: string | null;
-  let host: string | null;
-  try {
-    const requestHeaders = await headers();
-    referer = requestHeaders.get("referer");
-    host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  } catch (error) {
-    unstable_rethrow(error);
-    return undefined;
-  }
-  if (!referer) return undefined;
-
-  let url: URL;
-  try {
-    url = new URL(referer);
-  } catch {
-    return undefined;
-  }
-  if (host && url.host !== host) return undefined;
-  const route = /^\/r\/([^/]+)\/?$/.exec(url.pathname);
-  if (!route) return undefined;
-
-  const values = url.searchParams.getAll("location");
-  if (values.length === 0) return undefined;
-  const explicitSelection = parseExplicitLocationSelection(
-    values.length === 1 ? values[0] : values,
-  );
-
-  let routeSlug: string;
-  try {
-    routeSlug = decodeURIComponent(route[1]);
-  } catch {
-    return null;
-  }
-  const result = await resolveCurrentActiveContext({
-    routeSlug,
-    explicitSelection,
-  });
-  if (
-    result.status !== "resolved" ||
-    result.context.organizationId !== organizationId
-  ) {
-    return null;
-  }
-  return { id: result.context.locationId, time_zone: result.context.timeZone };
 }

@@ -150,8 +150,9 @@ async function createTask(
   slug: string,
   title: string,
   referer: string | null,
+  cookie: string | null = null,
 ) {
-  as(key, { referer });
+  as(key, { referer, cookie });
   return runTaskCommandAction({
     restaurantSlug: slug,
     command: {
@@ -656,17 +657,39 @@ describe("NOREF no-Referer safety through the real Server Action", () => {
       expect(r.ok, ref).toBe(false);
       expect(await taskRows(t), ref).toHaveLength(0);
     }
-    // A valid explicit Referer still works for tom (two locations).
-    const t = marker("Dok");
-    const r = await createTask(
+    // V2-003.004: the Referer never SELECTS a location. tom (two locations)
+    // with a valid explicit Referer but no persisted context is ambiguous.
+    const tNoCookie = marker("Dnc");
+    const rNoCookie = await createTask(
       "tom",
       slugD,
-      t,
+      tNoCookie,
       `https://app.test/r/${slugD}?location=${L.D2}`,
     );
+    expect(rNoCookie.ok).toBe(false);
+    expect(await taskRows(tNoCookie)).toHaveLength(0);
+    // With the persisted (verified) context the action runs in exactly D2,
+    // with or without a matching Referer.
+    const persisted = serializeActiveContextCookie({
+      organizationId: orgD,
+      locationId: L.D2,
+    });
+    const t = marker("Dok");
+    const r = await createTask("tom", slugD, t, null, persisted);
     expect(r.ok).toBe(true);
     expect((await taskRows(t))[0]).toMatchObject({ location_id: L.D2 });
-    // Cross-origin Referer is ignored as a preference -> tom (ambiguous) still denied.
+    // A Referer naming a DIFFERENT location than the persisted one fails closed.
+    const tMismatch = marker("Dmm");
+    const rMismatch = await createTask(
+      "tom",
+      slugD,
+      tMismatch,
+      `https://app.test/r/${slugD}?location=${L.D1}`,
+      persisted,
+    );
+    expect(rMismatch.ok).toBe(false);
+    expect(await taskRows(tMismatch)).toHaveLength(0);
+    // Cross-origin Referer is ignored -> tom (ambiguous, no cookie) still denied.
     const t2 = marker("Dx");
     const r2 = await createTask(
       "tom",

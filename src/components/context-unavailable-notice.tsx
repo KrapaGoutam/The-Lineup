@@ -2,10 +2,11 @@
 
 import { RefreshCw, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { clearActiveContextAction } from "@/features/context/actions/context-actions";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { groupContextsByOrganization } from "@/features/context/domain/context-navigation";
@@ -29,7 +30,9 @@ export function ContextUnavailableNotice({
 }) {
   const router = useRouter();
   const [retrying, startRetry] = useTransition();
-  const { switchingTo, switchTo } = useContextSwitch();
+  const { switchingTo, switchTo, switchError } = useContextSwitch();
+  const [clearing, startClear] = useTransition();
+  const [clearFailed, setClearFailed] = useState(false);
 
   const copy =
     status === "selection_required"
@@ -103,6 +106,18 @@ export function ContextUnavailableNotice({
             </p>
           ) : null}
 
+          {switchError ? (
+            <p role="alert" className="text-destructive text-sm">
+              {switchError}
+            </p>
+          ) : null}
+
+          {clearFailed ? (
+            <p role="alert" className="text-destructive text-sm">
+              We couldn&apos;t clear the saved location. Please try again.
+            </p>
+          ) : null}
+
           {switchingTo ? (
             <p role="status" className="text-muted-foreground text-sm">
               Opening {switchingTo.organizationName} —{" "}
@@ -121,6 +136,33 @@ export function ContextUnavailableNotice({
             >
               <RefreshCw aria-hidden className="size-4" />
               {retrying ? "Checking…" : "Try again"}
+            </Button>
+          ) : null}
+
+          {status === "invalid_context" ? (
+            <Button
+              variant="outline"
+              className="min-h-11 self-start"
+              disabled={clearing || !!switchingTo}
+              onClick={() =>
+                startClear(async () => {
+                  setClearFailed(false);
+                  try {
+                    const result = await clearActiveContextAction();
+                    if (!result.ok) {
+                      setClearFailed(true);
+                      return;
+                    }
+                  } catch {
+                    setClearFailed(true);
+                    return;
+                  }
+                  router.refresh();
+                })
+              }
+              data-testid="context-clear-saved"
+            >
+              {clearing ? "Clearing…" : "Clear saved location"}
             </Button>
           ) : null}
         </CardContent>
