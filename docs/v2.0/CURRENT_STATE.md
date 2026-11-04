@@ -13,8 +13,8 @@ Target Branch:            development
 GitHub Milestone:         The Lineup V2.0 (Milestone #8)
 GitHub Parent Issue:      #248
 Feature Issue:            #250
-Subfeature Issue:         (see PR)
-PR:                       (see PR)
+Subfeature Issue:         #279
+PR:                       #280 (open, against development)
 Head SHA:                 (see PR)
 Migration:                NONE (reuses apply_location_assignment_changes + existing tables)
 DEV Migration Status:     N/A (no migration); hosted DEV NOT VERIFIED IN CLOUD

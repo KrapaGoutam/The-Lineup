@@ -1,7 +1,7 @@
 # Subfeature V2-002.004: Staff Assignment Management — Status
 
 Parent Feature: [V2-002: Organizations & Locations](../README.md)  
-Milestone: The Lineup V2.0 (#8) · Feature #250 · Program #248  
+Milestone: The Lineup V2.0 (#8) · Feature #250 · Program #248 · Issue #279 · PR #280  
 Status: **READY_FOR_CODEX_LOCAL_VALIDATION** (PR open; not merged)  
 Branch: `feature/v2.0-002.004-staff-assignment-management`  
 Integration Target: `development`

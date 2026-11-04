@@ -1,5 +1,7 @@
 # Subfeature V2-002.004: Staff Assignment Management — Evidence
 
+Issue: #279 · PR: #280 (open; not merged)
+
 ## Baseline
 
 - Starting `origin/development`: `4d78eba63ec846198bd3cd654d99221f3f8b7c71`
