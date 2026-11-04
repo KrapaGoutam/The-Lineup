@@ -3,7 +3,7 @@
 GitHub Issue: [#250](https://github.com/KrapaGoutam/The-Lineup/issues/250)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `IN_PROGRESS` (V2-002.004 complete; V2-002.005 next, not started)
+Status: COMPLETE (PR #282, merge c543856a767b9f55452bf5f1c26bf5449d2e624b)
 
 ---
 

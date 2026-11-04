@@ -3,32 +3,33 @@
 ```text
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
-Current Feature:          V2-002 — Organizations & Locations
-Current Subfeature:       V2-002.005 — Location Lifecycle Integrity (LOCAL_VERIFIED_AWAITING_CI_AND_MERGE)
-Environment:              Codex Local (verified DEV only)
-Branch:                   feature/v2.0-002.005-location-lifecycle-integrity
-Starting dev SHA:         6aa61760ca8bbe8a643fae8ca8c27958dbd31a69
-Starting main SHA:        5e5b7747693b6e81014eafdf299b87e56c3f033d
-Target Branch:            development
-GitHub Milestone:         The Lineup V2.0 (Milestone #8)
-GitHub Parent Issue:      #248
-Feature Issue:            #250
-Subfeature Issue:         #281
-Migration:                20261104020000 + 20261104164217 (applied to hosted DEV)
-DEV Migration Status:     SYNCHRONIZED 72/72; 362 pgTAP assertions pass
-Status:                   V2-002.005 LOCAL_VERIFIED_AWAITING_CI_AND_MERGE / V2-002 IN PROGRESS
-Blockers:                 Exact-head CI and merge (all local/hosted gates pass)
-Next Expected Subfeature: V2-003 — Active Organization / Location Context (do not start before V2-002.005 merges)
-Production Changes:       NONE
+Completed Feature:        V2-002 — Organizations & Locations (COMPLETE)
+Completed Subfeature:     V2-002.005 — Location Lifecycle Integrity (COMPLETE)
+Environment:              Codex Local; verified hosted DEV only
+Final PR HEAD:            87e727cd808058da0ca9852dc1c7fbf5bce35854
+PR #282 Merge SHA:        c543856a767b9f55452bf5f1c26bf5449d2e624b
+Integration Branch:       development
+Main SHA (unchanged):     5e5b7747693b6e81014eafdf299b87e56c3f033d
+GitHub Milestone:         The Lineup V2.0 (#8; remains open)
+GitHub Program:           #248 (open)
+Feature/Subfeature:       #250 / #281 (closed)
+DEV Migration Status:     SYNCHRONIZED 72/72
+Latest Migration:         20261104164217_location_schedule_publication_guard
+Hosted pgTAP:             362 assertions passed (0050–0061)
+Actual JWT Authorization: PASS (eight synthetic identities + anonymous)
+Concurrency:              PASS (A–D; both publication orderings)
+WebKit host-tablet:       PASS 16/16
+Canonical Types:          MATCH
+Exact-head CI:            application/browser-smoke/database/Vercel PASS
+Blockers:                 NONE
+Next Subfeature:          V2-003.001 Active Organization / Location Context Resolution
+Next Subfeature Status:   NOT STARTED
+Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
 
----
+V2-001 and V2-002 are complete. V2-002.005 reused the Cloud implementation, added the narrow database-authoritative schedule-publication guard, verified hosted DEV with synthetic fixtures and true independent sessions, reconciled canonical types, and passed the real iPad/WebKit gate before merging the same PR.
 
-## Operational Summary
+Evidence: [Location Lifecycle Integrity](features/002-organizations-locations/005-location-lifecycle-integrity/EVIDENCE.md). The resulting docs-only development integration SHA is recorded in GitHub tracking and the final report. Main and Production remain untouched.
 
-1. **Safety Baseline**: `origin/development` `4d78eba63ec846198bd3cd654d99221f3f8b7c71`, `origin/main` `5e5b7747693b6e81014eafdf299b87e56c3f033d`. V2-002.003 (PR #278) confirmed merged.
-2. **V2-002.004 Implementation (Cloud)**: staff roster reader, assignment server actions, location-centric Staff tab, employee-centric multi-location editor, demo-isolated source. Reuses the atomic RPC; no schema change.
-3. **Exact-head CI**: application, desktop browser-smoke, Database (including `0058_staff_roster_reader.test.sql`) and Vercel passed on `242ba18e78201ca299fb55554db96e7ec7de2e5f`.
-4. **Codex Local gates**: DEV migration applied and synchronized; six targeted transactional suites passed 149 assertions; Overall Owner/Manager non-member roster access, inactive/creator denial, cross-tenant denial and mixed-batch zero-partial-write atomicity verified; real WebKit `host-tablet` 12/12 passed serially.
-5. **Merge closeout**: PR #280 merged with merge commit `b08efeee933507dcd4d7e475f2ebab957d47453e`; `origin/development` matches it, `origin/main` is unchanged at `5e5b7747693b6e81014eafdf299b87e56c3f033d`, and Production was untouched. V2-002.005 is now implemented in Cloud and awaiting Codex Local validation (see its STATUS.md).
+Next recommended environment: Claude Code Cloud for the bounded V2-003.001 feature, with Codex Local for hosted DEV/WebKit validation if required. Do not infer approval for Production or main promotion. V2-003 was not started in this closeout.

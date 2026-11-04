@@ -4,7 +4,7 @@ Each item is one or more vertical pull requests. Create `docs/features/<slug>.md
 
 ## The Lineup V2.0
 
-Status: Planning
+Status: In progress. V2-001 and V2-002 COMPLETE; PR #282 closed V2-002.005. V2-003.001 Active Organization / Location Context Resolution is next / not started. Main and Production untouched.
 
 Scope:
 Multi-organization, multi-location, scoped roles, location configuration, Attendance V2 and Clock Kiosk.

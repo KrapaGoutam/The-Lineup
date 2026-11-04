@@ -2,14 +2,14 @@
 
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8) (Milestone #8)  
-Current Status: `PLANNING` (Phase 0)
+Current Status: `IN_PROGRESS` (V2-001 and V2-002 complete; V2-003.001 next / not started)
 
 ---
 
 ## 1. Implementation Order and Dependencies
 
 ```text
-PHASE 0 — Planning Foundation (Current)
+PHASE 0 — Planning Foundation (Complete)
        ↓
 V2-001 — Access & Role Foundation
        ↓
@@ -55,14 +55,14 @@ development → main (Production)
 ### V2-002 — Organizations & Locations
 
 - **GitHub Issue:** [#250](https://github.com/KrapaGoutam/The-Lineup/issues/250)
-- **Status:** In Progress (V2-002.004 complete; V2-002.005 next, not started)
+- **Status:** Complete (PR #282 merged as c543856a767b9f55452bf5f1c26bf5449d2e624b)
 - **Directory:** `docs/v2.0/features/002-organizations-locations/`
 - **Subfeatures:**
   - [x] **V2-002.001**: Organization Model (Tenant lifecycle, branding, slug management, and settings — Complete; PR #274)
   - [x] **V2-002.002**: Location Model (Branch entity, addresses, timezones, and operating metadata — Complete; PR #276)
   - [x] **V2-002.003**: Location Administration (Manager/Owner UI for provisioning and configuring branches — Complete; Issue #277)
   - [x] **V2-002.004**: Staff Assignment Management (Complete; PR #280 merged as `b08efeee`)
-  - [ ] **V2-002.005**: Location Lifecycle Integrity (Safe deactivation, archive rules, and operational cascade protection)
+  - [x] **V2-002.005**: Location Lifecycle Integrity (Complete; PR #282; hosted DEV, actual JWT, concurrency, WebKit and exact-head CI verified)
 
 ### V2-003 — Active Organization / Location Context
 

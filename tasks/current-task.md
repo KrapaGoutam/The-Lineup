@@ -18,9 +18,9 @@ Environment: Codex Local closeout (2026-11-04); hosted DEV only
 - [x] format:check, lint, typecheck, `next build --webpack`, check:local-paths
 - [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE, CURRENT_STATE
 - [x] Issue #281 created under #250 (milestone #8)
-- [ ] Commit, push, open PR into `development`; exact-head CI green
-- [ ] **Codex Local**: hosted DEV migration + real-DB verification + WebKit tablet + `supabase gen types` diff check
-- [ ] Merge commit into `development` (only after hosted DEV verification)
+- [x] Commit, push, open PR into `development`; exact-head CI green
+- [x] **Codex Local**: hosted DEV migration + real-DB verification + WebKit tablet + `supabase gen types` diff check
+- [x] Merge commit into `development` (only after hosted DEV verification)
 
 ## Current State & Next Step
 
@@ -35,10 +35,10 @@ Environment: Codex Local closeout (2026-11-04); hosted DEV only
 - [x] Generate canonical DEV types to temporary file and reconcile.
 - [x] Actual WebKit `host-tablet`: lifecycle, location administration, staff assignments and settings.
 - [x] Check, unit tests, builds/environment checks and security/scope review.
-- [ ] Push same branch; all required CI green on final exact head.
-- [ ] Merge PR #282 with merge commit into development; verify main unchanged.
-- [ ] Close #281/#250 and update #248, milestone #8 and roadmap/current state.
+- [x] Push same branch; all required CI green on final exact head.
+- [x] Merge PR #282 with merge commit into development; verify main unchanged.
+- [x] Close #281/#250 and update #248, milestone #8 and roadmap/current state.
 
 Data/authorization: reuse trusted `schedule_periods.location_id`, existing RLS/grants and `private.guard_location_operational_write` with FOR SHARE. No history/schema model rewrite or client permission changes. UI unchanged; verify existing lifecycle states on WebKit. Risks: concurrent deactivation, direct-update bypass and generated-type drift. Tests: focused pgTAP, hosted synthetic rolled-back suites, true independent sessions, WebKit and exact-head CI. No Production access.
 
-Local verification complete: hosted DEV 72/72 migrations, 362 pgTAP assertions, actual JWT role matrix, races A–D, canonical types, WebKit 16/16, check/unit/build gates pass. Next: commit/push correction on same PR branch, verify required checks on exact final HEAD, then merge #282 by merge commit and close tracking. Main/Production untouched. Do not start V2-003.
+Local verification complete: hosted DEV 72/72 migrations, 362 pgTAP assertions, actual JWT role matrix, races A–D, canonical types, WebKit 16/16, check/unit/build gates pass. Final corrected head 87e727cd808058da0ca9852dc1c7fbf5bce35854; required exact-head checks passed; merged #282 as c543856a767b9f55452bf5f1c26bf5449d2e624b; tracking and docs closed out. V2-002.005 and V2-002 COMPLETE. Main/Production untouched. Do not start V2-003.
