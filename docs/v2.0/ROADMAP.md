@@ -41,7 +41,7 @@ development → main (Production)
 ### V2-001 — Access & Role Foundation
 
 - **GitHub Issue:** [#249](https://github.com/KrapaGoutam/The-Lineup/issues/249)
-- **Status:** In Progress (V2-001.006 active)
+- **Status:** Complete (PR #272 Merged)
 - **Directory:** `docs/v2.0/features/001-access-foundation/`
 - **Subfeatures:**
   - [x] **V2-001.001**: Overall Roles (PR #260 Merged; hosted DEV migration verified)
@@ -49,16 +49,16 @@ development → main (Production)
   - [x] **V2-001.003**: Location Access (PR #264 Merged; hosted DEV migration verified)
   - [x] **V2-001.004**: Per-Location Roles (PR #266 Merged; hosted DEV migration verified)
   - [x] **V2-001.005**: Multi-Location / Multi-Role Assignment (PR #268 Merged; hosted DEV migration verified)
-  - [ ] **V2-001.006**: Canonical Authorization Resolver (#269 — Unified pure resolver calculating effective capability union; In Progress)
-  - [ ] **V2-001.007**: RLS / Server Security Hardening (Eliminate #106 creator bypass from `private.has_org_role`, enforce active memberships)
+  - [x] **V2-001.006**: Canonical Authorization Resolver (PR #270 Merged)
+  - [x] **V2-001.007**: RLS / Server Security Hardening (PR #272 Merged; hosted DEV migration verified; Issue #106 closed)
 
 ### V2-002 — Organizations & Locations
 
 - **GitHub Issue:** [#250](https://github.com/KrapaGoutam/The-Lineup/issues/250)
-- **Status:** Planned
+- **Status:** In Progress (V2-002.001 active)
 - **Directory:** `docs/v2.0/features/002-organizations-locations/`
 - **Subfeatures:**
-  - [ ] **V2-002.001**: Organization Model (Tenant lifecycle, branding, slug management, and settings)
+  - [/] **V2-002.001**: Organization Model (Tenant lifecycle, branding, slug management, and settings — In Progress; Issue #273)
   - [ ] **V2-002.002**: Location Model (Location entity, addresses, timezones, and operating metadata)
   - [ ] **V2-002.003**: Location Administration (Manager/Owner UI for provisioning and configuring branches)
   - [ ] **V2-002.004**: Staff Assignment Management (Assigning staff to locations, designating roles, and revoking access)
