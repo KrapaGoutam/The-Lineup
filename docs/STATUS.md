@@ -2,8 +2,7 @@
 
 ## The Lineup V2.0
 
-The Lineup V2.0 planning initialized.
-Implementation has not started.
+The Lineup V2.0 implementation is in progress. V2-001 is complete; V2-002.004 Staff Assignment Management is complete via PR #280 (merge `b08efeee`) after hosted DEV, authorization/atomicity, WebKit/iPad, and exact-head CI verification. V2-002.005 Location Lifecycle Integrity is next and has not started.
 Canonical state: `docs/v2.0/CURRENT_STATE.md`
 
 ## Recipes V1 — Production preflight preparation (2026-10-29)

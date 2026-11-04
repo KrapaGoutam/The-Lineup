@@ -3,7 +3,7 @@
 Canonical docs: `docs/v2.0/features/002-organizations-locations/004-staff-assignment-management/`
 Parent Feature: Issue #250 · Program: Issue #248 · Milestone #8
 Branch: `feature/v2.0-002.004-staff-assignment-management` (from `origin/development` `4d78eba63ec846198bd3cd654d99221f3f8b7c71`)
-Environment: Claude Code Cloud
+Environment: Codex Local (Windows)
 
 ## Implementation Checklist
 
@@ -16,10 +16,10 @@ Environment: Claude Code Cloud
 - [x] format:check, lint, typecheck, `npm test`, `next build --webpack`, check:local-paths
 - [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE, CURRENT_STATE
 - [x] Commit, push, open PR into `development`
-- [ ] Exact-head CI green (see PR)
-- [ ] **Codex Local**: pgTAP, hosted DEV integration, Overall-admin roster RLS check, WebKit tablet run
-- [ ] Merge commit into `development` (only after all gates)
+- [x] Exact-head CI green on `242ba18e78201ca299fb55554db96e7ec7de2e5f`
+- [x] **Codex Local**: hosted DEV migration + 149 targeted pgTAP assertions, Overall-admin roster RLS, atomicity/tenant isolation, WebKit tablet 12/12
+- [x] Merge commit into `development`: `b08efeee933507dcd4d7e475f2ebab957d47453e`
 
 ## Current State & Next Step
 
-Cloud work complete; state is `READY_FOR_CODEX_LOCAL_VALIDATION`. Next step: Codex Local follows the handoff in `EVIDENCE.md`. Do not start V2-002.005.
+V2-002.004 is complete. PR #280 merged into `development` at `b08efeee933507dcd4d7e475f2ebab957d47453e`; hosted DEV and all required gates are verified. V2-002 remains `IN_PROGRESS`; V2-002.005 is next but was not started in this closeout.

@@ -1,6 +1,6 @@
 # Subfeature V2-002.004: Staff Assignment Management — Evidence
 
-Issue: #279 · PR: #280 (open; not merged)
+Issue: #279 (closed) · PR: #280 (merged)
 
 ## Baseline
 
@@ -79,3 +79,17 @@ Unfinished DEV gate: PENDING_CODEX_LOCAL
 4. Authenticated checks with synthetic fixtures: Overall Owner/Manager without membership lists the roster and assigns; Org GM does the same in own org and is denied in another; Overall Assistant Manager denied; mixed-org batch leaves zero partial writes.
 5. `npx playwright install --with-deps webkit` locally, then run the `host-tablet` project for `staff-assignment-management`, `location-administration` and `settings` specs.
 6. Fix any issue on the same branch, re-run exact-head CI, then merge PR #280 with a **merge commit** into `development` only.
+
+## Codex Local validation (2026-11-04)
+
+- Source/checkout/final PR head before closeout docs: `242ba18e78201ca299fb55554db96e7ec7de2e5f` (the only commit after `fcb177d` was docs-only).
+- DEV identity was verified as `opmujepkemwcdxxorhfd`; the Production database `ftadewtkjlaotfdvtjcv` was not queried or mutated.
+- `supabase migration list --linked` and `supabase db push --dry-run --linked` showed exactly one pending migration: `20261104010000_staff_roster_reader.sql`.
+- The migration was applied to DEV and the follow-up migration list showed local/remote synchronization through `20261104010000`.
+- Linked type generation confirmed the hand-edited `list_organization_staff` signature matches DEV. The generator added only its version-header metadata after formatting; that unrelated generator drift was not retained.
+- Six existing synthetic, transactional database suites were executed against hosted DEV and rolled back: `0051`, `0052`, `0053`, `0054`, `0055`, `0058`. Final planned assertions were 22 + 24 + 24 + 26 + 28 + 25 = **149 passed**.
+- Coverage includes Overall Owner/Manager without org membership, Org Owner/GM, ordinary/foreign/inactive/revoked users, invalid org, safe roster fields, assign/update/deactivate/reactivate, multi-location save, duplicate prevention, no sibling-branch grants, creator-bypass regression, and mixed-authority batch atomicity with zero partial writes.
+- The Supabase security advisor reports the expected generic warning for authenticated-callable `SECURITY DEFINER` RPCs. For this function it is intentional and mitigated by `auth.uid()`, explicit in-function authority checks, authenticated-only execute grant, empty search path, narrow return fields, and the dedicated authorization tests.
+- WebKit/iPad: the first 12-worker run passed 11/12; one test timed out during initial `page.goto` before authentication. The isolated rerun passed, then the complete three-spec gate passed **12/12 serially** on the real `host-tablet` WebKit project in 1.4 minutes. Playwright captured screenshots for each passing scenario under ignored `test-results/`.
+- Exact-head CI on `242ba18e`: application pass, browser-smoke pass, Database pass (log explicitly shows `0058_staff_roster_reader.test.sql ... ok` and `Result: PASS`), Vercel pass.
+- Merge closeout: PR #280 merged into `development` at `b08efeee933507dcd4d7e475f2ebab957d47453e` on 2026-11-04. Post-merge fetch verified `origin/development` equals the merge SHA and `origin/main` remains `5e5b7747693b6e81014eafdf299b87e56c3f033d`. Production was untouched.
