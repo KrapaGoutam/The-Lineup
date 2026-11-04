@@ -7,6 +7,11 @@ export type Json =
   | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.18";
+  };
   graphql_public: {
     Tables: {
       [_ in never]: never;
@@ -5282,6 +5287,7 @@ export type Database = {
         Returns: {
           active: boolean;
           address: Json;
+          archived_at: string | null;
           closing_local: string;
           cover_weight: number;
           created_at: string;
@@ -5454,7 +5460,26 @@ export type Database = {
           p_location_id: string;
           p_reason: string;
         };
-        Returns: Database["public"]["Tables"]["locations"]["Row"];
+        Returns: {
+          active: boolean;
+          address: Json;
+          archived_at: string | null;
+          closing_local: string;
+          cover_weight: number;
+          created_at: string;
+          id: string;
+          name: string;
+          opening_local: string;
+          organization_id: string;
+          time_zone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "locations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       unconfirm_payroll_payment: {
         Args: { p_payment_id: number; p_reason: string };

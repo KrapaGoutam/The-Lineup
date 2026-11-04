@@ -4,8 +4,8 @@
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
 Current Feature:          V2-002 — Organizations & Locations
-Current Subfeature:       V2-002.005 — Location Lifecycle Integrity (READY_FOR_CODEX_LOCAL_VALIDATION)
-Environment:              Claude Code Cloud (no Supabase credentials)
+Current Subfeature:       V2-002.005 — Location Lifecycle Integrity (LOCAL_VERIFIED_AWAITING_CI_AND_MERGE)
+Environment:              Codex Local (verified DEV only)
 Branch:                   feature/v2.0-002.005-location-lifecycle-integrity
 Starting dev SHA:         6aa61760ca8bbe8a643fae8ca8c27958dbd31a69
 Starting main SHA:        5e5b7747693b6e81014eafdf299b87e56c3f033d
@@ -14,10 +14,10 @@ GitHub Milestone:         The Lineup V2.0 (Milestone #8)
 GitHub Parent Issue:      #248
 Feature Issue:            #250
 Subfeature Issue:         #281
-Migration:                20261104020000_location_lifecycle_integrity.sql (NOT yet applied to hosted DEV)
-DEV Migration Status:     PENDING_CODEX_LOCAL
-Status:                   V2-002.005 READY_FOR_CODEX_LOCAL_VALIDATION / V2-002 IN PROGRESS
-Blockers:                 Hosted DEV verification + WebKit tablet run (Codex Local)
+Migration:                20261104020000 + 20261104164217 (applied to hosted DEV)
+DEV Migration Status:     SYNCHRONIZED 72/72; 362 pgTAP assertions pass
+Status:                   V2-002.005 LOCAL_VERIFIED_AWAITING_CI_AND_MERGE / V2-002 IN PROGRESS
+Blockers:                 Exact-head CI and merge (all local/hosted gates pass)
 Next Expected Subfeature: V2-003 — Active Organization / Location Context (do not start before V2-002.005 merges)
 Production Changes:       NONE
 Main Branch Merge:        NONE

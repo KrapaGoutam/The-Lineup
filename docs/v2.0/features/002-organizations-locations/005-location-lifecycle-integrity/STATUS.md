@@ -1,41 +1,19 @@
 # Subfeature V2-002.005: Location Lifecycle Integrity — Status
 
-Parent Feature: [V2-002: Organizations & Locations](../README.md)
-Milestone: The Lineup V2.0 (#8) · Feature #250 · Program #248 · Issue #281
-Status: **READY_FOR_CODEX_LOCAL_VALIDATION** (not COMPLETE — hosted DEV verification and merge are pending)
-Branch: `feature/v2.0-002.005-location-lifecycle-integrity` · Integration target: `development`
-Starting `origin/development`: `6aa61760ca8bbe8a643fae8ca8c27958dbd31a69` · `origin/main`: `5e5b7747693b6e81014eafdf299b87e56c3f033d` (untouched)
-Migration: `supabase/migrations/20261104020000_location_lifecycle_integrity.sql`
+Parent Feature: [V2-002](../README.md) · Program #248 · Feature #250 · Issue #281 · Milestone #8
+Status: **LOCAL_VERIFIED_AWAITING_EXACT_HEAD_CI_AND_MERGE**
+PR: [#282](https://github.com/KrapaGoutam/The-Lineup/pull/282)
+Branch: feature/v2.0-002.005-location-lifecycle-integrity · target: development
 
-## Deliverables
+- Cloud source and fetched local HEAD: db56889ff7a5f791d14201e8ebd143c2e5dc9d8c.
+- DEV identity verified: the-lineup-dev, opmujepkemwcdxxorhfd. Production not contacted.
+- Approved pending set dry-run then applied: 20261104020000_location_lifecycle_integrity.sql; 20261104164217_location_schedule_publication_guard.sql. Ledger synchronized 72/72.
+- Hosted rolled-back pgTAP 0050–0061: **362 assertions passed**, including lifecycle 96, publication 18, preservation/guard matrix 22.
+- Actual Auth JWT/PostgREST: eight synthetic identities; all four allowed authorities pass, four denied authorities and anonymous rejected. State validation, audit actor/atomicity, publication and canonical session-creation guards pass. Zero synthetic DB/Auth residue.
+- Actual independent-session races A–D pass, including both publication orderings; observed distinct backend PIDs and transactionid lock waits.
+- Canonical linked types reconciled; missing update_location.archived_at fixed; generator return/version metadata retained.
+- WebKit host-tablet: **16/16** across lifecycle, location administration, staff assignment management and settings. Screenshots/traces in ignored test-results.
+- npm run check, full Vitest **2,617 passed / 7 existing skips**, local paths, DEV environment check, demo and DEV-pinned non-demo webpack builds, output scan pass.
+- Security and scope review complete: existing RLS/grants unchanged; empty search paths retained; no new dependency; financial/history snapshots unchanged. Exact-head CI and merge are pending.
 
-| Deliverable                                                      | Status              | Notes                                                          |
-| ---------------------------------------------------------------- | ------------------- | -------------------------------------------------------------- |
-| Pre-flight (dev/main SHAs, PR #280 merged)                       | Complete            |                                                                |
-| Lifecycle model (`archived_at` + CHECK, `active` preserved)      | Complete            | PLAN §2                                                        |
-| Audit table (append-only, RLS read, no client write)             | Complete            |                                                                |
-| Transition RPC (atomic, row-locked, expected-state, blockers)    | Complete            | `LC001/2/3`                                                    |
-| Readiness reader                                                 | Complete            | shares blocker logic with the RPC                              |
-| Direct-update bypass guard                                       | Complete            | DB-012                                                         |
-| Hard-delete protection                                           | Complete            | DB-015                                                         |
-| Operational write guards (12 tables + assignments)               | Complete            | PLAN §7                                                        |
-| Domain / data / actions                                          | Complete            |                                                                |
-| Administration UI + demo isolation                               | Complete            |                                                                |
-| pgTAP 0059                                                       | Complete            | 96 assertions; also run locally on PostgreSQL 16, see EVIDENCE |
-| Vitest                                                           | Complete            | 192 files / 2,617 passed, 7 skipped (pre-existing)             |
-| Playwright desktop + mobile (mocked demo)                        | Complete            |                                                                |
-| Playwright WebKit `host-tablet`                                  | PENDING_CODEX_LOCAL | WebKit download blocked in Cloud                               |
-| Format / lint / typecheck / `next build --webpack` / local paths | Complete            |                                                                |
-| Isolated database CI (`migrations-and-policies`)                 | See PR checks       | exact-head result is reported in the PR and the Cloud report   |
-| Hosted DEV migration + real-database verification                | PENDING_CODEX_LOCAL | `opmujepkemwcdxxorhfd` only                                    |
-| Merge into `development`                                         | NOT DONE            | merge commit only, after hosted DEV verification               |
-
-## Hosted DEV checklist (Codex Local)
-
-1. Fetch the exact PR head; verify DEV project ref `opmujepkemwcdxxorhfd` (never `ftadewtkjlaotfdvtjcv`).
-2. Pending-migration set → dry run → apply `20261104020000`; confirm ledger sync.
-3. Re-run pgTAP `0050`–`0059` in rolled-back transactions on DEV.
-4. Synthetic-fixture checks only (never a real location): deactivate / blocker rejection / audit persistence / invalid transition / reactivate / archive / restore; hard-delete denial; cross-tenant denial; operational guards at inactive + archived; history preserved; sibling unaffected.
-5. Real concurrency: two sessions, transition vs. session insert, and transition vs. transition.
-6. `supabase gen types` must produce no diff against the hand-edited `database.generated.ts`.
-7. WebKit `host-tablet` project; exact-head CI; then `gh pr merge --merge`.
+See [EVIDENCE.md](EVIDENCE.md). Only merge PR #282 by merge commit into development after every required check is green on its new final head. Main baseline remains 5e5b7747693b6e81014eafdf299b87e56c3f033d. Do not start V2-003.
