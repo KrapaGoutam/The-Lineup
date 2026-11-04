@@ -15,6 +15,7 @@ const log = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: null } }) },
     from: (table: string) => {
       log.tables.push(table);
       const builder: Record<string, unknown> = {};

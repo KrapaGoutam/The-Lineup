@@ -1,7 +1,7 @@
 # Subfeature V2-003.001: Active Organization / Location Context Resolution — Status
 
 Parent Feature: [V2-003](../README.md) · Program #248 · Feature #251 · Issue #283 · Milestone #8
-Status: **IN REVIEW** (PR pending; see EVIDENCE.md)
+Status: **VERIFIED — hosted DEV 15/15, merged via PR #284** (see EVIDENCE.md)
 Branch: feature/v2.0-003.001-context-resolution · target: development
 Base: `development` cacdd7c9dc5bebdd4434c779f7d146ca4ab4230e · `main` 5e5b7747693b6e81014eafdf299b87e56c3f033d (untouched) · Production not contacted.
 

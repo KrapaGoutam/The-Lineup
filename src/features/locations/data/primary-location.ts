@@ -19,13 +19,40 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function getPrimaryLocation(organizationId: string) {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("locations")
-    .select("id, time_zone")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const eligible = () =>
+    supabase
+      .from("locations")
+      .select("id, time_zone")
+      .eq("organization_id", organizationId)
+      .eq("active", true)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+  // Never pick an unassigned location for a caller who has assignments in this
+  // organization: restrict to their own active assignments, and fail closed
+  // (null) when none of them is an active, un-archived location.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { data: assigned, error } = await supabase
+      .from("location_memberships")
+      .select("location_id, locations!inner(organization_id)")
+      .eq("profile_id", user.id)
+      .eq("active", true)
+      .eq("locations.organization_id", organizationId);
+    if (error) return null;
+    const assignedIds = (assigned ?? []).map((row) => row.location_id);
+    if (assignedIds.length > 0) {
+      const { data } = await eligible().in("id", assignedIds).maybeSingle();
+      return data;
+    }
+  }
+
+  // No assignments (Overall roles, legacy org-level members): oldest
+  // active, un-archived location, unchanged otherwise.
+  const { data } = await eligible().maybeSingle();
   return data;
 }
 
