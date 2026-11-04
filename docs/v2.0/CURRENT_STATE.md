@@ -22,7 +22,7 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-003.002 Organization / Location Switcher
+Active Subfeature:        V2-003.003 Single-Context Auto Resolution (not started)
 Active Subfeature Status: IMPLEMENTED — PR open into development; READY_FOR_CLAUDE_LOCAL_VALIDATION (hosted DEV real-JWT check of the new `?location=` input pending)
 Previous Subfeature:      V2-003.001 Context Resolution — COMPLETE (PR #284 merged, development 5333a526)
 Next Subfeature:          V2-003.003 Single-Context Auto Resolution (NOT STARTED)
@@ -40,6 +40,6 @@ Next recommended environment: Claude Code Cloud for the bounded V2-003.001 featu
 
 Branch `feature/v2.0-003.001-context-resolution` from `development` `cacdd7c9dc5bebdd4434c779f7d146ca4ab4230e`; no migration. Implements the server-authoritative active context (resolved / selection_required / unauthenticated / no_access / invalid_context / error), read-only cookie preference, route-over-cookie precedence, and verified-location initial loaders. Deferred: .002 switcher, .003 auto-selection workflow, .004 cookie persistence, .005 cross-tab safety, V2-005 module scoping. V2-003 is not complete. See [001-context-resolution/STATUS.md](features/003-active-context/001-context-resolution/STATUS.md).
 
-## V2-003.002 (implemented; PR open, hosted DEV validation pending)
+## V2-003.002 (COMPLETE — PR #286 merged, development 3c83535)
 
-Branch `feature/v2.0-003.002-org-location-switcher` from `development` `5333a5267d06e438877ed222e30b9910d90399ad`; no migration. Adds the header organization/location switcher, the server-verified temporary `?location=<uuid>` selection (no cookie writes), a reusable `listCurrentEligibleContexts()` candidate loader, interactive selection-required/invalid-context recovery, and a client-state boundary keyed by verified profile + organization + location. Open dependencies: V2-005 location-scoped RLS (some operational tables are organization-scoped), V2-008 assignment backfill, and write-path location scoping (see its STATUS.md). See [002-org-location-switcher/STATUS.md](features/003-active-context/002-org-location-switcher/STATUS.md).
+Branch `feature/v2.0-003.002-org-location-switcher` from `development` `5333a5267d06e438877ed222e30b9910d90399ad`; no migration. Adds the header organization/location switcher, the server-verified temporary `?location=<uuid>` selection (no cookie writes), a reusable `listCurrentEligibleContexts()` candidate loader, interactive selection-required/invalid-context recovery, and a client-state boundary keyed by verified profile + organization + location. Open dependencies: V2-005 location-scoped RLS (some operational tables are organization-scoped), V2-008 assignment backfill, client-supplied `locationId` binding and the no-Referer fallback until V2-003.004. Follow-up reads/actions now follow the verified selected location (fixed in PR #286); hosted DEV 16/16, browser 10/10 (see its STATUS.md). See [002-org-location-switcher/STATUS.md](features/003-active-context/002-org-location-switcher/STATUS.md).
