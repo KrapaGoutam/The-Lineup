@@ -18,7 +18,7 @@ PR:                       #280 (open, against development)
 Head SHA:                 (see PR)
 Migration:                20261104010000_staff_roster_reader.sql (additive, read-only RPC)
 DEV Migration Status:     NOT APPLIED to hosted DEV (PENDING_CODEX_LOCAL)
-CI Status:                see PR
+CI Status:                green on fcb177d (application, browser-smoke, Database)
 Status:                   IN PROGRESS / PR OPEN / AWAITING LOCAL VERIFICATION
 Blockers:                 pgTAP + hosted DEV verification require Codex Local
 Next Expected Subfeature: V2-002.005 — Location Lifecycle Integrity

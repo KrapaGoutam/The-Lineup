@@ -52,3 +52,30 @@ Closeout added ONE additive forward-only migration, `20261104010000_staff_roster
 - WebKit: `npx playwright install --with-deps webkit` fails in Cloud — download of `webkit-ubuntu-24.04.zip` from `playwright.download.prss.microsoft.com` is rejected with HTTP 403 by the environment network allowlist. No workaround attempted. iPad/WebKit project: **NOT RUN** (retained for Codex Local); Chromium 1024×768 tablet coverage unchanged.
 - Hosted DEV: no approved DEV-only workflow or credentials exist in Cloud (`database.yml` only deploys to production on push to `main`, which is not touched). **PENDING_CODEX_LOCAL**.
 - Cloud gates after the fix: `git diff --check`, format, lint, typecheck clean; `npm test` 188 files / 2,555 passed / 7 skipped; `next build --webpack` compiled; `check:local-paths` ok; `check-nonprod-env --scan .next` passed.
+
+### Database workflow (isolated CI Supabase — NOT hosted DEV)
+
+- Verified commit: `fcb177d07c456d62537df9466b63210be8384da2`
+- Run: https://github.com/KrapaGoutam/The-Lineup/actions/runs/41848841678 (`Database` / `migrations-and-policies`: **success**; `deploy-migrations`: skipped, as designed for non-`main` events)
+- Steps: `supabase start` ✓, `reset` (all migrations incl. `20261104010000`) ✓, `test` ✓ — the log shows `0058_staff_roster_reader.test.sql` executed and `supabase test succeeded`. The per-assertion summary line is not in the retained log tail; Codex Local should re-run to record counts.
+- Application CI for the same commit: run https://github.com/KrapaGoutam/The-Lineup/actions/runs/41848841677 (`application`, `browser-smoke`): **success**.
+- This validates the migration and policies on an ephemeral database only; it is not evidence about hosted DEV.
+
+### Codex Local continuation (short)
+
+```text
+Repository: KrapaGoutam/The-Lineup
+PR: #280   Branch: feature/v2.0-002.004-staff-assignment-management
+Verified code head: fcb177d07c456d62537df9466b63210be8384da2 (docs-only commits may follow; confirm `git log origin/<branch>`)
+Cloud tests: Vitest 188 files / 2,555 passed / 7 skipped; format, lint, typecheck, build, local-paths, nonprod-env scan green; Playwright desktop (CI) + mobile + 1024x768 Chromium green
+Database CI: success (run 41848841678), includes new pgTAP 0058
+WebKit: NOT RUN — playwright.download.prss.microsoft.com blocked (HTTP 403) in Cloud
+Unfinished DEV gate: PENDING_CODEX_LOCAL
+```
+
+1. `git fetch origin --prune`; check out the existing PR branch in an isolated worktree (do not re-branch from `development`).
+2. Map `LINEUP_SUPABASE_ACCESS_TOKEN` → `SUPABASE_ACCESS_TOKEN` for DEV-only commands; verify project ref `opmujepkemwcdxxorhfd`; never contact `ftadewtkjlaotfdvtjcv`.
+3. Apply migration `20261104010000_staff_roster_reader.sql` to DEV; confirm `supabase gen types` produces no diff against the hand-edited `list_organization_staff` entry in `src/types/database.generated.ts`.
+4. Authenticated checks with synthetic fixtures: Overall Owner/Manager without membership lists the roster and assigns; Org GM does the same in own org and is denied in another; Overall Assistant Manager denied; mixed-org batch leaves zero partial writes.
+5. `npx playwright install --with-deps webkit` locally, then run the `host-tablet` project for `staff-assignment-management`, `location-administration` and `settings` specs.
+6. Fix any issue on the same branch, re-run exact-head CI, then merge PR #280 with a **merge commit** into `development` only.
