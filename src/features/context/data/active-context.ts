@@ -16,7 +16,13 @@ import type {
   ContextOrganizationFact,
   ContextResolutionResult,
 } from "@/features/context/domain/active-context";
+import type {
+  AvailableContextSummary,
+  ExplicitLocationSelection,
+} from "@/features/context/domain/active-context";
 import {
+  listEligibleContexts,
+  NO_EXPLICIT_SELECTION,
   normalizeRouteSlug,
   resolveActiveContext,
 } from "@/features/context/domain/active-context";
@@ -51,6 +57,11 @@ export interface ResolveActiveContextOptions {
    * `null` → explicitly no cookie (used by tests / non-request callers).
    */
   readonly cookieValue?: string | null;
+  /**
+   * V2-003.002: untrusted `?location=` selection, validated in the pure
+   * resolver. When present it supersedes the cookie for this request.
+   */
+  readonly explicitSelection?: ExplicitLocationSelection;
   readonly client?: SupabaseClient<Database>;
 }
 
@@ -194,6 +205,95 @@ async function loadLocationAssignments(
   return assignments;
 }
 
+type AuthOutcome =
+  | { readonly ok: true; readonly profileId: string }
+  | { readonly ok: false; readonly result: ContextResolutionResult };
+
+/** Verified identity. Expired / revoked / missing sessions fail closed. */
+async function authenticate(
+  supabase: SupabaseClient<Database>,
+): Promise<AuthOutcome> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    const status = (authError as { status?: number } | null)?.status ?? 0;
+    const name = (authError as { name?: string } | null)?.name ?? "";
+    // A transient auth-server outage is an error, not "signed out".
+    if (status >= 500 || name === "AuthRetryableFetchError") {
+      return {
+        ok: false,
+        result: { status: "error", reason: "auth_service_unavailable" },
+      };
+    }
+    return { ok: false, result: { status: "unauthenticated" } };
+  }
+  return { ok: true, profileId: user.id };
+}
+
+type FactScope = Parameters<typeof loadCandidateOrganizations>[1];
+
+/**
+ * Gathers verified facts for a candidate-organization scope. Every query error
+ * becomes a failure (never an empty-but-successful set). `scopeFor` receives
+ * the loaded memberships/overall role because the "all" scope depends on them.
+ */
+async function gatherFacts(
+  supabase: SupabaseClient<Database>,
+  profileId: string,
+  scopeFor: (base: {
+    overallRole: OverallRole | null;
+    memberships: OrganizationMembership[];
+  }) => FactScope,
+): Promise<ActiveContextFacts | QueryFailure> {
+  const [overallRole, memberships] = await Promise.all([
+    loadOverallRole(supabase, profileId),
+    loadMemberships(supabase, profileId),
+  ]);
+  if (isFailure(overallRole)) return overallRole;
+  if (isFailure(memberships)) return memberships;
+
+  const organizations = await loadCandidateOrganizations(
+    supabase,
+    scopeFor({ overallRole, memberships }),
+  );
+  if (isFailure(organizations)) return organizations;
+
+  const [locations, locationAssignments] = await Promise.all([
+    loadLocations(
+      supabase,
+      organizations.map((o) => o.id),
+    ),
+    loadLocationAssignments(supabase, profileId),
+  ]);
+  if (isFailure(locations)) return locations;
+  if (isFailure(locationAssignments)) return locationAssignments;
+
+  return {
+    profileId,
+    overallRole,
+    organizations,
+    organizationMemberships: memberships,
+    locations,
+    locationAssignments,
+  };
+}
+
+function allAccessibleScope(base: {
+  overallRole: OverallRole | null;
+  memberships: OrganizationMembership[];
+}): FactScope {
+  return {
+    kind: "all",
+    overall: base.overallRole !== null,
+    activeOrganizationIds: base.memberships
+      .filter((m) => m.active)
+      .map((m) => m.organizationId),
+  };
+}
+
 /**
  * Resolves the active (organization, location) context for the CURRENTLY
  * authenticated user. Never throws.
@@ -204,24 +304,13 @@ export async function resolveCurrentActiveContext(
   try {
     const supabase = options.client ?? (await createClient());
 
-    // 1. Authenticate. Expired / revoked / missing sessions fail closed.
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const auth = await authenticate(supabase);
+    if (!auth.ok) return auth.result;
+    const profileId = auth.profileId;
 
-    if (authError || !user) {
-      const status = (authError as { status?: number } | null)?.status ?? 0;
-      const name = (authError as { name?: string } | null)?.name ?? "";
-      // A transient auth-server outage is an error, not "signed out".
-      if (status >= 500 || name === "AuthRetryableFetchError") {
-        return { status: "error", reason: "auth_service_unavailable" };
-      }
-      return { status: "unauthenticated" };
-    }
-    const profileId = user.id;
-
-    // 2. Untrusted inputs.
+    // Untrusted inputs.
+    const explicitSelection =
+      options.explicitSelection ?? NO_EXPLICIT_SELECTION;
     const rawCookie =
       options.cookieValue === undefined
         ? await readActiveContextCookieValue()
@@ -229,74 +318,102 @@ export async function resolveCurrentActiveContext(
     const cookie = parseActiveContextCookie(rawCookie);
     const routeSlug = normalizeRouteSlug(options.routeSlug);
 
-    // A malformed cookie is rejected before any tenant data is touched.
-    if (cookie.status === "malformed") {
+    // A malformed cookie is rejected before any tenant data is touched --
+    // unless the user made a deliberate explicit selection, which supersedes
+    // the cookie for this request (V2-003.002 rule D).
+    if (
+      cookie.status === "malformed" &&
+      explicitSelection.status === "absent"
+    ) {
       return { status: "invalid_context", reason: "cookie_malformed" };
     }
-
-    // 3. Verified facts about the profile.
-    const [overallRole, memberships] = await Promise.all([
-      loadOverallRole(supabase, profileId),
-      loadMemberships(supabase, profileId),
-    ]);
-    if (isFailure(overallRole)) {
-      return { status: "error", reason: overallRole.failed };
-    }
-    if (isFailure(memberships)) {
-      return { status: "error", reason: memberships.failed };
+    // Malformed explicit input never reaches the database.
+    if (explicitSelection.status === "malformed") {
+      return { status: "invalid_context", reason: "selection_malformed" };
     }
 
-    // 4. Candidate organizations (scope chosen by the untrusted-input
-    //    precedence; every row is still RLS-filtered and re-validated by the
-    //    canonical resolver).
-    const organizations = await loadCandidateOrganizations(
-      supabase,
+    // Candidate organizations: scope chosen by the untrusted-input precedence;
+    // every row is still RLS-filtered and re-validated by the canonical
+    // resolver. With an explicit selection the cookie plays no part.
+    const useCookieScope =
+      explicitSelection.status === "absent" &&
+      cookie.status === "present" &&
+      isUuid(cookie.selection.organizationId);
+
+    const facts = await gatherFacts(supabase, profileId, (base) =>
       routeSlug
         ? { kind: "slug", slug: routeSlug }
-        : cookie.status === "present" && isUuid(cookie.selection.organizationId)
+        : useCookieScope && cookie.status === "present"
           ? { kind: "id", id: cookie.selection.organizationId }
-          : {
-              kind: "all",
-              overall: overallRole !== null,
-              activeOrganizationIds: memberships
-                .filter((m) => m.active)
-                .map((m) => m.organizationId),
-            },
+          : allAccessibleScope(base),
     );
-    if (isFailure(organizations)) {
-      return { status: "error", reason: organizations.failed };
-    }
+    if (isFailure(facts)) return { status: "error", reason: facts.failed };
 
-    const [locations, locationAssignments] = await Promise.all([
-      loadLocations(
-        supabase,
-        organizations.map((o) => o.id),
-      ),
-      loadLocationAssignments(supabase, profileId),
-    ]);
-    if (isFailure(locations)) {
-      return { status: "error", reason: locations.failed };
-    }
-    if (isFailure(locationAssignments)) {
-      return { status: "error", reason: locationAssignments.failed };
-    }
-
-    const facts: ActiveContextFacts = {
-      profileId,
-      overallRole,
-      organizations,
-      organizationMemberships: memberships,
-      locations,
-      locationAssignments,
-    };
-
-    // 5. Pure, canonical-resolver-backed decision.
-    return resolveActiveContext(facts, { routeSlug, cookie });
+    // Pure, canonical-resolver-backed decision.
+    return resolveActiveContext(facts, {
+      routeSlug,
+      cookie,
+      explicitSelection,
+    });
   } catch (error) {
     // `createClient()`/`cookies()` throw a framework signal at request time
     // that Next must see (dynamic rendering); never convert it to "error".
     unstable_rethrow(error);
     console.error("resolveCurrentActiveContext", error);
     return { status: "error", reason: "context_resolution_failed" };
+  }
+}
+
+export type EligibleContextListResult =
+  | {
+      readonly status: "ok";
+      readonly contexts: readonly AvailableContextSummary[];
+    }
+  | { readonly status: "unauthenticated" }
+  | { readonly status: "error"; readonly reason: string };
+
+/**
+ * V2-003.002 reusable candidate list: every (organization, location) the
+ * CURRENT user may legitimately operate, built from the same authenticated
+ * database facts and the same canonical resolver as `resolveCurrentActiveContext`
+ * (via `listEligibleContexts`). Overall roles see eligible tenants without
+ * synthetic memberships; scoped users only their assigned locations; inactive
+ * and archived locations are omitted; a failed query is an `error`, never an
+ * empty list. The result is display-safe (no access/capability detail).
+ * Never throws.
+ */
+export async function listCurrentEligibleContexts(
+  options: { readonly client?: SupabaseClient<Database> } = {},
+): Promise<EligibleContextListResult> {
+  try {
+    const supabase = options.client ?? (await createClient());
+    const auth = await authenticate(supabase);
+    if (!auth.ok) {
+      return auth.result.status === "error"
+        ? { status: "error", reason: auth.result.reason }
+        : { status: "unauthenticated" };
+    }
+    const facts = await gatherFacts(
+      supabase,
+      auth.profileId,
+      allAccessibleScope,
+    );
+    if (isFailure(facts)) return { status: "error", reason: facts.failed };
+
+    return {
+      status: "ok",
+      contexts: listEligibleContexts(facts).map((c) => ({
+        organizationId: c.organizationId,
+        organizationSlug: c.organizationSlug,
+        organizationName: c.organizationName,
+        locationId: c.locationId,
+        locationName: c.locationName,
+        timeZone: c.timeZone,
+      })),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("listCurrentEligibleContexts", error);
+    return { status: "error", reason: "context_list_failed" };
   }
 }

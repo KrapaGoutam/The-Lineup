@@ -24,6 +24,10 @@ import {
 } from "lucide-react";
 
 import { AppearanceSwitch } from "@/components/appearance-switch";
+import { ContextScopeBoundary } from "@/features/context/components/context-scope-boundary";
+import { ContextSwitcher } from "@/features/context/components/context-switcher";
+import { useContextSwitch } from "@/features/context/components/use-context-switch";
+import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { ClientHydrationMarker } from "@/components/hydration-marker";
 import { AllocationWorkspace } from "@/features/allocation/components/allocation-workspace";
 import type { AllocationContext } from "@/features/allocation/data/allocation-data";
@@ -568,6 +572,13 @@ type RestaurantOperationsAppProps = {
   initialScheduleContext?: ScheduleContext | null;
   initialTipsContext?: TipsContext | null;
   initialAllocationContext?: AllocationContext | null;
+  /**
+   * V2-003.002: server-verified active context + switcher candidates. Absent
+   * in demo mode (synthetic identity; no real context picker).
+   */
+  activeContext?: (AvailableContextSummary & { selectedBy: string }) | null;
+  availableContexts?: readonly AvailableContextSummary[];
+  availableContextsFailed?: boolean;
 };
 
 /**
@@ -600,11 +611,20 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
   // React's hydration (flaky sign-in on the dynamic `/r/[slug]` route).
   return (
     <Suspense fallback={null}>
-      <RestaurantOperationsAppInner
-        key={`${identity}:${epoch}`}
-        {...props}
-        onAuthBoundary={() => setEpoch((current) => current + 1)}
-      />
+      {/* V2-003.002: state identity = verified profile + organization +
+          location (+ sign-in epoch). Any change discards all location-specific
+          client state and re-seeds from the new server response. */}
+      <ContextScopeBoundary
+        profileId={identity}
+        organizationId={props.activeContext?.organizationId ?? "none"}
+        locationId={props.activeContext?.locationId ?? "none"}
+        extraKey={epoch}
+      >
+        <RestaurantOperationsAppInner
+          {...props}
+          onAuthBoundary={() => setEpoch((current) => current + 1)}
+        />
+      </ContextScopeBoundary>
       <ClientHydrationMarker />
     </Suspense>
   );
@@ -617,9 +637,13 @@ function RestaurantOperationsAppInner({
   initialScheduleContext = null,
   initialTipsContext = null,
   initialAllocationContext = null,
+  activeContext = null,
+  availableContexts = [],
+  availableContextsFailed = false,
   onAuthBoundary,
 }: RestaurantOperationsAppProps & { onAuthBoundary: () => void }) {
   const router = useRouter();
+  const { switchingTo, switchTo } = useContextSwitch();
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   // Real mode: a successful passcode sign-in is only *pending* until the
   // Server Component re-renders with the authenticated person's real data.
@@ -1821,6 +1845,19 @@ function RestaurantOperationsAppInner({
     setShowMobileSheet(false);
   }
 
+  // V2-003.002: real mode only; demo has no verified context to switch.
+  const contextSwitcher =
+    !demoMode && activeContext ? (
+      <ContextSwitcher
+        active={activeContext}
+        contexts={availableContexts}
+        contextsUnavailable={availableContextsFailed}
+        switchingTo={switchingTo}
+        onSelect={switchTo}
+        className="max-w-[16rem] min-w-0"
+      />
+    ) : null;
+
   return (
     <div
       className={cn("min-h-screen", isRecipeDetail ? "pb-0" : "pb-28 lg:pb-0")}
@@ -1839,33 +1876,39 @@ function RestaurantOperationsAppInner({
             isRecipeDetail ? "h-12 min-h-12 py-0" : "min-h-[76px]",
           )}
         >
-          <button
-            onClick={() => setTab("allocation")}
-            className={cn(
-              "flex items-center justify-self-start",
-              isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
-            )}
-            aria-label="Home"
-          >
-            <span
+          <div className="flex min-w-0 items-center gap-3 justify-self-start">
+            <button
+              onClick={() => setTab("allocation")}
               className={cn(
-                "flex items-center justify-center rounded-xl bg-black",
-                isRecipeDetail ? "h-7 w-7" : "h-10 w-10",
+                "flex shrink-0 items-center",
+                isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
               )}
+              aria-label="Home"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://www.monkswebster.com/assets/img/logo-light.png"
-                alt="The Monk's Logo"
-                className={cn("object-contain", isRecipeDetail ? "h-4" : "h-6")}
-              />
-            </span>
-            <span className="text-left">
-              <span className="block text-sm font-bold tracking-tight">
-                The Monk&apos;s
+              <span
+                className={cn(
+                  "flex items-center justify-center rounded-xl bg-black",
+                  isRecipeDetail ? "h-7 w-7" : "h-10 w-10",
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://www.monkswebster.com/assets/img/logo-light.png"
+                  alt="The Monk's Logo"
+                  className={cn(
+                    "object-contain",
+                    isRecipeDetail ? "h-4" : "h-6",
+                  )}
+                />
               </span>
-            </span>
-          </button>
+              <span className="text-left">
+                <span className="block text-sm font-bold tracking-tight">
+                  The Monk&apos;s
+                </span>
+              </span>
+            </button>
+            {contextSwitcher}
+          </div>
 
           <CountdownPill clock={clock} compact={isRecipeDetail} />
 
@@ -2109,10 +2152,11 @@ function RestaurantOperationsAppInner({
                   className="h-5 object-contain"
                 />
               </span>
-              <span className="text-left">
+              <span className={cn("text-left", contextSwitcher && "sr-only")}>
                 <span className="block text-sm font-bold">The Monk&apos;s</span>
               </span>
             </button>
+            {contextSwitcher}
             <Button
               variant="ghost"
               size="icon"
@@ -2194,7 +2238,25 @@ function RestaurantOperationsAppInner({
         </div>
       ) : null}
 
+      {switchingTo ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="context-switching"
+          className="text-muted-foreground px-4 py-10 text-center text-sm"
+        >
+          Switching to {switchingTo.organizationName} —{" "}
+          {switchingTo.locationName}…
+        </div>
+      ) : null}
+
       <main
+        // While a switch is pending the previous location's workspace is
+        // hidden and inert, so it can never be read or acted on as if it
+        // belonged to the newly selected location.
+        aria-busy={switchingTo ? true : undefined}
+        inert={switchingTo ? true : undefined}
+        hidden={switchingTo ? true : undefined}
         className={cn(
           "mx-auto max-w-[1540px]",
           isRecipeDetail ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-10",

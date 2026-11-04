@@ -5,10 +5,14 @@ import {
   type AllocationContext,
 } from "@/features/allocation/data/allocation-data";
 import type { SignedInUser } from "@/components/login-screen";
-import { resolveCurrentActiveContext } from "@/features/context/data/active-context";
+import {
+  listCurrentEligibleContexts,
+  resolveCurrentActiveContext,
+} from "@/features/context/data/active-context";
 import type {
   AvailableContextSummary,
   ContextResolutionResult,
+  ExplicitLocationSelection,
 } from "@/features/context/domain/active-context";
 import { toVerifiedLocationScope } from "@/features/context/domain/active-context";
 import {
@@ -36,7 +40,10 @@ export type PageContextStatus = "demo" | ContextResolutionResult["status"];
 
 /** Serializable, display-safe active context (reusable by V2-003.002). */
 export type ActiveContextDisplay = AvailableContextSummary & {
-  selectedBy: "cookie_preference" | "sole_eligible_location";
+  selectedBy:
+    | "cookie_preference"
+    | "sole_eligible_location"
+    | "explicit_selection";
 };
 
 export type PageData = {
@@ -49,6 +56,12 @@ export type PageData = {
   activeContext: ActiveContextDisplay | null;
   availableContexts: readonly AvailableContextSummary[];
   contextReason: string | null;
+  /**
+   * V2-003.002: true when the switcher candidate list could not be loaded.
+   * Never interpreted as "no other locations": the switcher is then shown as
+   * unavailable instead of silently empty.
+   */
+  availableContextsFailed: boolean;
 };
 
 const EMPTY_OPERATIONAL = {
@@ -59,6 +72,7 @@ const EMPTY_OPERATIONAL = {
   activeContext: null,
   availableContexts: [],
   contextReason: null,
+  availableContextsFailed: false,
 } as const;
 
 /**
@@ -73,7 +87,10 @@ const EMPTY_OPERATIONAL = {
  * disagree about which branch they describe. A partially resolved context
  * never invokes a loader.
  */
-export async function loadPageData(restaurantSlug: string): Promise<PageData> {
+export async function loadPageData(
+  restaurantSlug: string,
+  explicitSelection?: ExplicitLocationSelection,
+): Promise<PageData> {
   const demoMode =
     process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -91,21 +108,34 @@ export async function loadPageData(restaurantSlug: string): Promise<PageData> {
 
   const resolution = await resolveCurrentActiveContext({
     routeSlug: restaurantSlug,
+    explicitSelection,
   });
 
-  if (resolution.status === "selection_required") {
+  if (
+    resolution.status === "selection_required" ||
+    resolution.status === "invalid_context"
+  ) {
+    // Recovery list: the user's verified eligible contexts (any organization),
+    // so a stale/invalid selection can be replaced by an explicit one. No
+    // operational data is loaded. A failed list is surfaced, not hidden.
+    const list = await listCurrentEligibleContexts();
+    const listed = list.status === "ok" ? list.contexts : null;
     return {
       demoMode,
       ...EMPTY_OPERATIONAL,
-      contextStatus: "selection_required",
-      availableContexts: resolution.availableContexts,
+      contextStatus: resolution.status,
+      contextReason:
+        resolution.status === "invalid_context" ? resolution.reason : null,
+      availableContexts:
+        listed ??
+        (resolution.status === "selection_required"
+          ? resolution.availableContexts
+          : []),
+      availableContextsFailed: listed === null,
     };
   }
 
-  if (
-    resolution.status === "invalid_context" ||
-    resolution.status === "error"
-  ) {
+  if (resolution.status === "error") {
     return {
       demoMode,
       ...EMPTY_OPERATIONAL,
@@ -136,11 +166,13 @@ export async function loadPageData(restaurantSlug: string): Promise<PageData> {
     };
   }
 
-  const [scheduleContext, tipsContext, allocationContext] = await Promise.all([
-    getScheduleContext(context.organizationId, scope),
-    getTipsContext(context.organizationId, scope),
-    getAllocationContext(context.organizationId, undefined, scope),
-  ]);
+  const [scheduleContext, tipsContext, allocationContext, switcher] =
+    await Promise.all([
+      getScheduleContext(context.organizationId, scope),
+      getTipsContext(context.organizationId, scope),
+      getAllocationContext(context.organizationId, undefined, scope),
+      listCurrentEligibleContexts(),
+    ]);
 
   return {
     demoMode,
@@ -158,7 +190,8 @@ export async function loadPageData(restaurantSlug: string): Promise<PageData> {
       timeZone: context.timeZone,
       selectedBy: context.selectedBy,
     },
-    availableContexts: [],
+    availableContexts: switcher.status === "ok" ? switcher.contexts : [],
     contextReason: null,
+    availableContextsFailed: switcher.status !== "ok",
   };
 }
