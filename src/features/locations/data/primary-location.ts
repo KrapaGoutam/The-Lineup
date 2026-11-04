@@ -3,20 +3,20 @@ import "server-only";
 import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 
-import { resolveCurrentActiveContext } from "@/features/context/data/active-context";
+import {
+  listCurrentEligibleContexts,
+  resolveCurrentActiveContext,
+} from "@/features/context/data/active-context";
 import { parseExplicitLocationSelection } from "@/features/context/domain/active-context";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
-import { createClient } from "@/lib/supabase/server";
 
 /**
- * LEGACY single-location bootstrap helper — NOT a context boundary.
+ * LEGACY follow-up location helper for module server actions / follow-up
+ * reads whose full location scoping belongs to V2-005.
  *
- * Returns the organization's oldest location by creation date. It does NOT
- * verify that the location is active, un-archived, assigned to the caller, or
- * the user's selected context, so it must never be used to establish what a
- * multi-location user may operate. It is retained ONLY for compatible
- * legacy/direct-call paths (module server actions and follow-up reads) whose
- * full location scoping belongs to V2-005.
+ * V2-003.003: no longer picks the oldest location. It returns a verified
+ * `?location=` selection (Referer), else the caller's single canonical
+ * eligible location in the organization, else null (ambiguous/none).
  *
  * The application-ENTRY data path (`loadPageData`) never calls this: it
  * resolves a verified context (V2-003.001) and passes that exact location
@@ -29,42 +29,23 @@ export async function getPrimaryLocation(organizationId: string) {
   const selected = await selectedLocationForRequest(organizationId);
   if (selected !== undefined) return selected;
 
-  const supabase = await createClient();
-  const eligible = () =>
-    supabase
-      .from("locations")
-      .select("id, time_zone")
-      .eq("organization_id", organizationId)
-      .eq("active", true)
-      .is("archived_at", null)
-      .order("created_at", { ascending: true })
-      .limit(1);
-
-  // Never pick an unassigned location for a caller who has assignments in this
-  // organization: restrict to their own active assignments, and fail closed
-  // (null) when none of them is an active, un-archived location.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    const { data: assigned, error } = await supabase
-      .from("location_memberships")
-      .select("location_id, locations!inner(organization_id)")
-      .eq("profile_id", user.id)
-      .eq("active", true)
-      .eq("locations.organization_id", organizationId);
-    if (error) return null;
-    const assignedIds = (assigned ?? []).map((row) => row.location_id);
-    if (assignedIds.length > 0) {
-      const { data } = await eligible().in("id", assignedIds).maybeSingle();
-      return data;
-    }
-  }
-
-  // No assignments (Overall roles, legacy org-level members): oldest
-  // active, un-archived location, unchanged otherwise.
-  const { data } = await eligible().maybeSingle();
-  return data;
+  // V2-003.003: with no verifiable explicit selection, the ONLY acceptable
+  // location is the caller's single server-verified eligible location in this
+  // organization (canonical resolver, same facts as the entry path). Zero or
+  // several eligible locations is ambiguous: fail closed (null) rather than
+  // picking the oldest/first-created branch. A missing `Referer` therefore can
+  // never redirect an action to a different location. V2-003.004 replaces
+  // this Referer dependency with persisted context.
+  const list = await listCurrentEligibleContexts();
+  if (list.status !== "ok") return null;
+  const inOrganization = list.contexts.filter(
+    (context) => context.organizationId === organizationId,
+  );
+  if (inOrganization.length !== 1) return null;
+  return {
+    id: inOrganization[0].locationId,
+    time_zone: inOrganization[0].timeZone,
+  };
 }
 
 export type LoaderLocation = { id: string; time_zone: string };

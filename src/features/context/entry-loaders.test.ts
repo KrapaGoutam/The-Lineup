@@ -115,8 +115,10 @@ describe("initial loaders honour the verified scope (V2-003.001)", () => {
     expect(log.tables).not.toContain("locations");
   });
 
-  it("legacy direct callers (no scope) still use the primary-location helper", async () => {
+  it("legacy direct callers (no scope) still use the primary-location helper, which now verifies via the canonical resolver and fails closed (V2-003.003)", async () => {
+    // Signed-out double: the helper authenticates first and never reaches the
+    // legacy "oldest location" query.
     await getTipsContext("org-monks");
-    expect(log.tables).toContain("locations");
+    expect(log.tables).not.toContain("locations");
   });
 });

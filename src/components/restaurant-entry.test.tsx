@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const pageData = vi.hoisted(() => ({ value: null as unknown }));
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+const redirect = vi.hoisted(() =>
+  vi.fn((to: string) => {
+    throw new Error(`NEXT_REDIRECT:${to}`);
+  }),
+);
+
+vi.mock("next/navigation", () => ({ useRouter: () => router, redirect }));
 
 vi.mock("@/lib/page-data", () => ({
   loadPageData: async () => pageData.value,
@@ -30,6 +36,7 @@ const base = {
   availableContexts: [],
   contextReason: null,
   availableContextsFailed: false,
+  redirectTo: null,
 };
 
 async function renderEntry() {
@@ -149,5 +156,24 @@ describe("ContextUnavailableNotice (V2-003.002 recovery)", () => {
       />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load/i);
+  });
+
+  it("V2-003.003: redirects to the server-built destination and renders nothing else", async () => {
+    pageData.value = {
+      ...base,
+      contextStatus: "no_access",
+      redirectTo: "/r/liquor-tap?location=loc-1",
+    };
+    await expect(
+      RestaurantEntry({ restaurantSlug: "the-monks", globalEntry: true }),
+    ).rejects.toThrow("NEXT_REDIRECT:/r/liquor-tap?location=loc-1");
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
+  it("V2-003.003: never redirects without a server-provided destination", async () => {
+    redirect.mockClear();
+    pageData.value = { ...base, contextStatus: "no_access" };
+    await renderEntry();
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

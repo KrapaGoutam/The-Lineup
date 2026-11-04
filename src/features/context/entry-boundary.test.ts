@@ -60,4 +60,14 @@ describe("entry-boundary static guards", () => {
     expect(source).toMatch(/auth\.getUser\(\)/);
     expect(source).not.toMatch(/getSession\(|getClaims\(|jwt-decode|atob\(/);
   });
+
+  it("V2-003.003: the legacy follow-up helper never picks the oldest location and the redirect is built only from verified data", () => {
+    const legacy = read("src/features/locations/data/primary-location.ts");
+    expect(legacy).not.toMatch(/created_at|ascending|\.limit\(/);
+    expect(legacy).toMatch(/listCurrentEligibleContexts/);
+    const pageData = read("src/lib/page-data.ts");
+    // the only redirect target is the canonical builder fed by a resolved context
+    expect(pageData).toMatch(/contextSwitchHref\(global\.context, ""\)/);
+    expect(pageData).not.toMatch(/searchParams|headers\(|referer/i);
+  });
 });

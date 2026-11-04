@@ -2,10 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   calls: 0,
-  user: null as { id: string } | null,
-  assigned: [] as { location_id: string }[],
-  inFilter: null as string[] | null,
-  filters: [] as string[],
+  eligible: { status: "ok", contexts: [] } as unknown,
+  eligibleCalls: 0,
   referer: null as string | null,
   resolved: null as unknown,
   resolveArgs: [] as unknown[],
@@ -24,56 +22,36 @@ vi.mock("@/features/context/data/active-context", () => ({
     state.resolveArgs.push(options);
     return state.resolved;
   },
+  listCurrentEligibleContexts: async () => {
+    state.eligibleCalls += 1;
+    return state.eligible;
+  },
 }));
 
+// The legacy "oldest location" query must never run any more (V2-003.003).
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: state.user } }) },
-    from: (table: string) => {
-      state.calls += 1;
-      if (table === "location_memberships") {
-        const assignments: Record<string, unknown> = {
-          select: () => assignments,
-          eq: () => assignments,
-          then: (resolve: (v: unknown) => void) =>
-            resolve({ data: state.assigned, error: null }),
-        };
-        return assignments;
-      }
-      const builder: Record<string, unknown> = {
-        select: () => builder,
-        eq: (column: string, value: unknown) => {
-          state.filters.push(`${column}=${String(value)}`);
-          return builder;
-        },
-        is: (column: string) => {
-          state.filters.push(`${column} is null`);
-          return builder;
-        },
-        in: (_column: string, ids: string[]) => {
-          state.inFilter = ids;
-          return builder;
-        },
-        order: () => builder,
-        limit: () => builder,
-        maybeSingle: async () => ({
-          data: { id: "legacy-oldest", time_zone: "America/New_York" },
-        }),
-      };
-      return builder;
-    },
-  }),
+  createClient: async () => {
+    state.calls += 1;
+    throw new Error("getPrimaryLocation must not query locations directly");
+  },
 }));
+
+const ctx = (organizationId: string, locationId: string) => ({
+  organizationId,
+  organizationSlug: "slug",
+  organizationName: "Org",
+  locationId,
+  locationName: "Loc",
+  timeZone: "America/Chicago",
+});
 
 import { getPrimaryLocation, locationForLoader } from "./primary-location";
 
 describe("locationForLoader (V2-003.001)", () => {
   beforeEach(() => {
     state.calls = 0;
-    state.user = null;
-    state.assigned = [];
-    state.inFilter = null;
-    state.filters = [];
+    state.eligible = { status: "ok", contexts: [] };
+    state.eligibleCalls = 0;
     state.referer = null;
     state.resolved = null;
     state.resolveArgs = [];
@@ -102,32 +80,37 @@ describe("locationForLoader (V2-003.001)", () => {
     expect(state.calls).toBe(0);
   });
 
-  it("legacy direct callers (no scope) keep the existing primary-location behavior", async () => {
-    const location = await locationForLoader("org-1");
-    expect(location).toEqual({
-      id: "legacy-oldest",
-      time_zone: "America/New_York",
+  it("AUTO-19: with no Referer and exactly one verified eligible location, a legacy caller uses it", async () => {
+    state.eligible = {
+      status: "ok",
+      contexts: [ctx("org-1", "loc-only"), ctx("org-2", "loc-other-org")],
+    };
+    expect(await locationForLoader("org-1")).toEqual({
+      id: "loc-only",
+      time_zone: "America/Chicago",
     });
-    expect(state.calls).toBe(1);
+    expect(state.calls).toBe(0);
   });
 
-  it("getPrimaryLocation only considers active, un-archived locations", async () => {
-    await getPrimaryLocation("org-1");
-    expect(state.filters).toContain("active=true");
-    expect(state.filters).toContain("archived_at is null");
+  it("AUTO-19: with no Referer and several eligible locations, it fails closed instead of choosing the oldest", async () => {
+    state.eligible = {
+      status: "ok",
+      contexts: [ctx("org-1", "loc-a"), ctx("org-1", "loc-b")],
+    };
+    expect(await getPrimaryLocation("org-1")).toBeNull();
+    expect(state.calls).toBe(0);
   });
 
-  it("getPrimaryLocation restricts a caller with assignments to those locations", async () => {
-    state.user = { id: "user-1" };
-    state.assigned = [{ location_id: "loc-b" }];
-    await getPrimaryLocation("org-1");
-    expect(state.inFilter).toEqual(["loc-b"]);
-  });
-
-  it("getPrimaryLocation does not restrict a caller without assignments", async () => {
-    state.user = { id: "user-1" };
-    await getPrimaryLocation("org-1");
-    expect(state.inFilter).toBeNull();
+  it("AUTO-19: no eligible location, a failed list or a signed-out caller all fail closed", async () => {
+    for (const eligible of [
+      { status: "ok", contexts: [ctx("org-2", "loc-x")] },
+      { status: "error", reason: "locations_query_failed" },
+      { status: "unauthenticated" },
+    ]) {
+      state.eligible = eligible;
+      expect(await getPrimaryLocation("org-1")).toBeNull();
+    }
+    expect(state.calls).toBe(0);
   });
 
   describe("selected-location follow-ups (V2-003.002)", () => {
@@ -183,7 +166,11 @@ describe("locationForLoader (V2-003.001)", () => {
       });
     });
 
-    it("SW-OPS-05: no selection, a cross-origin referer, or a non-/r/ page keeps the legacy path", async () => {
+    it("SW-OPS-05: no selection, a cross-origin referer, or a non-/r/ page never trusts the Referer; only the unique verified location is used", async () => {
+      state.eligible = {
+        status: "ok",
+        contexts: [ctx("org-1", "loc-only")],
+      };
       for (const referer of [
         null,
         "https://app.test/r/the-monks",
@@ -192,11 +179,12 @@ describe("locationForLoader (V2-003.001)", () => {
       ]) {
         state.referer = referer;
         expect(await getPrimaryLocation("org-1")).toEqual({
-          id: "legacy-oldest",
-          time_zone: "America/New_York",
+          id: "loc-only",
+          time_zone: "America/Chicago",
         });
       }
       expect(state.resolveArgs).toHaveLength(0);
+      expect(state.eligibleCalls).toBe(4);
     });
   });
 });
