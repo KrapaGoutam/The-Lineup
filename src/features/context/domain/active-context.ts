@@ -30,6 +30,23 @@
  *     More than one → `selection_required`. None → `no_access`.
  *  6. Creation order, name order or row order is NEVER used to pick a context.
  *
+ * ── V2-003.002 explicit URL selection (`?location=<uuid>`) ─────────────────
+ *  A. The explicit selection is a PREFERENCE, never an authorization token. It
+ *     is validated against the same eligible set as every other input.
+ *  B. It requires a route slug (organization scope). The route still fixes the
+ *     organization; the selected location must be eligible INSIDE that
+ *     organization. A location of another tenant, an inactive/archived/revoked
+ *     location, or an unknown id is `invalid_context` (never a silent
+ *     substitution, never an enumeration of other tenants).
+ *  C. A malformed selection (not a UUID / repeated / empty) is rejected
+ *     (`invalid_context`), never ignored.
+ *  D. A VALID explicit selection supersedes the cookie for that request only
+ *     (including a cookie naming a different organization or a malformed one),
+ *     so a deliberate Monks → Liquor Tap switch cannot be trapped by the
+ *     previous preference. Nothing is persisted (cookie writes are V2-003.004).
+ *  E. WITHOUT an explicit selection, rules 1–6 above apply unchanged: an
+ *     unrelated cookie/route mismatch still fails closed.
+ *
  * Eligible = location exists + belongs to the organization + active +
  * not archived + valid IANA time zone + canonical resolver `allowed` with
  * `location:access`.
@@ -63,7 +80,10 @@ export interface ResolvedActiveContext {
   /** Canonical resolver output for exactly this (organization, location). */
   readonly access: AccessResolution;
   /** How the pair was chosen (informational; never authority). */
-  readonly selectedBy: "cookie_preference" | "sole_eligible_location";
+  readonly selectedBy:
+    | "cookie_preference"
+    | "sole_eligible_location"
+    | "explicit_selection";
 }
 
 /** Display-safe summary reusable by the V2-003.002 switcher. */
@@ -77,6 +97,9 @@ export interface AvailableContextSummary {
 }
 
 export const INVALID_CONTEXT_REASONS = [
+  "selection_malformed",
+  "selection_requires_route",
+  "selection_location_unavailable",
   "cookie_malformed",
   "cookie_route_organization_mismatch",
   "cookie_organization_unavailable",
@@ -126,11 +149,41 @@ export interface ActiveContextFacts {
   readonly locationAssignments: readonly LocationRoleAssignment[];
 }
 
+/** Untrusted `?location=` input, already reduced to a tri-state. */
+export type ExplicitLocationSelection =
+  | { readonly status: "absent" }
+  | { readonly status: "present"; readonly locationId: string }
+  | { readonly status: "malformed" };
+
+export const NO_EXPLICIT_SELECTION: ExplicitLocationSelection = {
+  status: "absent",
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Reduces a raw Next `searchParams.location` value to the tri-state. Only a
+ * single well-formed UUID is `present`; anything else that was supplied
+ * (empty, repeated, non-UUID) is `malformed` and will fail closed.
+ */
+export function parseExplicitLocationSelection(
+  raw: string | readonly string[] | null | undefined,
+): ExplicitLocationSelection {
+  if (raw === undefined || raw === null) return NO_EXPLICIT_SELECTION;
+  if (typeof raw !== "string") return { status: "malformed" };
+  const value = raw.trim();
+  if (!UUID_PATTERN.test(value)) return { status: "malformed" };
+  return { status: "present", locationId: value.toLowerCase() };
+}
+
 /** Untrusted inputs. */
 export interface ActiveContextInputs {
   /** Route organization slug (`/` uses the configured default slug). */
   readonly routeSlug?: string | null;
   readonly cookie: ActiveContextCookieParseResult;
+  /** V2-003.002 explicit URL selection (defaults to absent). */
+  readonly explicitSelection?: ExplicitLocationSelection;
 }
 
 export interface EligibleContext extends AvailableContextSummary {
@@ -260,6 +313,42 @@ export function normalizeRouteSlug(slug: string | null | undefined): string {
 }
 
 /**
+ * Rules A–D: an explicit selection ignores the cookie entirely (it is a
+ * per-request, deliberate user choice) and is validated inside the route's
+ * organization against the canonical eligible set.
+ */
+function resolveExplicitSelection(
+  facts: ActiveContextFacts,
+  inputs: ActiveContextInputs,
+): ContextResolutionResult {
+  const explicit = inputs.explicitSelection;
+  if (!explicit || explicit.status === "absent") return { status: "no_access" };
+  if (explicit.status === "malformed") {
+    return { status: "invalid_context", reason: "selection_malformed" };
+  }
+
+  const routeSlug = normalizeRouteSlug(inputs.routeSlug);
+  if (!routeSlug) {
+    return { status: "invalid_context", reason: "selection_requires_route" };
+  }
+  const routeOrganization = facts.organizations.find(
+    (o) => o.slug === routeSlug,
+  );
+  if (!routeOrganization) return { status: "no_access" };
+
+  const selected = listEligibleContexts(facts, [routeOrganization]).find(
+    (e) => e.locationId === explicit.locationId,
+  );
+  if (!selected) {
+    return {
+      status: "invalid_context",
+      reason: "selection_location_unavailable",
+    };
+  }
+  return toResolved(selected, facts.profileId, "explicit_selection");
+}
+
+/**
  * Pure resolution of the active context from verified facts + untrusted
  * inputs. `unauthenticated` and `error` are produced by the data layer (they
  * are properties of the session / query, not of the facts) and never here.
@@ -268,6 +357,10 @@ export function resolveActiveContext(
   facts: ActiveContextFacts,
   inputs: ActiveContextInputs,
 ): ContextResolutionResult {
+  const explicit = inputs.explicitSelection ?? NO_EXPLICIT_SELECTION;
+  if (explicit.status !== "absent")
+    return resolveExplicitSelection(facts, inputs);
+
   const cookie = inputs.cookie;
 
   // Precedence 3: a malformed cookie is rejected outright.

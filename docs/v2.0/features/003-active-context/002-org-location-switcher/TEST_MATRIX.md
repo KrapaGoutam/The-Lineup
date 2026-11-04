@@ -1,0 +1,31 @@
+# V2-003.002 — Test Matrix
+
+Legend: ✅ automated (Vitest/Playwright, mocked Supabase double) · 🔶 needs hosted DEV real-JWT or real browser visual check (local handoff)
+
+| ID    | Scenario                                          | Coverage                                                                              | Where                                                      |
+| ----- | ------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| SW-01 | Active org/location label correct                 | ✅                                                                                    | `context-switcher.test.tsx`                                |
+| SW-02 | Only eligible locations appear                    | ✅                                                                                    | `context-switcher.test.ts` (list)                          |
+| SW-03 | Multi-org / Overall sees all authorized contexts  | ✅ 🔶                                                                                 | `context-switcher.test.ts`                                 |
+| SW-04 | Scoped user sees only assigned                    | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-05 | Role per location doesn't merge/elevate           | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-06 | Inactive excluded (list + explicit)               | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-07 | Archived excluded (list + explicit)               | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-08 | Revoked assignment/membership excluded            | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-09 | Cross-org URL injection rejected                  | ✅ 🔶                                                                                 | `context-switcher.test.ts`                                 |
+| SW-10 | Invalid UUID rejected (no query issued)           | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-11 | Explicit selection validated server-side          | ✅ 🔶                                                                                 | `context-switcher.test.ts`                                 |
+| SW-12 | Cross-org switch despite old cookie               | ✅ 🔶                                                                                 | `context-switcher.test.ts`                                 |
+| SW-13 | Unrelated cookie/route mismatch fail-closed       | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| SW-14 | Selection-required offers authorized choices      | ✅                                                                                    | `restaurant-entry.test.tsx`                                |
+| SW-15 | Context change clears stale client state          | ✅                                                                                    | `context-switcher.test.tsx` (boundary)                     |
+| SW-16 | Schedule/tips/allocation share one verified scope | ✅ (inherited from 001: one `VerifiedLocationScope` feeds all three loaders) 🔶       | `page-data.ts`                                             |
+| SW-17 | Module navigation keeps selection                 | ✅                                                                                    | `context-navigation.test.ts`                               |
+| SW-18 | Back/forward no stale cross-context data          | ✅ (re-key on identity) 🔶 browser                                                    | boundary test                                              |
+| SW-19 | Sign-out clears visible workspace                 | ✅ existing flow (`resetTab` drops query; login shown) 🔶                             | existing e2e                                               |
+| SW-20 | Demo mode unaffected, no hosted calls             | ✅                                                                                    | `context-switcher-demo.spec.ts`, `default-landing.spec.ts` |
+| SW-21 | Desktop/mobile a11y                               | ✅ semantics/keyboard (jsdom) · 🔶 real-browser visual/touch at 390/768/1366 + WebKit | handoff                                                    |
+| SW-22 | No new creator bypass / escalation                | ✅                                                                                    | `context-switcher.test.ts`                                 |
+| —     | Pending async during transition                   | ✅                                                                                    | `context-switcher.test.tsx`                                |
+| —     | Candidate query failure ≠ empty permissions       | ✅                                                                                    | `context-switcher.test.ts`, notice test                    |
+| —     | No cookie writer exists                           | ✅                                                                                    | `context-switcher.test.ts`                                 |

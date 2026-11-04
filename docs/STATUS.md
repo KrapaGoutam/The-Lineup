@@ -2,7 +2,7 @@
 
 ## The Lineup V2.0
 
-The Lineup V2.0 implementation is in progress. V2-001 is complete; V2-002.004 Staff Assignment Management is complete via PR #280 (merge `b08efeee`) after hosted DEV, authorization/atomicity, WebKit/iPad, and exact-head CI verification. V2-002.005 Location Lifecycle Integrity and V2-002 Organizations & Locations are COMPLETE via PR #282 (merge c543856a767b9f55452bf5f1c26bf5449d2e624b). Hosted DEV 72/72 migrations, 362 pgTAP assertions, actual JWT authorization, independent-session races A–D, canonical types, WebKit 16/16 and exact-head CI pass. V2-003.001 is next / not started. Main and Production untouched.
+The Lineup V2.0 implementation is in progress. V2-001 is complete; V2-002.004 Staff Assignment Management is complete via PR #280 (merge `b08efeee`) after hosted DEV, authorization/atomicity, WebKit/iPad, and exact-head CI verification. V2-002.005 Location Lifecycle Integrity and V2-002 Organizations & Locations are COMPLETE via PR #282 (merge c543856a767b9f55452bf5f1c26bf5449d2e624b). Hosted DEV 72/72 migrations, 362 pgTAP assertions, actual JWT authorization, independent-session races A–D, canonical types, WebKit 16/16 and exact-head CI pass. V2-003.001 is COMPLETE (PR #284, development 5333a526). V2-003.002 Organization / Location Switcher is implemented with its PR open, awaiting hosted DEV real-JWT validation of the new explicit `?location=` input. Main and Production untouched.
 Canonical state: `docs/v2.0/CURRENT_STATE.md`
 
 ## Recipes V1 — Production preflight preparation (2026-10-29)

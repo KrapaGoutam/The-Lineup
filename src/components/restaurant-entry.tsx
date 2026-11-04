@@ -1,20 +1,24 @@
 import { ContextUnavailableNotice } from "@/components/context-unavailable-notice";
 import { RestaurantOperationsApp } from "@/components/restaurant-operations-app";
+import type { ExplicitLocationSelection } from "@/features/context/domain/active-context";
 import { loadPageData } from "@/lib/page-data";
 
 /**
  * Shared server entry for `/` and `/r/[restaurantSlug]`. Loads the verified
  * page data and renders either the operations app or -- when an authenticated
  * request has no single verified (organization, location) -- the
- * non-interactive context-unavailable state. Operational data is only ever
+ * context-unavailable recovery state. Operational data is only ever
  * present for a `resolved` (or synthetic `demo`) context.
  */
 export async function RestaurantEntry({
   restaurantSlug,
+  explicitSelection,
 }: {
   restaurantSlug: string;
+  /** V2-003.002 `?location=` input (only the `/r/[slug]` route supplies it). */
+  explicitSelection?: ExplicitLocationSelection;
 }) {
-  const data = await loadPageData(restaurantSlug);
+  const data = await loadPageData(restaurantSlug, explicitSelection);
 
   if (
     data.contextStatus === "selection_required" ||
@@ -25,6 +29,7 @@ export async function RestaurantEntry({
       <ContextUnavailableNotice
         status={data.contextStatus}
         availableContexts={data.availableContexts}
+        availableContextsFailed={data.availableContextsFailed}
       />
     );
   }
@@ -37,6 +42,9 @@ export async function RestaurantEntry({
       initialScheduleContext={data.scheduleContext}
       initialTipsContext={data.tipsContext}
       initialAllocationContext={data.allocationContext}
+      activeContext={data.activeContext}
+      availableContexts={data.availableContexts}
+      availableContextsFailed={data.availableContextsFailed}
     />
   );
 }

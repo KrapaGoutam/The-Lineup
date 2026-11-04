@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const pageData = vi.hoisted(() => ({ value: null as unknown }));
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 vi.mock("@/lib/page-data", () => ({
   loadPageData: async () => pageData.value,
@@ -25,6 +29,7 @@ const base = {
   activeContext: null,
   availableContexts: [],
   contextReason: null,
+  availableContextsFailed: false,
 };
 
 async function renderEntry() {
@@ -37,7 +42,7 @@ describe("RestaurantEntry (V2-003.001)", () => {
   });
 
   it.each(["selection_required", "invalid_context", "error"] as const)(
-    "renders the non-interactive context-unavailable state for %s and never the app",
+    "renders the context-unavailable state for %s and never the app",
     async (status) => {
       pageData.value = { ...base, contextStatus: status };
       await renderEntry();
@@ -46,8 +51,6 @@ describe("RestaurantEntry (V2-003.001)", () => {
         status,
       );
       expect(screen.queryByTestId("operations-app")).toBeNull();
-      expect(screen.queryAllByRole("button")).toHaveLength(0);
-      expect(screen.queryAllByRole("link")).toHaveLength(0);
     },
   );
 
@@ -66,35 +69,85 @@ describe("RestaurantEntry (V2-003.001)", () => {
   );
 });
 
-describe("ContextUnavailableNotice", () => {
-  it("lists the eligible locations for selection_required without exposing controls", () => {
+describe("ContextUnavailableNotice (V2-003.002 recovery)", () => {
+  const nasa = {
+    organizationId: "o1",
+    organizationSlug: "liquor-tap",
+    organizationName: "Liquor Tap",
+    locationId: "l1",
+    locationName: "NASA",
+    timeZone: "America/Chicago",
+  };
+  const webster = {
+    organizationId: "o2",
+    organizationSlug: "the-monks",
+    organizationName: "Monks",
+    locationId: "l2",
+    locationName: "Webster",
+    timeZone: "America/Chicago",
+  };
+
+  beforeEach(() => {
+    router.push.mockClear();
+    router.refresh.mockClear();
+  });
+
+  it("SW-14: selection_required offers authorized choices, grouped, and navigates with the explicit location", async () => {
+    const user = userEvent.setup();
     render(
       <ContextUnavailableNotice
         status="selection_required"
-        availableContexts={[
-          {
-            organizationId: "o1",
-            organizationSlug: "liquor-tap",
-            organizationName: "Liquor Tap",
-            locationId: "l1",
-            locationName: "NASA",
-            timeZone: "America/Chicago",
-          },
-        ]}
+        availableContexts={[nasa, webster]}
       />,
     );
     expect(
       screen.getByRole("heading", { name: "Choose a location" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Liquor Tap — NASA")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Liquor Tap" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Webster" }));
+    expect(router.push).toHaveBeenCalledWith("/r/the-monks?location=l2");
+    // Only authorized contexts were ever offered.
+    expect(screen.getAllByRole("button")).toHaveLength(2);
   });
 
-  it("states that no data was loaded for invalid and error states", () => {
-    const { rerender } = render(
-      <ContextUnavailableNotice status="invalid_context" />,
+  it("invalid_context offers reselection and a revalidating retry", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextUnavailableNotice
+        status="invalid_context"
+        availableContexts={[nasa]}
+      />,
     );
     expect(screen.getByText(/No data has been loaded/)).toBeInTheDocument();
-    rerender(<ContextUnavailableNotice status="error" />);
-    expect(screen.getByText(/No data has been loaded/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "NASA" }));
+    expect(router.push).toHaveBeenCalledWith("/r/liquor-tap?location=l1");
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("invalid_context with no eligible list does not invent a context", () => {
+    render(<ContextUnavailableNotice status="invalid_context" />);
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeVisible();
+  });
+
+  it("error shows retry only and never lists locations", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextUnavailableNotice status="error" availableContexts={[nasa]} />,
+    );
+    expect(screen.queryByRole("button", { name: "NASA" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("a failed location load is announced, not shown as an empty list", () => {
+    render(
+      <ContextUnavailableNotice
+        status="selection_required"
+        availableContextsFailed
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load/i);
   });
 });
