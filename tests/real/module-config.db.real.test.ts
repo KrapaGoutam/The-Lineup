@@ -209,19 +209,84 @@ beforeAll(async () => {
 afterAll(async () => {
   const ids = Object.values(users).map((u) => u.id);
   const locationIds = Object.values(L);
+  const errors: string[] = [];
+  const step = async (
+    label: string,
+    run: () => PromiseLike<{ error: { message: string } | null }>,
+  ) => {
+    const { error } = await run();
+    if (error) errors.push(`${label}: ${error.message}`);
+  };
+
+  // Children before parents; only rows scoped to THIS run's tracked ids.
   // Configuration rows block hard-deleting their location (ON DELETE RESTRICT),
   // so the service role removes them first (privileged maintenance path).
-  await admin
-    .from("location_module_configs")
-    .delete()
-    .in("location_id", locationIds);
-  await admin.from("location_memberships").delete().in("profile_id", ids);
-  await admin.from("overall_roles").delete().in("profile_id", ids);
-  await admin.from("memberships").delete().in("organization_id", orgIds);
-  await admin.from("locations").delete().in("organization_id", orgIds);
-  await admin.from("organizations").delete().in("id", orgIds);
-  await admin.from("profiles").delete().in("id", ids);
-  for (const u of Object.values(users)) await admin.auth.admin.deleteUser(u.id);
+  if (locationIds.length) {
+    await step("location_module_configs", () =>
+      admin
+        .from("location_module_configs")
+        .delete()
+        .in("location_id", locationIds),
+    );
+  }
+  if (ids.length) {
+    await step("location_memberships", () =>
+      admin.from("location_memberships").delete().in("profile_id", ids),
+    );
+    await step("overall_roles", () =>
+      admin.from("overall_roles").delete().in("profile_id", ids),
+    );
+  }
+  if (orgIds.length) {
+    await step("memberships", () =>
+      admin.from("memberships").delete().in("organization_id", orgIds),
+    );
+    await step("locations", () =>
+      admin.from("locations").delete().in("organization_id", orgIds),
+    );
+    await step("organizations", () =>
+      admin.from("organizations").delete().in("id", orgIds),
+    );
+  }
+  if (ids.length) {
+    await step("profiles", () => admin.from("profiles").delete().in("id", ids));
+  }
+  for (const u of Object.values(users)) {
+    const { error } = await admin.auth.admin.deleteUser(u.id);
+    if (error) errors.push(`auth user ${u.id}: ${error.message}`);
+  }
+
+  // Prove the teardown instead of assuming it: no tracked id may survive.
+  const left = async (
+    table: "organizations" | "locations",
+    col: string,
+    v: string[],
+  ) => {
+    if (!v.length) return 0;
+    const { count, error } = await admin
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .in(col, v);
+    if (error) errors.push(`verify ${table}: ${error.message}`);
+    return count ?? 0;
+  };
+  const leftOrgs = await left("organizations", "id", orgIds);
+  const leftLocs = await left("locations", "id", locationIds);
+  let leftUsers = 0;
+  for (const id of ids) {
+    const r = await admin.auth.admin.getUserById(id);
+    if (r.data?.user) leftUsers += 1;
+  }
+  if (leftOrgs || leftLocs || leftUsers) {
+    errors.push(
+      `survivors: organizations=${leftOrgs} locations=${leftLocs} authUsers=${leftUsers}`,
+    );
+  }
+  if (errors.length) {
+    throw new Error(
+      `V2MC teardown incomplete for run ${runId} (orgs ${orgIds.join(",")} locations ${locationIds.join(",")} users ${ids.join(",")}): ${errors.join(" | ")}`,
+    );
+  }
 }, 180_000);
 
 const upsert = (
@@ -238,6 +303,23 @@ const upsert = (
     is_enabled,
     metadata: metadata as never,
   });
+
+/**
+ * Stored state as the service role sees it (bypasses RLS): module_key ->
+ * is_enabled for one location. A response (error or no error) is NOT proof of
+ * what was written: a denied UPDATE under RLS is silent (no error, zero rows),
+ * so every rejection path below is also checked against the stored rows.
+ */
+async function stored(loc: string): Promise<Record<string, boolean>> {
+  const rows = ok(
+    await admin
+      .from("location_module_configs")
+      .select("module_key, is_enabled")
+      .eq("location_id", loc),
+    "stored",
+  ) as Array<{ module_key: string; is_enabled: boolean }>;
+  return Object.fromEntries(rows.map((r) => [r.module_key, r.is_enabled]));
+}
 
 describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", () => {
   it("MCR-01 an Org Owner configures two locations of one organization independently", async () => {
@@ -257,6 +339,9 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
   it("MCR-02 the Org GM, Overall Owner may write; stamps are server-owned", async () => {
     expect((await upsert("gmX", L.A, "tasks", true)).error).toBeNull();
     expect((await upsert("ovOwner", L.B, "tasks", true)).error).toBeNull();
+    // Stored state, not just the absence of an error.
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
+    expect(await stored(L.B)).toEqual({ bar_inventory: false, tasks: true });
     const row = ok(
       await users.ownerX.client
         .from("location_module_configs")
@@ -273,7 +358,18 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
     for (const key of ["staffA", "locMgrA", "shiftX", "ovAsst", "revoked"]) {
       const r = await upsert(key, L.A, "payroll", true);
       expect(r.error?.code, key).toBe("42501");
+      // A denied UPDATE of an EXISTING row is silent under RLS (no error, zero
+      // rows affected). It must never be mistaken for a successful write.
+      const u = await users[key].client
+        .from("location_module_configs")
+        .update({ is_enabled: false })
+        .eq("location_id", L.A)
+        .eq("module_key", "bar_inventory")
+        .select("module_key");
+      expect(u.data ?? [], `${key} update affected rows`).toHaveLength(0);
     }
+    // Stored state is untouched: no payroll row, bar_inventory still enabled.
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
   });
 
   it("MCR-04 cross-organization writes and forged location ids are rejected", async () => {
@@ -287,6 +383,9 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
       (await upsert("ownerX", crypto.randomUUID(), "payroll", true)).error
         ?.code,
     ).toBe("42501");
+    // Nothing was written to either location.
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
+    expect(await stored(L.Y)).toEqual({});
   });
 
   it("MCR-05 anonymous callers have no access", async () => {
@@ -298,6 +397,7 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
     expect(w.error?.code).toBe("42501");
     const r = await anon.from("location_module_configs").select("*");
     expect(r.error?.code).toBe("42501");
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
   });
 
   it("MCR-06 unknown keys, system-required Settings and invalid metadata are rejected", async () => {
@@ -316,6 +416,8 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
         (await upsert("ownerX", L.A, "attendance", true, bad)).error?.code,
       ).toBe("23514");
     }
+    // None of the rejected payloads was stored.
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
   });
 
   it("MCR-07 ownership is immutable and rows cannot be deleted by a client", async () => {
@@ -330,6 +432,9 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
       .delete()
       .eq("location_id", L.A);
     expect(del.error?.code).toBe("42501");
+    // The row is still where it was, with its original value; nothing moved.
+    expect(await stored(L.A)).toEqual({ bar_inventory: true, tasks: true });
+    expect(await stored(L.B)).toEqual({ bar_inventory: false, tasks: true });
   });
 
   it("MCR-08 read scope: assigned staff see their location only; others see nothing", async () => {
@@ -365,22 +470,33 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
   });
 
   it("MCR-10 an archived location freezes its configuration", async () => {
-    const t = async (action: string, reason: string, expected: string) =>
-      users.ownerX.client.rpc("transition_location_lifecycle", {
-        p_location_id: L.B,
-        p_action: action,
-        p_reason: reason,
-        p_expected_status: expected,
-      });
-    expect(
-      (await t("deactivate", "mc test deactivate", "active")).error,
-    ).toBeNull();
-    expect(
-      (await t("archive", "mc test archive", "inactive")).error,
-    ).toBeNull();
+    // Archive through the PRIVILEGED path, not public.transition_location_lifecycle:
+    // that RPC writes a row to the append-only public.location_lifecycle_events
+    // (UPDATE/DELETE/TRUNCATE rejected for every role; non-cascading FK to
+    // locations), which would make this synthetic location -- and its
+    // organization and creator -- permanently undeletable on hosted DEV. The
+    // guard on archived locations reads locations.archived_at, which is exactly
+    // what is set here. The real RPC transition is covered (and rolled back) by
+    // pgTAP 0062 MC-012i..m.
+    const archive = await admin
+      .from("locations")
+      .update({ active: false, archived_at: new Date().toISOString() })
+      .eq("id", L.B)
+      .select("id");
+    expect(archive.error).toBeNull();
+    expect(archive.data).toHaveLength(1);
     expect((await upsert("ownerX", L.B, "recipes", true)).error?.code).toBe(
       "55000",
     );
+    // An UPDATE of an existing row at the archived location is frozen too.
+    const frozen = await users.ownerX.client
+      .from("location_module_configs")
+      .update({ is_enabled: true })
+      .eq("location_id", L.B)
+      .eq("module_key", "bar_inventory")
+      .select("module_key");
+    expect(frozen.error?.code).toBe("55000");
+    expect(await stored(L.B)).toEqual({ bar_inventory: false, tasks: true });
     const read = await readLocationModuleConfigs(L.B, users.ownerX.client);
     expect(read).toMatchObject({ status: "ok", lifecycle: "archived" });
     expect(resolveModuleState(read, "bar_inventory").status).toBe(
