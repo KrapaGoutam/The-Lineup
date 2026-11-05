@@ -98,3 +98,18 @@ Prior browser specs re-run on the final build: `org-location-switcher` 6/6 (incl
 ## 8. Not claimed
 
 No global guarantee. The server consistency check protects the Tasks mutation/read path and ships a reusable helper; V2-005 must apply it (and location RLS) to every module before Production. Heuristics worth knowing: history origin detection uses a 5 s popstate window and the document-load navigation type within 15 s of load; passive reconciliation is throttled to one check per 5 s.
+
+## 9. Integration, CI and HTTPS Preview
+
+- PR #296 head `870c5517896ddc2ae5ea5f90bc16fcc6551b8944`; merged into `development` as a regular merge commit `de8c67326ea7badc98a9e817178a527f9af0592a`. `main` still `5e5b7747693b6e81014eafdf299b87e56c3f033d`; Production not contacted.
+- Exact-head CI: `application` pass (4m22s), `browser-smoke` pass (12m35s), Vercel deployment pass, Vercel Preview Comments pass. No migration, so no Database CI.
+- Preview deployment for that head (`the-lineup-n6bi979zn-onepiece11.vercel.app`): client bundle contains the DEV project ref and **no** production ref, and contains this PR's channel code. Real Chromium over HTTPS against the Preview: MT-01/02/03/21, MT-09, MT-11/12, MT-13, MT-15, MT-17 and CLEANUP **7/7**; DEV table counts identical before and after.
+- The earlier PR head (`291f9d1`) also had green application / browser-smoke / Vercel; the final head adds the prior-session fix, the RACE-B premise correction, the hosted verdict assertion and these docs.
+
+## 10. Follow-ups (not done here)
+
+1. V2-005: apply `assertWorkspaceExpectation` + server-authoritative location binding + location RLS to every non-Tasks module (Production blockers).
+2. The shell's forced sign-out (`sessionInvalid`) issues a sign-out POST that could end another employee's fresh session in a different tab (pre-existing).
+3. Tasks controller re-reads whenever the shell re-renders (`onSessionInvalid` is an inline function) — efficiency.
+4. `active-context.db.real.test.ts`: two "legacy getPrimaryLocation" assertions superseded by V2-003.004 fail on `development`.
+5. Physical-iPad check of the stale panel and the switcher bottom sheet.
