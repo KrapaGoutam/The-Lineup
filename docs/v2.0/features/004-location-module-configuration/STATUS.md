@@ -6,9 +6,9 @@ GitHub Issue: #252
 Target Branch: development
 ```
 
-| Subfeature | Issue | Status                                                                                                                         |
-| ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------ |
-| V2-004.001 | #298  | **Implemented in Cloud; hosted DEV validation pending** — [STATUS](001-module-configuration-contract/STATUS.md) (not complete) |
-| V2-004.002 | —     | Not started                                                                                                                    |
-| V2-004.003 | —     | Not started                                                                                                                    |
-| V2-004.004 | —     | Not started                                                                                                                    |
+| Subfeature | Issue | Status                                                                                                                                          |
+| ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| V2-004.001 | #298  | **Complete** — local stack 73 migrations + pgTAP 2012, hosted DEV 72→73, real-JWT 10/10 — [STATUS](001-module-configuration-contract/STATUS.md) |
+| V2-004.002 | —     | Not started                                                                                                                                     |
+| V2-004.003 | —     | Not started                                                                                                                                     |
+| V2-004.004 | —     | Not started                                                                                                                                     |

@@ -1,8 +1,8 @@
 # V2-004.001 — Test Matrix
 
-Legend: **Cloud** = executed in Claude Code Cloud on an isolated disposable PostgreSQL 16 (unix socket only, no network listener) or in Vitest · **Local** = deferred to the authorized hosted-DEV validation stage (not executed in Cloud).
+Legend: **Cloud** = executed in Claude Code Cloud on an isolated disposable PostgreSQL 16 (unix socket only, no network listener) or in Vitest · **Local** = executed on the official local Supabase stack and hosted DEV in the Local validation stage (EVIDENCE §7).
 
-Files: `supabase/tests/database/0062_location_module_configs.test.sql` (92 assertions) · `src/features/modules/**/*.test.ts` (58 tests) · `tests/real/module-config.db.real.test.ts` (Local, 10 tests, **not executed**).
+Files: `supabase/tests/database/0062_location_module_configs.test.sql` (92 assertions) · `src/features/modules/**/*.test.ts` (58 tests) · `tests/real/module-config.db.real.test.ts` (Local, 10 tests, **10/10 on hosted DEV**).
 
 ## Required cases
 
@@ -45,7 +45,7 @@ Targeted breakage of the migration, each caught by pgTAP: read policy ignoring a
 
 ## Deferred to Local (real JWT, hosted DEV)
 
-`tests/real/module-config.db.real.test.ts` (MCR-01…10) exercises the same security properties through PostgREST with real Supabase Auth sessions and the real reader. It is typechecked and linted in Cloud but **not executed**.
+`tests/real/module-config.db.real.test.ts` (MCR-01…10) exercises the same security properties through PostgREST with real Supabase Auth sessions and the real reader. It was typechecked and linted in Cloud and **executed on hosted DEV: 10/10** (EVIDENCE §7.6). Denied writes are additionally verified against stored state with the service role, including silent zero-row UPDATEs; teardown fails loudly on any surviving tracked fixture (EVIDENCE §7.3).
 
 ## Not covered (intentionally)
 
