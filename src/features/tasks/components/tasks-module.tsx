@@ -3,6 +3,8 @@
 import { useEffect, useMemo } from "react";
 
 import type { Designation } from "@/features/auth/domain/passcode";
+import { useReportStaleContext } from "@/features/context/components/context-sync-guard";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 
 import type { TasksState } from "../domain/task-engine";
 import type { TaskTeamMember } from "../domain/task-types";
@@ -25,6 +27,8 @@ type Props = {
   /** Present in demo mode only; real mode reads and writes the database. */
   demo: TasksDemoBinding | null;
   onSessionInvalid?: () => void;
+  /** V2-003.005: the workspace on screen; null in demo mode. */
+  expectedContext?: WorkspaceExpectation | null;
   /** Lets the app shell keep its Tasks tab badge in step with the inbox. */
   onUnreadChange?: (unread: number) => void;
 };
@@ -40,8 +44,10 @@ export function TasksModule({
   user,
   demo,
   onSessionInvalid,
+  expectedContext = null,
   onUnreadChange,
 }: Props) {
+  const reportStale = useReportStaleContext();
   const viewer = useMemo(
     () => ({
       profileId: user.profileId,
@@ -55,6 +61,8 @@ export function TasksModule({
     restaurantSlug,
     viewer,
     onSessionInvalid,
+    expectedContext,
+    onContextStale: reportStale,
   });
   const unread = controller.snapshot?.unreadCount;
   useEffect(() => {

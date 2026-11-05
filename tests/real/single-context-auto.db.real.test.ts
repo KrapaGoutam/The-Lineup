@@ -145,6 +145,28 @@ const noData = (d: Awaited<ReturnType<typeof entry>>) => {
   expect(d.initialUser ?? null).toBeNull();
 };
 
+const NIL_UUID = "00000000-0000-4000-8000-000000000000";
+/** The workspace a tab would be showing: a fresh render of `/r/<slug>`. */
+async function shownWorkspace(
+  key: string,
+  slug: string,
+  cookie: string | null,
+) {
+  as(key, { cookie });
+  const page = await loadPageData(slug);
+  return page.contextStatus === "resolved" && page.activeContext
+    ? {
+        profileId: users[key].id,
+        organizationId: page.activeContext.organizationId,
+        locationId: page.activeContext.locationId,
+      }
+    : {
+        profileId: users[key].id,
+        organizationId: NIL_UUID,
+        locationId: NIL_UUID,
+      };
+}
+
 async function createTask(
   key: string,
   slug: string,
@@ -152,8 +174,10 @@ async function createTask(
   referer: string | null,
   cookie: string | null = null,
 ) {
+  const expectedContext = await shownWorkspace(key, slug, cookie);
   as(key, { referer, cookie });
   return runTaskCommandAction({
+    expectedContext,
     restaurantSlug: slug,
     command: {
       type: "create",

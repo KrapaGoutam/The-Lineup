@@ -133,14 +133,43 @@ const resetBrowser = () => {
   req.referer = null;
 };
 
+const NIL_UUID = "00000000-0000-4000-8000-000000000000";
+/**
+ * What a browser tab would be SHOWING for this user right now: the workspace a
+ * fresh server render resolves (V2-003.005 sends it with every Tasks action).
+ * Where nothing resolves the tab asserts an impossible location, so the action
+ * must still be refused.
+ */
+async function shownWorkspace(
+  key: string,
+  slug: string,
+  referer: string | null,
+) {
+  as(key, referer);
+  const page = await loadPageData(slug);
+  return page.contextStatus === "resolved" && page.activeContext
+    ? {
+        profileId: users[key].id,
+        organizationId: page.activeContext.organizationId,
+        locationId: page.activeContext.locationId,
+      }
+    : {
+        profileId: users[key].id,
+        organizationId: NIL_UUID,
+        locationId: NIL_UUID,
+      };
+}
+
 async function createTask(
   key: string,
   slug: string,
   title: string,
   referer: string | null,
 ) {
+  const expectedContext = await shownWorkspace(key, slug, referer);
   as(key, referer);
   return runTaskCommandAction({
+    expectedContext,
     restaurantSlug: slug,
     command: {
       type: "create",

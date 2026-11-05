@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Banknote,
@@ -27,6 +34,9 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { requestSignOut } from "@/lib/client-sign-out";
 import { ContextScopeBoundary } from "@/features/context/components/context-scope-boundary";
 import { ContextReconcileGate } from "@/features/context/components/context-reconcile-gate";
+import { publishContextEvent } from "@/features/context/components/context-sync-channel";
+import { ContextSyncGuard } from "@/features/context/components/context-sync-guard";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import type { ContextReconcileTarget } from "@/features/context/components/context-reconcile-gate";
 import { ContextSwitcher } from "@/features/context/components/context-switcher";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
@@ -628,6 +638,7 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
         <ContextReconcileGate
           target={props.contextReconcile ?? null}
           activeLocationId={props.activeContext?.locationId ?? null}
+          activeLocationName={props.activeContext?.locationName ?? null}
         >
           <RestaurantOperationsAppInner
             {...props}
@@ -655,6 +666,21 @@ function RestaurantOperationsAppInner({
   const router = useRouter();
   const { switchingTo, switchTo, switchError, dismissSwitchError } =
     useContextSwitch();
+  // V2-003.005: the (profile, organization, location) this render was built
+  // for -- all from SERVER-verified props. Sent to protected actions as an
+  // untrusted consistency assertion and used by the stale-tab guard. Absent in
+  // demo mode (no real context, nothing to compare).
+  const workspaceExpectation = useMemo<WorkspaceExpectation | null>(
+    () =>
+      !demoMode && activeContext && initialUser
+        ? {
+            profileId: initialUser.profileId,
+            organizationId: activeContext.organizationId,
+            locationId: activeContext.locationId,
+          }
+        : null,
+    [demoMode, activeContext, initialUser],
+  );
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   // Real mode: a successful passcode sign-in is only *pending* until the
   // Server Component re-renders with the authenticated person's real data.
@@ -903,6 +929,9 @@ function RestaurantOperationsAppInner({
     // the authenticated data (see RestaurantOperationsApp's keyed remount).
     setSignInStalled(false);
     setPendingAccount(account);
+    // V2-003.005: another employee (or the same one) just signed in on this
+    // browser; tabs showing a previous session re-verify against the server.
+    publishContextEvent("session_changed");
     router.refresh();
   }
 
@@ -1870,630 +1899,671 @@ function RestaurantOperationsAppInner({
     ) : null;
 
   return (
-    <div
-      className={cn("min-h-screen", isRecipeDetail ? "pb-0" : "pb-28 lg:pb-0")}
+    <ContextSyncGuard
+      expected={workspaceExpectation}
+      contexts={availableContexts}
+      contextsUnavailable={availableContextsFailed}
+      onRecovered={onAuthBoundary}
     >
-      <header
-        data-app-header
+      <div
         className={cn(
-          "border-border bg-background sticky top-0 z-40 border-b",
-          isRecipeDetail && "h-12 max-h-12",
+          "min-h-screen",
+          isRecipeDetail ? "pb-0" : "pb-28 lg:pb-0",
         )}
       >
-        {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
-        <div
+        <header
+          data-app-header
           className={cn(
-            "mx-auto hidden max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid",
-            isRecipeDetail ? "h-12 min-h-12 py-0" : "min-h-[76px]",
+            "border-border bg-background sticky top-0 z-40 border-b",
+            isRecipeDetail && "h-12 max-h-12",
           )}
         >
-          <div className="flex min-w-0 items-center gap-3 justify-self-start">
-            <button
-              onClick={() => setTab("allocation")}
-              className={cn(
-                "flex shrink-0 items-center",
-                isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
-              )}
-              aria-label="Home"
-            >
-              <span
+          {/* Desktop row 1: brand, centered countdown pill, avatar pill */}
+          <div
+            className={cn(
+              "mx-auto hidden max-w-[1540px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-8 lg:grid",
+              isRecipeDetail ? "h-12 min-h-12 py-0" : "min-h-[76px]",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-3 justify-self-start">
+              <button
+                onClick={() => setTab("allocation")}
                 className={cn(
-                  "flex items-center justify-center rounded-xl bg-black",
-                  isRecipeDetail ? "h-7 w-7" : "h-10 w-10",
+                  "flex shrink-0 items-center",
+                  isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
+                )}
+                aria-label="Home"
+              >
+                <span
+                  className={cn(
+                    "flex items-center justify-center rounded-xl bg-black",
+                    isRecipeDetail ? "h-7 w-7" : "h-10 w-10",
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://www.monkswebster.com/assets/img/logo-light.png"
+                    alt="The Monk's Logo"
+                    className={cn(
+                      "object-contain",
+                      isRecipeDetail ? "h-4" : "h-6",
+                    )}
+                  />
+                </span>
+                <span className="text-left">
+                  <span className="block text-sm font-bold tracking-tight">
+                    The Monk&apos;s
+                  </span>
+                </span>
+              </button>
+              {contextSwitcher}
+            </div>
+
+            <CountdownPill clock={clock} compact={isRecipeDetail} />
+
+            <div
+              className="relative justify-self-end"
+              ref={avatarPanelDesktopRef}
+            >
+              <button
+                onClick={() => setShowAvatarPanel((open) => !open)}
+                aria-expanded={showAvatarPanel}
+                aria-haspopup="true"
+                aria-label="Account and quick settings"
+                className={cn(
+                  "border-border bg-surface flex items-center rounded-full border",
+                  isRecipeDetail
+                    ? "gap-2 py-0.5 pr-2.5 pl-1"
+                    : "gap-2.5 py-1.5 pr-3.5 pl-1.5",
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://www.monkswebster.com/assets/img/logo-light.png"
-                  alt="The Monk's Logo"
+                <span
                   className={cn(
-                    "object-contain",
-                    isRecipeDetail ? "h-4" : "h-6",
+                    "bg-avatar grid place-items-center rounded-full font-bold",
+                    isRecipeDetail ? "size-7 text-xs" : "size-10 text-sm",
                   )}
-                />
-              </span>
-              <span className="text-left">
-                <span className="block text-sm font-bold tracking-tight">
-                  The Monk&apos;s
+                >
+                  {initials}
                 </span>
-              </span>
-            </button>
-            {contextSwitcher}
+                <span className="text-left">
+                  <span className="block text-sm font-semibold">
+                    {user.name}
+                  </span>
+                  <span className="text-muted-foreground block text-xs capitalize">
+                    {user.role.replace("_", " ")}
+                  </span>
+                </span>
+                {showAvatarPanel ? (
+                  <ChevronUp
+                    className="text-muted-foreground size-4"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ChevronDown
+                    className="text-muted-foreground size-4"
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+
+              {showAvatarPanel ? (
+                <div
+                  data-testid="account-menu"
+                  className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl"
+                >
+                  <div className="border-border/60 flex items-center justify-between border-b px-[18px] py-3.5">
+                    <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                      Appearance
+                    </span>
+                    <AppearanceSwitch />
+                  </div>
+                  <div className="border-border/60 space-y-3 border-b px-[18px] py-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                        Shift hours
+                      </span>
+                      {isManager ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={openHours}
+                        >
+                          Edit
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>Morning</span>
+                        <span className="text-muted-foreground font-mono">
+                          {shiftDefaults.morning.start} –{" "}
+                          {shiftDefaults.morning.end}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Evening</span>
+                        <span className="text-muted-foreground font-mono">
+                          {shiftDefaults.evening.start} –{" "}
+                          {shiftDefaults.evening.end}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Full day</span>
+                        <span className="text-muted-foreground font-mono">
+                          {shiftDefaults.full_day.start} –{" "}
+                          {shiftDefaults.full_day.end}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border-border/60 space-y-1 border-b px-[18px] py-4">
+                    <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
+                      Store hours
+                    </span>
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="text-base font-semibold">
+                        Today, {todayWeekdayShort}
+                      </span>
+                      <span className="text-primary font-mono text-base">
+                        {todayHours
+                          ? todayHours.closed
+                            ? "Closed"
+                            : `${todayHours.opening} – ${todayHours.closing}`
+                          : "—"}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      {timeZone}. Overnight closing times supported.
+                    </p>
+                  </div>
+                  <div className="space-y-0.5 p-2">
+                    <button
+                      onClick={openChangePasscode}
+                      className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                    >
+                      <KeyRound
+                        className="text-muted-foreground size-[18px]"
+                        aria-hidden="true"
+                      />
+                      <span className="flex-1 text-sm font-medium">
+                        Change passcode
+                      </span>
+                    </button>
+                    {isManager ? (
+                      <button
+                        onClick={openHours}
+                        className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                      >
+                        <Store
+                          className="text-muted-foreground size-[18px]"
+                          aria-hidden="true"
+                        />
+                        <span className="flex-1 text-sm font-medium">
+                          Store hours
+                        </span>
+                        <span className="text-faint text-xs">Mon–Sun</span>
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="border-border/60 space-y-2 border-t px-3.5 py-3">
+                    <Button
+                      variant="secondary"
+                      className="w-full justify-center"
+                      onClick={openSettingsPage}
+                    >
+                      <SlidersHorizontal aria-hidden="true" />
+                      More options
+                    </Button>
+                    <button
+                      onClick={signOut}
+                      className="text-destructive hover:bg-destructive/10 flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                    >
+                      <LogOut className="size-[18px]" aria-hidden="true" />
+                      <span className="text-sm font-semibold">Sign out</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
-          <CountdownPill clock={clock} compact={isRecipeDetail} />
-
-          <div
-            className="relative justify-self-end"
-            ref={avatarPanelDesktopRef}
-          >
-            <button
-              onClick={() => setShowAvatarPanel((open) => !open)}
-              aria-expanded={showAvatarPanel}
-              aria-haspopup="true"
-              aria-label="Account and quick settings"
-              className={cn(
-                "border-border bg-surface flex items-center rounded-full border",
-                isRecipeDetail
-                  ? "gap-2 py-0.5 pr-2.5 pl-1"
-                  : "gap-2.5 py-1.5 pr-3.5 pl-1.5",
-              )}
-            >
-              <span
-                className={cn(
-                  "bg-avatar grid place-items-center rounded-full font-bold",
-                  isRecipeDetail ? "size-7 text-xs" : "size-10 text-sm",
-                )}
+          {/* Desktop row 2: weighted nav -- primary (underlined), divider,
+            secondary (icon+label), Settings trigger far right. */}
+          {!isRecipeDetail && (
+            <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
+              <div className="flex shrink-0 gap-1.5">
+                {primaryTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    data-nav-tier="primary"
+                    onClick={() => setTab(id)}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={cn(
+                      "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
+                      tab === id
+                        ? "border-primary text-foreground"
+                        : "text-foreground/80 hover:text-foreground border-transparent",
+                    )}
+                  >
+                    <Icon className="size-[18px]" aria-hidden="true" />
+                    {label}
+                    {id === "tasks" && tasksUnread > 0 ? (
+                      <TasksBadge count={tasksUnread} />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+              <span className="bg-border h-6.5 w-px" />
+              <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
+                {secondaryTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    data-nav-tier="secondary"
+                    onClick={() => setTab(id)}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={cn(
+                      "flex h-14 items-center gap-1.5 px-3.5 text-[13px] font-medium whitespace-nowrap",
+                      tab === id ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="ml-auto shrink-0"
+                onClick={() => setTab("settings")}
               >
-                {initials}
-              </span>
-              <span className="text-left">
-                <span className="block text-sm font-semibold">{user.name}</span>
-                <span className="text-muted-foreground block text-xs capitalize">
-                  {user.role.replace("_", " ")}
+                <Settings2 aria-hidden="true" />
+                Settings
+              </Button>
+            </div>
+          )}
+
+          {/* Mobile header: brand + avatar row, then the countdown pill. */}
+          <div
+            className={cn(
+              "px-4 lg:hidden",
+              isRecipeDetail
+                ? "flex h-12 items-center py-0"
+                : "flex flex-col gap-3.5 py-3.5",
+            )}
+            ref={avatarPanelMobileRef}
+          >
+            <div className="flex w-full items-center gap-3">
+              <button
+                onClick={() => setTab("allocation")}
+                className="flex min-h-11 items-center gap-2.5"
+                aria-label="Home"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://www.monkswebster.com/assets/img/logo-light.png"
+                    alt="The Monk's Logo"
+                    className="h-5 object-contain"
+                  />
                 </span>
-              </span>
-              {showAvatarPanel ? (
-                <ChevronUp
-                  className="text-muted-foreground size-4"
-                  aria-hidden="true"
-                />
-              ) : (
+                <span className={cn("text-left", contextSwitcher && "sr-only")}>
+                  <span className="block text-sm font-bold">
+                    The Monk&apos;s
+                  </span>
+                </span>
+              </button>
+              {contextSwitcher}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto"
+                onClick={() => setShowChangePasscode(true)}
+                aria-label="Change your passcode"
+              >
+                <KeyRound />
+              </Button>
+              <button
+                onClick={() => setShowAvatarPanel((open) => !open)}
+                aria-expanded={showAvatarPanel}
+                aria-label="Account and quick settings"
+                className="border-border bg-surface flex min-h-11 items-center gap-2 rounded-full border py-1 pr-2.5 pl-1"
+              >
+                <span className="bg-avatar grid size-[34px] place-items-center rounded-full text-xs font-bold">
+                  {initials}
+                </span>
                 <ChevronDown
                   className="text-muted-foreground size-4"
                   aria-hidden="true"
                 />
-              )}
-            </button>
-
+              </button>
+            </div>
+            {!isRecipeDetail && <CountdownPill clock={clock} compact />}
             {showAvatarPanel ? (
               <div
                 data-testid="account-menu"
-                className="border-border bg-card absolute top-full right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-[20px] border shadow-2xl"
+                className="border-border bg-card absolute top-[calc(100%+0.5rem)] right-0 z-50 min-w-64 space-y-1 rounded-2xl border p-2 shadow-xl"
               >
-                <div className="border-border/60 flex items-center justify-between border-b px-[18px] py-3.5">
+                <div className="border-border/60 mb-1 flex flex-col border-b px-2.5 pb-2">
+                  <span className="text-sm font-semibold">{user.name}</span>
+                  <span className="text-muted-foreground text-xs capitalize">
+                    {user.role.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-2.5 py-2">
                   <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
                     Appearance
                   </span>
                   <AppearanceSwitch />
                 </div>
-                <div className="border-border/60 space-y-3 border-b px-[18px] py-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
-                      Shift hours
-                    </span>
-                    {isManager ? (
-                      <Button variant="secondary" size="sm" onClick={openHours}>
-                        Edit
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span>Morning</span>
-                      <span className="text-muted-foreground font-mono">
-                        {shiftDefaults.morning.start} –{" "}
-                        {shiftDefaults.morning.end}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Evening</span>
-                      <span className="text-muted-foreground font-mono">
-                        {shiftDefaults.evening.start} –{" "}
-                        {shiftDefaults.evening.end}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Full day</span>
-                      <span className="text-muted-foreground font-mono">
-                        {shiftDefaults.full_day.start} –{" "}
-                        {shiftDefaults.full_day.end}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-border/60 space-y-1 border-b px-[18px] py-4">
-                  <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
-                    Store hours
-                  </span>
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="text-base font-semibold">
-                      Today, {todayWeekdayShort}
-                    </span>
-                    <span className="text-primary font-mono text-base">
-                      {todayHours
-                        ? todayHours.closed
-                          ? "Closed"
-                          : `${todayHours.opening} – ${todayHours.closing}`
-                        : "—"}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    {timeZone}. Overnight closing times supported.
-                  </p>
-                </div>
-                <div className="space-y-0.5 p-2">
-                  <button
-                    onClick={openChangePasscode}
-                    className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-                  >
-                    <KeyRound
-                      className="text-muted-foreground size-[18px]"
-                      aria-hidden="true"
-                    />
-                    <span className="flex-1 text-sm font-medium">
-                      Change passcode
-                    </span>
-                  </button>
-                  {isManager ? (
-                    <button
-                      onClick={openHours}
-                      className="hover:bg-muted flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-                    >
-                      <Store
-                        className="text-muted-foreground size-[18px]"
-                        aria-hidden="true"
-                      />
-                      <span className="flex-1 text-sm font-medium">
-                        Store hours
-                      </span>
-                      <span className="text-faint text-xs">Mon–Sun</span>
-                    </button>
-                  ) : null}
-                </div>
-                <div className="border-border/60 space-y-2 border-t px-3.5 py-3">
-                  <Button
-                    variant="secondary"
-                    className="w-full justify-center"
-                    onClick={openSettingsPage}
-                  >
-                    <SlidersHorizontal aria-hidden="true" />
-                    More options
-                  </Button>
-                  <button
-                    onClick={signOut}
-                    className="text-destructive hover:bg-destructive/10 flex min-h-13 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-                  >
-                    <LogOut className="size-[18px]" aria-hidden="true" />
-                    <span className="text-sm font-semibold">Sign out</span>
-                  </button>
-                </div>
+                <button
+                  onClick={openSettingsPage}
+                  className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                >
+                  <Settings2
+                    className="text-muted-foreground size-[18px]"
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 text-sm font-medium">Settings</span>
+                </button>
+                <button
+                  onClick={signOut}
+                  className="text-destructive hover:bg-destructive/10 flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
+                >
+                  <LogOut className="size-[18px]" aria-hidden="true" />
+                  <span className="text-sm font-semibold">Sign out</span>
+                </button>
               </div>
             ) : null}
           </div>
-        </div>
+        </header>
 
-        {/* Desktop row 2: weighted nav -- primary (underlined), divider,
-            secondary (icon+label), Settings trigger far right. */}
-        {!isRecipeDetail && (
-          <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
-            <div className="flex shrink-0 gap-1.5">
-              {primaryTabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  data-nav-tier="primary"
-                  onClick={() => setTab(id)}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={cn(
-                    "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
-                    tab === id
-                      ? "border-primary text-foreground"
-                      : "text-foreground/80 hover:text-foreground border-transparent",
-                  )}
-                >
-                  <Icon className="size-[18px]" aria-hidden="true" />
-                  {label}
-                  {id === "tasks" && tasksUnread > 0 ? (
-                    <TasksBadge count={tasksUnread} />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-            <span className="bg-border h-6.5 w-px" />
-            <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
-              {secondaryTabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  data-nav-tier="secondary"
-                  onClick={() => setTab(id)}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={cn(
-                    "flex h-14 items-center gap-1.5 px-3.5 text-[13px] font-medium whitespace-nowrap",
-                    tab === id ? "text-primary" : "text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="ml-auto shrink-0"
-              onClick={() => setTab("settings")}
+        {!demoMode && isManager ? (
+          <OrgLockoutBanner restaurantSlug={restaurantSlug} />
+        ) : null}
+
+        {actionError ? (
+          <div className="border-destructive/30 bg-destructive/10 border-b px-4 py-2 text-center text-sm sm:px-6 lg:px-8">
+            <span className="text-destructive">{actionError}</span>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground ml-3 text-xs underline"
+              onClick={() => setActionError(null)}
             >
-              <Settings2 aria-hidden="true" />
-              Settings
-            </Button>
+              Dismiss
+            </button>
           </div>
-        )}
+        ) : null}
 
-        {/* Mobile header: brand + avatar row, then the countdown pill. */}
-        <div
+        {switchError ? (
+          <div
+            role="alert"
+            data-testid="context-switch-error"
+            className="border-destructive/30 bg-destructive/10 text-destructive mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 text-sm"
+          >
+            <span>{switchError}</span>
+            <button
+              type="button"
+              onClick={dismissSwitchError}
+              className="min-h-11 shrink-0 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        {switchingTo ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="context-switching"
+            className="text-muted-foreground px-4 py-10 text-center text-sm"
+          >
+            Switching to {switchingTo.organizationName} —{" "}
+            {switchingTo.locationName}…
+          </div>
+        ) : null}
+
+        <main
+          // While a switch is pending the previous location's workspace is
+          // hidden and inert, so it can never be read or acted on as if it
+          // belonged to the newly selected location.
+          aria-busy={switchingTo ? true : undefined}
+          inert={switchingTo ? true : undefined}
+          hidden={switchingTo ? true : undefined}
           className={cn(
-            "px-4 lg:hidden",
-            isRecipeDetail
-              ? "flex h-12 items-center py-0"
-              : "flex flex-col gap-3.5 py-3.5",
+            "mx-auto max-w-[1540px]",
+            isRecipeDetail ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-10",
           )}
-          ref={avatarPanelMobileRef}
         >
-          <div className="flex w-full items-center gap-3">
-            <button
-              onClick={() => setTab("allocation")}
-              className="flex min-h-11 items-center gap-2.5"
-              aria-label="Home"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-black">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://www.monkswebster.com/assets/img/logo-light.png"
-                  alt="The Monk's Logo"
-                  className="h-5 object-contain"
-                />
-              </span>
-              <span className={cn("text-left", contextSwitcher && "sr-only")}>
-                <span className="block text-sm font-bold">The Monk&apos;s</span>
-              </span>
-            </button>
-            {contextSwitcher}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto"
-              onClick={() => setShowChangePasscode(true)}
-              aria-label="Change your passcode"
-            >
-              <KeyRound />
-            </Button>
-            <button
-              onClick={() => setShowAvatarPanel((open) => !open)}
-              aria-expanded={showAvatarPanel}
-              aria-label="Account and quick settings"
-              className="border-border bg-surface flex min-h-11 items-center gap-2 rounded-full border py-1 pr-2.5 pl-1"
-            >
-              <span className="bg-avatar grid size-[34px] place-items-center rounded-full text-xs font-bold">
-                {initials}
-              </span>
-              <ChevronDown
-                className="text-muted-foreground size-4"
-                aria-hidden="true"
-              />
-            </button>
-          </div>
-          {!isRecipeDetail && <CountdownPill clock={clock} compact />}
-          {showAvatarPanel ? (
-            <div
-              data-testid="account-menu"
-              className="border-border bg-card absolute top-[calc(100%+0.5rem)] right-0 z-50 min-w-64 space-y-1 rounded-2xl border p-2 shadow-xl"
-            >
-              <div className="border-border/60 mb-1 flex flex-col border-b px-2.5 pb-2">
-                <span className="text-sm font-semibold">{user.name}</span>
-                <span className="text-muted-foreground text-xs capitalize">
-                  {user.role.replace("_", " ")}
-                </span>
-              </div>
-              <div className="flex items-center justify-between px-2.5 py-2">
-                <span className="text-faint text-[10px] font-semibold tracking-[0.12em] uppercase">
-                  Appearance
-                </span>
-                <AppearanceSwitch />
-              </div>
-              <button
-                onClick={openSettingsPage}
-                className="hover:bg-muted flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-              >
-                <Settings2
-                  className="text-muted-foreground size-[18px]"
-                  aria-hidden="true"
-                />
-                <span className="flex-1 text-sm font-medium">Settings</span>
-              </button>
-              <button
-                onClick={signOut}
-                className="text-destructive hover:bg-destructive/10 flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 text-left"
-              >
-                <LogOut className="size-[18px]" aria-hidden="true" />
-                <span className="text-sm font-semibold">Sign out</span>
-              </button>
-            </div>
+          {tab === "schedule" ? (
+            <ScheduleWorkspace
+              user={user}
+              team={activeTeam}
+              shiftDefaults={shiftDefaults}
+              shifts={shifts}
+              weekDates={weekDates}
+              monthDates={monthDates}
+              timeZone={timeZone}
+              restaurantSlug={restaurantSlug}
+              demoMode={demoMode}
+              onAddShifts={addShifts}
+              onPublish={publishSchedule}
+              onUpdateShift={updateShift}
+              onDeleteShift={deleteShift}
+            />
           ) : null}
-        </div>
-      </header>
+          {tab === "allocation" ? (
+            <AllocationWorkspace
+              user={user}
+              team={activeTeam}
+              boardLocked={tipsStatus === "finalized"}
+              onReopenTips={reopenTips}
+              tipsAuditLog={tipsAuditLog}
+              demoMode={demoMode}
+              restaurantSlug={restaurantSlug}
+              initialContext={initialAllocationContext}
+              onSessionInvalid={forceSignOut}
+            />
+          ) : null}
+          {tab === "tasks" ? (
+            <TasksModule
+              key={tasksNavKey}
+              restaurantSlug={restaurantSlug}
+              user={user}
+              expectedContext={workspaceExpectation}
+              onSessionInvalid={forceSignOut}
+              onUnreadChange={demoMode ? undefined : setRealTasksUnread}
+              demo={
+                demoMode
+                  ? {
+                      state: demoTasksState,
+                      setState: setDemoTasksState,
+                      team: toTasksTeam(activeTeam, demoAccounts),
+                      timeZone,
+                      organizationId: DEMO_ORGANIZATION_ID,
+                      openingReminders: demoReminders,
+                    }
+                  : null
+              }
+            />
+          ) : null}
+          {tab === "barInventory" && isManager ? (
+            <InventoryModule
+              restaurantSlug={restaurantSlug}
+              user={user}
+              timeZone={timeZone}
+              locationId={locationId}
+              onSessionInvalid={forceSignOut}
+              demo={
+                demoMode
+                  ? { state: demoCatalog, setState: setDemoCatalog }
+                  : null
+              }
+            />
+          ) : null}
+          {tab === "recipes" ? (
+            <RecipesModule
+              restaurantSlug={restaurantSlug}
+              demo={demoMode}
+              isManagement={currentUser.designation !== "staff"}
+              onSessionInvalid={forceSignOut}
+              onRecipeDetailActive={setRecipeDetailActive}
+            />
+          ) : null}
+          {tab === "tips" ? (
+            <TipWorkspace
+              user={user}
+              team={activeTeam}
+              status={tipsStatus}
+              intervals={tipIntervals}
+              onAddInterval={addTipInterval}
+              onFinalize={finalizeTips}
+              onReopen={reopenTips}
+              onPullClockedInTeam={pullClockedInTeam}
+              auditLog={tipsAuditLog}
+            />
+          ) : null}
+          {tab === "team" && isManager ? (
+            <TeamWorkspace
+              user={user}
+              team={team}
+              onChangeDesignation={changeDesignation}
+              onRenameMember={renameTeamMember}
+              onResetPasscode={resetMemberPasscode}
+              onDeactivate={deactivateTeamMember}
+              onReactivate={reactivateTeamMember}
+              onLoadAttendanceOptions={loadAttendanceLinkOptions}
+              onLinkAttendance={linkAttendanceIdentity}
+              onUnlinkAttendance={unlinkAttendanceIdentity}
+            />
+          ) : null}
+          {tab === "attendance" ? (
+            <AttendanceReport
+              restaurantSlug={restaurantSlug}
+              demoMode={demoMode}
+              timeZone={timeZone}
+              user={user}
+              demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
+            />
+          ) : null}
+          {tab === "payroll" && !demoMode ? (
+            <PayrollWorkspace
+              restaurantSlug={restaurantSlug}
+              timeZone={timeZone}
+              onGoToPayRates={() => setTab("settings")}
+            />
+          ) : null}
+          {tab === "settings" ? (
+            <SettingsPage
+              isManager={isManager}
+              demoMode={demoMode}
+              restaurantSlug={restaurantSlug}
+              timeZone={timeZone}
+              operatingHours={operatingHours}
+              shiftDefaults={shiftDefaults}
+              todayIndex={todayIndex}
+              onEditHours={openHours}
+              onChangePasscode={openChangePasscode}
+              onGoToTab={(nextTab) => setTab(nextTab)}
+              onSignOut={signOut}
+              onBack={() => setTab("allocation")}
+            />
+          ) : null}
+        </main>
 
-      {!demoMode && isManager ? (
-        <OrgLockoutBanner restaurantSlug={restaurantSlug} />
-      ) : null}
-
-      {actionError ? (
-        <div className="border-destructive/30 bg-destructive/10 border-b px-4 py-2 text-center text-sm sm:px-6 lg:px-8">
-          <span className="text-destructive">{actionError}</span>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground ml-3 text-xs underline"
-            onClick={() => setActionError(null)}
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {switchError ? (
-        <div
-          role="alert"
-          data-testid="context-switch-error"
-          className="border-destructive/30 bg-destructive/10 text-destructive mx-auto flex max-w-[1540px] items-center justify-between gap-3 px-4 py-3 text-sm"
-        >
-          <span>{switchError}</span>
-          <button
-            type="button"
-            onClick={dismissSwitchError}
-            className="min-h-11 shrink-0 underline"
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {switchingTo ? (
-        <div
-          role="status"
-          aria-live="polite"
-          data-testid="context-switching"
-          className="text-muted-foreground px-4 py-10 text-center text-sm"
-        >
-          Switching to {switchingTo.organizationName} —{" "}
-          {switchingTo.locationName}…
-        </div>
-      ) : null}
-
-      <main
-        // While a switch is pending the previous location's workspace is
-        // hidden and inert, so it can never be read or acted on as if it
-        // belonged to the newly selected location.
-        aria-busy={switchingTo ? true : undefined}
-        inert={switchingTo ? true : undefined}
-        hidden={switchingTo ? true : undefined}
-        className={cn(
-          "mx-auto max-w-[1540px]",
-          isRecipeDetail ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-10",
-        )}
-      >
-        {tab === "schedule" ? (
-          <ScheduleWorkspace
-            user={user}
-            team={activeTeam}
-            shiftDefaults={shiftDefaults}
-            shifts={shifts}
-            weekDates={weekDates}
-            monthDates={monthDates}
-            timeZone={timeZone}
-            restaurantSlug={restaurantSlug}
-            demoMode={demoMode}
-            onAddShifts={addShifts}
-            onPublish={publishSchedule}
-            onUpdateShift={updateShift}
-            onDeleteShift={deleteShift}
-          />
-        ) : null}
-        {tab === "allocation" ? (
-          <AllocationWorkspace
-            user={user}
-            team={activeTeam}
-            boardLocked={tipsStatus === "finalized"}
-            onReopenTips={reopenTips}
-            tipsAuditLog={tipsAuditLog}
-            demoMode={demoMode}
-            restaurantSlug={restaurantSlug}
-            initialContext={initialAllocationContext}
-            onSessionInvalid={forceSignOut}
-          />
-        ) : null}
-        {tab === "tasks" ? (
-          <TasksModule
-            key={tasksNavKey}
-            restaurantSlug={restaurantSlug}
-            user={user}
-            onSessionInvalid={forceSignOut}
-            onUnreadChange={demoMode ? undefined : setRealTasksUnread}
-            demo={
-              demoMode
-                ? {
-                    state: demoTasksState,
-                    setState: setDemoTasksState,
-                    team: toTasksTeam(activeTeam, demoAccounts),
-                    timeZone,
-                    organizationId: DEMO_ORGANIZATION_ID,
-                    openingReminders: demoReminders,
-                  }
-                : null
-            }
-          />
-        ) : null}
-        {tab === "barInventory" && isManager ? (
-          <InventoryModule
-            restaurantSlug={restaurantSlug}
-            user={user}
-            timeZone={timeZone}
-            locationId={locationId}
-            onSessionInvalid={forceSignOut}
-            demo={
-              demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null
-            }
-          />
-        ) : null}
-        {tab === "recipes" ? (
-          <RecipesModule
-            restaurantSlug={restaurantSlug}
-            demo={demoMode}
-            isManagement={currentUser.designation !== "staff"}
-            onSessionInvalid={forceSignOut}
-            onRecipeDetailActive={setRecipeDetailActive}
-          />
-        ) : null}
-        {tab === "tips" ? (
-          <TipWorkspace
-            user={user}
-            team={activeTeam}
-            status={tipsStatus}
-            intervals={tipIntervals}
-            onAddInterval={addTipInterval}
-            onFinalize={finalizeTips}
-            onReopen={reopenTips}
-            onPullClockedInTeam={pullClockedInTeam}
-            auditLog={tipsAuditLog}
-          />
-        ) : null}
-        {tab === "team" && isManager ? (
-          <TeamWorkspace
-            user={user}
-            team={team}
-            onChangeDesignation={changeDesignation}
-            onRenameMember={renameTeamMember}
-            onResetPasscode={resetMemberPasscode}
-            onDeactivate={deactivateTeamMember}
-            onReactivate={reactivateTeamMember}
-            onLoadAttendanceOptions={loadAttendanceLinkOptions}
-            onLinkAttendance={linkAttendanceIdentity}
-            onUnlinkAttendance={unlinkAttendanceIdentity}
-          />
-        ) : null}
-        {tab === "attendance" ? (
-          <AttendanceReport
-            restaurantSlug={restaurantSlug}
-            demoMode={demoMode}
-            timeZone={timeZone}
-            user={user}
-            demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
-          />
-        ) : null}
-        {tab === "payroll" && !demoMode ? (
-          <PayrollWorkspace
-            restaurantSlug={restaurantSlug}
-            timeZone={timeZone}
-            onGoToPayRates={() => setTab("settings")}
-          />
-        ) : null}
-        {tab === "settings" ? (
-          <SettingsPage
-            isManager={isManager}
-            demoMode={demoMode}
-            restaurantSlug={restaurantSlug}
-            timeZone={timeZone}
-            operatingHours={operatingHours}
-            shiftDefaults={shiftDefaults}
-            todayIndex={todayIndex}
-            onEditHours={openHours}
-            onChangePasscode={openChangePasscode}
-            onGoToTab={(nextTab) => setTab(nextTab)}
-            onSignOut={signOut}
-            onBack={() => setTab("allocation")}
-          />
-        ) : null}
-      </main>
-
-      {/* Feature 021 / Tasks V1: fixed 3-button dock -- the two primary
+        {/* Feature 021 / Tasks V1: fixed 3-button dock -- the two primary
           frontline modules (Table Allocation, Tasks) plus "More".
           Everything else (Schedule, Team, Attendance, Tip Split, Payroll,
           Settings) lives in the slide-up sheet below. */}
-      <nav
-        className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
-        aria-label="Mobile navigation"
-      >
-        <button
-          onClick={() => goToTab("allocation")}
-          aria-current={tab === "allocation" ? "page" : undefined}
-          className={cn(
-            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "allocation"
-              ? "bg-primary text-primary-foreground"
-              : "border-border bg-surface text-foreground border",
-          )}
+        <nav
+          className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
+          aria-label="Mobile navigation"
         >
-          <Table2 className="size-[22px]" aria-hidden="true" />
-          Allocation
-        </button>
-        <button
-          onClick={() => goToTab("tasks")}
-          aria-current={tab === "tasks" ? "page" : undefined}
-          className={cn(
-            "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "tasks"
-              ? "bg-primary text-primary-foreground"
-              : "border-border bg-surface text-foreground border",
-          )}
-        >
-          <ListChecks className="size-[22px]" aria-hidden="true" />
-          Tasks
-          {tasksUnread > 0 ? <TasksBadge count={tasksUnread} dock /> : null}
-        </button>
-        <button
-          onClick={() => setShowMobileSheet(true)}
-          aria-expanded={showMobileSheet}
-          className="border-border bg-surface text-muted-foreground flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border text-xs font-semibold"
-        >
-          <Menu className="size-[22px]" aria-hidden="true" />
-          More
-        </button>
-      </nav>
-
-      {showMobileSheet ? (
-        <div
-          className="fixed inset-0 z-50 bg-black/55 lg:hidden"
-          role="presentation"
-        >
-          <div
-            ref={mobileSheetRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="More"
-            className="bg-card border-border absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl"
+          <button
+            onClick={() => goToTab("allocation")}
+            aria-current={tab === "allocation" ? "page" : undefined}
+            className={cn(
+              "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+              tab === "allocation"
+                ? "bg-primary text-primary-foreground"
+                : "border-border bg-surface text-foreground border",
+            )}
           >
-            <span className="bg-border mx-auto mb-3 block h-1 w-10 rounded-full" />
-            <div className="space-y-0.5">
-              {moreTabs.map(({ id, label, icon: Icon }) => (
+            <Table2 className="size-[22px]" aria-hidden="true" />
+            Allocation
+          </button>
+          <button
+            onClick={() => goToTab("tasks")}
+            aria-current={tab === "tasks" ? "page" : undefined}
+            className={cn(
+              "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+              tab === "tasks"
+                ? "bg-primary text-primary-foreground"
+                : "border-border bg-surface text-foreground border",
+            )}
+          >
+            <ListChecks className="size-[22px]" aria-hidden="true" />
+            Tasks
+            {tasksUnread > 0 ? <TasksBadge count={tasksUnread} dock /> : null}
+          </button>
+          <button
+            onClick={() => setShowMobileSheet(true)}
+            aria-expanded={showMobileSheet}
+            className="border-border bg-surface text-muted-foreground flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border text-xs font-semibold"
+          >
+            <Menu className="size-[22px]" aria-hidden="true" />
+            More
+          </button>
+        </nav>
+
+        {showMobileSheet ? (
+          <div
+            className="fixed inset-0 z-50 bg-black/55 lg:hidden"
+            role="presentation"
+          >
+            <div
+              ref={mobileSheetRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="More"
+              className="bg-card border-border absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl"
+            >
+              <span className="bg-border mx-auto mb-3 block h-1 w-10 rounded-full" />
+              <div className="space-y-0.5">
+                {moreTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => goToTab(id)}
+                    className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+                  >
+                    <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                      <Icon className="size-[19px]" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="text-foreground block text-[15px] font-semibold">
+                        {label}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className="text-muted-foreground size-4 -rotate-90"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ))}
                 <button
-                  key={id}
-                  onClick={() => goToTab(id)}
+                  onClick={openSettingsPage}
                   className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
                 >
                   <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                    <Icon className="size-[19px]" aria-hidden="true" />
+                    <Settings2 className="size-[19px]" aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-foreground block text-[15px] font-semibold">
-                      {label}
+                      Settings
+                    </span>
+                    <span className="text-muted-foreground block text-xs">
+                      Preferences, passcode, and more
                     </span>
                   </span>
                   <ChevronDown
@@ -2501,108 +2571,88 @@ function RestaurantOperationsAppInner({
                     aria-hidden="true"
                   />
                 </button>
-              ))}
-              <button
-                onClick={openSettingsPage}
-                className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
-              >
-                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <Settings2 className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="text-foreground block text-[15px] font-semibold">
-                    Settings
+                <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
+                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                    <Settings2 className="size-[19px]" aria-hidden="true" />
                   </span>
-                  <span className="text-muted-foreground block text-xs">
-                    Preferences, passcode, and more
+                  <span className="flex-1 text-[15px] font-semibold">
+                    Appearance
                   </span>
-                </span>
-                <ChevronDown
-                  className="text-muted-foreground size-4 -rotate-90"
-                  aria-hidden="true"
-                />
-              </button>
-              <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
-                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <Settings2 className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="flex-1 text-[15px] font-semibold">
-                  Appearance
-                </span>
-                <AppearanceSwitch />
+                  <AppearanceSwitch />
+                </div>
+                <button
+                  onClick={openChangePasscode}
+                  className="hover:bg-muted border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+                >
+                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                    <KeyRound className="size-[19px]" aria-hidden="true" />
+                  </span>
+                  <span className="text-foreground flex-1 text-[15px] font-semibold">
+                    Change passcode
+                  </span>
+                </button>
+                <button
+                  onClick={signOut}
+                  className="hover:bg-destructive/10 border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+                >
+                  <span className="bg-destructive/15 text-destructive grid size-10 flex-none place-items-center rounded-xl">
+                    <LogOut className="size-[19px]" aria-hidden="true" />
+                  </span>
+                  <span className="text-destructive flex-1 text-[15px] font-semibold">
+                    Sign out
+                  </span>
+                </button>
               </div>
-              <button
-                onClick={openChangePasscode}
-                className="hover:bg-muted border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
-              >
-                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <KeyRound className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="text-foreground flex-1 text-[15px] font-semibold">
-                  Change passcode
-                </span>
-              </button>
-              <button
-                onClick={signOut}
-                className="hover:bg-destructive/10 border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
-              >
-                <span className="bg-destructive/15 text-destructive grid size-10 flex-none place-items-center rounded-xl">
-                  <LogOut className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="text-destructive flex-1 text-[15px] font-semibold">
-                  Sign out
-                </span>
-              </button>
             </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {showHours && isManager ? (
-        <HoursDialog
-          hours={operatingHours}
-          shiftDefaults={shiftDefaults}
-          timeZone={timeZone}
-          onClose={() => setShowHours(false)}
-          onSave={saveScheduleConfig}
-        />
-      ) : null}
+        {showHours && isManager ? (
+          <HoursDialog
+            hours={operatingHours}
+            shiftDefaults={shiftDefaults}
+            timeZone={timeZone}
+            onClose={() => setShowHours(false)}
+            onSave={saveScheduleConfig}
+          />
+        ) : null}
 
-      {showChangePasscode ? (
-        <PasscodeChangeDialog
-          onClose={() => setShowChangePasscode(false)}
-          onSubmit={changeMyPasscode}
-        />
-      ) : null}
+        {showChangePasscode ? (
+          <PasscodeChangeDialog
+            onClose={() => setShowChangePasscode(false)}
+            onSubmit={changeMyPasscode}
+          />
+        ) : null}
 
-      {/* Tasks V1.1 / T-5: the one Opening reminder popup, on any module. */}
-      {!demoMode || demoReminders ? (
-        <OpeningReminderPrompt
-          key={`${currentUser.profileId}:${restaurantSlug}`}
-          source={
-            demoMode
-              ? createDemoOpeningReminderSource({
-                  getState: () => demoTasksState,
-                  setState: setDemoTasksState,
-                  team: toTasksTeam(activeTeam, demoAccounts),
-                  timeZone,
-                  viewer: {
-                    profileId: currentUser.profileId,
-                    name: currentUser.name,
-                    designation: currentUser.designation,
-                  },
-                })
-              : createRealOpeningReminderSource(restaurantSlug)
-          }
-          isManagement={currentUser.designation !== "staff"}
-          onViewTasks={() => {
-            setTasksNavKey((key) => key + 1);
-            setTab("tasks");
-          }}
-          onSessionInvalid={forceSignOut}
-          onAcknowledged={() => setUnreadNonce((n) => n + 1)}
-        />
-      ) : null}
-    </div>
+        {/* Tasks V1.1 / T-5: the one Opening reminder popup, on any module. */}
+        {!demoMode || demoReminders ? (
+          <OpeningReminderPrompt
+            key={`${currentUser.profileId}:${restaurantSlug}`}
+            source={
+              demoMode
+                ? createDemoOpeningReminderSource({
+                    getState: () => demoTasksState,
+                    setState: setDemoTasksState,
+                    team: toTasksTeam(activeTeam, demoAccounts),
+                    timeZone,
+                    viewer: {
+                      profileId: currentUser.profileId,
+                      name: currentUser.name,
+                      designation: currentUser.designation,
+                    },
+                  })
+                : createRealOpeningReminderSource(restaurantSlug)
+            }
+            isManagement={currentUser.designation !== "staff"}
+            onViewTasks={() => {
+              setTasksNavKey((key) => key + 1);
+              setTab("tasks");
+            }}
+            onSessionInvalid={forceSignOut}
+            onAcknowledged={() => setUnreadNonce((n) => n + 1)}
+          />
+        ) : null}
+      </div>
+    </ContextSyncGuard>
   );
 }

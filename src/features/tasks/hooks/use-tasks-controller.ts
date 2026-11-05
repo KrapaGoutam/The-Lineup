@@ -7,6 +7,7 @@ import {
   getTasksSnapshotAction,
   runTaskCommandAction,
 } from "@/features/tasks/actions/tasks-actions";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import type { TaskCommand } from "@/features/tasks/domain/task-commands";
 import { generateDailyChecklists } from "@/features/tasks/domain/checklist-engine";
 import { runDemoOpeningReminders } from "@/features/tasks/domain/opening-reminder-engine";
@@ -64,6 +65,14 @@ type Options = {
   restaurantSlug: string;
   viewer: TaskViewer;
   onSessionInvalid?: () => void;
+  /**
+   * V2-003.005: the workspace (profile, organization, location) this screen
+   * was rendered for. Sent with every real-mode call as an UNTRUSTED assertion
+   * the server must confirm before it reads or writes anything.
+   */
+  expectedContext?: WorkspaceExpectation | null;
+  /** The server refused because that workspace is no longer the active one. */
+  onContextStale?: () => void;
 };
 
 const CLOCK_TICK_MS = 30_000;
@@ -101,6 +110,8 @@ export function useTasksController({
   restaurantSlug,
   viewer,
   onSessionInvalid,
+  expectedContext = null,
+  onContextStale,
 }: Options): TasksController {
   const [now, setNow] = useState(() => new Date());
   const [remote, setRemote] = useState<TasksSnapshot | null>(null);
@@ -121,13 +132,18 @@ export function useTasksController({
     if (demo || inFlight.current) return;
     inFlight.current = true;
     try {
-      const result = await getTasksSnapshotAction({ restaurantSlug });
+      const result = await getTasksSnapshotAction({
+        restaurantSlug,
+        expectedContext,
+      });
       lastFetch.current = Date.now();
       if (result.ok) {
         setRemote(result.data);
         setLoadError(null);
       } else if (result.sessionInvalid) {
         onSessionInvalid?.();
+      } else if (result.contextStale) {
+        onContextStale?.();
       } else {
         setLoadError(result.error);
       }
@@ -135,7 +151,7 @@ export function useTasksController({
       inFlight.current = false;
       setLoading(false);
     }
-  }, [demo, restaurantSlug, onSessionInvalid]);
+  }, [demo, restaurantSlug, onSessionInvalid, expectedContext, onContextStale]);
 
   useEffect(() => {
     if (demo) return;
@@ -219,13 +235,18 @@ export function useTasksController({
           return { ok: true };
         }
 
-        const result = await runTaskCommandAction({ restaurantSlug, command });
+        const result = await runTaskCommandAction({
+          restaurantSlug,
+          command,
+          expectedContext,
+        });
         if (result.ok) {
           setRemote(result.data);
           setLoadError(null);
           return { ok: true };
         }
         if (result.sessionInvalid) onSessionInvalid?.();
+        if (result.contextStale) onContextStale?.();
         // Server truth wins: drop whatever the screen assumed and re-read.
         void refresh();
         return { ok: false, error: result.error };
@@ -236,7 +257,15 @@ export function useTasksController({
         settle();
       }
     },
-    [demo, viewer, restaurantSlug, onSessionInvalid, refresh],
+    [
+      demo,
+      viewer,
+      restaurantSlug,
+      onSessionInvalid,
+      expectedContext,
+      onContextStale,
+      refresh,
+    ],
   );
 
   const loadHistory = useCallback(async (): Promise<TaskHistoryLoadResult> => {
@@ -258,14 +287,25 @@ export function useTasksController({
       };
     }
     try {
-      const result = await getTaskHistoryAction({ restaurantSlug });
+      const result = await getTaskHistoryAction({
+        restaurantSlug,
+        expectedContext,
+      });
       if (result.ok) return { ok: true, data: result.data };
       if (result.sessionInvalid) onSessionInvalid?.();
+      if (result.contextStale) onContextStale?.();
       return { ok: false, error: result.error };
     } catch {
       return { ok: false, error: "Task history could not be loaded." };
     }
-  }, [demo, demoSnapshot, restaurantSlug, onSessionInvalid]);
+  }, [
+    demo,
+    demoSnapshot,
+    restaurantSlug,
+    onSessionInvalid,
+    expectedContext,
+    onContextStale,
+  ]);
 
   return {
     snapshot: demo ? demoSnapshot : remote,

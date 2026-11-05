@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCw, ShieldAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,12 @@ import {
   clearActiveContextAction,
   setActiveContextAction,
 } from "@/features/context/actions/context-actions";
-import { organizationPath } from "@/features/context/domain/context-navigation";
+import { publishContextEvent } from "@/features/context/components/context-sync-channel";
+import { currentNavigationOrigin } from "@/features/context/components/history-traversal";
+import {
+  organizationPath,
+  recoveryHref,
+} from "@/features/context/domain/context-navigation";
 
 export interface ContextReconcileTarget {
   readonly organizationId: string;
@@ -17,7 +22,7 @@ export interface ContextReconcileTarget {
   readonly locationId: string;
 }
 
-type Outcome = { key: string; status: "done" | "failed" };
+type Outcome = { key: string; status: "done" | "failed" | "confirm" };
 
 /**
  * V2-003.004 deep-link reconciliation gate.
@@ -35,35 +40,57 @@ type Outcome = { key: string; status: "done" | "failed" };
  * Server-side, any action issued while the cookie and the workspace URL
  * disagree is refused anyway (see `getPrimaryLocation`), so a stale tab fails
  * closed even without this gate.
+ *
+ * V2-003.005: the URL is only a DELIBERATE selection for a fresh navigation.
+ * After a reload or back/forward it is what the app (or an old history entry)
+ * left in the address bar, so persisting it silently would reinstate a previous
+ * context and flip every other tab. In that case nothing is written: the user
+ * is asked to switch (a deliberate, server-verified action) or to stay on the
+ * location the server has persisted.
  */
 export function ContextReconcileGate({
   target,
   activeLocationId,
+  activeLocationName = null,
   children,
 }: {
   target: ContextReconcileTarget | null;
   /** The server-verified location on screen (enables URL canonicalization). */
   activeLocationId?: string | null;
+  /** Display name of that location (confirmation copy only). */
+  activeLocationName?: string | null;
   children: ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  // The key the user deliberately confirmed (or retried): bypasses the
+  // history/reload confirmation for exactly that target.
+  const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
   const key = target ? `${target.organizationId}:${target.locationId}` : null;
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  const status: "ready" | "pending" | "failed" =
+  const status: "ready" | "pending" | "failed" | "confirm" =
     key === null
       ? "ready"
       : outcome?.key === key
         ? outcome.status === "done"
           ? "ready"
-          : "failed"
+          : outcome.status === "confirm"
+            ? "confirm"
+            : "failed"
         : "pending";
 
   useEffect(() => {
     if (status !== "pending" || !target || !key) return;
     let alive = true;
     void (async () => {
+      // Browser-only decision (never during render): a reload / back-forward
+      // asks before persisting anything.
+      if (confirmedKey !== key && currentNavigationOrigin() !== "fresh") {
+        if (alive) setOutcome({ key, status: "confirm" });
+        return;
+      }
       let ok = false;
       try {
         const result = await setActiveContextAction({
@@ -74,13 +101,15 @@ export function ContextReconcileGate({
       } catch {
         ok = false;
       }
+      // Announce only what the server actually persisted.
+      if (ok) publishContextEvent("context_changed");
       if (alive) setOutcome({ key, status: ok ? "done" : "failed" });
     })();
     return () => {
       alive = false;
     };
     // `attempt` re-arms the effect for an explicit retry.
-  }, [status, target, key, attempt]);
+  }, [status, target, key, attempt, confirmedKey]);
 
   // Once the workspace is open, make the address bar name the location it is
   // showing. Server Actions are POSTed from this URL, so a stale tab (or a
@@ -118,6 +147,50 @@ export function ContextReconcileGate({
     );
   }
 
+  if (status === "confirm") {
+    const name = activeLocationName?.trim() || "another location";
+    return (
+      <main
+        className="mx-auto flex min-h-dvh max-w-xl items-center justify-center p-4"
+        data-testid="context-reconcile-confirm"
+      >
+        <div className="border-border bg-card flex w-full flex-col gap-3 rounded-2xl border p-6">
+          <div className="flex items-center gap-2">
+            <ShieldAlert aria-hidden className="text-muted-foreground size-5" />
+            <h1 className="text-lg font-semibold">This page is for {name}</h1>
+          </div>
+          <p role="alert" className="text-muted-foreground text-sm">
+            Your active location is different. Nothing has been loaded or
+            changed. Choose which location to continue with.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              onClick={() => {
+                setConfirmedKey(key);
+                setOutcome(null);
+              }}
+            >
+              Switch to {name}
+            </Button>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => {
+                // Back to the verified persisted location (no `?location=`).
+                router.replace(recoveryHref(pathname, window.location.search));
+                router.refresh();
+              }}
+            >
+              Stay on my current location
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className="mx-auto flex min-h-dvh max-w-xl items-center justify-center p-4"
@@ -139,6 +212,7 @@ export function ContextReconcileGate({
             variant="secondary"
             className="min-h-11"
             onClick={() => {
+              setConfirmedKey(key);
               setOutcome(null);
               setAttempt((value) => value + 1);
             }}
@@ -152,7 +226,8 @@ export function ContextReconcileGate({
             onClick={() => {
               void (async () => {
                 try {
-                  await clearActiveContextAction();
+                  const cleared = await clearActiveContextAction();
+                  if (cleared.ok) publishContextEvent("context_cleared");
                 } finally {
                   router.replace(
                     target ? organizationPath(target.organizationSlug) : "/",

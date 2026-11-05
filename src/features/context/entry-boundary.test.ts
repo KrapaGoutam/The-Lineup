@@ -138,4 +138,53 @@ describe("entry-boundary static guards", () => {
     const login = read("src/components/login-screen.tsx");
     expect(login).toMatch(/settleSignOut\(\)/);
   });
+
+  it("V2-003.005: the cross-tab layer is a notification channel only -- no storage, no cookie access, no ids", () => {
+    for (const file of [
+      "src/features/context/components/context-sync-channel.ts",
+      "src/features/context/domain/context-sync.ts",
+      "src/features/context/components/history-traversal.ts",
+    ]) {
+      const source = read(file);
+      expect(source, file).not.toMatch(
+        /document\.cookie|localStorage|sessionStorage|ACTIVE_CONTEXT_COOKIE|indexedDB/,
+      );
+      expect(source, file).not.toMatch(/organizationId|locationId|profileId/);
+    }
+    // A received event may only schedule a SERVER check: the guard never
+    // calls the selection/clear actions itself and touches no storage.
+    const guard = read(
+      "src/features/context/components/context-sync-guard.tsx",
+    );
+    expect(guard).not.toMatch(/document\.cookie|localStorage|sessionStorage/);
+    expect(guard).not.toMatch(
+      /setActiveContextAction|clearActiveContextAction/,
+    );
+    expect(guard).toMatch(/verifyWorkspaceContextAction/);
+  });
+
+  it("V2-003.005: the consistency helper never uses a privileged client, a query or a cookie, and resolves the location only through getPrimaryLocation", () => {
+    const helper = read("src/features/context/data/workspace-expectation.ts");
+    expect(helper).not.toMatch(
+      /service[_-]?role|supabase\/admin|createAdminClient|\.from\(|\.rpc\(/i,
+    );
+    expect(helper).not.toMatch(/cookies?\(|\.set\(|\.delete\(/);
+    expect(helper).toMatch(/getPrimaryLocation/);
+    expect(read("src/features/context/domain/context-navigation.ts")).toMatch(
+      /export function recoveryHref/,
+    );
+  });
+
+  it("V2-003.005: the Tasks write path checks the workspace expectation before it touches the database", () => {
+    const actions = read("src/features/tasks/actions/tasks-actions.ts");
+    const write = actions.slice(
+      actions.indexOf("export async function runTaskCommandAction"),
+    );
+    expect(write.indexOf("checkWorkspace(")).toBeGreaterThan(-1);
+    expect(write.indexOf("checkWorkspace(")).toBeLessThan(
+      write.indexOf("runCommand("),
+    );
+    // the verified location comes from the check, not a direct lookup
+    expect(actions).not.toMatch(/getPrimaryLocation/);
+  });
 });

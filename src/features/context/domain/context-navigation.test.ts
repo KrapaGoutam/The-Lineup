@@ -6,6 +6,7 @@ import {
   contextIdentityKey,
   contextSwitchHref,
   groupContextsByOrganization,
+  recoveryHref,
 } from "./context-navigation";
 
 const target = { organizationSlug: "liquor-tap", locationId: "loc-nasa" };
@@ -82,5 +83,19 @@ describe("contextIdentityKey", () => {
     expect(contextIdentityKey("p2", "o", "l")).not.toBe(base);
     expect(contextIdentityKey("p", "o2", "l")).not.toBe(base);
     expect(contextIdentityKey("p", "o", "l2")).not.toBe(base);
+  });
+});
+
+describe("recoveryHref (V2-003.005)", () => {
+  it("MT-03: drops ?location= (a stale address bar must not be re-read as a deliberate selection) and keeps the module tab", () => {
+    expect(
+      recoveryHref("/r/liquor-tap", "?tab=tasks&location=old&recipe=x"),
+    ).toBe("/r/liquor-tap?tab=tasks");
+  });
+  it("MT-21: no tab -> the bare path; a hostile tab value is not carried", () => {
+    expect(recoveryHref("/r/liquor-tap", "?location=old")).toBe(
+      "/r/liquor-tap",
+    );
+    expect(recoveryHref("/", "?tab=../../x")).toBe("/");
   });
 });
