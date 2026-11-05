@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   eligible: { status: "ok", contexts: [] } as unknown,
   eligibleCalls: 0,
   referer: null as string | null,
+  cookie: null as string | null,
   resolved: null as unknown,
   resolveArgs: [] as unknown[],
 }));
@@ -15,6 +16,10 @@ vi.mock("next/headers", () => ({
       host: "app.test",
       ...(state.referer ? { referer: state.referer } : {}),
     }),
+}));
+
+vi.mock("@/features/context/data/context-cookie-reader", () => ({
+  readActiveContextCookieValue: async () => state.cookie,
 }));
 
 vi.mock("@/features/context/data/active-context", () => ({
@@ -53,6 +58,7 @@ describe("locationForLoader (V2-003.001)", () => {
     state.eligible = { status: "ok", contexts: [] };
     state.eligibleCalls = 0;
     state.referer = null;
+    state.cookie = null;
     state.resolved = null;
     state.resolveArgs = [];
   });
@@ -113,78 +119,125 @@ describe("locationForLoader (V2-003.001)", () => {
     expect(state.calls).toBe(0);
   });
 
-  describe("selected-location follow-ups (V2-003.002)", () => {
+  describe("persisted-context follow-ups (V2-003.004)", () => {
+    const ORG = "11111111-1111-4111-8111-111111111111";
+    const OTHER_ORG = "33333333-3333-4333-8333-333333333333";
+    const LOC_A = "21111111-1111-4111-8111-111111111111";
     const LOC_B = "22222222-2222-4222-8222-222222222222";
-    const resolvedB = {
+    const cookieFor = (o: string, l: string) => JSON.stringify({ v: 1, o, l });
+    const resolved = (organizationId: string, locationId: string) => ({
       status: "resolved",
       context: {
-        organizationId: "org-1",
-        locationId: LOC_B,
+        organizationId,
+        organizationSlug: "the-monks",
+        locationId,
         timeZone: "America/Chicago",
       },
-    };
+    });
 
-    it("SW-OPS-01: a verified ?location= referer makes follow-ups use that SAME location, not the oldest assigned one", async () => {
-      state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
-      state.resolved = resolvedB;
-      const location = await getPrimaryLocation("org-1");
-      expect(location).toEqual({ id: LOC_B, time_zone: "America/Chicago" });
-      expect(state.calls).toBe(0);
-      expect(state.resolveArgs[0]).toMatchObject({
-        routeSlug: "the-monks",
-        explicitSelection: { status: "present", locationId: LOC_B },
+    it("PERSIST-27: with NO Referer the validated persisted location is used", async () => {
+      state.cookie = cookieFor(ORG, LOC_B);
+      state.resolved = resolved(ORG, LOC_B);
+      expect(await getPrimaryLocation(ORG)).toEqual({
+        id: LOC_B,
+        time_zone: "America/Chicago",
       });
-    });
-
-    it("SW-OPS-02: an unverifiable selection is a safe denial (null), never a substitute location", async () => {
-      state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
-      state.resolved = {
-        status: "invalid_context",
-        reason: "selection_location_unavailable",
-      };
-      expect(await getPrimaryLocation("org-1")).toBeNull();
       expect(state.calls).toBe(0);
+      expect(state.resolveArgs[0]).toMatchObject({ routeSlug: null });
+      expect(state.eligibleCalls).toBe(0);
     });
 
-    it("SW-OPS-03: a selection that resolves to a different organization is denied", async () => {
+    it("PERSIST-28: an unverifiable (stale/revoked/invalid) persisted context is a safe denial, never a substitute", async () => {
+      state.cookie = cookieFor(ORG, LOC_B);
+      state.eligible = { status: "ok", contexts: [ctx(ORG, LOC_A)] };
+      for (const resolution of [
+        { status: "invalid_context", reason: "cookie_location_unavailable" },
+        { status: "no_access" },
+        { status: "unauthenticated" },
+        { status: "error", reason: "locations_query_failed" },
+      ]) {
+        state.resolved = resolution;
+        expect(await getPrimaryLocation(ORG)).toBeNull();
+      }
+      // never falls back to the (valid) other eligible location
+      expect(state.eligibleCalls).toBe(0);
+    });
+
+    it("PERSIST-22: a malformed cookie is denied before any resolution", async () => {
+      state.cookie = "not-json";
+      state.eligible = { status: "ok", contexts: [ctx(ORG, LOC_A)] };
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+      expect(state.resolveArgs).toHaveLength(0);
+      expect(state.eligibleCalls).toBe(0);
+    });
+
+    it("PERSIST-29: a persisted context for another organization cannot operate this one", async () => {
+      state.cookie = cookieFor(OTHER_ORG, LOC_B);
+      state.resolved = resolved(OTHER_ORG, LOC_B);
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+      // and a resolver answer that disagrees with the cookie pair is refused
+      state.cookie = cookieFor(ORG, LOC_A);
+      state.resolved = resolved(ORG, LOC_B);
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+    });
+
+    it("PERSIST-20: a Referer naming a DIFFERENT location than the verified context fails closed", async () => {
+      state.cookie = cookieFor(ORG, LOC_A);
+      state.resolved = resolved(ORG, LOC_A);
       state.referer = `https://app.test/r/the-monks?location=${LOC_B}`;
-      state.resolved = resolvedB;
-      expect(await getPrimaryLocation("org-2")).toBeNull();
-    });
-
-    it("SW-OPS-04: malformed or repeated location params fail closed", async () => {
-      state.resolved = {
-        status: "invalid_context",
-        reason: "selection_malformed",
-      };
-      state.referer = "https://app.test/r/the-monks?location=nope";
-      expect(await getPrimaryLocation("org-1")).toBeNull();
-      state.referer = `https://app.test/r/the-monks?location=${LOC_B}&location=${LOC_B}`;
-      expect(await getPrimaryLocation("org-1")).toBeNull();
-      expect(state.resolveArgs[1]).toMatchObject({
-        explicitSelection: { status: "malformed" },
-      });
-    });
-
-    it("SW-OPS-05: no selection, a cross-origin referer, or a non-/r/ page never trusts the Referer; only the unique verified location is used", async () => {
-      state.eligible = {
-        status: "ok",
-        contexts: [ctx("org-1", "loc-only")],
-      };
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+      // a Referer for a different organization route also fails closed
+      state.referer = `https://app.test/r/liquor-tap?location=${LOC_A}`;
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+      // malformed / repeated / unreadable Referer selections fail closed
       for (const referer of [
+        "https://app.test/r/the-monks?location=nope",
+        `https://app.test/r/the-monks?location=${LOC_A}&location=${LOC_A}`,
+        `https://app.test/r/%E0%A4%A?location=${LOC_A}`,
+      ]) {
+        state.referer = referer;
+        expect(await getPrimaryLocation(ORG)).toBeNull();
+      }
+    });
+
+    it("the Referer only ever agrees; it can never select a location (matching, missing, cross-origin, non-workspace)", async () => {
+      state.cookie = cookieFor(ORG, LOC_A);
+      state.resolved = resolved(ORG, LOC_A);
+      for (const referer of [
+        `https://app.test/r/the-monks?location=${LOC_A}`,
         null,
         "https://app.test/r/the-monks",
         `https://evil.test/r/the-monks?location=${LOC_B}`,
         `https://app.test/other?location=${LOC_B}`,
       ]) {
         state.referer = referer;
-        expect(await getPrimaryLocation("org-1")).toEqual({
-          id: "loc-only",
+        expect(await getPrimaryLocation(ORG)).toEqual({
+          id: LOC_A,
           time_zone: "America/Chicago",
         });
       }
-      expect(state.resolveArgs).toHaveLength(0);
-      expect(state.eligibleCalls).toBe(4);
+    });
+
+    it("PERSIST-25/26: with no cookie only a single verified eligible location in the organization is used", async () => {
+      state.eligible = {
+        status: "ok",
+        contexts: [ctx(ORG, LOC_A), ctx(OTHER_ORG, LOC_B)],
+      };
+      expect(await getPrimaryLocation(ORG)).toEqual({
+        id: LOC_A,
+        time_zone: "America/Chicago",
+      });
+      state.eligible = {
+        status: "ok",
+        contexts: [ctx(ORG, LOC_A), ctx(ORG, LOC_B)],
+      };
+      expect(await getPrimaryLocation(ORG)).toBeNull();
+    });
+
+    it("with no cookie, an explicit Referer location that is not the sole verified one fails closed", async () => {
+      state.eligible = { status: "ok", contexts: [ctx(ORG, LOC_A)] };
+      state.referer = `https://app.test/r/slug?location=${LOC_B}`;
+      expect(await getPrimaryLocation(ORG)).toBeNull();
     });
   });
 });

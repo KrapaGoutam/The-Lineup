@@ -67,13 +67,13 @@ development → main (Production)
 ### V2-003 — Active Organization / Location Context
 
 - **GitHub Issue:** [#251](https://github.com/KrapaGoutam/The-Lineup/issues/251)
-- **Status:** In progress (V2-003.001 complete — PR #284 merged; V2-003.002 complete — PR #286 merge 3c83535, hosted DEV 16/16, browser 10/10; V2-003.003 complete — PR #289, hosted DEV 22/22, browser 8/8; .004–.005 not started)
+- **Status:** In progress (V2-003.001 complete — PR #284 merged; V2-003.002 complete — PR #286 merge 3c83535, hosted DEV 16/16, browser 10/10; V2-003.003 complete — PR #289, hosted DEV 22/22, browser 8/8; V2-003.004 implemented, `READY_FOR_CLAUDE_LOCAL_VALIDATION` (hosted DEV + browser verification pending); .005 not started)
 - **Directory:** `docs/v2.0/features/003-active-context/`
 - **Subfeatures:**
   - [x] **V2-003.001**: Context Resolution (Server-side hydration of active organization and location from session/cookies — Issue #283; PR #284 merged into `development` at `5333a526`; hosted DEV real-JWT verified)
   - [x] **V2-003.002**: Organization / Location Switcher (Header/App Shell interactive selector with visible active indicator; explicit `?location=` selection, no cookie writes — COMPLETE; see its STATUS.md)
   - [x] **V2-003.003**: Single-Context Auto Resolution (Zero-friction auto-select for single-org / single-location staff; `/` redirects a non-default single-context user to the canonical route; no-`Referer` follow-ups fail closed — COMPLETE, PR #289; see its STATUS.md)
-  - [ ] **V2-003.004**: Context Persistence (Reliable server cookie persistence honoring security boundaries)
+  - [ ] **V2-003.004**: Context Persistence (HttpOnly server-verified cookie, `Referer` replaced by persisted context, deep-link reconciliation, sign-in/out clearing — Issue #290; implemented, awaiting Local hosted DEV + browser validation; see its STATUS.md)
   - [ ] **V2-003.005**: Multi-Tab / Stale Context Safety (Cross-tab broadcast channel sync and invalidation guards)
 
 ### V2-004 — Per-Location Module Configuration

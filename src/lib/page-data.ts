@@ -15,6 +15,11 @@ import type {
   ExplicitLocationSelection,
 } from "@/features/context/domain/active-context";
 import { toVerifiedLocationScope } from "@/features/context/domain/active-context";
+import { readActiveContextCookieValue } from "@/features/context/data/context-cookie-reader";
+import {
+  cookieNamesPair,
+  parseActiveContextCookie,
+} from "@/features/context/domain/context-cookie";
 import { contextSwitchHref } from "@/features/context/domain/context-navigation";
 import {
   getScheduleContext,
@@ -70,6 +75,17 @@ export type PageData = {
    * Never derived from input; null otherwise.
    */
   redirectTo: string | null;
+  /**
+   * V2-003.004: set when the verified page context came from an explicit
+   * `?location=` that the persisted (cookie) context does not match, so module
+   * Server Actions would not operate on what is on screen. The client keeps the
+   * workspace closed until the selection action re-verifies and persists it.
+   */
+  contextReconcile: {
+    organizationId: string;
+    organizationSlug: string;
+    locationId: string;
+  } | null;
 };
 
 const EMPTY_OPERATIONAL = {
@@ -82,6 +98,7 @@ const EMPTY_OPERATIONAL = {
   contextReason: null,
   availableContextsFailed: false,
   redirectTo: null,
+  contextReconcile: null,
 } as const;
 
 /**
@@ -202,6 +219,29 @@ export async function loadPageData(
       listCurrentEligibleContexts(),
     ]);
 
+  // V2-003.004 reconciliation: an explicit selection only needs persisting
+  // when module actions would otherwise resolve to a DIFFERENT (or no)
+  // location. With no cookie and exactly one eligible location in the
+  // organization, actions resolve to that same location, so nothing is
+  // written (single-context users never need a cookie).
+  let needsReconcile = false;
+  if (context.selectedBy === "explicit_selection") {
+    const cookie = parseActiveContextCookie(
+      await readActiveContextCookieValue(),
+    );
+    if (cookie.status === "present") {
+      needsReconcile = !cookieNamesPair(cookie, context);
+    } else if (cookie.status === "malformed") {
+      needsReconcile = true;
+    } else {
+      needsReconcile =
+        switcher.status !== "ok" ||
+        switcher.contexts.filter(
+          (candidate) => candidate.organizationId === context.organizationId,
+        ).length !== 1;
+    }
+  }
+
   return {
     demoMode,
     initialUser,
@@ -222,5 +262,12 @@ export async function loadPageData(
     contextReason: null,
     availableContextsFailed: switcher.status !== "ok",
     redirectTo: null,
+    contextReconcile: needsReconcile
+      ? {
+          organizationId: context.organizationId,
+          organizationSlug: context.organizationSlug,
+          locationId: context.locationId,
+        }
+      : null,
   };
 }

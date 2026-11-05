@@ -160,6 +160,7 @@ export function createFakeSupabase(options: FakeSupabaseOptions) {
             : { name: "AuthSessionMissingError", status: 400 },
         };
       },
+      signOut: async () => ({ error: null }),
     },
     from,
   };

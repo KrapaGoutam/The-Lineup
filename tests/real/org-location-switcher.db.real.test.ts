@@ -32,6 +32,7 @@ type U = {
 const req = vi.hoisted(() => ({
   client: null as unknown,
   referer: null as string | null,
+  cookie: null as string | null,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => req.client,
@@ -42,6 +43,12 @@ vi.mock("next/headers", () => ({
       host: "app.test",
       ...(req.referer ? { referer: req.referer } : {}),
     }),
+  cookies: async () => ({
+    get: (name: string) =>
+      name === "lineup_active_context" && req.cookie !== null
+        ? { name, value: req.cookie }
+        : undefined,
+  }),
 }));
 
 const admin = adminClient();
@@ -113,13 +120,22 @@ const denied = (r: Awaited<ReturnType<typeof select>>) =>
     r.status,
   );
 
-/** Follow-up read as the browser would send it: Referer = the switched page. */
-async function followUp(key: string, org: string, query: string, slug = slugX) {
+/**
+ * V2-003.004 follow-up read: the operational context is the PERSISTED cookie;
+ * the Referer (what the user is looking at) can only make it fail closed.
+ */
+async function followUp(
+  key: string,
+  org: string,
+  o: { cookie?: string | null; referer?: string | null } = {},
+) {
   req.client = users[key].client;
-  req.referer = `https://app.test/r/${slug}${query}`;
+  req.cookie = o.cookie ?? null;
+  req.referer = o.referer ?? null;
   try {
     return await getPrimaryLocation(org);
   } finally {
+    req.cookie = null;
     req.referer = null;
   }
 }
@@ -424,35 +440,54 @@ describe("V2-003.002 hosted DEV — explicit selection with real JWT + RLS", () 
   });
 });
 
-describe("V2-003.002 hosted DEV — follow-up reads/writes use the SAME selected location", () => {
-  it("SW-OPS-01 explicit Location B: legacy helper returns B (not the oldest assigned A)", async () => {
-    const r = await followUp("multi", orgX, `?location=${L.B}`);
+describe("V2-003.004 hosted DEV — follow-ups use the PERSISTED location (Referer never selects)", () => {
+  it("SW-OPS-01 persisted Location B: legacy helper returns B (not the oldest assigned A), with no Referer", async () => {
+    const r = await followUp("multi", orgX, { cookie: cookie(orgX, L.B) });
     expect(r).toEqual({ id: L.B, time_zone: "America/Los_Angeles" });
-    const a = await followUp("multi", orgX, `?location=${L.A}`);
+    const a = await followUp("multi", orgX, { cookie: cookie(orgX, L.A) });
     expect(a).toEqual({ id: L.A, time_zone: "America/New_York" });
   });
 
-  it("SW-OPS-02 unverifiable selections are a safe denial, never a substitute", async () => {
-    expect(await followUp("scopedB", orgX, `?location=${L.A}`)).toBeNull();
-    expect(await followUp("scopedB", orgX, `?location=${L.Y}`)).toBeNull();
-    expect(await followUp("revoked", orgX, `?location=${L.A}`)).toBeNull();
-    expect(await followUp("multi", orgX, `?location=${L.C}`)).toBeNull();
-    expect(await followUp("multi", orgX, `?location=bad`)).toBeNull();
+  it("SW-OPS-02 unverifiable persisted contexts are a safe denial, never a substitute", async () => {
     expect(
-      await followUp("multi", orgX, `?location=${L.A}&location=${L.B}`),
+      await followUp("scopedB", orgX, { cookie: cookie(orgX, L.A) }),
     ).toBeNull();
+    expect(
+      await followUp("scopedB", orgX, { cookie: cookie(orgX, L.Y) }),
+    ).toBeNull();
+    expect(
+      await followUp("revoked", orgX, { cookie: cookie(orgX, L.A) }),
+    ).toBeNull();
+    expect(
+      await followUp("multi", orgX, { cookie: cookie(orgX, L.C) }),
+    ).toBeNull();
+    expect(await followUp("multi", orgX, { cookie: "bad" })).toBeNull();
   });
 
-  it("SW-OPS-03 a selection for another organization cannot satisfy this organization's follow-up", async () => {
-    expect(await followUp("cross", orgX, `?location=${L.Y}`, slugY)).toBeNull();
-    expect((await followUp("cross", orgY, `?location=${L.Y}`, slugY))?.id).toBe(
-      L.Y,
-    );
+  it("SW-OPS-03 a persisted context for another organization cannot satisfy this organization's follow-up", async () => {
+    expect(
+      await followUp("cross", orgX, { cookie: cookie(orgY, L.Y) }),
+    ).toBeNull();
+    expect(
+      (await followUp("cross", orgY, { cookie: cookie(orgY, L.Y) }))?.id,
+    ).toBe(L.Y);
   });
 
-  it("SW-OPS-04 no selection keeps the legacy behavior", async () => {
-    req.client = users.multi.client;
-    req.referer = null;
-    expect([L.A, L.B]).toContain((await getPrimaryLocation(orgX))?.id);
+  it("SW-OPS-04 no persisted context and several locations is ambiguous (never the oldest)", async () => {
+    expect(await followUp("multi", orgX)).toBeNull();
+  });
+
+  it("SW-OPS-05 a Referer for a different location than the persisted one fails closed; a Referer alone never selects", async () => {
+    expect(
+      await followUp("multi", orgX, {
+        cookie: cookie(orgX, L.A),
+        referer: `https://app.test/r/${slugX}?location=${L.B}`,
+      }),
+    ).toBeNull();
+    expect(
+      await followUp("multi", orgX, {
+        referer: `https://app.test/r/${slugX}?location=${L.B}`,
+      }),
+    ).toBeNull();
   });
 });

@@ -53,6 +53,7 @@ export async function RestaurantEntry({
       activeContext={data.activeContext}
       availableContexts={data.availableContexts}
       availableContextsFailed={data.availableContextsFailed}
+      contextReconcile={data.contextReconcile}
     />
   );
 }
