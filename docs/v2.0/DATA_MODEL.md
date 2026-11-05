@@ -82,23 +82,28 @@ create table public.location_assignments (
 
 ### 2.4. `location_module_configs`
 
-Configures enabled/disabled states and module-specific settings per location.
+Per-location module enablement. **Implemented in V2-004.001** (`supabase/migrations/20261105210000_location_module_configs.sql`); design, semantics and the role/RLS matrix are in [001-module-configuration-contract/PLAN.md](features/004-location-module-configuration/001-module-configuration-contract/PLAN.md).
 
 ```sql
+create type public.location_module_key as enum (
+  'table_allocation', 'tasks', 'schedule', 'tips', 'team',
+  'attendance', 'payroll', 'bar_inventory', 'recipes'
+); -- `settings` is system-required and intentionally has no value
+
 create table public.location_module_configs (
-  id bigint generated always as identity primary key,
-  organization_id uuid not null references public.organizations (id) on delete cascade,
-  location_id uuid not null,
-  module_key text not null check (module_key ~ '^[a-z0-9_-]+$'),
-  is_enabled boolean not null default true,
-  settings jsonb not null default '{}'::jsonb check (jsonb_typeof(settings) = 'object'),
+  location_id uuid not null references public.locations (id) on delete restrict,
+  module_key public.location_module_key not null,
+  is_enabled boolean not null,                       -- no default: explicit decision
+  metadata jsonb not null default '{}'::jsonb
+    check (private.location_module_metadata_valid(module_key, metadata)),
+  created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  updated_by uuid,
-  unique (location_id, module_key),
-  foreign key (location_id, organization_id)
-    references public.locations (id, organization_id) on delete cascade
+  updated_by uuid,                                   -- server-stamped, no FK
+  primary key (location_id, module_key)
 );
 ```
+
+Differences from the earlier sketch, all deliberate: no stored `organization_id` (derived from `locations`, whose `organization_id` is immutable, so it cannot drift); an enum instead of free text (the database rejects unknown keys); `is_enabled` has no default (a missing row is "not configured", never "enabled"); `ON DELETE RESTRICT` instead of `CASCADE` (a location can never silently erase its configuration); `metadata` is a validated envelope (`schemaVersion`, `note`, reserved empty `settings`) rather than an open `settings` object; ownership columns are immutable; clients cannot delete rows.
 
 ### 2.5. `kiosk_devices`
 

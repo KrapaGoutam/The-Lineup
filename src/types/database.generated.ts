@@ -2184,6 +2184,44 @@ export type Database = {
           },
         ];
       };
+      location_module_configs: {
+        Row: {
+          created_at: string;
+          is_enabled: boolean;
+          location_id: string;
+          metadata: Json;
+          module_key: Database["public"]["Enums"]["location_module_key"];
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          is_enabled: boolean;
+          location_id: string;
+          metadata?: Json;
+          module_key: Database["public"]["Enums"]["location_module_key"];
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          is_enabled?: boolean;
+          location_id?: string;
+          metadata?: Json;
+          module_key?: Database["public"]["Enums"]["location_module_key"];
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "location_module_configs_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       locations: {
         Row: {
           active: boolean;
@@ -5514,6 +5552,16 @@ export type Database = {
         | "skip"
         | "end_and_assign";
       checklist_kind: "opening" | "closing";
+      location_module_key:
+        | "table_allocation"
+        | "tasks"
+        | "schedule"
+        | "tips"
+        | "team"
+        | "attendance"
+        | "payroll"
+        | "bar_inventory"
+        | "recipes";
       location_role: "manager" | "assistant_manager" | "staff";
       overall_role: "owner" | "manager" | "assistant_manager";
       recurrence_end_type: "never" | "on_date" | "after_count";
@@ -5724,6 +5772,17 @@ export const Constants = {
         "end_and_assign",
       ],
       checklist_kind: ["opening", "closing"],
+      location_module_key: [
+        "table_allocation",
+        "tasks",
+        "schedule",
+        "tips",
+        "team",
+        "attendance",
+        "payroll",
+        "bar_inventory",
+        "recipes",
+      ],
       location_role: ["manager", "assistant_manager", "staff"],
       overall_role: ["owner", "manager", "assistant_manager"],
       recurrence_end_type: ["never", "on_date", "after_count"],

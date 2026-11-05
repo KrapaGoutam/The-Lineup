@@ -13,8 +13,8 @@ Main SHA (unchanged):     5e5b7747693b6e81014eafdf299b87e56c3f033d
 GitHub Milestone:         The Lineup V2.0 (#8; remains open)
 GitHub Program:           #248 (open)
 Feature/Subfeature:       #250 / #281 (closed)
-DEV Migration Status:     SYNCHRONIZED 72/72
-Latest Migration:         20261104164217_location_schedule_publication_guard
+DEV Migration Status:     SYNCHRONIZED 73/73 (V2-004.001 applied 2026-11-05)
+Latest Migration:         20261105210000_location_module_configs
 Hosted pgTAP:             362 assertions passed (0050–0061)
 Actual JWT Authorization: PASS (eight synthetic identities + anonymous)
 Concurrency:              PASS (A–D; both publication orderings)
@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        none — V2-003.001–.005 implemented; V2-003 awaiting owner review (parent #251 open)
-Active Subfeature Status: V2-004.001 not started; waiting for owner go-ahead
+Active Subfeature:        none in progress — V2-004.001 complete; V2-004.002 not started
+Active Subfeature Status: V2-004.001 COMPLETE (Issue #298, PR #299); V2-004 stays IN PROGRESS (V2-003 still awaiting owner review, parent #251 open)
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.001 Per-Location Module Configuration Contract (NOT STARTED)
+Next Subfeature:          V2-004.002 Location Module Settings (NOT STARTED; owner decisions Q1–Q4 open)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -35,6 +35,10 @@ V2-001 and V2-002 are complete. V2-002.005 reused the Cloud implementation, adde
 Evidence: [Location Lifecycle Integrity](features/002-organizations-locations/005-location-lifecycle-integrity/EVIDENCE.md). The resulting docs-only development integration SHA is recorded in GitHub tracking and the final report. Main and Production remain untouched.
 
 Next recommended environment: Claude Code Cloud for the bounded V2-003.001 feature, with Codex Local for hosted DEV/WebKit validation if required. Do not infer approval for Production or main promotion. V2-003 was not started in this closeout.
+
+## V2-004.001 (COMPLETE — PR #299 merged into `development`; validated locally and on hosted DEV)
+
+Issue #298 (parent #252, program #248, milestone #8); PR #299 merged into `development` by regular merge commit (SHA on the PR and issue). Migration `20261105210000_location_module_configs.sql` (additive, forward-only, inserts nothing): enum `location_module_key`, table `location_module_configs` (composite key `(location_id, module_key)`, explicit `is_enabled` with no default, validated informational `metadata`, immutable ownership, no client delete, frozen at archived locations), RLS aligned to the existing location-administration authority. TypeScript: canonical module registry + enabled/disabled/missing/unavailable result model + a reader that never reports a failure as an empty configuration. **No behaviour change**: nothing reads the table, demo mode never touches it. **Validation:** official local Supabase stack (CLI 2.76.8) — `db reset` applied all 73 migrations, `supabase test db` 62 files / 2012 assertions PASS (`0062` 92/92; `0039`/`0042`/`0045` pass); CLI-generated types identical to the committed file; hosted DEV `the-lineup-dev` migrated 72→73 with only this file (checksum `109b7f4a…f19a`), **0 configuration rows**, counts and role fingerprints unchanged; real-JWT `MCR-01…10` 10/10 with stored-state proof of denied writes; 0 synthetic leftovers; Vitest 3078 passed, build/lint/typecheck green. One test-harness defect found and fixed (teardown could not remove a location archived through the append-only audit RPC). **Release gates carried forward:** V2-004.004 must not be activated before every ACTIVE location has owner-approved explicit rows (no guessed defaults); account recovery must stay reachable when Team is disabled. Does not resolve any V2-003 residual; Production release stays blocked on V2-005, V2-008, V2-009. See [STATUS](features/004-location-module-configuration/001-module-configuration-contract/STATUS.md) · [EVIDENCE](features/004-location-module-configuration/001-module-configuration-contract/EVIDENCE.md).
 
 ## V2-003.005 (COMPLETE — PR #296 merged, `development` `de8c6732`)
 
