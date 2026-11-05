@@ -1141,8 +1141,19 @@ test("RACE-B a delayed sign-out can never end the NEXT person's session", async 
   console.log(`RACE-B order: ${events.join(" | ")}`);
   const signoutDone = events.findIndex((e) => e.includes("signout response"));
   const passcodeStart = events.findIndex((e) => e.includes("passcode request"));
-  expect(signoutDone).toBeGreaterThanOrEqual(0);
-  expect(passcodeStart).toBeGreaterThan(signoutDone); // strictly ordered
+  expect(passcodeStart).toBeGreaterThanOrEqual(0);
+  if (signoutDone >= 0) {
+    expect(passcodeStart).toBeGreaterThan(signoutDone); // strictly ordered
+  } else {
+    // V2-003.005: the stale-workspace guard can reach the dead session before
+    // the Tasks action does (a focus event), and the server's response then
+    // tears the tab down to the login screen itself. No sign-out request
+    // exists in that run, so there is nothing that could end the next person's
+    // session late. (The guard deliberately never issues a sign-out request:
+    // across tabs a late one could end ANOTHER employee's fresh session.) The
+    // ordering itself is pinned deterministically in client-sign-out.test.ts.
+    console.log("RACE-B: no forced sign-out request in this run");
+  }
 
   // The new session is alive and unaffected by the old sign-out.
   await page.unroute("**/api/auth/signout");
