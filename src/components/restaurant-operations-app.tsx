@@ -36,6 +36,7 @@ import { ContextScopeBoundary } from "@/features/context/components/context-scop
 import { ContextReconcileGate } from "@/features/context/components/context-reconcile-gate";
 import { publishContextEvent } from "@/features/context/components/context-sync-channel";
 import { ContextSyncGuard } from "@/features/context/components/context-sync-guard";
+import { clearPriorWorkspaceUrl } from "@/features/context/components/prior-session";
 import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import type { ContextReconcileTarget } from "@/features/context/components/context-reconcile-gate";
 import { ContextSwitcher } from "@/features/context/components/context-switcher";
@@ -929,6 +930,10 @@ function RestaurantOperationsAppInner({
     // the authenticated data (see RestaurantOperationsApp's keyed remount).
     setSignInStalled(false);
     setPendingAccount(account);
+    // V2-003.005: a session that ended underneath this tab can leave the
+    // previous employee's `?location=` in the address bar; do not let this
+    // sign-in read it as a deliberate deep link.
+    clearPriorWorkspaceUrl(pathname);
     // V2-003.005: another employee (or the same one) just signed in on this
     // browser; tabs showing a previous session re-verify against the server.
     publishContextEvent("session_changed");

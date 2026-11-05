@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { verifyWorkspaceContextAction } from "@/features/context/actions/context-actions";
 import { currentNavigationOrigin } from "@/features/context/components/history-traversal";
+import { noteWorkspaceOpened } from "@/features/context/components/prior-session";
 import { subscribeContextEvents } from "@/features/context/components/context-sync-channel";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
@@ -123,6 +124,12 @@ export function ContextSyncGuard({
       mounted.current = false;
     };
   }, []);
+
+  // A real signed-in workspace is open in this document: remember it so the
+  // NEXT sign-in cannot inherit this person's address-bar location.
+  useEffect(() => {
+    if (expectation) noteWorkspaceOpened();
+  }, [expectation]);
 
   const ask = useCallback(async () => {
     if (!expectation) return null;

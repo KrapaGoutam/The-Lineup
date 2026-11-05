@@ -16,6 +16,7 @@ const sync = vi.hoisted(() => ({
   unsubscribe: vi.fn(),
   publishContextEvent: vi.fn(),
 }));
+const prior = vi.hoisted(() => ({ noteWorkspaceOpened: vi.fn() }));
 const nav = vi.hoisted(() => ({
   origin: "fresh" as "fresh" | "reload" | "history",
 }));
@@ -31,6 +32,7 @@ vi.mock("@/features/context/components/context-sync-channel", () => ({
   },
   publishContextEvent: sync.publishContextEvent,
 }));
+vi.mock("@/features/context/components/prior-session", () => prior);
 vi.mock("@/features/context/components/history-traversal", () => ({
   currentNavigationOrigin: () => nav.origin,
 }));
@@ -104,6 +106,7 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockImplementation(() => now);
   now = 1_000_000;
   nav.origin = "fresh";
+  prior.noteWorkspaceOpened.mockClear();
   sync.handler = null;
   sync.unsubscribe.mockClear();
   sync.publishContextEvent.mockClear();
@@ -285,8 +288,14 @@ describe("ContextSyncGuard detection (V2-003.005)", () => {
     expect(calls()).toBe(0);
   });
 
+  it("MT-18: a real signed-in workspace is remembered so the next sign-in cannot inherit its location; demo never is", () => {
+    mount();
+    expect(prior.noteWorkspaceOpened).toHaveBeenCalledTimes(1);
+  });
+
   it("demo / no context: pass-through, no subscription, no server calls", async () => {
     mount({ expected: null });
+    expect(prior.noteWorkspaceOpened).not.toHaveBeenCalled();
     expect(screen.getByTestId("workspace")).toBeInTheDocument();
     expect(sync.handler).toBeNull();
     await act(async () => {
