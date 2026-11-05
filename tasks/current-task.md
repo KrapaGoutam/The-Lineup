@@ -1,28 +1,26 @@
-# V2-003.004 — Secure Active Context Persistence
+# V2-004.001 — Per-Location Module Configuration Contract
 
-Canonical docs: `docs/v2.0/features/003-active-context/004-secure-context-persistence/`
-Parent Feature: Issue #251 · Program: Issue #248 · Subfeature Issue: #290 · Milestone #8
-Branch: `feature/v2.0-003.004-secure-context-persistence` (from `origin/development` `398393bfa4f0a8edb5b99f33b78574960d74666a`)
-Environment: Claude Code Cloud
+Canonical docs: `docs/v2.0/features/004-location-module-configuration/001-module-configuration-contract/`
+Parent Feature: Issue #252 · Program: Issue #248 · Subfeature Issue: #298 · Milestone #8
+Branch: `feature/v2.0-004.001-module-configuration-contract` (from `origin/development` `fcc661df96b5af1c01ebb8f2f00ff42078e02979`)
+Environment: Claude Code Cloud (isolated disposable local PostgreSQL only; no hosted DEV, no Production)
 
 ## Implementation Checklist
 
-- [x] Pre-flight: SHAs recorded; PRs #287/#289 verified merged; Issue #290 created
-- [x] Audit: cookie contract, reader, switcher, sign-out, `getPrimaryLocation` call sites, entry path
-- [x] Domain: central cookie attributes (`context-cookie.ts`), request-consistency hint
-- [x] Server: cookie writer, `setActiveContextAction` / `clearActiveContextAction`, sign-in/sign-out cookie expiry
-- [x] `getPrimaryLocation` resolves from the persisted context; Referer reject-only
-- [x] Client: `useContextSwitch` via the action; `ContextReconcileGate`; recovery "Clear saved location"; ordered sign-out helper
-- [x] Tests: PERSIST-01…36 + negatives (Vitest 2,880 passed / 7 skipped); mutation checks
-- [x] format:check, lint, typecheck, check:local-paths, `next build --webpack` (demo + real)
-- [x] Playwright demo desktop + server-mobile 26/26
-- [x] Hosted-test files updated/added for Local (not executed in Cloud)
-- [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE; ROADMAP, CURRENT_STATE, 003 README/STATUS
-- [x] Commit, push, open PR #291 into `development`
-- [ ] Exact-head CI green (verify on the final PR head)
-- [x] **Claude Local**: hosted DEV real-JWT 46/46, Chromium 25/25 + WebKit iPad 25/25, passcode/sign-out/races verified; one narrow `Secure`/`X-Forwarded-Host` hardening (see EVIDENCE.md)
-- [ ] Exact-head CI green on the new PR head, then regular merge into `development`
+- [x] Pre-flight: `development`/`main` SHAs verified against the remote; Issue #298 created and linked to #252 (no duplicate existed)
+- [x] Investigation: schema, authority helpers (`can_manage_location_lifecycle`, `has_org_role`), migration/test conventions, `AppTab` ids, earlier DATA_MODEL/MIGRATION_STRATEGY sketches reconciled
+- [x] Decisions documented (PLAN.md): enum key, derived organization, no default for `is_enabled`, system-required Settings, read/write matrix, archived-location freeze, metadata envelope
+- [x] Migration `20261105210000_location_module_configs.sql` applies from scratch (73/73)
+- [x] pgTAP `0062` 92/92; 61 pre-existing files re-run (58 pass; 3 environment-limited identically at baseline); 5 migration mutants caught
+- [x] Registry + contract + reader (`src/features/modules/`), Vitest +58, mutation checks, compile-time exhaustiveness verified
+- [x] Generated types patched from a before/after generator diff (NOT CLI-verified — Local step)
+- [x] format:check, lint, typecheck, check:local-paths, `npm test` (3078 passed), `next build --webpack`
+- [x] Docs: PLAN / TEST_MATRIX / EVIDENCE / STATUS; ROADMAP, CURRENT_STATE, V2-004 README/STATUS, DATA_MODEL §2.4, MIGRATION_STRATEGY §2.3
+- [x] Local-only real-JWT test written (`tests/real/module-config.db.real.test.ts`), typechecked, **not executed**
+- [ ] Commit, push, open Draft PR into `development`
+- [ ] **Local**: real Supabase stack `supabase test db`, `supabase gen types --local` diff, hosted DEV migration (single file), real-JWT 10/10, exact-head CI
+- [ ] Regular merge into `development` only after every Local gate passes; then docs closeout
 
 ## Current State & Next Step
 
-Locally validated (`LOCALLY_VALIDATED`, 2026-11-04). Next: verify CI on the final PR head, regular merge commit into `development`, then a docs-only closeout PR. Do NOT start V2-003.005.
+Implemented in Cloud; hosted DEV validation pending. Next: Draft PR, then Local validation per `EVIDENCE.md §5`. Do NOT start V2-004.002 (settings UI), V2-004.003, V2-004.004, V2-005 or V2-008. Do not merge before the Local gates pass.

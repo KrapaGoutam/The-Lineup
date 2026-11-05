@@ -67,36 +67,29 @@ where attendance_mode is null;
 
 _Rationale:_ Monks' existing Neon attendance reporting and timesheets continue functioning without disruption.
 
-### 2.3. Location Module Config Backfill
+### 2.3. Location Module Config Backfill (owned by V2-008.004)
 
-Seed `location_module_configs` with all modules enabled for existing locations:
+V2-004.001 creates `location_module_configs` empty and **inserts nothing**: a location with no row is `missing` ("not configured"), which is **not usable** (fail-closed) once V2-004.004 enforcement is active. Legacy locations therefore need explicit rows _before_ that enforcement is activated anywhere with live data.
+
+V2-008.004 reconciles them from an **owner-approved per-location module list** (never a guessed blanket default), using the canonical keys of `public.location_module_key` — the earlier draft's `allocation`, `schedules` and `inventory` are now `table_allocation`, `schedule` and `bar_inventory`; `team` is also a module; `settings` is system-required and is never inserted. Shape (illustrative — the module list per location comes from the owner):
 
 ```sql
-insert into public.location_module_configs (
-  organization_id,
-  location_id,
-  module_key,
-  is_enabled
-)
-select
-  l.organization_id,
-  l.id,
-  m.key,
-  true
+insert into public.location_module_configs (location_id, module_key, is_enabled)
+select l.id, m.key, true
 from public.locations l
 cross join (
   values
-    ('allocation'),
-    ('tasks'),
-    ('tips'),
-    ('schedules'),
-    ('payroll'),
-    ('attendance'),
-    ('inventory'),
-    ('recipes')
+    ('table_allocation'::public.location_module_key),
+    ('tasks'), ('schedule'), ('tips'), ('team'),
+    ('attendance'), ('payroll'), ('bar_inventory'), ('recipes')
 ) as m(key)
-on conflict (location_id, module_key) do nothing;
+where l.archived_at is null -- archived locations are frozen by the guard trigger
+on conflict (location_id, module_key) do nothing; -- never overwrite an explicit decision
 ```
+
+Run as a privileged maintenance session (the row guard lets it supply `created_at`). The `organization_id` column no longer exists: organization is derived from `locations`.
+
+**Gate:** V2-004.004 must not be activated in an environment until every ACTIVE location there has explicit rows (see [001-module-configuration-contract/PLAN.md §6](features/004-location-module-configuration/001-module-configuration-contract/PLAN.md)).
 
 ---
 

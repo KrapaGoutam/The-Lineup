@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        none — V2-003.001–.005 implemented; V2-003 awaiting owner review (parent #251 open)
-Active Subfeature Status: V2-004.001 not started; waiting for owner go-ahead
+Active Subfeature:        V2-004.001 Per-Location Module Configuration Contract (Issue #298; Draft PR into development)
+Active Subfeature Status: Implemented in Cloud; hosted DEV validation pending (V2-003 still awaiting owner review, parent #251 open)
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.001 Per-Location Module Configuration Contract (NOT STARTED)
+Next Subfeature:          Local DEV validation + merge of V2-004.001; then V2-004.002 Location Module Settings (NOT STARTED)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -35,6 +35,10 @@ V2-001 and V2-002 are complete. V2-002.005 reused the Cloud implementation, adde
 Evidence: [Location Lifecycle Integrity](features/002-organizations-locations/005-location-lifecycle-integrity/EVIDENCE.md). The resulting docs-only development integration SHA is recorded in GitHub tracking and the final report. Main and Production remain untouched.
 
 Next recommended environment: Claude Code Cloud for the bounded V2-003.001 feature, with Codex Local for hosted DEV/WebKit validation if required. Do not infer approval for Production or main promotion. V2-003 was not started in this closeout.
+
+## V2-004.001 (IMPLEMENTED IN CLOUD — hosted DEV validation pending; not merged, not complete)
+
+Issue #298 (parent #252, program #248, milestone #8); Draft PR into `development` from `development` `fcc661df`. Migration `20261105210000_location_module_configs.sql` (additive, forward-only, inserts nothing): enum `location_module_key`, table `location_module_configs` (composite key `(location_id, module_key)`, explicit `is_enabled`, validated informational `metadata`, immutable ownership, no client delete, frozen at archived locations), RLS aligned to the existing location-administration authority. TypeScript: canonical module registry + enabled/disabled/missing/unavailable result model + a reader that never reports a failure as an empty configuration. **No behaviour change**: nothing reads the table, demo mode never touches it. Cloud evidence: pgTAP 92/92 on an isolated local PostgreSQL (61 pre-existing files re-run; 3 environment-limited identically at baseline), Vitest +58 (3078 passed), build/lint/typecheck green. **Pending (Local):** real Supabase stack `supabase test db`, `supabase gen types --local` diff (types were generator-patched, not CLI-verified), hosted DEV migration of the single file, real-JWT `tests/real/module-config.db.real.test.ts`. Does not resolve any V2-003 residual; Production release stays blocked on V2-005, V2-008, V2-009. See [STATUS](features/004-location-module-configuration/001-module-configuration-contract/STATUS.md) · [EVIDENCE](features/004-location-module-configuration/001-module-configuration-contract/EVIDENCE.md).
 
 ## V2-003.005 (COMPLETE — PR #296 merged, `development` `de8c6732`)
 
