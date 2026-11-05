@@ -598,9 +598,11 @@ describe("LIVE-MT-G verification is read-only and compatible (MT-19/20/23)", () 
     await select(browser, "multi", orgP, L.P2);
     const cookieBefore = browser.jar.get(COOKIE);
     send(browser, "multi");
+    // The verdict points recovery at the organization the SERVER verified.
     expect(await verifyWorkspaceContextAction(tabA)).toEqual({
       status: "stale",
       reason: "location_changed",
+      organizationSlug: slugP,
     });
     expect(req.sets).toHaveLength(0);
     expect(browser.jar.get(COOKIE)).toBe(cookieBefore);
