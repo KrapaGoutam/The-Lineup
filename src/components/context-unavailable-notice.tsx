@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { clearActiveContextAction } from "@/features/context/actions/context-actions";
+import { requestSignOut } from "@/lib/client-sign-out";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { groupContextsByOrganization } from "@/features/context/domain/context-navigation";
@@ -24,7 +25,7 @@ export function ContextUnavailableNotice({
   availableContexts = [],
   availableContextsFailed = false,
 }: {
-  status: "selection_required" | "invalid_context" | "error";
+  status: "selection_required" | "invalid_context" | "error" | "no_access";
   availableContexts?: readonly AvailableContextSummary[];
   availableContextsFailed?: boolean;
 }) {
@@ -34,21 +35,27 @@ export function ContextUnavailableNotice({
   const [clearing, startClear] = useTransition();
   const [clearFailed, setClearFailed] = useState(false);
 
+  const [signingOut, startSignOut] = useTransition();
   const copy =
-    status === "selection_required"
+    status === "no_access"
       ? {
-          title: "Choose a location",
-          body: "Your account can work at more than one location. Choose where to work before this workspace opens.",
+          title: "No restaurant location assigned",
+          body: "Your sign-in was successful, but your account doesn't currently have access to a restaurant location. Ask your manager to assign you to a location. No restaurant data has been loaded.",
         }
-      : status === "invalid_context"
+      : status === "selection_required"
         ? {
-            title: "Location selection is no longer valid",
-            body: "That location doesn't match your current access. No data has been loaded. Choose a location you can access, or try again.",
+            title: "Choose a location",
+            body: "Your account can work at more than one location. Choose where to work before this workspace opens.",
           }
-        : {
-            title: "Workspace unavailable",
-            body: "We couldn't verify your location access right now. No data has been loaded. Please try again.",
-          };
+        : status === "invalid_context"
+          ? {
+              title: "Location selection is no longer valid",
+              body: "That location doesn't match your current access. No data has been loaded. Choose a location you can access, or try again.",
+            }
+          : {
+              title: "Workspace unavailable",
+              body: "We couldn't verify your location access right now. No data has been loaded. Please try again.",
+            };
 
   const showChoices = status !== "error" && availableContexts.length > 0;
   const groups = groupContextsByOrganization(availableContexts);
@@ -123,6 +130,35 @@ export function ContextUnavailableNotice({
               Opening {switchingTo.organizationName} —{" "}
               {switchingTo.locationName}…
             </p>
+          ) : null}
+
+          {status === "no_access" ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                className="min-h-11"
+                disabled={retrying || signingOut}
+                onClick={() => startRetry(() => router.refresh())}
+                data-testid="no-access-retry"
+              >
+                <RefreshCw aria-hidden className="size-4" />
+                {retrying ? "Checking…" : "Check again"}
+              </Button>
+              <Button
+                variant="outline"
+                className="min-h-11"
+                disabled={signingOut}
+                onClick={() =>
+                  startSignOut(async () => {
+                    await requestSignOut();
+                    router.refresh();
+                  })
+                }
+                data-testid="no-access-sign-out"
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </Button>
+            </div>
           ) : null}
 
           {status === "error" ||

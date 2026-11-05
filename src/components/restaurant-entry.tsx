@@ -28,7 +28,12 @@ export async function RestaurantEntry({
   });
   if (data.redirectTo) redirect(data.redirectTo);
 
+  // `no_access` is an AUTHENTICATED denial (an unauthenticated request is
+  // `unauthenticated` and keeps the passcode screen): the user signed in but
+  // has no authorized location here. Show the denial, never the pending
+  // sign-in state of the operations app.
   if (
+    data.contextStatus === "no_access" ||
     data.contextStatus === "selection_required" ||
     data.contextStatus === "invalid_context" ||
     data.contextStatus === "error"

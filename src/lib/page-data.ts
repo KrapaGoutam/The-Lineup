@@ -36,11 +36,12 @@ import { getEntryUser } from "@/lib/current-user";
  *  - `demo`: synthetic data, no hosted calls, no real context.
  *  - `resolved`: a verified (organization, location) pair; operational
  *    contexts below were all loaded for that exact pair.
- *  - `selection_required` / `invalid_context` / `error`: authenticated, but
- *    NO operational data was loaded; the page renders a context-unavailable
- *    state.
- *  - `unauthenticated` / `no_access`: signed-out presentation (login screen),
- *    exactly as before; NO operational data was loaded.
+ *  - `no_access` / `selection_required` / `invalid_context` / `error`:
+ *    authenticated, but NO operational data was loaded; the page renders a
+ *    context-unavailable state (`no_access` = "no restaurant location
+ *    assigned", with retry + sign-out).
+ *  - `unauthenticated`: signed-out presentation (login screen); NO
+ *    operational data was loaded.
  */
 export type PageContextStatus = "demo" | ContextResolutionResult["status"];
 

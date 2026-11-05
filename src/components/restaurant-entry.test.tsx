@@ -10,6 +10,8 @@ const actions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/context/actions/context-actions", () => actions);
+const signOut = vi.hoisted(() => ({ requestSignOut: vi.fn() }));
+vi.mock("@/lib/client-sign-out", () => signOut);
 
 const redirect = vi.hoisted(() =>
   vi.fn((to: string) => {
@@ -55,7 +57,12 @@ describe("RestaurantEntry (V2-003.001)", () => {
     pageData.value = null;
   });
 
-  it.each(["selection_required", "invalid_context", "error"] as const)(
+  it.each([
+    "no_access",
+    "selection_required",
+    "invalid_context",
+    "error",
+  ] as const)(
     "renders the context-unavailable state for %s and never the app",
     async (status) => {
       pageData.value = { ...base, contextStatus: status };
@@ -68,7 +75,7 @@ describe("RestaurantEntry (V2-003.001)", () => {
     },
   );
 
-  it.each(["resolved", "demo", "unauthenticated", "no_access"] as const)(
+  it.each(["resolved", "demo", "unauthenticated"] as const)(
     "renders the operations app for %s (signed-out/demo/resolved presentation unchanged)",
     async (status) => {
       pageData.value = {
@@ -294,5 +301,49 @@ describe("ContextUnavailableNotice (V2-003.002 recovery)", () => {
     pageData.value = { ...base, contextStatus: "no_access" };
     await renderEntry();
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("no_access after a successful sign-in (login hotfix)", () => {
+  beforeEach(() => {
+    router.refresh.mockClear();
+    router.push.mockClear();
+    signOut.requestSignOut.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("LOGIN-FIX-02: shows the denial, never the operations app or a pending sign-in, and loads no choices", async () => {
+    pageData.value = { ...base, contextStatus: "no_access" };
+    await renderEntry();
+    expect(screen.getByTestId("context-unavailable")).toHaveAttribute(
+      "data-context-status",
+      "no_access",
+    );
+    expect(
+      screen.getByRole("heading", { name: "No restaurant location assigned" }),
+    ).toBeVisible();
+    expect(screen.getByText(/ask your manager/i)).toBeVisible();
+    expect(screen.queryByTestId("operations-app")).toBeNull();
+    expect(screen.queryByText(/signing in as/i)).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(actions.setActiveContextAction).not.toHaveBeenCalled();
+  });
+
+  it("LOGIN-FIX-03: 'Check again' re-runs the server access check", async () => {
+    const user = userEvent.setup();
+    render(<ContextUnavailableNotice status="no_access" />);
+    await user.click(screen.getByTestId("no-access-retry"));
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("LOGIN-FIX-03/08: 'Sign out' uses the shared ordered sign-out helper, then refreshes to the login screen", async () => {
+    const user = userEvent.setup();
+    render(<ContextUnavailableNotice status="no_access" />);
+    await user.click(screen.getByTestId("no-access-sign-out"));
+    expect(signOut.requestSignOut).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
+    // the refresh happens only after the sign-out request settled
+    expect(signOut.requestSignOut.mock.invocationCallOrder[0]).toBeLessThan(
+      router.refresh.mock.invocationCallOrder[0],
+    );
   });
 });
