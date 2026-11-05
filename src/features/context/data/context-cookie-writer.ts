@@ -28,10 +28,12 @@ import type { ActiveContextCookieSelection } from "@/features/context/domain/con
 
 async function secureForRequest(): Promise<boolean> {
   let host: string | null = null;
+  let forwardedHost: string | null = null;
   let forwardedProto: string | null = null;
   try {
     const requestHeaders = await headers();
-    host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+    host = requestHeaders.get("host");
+    forwardedHost = requestHeaders.get("x-forwarded-host");
     forwardedProto = requestHeaders.get("x-forwarded-proto");
   } catch (error) {
     unstable_rethrow(error);
@@ -39,6 +41,7 @@ async function secureForRequest(): Promise<boolean> {
   return shouldUseSecureCookie({
     nodeEnv: process.env.NODE_ENV,
     host,
+    forwardedHost,
     forwardedProto,
   });
 }

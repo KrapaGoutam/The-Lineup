@@ -408,6 +408,17 @@ describe("LIVE-PERSIST-E revocation", () => {
     ).toMatchObject({ ok: true });
     as("coworker");
     expect(await getPrimaryLocation(orgP)).toMatchObject({ id: L.P1 });
+    // Restore the assignment so later tests keep the documented fixture
+    // (coworker is eligible for both P1 and P2).
+    ok(
+      await admin
+        .from("location_memberships")
+        .update({ active: true })
+        .eq("profile_id", users.coworker.id)
+        .eq("location_id", L.P2)
+        .select("id"),
+      "restore",
+    );
   });
 });
 
@@ -421,6 +432,9 @@ describe("LIVE-PERSIST-F sign-out / shared device", () => {
     const res = await signOutRoute();
     expect(res.status).toBe(200);
     expect(cookieOf()).toBeNull();
+    // The real sign-out ended the real Auth session (global scope), so the
+    // saved workspace cannot be used by anyone holding the old token either.
+    expect((await users.multi.client.auth.getUser()).data.user).toBeNull();
     // coworker is also authorized for P1 + P2: fresh sign-in → selection required
     as("coworker");
     const page = await loadPageData(slugP);
@@ -429,6 +443,9 @@ describe("LIVE-PERSIST-F sign-out / shared device", () => {
     expect(await getPrimaryLocation(orgP)).toBeNull();
     // clearing never selects an arbitrary location
     expect(await clearActiveContextAction()).toEqual({ ok: true });
+    // The sign-out above genuinely revoked `multi`'s Auth session; sign in
+    // again so the following tests start from a valid session.
+    await signIn(users.multi);
   });
 });
 

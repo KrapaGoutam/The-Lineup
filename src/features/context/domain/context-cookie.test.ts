@@ -128,6 +128,31 @@ describe("V2-003.004 cookie attributes", () => {
     expect(secure("production", "localhost.evil.test", "http")).toBe(true);
     expect(secure("production", "evil.test:80", "http,https")).toBe(true);
     expect(secure("development", "localhost:3000", "http")).toBe(false);
+
+    // A client-suppliable X-Forwarded-Host can only make the decision stricter:
+    // spoofing "localhost" can never switch Secure off for a real Host.
+    const withForwardedHost = (
+      host: string | null,
+      forwardedHost: string | null,
+      proto: string | null = null,
+    ) =>
+      shouldUseSecureCookie({
+        nodeEnv: "production",
+        host,
+        forwardedHost,
+        forwardedProto: proto,
+      });
+    expect(withForwardedHost("app.example.com", "localhost")).toBe(true);
+    expect(withForwardedHost("app.example.com", "localhost, evil.test")).toBe(
+      true,
+    );
+    expect(withForwardedHost("app.example.com", "127.0.0.1:3000")).toBe(true);
+    expect(withForwardedHost("localhost:3000", "app.example.com")).toBe(true);
+    expect(withForwardedHost("localhost:3000", "localhost:3000")).toBe(false);
+    expect(withForwardedHost("localhost:3000", null)).toBe(false);
+    expect(withForwardedHost("localhost:3000", "localhost", "https")).toBe(
+      true,
+    );
   });
 
   it("PERSIST-11: the v1 wire format is unchanged and ids only (no roles/tokens/flags)", () => {

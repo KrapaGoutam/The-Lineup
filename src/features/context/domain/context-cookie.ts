@@ -149,10 +149,18 @@ export function isLoopbackHost(host: string | null | undefined): boolean {
  * the strict value. Development builds get `secure: false` so `next dev` over
  * HTTP works. The exemption is derived from the request, not from a flag a
  * deployment could leave switched on.
+ *
+ * `host` is the Host the server itself received. `forwardedHost`
+ * (`X-Forwarded-Host`) is client-suppliable on any deployment whose proxy does
+ * not overwrite it, so it can only ever make the decision STRICTER: a
+ * forwarded host that is present and not loopback keeps `Secure` on, and a
+ * spoofed `X-Forwarded-Host: localhost` can never switch it off for a real
+ * Host.
  */
 export function shouldUseSecureCookie(input: {
   readonly nodeEnv: string | undefined;
   readonly host: string | null | undefined;
+  readonly forwardedHost?: string | null | undefined;
   readonly forwardedProto: string | null | undefined;
 }): boolean {
   if (input.nodeEnv !== "production") return false;
@@ -160,7 +168,11 @@ export function shouldUseSecureCookie(input: {
     .split(",")[0]
     ?.trim()
     .toLowerCase();
-  if (isLoopbackHost(input.host) && proto !== "https") return false;
+  const forwardedHost = (input.forwardedHost ?? "").split(",")[0]?.trim();
+  const loopback =
+    isLoopbackHost(input.host) &&
+    (forwardedHost === "" || isLoopbackHost(forwardedHost));
+  if (loopback && proto !== "https") return false;
   return true;
 }
 

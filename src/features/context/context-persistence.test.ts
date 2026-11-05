@@ -34,6 +34,7 @@ const env = vi.hoisted(() => ({
   referer: null as string | null,
   host: "app.test",
   proto: null as string | null,
+  forwardedHost: null as string | null,
 }));
 
 vi.mock("next/headers", () => ({
@@ -50,6 +51,7 @@ vi.mock("next/headers", () => ({
     const h = new Headers({ host: env.host });
     if (env.referer) h.set("referer", env.referer);
     if (env.proto) h.set("x-forwarded-proto", env.proto);
+    if (env.forwardedHost) h.set("x-forwarded-host", env.forwardedHost);
     return h;
   },
 }));
@@ -108,6 +110,7 @@ beforeEach(() => {
   env.referer = null;
   env.host = "app.test";
   env.proto = null;
+  env.forwardedHost = null;
 
   // Jack: Monks (Webster + Katy) and Liquor Tap (NASA only).
   addMembership(db, IDS.jack, IDS.orgMonks, ["server"]);
@@ -157,6 +160,14 @@ describe("setActiveContextAction — authorization before persistence", () => {
       env.sets = [];
       env.host = "the-lineup.example.com";
       env.proto = "http";
+      await setActiveContextAction(pair(IDS.orgMonks, WEBSTER));
+      expect(env.sets[0].options.secure).toBe(true);
+      // A client-supplied X-Forwarded-Host: localhost must not switch Secure
+      // off for a real Host (no forwarded proto, as a spoofing client sends).
+      env.sets = [];
+      env.host = "the-lineup.example.com";
+      env.forwardedHost = "localhost";
+      env.proto = null;
       await setActiveContextAction(pair(IDS.orgMonks, WEBSTER));
       expect(env.sets[0].options.secure).toBe(true);
     } finally {

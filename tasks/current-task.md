@@ -20,8 +20,9 @@ Environment: Claude Code Cloud
 - [x] Docs: PLAN / STATUS / TEST_MATRIX / EVIDENCE; ROADMAP, CURRENT_STATE, 003 README/STATUS
 - [x] Commit, push, open PR #291 into `development`
 - [ ] Exact-head CI green (verify on the final PR head)
-- [ ] **Claude Local**: hosted DEV real-JWT A–G + Chromium/WebKit browser verification, then merge decision
+- [x] **Claude Local**: hosted DEV real-JWT 46/46, Chromium 25/25 + WebKit iPad 25/25, passcode/sign-out/races verified; one narrow `Secure`/`X-Forwarded-Host` hardening (see EVIDENCE.md)
+- [ ] Exact-head CI green on the new PR head, then regular merge into `development`
 
 ## Current State & Next Step
 
-All Cloud work is complete; PR open for authenticated local verification (`READY_FOR_CLAUDE_LOCAL_VALIDATION`). Next: Claude Local follows `EVIDENCE.md` → "Claude Local handoff". Do NOT start V2-003.005. Do not merge before hosted DEV + browser checks pass.
+Locally validated (`LOCALLY_VALIDATED`, 2026-11-04). Next: verify CI on the final PR head, regular merge commit into `development`, then a docs-only closeout PR. Do NOT start V2-003.005.

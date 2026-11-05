@@ -62,3 +62,23 @@ Files: `src/features/context/context-persistence.test.ts` (CP), `src/features/lo
 ## Mutation checks performed
 
 See EVIDENCE.md.
+
+## Local validation (2026-11-04) — executed
+
+Hosted DEV real-JWT 46/46 (`context-persistence` 7, `org-location-switcher` 17, `single-context-auto` 22). Real browser, Chromium 25/25 and WebKit iPad 25/25, in `tests/real/ui/context-persistence.real.spec.ts` (new) and `org-location-switcher.real.spec.ts`:
+
+| Spec id         | Covers                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| PASSCODE-1/2/3  | real sign-in clears saved context and shows the picker; failed passcode leaves it; single-location auto-entry (PERSIST-18, 26) |
+| PERSIST-1       | wire + stored cookie attributes, HttpOnly, reload, new tab, `?tab=`, module navigation, browser restart (PERSIST-11–16)        |
+| PERSIST-2       | no-Referer action writes only the persisted location; contradicting Referer refused (PERSIST-27, 20)                           |
+| DEEPLINK / -2   | confirmation gate, abort, retry, choose-location, unauthorized deep link (PERSIST-19, 20)                                      |
+| XORG            | cross-organization switch (PERSIST-21, 29)                                                                                     |
+| SIGNOUT         | sign-out + shared device (PERSIST-17, 18, 35)                                                                                  |
+| RACE-A/B/C/D/E  | double selection, delayed sign-out, stale tab, in-flight action, two devices                                                   |
+| KNOWN-RESIDUAL  | stripped-Referer stale tab characterization (see STATUS.md)                                                                    |
+| HISTORY / CANON | back/forward without loops, `?tab=` canonicalization (PERSIST-32)                                                              |
+| REVOKE          | revocation on the next action and next load (PERSIST-24)                                                                       |
+| SWITCHFAIL      | failed switch message, no cookie, retry                                                                                        |
+
+Added in Local: `context-cookie.test.ts` and `context-persistence.test.ts` cover a spoofed `X-Forwarded-Host` (PERSIST-12). PERSIST-16 (browser restart) is covered by PERSIST-1 above.
