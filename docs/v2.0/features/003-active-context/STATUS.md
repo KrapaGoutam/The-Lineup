@@ -6,13 +6,13 @@ GitHub Issue: #251
 Target Branch: development
 ```
 
-| Subfeature | Name                             | Status                                                                                                                                                |
-| ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V2-003.001 | Context Resolution               | Implemented; in review — [001-context-resolution/STATUS.md](001-context-resolution/STATUS.md) (Issue #283)                                            |
-| V2-003.002 | Organization / Location Switcher | NOT STARTED                                                                                                                                           |
-| V2-003.003 | Single-Context Auto Resolution   | NOT STARTED (only a bounded "unique eligible location" rule exists inside .001)                                                                       |
-| V2-003.004 | Context Persistence              | Implemented — `READY_FOR_CLAUDE_LOCAL_VALIDATION` — [004-secure-context-persistence/STATUS.md](004-secure-context-persistence/STATUS.md) (Issue #290) |
-| V2-003.005 | Multi-Tab / Stale Context Safety | NOT STARTED                                                                                                                                           |
+| Subfeature | Name                             | Status                                                                                                                                                                                          |
+| ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V2-003.001 | Context Resolution               | Implemented; in review — [001-context-resolution/STATUS.md](001-context-resolution/STATUS.md) (Issue #283)                                                                                      |
+| V2-003.002 | Organization / Location Switcher | NOT STARTED                                                                                                                                                                                     |
+| V2-003.003 | Single-Context Auto Resolution   | NOT STARTED (only a bounded "unique eligible location" rule exists inside .001)                                                                                                                 |
+| V2-003.004 | Context Persistence              | COMPLETE — PR #291 merged (`a649e82c`); hosted DEV 46/46, Chromium 25/25, WebKit iPad 25/25 — [004-secure-context-persistence/STATUS.md](004-secure-context-persistence/STATUS.md) (Issue #290) |
+| V2-003.005 | Multi-Tab / Stale Context Safety | NOT STARTED                                                                                                                                                                                     |
 
 ## What V2-003.001 delivers (and what it defers)
 

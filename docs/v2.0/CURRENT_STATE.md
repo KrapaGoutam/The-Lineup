@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-003.004 Secure Context Persistence — READY_FOR_CLAUDE_LOCAL_VALIDATION (Issue #290, PR #291; not merged)
-Active Subfeature Status: Cloud gates green (Vitest 2,880, build demo+real, Playwright demo 26/26); hosted DEV real-JWT and real-browser verification NOT DONE
-Previous Subfeature:      V2-003.003 Single-Context Auto Resolution — COMPLETE (PR #289, development 398393b)
-Next Subfeature:          V2-003.005 Multi-Tab / Stale Context Safety (NOT STARTED; do not start before .004 is verified)
+Active Subfeature:        V2-003.005 Multi-Tab / Stale Context Safety — NOT STARTED (V2-003 IN PROGRESS)
+Active Subfeature Status: not started; waiting for owner go-ahead
+Previous Subfeature:      V2-003.004 Secure Context Persistence — COMPLETE (PR #291, merge a649e82c; hosted DEV 46/46, Chromium 25/25, WebKit iPad 25/25)
+Next Subfeature:          V2-003.005 Multi-Tab / Stale Context Safety (NOT STARTED)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -36,9 +36,11 @@ Evidence: [Location Lifecycle Integrity](features/002-organizations-locations/00
 
 Next recommended environment: Claude Code Cloud for the bounded V2-003.001 feature, with Codex Local for hosted DEV/WebKit validation if required. Do not infer approval for Production or main promotion. V2-003 was not started in this closeout.
 
-## V2-003.004 (READY_FOR_CLAUDE_LOCAL_VALIDATION — not merged)
+## V2-003.004 (COMPLETE — PR #291 merged, `development` `a649e82c`)
 
 Issue #290 / PR #291; no migration. The active context is persisted in the existing `lineup_active_context` cookie (v1 format), now `HttpOnly; SameSite=Lax; Path=/; 7 days; Secure` in production, written only by `setActiveContextAction` after the canonical resolver authorizes the pair; cleared by `clearActiveContextAction`, sign-out and sign-in. `getPrimaryLocation` resolves from the persisted context (stale/invalid/cross-organization → fail closed); the `Referer` is only a reject-on-mismatch consistency signal. An explicit `?location=` that differs from the cookie is reconciled by a client gate that verifies and persists it before the workspace opens. Open dependencies: V2-003.005 (multi-tab), V2-005 (direct-PostgREST cross-location RLS and server-authoritative `locationId` binding — Production release blockers, **not fixed here**), V2-008 (backfill). See [004-secure-context-persistence/EVIDENCE.md](features/003-active-context/004-secure-context-persistence/EVIDENCE.md).
+
+Local validation (2026-11-04): hosted DEV real-JWT 46/46, real Chromium 25/25 and WebKit iPad 25/25 (real passcode sign-in, cookie storage, browser restart, no-Referer writes, deep-link gate, cross-organization switch, sign-out, races, history), one narrow hardening (the `Secure` loopback exemption no longer trusts a spoofed `X-Forwarded-Host`). Accepted residuals owned by V2-003.005/V2-005: a stale tab with a stripped `Referer` writes to the persisted location, and the stale-tab refusal copy is misleading. Production and `main` untouched. Evidence: [EVIDENCE.md](features/003-active-context/004-secure-context-persistence/EVIDENCE.md).
 
 ## V2-003.001 (COMPLETE — PR #284 merged, `development` 5333a526)
 
