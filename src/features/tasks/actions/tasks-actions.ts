@@ -2,7 +2,8 @@
 
 import { z } from "zod";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { getOpeningReminderPrompt } from "@/features/tasks/data/opening-reminder-prompt-data";
 import { getTaskHistory } from "@/features/tasks/data/task-history-data";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
@@ -18,9 +19,13 @@ import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * `contextStale`: the server refused because the workspace the tab shows is no
+ * longer the one it would operate on (V2-003.005). No mutation was attempted.
+ */
 export type TasksActionResult =
   | { ok: true; data: TasksSnapshot }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 const slugSchema = z
   .string()
@@ -40,6 +45,36 @@ async function resolveCaller(restaurantSlug: string) {
       profileId: user.profileId,
       name: user.name,
       designation: user.designation,
+    },
+  };
+}
+
+type Caller = NonNullable<Awaited<ReturnType<typeof resolveCaller>>>;
+
+/**
+ * V2-003.005: the browser's `expectedContext` (profile, organization,
+ * location it is showing) is an untrusted assertion. It must agree with the
+ * identity and operational location the SERVER verifies itself; otherwise the
+ * request is refused before any read or write, with nothing substituted.
+ */
+async function checkWorkspace(raw: unknown, caller: Caller) {
+  const outcome = await assertWorkspaceExpectation(raw, {
+    profileId: caller.viewer.profileId,
+    organizationId: caller.organizationId,
+  });
+  if (outcome.ok) return { ok: true as const, location: outcome.location };
+  if (outcome.code === "invalid") {
+    return {
+      ok: false as const,
+      result: { ok: false as const, error: "That request is invalid." },
+    };
+  }
+  return {
+    ok: false as const,
+    result: {
+      ok: false as const,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
     },
   };
 }
@@ -223,8 +258,11 @@ async function runCommand(
  */
 export async function getTasksSnapshotAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<TasksActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
@@ -233,6 +271,9 @@ export async function getTasksSnapshotAction(input: {
 
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to see tasks." };
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
 
   const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
@@ -247,9 +288,15 @@ export async function getTasksSnapshotAction(input: {
 export async function runTaskCommandAction(input: {
   restaurantSlug: string;
   command: TaskCommand;
+  /** REQUIRED: the workspace the caller is looking at (see `checkWorkspace`). */
+  expectedContext: unknown;
 }): Promise<TasksActionResult> {
   const parsed = z
-    .object({ restaurantSlug: slugSchema, command: taskCommandSchema })
+    .object({
+      restaurantSlug: slugSchema,
+      command: taskCommandSchema,
+      expectedContext: z.unknown(),
+    })
     .safeParse(input);
   if (!parsed.success) {
     return {
@@ -265,13 +312,16 @@ export async function runTaskCommandAction(input: {
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to do that." };
 
-  const location = await getPrimaryLocation(caller.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
+  // Refused here -- before ANY database write -- when what the tab shows is
+  // not what the server authorizes. The location used below is the one the
+  // server verified, never the one the browser asserted.
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
 
   const failure = await runCommand(
     supabase,
     caller.organizationId,
-    location.id,
+    workspace.location.id,
     parsed.data.command,
   );
   if (failure) return { ok: false, error: friendly(failure) };
@@ -283,13 +333,16 @@ export async function runTaskCommandAction(input: {
 
 export type TaskHistoryActionResult =
   | { ok: true; data: TaskHistoryData }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 /** Read-only: completed tasks for Tasks → History, scoped by the caller's RLS. */
 export async function getTaskHistoryAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<TaskHistoryActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
@@ -300,6 +353,9 @@ export async function getTaskHistoryAction(input: {
   if (!caller) {
     return { ok: false, error: "You need to sign in to see task history." };
   }
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
 
   const history = await getTaskHistory(caller.organizationId);
   if (!history)

@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Banknote,
@@ -27,6 +34,10 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { requestSignOut } from "@/lib/client-sign-out";
 import { ContextScopeBoundary } from "@/features/context/components/context-scope-boundary";
 import { ContextReconcileGate } from "@/features/context/components/context-reconcile-gate";
+import { publishContextEvent } from "@/features/context/components/context-sync-channel";
+import { ContextSyncGuard } from "@/features/context/components/context-sync-guard";
+import { clearPriorWorkspaceUrl } from "@/features/context/components/prior-session";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import type { ContextReconcileTarget } from "@/features/context/components/context-reconcile-gate";
 import { ContextSwitcher } from "@/features/context/components/context-switcher";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
@@ -628,6 +639,7 @@ export function RestaurantOperationsApp(props: RestaurantOperationsAppProps) {
         <ContextReconcileGate
           target={props.contextReconcile ?? null}
           activeLocationId={props.activeContext?.locationId ?? null}
+          activeLocationName={props.activeContext?.locationName ?? null}
         >
           <RestaurantOperationsAppInner
             {...props}
@@ -655,6 +667,21 @@ function RestaurantOperationsAppInner({
   const router = useRouter();
   const { switchingTo, switchTo, switchError, dismissSwitchError } =
     useContextSwitch();
+  // V2-003.005: the (profile, organization, location) this render was built
+  // for -- all from SERVER-verified props. Sent to protected actions as an
+  // untrusted consistency assertion and used by the stale-tab guard. Absent in
+  // demo mode (no real context, nothing to compare).
+  const workspaceExpectation = useMemo<WorkspaceExpectation | null>(
+    () =>
+      !demoMode && activeContext && initialUser
+        ? {
+            profileId: initialUser.profileId,
+            organizationId: activeContext.organizationId,
+            locationId: activeContext.locationId,
+          }
+        : null,
+    [demoMode, activeContext, initialUser],
+  );
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
   // Real mode: a successful passcode sign-in is only *pending* until the
   // Server Component re-renders with the authenticated person's real data.
@@ -903,6 +930,13 @@ function RestaurantOperationsAppInner({
     // the authenticated data (see RestaurantOperationsApp's keyed remount).
     setSignInStalled(false);
     setPendingAccount(account);
+    // V2-003.005: a session that ended underneath this tab can leave the
+    // previous employee's `?location=` in the address bar; do not let this
+    // sign-in read it as a deliberate deep link.
+    clearPriorWorkspaceUrl(pathname);
+    // V2-003.005: another employee (or the same one) just signed in on this
+    // browser; tabs showing a previous session re-verify against the server.
+    publishContextEvent("session_changed");
     router.refresh();
   }
 
@@ -1869,7 +1903,7 @@ function RestaurantOperationsAppInner({
       />
     ) : null;
 
-  return (
+  const content = (
     <div
       className={cn("min-h-screen", isRecipeDetail ? "pb-0" : "pb-28 lg:pb-0")}
     >
@@ -2325,6 +2359,7 @@ function RestaurantOperationsAppInner({
             key={tasksNavKey}
             restaurantSlug={restaurantSlug}
             user={user}
+            expectedContext={workspaceExpectation}
             onSessionInvalid={forceSignOut}
             onUnreadChange={demoMode ? undefined : setRealTasksUnread}
             demo={
@@ -2604,5 +2639,18 @@ function RestaurantOperationsAppInner({
         />
       ) : null}
     </div>
+  );
+
+  // V2-003.005: blocks the whole workspace when another tab (or session)
+  // changed the context this tab is showing; see ContextSyncGuard.
+  return (
+    <ContextSyncGuard
+      expected={workspaceExpectation}
+      contexts={availableContexts}
+      contextsUnavailable={availableContextsFailed}
+      onRecovered={onAuthBoundary}
+    >
+      {content}
+    </ContextSyncGuard>
   );
 }

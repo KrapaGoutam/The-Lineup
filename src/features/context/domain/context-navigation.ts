@@ -16,6 +16,7 @@ export const LOCATION_PARAM = "location";
  * workspace.
  */
 const CARRY_ACROSS_SWITCH = ["tab"] as const;
+const TAB_TOKEN = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
 
 /** Canonical organization route for a slug (slug is URL-encoded). */
 export function organizationPath(organizationSlug: string): string {
@@ -39,6 +40,20 @@ export function contextSwitchHref(
   }
   next.set(LOCATION_PARAM, target.locationId);
   return `${organizationPath(target.organizationSlug)}?${next.toString()}`;
+}
+
+/**
+ * V2-003.005 recovery URL: the SAME path, `?location=` dropped, only `tab`
+ * carried. The address bar names the location a tab is (or was) showing;
+ * reloading that URL would be read as a deliberate explicit selection and
+ * rewrite the persisted context back to it. Without it the server resolves the
+ * verified persisted context.
+ */
+export function recoveryHref(pathname: string, currentSearch: string): string {
+  const tab = new URLSearchParams(currentSearch).get("tab");
+  return tab && TAB_TOKEN.test(tab)
+    ? `${pathname}?tab=${encodeURIComponent(tab)}`
+    : pathname;
 }
 
 export interface ContextGroup {

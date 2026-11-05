@@ -2,13 +2,24 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = vi.hoisted(() => ({ replace: vi.fn() }));
+const router = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
 const actions = vi.hoisted(() => ({
   setActiveContextAction: vi.fn(),
   clearActiveContextAction: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+const sync = vi.hoisted(() => ({ publishContextEvent: vi.fn() }));
+const nav = vi.hoisted(() => ({
+  origin: "fresh" as "fresh" | "reload" | "history",
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => router,
+  usePathname: () => "/r/the-monks",
+}));
 vi.mock("@/features/context/actions/context-actions", () => actions);
+vi.mock("@/features/context/components/context-sync-channel", () => sync);
+vi.mock("@/features/context/components/history-traversal", () => ({
+  currentNavigationOrigin: () => nav.origin,
+}));
 
 import { ContextReconcileGate } from "./context-reconcile-gate";
 
@@ -20,6 +31,9 @@ const TARGET = {
 const workspace = <div data-testid="workspace">workspace</div>;
 
 beforeEach(() => {
+  nav.origin = "fresh";
+  sync.publishContextEvent.mockClear();
+  router.refresh.mockClear();
   router.replace.mockClear();
   actions.setActiveContextAction.mockReset();
   actions.clearActiveContextAction.mockReset().mockResolvedValue({ ok: true });
@@ -180,6 +194,104 @@ describe("ContextReconcileGate (V2-003.004)", () => {
     );
     expect(`${window.location.pathname}${window.location.search}`).toBe(
       existing,
+    );
+  });
+});
+
+describe("ContextReconcileGate (V2-003.005 history / publishing)", () => {
+  it.each(["reload", "history"] as const)(
+    "NAV: after a %s the URL is NOT silently persisted -- the user is asked and nothing is written",
+    async (origin) => {
+      nav.origin = origin;
+      render(
+        <ContextReconcileGate target={TARGET} activeLocationName="Bbb Bar">
+          {workspace}
+        </ContextReconcileGate>,
+      );
+      expect(
+        await screen.findByTestId("context-reconcile-confirm"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("heading")).toHaveTextContent(
+        "This page is for Bbb Bar",
+      );
+      expect(screen.queryByTestId("workspace")).toBeNull();
+      expect(actions.setActiveContextAction).not.toHaveBeenCalled();
+      expect(sync.publishContextEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("NAV: 'Switch to X' is the deliberate, server-verified action; only then is it persisted and announced", async () => {
+    nav.origin = "history";
+    actions.setActiveContextAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(
+      <ContextReconcileGate target={TARGET} activeLocationName="Bbb Bar">
+        {workspace}
+      </ContextReconcileGate>,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /switch to bbb bar/i }),
+    );
+    expect(await screen.findByTestId("workspace")).toBeInTheDocument();
+    expect(actions.setActiveContextAction).toHaveBeenCalledTimes(1);
+    expect(actions.setActiveContextAction).toHaveBeenCalledWith({
+      organizationId: TARGET.organizationId,
+      locationId: TARGET.locationId,
+    });
+    expect(sync.publishContextEvent).toHaveBeenCalledWith("context_changed");
+  });
+
+  it("NAV: 'Stay on my current location' never writes and returns to the URL without ?location= (tab kept)", async () => {
+    nav.origin = "history";
+    window.history.replaceState(null, "", "/r/the-monks?location=x&tab=tasks");
+    const user = userEvent.setup();
+    render(
+      <ContextReconcileGate target={TARGET}>{workspace}</ContextReconcileGate>,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /stay on my current/i }),
+    );
+    expect(actions.setActiveContextAction).not.toHaveBeenCalled();
+    expect(router.replace).toHaveBeenCalledWith("/r/the-monks?tab=tasks");
+    expect(router.refresh).toHaveBeenCalled();
+  });
+
+  it("PUB: a fresh deep link is persisted and announced to other tabs only after the server confirmed", async () => {
+    actions.setActiveContextAction.mockResolvedValue({ ok: true });
+    render(
+      <ContextReconcileGate target={TARGET}>{workspace}</ContextReconcileGate>,
+    );
+    expect(await screen.findByTestId("workspace")).toBeInTheDocument();
+    expect(sync.publishContextEvent).toHaveBeenCalledTimes(1);
+    expect(sync.publishContextEvent).toHaveBeenCalledWith("context_changed");
+  });
+
+  it("PUB: a refused reconciliation announces nothing", async () => {
+    actions.setActiveContextAction.mockResolvedValue({
+      ok: false,
+      code: "not_available",
+    });
+    render(
+      <ContextReconcileGate target={TARGET}>{workspace}</ContextReconcileGate>,
+    );
+    await screen.findByTestId("context-reconcile-failed");
+    expect(sync.publishContextEvent).not.toHaveBeenCalled();
+  });
+
+  it("PUB: clearing the saved preference is announced as context_cleared", async () => {
+    actions.setActiveContextAction.mockResolvedValue({
+      ok: false,
+      code: "not_available",
+    });
+    const user = userEvent.setup();
+    render(
+      <ContextReconcileGate target={TARGET}>{workspace}</ContextReconcileGate>,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: /choose a location/i }),
+    );
+    await waitFor(() =>
+      expect(sync.publishContextEvent).toHaveBeenCalledWith("context_cleared"),
     );
   });
 });

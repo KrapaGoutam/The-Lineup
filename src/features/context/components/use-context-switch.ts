@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState, useTransition } from "react";
 
 import { setActiveContextAction } from "@/features/context/actions/context-actions";
+import { publishContextEvent } from "@/features/context/components/context-sync-channel";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 
 /**
@@ -61,6 +62,9 @@ export function useContextSwitch(): {
           setSwitchError(SWITCH_FAILURE_MESSAGE);
           return;
         }
+        // V2-003.005: tell the other tabs ONLY after the server persisted the
+        // new context (a failed switch returned above, so it never announces).
+        publishContextEvent("context_changed");
         startTransition(() => {
           router.push(result.destination);
         });

@@ -249,15 +249,24 @@ for (const vp of [
     await page.waitForSelector('body[data-hydrated="true"]');
     await expect(trigger(page)).toHaveAttribute("aria-label", /Webster/);
 
-    // Back returns to the previous temporary selection (NASA).
+    // V2-003.005: Back names NASA, but the persisted location is Webster. An
+    // old history entry is NOT silently re-persisted: the workspace stays
+    // closed until the user makes a deliberate, server-verified choice.
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`location=${ids.nasa}`), {
       timeout: 30_000,
     });
+    const confirm = page.getByTestId("context-reconcile-confirm");
+    await expect(confirm).toBeVisible({ timeout: 30_000 });
+    await expect(trigger(page)).toHaveCount(0);
+    await page.getByRole("button", { name: /switch to nasa/i }).click();
     await expect(trigger(page)).toHaveAttribute("aria-label", /NASA/, {
       timeout: 30_000,
     });
+    // Forward names Webster while NASA is persisted now: asks again.
     await page.goForward();
+    await expect(confirm).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: /switch to webster/i }).click();
     await expect(trigger(page)).toHaveAttribute("aria-label", /Webster/, {
       timeout: 30_000,
     });
