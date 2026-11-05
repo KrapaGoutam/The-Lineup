@@ -360,6 +360,19 @@ describe("ContextSyncGuard stale panel and recovery", () => {
     expect(sync.publishContextEvent).not.toHaveBeenCalled();
   });
 
+  it("MT-15: when the server now operates on another organization, Refresh goes to THAT organization route (not the old slug)", async () => {
+    const user = userEvent.setup();
+    await goStale({
+      status: "stale",
+      reason: "location_changed",
+      organizationSlug: "liquor-tap",
+    });
+    await user.click(
+      screen.getByRole("button", { name: /refresh workspace/i }),
+    );
+    expect(router.replace).toHaveBeenCalledWith("/r/liquor-tap?tab=tasks");
+  });
+
   it("a refresh the server still disagrees with stays closed and explains it (no loop, no re-seed)", async () => {
     const user = userEvent.setup();
     await goStale();
@@ -395,6 +408,38 @@ describe("ContextSyncGuard stale panel and recovery", () => {
       ),
     );
     expect(sync.publishContextEvent).toHaveBeenCalledWith("context_changed");
+  });
+
+  it("MT-04: choosing the location this tab ALREADY shows (it was moved back) lifts the block instead of leaving it stuck", async () => {
+    const user = userEvent.setup();
+    await goStale();
+    actions.verifyWorkspaceContextAction.mockResolvedValue({
+      status: "consistent",
+    });
+    actions.setActiveContextAction.mockResolvedValue({
+      ok: true,
+      destination: "/r/the-monks?location=" + EXPECTED.locationId,
+    });
+    await user.click(
+      screen.getByRole("button", { name: /choose a location/i }),
+    );
+    await user.click(screen.getByRole("button", { name: "Aaa Bar" }));
+    await waitFor(() => expect(onRecovered).toHaveBeenCalledTimes(1));
+  });
+
+  it("a refused selection does NOT lift the block", async () => {
+    const user = userEvent.setup();
+    await goStale();
+    actions.setActiveContextAction.mockResolvedValue({
+      ok: false,
+      code: "not_available",
+    });
+    await user.click(
+      screen.getByRole("button", { name: /choose a location/i }),
+    );
+    await user.click(screen.getByRole("button", { name: "Aaa Bar" }));
+    await screen.findAllByRole("alert");
+    expect(onRecovered).not.toHaveBeenCalled();
   });
 
   it("MT-05: a refused selection shows the error, navigates nowhere and publishes nothing", async () => {

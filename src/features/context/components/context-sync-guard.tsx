@@ -22,6 +22,7 @@ import { useContextSwitch } from "@/features/context/components/use-context-swit
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import {
   groupContextsByOrganization,
+  organizationPath,
   recoveryHref,
 } from "@/features/context/domain/context-navigation";
 import type {
@@ -33,7 +34,11 @@ import type {
 export const PASSIVE_CHECK_MIN_INTERVAL_MS = 5_000;
 
 type Blocked =
-  | { readonly kind: "stale"; readonly reason: StaleReason }
+  | {
+      readonly kind: "stale";
+      readonly reason: StaleReason;
+      readonly organizationSlug?: string;
+    }
   | { readonly kind: "signed_out" };
 
 const COPY: Record<
@@ -151,7 +156,11 @@ export function ContextSyncGuard({
           const verdict = await ask();
           if (!mounted.current || !verdict) break;
           if (verdict.status === "stale") {
-            setBlocked({ kind: "stale", reason: verdict.reason });
+            setBlocked({
+              kind: "stale",
+              reason: verdict.reason,
+              organizationSlug: verdict.organizationSlug,
+            });
           } else if (verdict.status === "signed_out") {
             setBlocked({ kind: "signed_out" });
           }
@@ -264,12 +273,41 @@ function StalePanel({
     // the stale location (`?location=`); reloading THAT would be read as a
     // deliberate selection and rewrite the cookie back to it, so only the
     // module (`?tab=`) is carried over.
-    const href = recoveryHref(pathname, window.location.search);
+    // Go to the organization the SERVER now operates on (its verified slug),
+    // else stay on the current route.
+    const base =
+      blocked.kind === "stale" && blocked.organizationSlug
+        ? organizationPath(blocked.organizationSlug)
+        : pathname;
+    const href = recoveryHref(base, window.location.search);
     startRefresh(() => {
       router.replace(href);
       router.refresh();
     });
   }
+
+  // "Choose a location" can legitimately pick the location this tab ALREADY
+  // shows (the other tab moved away, the user moved it back). The workspace key
+  // is then unchanged, so nothing remounts on its own and the block would stay
+  // forever: once the verified selection has finished navigating, re-check and
+  // re-seed. (A different location re-keys the workspace and unmounts us.)
+  const wasSwitching = useRef(false);
+  useEffect(() => {
+    if (switchingTo) {
+      wasSwitching.current = true;
+      return;
+    }
+    if (!wasSwitching.current || switchError) return;
+    wasSwitching.current = false;
+    let alive = true;
+    void (async () => {
+      const verdict = await ask();
+      if (alive && verdict?.status === "consistent") onRecovered();
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [switchingTo, switchError, ask, onRecovered]);
 
   // After the refresh settles: if this very workspace is still the verified
   // one (a different one would have re-keyed and unmounted us), re-seed from

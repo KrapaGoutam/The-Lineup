@@ -163,7 +163,7 @@ export function ContextSwitcher({
           role="menu"
           aria-label="Switch workspace"
           onKeyDown={onMenuKeyDown}
-          className="border-border bg-card fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-y-auto rounded-t-2xl border p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-xl lg:absolute lg:inset-x-auto lg:top-[calc(100%+0.5rem)] lg:bottom-auto lg:left-0 lg:max-h-[60dvh] lg:min-w-64 lg:rounded-2xl"
+          className="border-border bg-card fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-y-auto rounded-t-2xl border p-2 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-xl lg:absolute lg:inset-x-auto lg:top-[calc(100%+0.5rem)] lg:bottom-auto lg:left-0 lg:max-h-[60dvh] lg:min-w-64 lg:rounded-2xl lg:pb-2"
           data-testid="context-switcher-menu"
         >
           <p className="text-faint px-2.5 pt-1 pb-2 text-[10px] font-semibold tracking-[0.12em] uppercase">

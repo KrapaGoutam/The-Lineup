@@ -130,7 +130,11 @@ describe("verifyWorkspaceContext (read-only)", () => {
       await verifyWorkspaceContext(expectA, {
         resolve: async () => resolved(B),
       }),
-    ).toEqual({ status: "stale", reason: "location_changed" });
+    ).toEqual({
+      status: "stale",
+      reason: "location_changed",
+      organizationSlug: "s",
+    });
   });
   it("a malformed assertion concludes nothing and does not even resolve", async () => {
     const resolve = vi.fn(async () => resolved(A));

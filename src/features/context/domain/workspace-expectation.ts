@@ -82,7 +82,16 @@ export type StaleReason =
 
 export type WorkspaceVerdict =
   | { readonly status: "consistent" }
-  | { readonly status: "stale"; readonly reason: StaleReason }
+  | {
+      readonly status: "stale";
+      readonly reason: StaleReason;
+      /**
+       * The route slug of the context the server NOW operates on, when it
+       * resolved one. Built from verified data (never from the assertion) so
+       * recovery can go straight to the right organization route.
+       */
+      readonly organizationSlug?: string;
+    }
   | { readonly status: "signed_out" }
   /** Auth/database outage: nothing was verified, so nothing is concluded. */
   | { readonly status: "unavailable" };
@@ -112,7 +121,11 @@ export function classifyWorkspaceDrift(
         locationId: context.locationId,
       })
         ? { status: "consistent" }
-        : { status: "stale", reason: "location_changed" };
+        : {
+            status: "stale",
+            reason: "location_changed",
+            organizationSlug: context.organizationSlug,
+          };
     }
     case "selection_required":
       // The saved location was cleared (or never persisted) and several

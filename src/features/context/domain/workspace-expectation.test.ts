@@ -104,12 +104,20 @@ describe("classifyWorkspaceDrift", () => {
   it("MT-02: the persisted location moved to B -> stale (location_changed)", () => {
     expect(
       classifyWorkspaceDrift(resolved({ locationId: B }), expected),
-    ).toEqual({ status: "stale", reason: "location_changed" });
+    ).toEqual({
+      status: "stale",
+      reason: "location_changed",
+      organizationSlug: "slug",
+    });
   });
-  it("MT-15: another organization -> stale", () => {
+  it("MT-15: another organization -> stale, pointing recovery at the verified organization route", () => {
     expect(
       classifyWorkspaceDrift(resolved({ organizationId: B }), expected),
-    ).toEqual({ status: "stale", reason: "location_changed" });
+    ).toEqual({
+      status: "stale",
+      reason: "location_changed",
+      organizationSlug: "slug",
+    });
   });
   it("MT-18: a different employee is signed in -> different_user, even at the same location", () => {
     expect(
