@@ -765,7 +765,7 @@ test("RACE-A two quick selections never leave the page and the cookie describing
   expect(label).toContain(urlLoc === ids.locA ? nameA : nameB);
 });
 
-test("RACE-C stale tab: a tab still showing A cannot write after another tab switched to B (Referer present)", async ({
+test("RACE-C stale tab: a tab still showing A is blocked (V2-003.005) after another tab switched to B, so it cannot write", async ({
   page,
   context,
 }) => {
@@ -777,13 +777,15 @@ test("RACE-C stale tab: a tab still showing A cannot write after another tab swi
   await switchViaMenu(tab2, nameB);
   expect(parsed((await ctxCookie(context))!.value).l).toBe(ids.locB);
   await page.bringToFront();
-  await expect(trigger(page)).toHaveAttribute("aria-label", new RegExp(nameA)); // still A on screen
-  const title = `RACEC-${runId}`;
-  const { request, alerts } = await createTaskUI(page, title);
-  console.log(
-    `RACE-C referer=${request.headers()["referer"]?.includes(ids.locA) ? "A" : "other"} alerts=${JSON.stringify(alerts)}`,
-  );
-  expect(await tasksFor(title)).toHaveLength(0); // refused: nothing at A or B
+  // Before V2-003.005 this tab kept showing A and relied on the Referer check.
+  // Now it learns (channel / focus / a refused read) and its workspace closes;
+  // the refused-write proof (0 rows at A and B) lives in
+  // multi-tab-context.real.spec.ts MT-11/12.
+  await expect(page.getByTestId("context-stale")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(trigger(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /New task/ })).toHaveCount(0);
   await tab2.close();
 });
 
@@ -858,7 +860,7 @@ test("RACE-E one employee on two devices keeps independent preferences and each 
   await other.close();
 });
 
-test("KNOWN-RESIDUAL stale tab whose Referer was stripped (privacy) writes to the PERSISTED location, never anywhere else", async ({
+test("RESIDUAL-CLOSED a stale tab's action replayed with the Referer stripped (privacy) is REFUSED -- it no longer lands at the persisted location (V2-003.005)", async ({
   page,
   context,
 }) => {
@@ -879,13 +881,13 @@ test("KNOWN-RESIDUAL stale tab whose Referer was stripped (privacy) writes to th
       });
     }
   });
+  // A genuine create at A, captured: its arguments carry the workspace A.
+  await createTaskUI(page, title);
+  expect((await tasksFor(title)).map((r) => r.location_id)).toEqual([ids.locA]);
   const tab2 = await context.newPage();
   await tab2.goto(`/r/${slugP}`);
   await tab2.waitForSelector('body[data-hydrated="true"]');
-  await switchViaMenu(tab2, nameB);
-  await page.bringToFront();
-  await createTaskUI(page, title); // refused (Referer A vs cookie B)
-  expect(await tasksFor(title)).toHaveLength(0);
+  await switchViaMenu(tab2, nameB); // the shared cookie is now B
   const replayTitle = `${title}-noref`;
   const headers = { ...captured[0].headers };
   delete headers["referer"];
@@ -896,11 +898,11 @@ test("KNOWN-RESIDUAL stale tab whose Referer was stripped (privacy) writes to th
   });
   const rows = await tasksFor(replayTitle);
   console.log(
-    `KNOWN-RESIDUAL stripped-Referer rows at: ${JSON.stringify(rows.map((r) => where(r.location_id)))}`,
+    `RESIDUAL-CLOSED stripped-Referer replay rows at: ${JSON.stringify(rows.map((r) => where(r.location_id)))}`,
   );
-  // Persisted context (B) decides; the display (A) is not consulted. Owned by
-  // V2-003.005 (stale-tab UX) / V2-005 (server-authoritative location binding).
-  expect(rows.map((r) => r.location_id)).toEqual([ids.locB]);
+  // V2-003.004 accepted this landing at B. The server now compares the
+  // asserted workspace (A) with the verified one (B) and refuses: no row.
+  expect(rows).toHaveLength(0);
   await tab2.close();
 });
 
@@ -922,9 +924,12 @@ test("HISTORY back/forward after a switch never loops and never writes to a loca
   await page.goBack();
   await page.waitForTimeout(6000);
   const url = page.url();
-  const label = await trigger(page)
-    .getAttribute("aria-label")
-    .catch(() => null);
+  // V2-003.005: after Back the old entry is NOT re-persisted, so the workspace
+  // may be closed (confirmation / stale panel) and the trigger absent. Probe
+  // without waiting (Playwright actions have no default timeout here).
+  const label = (await trigger(page).count())
+    ? await trigger(page).getAttribute("aria-label")
+    : null;
   const stored = await ctxCookie(context);
   const cookie = stored ? parsed(stored.value).l : null;
   console.log(

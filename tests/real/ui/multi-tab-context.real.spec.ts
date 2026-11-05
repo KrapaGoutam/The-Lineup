@@ -663,10 +663,12 @@ test("MT-10 a tab closed mid-switch leaves a valid persisted pair and no danglin
   context,
 }) => {
   const a = await context.newPage();
-  const errors: string[] = [];
-  a.on("pageerror", (error) => errors.push(error.message));
   await openAt(a, "emp1", ids.locA);
   const b = await secondTab(context, nameA);
+  // Only the scenario is observed: setup navigations cancel in-flight
+  // requests, which WebKit reports as "Load failed" page errors.
+  const errors: string[] = [];
+  a.on("pageerror", (error) => errors.push(error.message));
 
   await trigger(b).click();
   await b
@@ -674,6 +676,7 @@ test("MT-10 a tab closed mid-switch leaves a valid persisted pair and no danglin
     .click();
   await b.close();
   await a.waitForTimeout(3_000);
+  await a.bringToFront();
   await a.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
 
   const persisted = await cookieLoc(context);
@@ -812,6 +815,7 @@ test("MT-14 a revoked assignment blocks the tab on its next check; the stale pic
   expect(revoked.error).toBeNull();
   expect(revoked.data).toHaveLength(1);
 
+  await a.bringToFront();
   await a.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expectWorkspaceBlocked(a);
   await expect(a.getByRole("heading")).toHaveText(
@@ -872,10 +876,15 @@ test("MT-17 signing out in one tab invalidates the other; refreshing shows the l
   await signOutViaUi(b);
   await expect(b.locator("#passcode")).toBeVisible({ timeout: 30_000 });
 
-  await expect(stale(a)).toBeVisible({ timeout: 20_000 });
-  await expect(a.getByRole("heading")).toContainText(/signed out/i);
+  await expect(stale(a).or(a.locator("#passcode"))).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(trigger(a)).toHaveCount(0);
-  await a.getByRole("button", { name: "Refresh workspace" }).click();
+  await expect(a.getByRole("button", { name: /New task/ })).toHaveCount(0);
+  if (await stale(a).count()) {
+    await expect(a.getByRole("heading")).toContainText(/signed out/i);
+    await a.getByRole("button", { name: "Refresh workspace" }).click();
+  }
   await expect(a.locator("#passcode")).toBeVisible({ timeout: 60_000 });
   await expect(trigger(a)).toHaveCount(0);
   await expect(stale(a)).toHaveCount(0);
@@ -899,21 +908,31 @@ test("MT-18 another employee signs in on the same browser: the old tab is closed
   ).toBeVisible({ timeout: 60_000 });
 
   // A was never told (no BroadcastChannel); its next check closes it.
+  await a.bringToFront();
   await a.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await expect(stale(a)).toBeVisible({ timeout: 20_000 });
-  await expect(a.getByRole("heading")).toHaveText(
-    "A different account is signed in",
-  );
+  // Whichever path observes it first closes the old workspace: the guard's
+  // "different account" panel, or the existing forced sign-out (the previous
+  // session was revoked by the sign-out) which ends on the login screen.
+  await expect(stale(a).or(a.locator("#passcode"))).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(trigger(a)).toHaveCount(0);
+  await expect(a.getByRole("button", { name: /New task/ })).toHaveCount(0);
   await expect(a.locator("body")).not.toContainText(nameA);
   const title = `MT18-other-user-${runId}`;
   await expectNoRows(title);
 
-  await a.getByRole("button", { name: "Refresh workspace" }).click();
-  await expect(
-    trigger(a).or(a.getByTestId("context-indicator").first()),
-  ).toBeVisible({ timeout: 60_000 });
-  await expect(a.locator("body")).toContainText(nameB); // solo's only location
-  await expect(a.locator("body")).not.toContainText(nameA);
+  if (await stale(a).count()) {
+    await expect(a.getByRole("heading")).toHaveText(
+      "A different account is signed in",
+    );
+    await a.getByRole("button", { name: "Refresh workspace" }).click();
+    await expect(
+      trigger(a).or(a.getByTestId("context-indicator").first()),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(a.locator("body")).toContainText(nameB); // solo's only location
+    await expect(a.locator("body")).not.toContainText(nameA);
+  }
 });
 
 test("MT-19/20 compatibility: a single-location employee enters automatically with no false stale warning; a multi-location employee keeps a working switcher", async ({
