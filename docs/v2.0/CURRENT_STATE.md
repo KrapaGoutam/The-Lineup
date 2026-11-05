@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-003.005 Multi-Tab / Stale Context Safety — NOT STARTED (V2-003 IN PROGRESS)
-Active Subfeature Status: not started; waiting for owner go-ahead
-Previous Subfeature:      V2-003.004 Secure Context Persistence — COMPLETE (PR #291, merge a649e82c; hosted DEV 46/46, Chromium 25/25, WebKit iPad 25/25)
-Next Subfeature:          V2-003.005 Multi-Tab / Stale Context Safety (NOT STARTED)
+Active Subfeature:        none — V2-003.001–.005 implemented; V2-003 awaiting owner review (parent #251 open)
+Active Subfeature Status: V2-004.001 not started; waiting for owner go-ahead
+Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
+Next Subfeature:          V2-004.001 Per-Location Module Configuration Contract (NOT STARTED)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -35,6 +35,12 @@ V2-001 and V2-002 are complete. V2-002.005 reused the Cloud implementation, adde
 Evidence: [Location Lifecycle Integrity](features/002-organizations-locations/005-location-lifecycle-integrity/EVIDENCE.md). The resulting docs-only development integration SHA is recorded in GitHub tracking and the final report. Main and Production remain untouched.
 
 Next recommended environment: Claude Code Cloud for the bounded V2-003.001 feature, with Codex Local for hosted DEV/WebKit validation if required. Do not infer approval for Production or main promotion. V2-003 was not started in this closeout.
+
+## V2-003.005 (COMPLETE — PR #296 merged, `development` `de8c6732`)
+
+Issue #295 / PR #296 (source head `870c5517`, merge `de8c67326ea7badc98a9e817178a527f9af0592a`); no migration. A protected Tasks action now carries the workspace the UI was built for (`profileId`, `organizationId`, `locationId`) as an **untrusted** assertion; the server compares it with the identity and operational location it verified itself (`getPrimaryLocation`: persisted cookie or sole eligible location, canonical resolver) and refuses before the RPC, with or without a `Referer`. This closes the V2-003.004 residual: reproduced on untouched `development` (stale tab, stripped `Referer` → 0 rows at the shown location, 1 at the persisted one), now 0/0. On top: an id-free BroadcastChannel notification, focus / visibility / bfcache / history reconciliation, a stale-workspace panel with verified recovery, a "confirm instead of persist" rule for reload / back-forward to an old `?location=`, and a sign-in that no longer inherits the previous employee's address-bar location.
+
+Validation: unit 3020; hosted DEV real-JWT 17/17 (+ persistence 7/7) with exact row counts at both locations; real Chromium 20/20 and WebKit iPad 20/20; HTTPS Preview 7/7; exact-head CI (application, browser-smoke, Vercel) PASS; DEV table counts back to the pre-run baseline. **Not protected (V2-005, Production blockers):** every other module's actions (a stale tab with a stripped `Referer` still writes at the persisted location), a different employee acting through a stale tab for those modules, and direct-PostgREST cross-location RLS. V2-003 parent #251 stays **open** pending owner review. Evidence: [EVIDENCE.md](features/003-active-context/005-multi-tab-stale-context/EVIDENCE.md).
 
 ## V2-003.004 (COMPLETE — PR #291 merged, `development` `a649e82c`)
 

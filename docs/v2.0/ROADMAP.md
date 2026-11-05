@@ -2,7 +2,7 @@
 
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8) (Milestone #8)  
-Current Status: `IN_PROGRESS` (V2-001, V2-002, V2-003.001–.004 complete; V2-003.005 not started)
+Current Status: `IN_PROGRESS` (V2-001, V2-002 and V2-003.001–.005 complete; V2-003 awaiting owner review; V2-004 not started)
 
 ---
 
@@ -67,14 +67,14 @@ development → main (Production)
 ### V2-003 — Active Organization / Location Context
 
 - **GitHub Issue:** [#251](https://github.com/KrapaGoutam/The-Lineup/issues/251)
-- **Status:** In progress (V2-003.001 complete — PR #284 merged; V2-003.002 complete — PR #286 merge 3c83535, hosted DEV 16/16, browser 10/10; V2-003.003 complete — PR #289, hosted DEV 22/22, browser 8/8; V2-003.004 complete — PR #291 merge `a649e82c`, hosted DEV 46/46, Chromium 25/25, WebKit iPad 25/25; .005 not started)
+- **Status:** In progress (V2-003.001 complete — PR #284 merged; V2-003.002 complete — PR #286 merge 3c83535, hosted DEV 16/16, browser 10/10; V2-003.003 complete — PR #289, hosted DEV 22/22, browser 8/8; V2-003.004 complete — PR #291 merge `a649e82c`, hosted DEV 46/46, Chromium 25/25, WebKit iPad 25/25; V2-003.005 complete — PR #296 merge `de8c6732`, hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7; V2-003 awaits owner review (V2-005 module binding + RLS remain Production blockers))
 - **Directory:** `docs/v2.0/features/003-active-context/`
 - **Subfeatures:**
   - [x] **V2-003.001**: Context Resolution (Server-side hydration of active organization and location from session/cookies — Issue #283; PR #284 merged into `development` at `5333a526`; hosted DEV real-JWT verified)
   - [x] **V2-003.002**: Organization / Location Switcher (Header/App Shell interactive selector with visible active indicator; explicit `?location=` selection, no cookie writes — COMPLETE; see its STATUS.md)
   - [x] **V2-003.003**: Single-Context Auto Resolution (Zero-friction auto-select for single-org / single-location staff; `/` redirects a non-default single-context user to the canonical route; no-`Referer` follow-ups fail closed — COMPLETE, PR #289; see its STATUS.md)
   - [x] **V2-003.004**: Context Persistence (HttpOnly server-verified cookie, `Referer` replaced by persisted context, deep-link reconciliation, sign-in/out clearing — Issue #290; complete — PR #291, see its STATUS.md)
-  - [ ] **V2-003.005**: Multi-Tab / Stale Context Safety (Cross-tab broadcast channel sync and invalidation guards)
+  - [x] **V2-003.005**: Multi-Tab / Stale Context Safety (Server-verified workspace assertion on the Tasks write/read path, BroadcastChannel notification, stale-workspace guard and recovery, history-safe reconciliation — Issue #295; complete — PR #296, see its STATUS.md)
 
 ### V2-004 — Per-Location Module Configuration
 
