@@ -2,14 +2,14 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(59);
 
 -- --------------------------------------------------------------------------
 -- V2-004.004 Per-Location Backend Module Enforcement (0063 namespace)
 --
 -- Actors
 --   ...630000 Org A owner         ...630001 Org A server (staff)
---   ...630002 Org B owner
+--   ...630002 Org B owner         ...630003 Org A general manager, membership REVOKED
 -- Organizations: A (locations A1, A2) and B (location B1)
 --   A1: tasks / table_allocation / bar_inventory ENABLED; schedule / tips DISABLED
 --   A2: schedule / tips ENABLED; tasks / table_allocation / bar_inventory DISABLED
@@ -18,11 +18,11 @@ select plan(54);
 
 insert into auth.users (id, email, encrypted_password, email_confirmed_at, aud, role)
 select ('00000000-0000-0000-0000-0000000630' || lpad(n::text, 2, '0'))::uuid, 'u63' || n || '@test.internal', 'hash', now(), 'authenticated', 'authenticated'
-from generate_series(0, 2) n;
+from generate_series(0, 3) n;
 
 insert into public.profiles (id, display_name)
 select ('00000000-0000-0000-0000-0000000630' || lpad(n::text, 2, '0'))::uuid, 'User 63' || n
-from generate_series(0, 2) n;
+from generate_series(0, 3) n;
 
 insert into public.organizations (id, name, slug, created_by, settings)
 values
@@ -33,7 +33,8 @@ insert into public.memberships (organization_id, profile_id, roles, active)
 values
   ('00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-000000063000'::uuid, array['owner']::public.app_role[], true),
   ('00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-000000063001'::uuid, array['server']::public.app_role[], true),
-  ('00000000-0000-0000-0000-0000000630a2'::uuid, '00000000-0000-0000-0000-000000063002'::uuid, array['owner']::public.app_role[], true);
+  ('00000000-0000-0000-0000-0000000630a2'::uuid, '00000000-0000-0000-0000-000000063002'::uuid, array['owner']::public.app_role[], true),
+  ('00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-000000063003'::uuid, array['general_manager']::public.app_role[], false);
 
 insert into public.locations (id, organization_id, name, time_zone, address)
 values
@@ -206,6 +207,24 @@ select throws_ok(
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
 
+-- Authorization is untouched by the module check.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063003', true);
+select throws_ok(
+  $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Revoked try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
+  '42501', 'You do not have access to tasks for this location.', 'BE-DB-55: a REVOKED membership is denied by the existing check even at an Enabled location');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select throws_ok(
+  $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b3','Wrong location',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
+  '42501', 'You do not have access to tasks for this location.', 'BE-DB-56: a location of another organization is refused even though that location has tasks Enabled');
+select throws_ok(
+  $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b5','Inactive try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
+  '42501', 'This module is turned off for this location.', 'BE-DB-57: an INACTIVE location is denied operationally even with every module Enabled');
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+update public.locations set archived_at = now() where id = '00000000-0000-0000-0000-0000000630b5';
+select ok(not private.location_module_allows('00000000-0000-0000-0000-0000000630b5', 'tasks'), 'BE-DB-58: an ARCHIVED location is denied operationally even with every module Enabled');
+
 -- ======================= ACTIVE: DIRECT TABLE ACCESS ========================
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
@@ -234,6 +253,13 @@ select is(pg_temp.affected($$update public.location_module_configs set is_enable
 select is((select count(*)::int from public.location_module_configs where location_id = '00000000-0000-0000-0000-0000000630b2'), 9, 'BE-DB-51: configuration remains readable at a location whose modules are Disabled');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+
+-- Shared organization data is neither gated nor deleted by a module toggle.
+select is(
+  (select count(*)::int from pg_policies
+   where schemaname = 'public' and policyname like '%_module_enforcement'
+     and (tablename like 'bar_recipe%' or tablename in ('inventory_vendors', 'inventory_products', 'inventory_categories', 'inventory_subcategories', 'organizations', 'memberships', 'profiles', 'locations', 'location_module_configs', 'operating_hours'))),
+  0, 'BE-DB-59: the recipe book, the inventory catalog and Settings/identity tables carry no module policy');
 
 -- ======================= REVERSIBILITY ======================================
 update public.module_enforcement_settings set mode = 'staged';

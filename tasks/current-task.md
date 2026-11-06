@@ -1,18 +1,21 @@
-# V2-004.003 - Per-location module navigation enforcement
+# V2-004.004 - Per-location backend module enforcement
 
-Approved: owner prompt 2026-11-06. Branch feature/v2.0-004.003-module-navigation-enforcement.
-Worktree .tmp/v2-location-module-navigation; baseline 6000e6cdffeb24496fce192020d3edce0f669341, PR #301 verified.
+Approved: owner prompt 2026-11-06 (explicit implementation authority). Branch feature/v2.0-004.004-backend-module-enforcement.
+Worktree .tmp/v2-module-backend-enforcement; baseline 53ad8397dd8712b70846b13b067d9c3c1ef0c06a (PR #303 verified). Issue #304.
 Main 5e5b7747693b6e81014eafdf299b87e56c3f033d; Production forbidden.
 
-- [x] Fetch/verify remote baseline; fast-forward clean development; preserve unrelated work
-- [x] Inspect canonical configuration, entry/context boundaries, navigation and recovery authority
-- [x] Implement scoped serializable snapshot and pure navigation policy
-- [x] Desktop/mobile, URL/history/home, Settings recovery and save refresh
-- [x] Focused/full unit, format/lint/typecheck, demo and DEV release builds
-- [x] Authenticated DEV JWT 9/9, local Chromium 5/5 and WebKit 5/5; exact cleanup
-- [x] HTTPS implementation Preview: Chromium/WebKit main flows and Pixel 7 mobile recovery
-- [x] Documentation and security/accessibility/tenant/scope review; delivery gates specified on PR #303
+- [x] Fetch/verify remote baseline; worktree; preserve unrelated work
+- [x] Entry-point inventory (98 actions, 9 routes, 80 SQL functions, 31 writable tables)
+- [x] Pure decision + readiness domain, server guard, staged DB switch with readiness gate
+- [x] Wire 78 Server Actions + page-entry loaders; 20 system actions exempt (tested list)
+- [x] DB seams (tasks/inventory/board) + 36 restrictive policies
+- [x] pgTAP 0063 (59), clean replay 74 migrations, full pgTAP, real-JWT local suite 15/15
+- [x] Unit 3222 pass, format/lint/typecheck/paths, cold CI build
+- [x] Hosted DEV read-only readiness: 44 active locations, 0 configured = NOT READY
+- [x] Docs: PLAN, ENTRY_POINT_MATRIX, TEST_MATRIX, ROLLOUT_READINESS, EVIDENCE, STATUS
+- [ ] Push, PR to development, exact-head CI (application, browser-smoke, database, Vercel)
+- [ ] Owner decision R1: approved module values for the 44 DEV locations -> then activate DEV and verify
 
-Implementation acceptance complete. Final delivery state is authoritative on PR #303: repeat all required CI at final HEAD, test its immutable HTTPS Preview with the complete 11-case suite and verify cleanup, then regular merge into development and verify unchanged main. Until those checks and merge finish, delivery is pending; no gate is waived. This pre-delivery record keeps the tested and merged head identical. Final CI/Preview/merge SHAs and gate results are recorded on PR #303 and in the closeout report.
+## Current State & Next Step
 
-No migration/backend module enforcement. Q1-Q4 open; unreconciled DEV locations intentionally Settings-only. V2-004.004 NOT STARTED; stop after .003. Parent #252/program #248/milestone #8 remain open. Evidence: docs/v2.0/features/004-location-module-configuration/003-navigation-enforcement/.
+Implemented, NOT activated. Do not set module_enforcement_settings.mode='active' in any environment until the readiness script says READY and the owner has approved the values (the database refuses otherwise). No merge until the owner decides on the activation dependency. Stop after V2-004.004; V2-005 is not authorized.

@@ -145,7 +145,7 @@ const TASK = (org: string, location: string, title: string) => ({
   p_start_date: null as unknown as string,
   p_due_date: null as unknown as string,
   p_due_time: null as unknown as string,
-  p_due_window: null as unknown as "opening",
+  p_due_window: null as unknown as "closing",
 });
 
 async function taskCount(location: string, title?: string) {

@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-004.003 Navigation Enforcement - issue #302 / PR #303
-Active Subfeature Status: Acceptance complete; final exact-head CI/HTTPS/merge record: PR #303
+Active Subfeature:        V2-004.004 Backend Enforcement - issue #304
+Active Subfeature Status: IMPLEMENTED - ACTIVATION BLOCKED (staged; hosted DEV NOT READY 0/44 active locations configured); record: 004-backend-enforcement/STATUS.md
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.004 Backend Enforcement (NOT STARTED; NOT AUTHORIZED; Q1-Q4 open)
+Next Subfeature:          V2-005 Existing Module Location Scoping (NOT STARTED; NOT AUTHORIZED; Q1-Q4, R1-R2 open)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -71,3 +71,7 @@ PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, devel
 ## V2-004.003 - acceptance complete (#302; delivery PR #303)
 
 Baseline PR #301 merged at `6000e6c`. Canonical server-verified navigation policy, role intersection, desktop/mobile/URL/context handling and Settings-only recovery implemented. Local application checks and authenticated DEV evidence in [003 evidence](features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md); Chromium/WebKit/Pixel 7 HTTPS acceptance passes. Final exact-head CI, full HTTPS repeat and regular merge are mandatory; authoritative delivery record is PR #303. No schema/backend module enforcement/backfill. Q1-Q4 open; V2-004.004 NOT STARTED. Main/Production untouched.
+
+## V2-004.004 - implemented, activation blocked (#304)
+
+Backend module enforcement is implemented and tested but **not active in any hosted environment**. A database switch (`public.module_enforcement_settings`) defaults to `staged`; the database itself refuses to activate it while any active location lacks an explicit row for every module. Hosted DEV (fresh read-only check): 44 active locations, 0 configured - NOT READY; no owner-approved backfill exists; DEV was not migrated by this work. 98 Server Actions classified (78 guarded, 20 exempt system actions), 9 routes exempt, 80 SQL functions and 36 restrictive policies classified; organization-level data without `location_id` (payroll, recipes, team, attendance links) is Server-Action-guarded only and recorded as a V2-005 gap. Evidence: `features/004-location-module-configuration/004-backend-enforcement/`. Main and Production untouched.
