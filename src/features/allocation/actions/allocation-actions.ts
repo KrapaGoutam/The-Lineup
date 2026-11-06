@@ -802,6 +802,10 @@ export async function getAllocationContextForDateAction(input: {
   serviceDate: string;
   expectedContext?: unknown;
 }): Promise<ActionResult<AllocationContext>> {
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,

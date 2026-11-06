@@ -3,10 +3,10 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 /**
- * Real-mode suite: runs against the hosted the-lineup-dev project with real
- * Auth sessions (see tests/real/support/harness.ts, which hard-aborts on any
- * other project). Deliberately NOT part of `npm test` -- it needs DEV
- * credentials and the network. Run with `npm run test:real`.
+ * Real Auth/JWT suite, deliberately excluded from npm test. The shared harness
+ * defaults to hosted the-lineup-dev; explicit LINEUP_REAL_LOCAL=1 accepts only
+ * restaurant-roster on 127.0.0.1:54321 with process-provided local credentials.
+ * Run with npm run test:real or select a specific real.test.ts file.
  */
 export default defineConfig({
   resolve: {

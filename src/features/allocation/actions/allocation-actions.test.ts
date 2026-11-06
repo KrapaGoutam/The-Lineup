@@ -439,4 +439,46 @@ describe("allocation-actions location scoping and consistency", () => {
       });
     });
   });
+  it("omitting expectation cannot select a client-supplied location", async () => {
+    const result = await executeBoardActionRemote({
+      restaurantSlug: SLUG,
+      organizationId: O,
+      locationId: B,
+      timeZone: "Pacific/Auckland",
+      serviceSessionId: 1,
+      action: { type: "clear-board" },
+    });
+    expect(result.ok).toBe(false);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("legacy undo fails closed when canonical location is ambiguous", async () => {
+    mocks.getPrimaryLocation.mockResolvedValueOnce(null);
+    expect(
+      (
+        await undoBoardAction({
+          restaurantSlug: SLUG,
+          organizationId: O,
+          serviceSessionId: 1,
+        })
+      ).ok,
+    ).toBe(false);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("historical read refuses an invalid live session before loading", async () => {
+    mocks.requireLiveSession.mockResolvedValueOnce({
+      ok: false,
+      error: "Session expired",
+      sessionInvalid: true,
+    });
+    expect(
+      (
+        await getAllocationContextForDateAction({
+          restaurantSlug: SLUG,
+          serviceDate: "2026-10-01",
+          expectedContext: validCtx(),
+        })
+      ).ok,
+    ).toBe(false);
+    expect(mocks.getAllocationContext).not.toHaveBeenCalled();
+  });
 });

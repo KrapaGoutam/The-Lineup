@@ -1,36 +1,36 @@
-# V2-005.001 Table Allocation / Rotation Location Scoping — Status
+# V2-005.001 - Independent closeout
 
-## Current Status
+**BLOCKED - NOT COMPLETE / NOT MERGED.** Issue #307; existing PR #306.
 
-**READY FOR REVIEW** (Checkpoints A, B, C, D complete; all gates pass)
+Security fixes close zero-assignment multi-location access, permissive manager
+policy composition, and the Organization Owner/GM operational-location exemption.
+The historical action uses the common live-session guard. The unchanged loader's
+canonical fallback is safe; no source file was omitted.
 
-## Progress Checklist
+Actual verification: standalone pgTAP 63 files / 2,077 assertions; combined 64 /
+2,136; allocation real JWT 23/23 standalone and combined; #305 local JWT 15/15;
+focused combined units 183/183; full unit suite 3,163 passed / 7 skipped;
+authenticated local browser 6/6 on Chromium desktop, WebKit iPad and mobile.
+Demo regression initially 155/159; all four failures passed focused serial reruns.
+Application quality gates and production builds pass. Final commit/push and
+exact-head CI evidence are recorded in the PR closeout; do not substitute old CI.
 
-- [x] **Checkpoint A — Audit and Architecture Review**
-  - [x] Application files audited (`allocation-data.ts`, `allocation-actions.ts`, `allocation-workspace.tsx`, `page-data.ts`, `restaurant-operations-app.tsx`).
-  - [x] Shared location and context files inspected (`primary-location.ts`, `active-context.ts`, `workspace-expectation.ts`, `location-access.ts`, `access-resolver.ts`).
-  - [x] Database objects, RPCs, and RLS policies audited (`service_sessions`, `dining_tables`, `dining_areas`, `section_assignments`, `rotation_members`, `rotation_rounds`, `table_rotation_entries`, `board_events`, `can_operate_board`, `begin_board_write`, `assign_table`, `board_add_column`).
-  - [x] Entry-Point Matrix documented (`ENTRY_POINT_MATRIX.md`).
-  - [x] Implementation Plan created (`PLAN.md`).
-  - [x] Comprehensive Test Matrix defined (`TEST_MATRIX.md`).
-- [x] **Checkpoint B — Implementation**
-  - [x] Migration: update `private.can_operate_board(p_organization_id, p_location_id)` to enforce location scoping.
-  - [x] Migration: update `public.board_add_column` to verify server location assignment.
-  - [x] Migration: update RLS policies on allocation tables (`service_sessions`, `dining_tables`, `dining_areas`, `section_assignments`, `rotation_members`, `rotation_rounds`, `table_rotation_entries`, `board_events`).
-  - [x] Server Actions: enforce `assertWorkspaceExpectation` and session ownership in `executeBoardActionRemote`, `undoBoardAction`, `redoBoardAction`, `getAllocationContextForDateAction`.
-  - [x] Data loader: update `getAllocationContext` to require verified location scope and eliminate unverified fallback.
-  - [x] UI / Component: ensure `expectedContext` is passed from `restaurant-operations-app.tsx` &rarr; `AllocationWorkspace` &rarr; actions.
-- [x] **Checkpoint C — Security and Regression Testing**
-  - [x] Unit tests for location-scoped actions and loaders (`allocation-actions.test.ts`: 12 tests passing).
-  - [x] Real-mode / JWT tests for positive cases (AL-01 to AL-08) (`table-allocation-location-scoping.real.test.ts`).
-  - [x] Real-mode / JWT tests for security denials (AL-09 to AL-22).
-  - [x] pgTAP tests for direct database access & RLS boundaries (AL-23 to AL-28) (`0063_allocation_location_scoping.test.sql`: 53/53 assertions passing; 63 total files, 2,065 assertions passing).
-  - [x] Full regression suite: format, lint, typecheck, vitest (233 test files, 3,160 tests passing, 0 failed).
-- [x] **Checkpoint D — Evidence & PR**
-  - [x] Record final execution evidence in `EVIDENCE.md`.
-  - [x] GitHub issue / PR against `development`.
+## Remaining blockers and owner decisions
 
-## Open Risks & Dependencies
+- Overall-only users can read but cannot mutate without tenant membership:
+  getCurrentUser and actor-membership FKs conflict with canonical cross-tenant
+  Overall authority. Three actual JWT regressions reproduce 23503 and verify
+  no persisted mutation. These passing NEGATIVE tests do not satisfy Overall
+  mutation acceptance. A bounded identity/audit-contract repair or explicit
+  owner acceptance of this functional limitation is required for a full GO.
+- PR #305 remains implemented / activation blocked and OPEN. Its integration
+  requires the documented action conflict resolution and explicit assignment
+  fixtures. Choose merge/deployment order; prefer #305 before #306 to preserve
+  migration chronology. #306 code can stand alone, but applying its later
+  migration first requires an intentional include-all plan for #305 later.
+- Hosted DEV browser/deployment validation is SKIPPED. No hosted parity or
+  migration deployment is inferred from CI's skipped production deploy job.
 
-- Predecessor dependency: PR #305 (V2-004.004) remains open and unmerged on GitHub. V2-005.001 is authored independently against `origin/development`.
-- Reconciliation plan documented in `PLAN.md`.
+No automatic merges, hosted activation, configuration changes to The Monk's or
+Liquor Tap, main edits, or Production contact. V2-005.002 through .008 NOT STARTED.
+Detailed findings, initial failures, cleanup and assertion scope: EVIDENCE.md.

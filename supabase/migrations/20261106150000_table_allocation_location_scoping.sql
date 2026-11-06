@@ -5,8 +5,8 @@
 --    - Requires authenticated caller (auth.uid() IS NOT NULL)
 --    - Enforces location existence, active status, unarchived status, and tenant ownership
 --    - System-wide Overall roles (owner, manager, assistant_manager) operate any valid location
---    - Organization Owner and General Manager operate any valid location in their organization
---    - Floor staff (shift_manager, host, server) require active membership in the organization
+--    - Organization Owner/GM require the same explicit operational assignment as other scoped users
+--    - Scoped users require active membership in the organization
 --      AND active location assignment (public.location_memberships) for the target location
 --
 -- 2. Add private.can_operate_board_for_session(p_organization_id, p_service_session_id):
@@ -63,17 +63,12 @@ as $$
         where orl.profile_id = (select auth.uid())
           and orl.role in ('owner', 'manager', 'assistant_manager')
       )
-      -- Organization Owner or General Manager has authority across all locations in this org
-      or private.has_org_role(
-        p_organization_id,
-        array['owner', 'general_manager']::public.app_role[]
-      )
       -- Floor team members (shift_manager, host, server) must be active org members
       -- AND have an active location_memberships row for the target location
       or (
-        private.has_org_role(
+        private.has_board_role(
           p_organization_id,
-          array['shift_manager', 'host', 'server']::public.app_role[]
+          array['owner', 'general_manager', 'shift_manager', 'host', 'server']::public.app_role[]
         )
         and (
           case
@@ -89,11 +84,16 @@ as $$
                   and l.active = true
                   and l.archived_at is null
               )
-              or not exists (
-                select 1
-                from public.location_memberships lm
-                join public.locations l on l.id = lm.location_id
-                where l.organization_id = p_organization_id
+              or (
+                (select count(*) from public.locations legacy_location
+                 where legacy_location.organization_id = p_organization_id
+                   and legacy_location.active and legacy_location.archived_at is null) = 1
+                and not exists (
+                  select 1
+                  from public.location_memberships lm
+                  join public.locations l on l.id = lm.location_id
+                  where l.organization_id = p_organization_id
+                )
               )
             else
               exists (
@@ -106,11 +106,16 @@ as $$
                   and l.active = true
                   and l.archived_at is null
               )
-              or not exists (
-                select 1
-                from public.location_memberships lm
-                join public.locations l on l.id = lm.location_id
-                where l.organization_id = p_organization_id
+              or (
+                (select count(*) from public.locations legacy_location
+                 where legacy_location.organization_id = p_organization_id
+                   and legacy_location.active and legacy_location.archived_at is null) = 1
+                and not exists (
+                  select 1
+                  from public.location_memberships lm
+                  join public.locations l on l.id = lm.location_id
+                  where l.organization_id = p_organization_id
+                )
               )
           end
         )
@@ -167,8 +172,9 @@ declare
   v_next_position integer;
   v_previous_status public.rotation_status;
 begin
-  v_session_id := private.get_or_create_active_session(p_organization_id, p_location_id, p_service_date);
-  perform private.begin_board_write(p_organization_id, v_session_id);
+  if p_location_id is null or not private.can_operate_board(p_organization_id, p_location_id) then
+    raise exception 'Only an active floor team member can do that.' using errcode = '42501';
+  end if;
 
   -- 1. Server must have active membership in this organization (or Overall role)
   if not (
@@ -187,7 +193,7 @@ begin
     raise exception 'That person is not an active member of this restaurant.';
   end if;
 
-  -- 2. Server must be assigned to this location (or be Overall role or Org Owner/GM)
+  -- 2. Server must be assigned to this location (or hold an Overall role)
   if not (
     exists (
       select 1 from public.overall_roles orl
@@ -195,27 +201,29 @@ begin
         and orl.role in ('owner', 'manager', 'assistant_manager')
     )
     or exists (
-      select 1 from public.memberships m
-      where m.organization_id = p_organization_id
-        and m.profile_id = p_server_profile_id
-        and m.active = true
-        and m.roles && array['owner', 'general_manager']::public.app_role[]
-    )
-    or exists (
       select 1 from public.location_memberships lm
       where lm.profile_id = p_server_profile_id
         and lm.location_id = p_location_id
         and lm.active = true
     )
-    or not exists (
-      select 1
-      from public.location_memberships lm
-      join public.locations l on l.id = lm.location_id
-      where l.organization_id = p_organization_id
+    or (
+      (select count(*) from public.locations legacy_location
+       where legacy_location.organization_id = p_organization_id
+         and legacy_location.active and legacy_location.archived_at is null) = 1
+      and not exists (
+        select 1
+        from public.location_memberships lm
+        join public.locations l on l.id = lm.location_id
+        where l.organization_id = p_organization_id
+      )
     )
   ) then
     raise exception 'That person is not assigned to this location.';
   end if;
+
+  -- Target eligibility is checked before creating any session or event.
+  v_session_id := private.get_or_create_active_session(p_organization_id, p_location_id, p_service_date);
+  perform private.begin_board_write(p_organization_id, v_session_id);
 
   -- begin_board_write holds the session row lock, so max(position)+1 is
   -- computed against a state that already reflects every other writer.
@@ -309,3 +317,14 @@ create policy board_events_select_member on public.board_events
 create index if not exists location_memberships_active_profile_idx
   on public.location_memberships (profile_id)
   where active;
+
+-- Existing manager FOR ALL policies are permissive, including SELECT.
+-- Bound those policies too: replacing only the named SELECT policy is insufficient.
+create policy dining_tables_location_scope on public.dining_tables
+  as restrictive for all to authenticated
+  using (private.can_operate_board(organization_id, location_id))
+  with check (private.can_operate_board(organization_id, location_id));
+create policy dining_areas_location_scope on public.dining_areas
+  as restrictive for all to authenticated
+  using (private.can_operate_board(organization_id, location_id))
+  with check (private.can_operate_board(organization_id, location_id));

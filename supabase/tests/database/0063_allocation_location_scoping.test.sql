@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(53);
+select plan(65);
 
 -- --------------------------------------------------------------------------
 -- V2-005.001 Table Allocation / Rotation Location Scoping (0063 namespace)
@@ -68,6 +68,11 @@ values
   ('00000000-0000-0000-0000-0000000630b3'::uuid, '00000000-0000-0000-0000-0000000630a1'::uuid, 'Inactive Loc', 'America/Chicago', '{}'::jsonb, false, null),
   ('00000000-0000-0000-0000-0000000630b4'::uuid, '00000000-0000-0000-0000-0000000630a1'::uuid, 'Archived Loc', 'America/Chicago', '{}'::jsonb, false, now()),
   ('00000000-0000-0000-0000-0000000630b5'::uuid, '00000000-0000-0000-0000-0000000630a2'::uuid, 'NASA', 'America/Chicago', '{}'::jsonb, true, null);
+
+insert into public.location_memberships (location_id, profile_id, role, active)
+select l.id, m.profile_id, 'manager'::public.location_role, true
+from public.locations l join public.memberships m on m.organization_id = l.organization_id
+where m.roles && array['owner','general_manager']::public.app_role[] and l.active;
 
 insert into public.location_memberships (location_id, profile_id, role, active)
 values
@@ -522,6 +527,36 @@ select is(
 
 reset role;
 
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063007', true);
+select is((select count(*)::int from public.dining_tables where location_id = '00000000-0000-0000-0000-0000000630b2'), 0, 'Audit ALL policy: A shift manager cannot read B tables');
+select is((select count(*)::int from public.dining_areas where location_id = '00000000-0000-0000-0000-0000000630b2'), 0, 'Audit ALL policy: A shift manager cannot read B areas');
+reset role;
+-- Independent audit: zero-assignment rollout and NULL preliminary gate.
+delete from public.location_memberships where location_id in (
+ '00000000-0000-0000-0000-0000000630b1', '00000000-0000-0000-0000-0000000630b2');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063008', true);
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b1'), false, 'Audit B: zero assignments cannot authorize multi-location A');
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b2'), false, 'Audit B: zero assignments cannot authorize multi-location B');
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', null), false, 'Audit E: unassigned multi-location staff fails NULL preliminary gate');
+select is((select count(*)::int from public.service_sessions), 0, 'Audit B: direct SELECT hides both sessions');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063003', true);
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b2'), false, 'Canonical owner: organization admin does not imply unassigned operational access');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063004', true);
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b2'), false, 'Canonical GM: organization admin does not imply unassigned operational access');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063008', true);
+reset role;
+update public.locations set active = false where id = '00000000-0000-0000-0000-0000000630b2';
+set local role authenticated;
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b1'), true, 'Audit A: sole active location retains legacy compatibility');
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', null), true, 'Audit E: NULL can pass preliminary gate but never chooses a location');
+reset role;
+insert into public.location_memberships(location_id, profile_id, active) values ('00000000-0000-0000-0000-0000000630b1','00000000-0000-0000-0000-000000063008',false);
+set local role authenticated;
+select is(private.can_operate_board('00000000-0000-0000-0000-0000000630a1', '00000000-0000-0000-0000-0000000630b1'), false, 'Audit D: inactive assignment row disables legacy exception');
+select throws_ok($audit$select public.board_add_column('00000000-0000-0000-0000-0000000630a1', null, current_date, '00000000-0000-0000-0000-000000063008')$audit$, '42501', 'Only an active floor team member can do that.', 'Audit E: NULL public location denied');
+reset role;
 select * from finish();
 
 rollback;

@@ -49,9 +49,9 @@ Every operational read and mutation must bind strictly to the authenticated call
    - Refactored from org-only role check to canonical location authorization:
      1. Unauthenticated (`auth.uid() IS NULL`) &rarr; `FALSE`.
      2. Caller holds system-wide Overall role (`owner`, `manager`, `assistant_manager`) &rarr; `TRUE` (provided target location exists, is active, non-archived, and belongs to org).
-     3. Caller holds Organization Owner / General Manager role &rarr; `TRUE` (provided target location exists, is active, non-archived, and belongs to org).
-     4. Caller holds active `location_memberships` assignment for `p_location_id` with active floor membership in `p_organization_id` &rarr; `TRUE` (provided location is active and non-archived).
-     5. If `p_location_id IS NULL`: `TRUE` only if caller has Overall role, Org Owner/GM, or at least one active location assignment in `p_organization_id`.
+     3. Organization Owner/GM administrative membership alone does not authorize operational locations; canonical explicit assignment is required.
+     4. Caller holds active `location_memberships` assignment for `p_location_id` with active organization membership in `p_organization_id` &rarr; `TRUE` (provided location is active and non-archived).
+     5. If `p_location_id IS NULL`: `TRUE` only for an Overall role, or active organization membership with an active operational assignment (or the bounded single-active-location legacy exception). This preliminary gate never selects a location.
      6. Otherwise &rarr; `FALSE` (fails closed).
 2. **`private.begin_board_write(p_organization_id uuid, p_service_session_id bigint)`**:
    - Locks session row and resolves `v_location := s.location_id`.
@@ -63,7 +63,7 @@ Every operational read and mutation must bind strictly to the authenticated call
    - `public.service_sessions`: SELECT policy updated from org-wide `has_org_role` to `private.can_operate_board(organization_id, location_id)`.
    - `public.dining_tables` & `public.dining_areas`: SELECT policy updated to `private.can_operate_board(organization_id, location_id)`.
    - `public.section_assignments`: SELECT policy updated to `private.can_operate_board(organization_id, location_id)`.
-   - `public.rotation_members`, `public.rotation_rounds`, `public.table_rotation_entries`, `public.board_events`: SELECT and direct write policies updated to verify `private.can_operate_board(s.organization_id, s.location_id)` via join to `public.service_sessions`.
+   - `public.rotation_members`, `public.rotation_rounds`, `public.table_rotation_entries`, `public.board_events`: SELECT policies updated (direct graph writes remain revoked) to verify `private.can_operate_board(s.organization_id, s.location_id)` via join to `public.service_sessions`.
 
 ---
 
@@ -77,7 +77,7 @@ Every operational read and mutation must bind strictly to the authenticated call
 
 ## 7. Legacy Helper Usage & Retirement Strategy
 
-1. `getAllocationContext`: Remove silent fallback to `locationForLoader` without scope for operational paths. If `verifiedLocation` is missing, resolve safely or require explicit scope.
+1. `getAllocationContext` already accepts a verified scope and its optional `locationForLoader` fallback re-verifies through the canonical resolver. Both operational callers pass scope. No loader source change was necessary; direct scope-free invocation remains fail-closed on ambiguous, revoked, foreign or missing context.
 2. `getPrimaryLocation`: Retained for other modules (Tasks, Tips, Schedules, etc.) until their dedicated V2-005 subfeatures.
 3. No breaking global changes to shared helpers.
 
@@ -85,7 +85,11 @@ Every operational read and mutation must bind strictly to the authenticated call
 
 ## 8. PR #305 Integration Considerations
 
-1. PR #305 (unmerged on `feature/v2.0-004.004-backend-module-enforcement`) adds `assert_location_module_enabled(v_location, 'table_rotation')` inside `begin_board_write`.
+1. PR #305 (unmerged on `feature/v2.0-004.004-backend-module-enforcement`) adds `assert_location_module_enabled(v_location, 'table_allocation')` inside `begin_board_write`.
 2. V2-005.001 keeps `begin_board_write` independent on `development` base.
-3. Our migration will have a forward timestamp (e.g. `20261106160000_table_allocation_location_scoping.sql`).
-4. Rebase reconciliation will be clean: PR #305's module enablement assertion and V2-005.001's location authorization seam reside in distinct parts of `begin_board_write`.
+3. Migration order is 20261106120000 (#305), then 20261106150000 (#306). #306 does not redefine begin_board_write and preserves #305's module assertion.
+4. Actual local merge conflicts occur in allocation-actions.ts and tasks/current-task.md. Preserve #306 caller/context/time-zone/session binding and insert #305 guardModule calls using the VERIFIED organization/location before session reads or RPCs. Date reads retain guardModule after canonical scope resolution. The disposable integration workspace validates this resolution; neither real PR branch was merged or changed for this test.
+
+## Independent security corrections
+
+The assignment-free legacy exception requires exactly one active, non-archived location and ZERO assignment rows anywhere in the organization (inactive rows also disable it). It is a compatibility floor, never authority in a multi-location rollout. Target eligibility is checked before session creation. Restrictive location policies on dining_tables and dining_areas constrain pre-existing permissive manager FOR ALL policies. NULL remains an internal preliminary authorization gate; every public operation must resolve/validate a concrete location before writes.

@@ -1,5 +1,7 @@
 # The Lineup V2.0 — Current Operational State
 
+Latest checkpoint: V2-005.001 independent review, PR #306 / issue #307, BLOCKED on Overall-only mutation identity/audit-FK incompatibility. Security fixes and local standalone/combined evidence: [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 implemented in open PR #305; activation blocked. No merges, hosted activation, main or Production changes. V2-005.002 through .008 not started. Earlier checkpoints below retain their historical validation scope.
+
 ```text
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
@@ -25,7 +27,7 @@ Blockers:                 NONE
 Active Subfeature:        V2-004.003 Navigation Enforcement - issue #302 / PR #303
 Active Subfeature Status: Acceptance complete; final exact-head CI/HTTPS/merge record: PR #303
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.004 Backend Enforcement (NOT STARTED; NOT AUTHORIZED; Q1-Q4 open)
+Next Subfeature:          V2-005.002 Tasks (NOT STARTED; NOT AUTHORIZED); first resolve #306 closeout and #305 order
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```

@@ -1,303 +1,396 @@
-/**
- * V2-005.001 Table Allocation / Rotation Location Scoping
- * Real Supabase Auth JWT verification suite (AL-01 to AL-28).
- *
- * Verifies that:
- * 1. Floor staff can only view and operate Table Allocation data for their active location.
- * 2. Unassigned locations in the same organization refuse floor staff access.
- * 3. Cross-organization access is strictly rejected.
- * 4. Inactive or archived locations refuse operations.
- * 5. Direct PostgREST queries on sessions, tables, and rotation data respect location scoping.
- * 6. Managerial roles (Org Owner, Org GM, Overall roles) maintain canonical cross-location access.
- */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-
+﻿import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   Board,
   createFixture,
   type Fixture,
   type Rpc,
+  type TestUser,
 } from "./support/harness";
 
 let fx: Fixture;
-let boardA: Board;
-let boardB: Board;
-let memberA1: number;
-let memberB1: number;
+let a: Board;
+let b: Board;
+let member: number;
+const graph = [
+  "service_sessions",
+  "rotation_members",
+  "rotation_rounds",
+  "table_rotation_entries",
+  "section_assignments",
+  "board_events",
+];
 
-function ok(result: Rpc) {
-  expect(result.error?.message, "rpc should succeed").toBeUndefined();
+async function snapshot() {
+  return Promise.all(
+    graph.map(async (table) => {
+      const result = await fx.admin
+        .from(table)
+        .select("*")
+        .in("organization_id", [fx.orgId, fx.otherOrgId])
+        .order("id");
+      expect(result.error).toBeNull();
+      return result.data;
+    }),
+  );
 }
-
-function denied(result: Rpc, pattern?: RegExp) {
-  expect(result.error, "rpc should be rejected").not.toBeNull();
-  if (pattern) {
-    expect(result.error!.message).toMatch(pattern);
+async function deniedUnchanged(
+  operation: () => PromiseLike<Rpc>,
+  pattern?: RegExp,
+) {
+  const before = await snapshot();
+  const result = await operation();
+  expect(result.error).not.toBeNull();
+  // A missing RPC/signature is never evidence of an authorization denial.
+  expect(result.error?.code).not.toMatch(/^PGRST/);
+  if (pattern) expect(result.error?.message).toMatch(pattern);
+  expect(await snapshot()).toEqual(before);
+}
+async function assignment(user: TestUser, location = fx.locA, active = true) {
+  const result = await fx.admin
+    .from("location_memberships")
+    .upsert(
+      { location_id: location, profile_id: user.id, active },
+      { onConflict: "location_id,profile_id" },
+    );
+  expect(result.error).toBeNull();
+}
+async function removeAssignments() {
+  const result = await fx.admin
+    .from("location_memberships")
+    .delete()
+    .in("location_id", [fx.locA, fx.locB]);
+  expect(result.error).toBeNull();
+}
+async function readHidden(user: TestUser, location: string, session: number) {
+  for (const table of [
+    "service_sessions",
+    "dining_tables",
+    "dining_areas",
+    "section_assignments",
+    ...graph.slice(1, 4),
+    "board_events",
+  ]) {
+    const column = [
+      "service_sessions",
+      "dining_tables",
+      "dining_areas",
+      "section_assignments",
+    ].includes(table)
+      ? "location_id"
+      : "service_session_id";
+    const result = await user.client
+      .from(table)
+      .select("id")
+      .eq(column, column === "location_id" ? location : session);
+    expect(result.error, table).toBeNull();
+    expect(result.data, table).toEqual([]);
   }
+}
+async function add(user: TestUser, location: string, target = user.id) {
+  return user.client.rpc("board_add_column", {
+    p_organization_id: fx.orgId,
+    p_location_id: location,
+    p_service_date: a.date,
+    p_server_profile_id: target,
+  });
 }
 
 beforeAll(async () => {
   fx = await createFixture();
-  boardA = new Board(fx, fx.locA);
-  boardB = new Board(fx, fx.locB);
+  a = new Board(fx, fx.locA);
+  b = new Board(fx, fx.locB);
 });
-
 afterAll(async () => {
-  if (fx) {
-    await fx.teardown();
+  if (!fx) return;
+  await fx.teardown();
+  for (const table of ["organizations", "profiles"]) {
+    const ids =
+      table === "organizations"
+        ? [fx.orgId, fx.otherOrgId]
+        : [
+            fx.owner,
+            fx.manager,
+            fx.server1,
+            fx.server2,
+            fx.server3,
+            fx.outsider,
+          ].map((u) => u.id);
+    const result = await fx.admin.from(table).select("id").in("id", ids);
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual([]);
+  }
+  for (const user of [
+    fx.owner,
+    fx.manager,
+    fx.server1,
+    fx.server2,
+    fx.server3,
+    fx.outsider,
+  ]) {
+    const result = await fx.admin.auth.admin.getUserById(user.id);
+    expect(result.data.user).toBeNull();
   }
 });
-
 beforeEach(async () => {
-  await boardA.reset();
-  await boardB.reset();
-  // Location A: server1 assigned and added as column
-  memberA1 = (await boardA.addServer(fx.owner, fx.server1)).memberId;
+  await fx.admin
+    .from("locations")
+    .update({ active: true, archived_at: null })
+    .in("id", [fx.locA, fx.locB]);
+  await removeAssignments();
+  for (const user of [fx.owner, fx.manager]) {
+    await assignment(user);
+    await assignment(user, fx.locB);
+  }
+  await assignment(fx.server1);
+  await assignment(fx.server2);
+  await assignment(fx.server3);
+  await a.reset();
+  await b.reset();
+  member = (await a.addServer(fx.owner, fx.server1)).memberId;
 });
 
-describe("AL-01..AL-08 Positive Access: Authorized Staff and Managerial Hierarchy", () => {
-  it("AL-01 & AL-02: Authorized server can read and operate Location A board", async () => {
-    // server1 assigns table 10 to themselves on Location A
-    ok(await boardA.assign(fx.server1, memberA1, "10"));
-
-    const entries = await boardA.entries();
-    expect(entries.length).toBeGreaterThan(0);
-    const [entry] = entries;
-    expect(entry.table_label).toBe("10");
-    expect(entry.status).toBe("active");
-
-    // PostgREST read: server1 can query service_sessions for Location A
-    const { data: sessions, error } = await fx.server1.client
+describe("allocation location authorization through real JWTs", () => {
+  it("AL-01/02/04: assigned staff can read and assign on A", async () => {
+    expect((await a.assign(fx.server1, member, "10")).error).toBeNull();
+    const result = await fx.server1.client
       .from("service_sessions")
-      .select("id, location_id")
-      .eq("id", boardA.sid!);
-    expect(error).toBeNull();
-    expect(sessions?.length).toBe(1);
-    expect(sessions?.[0].location_id).toBe(fx.locA);
+      .select("location_id")
+      .eq("id", a.sid);
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual([{ location_id: fx.locA }]);
+    expect((await a.claims()).get("10")).toBe(member);
   });
-
-  it("AL-03 & AL-28: Org Owner and GM can operate across multiple locations without location_memberships", async () => {
-    // Owner can add a server and assign on Location B (where server1 is not assigned, but owner has canonical authority)
-    // First, give server2 assignment to locB so they are eligible on locB
-    await fx.admin.from("location_memberships").insert({
+  it("AL-03/28: active org manager can operate B with eligible target", async () => {
+    await assignment(fx.server2, fx.locB);
+    const other = (await b.addServer(fx.manager, fx.server2)).memberId;
+    expect((await b.assign(fx.owner, other, "1")).error).toBeNull();
+  });
+  it("AL-08: undo/redo remain scoped", async () => {
+    expect((await a.assign(fx.server1, member, "15")).error).toBeNull();
+    expect((await a.undo(fx.server1)).error).toBeNull();
+    expect((await a.claims()).has("15")).toBe(false);
+    expect((await a.redo(fx.server1)).error).toBeNull();
+    expect((await a.claims()).get("15")).toBe(member);
+  });
+  it("AL-09: anonymous RPC fails with no mutation", async () => {
+    await deniedUnchanged(() =>
+      fx.anon.rpc("board_undo", {
+        p_organization_id: fx.orgId,
+        p_service_session_id: a.sid,
+      }),
+    );
+  });
+  it("AL-10: foreign organization cannot read or mutate A", async () => {
+    await deniedUnchanged(() => add(fx.outsider, fx.locA), /active floor/);
+    await readHidden(fx.outsider, fx.locA, a.sid);
+  });
+  it("AL-11/23/24/26: A-only staff cannot read or operate B", async () => {
+    const other = (await b.addServer(fx.owner, fx.owner)).memberId;
+    await deniedUnchanged(
+      () => b.assign(fx.server1, other, "1"),
+      /active floor/,
+    );
+    await readHidden(fx.server1, fx.locB, b.sid);
+    await deniedUnchanged(() => b.undo(fx.server1), /active floor/);
+    await deniedUnchanged(() => b.redo(fx.server1), /active floor/);
+  });
+  it("AL-12: inactive assignment cannot regain legacy access", async () => {
+    await assignment(fx.server1, fx.locA, false);
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "11"),
+      /active floor/,
+    );
+    await readHidden(fx.server1, fx.locA, a.sid);
+  });
+  it("AL-14: inactive location refuses real board_assign", async () => {
+    expect(
+      (
+        await fx.admin
+          .from("locations")
+          .update({ active: false })
+          .eq("id", fx.locA)
+      ).error,
+    ).toBeNull();
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "12"),
+      /active floor/,
+    );
+    await readHidden(fx.server1, fx.locA, a.sid);
+  });
+  it("AL-15: archived location refuses real board_assign", async () => {
+    expect(
+      (
+        await fx.admin
+          .from("locations")
+          .update({ active: false, archived_at: new Date().toISOString() })
+          .eq("id", fx.locA)
+      ).error,
+    ).toBeNull();
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "12"),
+      /active floor/,
+    );
+  });
+  it("AL-16/17: foreign round cannot be assigned through authorized A", async () => {
+    await b.addServer(fx.owner, fx.owner);
+    const foreignRound = (await b.rounds())[0].id;
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "1", { roundId: foreignRound }),
+      /row.*board|round.*session/i,
+    );
+  });
+  it("AL-18: shared labels resolve only to A physical tables", async () => {
+    expect((await a.assign(fx.server1, member, "10")).error).toBeNull();
+    const result = await fx.admin
+      .from("section_assignments")
+      .select("dining_table_id, location_id")
+      .eq("service_session_id", a.sid)
+      .is("released_at", null);
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual([
+      { dining_table_id: fx.tablesA.get("10"), location_id: fx.locA },
+    ]);
+    expect(result.data?.[0].dining_table_id).not.toBe(fx.tablesB.get("10"));
+  });
+  it("AL-22: ineligible target does not create a new B session", async () => {
+    await deniedUnchanged(
+      () => add(fx.owner, fx.locB, fx.server1.id),
+      /not assigned/,
+    );
+  });
+  it("AL-25: direct client writes to rotation graph are denied", async () => {
+    const before = await snapshot();
+    const result = await fx.server1.client.from("rotation_rounds").insert({
       organization_id: fx.orgId,
-      location_id: fx.locB,
-      profile_id: fx.server2.id,
-      active: true,
+      service_session_id: a.sid,
+      sequence: 90,
     });
-
+    expect(result.error?.code).toBe("42501");
+    expect(await snapshot()).toEqual(before);
+  });
+  it("Audit A: sole active location and zero assignment rows retains bounded compatibility", async () => {
+    await removeAssignments();
+    expect(
+      (
+        await fx.admin
+          .from("locations")
+          .update({ active: false })
+          .eq("id", fx.locB)
+      ).error,
+    ).toBeNull();
+    expect((await a.assign(fx.server1, member, "10")).error).toBeNull();
+  });
+  it("Audit B: two active locations and zero assignments fail closed for reads and RPC", async () => {
+    await b.addServer(fx.owner, fx.owner);
+    await removeAssignments();
+    await readHidden(fx.server1, fx.locA, a.sid);
+    await readHidden(fx.server1, fx.locB, b.sid);
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "10"),
+      /active floor/,
+    );
+    await deniedUnchanged(() => add(fx.server1, fx.locB), /active floor/);
+    await deniedUnchanged(
+      () => add(fx.owner, fx.locB, fx.server1.id),
+      /active floor/,
+    );
+  });
+  it("Audit D: revoked row blocks fallback even with a sole active location", async () => {
+    await removeAssignments();
+    await assignment(fx.server1, fx.locA, false);
+    await fx.admin
+      .from("locations")
+      .update({ active: false })
+      .eq("id", fx.locB);
+    await deniedUnchanged(
+      () => a.assign(fx.server1, member, "10"),
+      /active floor/,
+    );
+  });
+  it("Audit E: public operation with NULL location cannot create state", async () => {
+    await deniedUnchanged(() =>
+      fx.owner.client.rpc("board_add_column", {
+        p_organization_id: fx.orgId,
+        p_location_id: null,
+        p_service_date: a.date,
+        p_server_profile_id: fx.owner.id,
+      }),
+    );
+  });
+  it("Audit creator: inactive organization creator has no board authority", async () => {
+    await fx.admin
+      .from("memberships")
+      .update({ active: false })
+      .eq("organization_id", fx.orgId)
+      .eq("profile_id", fx.owner.id);
     try {
-      const added = await boardB.addServer(fx.manager, fx.server2);
-      expect(added.memberId).toBeGreaterThan(0);
-      memberB1 = added.memberId;
-
-      // Owner can assign on Location B
-      ok(await boardB.assign(fx.owner, memberB1, "1"));
-      // Manager can end table on Location B
-      const entries = await boardB.entries();
-      const [entry] = entries;
-      ok(
-        await boardB.rpc(fx.manager, "board_end_table", {
-          p_service_session_id: boardB.sid,
-          p_round_id: entry.rotation_round_id,
-          p_member_id: memberB1,
-        }),
+      await deniedUnchanged(
+        () => a.assign(fx.owner, member, "10"),
+        /active floor/,
       );
+      await readHidden(fx.owner, fx.locA, a.sid);
     } finally {
       await fx.admin
-        .from("location_memberships")
-        .delete()
-        .eq("location_id", fx.locB)
-        .eq("profile_id", fx.server2.id);
-    }
-  });
-
-  it("AL-08: Undo and redo work within authorized location", async () => {
-    ok(await boardA.assign(fx.owner, memberA1, "15"));
-    expect((await boardA.claims()).get("15")).toBe(memberA1);
-
-    ok(await boardA.undo(fx.server1));
-    expect((await boardA.claims()).has("15")).toBe(false);
-
-    ok(await boardA.redo(fx.server1));
-    expect((await boardA.claims()).get("15")).toBe(memberA1);
-  });
-});
-
-describe("AL-09..AL-22 Security Denials & Boundary Enforcement", () => {
-  it("AL-10: Foreign organization user cannot operate or read Location A", async () => {
-    // outsider is owner of otherOrg
-    const rpcResult = (await fx.outsider.client.rpc("board_add_column", {
-      p_organization_id: fx.orgId,
-      p_location_id: fx.locA,
-      p_service_date: boardA.date,
-      p_server_profile_id: fx.outsider.id,
-    })) as Rpc;
-    denied(rpcResult);
-
-    // PostgREST: outsider sees 0 sessions
-    const { data: sessions } = await fx.outsider.client
-      .from("service_sessions")
-      .select("id")
-      .eq("location_id", fx.locA);
-    expect(sessions?.length ?? 0).toBe(0);
-  });
-
-  it("AL-11 & AL-23: Server assigned to Location A cannot add column or operate Location B", async () => {
-    // server1 has no assignment to Location B
-    const rpcResult = (await fx.server1.client.rpc("board_add_column", {
-      p_organization_id: fx.orgId,
-      p_location_id: fx.locB,
-      p_service_date: boardB.date,
-      p_server_profile_id: fx.server1.id,
-    })) as Rpc;
-    denied(rpcResult);
-  });
-
-  it("AL-24 & AL-26: Server assigned to Location A cannot read Location B data via PostgREST", async () => {
-    // Ensure Location B has a session created by manager
-    // Temporarily give server2 assignment to locB
-    await fx.admin.from("location_memberships").insert({
-      organization_id: fx.orgId,
-      location_id: fx.locB,
-      profile_id: fx.server2.id,
-      active: true,
-    });
-
-    try {
-      await boardB.addServer(fx.manager, fx.server2);
-
-      // server1 queries Location B's sessions -> 0 rows
-      const { data: sessions } = await fx.server1.client
-        .from("service_sessions")
-        .select("id")
-        .eq("location_id", fx.locB);
-      expect(sessions?.length ?? 0).toBe(0);
-
-      // server1 queries Location B's dining tables -> 0 rows
-      const { data: tables } = await fx.server1.client
-        .from("dining_tables")
-        .select("id")
-        .eq("location_id", fx.locB);
-      expect(tables?.length ?? 0).toBe(0);
-
-      // server1 queries Location B's rotation members -> 0 rows
-      const { data: members } = await fx.server1.client
-        .from("rotation_members")
-        .select("id")
-        .eq("service_session_id", boardB.sid!);
-      expect(members?.length ?? 0).toBe(0);
-    } finally {
-      await fx.admin
-        .from("location_memberships")
-        .delete()
-        .eq("location_id", fx.locB)
-        .eq("profile_id", fx.server2.id);
-    }
-  });
-
-  it("AL-12: Revoked assignment (active = false) immediately loses access to Location A", async () => {
-    // Deactivate server1's location assignment
-    await fx.admin
-      .from("location_memberships")
-      .update({ active: false })
-      .eq("location_id", fx.locA)
-      .eq("profile_id", fx.server1.id);
-
-    try {
-      // server1 attempts to assign table on Location A -> denied
-      const rpcResult = (await fx.server1.client.rpc("board_assign_table", {
-        p_service_session_id: boardA.sid,
-        p_member_id: memberA1,
-        p_table_label: "11",
-      })) as Rpc;
-      denied(rpcResult);
-
-      // server1 reads Location A service_sessions -> 0 rows
-      const { data: sessions } = await fx.server1.client
-        .from("service_sessions")
-        .select("id")
-        .eq("location_id", fx.locA);
-      expect(sessions?.length ?? 0).toBe(0);
-    } finally {
-      // Re-enable server1 assignment for subsequent tests
-      await fx.admin
-        .from("location_memberships")
+        .from("memberships")
         .update({ active: true })
-        .eq("location_id", fx.locA)
-        .eq("profile_id", fx.server1.id);
+        .eq("organization_id", fx.orgId)
+        .eq("profile_id", fx.owner.id);
     }
   });
-
-  it("AL-14: Inactive location cannot be operated", async () => {
-    // Mark Location A inactive
-    await fx.admin
-      .from("locations")
-      .update({ active: false })
-      .eq("id", fx.locA);
-
-    try {
-      const rpcResult = (await fx.server1.client.rpc("board_assign_table", {
-        p_service_session_id: boardA.sid,
-        p_member_id: memberA1,
-        p_table_label: "12",
-      })) as Rpc;
-      denied(rpcResult);
-    } finally {
-      await fx.admin
-        .from("locations")
-        .update({ active: true })
-        .eq("id", fx.locA);
-    }
-  });
-
-  it("AL-15: Archived location cannot be operated", async () => {
-    // Mark Location A archived
-    await fx.admin
-      .from("locations")
-      .update({ archived_at: new Date().toISOString() })
-      .eq("id", fx.locA);
-
-    try {
-      const rpcResult = (await fx.server1.client.rpc("board_assign_table", {
-        p_service_session_id: boardA.sid,
-        p_member_id: memberA1,
-        p_table_label: "12",
-      })) as Rpc;
-      denied(rpcResult);
-    } finally {
-      await fx.admin
-        .from("locations")
-        .update({ archived_at: null })
-        .eq("id", fx.locA);
-    }
-  });
-
-  it("AL-16 & AL-25: Direct mutation with mismatched session ID is denied", async () => {
-    // Create session in Location B
-    await fx.admin.from("location_memberships").insert({
-      organization_id: fx.orgId,
-      location_id: fx.locB,
-      profile_id: fx.server2.id,
-      active: true,
-    });
-
-    try {
-      await boardB.addServer(fx.manager, fx.server2);
-
-      // server1 calls board_assign_table on Location B's session ID -> rejected
-      const rpcResult = (await fx.server1.client.rpc("board_assign_table", {
-        p_service_session_id: boardB.sid,
-        p_member_id: memberA1,
-        p_table_label: "5",
-      })) as Rpc;
-      denied(rpcResult);
-    } finally {
-      await fx.admin
-        .from("location_memberships")
-        .delete()
-        .eq("location_id", fx.locB)
-        .eq("profile_id", fx.server2.id);
-    }
-  });
+  it.each(["owner", "manager", "assistant_manager"])(
+    "known contract limit: Overall %s reads A but actor FK prevents a no-membership write",
+    async (role) => {
+      expect(
+        (
+          await fx.admin
+            .from("overall_roles")
+            .insert({ profile_id: fx.outsider.id, role })
+        ).error,
+      ).toBeNull();
+      try {
+        const read = await fx.outsider.client
+          .from("service_sessions")
+          .select("id")
+          .eq("id", a.sid);
+        expect(read.error).toBeNull();
+        expect(read.data).toEqual([{ id: a.sid }]);
+        await deniedUnchanged(async () => {
+          const result = await add(fx.outsider, fx.locA, fx.server1.id);
+          expect(result.error?.code).toBe("23503");
+          return result;
+        });
+      } finally {
+        expect(
+          (
+            await fx.admin
+              .from("overall_roles")
+              .delete()
+              .eq("profile_id", fx.outsider.id)
+          ).error,
+        ).toBeNull();
+      }
+    },
+  );
+  it.each(["owner", "manager"] as const)(
+    "scoped %s has no blanket access to unassigned B",
+    async (key) => {
+      await assignment(fx.server2, fx.locB);
+      await b.addServer(fx.owner, fx.server2);
+      const user = fx[key];
+      expect(
+        (
+          await fx.admin
+            .from("location_memberships")
+            .delete()
+            .eq("profile_id", user.id)
+            .eq("location_id", fx.locB)
+        ).error,
+      ).toBeNull();
+      await readHidden(user, fx.locB, b.sid);
+      await deniedUnchanged(
+        () => add(user, fx.locB, fx.server1.id),
+        /active floor/,
+      );
+    },
+  );
 });
