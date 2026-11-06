@@ -127,7 +127,11 @@ export function LocationModuleSettings({
   }
   const lifecycle = location.archivedAt
     ? "archived"
-    : (snapshot?.lifecycle ?? (location.active ? "active" : "inactive"));
+    : demoMode
+      ? location.active
+        ? "active"
+        : "inactive"
+      : (snapshot?.lifecycle ?? (location.active ? "active" : "inactive"));
   return (
     <section aria-label="Location modules" className="space-y-4">
       <div>

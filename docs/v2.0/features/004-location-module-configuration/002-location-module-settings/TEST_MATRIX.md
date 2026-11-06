@@ -13,4 +13,4 @@
 | Hosted browser persistence, second manager, archived/staff | New module-settings.real.spec.ts with synthetic fixtures and pre/post count verification                                                                                                                  | In flight                   |
 | HTTPS Preview exact-head DEV binding                       | Inspect public bundles before fixtures or authentication                                                                                                                                                  | Pending PR                  |
 
-No claim that tests merely authored have executed. Full pgTAP not rerun: Docker unavailable, schema unchanged; predecessor 62 files / 2,012 assertions accepted. Light/dark responsive matrix 12/12 PASS. Existing admin browser regression 4/4 PASS.
+No claim that tests merely authored have executed. Full pgTAP not rerun: Docker available with approval; schema unchanged; predecessor 62 files / 2,012 assertions accepted. Light/dark responsive matrix 12/12 PASS. Existing admin browser regression 4/4 PASS.

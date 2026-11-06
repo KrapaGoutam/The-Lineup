@@ -97,6 +97,7 @@ describe("location module editor", () => {
     expect(screen.queryByRole("button", { name: "Enable Tasks" })).toBeNull();
     first.unmount();
     await loaded(undefined, { active: false });
+    expect(screen.getByText(/This location is inactive/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Enable Tasks" })).toBeEnabled();
   });
   it("blocks duplicate submissions while saving", async () => {

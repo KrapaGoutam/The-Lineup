@@ -2,7 +2,7 @@
 
 ## Baseline/environment
 
-Linux x86_64 Codespaces, Node 24.22.2, npm 11.19.1, Codex CLI 0.166.0, Supabase CLI 2.76.8. Docker unavailable. Chromium/WebKit installed. Supabase DEV process credentials present; no secrets persisted to disk. GitHub calls work with normal network approval (sandboxed initial auth status was misleading).
+Linux x86_64 Codespaces, Node 24.22.2, npm 11.19.1, Codex CLI 0.166.0, Supabase CLI 2.76.8. Docker 29.9.2-2 is available with normal sandbox approval (initial sandboxed probe failed). Chromium/WebKit installed. Supabase DEV process credentials present; no secrets persisted to disk. GitHub calls work with normal network approval (sandboxed initial auth status was misleading).
 
 Live GitHub baseline rechecked before worktree mutation: development `0024bc8355cd5b2899f5c1721981508b285e296f`, main `5e5b7747693b6e81014eafdf299b87e56c3f033d`; PR #299 merged at development baseline. Initial checkout clean at older `fcc661d`; preserved untouched. No other worktrees or target branches existed.
 
@@ -31,3 +31,11 @@ V2-004.003 navigation, .004 backend enforcement, V2-005 location scoping, V2-008
 ## Review
 
 Reviewed diff for tenant selectors, authority, lifecycle, stale identity/version, metadata, RLS enforcement, secrets and unrelated scope. No schema/type regeneration required. Main source adds no enforcement consumer. Existing static isolation test now permits only the administration host; operational shell remains disallowed. Phone screenshot visually reviewed (390px), no overflow; buttons and status text fit. Final light/dark responsive matrix 12/12 PASS across desktop Chromium, iPad WebKit and mobile Chromium at 1366/1024/768/390px. Existing location administration desktop regression 4/4 PASS. Review corrected auth transport classification and added regression coverage (focused 23 files / 324 PASS).
+
+## HTTPS Preview and first-head checks
+
+PR [#301](https://github.com/KrapaGoutam/The-Lineup/pull/301), base development. First source head `5d8fff055d411017a6e2bc3db5258b2f3c4a8eec`: Vercel success linked deployment `J1Z4Z7SbuMZukQhLMUYvMuotzuy1`, Preview `https://the-lineup-git-feature-v20-004002-location-mo-361870-onepiece11.vercel.app`. Public bundles verified DEV before authentication; actual HTTPS synthetic passcode flow PASS Chromium 44.0s and WebKit tablet 38.8s. Both cleanup diffs {}. Application CI PASS; browser-smoke still running at documentation preparation. No database check triggered: workflow path filter excludes this schema-free change; predecessor pgTAP evidence reused as directed. No local reset performed.
+
+Vercel plugin denied team-scope access (403); public Preview and commit-scoped GitHub Vercel status used instead. No protection bypass, no Production contact. GitHub authentication succeeds as repository owner with approved network access. Final exact-head checks and merge outcome are recorded on PR #301; do not rely on first-head statuses for the closeout commit.
+
+Final review also corrected an inactive-demo lifecycle badge and asserted the preparation explanation. This does not change hosted writes or module enforcement. Final combined checks/build/tests rerun before push.
