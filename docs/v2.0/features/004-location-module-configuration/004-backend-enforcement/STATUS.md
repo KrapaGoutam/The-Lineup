@@ -3,6 +3,7 @@
 ```text
 Status:            IMPLEMENTED — ACTIVATION BLOCKED   (not COMPLETE)
 GitHub Issue:      #304   (parent #252, program #248, milestone #8)
+Pull Request:      #305   (open, base development; NOT merged)
 Target Branch:     development
 Feature Branch:    feature/v2.0-004.004-backend-module-enforcement
 Baseline:          origin/development 53ad8397dd8712b70846b13b067d9c3c1ef0c06a (PR #303 included)

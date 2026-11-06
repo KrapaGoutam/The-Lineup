@@ -13,7 +13,7 @@ Main 5e5b7747693b6e81014eafdf299b87e56c3f033d; Production forbidden.
 - [x] Unit 3222 pass, format/lint/typecheck/paths, cold CI build
 - [x] Hosted DEV read-only readiness: 44 active locations, 0 configured = NOT READY
 - [x] Docs: PLAN, ENTRY_POINT_MATRIX, TEST_MATRIX, ROLLOUT_READINESS, EVIDENCE, STATUS
-- [ ] Push, PR to development, exact-head CI (application, browser-smoke, database, Vercel)
+- [x] Push, PR #305 to development, exact-head CI at 732b509: application, browser-smoke, migrations-and-policies, Vercel all PASS
 - [ ] Owner decision R1: approved module values for the 44 DEV locations -> then activate DEV and verify
 
 ## Current State & Next Step

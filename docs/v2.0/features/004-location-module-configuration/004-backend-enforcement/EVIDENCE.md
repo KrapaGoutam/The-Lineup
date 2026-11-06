@@ -76,4 +76,6 @@ Module enforcement readiness (hosted DEV)
 
 ## 7. CI and delivery
 
-Recorded on the PR for the final head (see [STATUS.md](STATUS.md)); not reused from older heads.
+PR [#305](https://github.com/KrapaGoutam/The-Lineup/pull/305) → `development`. CI is verified at each pushed head and never carried over from an older one.
+
+Head `732b509a629cad7b3f6f855c7f8957bc1d7e0c60` (run 42272720555 / 42272720676): `application` PASS (2m46s) · `browser-smoke` PASS (9m01s) · `migrations-and-policies` PASS (3m39s; includes the pgTAP suite at default ports, so `0039`/`0042` pass there) · Vercel Preview deployment PASS · `deploy-migrations` SKIPPED by design (runs on `main` only). Required checks for any later head are recorded on the PR.
