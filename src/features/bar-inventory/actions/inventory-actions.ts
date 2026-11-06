@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import {
   EXPORT_MIME,
@@ -298,6 +299,13 @@ async function resolveManager(restaurantSlug: string) {
       error: "Bar Inventory is not available for your role.",
     };
   }
+  // V2-004.004: after the role check, the module must be on at the verified
+  // location. Shared catalog data is untouched; only this location's use of it.
+  const blocked = await guardModule({
+    module: "bar_inventory",
+    organizationId: user.organizationId,
+  });
+  if (blocked) return blocked;
   return { ok: true as const, organizationId: user.organizationId };
 }
 

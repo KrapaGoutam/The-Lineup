@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
+
 // Same shape of fake as schedule-actions.publish.test.ts's makeFakeSupabase
 // -- a chainable query builder closely enough matching supabase-js's real
 // one (awaitable without a terminal call) that a regression in which

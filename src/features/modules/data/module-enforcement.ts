@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { getCurrentUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.generated";
 
@@ -90,6 +91,13 @@ export interface ModuleGuardTarget {
    * context is resolved here.
    */
   readonly location?: { readonly id: string } | null;
+  /**
+   * UNTRUSTED location named by the request (an id the browser sent). It is
+   * never used to choose a location: when present it must equal the verified
+   * one, otherwise the request is stale and denied. Only consulted when
+   * enforcement is active.
+   */
+  readonly claimedLocationId?: string | null;
 }
 
 export interface ModuleGuardDeps {
@@ -123,12 +131,19 @@ export async function checkModuleAccess(
 
   let configuration: ModuleConfigReadResult | null = null;
   if (enforcement.status === "ok") {
-    const location =
+    let location =
       target.location !== undefined
         ? target.location
         : await (deps.resolveLocation ?? getPrimaryLocation)(
             target.organizationId,
           );
+    if (
+      location &&
+      typeof target.claimedLocationId === "string" &&
+      target.claimedLocationId.toLowerCase() !== location.id.toLowerCase()
+    ) {
+      location = null; // the request names a different location: stale
+    }
     if (location) {
       configuration = await (
         deps.readConfigs ??
@@ -192,4 +207,41 @@ export async function guardModule(
   return verdict.sessionInvalid
     ? { ...failure, sessionInvalid: true as const }
     : failure;
+}
+
+/**
+ * For hot, slug-only actions (e.g. a badge count) that do not otherwise load
+ * the caller: while the switch is `staged` this is a single small read; only
+ * when enforcement is active does it resolve the caller's organization (the
+ * same `getCurrentUser(slug)` every other action uses) and run the full guard.
+ */
+export async function guardModuleForSlug(
+  module: string,
+  restaurantSlug: string,
+  deps: ModuleGuardDeps & {
+    readonly resolveOrganizationId?: (slug: string) => Promise<string | null>;
+    /** Untrusted location named by the request; see `ModuleGuardTarget`. */
+    readonly claimedLocationId?: string | null;
+  } = {},
+): Promise<ModuleGuardFailure | null> {
+  const mode = await (
+    deps.readMode ?? (() => readModuleEnforcementMode(deps.client))
+  )();
+  if (mode.status === "ok" && mode.mode === "staged") {
+    return guardModule(
+      { module, organizationId: "" },
+      { ...deps, readMode: async () => mode },
+    );
+  }
+  const resolve =
+    deps.resolveOrganizationId ??
+    (async (slug: string) => {
+      return (await getCurrentUser(slug))?.organizationId ?? null;
+    });
+  const organizationId = await resolve(restaurantSlug);
+  if (!organizationId) return toGuardFailure("unauthorized");
+  return guardModule(
+    { module, organizationId, claimedLocationId: deps.claimedLocationId },
+    { ...deps, readMode: async () => mode },
+  );
 }

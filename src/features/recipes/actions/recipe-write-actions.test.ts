@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
 const { client, user, session, save, from } = vi.hoisted(() => ({
   client: vi.fn(),
   user: vi.fn(),

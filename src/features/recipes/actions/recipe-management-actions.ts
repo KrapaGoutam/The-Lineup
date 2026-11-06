@@ -1,5 +1,6 @@
 "use server";
 import { z } from "zod";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -29,6 +30,18 @@ async function context(slug: string) {
         ok: false as const,
         kind: "permission" as const,
         error: "You don't have permission to manage recipes.",
+      },
+    };
+  const blocked = await guardModule({
+    module: "recipes",
+    organizationId: user.organizationId,
+  });
+  if (blocked)
+    return {
+      error: {
+        ok: false as const,
+        kind: "permission" as const,
+        error: blocked.error,
       },
     };
   return { client, org: user.organizationId };

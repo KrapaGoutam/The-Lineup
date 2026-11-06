@@ -16,6 +16,10 @@ import {
 import { nextPublishedVersion } from "@/features/schedules/domain/schedule-versioning";
 import { writeAuditEvent } from "@/features/team/data/audit-log";
 import { getCurrentUser } from "@/lib/current-user";
+import {
+  guardModule,
+  guardModuleForSlug,
+} from "@/features/modules/data/module-enforcement";
 import type { DemoShift } from "@/lib/demo-data";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -114,6 +118,13 @@ export async function addShiftAction(
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const blocked = await guardModule({
+    module: "schedule",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
 
   const period = await getOrCreateDraftPeriod(
     supabase,
@@ -216,6 +227,11 @@ export async function publishScheduleAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const blocked = await guardModuleForSlug("schedule", input.restaurantSlug, {
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
+
   const year = new Date().getFullYear().toString();
   // Deliberately not timezone-corrected to the exact location-local
   // year -- this only matters within a few hours of New Year's, and the
@@ -278,6 +294,13 @@ export async function saveScheduleConfigAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const blocked = await guardModule({
+    module: "schedule",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
+
   const { error: hoursError } = await supabase.from("operating_hours").upsert(
     input.operatingHours.map((day, dayOfWeek) => ({
       organization_id: input.organizationId,
@@ -338,6 +361,12 @@ export async function getScheduleContextForWeekAction(input: {
     return { ok: false, error: "You need to sign in to see the schedule." };
   }
 
+  const blocked = await guardModule({
+    module: "schedule",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const result = await getWeekScheduleData(
     currentUser.organizationId,
     parsed.data.weekStartDate,
@@ -388,6 +417,12 @@ export async function updateShiftAction(
   if (currentUser.organizationId !== input.organizationId) {
     return { ok: false, error: "That shift no longer exists." };
   }
+
+  const blocked = await guardModule({
+    module: "schedule",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const shiftId = Number(input.shiftId);
   if (!Number.isFinite(shiftId)) {
@@ -507,6 +542,12 @@ export async function deleteShiftAction(input: {
   if (currentUser.organizationId !== input.organizationId) {
     return { ok: false, error: "That shift no longer exists." };
   }
+
+  const blocked = await guardModule({
+    module: "schedule",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const shiftId = Number(input.shiftId);
   if (!Number.isFinite(shiftId)) {

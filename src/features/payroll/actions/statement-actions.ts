@@ -27,6 +27,7 @@ import {
   type PayrollAdjustment,
   type PayrollPayment,
 } from "@/features/payroll/data/payroll-data";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
 
@@ -210,6 +211,13 @@ export async function getCombinedMonthlyStatementAction(input: {
   if (!currentUser) {
     return { ok: false, error: "You must be signed in to view statements." };
   }
+
+  // V2-004.004: demo returned above; a live read needs payroll turned on.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
 

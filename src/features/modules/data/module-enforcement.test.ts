@@ -7,6 +7,7 @@ vi.mock("@/features/locations/data/primary-location", () => ({
   getPrimaryLocation: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/lib/current-user", () => ({ getCurrentUser: vi.fn() }));
 
 import {
   buildModuleConfigSnapshot,
