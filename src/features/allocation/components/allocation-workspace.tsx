@@ -52,6 +52,7 @@ import type {
   AllocationContext,
   CrossEditEntry,
 } from "@/features/allocation/data/allocation-data";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import {
   crossEditToActivity,
   type BoardActivityEntry,
@@ -342,6 +343,7 @@ export function AllocationWorkspace({
   restaurantSlug,
   initialContext = null,
   onSessionInvalid,
+  expectedContext = null,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -356,6 +358,7 @@ export function AllocationWorkspace({
   // deactivated mid-session, most commonly) -- the parent owns signing
   // out, this component only detects and reports it.
   onSessionInvalid: () => void;
+  expectedContext?: WorkspaceExpectation | null;
 }) {
   const router = useRouter();
   const isManager = user.role !== "server";
@@ -487,6 +490,7 @@ export function AllocationWorkspace({
     const result = await getAllocationContextForDateAction({
       restaurantSlug,
       serviceDate: nextDate,
+      expectedContext: expectedContext ?? undefined,
     });
     setDateLoading(false);
     if (!result.ok) {
@@ -570,7 +574,8 @@ export function AllocationWorkspace({
   // no attendance data, so this is simply empty there and the order is
   // unaffected.
   const clockedInProfileIds = initialContext?.clockedInProfileIds ?? [];
-  const availableMembers = team
+  const roster = initialContext?.team ?? team;
+  const availableMembers = roster
     .filter((member) => !visibleColumns.some(({ id }) => id === member.id))
     .sort((a, b) => {
       const aClockedIn = clockedInProfileIds.includes(a.id);
@@ -688,12 +693,18 @@ export function AllocationWorkspace({
       timeZone: initialContext?.timeZone ?? "America/Chicago",
       serviceSessionId,
       action,
+      expectedContext: expectedContext ?? undefined,
     });
     if (!result.ok) {
       setHistory(previousHistory);
       setEventCount((count) => count - 1);
       if (result.sessionInvalid) {
         onSessionInvalid();
+        return;
+      }
+      if (result.contextStale) {
+        setActionError(result.error);
+        router.refresh();
         return;
       }
       // Stale client: the database says the table is held. Show the same
@@ -778,10 +789,14 @@ export function AllocationWorkspace({
       restaurantSlug,
       organizationId: user.organizationId,
       serviceSessionId,
+      expectedContext: expectedContext ?? undefined,
     });
     if (!result.ok) {
       if (result.sessionInvalid) onSessionInvalid();
-      else setActionError(result.error);
+      else if (result.contextStale) {
+        setActionError(result.error);
+        router.refresh();
+      } else setActionError(result.error);
     }
   }
 
@@ -796,10 +811,14 @@ export function AllocationWorkspace({
       restaurantSlug,
       organizationId: user.organizationId,
       serviceSessionId,
+      expectedContext: expectedContext ?? undefined,
     });
     if (!result.ok) {
       if (result.sessionInvalid) onSessionInvalid();
-      else setActionError(result.error);
+      else if (result.contextStale) {
+        setActionError(result.error);
+        router.refresh();
+      } else setActionError(result.error);
     }
   }
 
