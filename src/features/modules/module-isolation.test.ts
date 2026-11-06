@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-/** V2-004.002 permits the settings editor only; enforcement remains deferred. */
+/** V2-004.003 permits entry loading and navigation; backend enforcement deferred. */
 
 const SRC = path.resolve(import.meta.dirname, "../..");
 const OWN_FEATURE = path.join(SRC, "features", "modules");
@@ -17,10 +17,16 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("module configuration is consumed only by location settings (V2-004.002)", () => {
+describe("module configuration stays within settings and navigation (V2-004.003)", () => {
   const consumers = walk(SRC).filter(
     (file) =>
       !file.startsWith(OWN_FEATURE + path.sep) &&
+      !file.includes(".test.") &&
+      ![
+        "lib/page-data.ts",
+        "components/restaurant-operations-app.tsx",
+        "features/settings/components/settings-page.tsx",
+      ].some((rel) => file === path.join(SRC, rel)) &&
       file !== GENERATED_TYPES &&
       file !==
         path.join(
@@ -41,11 +47,7 @@ describe("module configuration is consumed only by location settings (V2-004.002
   });
 
   it("MC-020: the application shell and demo data do not depend on the new table", () => {
-    for (const rel of [
-      "components/restaurant-operations-app.tsx",
-      "lib/demo-data.ts",
-      "lib/app-tab.ts",
-    ]) {
+    for (const rel of ["lib/demo-data.ts", "lib/app-tab.ts"]) {
       const text = fs.readFileSync(path.join(SRC, rel), "utf8");
       expect(text).not.toContain("location_module_configs");
       expect(text).not.toContain("features/modules");
@@ -53,7 +55,11 @@ describe("module configuration is consumed only by location settings (V2-004.002
   });
 
   it("the registry module imports no data layer (stays pure and demo-safe)", () => {
-    for (const file of ["module-registry.ts", "module-config.ts"]) {
+    for (const file of [
+      "module-registry.ts",
+      "module-config.ts",
+      "module-navigation.ts",
+    ]) {
       const text = fs.readFileSync(
         path.join(OWN_FEATURE, "domain", file),
         "utf8",

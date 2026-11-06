@@ -1,4 +1,5 @@
 "use server";
+import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   loadModuleEditor,
@@ -18,7 +19,9 @@ export async function loadModuleSettingsAction(target: ModuleEditorTarget) {
 }
 export async function saveModuleSettingsAction(input: ModuleSaveInput) {
   try {
-    return await saveModuleConfig(input, await createClient());
+    const result = await saveModuleConfig(input, await createClient());
+    if (result.ok) refresh();
+    return result;
   } catch {
     return { ok: false as const, code: "unexpected" as const };
   }

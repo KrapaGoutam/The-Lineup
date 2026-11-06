@@ -30,6 +30,11 @@ import {
   type TipsContext,
 } from "@/features/tips/data/tips-data";
 import { getEntryUser } from "@/lib/current-user";
+import { readLocationModuleConfigs } from "@/features/modules/data/module-config-reader";
+import {
+  serializeModuleNavigation,
+  type ModuleNavigationSnapshot,
+} from "@/features/modules/domain/module-navigation";
 
 /**
  * V2-003.001: what the entry route knows about the active context.
@@ -54,6 +59,7 @@ export type ActiveContextDisplay = AvailableContextSummary & {
 };
 
 export type PageData = {
+  moduleNavigation: ModuleNavigationSnapshot | null;
   demoMode: boolean;
   initialUser: SignedInUser | null;
   scheduleContext: ScheduleContext | null;
@@ -90,6 +96,7 @@ export type PageData = {
 };
 
 const EMPTY_OPERATIONAL = {
+  moduleNavigation: null,
   initialUser: null,
   scheduleContext: null,
   tipsContext: null,
@@ -212,13 +219,19 @@ export async function loadPageData(
     };
   }
 
-  const [scheduleContext, tipsContext, allocationContext, switcher] =
-    await Promise.all([
-      getScheduleContext(context.organizationId, scope),
-      getTipsContext(context.organizationId, scope),
-      getAllocationContext(context.organizationId, undefined, scope),
-      listCurrentEligibleContexts(),
-    ]);
+  const [
+    moduleConfigs,
+    scheduleContext,
+    tipsContext,
+    allocationContext,
+    switcher,
+  ] = await Promise.all([
+    readLocationModuleConfigs(context.locationId),
+    getScheduleContext(context.organizationId, scope),
+    getTipsContext(context.organizationId, scope),
+    getAllocationContext(context.organizationId, undefined, scope),
+    listCurrentEligibleContexts(),
+  ]);
 
   // V2-003.004 reconciliation: an explicit selection only needs persisting
   // when module actions would otherwise resolve to a DIFFERENT (or no)
@@ -246,6 +259,14 @@ export async function loadPageData(
   return {
     demoMode,
     initialUser,
+    moduleNavigation: serializeModuleNavigation(
+      {
+        profileId: initialUser.profileId,
+        organizationId: context.organizationId,
+        locationId: context.locationId,
+      },
+      moduleConfigs,
+    ),
     scheduleContext,
     tipsContext,
     allocationContext,

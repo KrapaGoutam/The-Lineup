@@ -14,37 +14,54 @@
 
 export type NavigationOrigin = "fresh" | "reload" | "history";
 
-/** A popstate within this window explains the render that is happening now. */
-const POPSTATE_WINDOW_MS = 5_000;
 /** The document-load navigation type only describes mounts right after load. */
 const DOCUMENT_LOAD_WINDOW_MS = 15_000;
 
-let lastPopstateAt = Number.NEGATIVE_INFINITY;
+let historyContext: string | null = null;
 let installed = false;
+
+// Module fallback can replace ?tab= while the RSC response is still loading.
+// Keep the traversal signal attached to its context, rather than a timer that
+// can expire before a slow server response/hydration reaches reconciliation.
+function contextKey(url: URL): string {
+  return `${url.pathname}:${url.searchParams.get("location")?.toLowerCase() ?? ""}`;
+}
 
 function install(): void {
   if (installed || typeof window === "undefined") return;
   installed = true;
   window.addEventListener("popstate", () => {
-    lastPopstateAt = performance.now();
+    historyContext = contextKey(new URL(window.location.href));
   });
 }
 install();
 
-function documentNavigationType(): string | null {
+function documentNavigation(): PerformanceNavigationTiming | null {
   if (typeof performance === "undefined") return null;
   const entry = performance.getEntriesByType?.("navigation")?.[0] as
     | PerformanceNavigationTiming
     | undefined;
-  return entry?.type ?? null;
+  return entry ?? null;
 }
 
 export function currentNavigationOrigin(): NavigationOrigin {
   install();
+  const currentKey =
+    typeof window === "undefined"
+      ? null
+      : contextKey(new URL(window.location.href));
+  if (historyContext !== null && historyContext === currentKey)
+    return "history";
+  const entry = documentNavigation();
+  // A full-document reload/history load may hydrate after the timing window.
+  // Its destination remains a stored preference until the context changes.
+  if (entry?.name && currentKey === contextKey(new URL(entry.name))) {
+    if (entry.type === "back_forward") return "history";
+    if (entry.type === "reload") return "reload";
+  }
   const now = performance.now();
-  if (now - lastPopstateAt <= POPSTATE_WINDOW_MS) return "history";
   if (now <= DOCUMENT_LOAD_WINDOW_MS) {
-    const type = documentNavigationType();
+    const type = entry?.type;
     if (type === "back_forward") return "history";
     if (type === "reload") return "reload";
   }

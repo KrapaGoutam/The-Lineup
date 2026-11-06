@@ -141,8 +141,8 @@ export function LocationModuleSettings({
         <Badge>{lifecycle}</Badge>
       </div>
       <p className="text-muted-foreground text-sm">
-        Module preferences are saved. Application-wide enforcement will be
-        enabled in a later upgrade.
+        Module navigation reflects saved location preferences. Backend operation
+        enforcement is not yet active.
       </p>
       {demoMode && (
         <p className="text-sm">

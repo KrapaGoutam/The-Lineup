@@ -147,6 +147,8 @@ export function useTasksController({
       } else {
         setLoadError(result.error);
       }
+    } catch {
+      setLoadError("Tasks could not be loaded. Please try again.");
     } finally {
       inFlight.current = false;
       setLoading(false);
@@ -155,7 +157,7 @@ export function useTasksController({
 
   useEffect(() => {
     if (demo) return;
-    void refresh();
+    void Promise.resolve().then(refresh);
     const onFocus = () => {
       if (document.visibilityState === "hidden") return;
       if (Date.now() - lastFetch.current < FOCUS_REFRESH_MIN_MS) return;

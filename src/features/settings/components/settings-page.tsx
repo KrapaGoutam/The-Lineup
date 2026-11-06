@@ -16,6 +16,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LocationAdministration } from "@/features/locations/components/location-administration";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
 import type { DayHours } from "@/hooks/use-restaurant-clock";
+import type { AppTab } from "@/lib/app-tab";
+import type { SignedInUser } from "@/components/login-screen";
+import type { TeamMember } from "@/lib/demo-data";
+import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
+import type { ModuleNavigationPolicy } from "@/features/modules/domain/module-navigation";
+import { AccountRecovery } from "./account-recovery";
 
 import { PayRatesSection } from "./pay-rates-section";
 import { ShiftHoursCard } from "./shift-hours-card";
@@ -43,6 +49,12 @@ export function SettingsPage({
   onGoToTab,
   onSignOut,
   onBack,
+  availableTabs,
+  configurationStatus,
+  recoveryUser,
+  recoveryTeam = [],
+  onResetPasscode,
+  onRefreshModules,
 }: {
   isManager: boolean;
   demoMode: boolean;
@@ -56,9 +68,26 @@ export function SettingsPage({
   onGoToTab: (tab: "team" | "schedule") => void;
   onSignOut: () => void;
   onBack: () => void;
+  availableTabs?: readonly AppTab[];
+  configurationStatus?: ModuleNavigationPolicy["configurationStatus"];
+  recoveryUser?: SignedInUser;
+  recoveryTeam?: readonly TeamMember[];
+  onResetPasscode?: (input: {
+    targetProfileId: string;
+    reason: string;
+    newPasscode?: string;
+  }) => Promise<ResetPasscodeResult>;
+  onRefreshModules?: () => void;
 }) {
   const [subview, setSubview] = useState<"main" | "locations">("main");
   const showPayRates = isManager && !demoMode;
+  const showTeam = isManager && (availableTabs?.includes("team") ?? true);
+  const showSchedule =
+    isManager && (availableTabs?.includes("schedule") ?? true);
+  const settingsOnly =
+    availableTabs?.every((tab) => tab === "settings") ?? false;
+  const configFailed =
+    configurationStatus && !["ok", "demo"].includes(configurationStatus);
 
   if (subview === "locations") {
     return (
@@ -75,8 +104,13 @@ export function SettingsPage({
       : []),
     { href: "#settings-store-hours", label: "Store hours" },
     ...(isManager ? [{ href: "#settings-locations", label: "Locations" }] : []),
-    ...(isManager ? [{ href: "#settings-schedule", label: "Schedule" }] : []),
-    ...(isManager ? [{ href: "#settings-team", label: "Team" }] : []),
+    ...(showSchedule
+      ? [{ href: "#settings-schedule", label: "Schedule" }]
+      : []),
+    ...(showTeam ? [{ href: "#settings-team", label: "Team" }] : []),
+    ...(recoveryUser && ["owner", "manager"].includes(recoveryUser.designation)
+      ? [{ href: "#settings-recovery", label: "Account recovery" }]
+      : []),
     ...(showPayRates
       ? [{ href: "#settings-pay-rates", label: "Pay rates" }]
       : []),
@@ -104,6 +138,28 @@ export function SettingsPage({
           </p>
         </div>
       </div>
+
+      {settingsOnly ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3 pt-5" role="status">
+            <p>
+              {configFailed
+                ? "Module availability could not be verified for this location."
+                : "No operational modules are enabled for this location."}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {isManager
+                ? "Authorized administrators can configure modules under Locations → Manage → Modules."
+                : "Contact your manager to enable operational modules. Your account controls remain available below."}
+            </p>
+            {onRefreshModules ? (
+              <Button variant="secondary" onClick={onRefreshModules}>
+                Refresh module availability
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
         <nav
@@ -159,20 +215,24 @@ export function SettingsPage({
                 description="Manage restaurant branches, addresses, time zones and operating hours."
                 onClick={() => setSubview("locations")}
               />
-              <QuickLinkCard
-                id="settings-team"
-                icon={Users}
-                title="Team"
-                description="Rename, set designation, reset a passcode, link attendance."
-                onClick={() => onGoToTab("team")}
-              />
-              <QuickLinkCard
-                id="settings-schedule"
-                icon={CalendarDays}
-                title="Schedule"
-                description="Rarely touched mid-shift. Plan and publish the week here."
-                onClick={() => onGoToTab("schedule")}
-              />
+              {showTeam ? (
+                <QuickLinkCard
+                  id="settings-team"
+                  icon={Users}
+                  title="Team"
+                  description="Rename, set designation, reset a passcode, link attendance."
+                  onClick={() => onGoToTab("team")}
+                />
+              ) : null}
+              {showSchedule ? (
+                <QuickLinkCard
+                  id="settings-schedule"
+                  icon={CalendarDays}
+                  title="Schedule"
+                  description="Rarely touched mid-shift. Plan and publish the week here."
+                  onClick={() => onGoToTab("schedule")}
+                />
+              ) : null}
             </div>
           ) : null}
 
@@ -180,6 +240,14 @@ export function SettingsPage({
             <div id="settings-pay-rates">
               <PayRatesSection restaurantSlug={restaurantSlug} />
             </div>
+          ) : null}
+
+          {recoveryUser && onResetPasscode ? (
+            <AccountRecovery
+              user={recoveryUser}
+              team={recoveryTeam}
+              onResetPasscode={onResetPasscode}
+            />
           ) : null}
 
           <Card id="settings-passcode">

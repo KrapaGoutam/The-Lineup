@@ -11,6 +11,7 @@ import { requestSignOut } from "@/lib/client-sign-out";
 import { useContextSwitch } from "@/features/context/components/use-context-switch";
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { groupContextsByOrganization } from "@/features/context/domain/context-navigation";
+import { ContextSettings } from "@/features/settings/components/context-settings";
 
 /**
  * V2-003.001/.002: shown when the server could not establish ONE verified
@@ -24,11 +25,14 @@ export function ContextUnavailableNotice({
   status,
   availableContexts = [],
   availableContextsFailed = false,
+  restaurantSlug,
 }: {
   status: "selection_required" | "invalid_context" | "error" | "no_access";
   availableContexts?: readonly AvailableContextSummary[];
   availableContextsFailed?: boolean;
+  restaurantSlug?: string;
 }) {
+  const [showSettings, setShowSettings] = useState(false);
   const router = useRouter();
   const [retrying, startRetry] = useTransition();
   const { switchingTo, switchTo, switchError } = useContextSwitch();
@@ -66,143 +70,159 @@ export function ContextUnavailableNotice({
       data-testid="context-unavailable"
       data-context-status={status}
     >
-      <Card className="w-full">
-        <CardContent className="flex flex-col gap-3 p-6">
-          <div className="flex items-center gap-2">
-            <ShieldAlert aria-hidden className="text-muted-foreground size-5" />
-            <h1 className="text-lg font-semibold">{copy.title}</h1>
-          </div>
-          <p className="text-muted-foreground text-sm">{copy.body}</p>
+      {showSettings && restaurantSlug ? (
+        <ContextSettings
+          key={restaurantSlug}
+          restaurantSlug={restaurantSlug}
+          onBack={() => setShowSettings(false)}
+        />
+      ) : (
+        <Card className="w-full">
+          <CardContent className="flex flex-col gap-3 p-6">
+            <div className="flex items-center gap-2">
+              <ShieldAlert
+                aria-hidden
+                className="text-muted-foreground size-5"
+              />
+              <h1 className="text-lg font-semibold">{copy.title}</h1>
+            </div>
+            <p className="text-muted-foreground text-sm">{copy.body}</p>
+            {restaurantSlug ? (
+              <Button variant="secondary" onClick={() => setShowSettings(true)}>
+                Settings
+              </Button>
+            ) : null}
 
-          {showChoices ? (
-            <nav
-              aria-label="Available locations"
-              className="flex flex-col gap-3"
-            >
-              {groups.map((group) => (
-                <section
-                  key={group.organizationId}
-                  aria-label={group.organizationName}
+            {showChoices ? (
+              <nav
+                aria-label="Available locations"
+                className="flex flex-col gap-3"
+              >
+                {groups.map((group) => (
+                  <section
+                    key={group.organizationId}
+                    aria-label={group.organizationName}
+                  >
+                    <h2 className="text-muted-foreground pb-1 text-xs font-semibold tracking-wide uppercase">
+                      {group.organizationName}
+                    </h2>
+                    <ul className="flex flex-col gap-1.5">
+                      {group.locations.map((context) => (
+                        <li key={context.locationId}>
+                          <Button
+                            variant="outline"
+                            className="min-h-12 w-full justify-start"
+                            disabled={!!switchingTo}
+                            onClick={() => switchTo(context)}
+                            data-location-id={context.locationId}
+                          >
+                            {context.locationName}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </nav>
+            ) : null}
+
+            {status !== "error" && availableContextsFailed ? (
+              <p role="alert" className="text-destructive text-sm">
+                We couldn&apos;t load your locations. Please try again.
+              </p>
+            ) : null}
+
+            {switchError ? (
+              <p role="alert" className="text-destructive text-sm">
+                {switchError}
+              </p>
+            ) : null}
+
+            {clearFailed ? (
+              <p role="alert" className="text-destructive text-sm">
+                We couldn&apos;t clear the saved location. Please try again.
+              </p>
+            ) : null}
+
+            {switchingTo ? (
+              <p role="status" className="text-muted-foreground text-sm">
+                Opening {switchingTo.organizationName} —{" "}
+                {switchingTo.locationName}…
+              </p>
+            ) : null}
+
+            {status === "no_access" ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  className="min-h-11"
+                  disabled={retrying || signingOut}
+                  onClick={() => startRetry(() => router.refresh())}
+                  data-testid="no-access-retry"
                 >
-                  <h2 className="text-muted-foreground pb-1 text-xs font-semibold tracking-wide uppercase">
-                    {group.organizationName}
-                  </h2>
-                  <ul className="flex flex-col gap-1.5">
-                    {group.locations.map((context) => (
-                      <li key={context.locationId}>
-                        <Button
-                          variant="outline"
-                          className="min-h-12 w-full justify-start"
-                          disabled={!!switchingTo}
-                          onClick={() => switchTo(context)}
-                          data-location-id={context.locationId}
-                        >
-                          {context.locationName}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </nav>
-          ) : null}
+                  <RefreshCw aria-hidden className="size-4" />
+                  {retrying ? "Checking…" : "Check again"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={signingOut}
+                  onClick={() =>
+                    startSignOut(async () => {
+                      await requestSignOut();
+                      router.refresh();
+                    })
+                  }
+                  data-testid="no-access-sign-out"
+                >
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </Button>
+              </div>
+            ) : null}
 
-          {status !== "error" && availableContextsFailed ? (
-            <p role="alert" className="text-destructive text-sm">
-              We couldn&apos;t load your locations. Please try again.
-            </p>
-          ) : null}
-
-          {switchError ? (
-            <p role="alert" className="text-destructive text-sm">
-              {switchError}
-            </p>
-          ) : null}
-
-          {clearFailed ? (
-            <p role="alert" className="text-destructive text-sm">
-              We couldn&apos;t clear the saved location. Please try again.
-            </p>
-          ) : null}
-
-          {switchingTo ? (
-            <p role="status" className="text-muted-foreground text-sm">
-              Opening {switchingTo.organizationName} —{" "}
-              {switchingTo.locationName}…
-            </p>
-          ) : null}
-
-          {status === "no_access" ? (
-            <div className="flex flex-wrap gap-2">
+            {status === "error" ||
+            status === "invalid_context" ||
+            availableContextsFailed ? (
               <Button
                 variant="secondary"
-                className="min-h-11"
-                disabled={retrying || signingOut}
+                className="min-h-11 self-start"
+                disabled={retrying}
                 onClick={() => startRetry(() => router.refresh())}
-                data-testid="no-access-retry"
               >
                 <RefreshCw aria-hidden className="size-4" />
-                {retrying ? "Checking…" : "Check again"}
+                {retrying ? "Checking…" : "Try again"}
               </Button>
+            ) : null}
+
+            {status === "invalid_context" ? (
               <Button
                 variant="outline"
-                className="min-h-11"
-                disabled={signingOut}
+                className="min-h-11 self-start"
+                disabled={clearing || !!switchingTo}
                 onClick={() =>
-                  startSignOut(async () => {
-                    await requestSignOut();
-                    router.refresh();
-                  })
-                }
-                data-testid="no-access-sign-out"
-              >
-                {signingOut ? "Signing out…" : "Sign out"}
-              </Button>
-            </div>
-          ) : null}
-
-          {status === "error" ||
-          status === "invalid_context" ||
-          availableContextsFailed ? (
-            <Button
-              variant="secondary"
-              className="min-h-11 self-start"
-              disabled={retrying}
-              onClick={() => startRetry(() => router.refresh())}
-            >
-              <RefreshCw aria-hidden className="size-4" />
-              {retrying ? "Checking…" : "Try again"}
-            </Button>
-          ) : null}
-
-          {status === "invalid_context" ? (
-            <Button
-              variant="outline"
-              className="min-h-11 self-start"
-              disabled={clearing || !!switchingTo}
-              onClick={() =>
-                startClear(async () => {
-                  setClearFailed(false);
-                  try {
-                    const result = await clearActiveContextAction();
-                    if (!result.ok) {
+                  startClear(async () => {
+                    setClearFailed(false);
+                    try {
+                      const result = await clearActiveContextAction();
+                      if (!result.ok) {
+                        setClearFailed(true);
+                        return;
+                      }
+                    } catch {
                       setClearFailed(true);
                       return;
                     }
-                  } catch {
-                    setClearFailed(true);
-                    return;
-                  }
-                  router.refresh();
-                })
-              }
-              data-testid="context-clear-saved"
-            >
-              {clearing ? "Clearing…" : "Clear saved location"}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+                    router.refresh();
+                  })
+                }
+                data-testid="context-clear-saved"
+              >
+                {clearing ? "Clearing…" : "Clear saved location"}
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

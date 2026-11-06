@@ -17,9 +17,8 @@ import {
  * V2-004.001 — server-authoritative reader of one location's module
  * configuration.
  *
- * NOT wired into any screen, navigation or action yet (V2-004.003/.004 own
- * that); demo mode never calls it, so the demo application does not need the
- * `location_module_configs` table.
+ * V2-004.003 consumes this at the verified server entry for navigation.
+ * Demo mode never calls it; backend module enforcement remains V2-004.004.
  *
  * Contract (the reason this is not shaped like the other location readers):
  *   • It NEVER throws and NEVER turns a failure into an empty successful

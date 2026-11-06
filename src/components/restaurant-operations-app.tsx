@@ -79,6 +79,11 @@ import {
   type ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
 import { SettingsPage } from "@/features/settings/components/settings-page";
+import {
+  moduleNavigationPolicy,
+  resolveNavigationTab,
+  type ModuleNavigationSnapshot,
+} from "@/features/modules/domain/module-navigation";
 import { getTasksUnreadCountAction } from "@/features/tasks/actions/tasks-actions";
 import { RecipesModule } from "@/features/recipes/components/recipes-module";
 import { InventoryModule } from "@/features/bar-inventory/components/inventory-module";
@@ -128,7 +133,6 @@ import {
 } from "@/lib/demo-data";
 import {
   DEFAULT_APP_TAB,
-  resolveTab,
   tabFromParam,
   tabHref,
   type AppTab,
@@ -148,6 +152,7 @@ import {
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
+import { Dialog } from "./ui/dialog";
 import { Label } from "./ui/label";
 
 // Feature 021: weighted into two tiers on desktop (primary, underlined when
@@ -580,6 +585,7 @@ function HoursDialog({
 }
 
 type RestaurantOperationsAppProps = {
+  moduleNavigation?: ModuleNavigationSnapshot | null;
   demoMode: boolean;
   restaurantSlug: string;
   initialUser?: SignedInUser | null;
@@ -659,6 +665,7 @@ function RestaurantOperationsAppInner({
   initialScheduleContext = null,
   initialTipsContext = null,
   initialAllocationContext = null,
+  moduleNavigation = null,
   activeContext = null,
   availableContexts = [],
   availableContextsFailed = false,
@@ -683,6 +690,14 @@ function RestaurantOperationsAppInner({
     [demoMode, activeContext, initialUser],
   );
   const [user, setUser] = useState<SignedInUser | null>(initialUser);
+  const navigation = useMemo(
+    () =>
+      moduleNavigationPolicy(moduleNavigation, workspaceExpectation, {
+        isManager: !!user && user.role !== "server",
+        demoMode,
+      }),
+    [moduleNavigation, workspaceExpectation, user, demoMode],
+  );
   // Real mode: a successful passcode sign-in is only *pending* until the
   // Server Component re-renders with the authenticated person's real data.
   const [pendingAccount, setPendingAccount] = useState<SignedInUser | null>(
@@ -694,6 +709,15 @@ function RestaurantOperationsAppInner({
   // is instant, while reload and back/forward still land on the right module.
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const requestedLocation =
+    typeof window === "undefined"
+      ? searchParams.get("location")
+      : new URLSearchParams(window.location.search).get("location");
+  const urlContextMatches =
+    demoMode ||
+    !activeContext ||
+    !requestedLocation ||
+    requestedLocation.toLowerCase() === activeContext.locationId.toLowerCase();
   const urlTab = tabFromParam(searchParams.get("tab"));
   const [requestedTab, setRequestedTab] = useState<AppTab>(
     urlTab ?? DEFAULT_APP_TAB,
@@ -717,6 +741,7 @@ function RestaurantOperationsAppInner({
     setRequestedTab(urlTab ?? DEFAULT_APP_TAB);
   }
   function setTab(next: AppTab) {
+    next = resolveNavigationTab(next, navigation);
     setRequestedTab(next);
     let href = tabHref(pathname, window.location.search, next);
     if (next === "recipes") {
@@ -798,14 +823,10 @@ function RestaurantOperationsAppInner({
   // resolves against the wrong (often off-screen) subtree.
   const avatarPanelDesktopRef = useRef<HTMLDivElement>(null);
   const avatarPanelMobileRef = useRef<HTMLDivElement>(null);
-  const mobileSheetRef = useRef<HTMLDivElement>(null);
   useDismissOnOutsideOrEscape(
     [avatarPanelDesktopRef, avatarPanelMobileRef],
     showAvatarPanel,
     () => setShowAvatarPanel(false),
-  );
-  useDismissOnOutsideOrEscape(mobileSheetRef, showMobileSheet, () =>
-    setShowMobileSheet(false),
   );
   const clock = useRestaurantClock(timeZone, operatingHours);
 
@@ -849,11 +870,23 @@ function RestaurantOperationsAppInner({
   // is authoritative; Realtime is deliberately not involved (#134).
   const signedInProfileId = user?.profileId ?? null;
   useEffect(() => {
-    if (demoMode || !signedInProfileId) return;
+    if (
+      demoMode ||
+      !signedInProfileId ||
+      !urlContextMatches ||
+      !navigation.tabs.includes("tasks")
+    )
+      return;
     let cancelled = false;
     const refresh = async () => {
-      const result = await getTasksUnreadCountAction({ restaurantSlug });
-      if (!cancelled && result.ok) setRealTasksUnread(result.unread);
+      try {
+        const result = await getTasksUnreadCountAction({ restaurantSlug });
+        if (!cancelled && result.ok) setRealTasksUnread(result.unread);
+      } catch {
+        // A context/document switch may cancel an in-flight action. The badge
+        // must fail quietly instead of producing an unhandled rejection.
+        if (!cancelled) setRealTasksUnread(0);
+      }
     };
     void refresh();
     window.addEventListener("focus", refresh);
@@ -861,7 +894,14 @@ function RestaurantOperationsAppInner({
       cancelled = true;
       window.removeEventListener("focus", refresh);
     };
-  }, [demoMode, signedInProfileId, restaurantSlug, unreadNonce]);
+  }, [
+    demoMode,
+    signedInProfileId,
+    restaurantSlug,
+    unreadNonce,
+    navigation,
+    urlContextMatches,
+  ]);
 
   // The demo Opening reminder engine is opt-in (`?demoReminders=1`) so the
   // ordinary demo walkthrough, and every unrelated demo test, is never
@@ -975,20 +1015,36 @@ function RestaurantOperationsAppInner({
   // requested module must survive the passcode screen and a reload.
   useEffect(() => {
     if (!user) return;
-    const param = new URLSearchParams(window.location.search).get("tab");
-    if (param === null) return;
-    // Normalize the actual destination, not a possibly stale requestedTab.
-    const shown = resolveTab(tabFromParam(param) ?? DEFAULT_APP_TAB, {
-      isManager: user.role !== "server",
-      demoMode,
-    });
-    if (tabFromParam(param) === shown) return;
-    window.history.replaceState(
-      null,
-      "",
-      tabHref(pathname, window.location.search, shown),
+    // During Back/Forward the address bar can already name the next context
+    // while this shell still holds the previous RSC snapshot. Replacing that
+    // history entry here would copy the old Next router tree over the entry
+    // being restored. Wait for verified matching props before normalization.
+    const browserLocation = new URLSearchParams(window.location.search).get(
+      "location",
     );
-  }, [user, requestedTab, demoMode, pathname, searchParams]);
+    if (
+      !demoMode &&
+      workspaceExpectation &&
+      browserLocation &&
+      browserLocation.toLowerCase() !==
+        workspaceExpectation.locationId.toLowerCase()
+    )
+      return;
+    const param = new URLSearchParams(window.location.search).get("tab");
+    // Normalize the actual destination, not a possibly stale requestedTab.
+    const shown = resolveNavigationTab(tabFromParam(param), navigation);
+    const href = tabHref(pathname, window.location.search, shown);
+    if (href === `${window.location.pathname}${window.location.search}`) return;
+    window.history.replaceState(null, "", href);
+  }, [
+    user,
+    requestedTab,
+    navigation,
+    pathname,
+    searchParams,
+    workspaceExpectation,
+    demoMode,
+  ]);
 
   if (!user && pendingAccount) {
     return (
@@ -1028,10 +1084,24 @@ function RestaurantOperationsAppInner({
     );
   }
 
+  if (!urlContextMatches) {
+    return (
+      <main className="grid min-h-dvh place-items-center p-4">
+        <p role="status">Loading verified location…</p>
+        <Button variant="secondary" onClick={() => router.refresh()}>
+          Reload location
+        </Button>
+      </main>
+    );
+  }
+
   const isManager = user.role !== "server";
   // What is actually on screen: the requested module unless this viewer
   // cannot open it (UX fallback only; the server enforces access).
-  const tab = resolveTab(requestedTab, { isManager, demoMode });
+  const tab = resolveNavigationTab(requestedTab, navigation);
+  const visiblePrimaryTabs = primaryTabs.filter(
+    ({ id }) => !switchingTo && navigation.tabs.includes(id),
+  );
   const isRecipeDetail = tab === "recipes" && recipeDetailActive;
   // Unread Tasks notifications for the tab badge. Demo mode derives it from
   // the in-memory state; real mode from the last fetch / the inbox itself.
@@ -1054,7 +1124,7 @@ function RestaurantOperationsAppInner({
     recipesTab,
     tipsTab,
     ...(!demoMode ? [payrollTab] : []),
-  ];
+  ].filter(({ id }) => !switchingTo && navigation.tabs.includes(id));
   // Mobile sheet ("More" tab) collects everything not in the 3-button fixed dock
   const moreTabs = [...secondaryTabs];
   // Narrowing doesn't cross into the nested function declarations below —
@@ -1923,7 +1993,7 @@ function RestaurantOperationsAppInner({
         >
           <div className="flex min-w-0 items-center gap-3 justify-self-start">
             <button
-              onClick={() => setTab("allocation")}
+              onClick={() => setTab(navigation.fallback)}
               className={cn(
                 "flex shrink-0 items-center",
                 isRecipeDetail ? "h-10 gap-2.5" : "min-h-11 gap-3",
@@ -2121,29 +2191,33 @@ function RestaurantOperationsAppInner({
             secondary (icon+label), Settings trigger far right. */}
         {!isRecipeDetail && (
           <div className="border-border/60 bg-card hidden items-center gap-4 border-t border-b px-8 lg:flex">
-            <div className="flex shrink-0 gap-1.5">
-              {primaryTabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  data-nav-tier="primary"
-                  onClick={() => setTab(id)}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={cn(
-                    "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
-                    tab === id
-                      ? "border-primary text-foreground"
-                      : "text-foreground/80 hover:text-foreground border-transparent",
-                  )}
-                >
-                  <Icon className="size-[18px]" aria-hidden="true" />
-                  {label}
-                  {id === "tasks" && tasksUnread > 0 ? (
-                    <TasksBadge count={tasksUnread} />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-            <span className="bg-border h-6.5 w-px" />
+            {visiblePrimaryTabs.length > 0 ? (
+              <div className="flex shrink-0 gap-1.5">
+                {visiblePrimaryTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    data-nav-tier="primary"
+                    onClick={() => setTab(id)}
+                    aria-current={tab === id ? "page" : undefined}
+                    className={cn(
+                      "flex h-14 items-center gap-2 border-b-2 px-3 text-sm font-semibold whitespace-nowrap",
+                      tab === id
+                        ? "border-primary text-foreground"
+                        : "text-foreground/80 hover:text-foreground border-transparent",
+                    )}
+                  >
+                    <Icon className="size-[18px]" aria-hidden="true" />
+                    {label}
+                    {id === "tasks" && tasksUnread > 0 ? (
+                      <TasksBadge count={tasksUnread} />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {visiblePrimaryTabs.length > 0 && secondaryTabs.length > 0 ? (
+              <span className="bg-border h-6.5 w-px" />
+            ) : null}
             <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
               {secondaryTabs.map(({ id, label, icon: Icon }) => (
                 <button
@@ -2185,7 +2259,7 @@ function RestaurantOperationsAppInner({
         >
           <div className="flex w-full items-center gap-3">
             <button
-              onClick={() => setTab("allocation")}
+              onClick={() => setTab(navigation.fallback)}
               className="flex min-h-11 items-center gap-2.5"
               aria-label="Home"
             >
@@ -2324,137 +2398,149 @@ function RestaurantOperationsAppInner({
           isRecipeDetail ? "p-0" : "px-4 py-7 sm:px-6 lg:px-8 lg:py-10",
         )}
       >
-        {tab === "schedule" ? (
-          <ScheduleWorkspace
-            user={user}
-            team={activeTeam}
-            shiftDefaults={shiftDefaults}
-            shifts={shifts}
-            weekDates={weekDates}
-            monthDates={monthDates}
-            timeZone={timeZone}
-            restaurantSlug={restaurantSlug}
-            demoMode={demoMode}
-            onAddShifts={addShifts}
-            onPublish={publishSchedule}
-            onUpdateShift={updateShift}
-            onDeleteShift={deleteShift}
-          />
-        ) : null}
-        {tab === "allocation" ? (
-          <AllocationWorkspace
-            user={user}
-            team={activeTeam}
-            boardLocked={tipsStatus === "finalized"}
-            onReopenTips={reopenTips}
-            tipsAuditLog={tipsAuditLog}
-            demoMode={demoMode}
-            restaurantSlug={restaurantSlug}
-            initialContext={initialAllocationContext}
-            onSessionInvalid={forceSignOut}
-          />
-        ) : null}
-        {tab === "tasks" ? (
-          <TasksModule
-            key={tasksNavKey}
-            restaurantSlug={restaurantSlug}
-            user={user}
-            expectedContext={workspaceExpectation}
-            onSessionInvalid={forceSignOut}
-            onUnreadChange={demoMode ? undefined : setRealTasksUnread}
-            demo={
-              demoMode
-                ? {
-                    state: demoTasksState,
-                    setState: setDemoTasksState,
-                    team: toTasksTeam(activeTeam, demoAccounts),
-                    timeZone,
-                    organizationId: DEMO_ORGANIZATION_ID,
-                    openingReminders: demoReminders,
-                  }
-                : null
-            }
-          />
-        ) : null}
-        {tab === "barInventory" && isManager ? (
-          <InventoryModule
-            restaurantSlug={restaurantSlug}
-            user={user}
-            timeZone={timeZone}
-            locationId={locationId}
-            onSessionInvalid={forceSignOut}
-            demo={
-              demoMode ? { state: demoCatalog, setState: setDemoCatalog } : null
-            }
-          />
-        ) : null}
-        {tab === "recipes" ? (
-          <RecipesModule
-            restaurantSlug={restaurantSlug}
-            demo={demoMode}
-            isManagement={currentUser.designation !== "staff"}
-            onSessionInvalid={forceSignOut}
-            onRecipeDetailActive={setRecipeDetailActive}
-          />
-        ) : null}
-        {tab === "tips" ? (
-          <TipWorkspace
-            user={user}
-            team={activeTeam}
-            status={tipsStatus}
-            intervals={tipIntervals}
-            onAddInterval={addTipInterval}
-            onFinalize={finalizeTips}
-            onReopen={reopenTips}
-            onPullClockedInTeam={pullClockedInTeam}
-            auditLog={tipsAuditLog}
-          />
-        ) : null}
-        {tab === "team" && isManager ? (
-          <TeamWorkspace
-            user={user}
-            team={team}
-            onChangeDesignation={changeDesignation}
-            onRenameMember={renameTeamMember}
-            onResetPasscode={resetMemberPasscode}
-            onDeactivate={deactivateTeamMember}
-            onReactivate={reactivateTeamMember}
-            onLoadAttendanceOptions={loadAttendanceLinkOptions}
-            onLinkAttendance={linkAttendanceIdentity}
-            onUnlinkAttendance={unlinkAttendanceIdentity}
-          />
-        ) : null}
-        {tab === "attendance" ? (
-          <AttendanceReport
-            restaurantSlug={restaurantSlug}
-            demoMode={demoMode}
-            timeZone={timeZone}
-            user={user}
-            demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
-          />
-        ) : null}
-        {tab === "payroll" && !demoMode ? (
-          <PayrollWorkspace
-            restaurantSlug={restaurantSlug}
-            timeZone={timeZone}
-            onGoToPayRates={() => setTab("settings")}
-          />
-        ) : null}
-        {tab === "settings" ? (
-          <SettingsPage
-            isManager={isManager}
-            demoMode={demoMode}
-            restaurantSlug={restaurantSlug}
-            timeZone={timeZone}
-            operatingHours={operatingHours}
-            shiftDefaults={shiftDefaults}
-            todayIndex={todayIndex}
-            onEditHours={openHours}
-            onChangePasscode={openChangePasscode}
-            onGoToTab={(nextTab) => setTab(nextTab)}
-            onSignOut={signOut}
-            onBack={() => setTab("allocation")}
-          />
+        {!switchingTo ? (
+          <>
+            {tab === "schedule" ? (
+              <ScheduleWorkspace
+                user={user}
+                team={activeTeam}
+                shiftDefaults={shiftDefaults}
+                shifts={shifts}
+                weekDates={weekDates}
+                monthDates={monthDates}
+                timeZone={timeZone}
+                restaurantSlug={restaurantSlug}
+                demoMode={demoMode}
+                onAddShifts={addShifts}
+                onPublish={publishSchedule}
+                onUpdateShift={updateShift}
+                onDeleteShift={deleteShift}
+              />
+            ) : null}
+            {tab === "allocation" ? (
+              <AllocationWorkspace
+                user={user}
+                team={activeTeam}
+                boardLocked={tipsStatus === "finalized"}
+                onReopenTips={reopenTips}
+                tipsAuditLog={tipsAuditLog}
+                demoMode={demoMode}
+                restaurantSlug={restaurantSlug}
+                initialContext={initialAllocationContext}
+                onSessionInvalid={forceSignOut}
+              />
+            ) : null}
+            {tab === "tasks" ? (
+              <TasksModule
+                key={tasksNavKey}
+                restaurantSlug={restaurantSlug}
+                user={user}
+                expectedContext={workspaceExpectation}
+                onSessionInvalid={forceSignOut}
+                onUnreadChange={demoMode ? undefined : setRealTasksUnread}
+                demo={
+                  demoMode
+                    ? {
+                        state: demoTasksState,
+                        setState: setDemoTasksState,
+                        team: toTasksTeam(activeTeam, demoAccounts),
+                        timeZone,
+                        organizationId: DEMO_ORGANIZATION_ID,
+                        openingReminders: demoReminders,
+                      }
+                    : null
+                }
+              />
+            ) : null}
+            {tab === "barInventory" && isManager ? (
+              <InventoryModule
+                restaurantSlug={restaurantSlug}
+                user={user}
+                timeZone={timeZone}
+                locationId={locationId}
+                onSessionInvalid={forceSignOut}
+                demo={
+                  demoMode
+                    ? { state: demoCatalog, setState: setDemoCatalog }
+                    : null
+                }
+              />
+            ) : null}
+            {tab === "recipes" ? (
+              <RecipesModule
+                restaurantSlug={restaurantSlug}
+                demo={demoMode}
+                isManagement={currentUser.designation !== "staff"}
+                onSessionInvalid={forceSignOut}
+                onRecipeDetailActive={setRecipeDetailActive}
+              />
+            ) : null}
+            {tab === "tips" ? (
+              <TipWorkspace
+                user={user}
+                team={activeTeam}
+                status={tipsStatus}
+                intervals={tipIntervals}
+                onAddInterval={addTipInterval}
+                onFinalize={finalizeTips}
+                onReopen={reopenTips}
+                onPullClockedInTeam={pullClockedInTeam}
+                auditLog={tipsAuditLog}
+              />
+            ) : null}
+            {tab === "team" && isManager ? (
+              <TeamWorkspace
+                user={user}
+                team={team}
+                onChangeDesignation={changeDesignation}
+                onRenameMember={renameTeamMember}
+                onResetPasscode={resetMemberPasscode}
+                onDeactivate={deactivateTeamMember}
+                onReactivate={reactivateTeamMember}
+                onLoadAttendanceOptions={loadAttendanceLinkOptions}
+                onLinkAttendance={linkAttendanceIdentity}
+                onUnlinkAttendance={unlinkAttendanceIdentity}
+              />
+            ) : null}
+            {tab === "attendance" ? (
+              <AttendanceReport
+                restaurantSlug={restaurantSlug}
+                demoMode={demoMode}
+                timeZone={timeZone}
+                user={user}
+                demoNeonUserId={demoAttendanceLinks[user.profileId] ?? null}
+              />
+            ) : null}
+            {tab === "payroll" && !demoMode ? (
+              <PayrollWorkspace
+                restaurantSlug={restaurantSlug}
+                timeZone={timeZone}
+                onGoToPayRates={() => setTab("settings")}
+              />
+            ) : null}
+            {tab === "settings" ? (
+              <SettingsPage
+                isManager={isManager}
+                demoMode={demoMode}
+                restaurantSlug={restaurantSlug}
+                timeZone={timeZone}
+                operatingHours={operatingHours}
+                shiftDefaults={shiftDefaults}
+                todayIndex={todayIndex}
+                onEditHours={openHours}
+                onChangePasscode={openChangePasscode}
+                onGoToTab={(nextTab) => setTab(nextTab)}
+                availableTabs={navigation.tabs}
+                configurationStatus={navigation.configurationStatus}
+                recoveryUser={user}
+                recoveryTeam={activeTeam}
+                onResetPasscode={resetMemberPasscode}
+                onRefreshModules={() => router.refresh()}
+                onSignOut={signOut}
+                onBack={() => setTab(navigation.fallback)}
+              />
+            ) : null}
+          </>
         ) : null}
       </main>
 
@@ -2463,38 +2549,36 @@ function RestaurantOperationsAppInner({
           Everything else (Schedule, Team, Attendance, Tip Split, Payroll,
           Settings) lives in the slide-up sheet below. */}
       <nav
-        className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
+        className="bg-background border-border fixed inset-x-0 bottom-0 z-40 grid gap-1.5 border-t px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden"
+        style={{
+          gridTemplateColumns: `repeat(${visiblePrimaryTabs.length + 1}, minmax(0, 1fr))`,
+        }}
         aria-label="Mobile navigation"
       >
+        {visiblePrimaryTabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => goToTab(id)}
+            aria-current={tab === id ? "page" : undefined}
+            className={cn(
+              "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
+              tab === id
+                ? "bg-primary text-primary-foreground"
+                : "border-border bg-surface text-foreground border",
+            )}
+          >
+            <Icon className="size-[22px]" aria-hidden="true" />
+            {id === "allocation" ? "Allocation" : label}
+            {id === "tasks" && tasksUnread > 0 ? (
+              <TasksBadge count={tasksUnread} dock />
+            ) : null}
+          </button>
+        ))}
         <button
-          onClick={() => goToTab("allocation")}
-          aria-current={tab === "allocation" ? "page" : undefined}
-          className={cn(
-            "flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "allocation"
-              ? "bg-primary text-primary-foreground"
-              : "border-border bg-surface text-foreground border",
-          )}
-        >
-          <Table2 className="size-[22px]" aria-hidden="true" />
-          Allocation
-        </button>
-        <button
-          onClick={() => goToTab("tasks")}
-          aria-current={tab === "tasks" ? "page" : undefined}
-          className={cn(
-            "relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold",
-            tab === "tasks"
-              ? "bg-primary text-primary-foreground"
-              : "border-border bg-surface text-foreground border",
-          )}
-        >
-          <ListChecks className="size-[22px]" aria-hidden="true" />
-          Tasks
-          {tasksUnread > 0 ? <TasksBadge count={tasksUnread} dock /> : null}
-        </button>
-        <button
-          onClick={() => setShowMobileSheet(true)}
+          onClick={(event) => {
+            event.currentTarget.focus();
+            setShowMobileSheet(true);
+          }}
           aria-expanded={showMobileSheet}
           className="border-border bg-surface text-muted-foreground flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border text-xs font-semibold"
         >
@@ -2504,52 +2588,25 @@ function RestaurantOperationsAppInner({
       </nav>
 
       {showMobileSheet ? (
-        <div
-          className="fixed inset-0 z-50 bg-black/55 lg:hidden"
-          role="presentation"
+        <Dialog
+          open
+          title="More"
+          onClose={() => setShowMobileSheet(false)}
+          className="fixed inset-x-0 bottom-0 m-0 mt-auto max-h-[85vh] w-full max-w-none rounded-t-3xl rounded-b-none pb-[max(1rem,env(safe-area-inset-bottom))] sm:w-full lg:hidden"
         >
-          <div
-            ref={mobileSheetRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="More"
-            className="bg-card border-border absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t px-4 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl"
-          >
-            <span className="bg-border mx-auto mb-3 block h-1 w-10 rounded-full" />
-            <div className="space-y-0.5">
-              {moreTabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => goToTab(id)}
-                  className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
-                >
-                  <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                    <Icon className="size-[19px]" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-foreground block text-[15px] font-semibold">
-                      {label}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    className="text-muted-foreground size-4 -rotate-90"
-                    aria-hidden="true"
-                  />
-                </button>
-              ))}
+          <div className="space-y-0.5">
+            {moreTabs.map(({ id, label, icon: Icon }) => (
               <button
-                onClick={openSettingsPage}
+                key={id}
+                onClick={() => goToTab(id)}
                 className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
               >
                 <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <Settings2 className="size-[19px]" aria-hidden="true" />
+                  <Icon className="size-[19px]" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="text-foreground block text-[15px] font-semibold">
-                    Settings
-                  </span>
-                  <span className="text-muted-foreground block text-xs">
-                    Preferences, passcode, and more
+                    {label}
                   </span>
                 </span>
                 <ChevronDown
@@ -2557,40 +2614,60 @@ function RestaurantOperationsAppInner({
                   aria-hidden="true"
                 />
               </button>
-              <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
-                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <Settings2 className="size-[19px]" aria-hidden="true" />
+            ))}
+            <button
+              onClick={openSettingsPage}
+              className="hover:bg-muted flex min-h-15 w-full items-center gap-3.5 rounded-2xl px-3 text-left"
+            >
+              <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                <Settings2 className="size-[19px]" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="text-foreground block text-[15px] font-semibold">
+                  Settings
                 </span>
-                <span className="flex-1 text-[15px] font-semibold">
-                  Appearance
+                <span className="text-muted-foreground block text-xs">
+                  Preferences, passcode, and more
                 </span>
-                <AppearanceSwitch />
-              </div>
-              <button
-                onClick={openChangePasscode}
-                className="hover:bg-muted border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
-              >
-                <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
-                  <KeyRound className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="text-foreground flex-1 text-[15px] font-semibold">
-                  Change passcode
-                </span>
-              </button>
-              <button
-                onClick={signOut}
-                className="hover:bg-destructive/10 border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
-              >
-                <span className="bg-destructive/15 text-destructive grid size-10 flex-none place-items-center rounded-xl">
-                  <LogOut className="size-[19px]" aria-hidden="true" />
-                </span>
-                <span className="text-destructive flex-1 text-[15px] font-semibold">
-                  Sign out
-                </span>
-              </button>
+              </span>
+              <ChevronDown
+                className="text-muted-foreground size-4 -rotate-90"
+                aria-hidden="true"
+              />
+            </button>
+            <div className="border-border/60 mt-1.5 flex items-center gap-3.5 border-t px-3 py-3.5">
+              <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                <Settings2 className="size-[19px]" aria-hidden="true" />
+              </span>
+              <span className="flex-1 text-[15px] font-semibold">
+                Appearance
+              </span>
+              <AppearanceSwitch />
             </div>
+            <button
+              onClick={openChangePasscode}
+              className="hover:bg-muted border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+            >
+              <span className="bg-primary/15 text-primary grid size-10 flex-none place-items-center rounded-xl">
+                <KeyRound className="size-[19px]" aria-hidden="true" />
+              </span>
+              <span className="text-foreground flex-1 text-[15px] font-semibold">
+                Change passcode
+              </span>
+            </button>
+            <button
+              onClick={signOut}
+              className="hover:bg-destructive/10 border-border/60 flex min-h-15 w-full items-center gap-3.5 rounded-2xl border-t px-3 text-left"
+            >
+              <span className="bg-destructive/15 text-destructive grid size-10 flex-none place-items-center rounded-xl">
+                <LogOut className="size-[19px]" aria-hidden="true" />
+              </span>
+              <span className="text-destructive flex-1 text-[15px] font-semibold">
+                Sign out
+              </span>
+            </button>
           </div>
-        </div>
+        </Dialog>
       ) : null}
 
       {showHours && isManager ? (
@@ -2611,7 +2688,9 @@ function RestaurantOperationsAppInner({
       ) : null}
 
       {/* Tasks V1.1 / T-5: the one Opening reminder popup, on any module. */}
-      {!demoMode || demoReminders ? (
+      {!switchingTo &&
+      navigation.tabs.includes("tasks") &&
+      (!demoMode || demoReminders) ? (
         <OpeningReminderPrompt
           key={`${currentUser.profileId}:${restaurantSlug}`}
           source={

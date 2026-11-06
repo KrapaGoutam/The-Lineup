@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-004.002 Location Module Settings — accepted implementation and delivery record
-Active Subfeature Status: V2-004.002 implementation accepted (#300); authoritative integration/CI outcome: PR #301
+Active Subfeature:        V2-004.003 Navigation Enforcement - issue #302 / PR #303
+Active Subfeature Status: Acceptance complete; final exact-head CI/HTTPS/merge record: PR #303
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.003 Navigation Enforcement (NOT STARTED; do not begin until .002 accepted; Q1–Q4 open)
+Next Subfeature:          V2-004.004 Backend Enforcement (NOT STARTED; NOT AUTHORIZED; Q1-Q4 open)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -64,6 +64,10 @@ Branch `feature/v2.0-003.002-org-location-switcher` from `development` `5333a526
 
 No migration. `/` now redirects a signed-in user with no access to the default tenant but exactly one verified eligible context to `/r/<verified-slug>?location=<verified-id>` (built from verified data, never input; ambiguous/invalid/stale/errored cases keep the existing presentation; `/r/*` never redirects). `getPrimaryLocation()` no longer falls back to the oldest location: verified `Referer` selection, else the caller's single eligible location in the organization, else `null`. Hosted DEV real-JWT 22/22 (incl. real Server Action no-`Referer` write-outcome checks), real browser Chromium + WebKit iPad 8/8. Open dependencies: V2-003.004 (replace the temporary `Referer` mechanism), V2-005 (location-scoped RLS and server-authoritative `locationId` binding — release blockers), V2-008 (backfill). See [003-single-context-auto-resolution/EVIDENCE.md](features/003-active-context/003-single-context-auto-resolution/EVIDENCE.md).
 
-## V2-004.002 — accepted implementation and delivery record
+## V2-004.002 - complete
 
-Issue [#300](https://github.com/KrapaGoutam/The-Lineup/issues/300): per-location module preferences editor and authorized single-module writer implemented, no migration, no seeding, no navigation/backend enforcement. DEV JWT and local authenticated Chromium/WebKit flows pass with verified synthetic cleanup; HTTPS Preview and source-head CI pass; final-head verification and integration outcome are recorded on [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301). [Evidence](features/004-location-module-configuration/002-location-module-settings/EVIDENCE.md). Q1–Q4 remain open; V2-004.003/.004, V2-005 and V2-008.004 deferred. Main/Production untouched.
+PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, development merge `6000e6cdffeb24496fce192020d3edce0f669341`. Its accepted schema/reader/writer/editor are the baseline for V2-004.003. No schema or backend enforcement change in .003. Q1-Q4 remain open. See the .003 evidence for current acceptance and delivery status.
+
+## V2-004.003 - acceptance complete (#302; delivery PR #303)
+
+Baseline PR #301 merged at `6000e6c`. Canonical server-verified navigation policy, role intersection, desktop/mobile/URL/context handling and Settings-only recovery implemented. Local application checks and authenticated DEV evidence in [003 evidence](features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md); Chromium/WebKit/Pixel 7 HTTPS acceptance passes. Final exact-head CI, full HTTPS repeat and regular merge are mandatory; authoritative delivery record is PR #303. No schema/backend module enforcement/backfill. Q1-Q4 open; V2-004.004 NOT STARTED. Main/Production untouched.

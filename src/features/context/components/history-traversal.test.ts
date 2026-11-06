@@ -32,12 +32,29 @@ describe("currentNavigationOrigin (V2-003.005)", () => {
     expect(currentNavigationOrigin()).toBe("history");
   });
 
-  it("the popstate explanation expires", async () => {
+  it("history provenance survives slow reconciliation and tab fallback, until context changes", async () => {
     stubNavigationType("navigate");
+    window.history.replaceState(null, "", "/r/test?location=a&tab=recipes");
     const { currentNavigationOrigin } = await load();
     window.dispatchEvent(new PopStateEvent("popstate"));
-    vi.spyOn(performance, "now").mockReturnValue(60_000 + 6_000);
+    vi.spyOn(performance, "now").mockReturnValue(120_000);
+    window.history.replaceState(null, "", "/r/test?location=a&tab=settings");
+    expect(currentNavigationOrigin()).toBe("history");
+    window.history.replaceState(null, "", "/r/test?location=b");
     expect(currentNavigationOrigin()).toBe("fresh");
+  });
+
+  it("a delayed full-document history load retains provenance for its destination", async () => {
+    window.history.replaceState(null, "", "/r/test?location=a&tab=settings");
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      {
+        type: "back_forward",
+        name: `${window.location.origin}/r/test?location=a&tab=recipes`,
+      },
+    ] as unknown as PerformanceEntryList);
+    vi.spyOn(performance, "now").mockReturnValue(120_000);
+    const { currentNavigationOrigin } = await load();
+    expect(currentNavigationOrigin()).toBe("history");
   });
 
   it("a document that was reloaded or restored by back/forward is classified only while it is young", async () => {

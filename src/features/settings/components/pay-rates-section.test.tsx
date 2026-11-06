@@ -20,6 +20,14 @@ afterEach(() => {
 });
 
 describe("PayRatesSection", () => {
+  it("handles a rejected transport with a retry instead of an unhandled promise", async () => {
+    mockedGetOptions.mockRejectedValueOnce(new Error("transport canceled"));
+    render(<PayRatesSection restaurantSlug="the-monks" />);
+    expect(
+      await screen.findByText("Pay rates could not be loaded. Try again."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
   it("fetches and renders the rate settings once loaded", async () => {
     mockedGetOptions.mockResolvedValue({
       ok: true,

@@ -41,7 +41,9 @@ export function PayRatesSection({
       }
       setOptions(result.data);
     }
-    load();
+    void load().catch(() => {
+      if (!cancelled) setError("Pay rates could not be loaded. Try again.");
+    });
     return () => {
       cancelled = true;
     };
