@@ -22,8 +22,8 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-004.003 Navigation Enforcement ? issue #302
-Active Subfeature Status: Implementation and DEV JWT complete; browser/Preview/exact-head CI gates in progress
+Active Subfeature:        V2-004.003 Navigation Enforcement - issue #302 / PR #303
+Active Subfeature Status: Acceptance complete; final exact-head CI/HTTPS/merge record: PR #303
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
 Next Subfeature:          V2-004.004 Backend Enforcement (NOT STARTED; NOT AUTHORIZED; Q1-Q4 open)
 Production Changes:       NONE; Production not contacted
@@ -68,6 +68,6 @@ No migration. `/` now redirects a signed-in user with no access to the default t
 
 PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, development merge `6000e6cdffeb24496fce192020d3edce0f669341`. Its accepted schema/reader/writer/editor are the baseline for V2-004.003. No schema or backend enforcement change in .003. Q1-Q4 remain open. See the .003 evidence for current acceptance and delivery status.
 
-## V2-004.003 - in progress (#302)
+## V2-004.003 - acceptance complete (#302; delivery PR #303)
 
-Baseline PR #301 merged at `6000e6c`. Canonical server-verified navigation policy, role intersection, desktop/mobile/URL/context handling and Settings-only recovery implemented. Local application checks and authenticated DEV evidence in [003 evidence](features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md); browser/HTTPS Preview/exact-head CI gates remain in progress. No schema/backend module enforcement/backfill. Q1-Q4 open; V2-004.004 NOT STARTED. Main/Production untouched.
+Baseline PR #301 merged at `6000e6c`. Canonical server-verified navigation policy, role intersection, desktop/mobile/URL/context handling and Settings-only recovery implemented. Local application checks and authenticated DEV evidence in [003 evidence](features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md); Chromium/WebKit/Pixel 7 HTTPS acceptance passes. Final exact-head CI, full HTTPS repeat and regular merge are mandatory; authoritative delivery record is PR #303. No schema/backend module enforcement/backfill. Q1-Q4 open; V2-004.004 NOT STARTED. Main/Production untouched.

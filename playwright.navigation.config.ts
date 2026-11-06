@@ -21,7 +21,27 @@ export default defineConfig({
     screenshot: "off",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "webkit-ipad", use: { ...devices["iPad (gen 7) landscape"] } },
+    {
+      name: "chromium",
+      grepInvert: /mobile account recovery/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "webkit-ipad",
+      grepInvert: /mobile account recovery/,
+      use: {
+        ...devices["iPad (gen 7) landscape"],
+        // Windows WebKit's bundled TLS store rejects the otherwise trusted
+        // Vercel chain. verifyDevApp first validates TLS with Node normally.
+        ignoreHTTPSErrors:
+          process.platform === "win32" &&
+          (process.env.PLAYWRIGHT_BASE_URL?.startsWith("https://") ?? false),
+      },
+    },
+    {
+      name: "chromium-mobile",
+      grep: /mobile account recovery/,
+      use: { ...devices["Pixel 7"] },
+    },
   ],
 });

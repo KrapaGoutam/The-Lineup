@@ -10,7 +10,7 @@ Target Branch: development
 | ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | V2-004.001 | #298  | **Complete** — local stack 73 migrations + pgTAP 2012, hosted DEV 72→73, real-JWT 10/10 — [STATUS](001-module-configuration-contract/STATUS.md) |
 | V2-004.002 | #300  | Complete - PR #301 merged, `6000e6c`                                                                                                            |
-| V2-004.003 | #302  | In progress - [status](003-navigation-enforcement/STATUS.md), browser/Preview/CI gates pending                                                  |
+| V2-004.003 | #302  | Acceptance complete - [status](003-navigation-enforcement/STATUS.md); final exact-head delivery record PR #303                                  |
 | V2-004.004 | —     | Not started                                                                                                                                     |
 
 ## V2-004.002 - complete

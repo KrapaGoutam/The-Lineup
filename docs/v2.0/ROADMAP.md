@@ -79,12 +79,12 @@ development → main (Production)
 ### V2-004 — Per-Location Module Configuration
 
 - **GitHub Issue:** [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)
-- **Status:** In progress (V2-004.001/.002 complete; V2-004.003 in progress (#302); V2-004.004 not started)
+- **Status:** In progress (V2-004.001/.002 complete; V2-004.003 acceptance complete (#302; delivery PR #303); V2-004.004 not started)
 - **Directory:** `docs/v2.0/features/004-location-module-configuration/`
 - **Subfeatures:**
   - [x] **V2-004.001**: Module Configuration Contract (Schema and types for per-location module flags and metadata — Issue [#298](https://github.com/KrapaGoutam/The-Lineup/issues/298); PR #299; validated on the official local stack and hosted DEV, real-JWT 10/10; see its [STATUS.md](features/004-location-module-configuration/001-module-configuration-contract/STATUS.md))
   - [x] **V2-004.002**: Location Module Settings (Management UI for enabling/disabling modules per location) - COMPLETE, PR #301 merge `6000e6c`
-  - [ ] **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module tabs and navigation entries) - IN PROGRESS, #302; [status](features/004-location-module-configuration/003-navigation-enforcement/STATUS.md)
+  - [ ] **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module tabs and navigation entries) - ACCEPTANCE COMPLETE, #302; delivery PR #303; [status](features/004-location-module-configuration/003-navigation-enforcement/STATUS.md)
   - [ ] **V2-004.004**: Backend Enforcement (Server Actions and RPCs fail-closed if module is disabled at target location)
 
 ### V2-005 — Existing Module Location Scoping

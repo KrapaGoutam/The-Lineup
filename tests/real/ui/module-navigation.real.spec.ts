@@ -17,6 +17,9 @@ test.afterAll(async () => {
 });
 
 async function login(page: Page, key = "owner") {
+  // The injected Vercel feedback toolbar is not product UI. Its cross-origin
+  // requests produce unrelated WebKit errors; keep acceptance on the app.
+  await page.route("https://vercel.live/**", (route) => route.abort());
   await page.goto(`${base}/r/${fixture.slug}`);
   await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill(fixture.users[key].pin);
@@ -220,7 +223,9 @@ test("DEV navigation, history, context isolation, recovery and save refresh", as
   await expect(
     page.getByRole("button", { name: "Manage locations and modules" }),
   ).toBeVisible();
-  const staffContext = await browser.newContext();
+  const staffContext = await browser.newContext({
+    ignoreHTTPSErrors: test.info().project.use.ignoreHTTPSErrors === true,
+  });
   try {
     const staff = await staffContext.newPage();
     observe(staff);
@@ -293,6 +298,87 @@ test("DEV navigation, history, context isolation, recovery and save refresh", as
     );
   });
   expect(unexpected, JSON.stringify(failedRequests)).toEqual([]);
+});
+
+test("mobile account recovery and location navigation", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  await login(page);
+  const dock = page.getByRole("navigation", { name: "Mobile navigation" });
+  await expect(dock.getByRole("button")).toHaveCount(3);
+  expect(
+    await dock
+      .getByRole("button")
+      .evaluateAll((buttons) =>
+        buttons.every(
+          (button) =>
+            button.getBoundingClientRect().height >= 44 &&
+            button.getBoundingClientRect().width >= 44,
+        ),
+      ),
+  ).toBe(true);
+  await dock.getByRole("button", { name: "More" }).click();
+  let more = page.getByRole("dialog", { name: "More", exact: true });
+  await expect(
+    more.getByRole("button", { name: "Bar Inventory", exact: true }),
+  ).toBeVisible();
+  await expect(
+    more.getByRole("button", { name: "Recipes", exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await settings(page);
+  await expect(page.locator("#settings-team")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Reset Navigation staff's passcode" })
+    .click();
+  await page
+    .getByLabel("Reason", { exact: true })
+    .fill("Synthetic mobile recovery acceptance");
+  await page
+    .getByRole("button", { name: "Reset passcode", exact: true })
+    .click();
+  await expect(page.getByText(/Write this down now/)).toBeVisible();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page
+    .locator("#settings-passcode")
+    .getByRole("button", { name: "Change your passcode", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Change your passcode" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await choose(page, "B");
+  await expect(dock.getByRole("button")).toHaveCount(2);
+  await dock.getByRole("button", { name: "More" }).click();
+  more = page.getByRole("dialog", { name: "More", exact: true });
+  await expect(
+    more.getByRole("button", { name: "Recipes", exact: true }),
+  ).toBeVisible();
+  await expect(
+    more.getByRole("button", { name: "Bar Inventory", exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.goto(
+    `${base}/r/${fixture.slug}?location=${fixture.locations.B}&tab=bar-inventory`,
+  );
+  await expect(page).not.toHaveURL(/tab=bar-inventory/);
+  await expect(
+    dock.getByRole("button", { name: "Tasks", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await choose(page, "Missing");
+  await expect(dock.getByRole("button")).toHaveCount(1);
+  await expect(
+    page.getByText("No operational modules are enabled for this location."),
+  ).toBeVisible();
+  await dock.getByRole("button", { name: "More" }).click();
+  more = page.getByRole("dialog", { name: "More", exact: true });
+  await expect(more.getByRole("button", { name: /^Settings/ })).toBeVisible();
+  await expect(
+    more.getByRole("button", { name: "Change passcode", exact: true }),
+  ).toBeVisible();
+  await more.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByLabel("Restaurant passcode")).toBeVisible();
+  expect(errors).toEqual([]);
 });
 
 for (const width of [1366, 1024, 768, 390]) {
