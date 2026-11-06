@@ -273,6 +273,33 @@ export async function createFixture(): Promise<Fixture> {
     "memberships",
   );
 
+  must(
+    await admin
+      .from("location_memberships")
+      .insert([
+        {
+          organization_id: org.id,
+          location_id: locA,
+          profile_id: server1.id,
+          active: true,
+        },
+        {
+          organization_id: org.id,
+          location_id: locA,
+          profile_id: server2.id,
+          active: true,
+        },
+        {
+          organization_id: org.id,
+          location_id: locA,
+          profile_id: server3.id,
+          active: true,
+        },
+      ])
+      .select("id"),
+    "location_memberships",
+  );
+
   const tablesFor = async (orgId: string, locationId: string) => {
     const area = must(
       await admin
@@ -359,6 +386,10 @@ export async function createFixture(): Promise<Fixture> {
     // clears only by cascade from the organization, and holds actor FKs to
     // memberships, so remove the organizations (cascade) before memberships.
     // Everything above that blocks an organization delete is already gone.
+    await admin
+      .from("location_memberships")
+      .delete()
+      .in("organization_id", orgIds);
     await admin.from("organizations").delete().in("id", orgIds);
     await admin.from("memberships").delete().in("organization_id", orgIds);
     await admin.from("locations").delete().in("organization_id", orgIds);

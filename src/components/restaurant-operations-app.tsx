@@ -2428,6 +2428,7 @@ function RestaurantOperationsAppInner({
                 restaurantSlug={restaurantSlug}
                 initialContext={initialAllocationContext}
                 onSessionInvalid={forceSignOut}
+                expectedContext={workspaceExpectation}
               />
             ) : null}
             {tab === "tasks" ? (
