@@ -43,6 +43,10 @@ vi.mock("@/features/context/data/context-cookie-reader", () => ({
 const getScheduleContext = vi.hoisted(() => vi.fn());
 const getTipsContext = vi.hoisted(() => vi.fn());
 const getAllocationContext = vi.hoisted(() => vi.fn());
+const readLocationModuleConfigs = vi.hoisted(() => vi.fn());
+vi.mock("@/features/modules/data/module-config-reader", () => ({
+  readLocationModuleConfigs,
+}));
 
 vi.mock("@/features/schedules/data/schedule-data", () => ({
   getScheduleContext,
@@ -69,6 +73,12 @@ describe("loadPageData (V2-003.001 entry boundary)", () => {
     state.createClientCalls = 0;
     state.cookieReads = 0;
     getScheduleContext.mockReset().mockResolvedValue({ marker: "schedule" });
+    readLocationModuleConfigs.mockReset().mockResolvedValue({
+      status: "ok",
+      locationId: IDS.locWebster,
+      lifecycle: "active",
+      configs: new Map(),
+    });
     getTipsContext.mockReset().mockResolvedValue({ marker: "tips" });
     getAllocationContext
       .mockReset()
@@ -100,6 +110,7 @@ describe("loadPageData (V2-003.001 entry boundary)", () => {
   });
 
   function expectNoOperationalLoad() {
+    expect(readLocationModuleConfigs).not.toHaveBeenCalled();
     expect(getScheduleContext).not.toHaveBeenCalled();
     expect(getTipsContext).not.toHaveBeenCalled();
     expect(getAllocationContext).not.toHaveBeenCalled();
@@ -110,6 +121,20 @@ describe("loadPageData (V2-003.001 entry boundary)", () => {
     const data = await loadPageData("the-monks");
 
     expect(data.contextStatus).toBe("resolved");
+    expect(readLocationModuleConfigs).toHaveBeenCalledWith(IDS.locWebster);
+    expect(data.moduleNavigation).toEqual({
+      identity: {
+        profileId: IDS.jerry,
+        organizationId: IDS.orgMonks,
+        locationId: IDS.locWebster,
+      },
+      result: {
+        status: "ok",
+        locationId: IDS.locWebster,
+        lifecycle: "active",
+        configs: [],
+      },
+    });
     const scope = {
       organizationId: IDS.orgMonks,
       locationId: IDS.locWebster,
@@ -219,6 +244,20 @@ describe("loadPageData (V2-003.001 entry boundary)", () => {
     expect(data.contextStatus).toBe("error");
     expect(data.contextReason).toBe("locations_query_failed");
     expectNoOperationalLoad();
+  });
+
+  it("NAV: a failed configuration read remains distinct from an empty successful snapshot", async () => {
+    useUser(db, IDS.jerry);
+    readLocationModuleConfigs.mockResolvedValue({
+      status: "unavailable",
+      reason: "database_error",
+    });
+    const data = await loadPageData("the-monks");
+    expect(data.contextStatus).toBe("resolved");
+    expect(data.moduleNavigation?.result).toEqual({
+      status: "unavailable",
+      reason: "database_error",
+    });
   });
 
   it("CTX-22: the legacy `/r/<slug>` route for an organization the user cannot access is safe (no data, signed-out presentation)", async () => {

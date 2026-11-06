@@ -3,7 +3,7 @@
 GitHub Issue: [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `IN PROGRESS` (V2-004.001 complete; V2-004.002 implementation accepted (delivery PR #301); V2-004.003/.004 not started)
+Status: `IN PROGRESS` (V2-004.001/.002 complete; V2-004.003 in progress (#302); V2-004.004 not started)
 
 ---
 
@@ -17,9 +17,9 @@ Feature V2-004 establishes per-location module configuration. It allows restaura
 
 - **V2-004.001**: Module Configuration Contract (Relational schema `location_module_configs` and types) — Issue [#298](https://github.com/KrapaGoutam/The-Lineup/issues/298); **complete** (validated on the official local stack and hosted DEV, merged via PR #299). See [001-module-configuration-contract/](001-module-configuration-contract/STATUS.md).
 - **V2-004.002**: Location Module Settings (Management UI for toggling modules by branch).
-- **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module navigation items).
+- **V2-004.003**: Navigation Enforcement — issue #302, [status and delivery gates](003-navigation-enforcement/STATUS.md).
 - **V2-004.004**: Backend Enforcement (Server Actions and RPCs fail-closed if module is disabled).
 
-## V2-004.002 — accepted implementation and delivery record
+## V2-004.002 - complete
 
-Location Module Settings is implemented on `feature/v2.0-004.002-location-module-settings` ([#300](https://github.com/KrapaGoutam/The-Lineup/issues/300)). Local application and DEV JWT/browser evidence is recorded in [002 evidence](002-location-module-settings/EVIDENCE.md). Prior-head HTTPS Preview and exact-head CI pass. Final delivery/merge evidence is recorded on [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301); the final head must independently pass those gates. No migration or operational enforcement; V2-004.003/.004 remain not started, Q1–Q4 remain open. V2-004 overall remains IN PROGRESS.
+PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, development merge `6000e6cdffeb24496fce192020d3edce0f669341`. Its accepted schema/reader/writer/editor are the baseline for V2-004.003. No schema or backend enforcement change in .003. Q1-Q4 remain open. See the .003 evidence for current acceptance and delivery status.

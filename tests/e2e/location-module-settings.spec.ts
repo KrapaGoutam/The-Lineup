@@ -29,7 +29,7 @@ for (const width of [1366, 1024, 768, 390]) {
       section.getByText("Not configured", { exact: true }),
     ).toHaveCount(9);
     await expect(
-      section.getByText(/Application-wide enforcement/),
+      section.getByText(/Backend operation enforcement is not yet active/),
     ).toBeVisible();
     await section
       .getByRole("button", { name: "Enable Tasks", exact: true })

@@ -40,6 +40,7 @@ export async function RestaurantEntry({
   ) {
     return (
       <ContextUnavailableNotice
+        restaurantSlug={restaurantSlug}
         status={data.contextStatus}
         availableContexts={data.availableContexts}
         availableContextsFailed={data.availableContextsFailed}
@@ -52,6 +53,7 @@ export async function RestaurantEntry({
       demoMode={data.demoMode}
       restaurantSlug={restaurantSlug}
       initialUser={data.initialUser}
+      moduleNavigation={data.moduleNavigation}
       initialScheduleContext={data.scheduleContext}
       initialTipsContext={data.tipsContext}
       initialAllocationContext={data.allocationContext}

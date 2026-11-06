@@ -49,7 +49,9 @@ describe("location module editor", () => {
     expect(
       screen.queryByRole("button", { name: "Disable Settings" }),
     ).toBeNull();
-    expect(screen.getByText(/Application-wide enforcement/)).toBeVisible();
+    expect(
+      screen.getByText(/Backend operation enforcement is not yet active/),
+    ).toBeVisible();
   });
   it("explicit choices survive reopening and remain isolated by location and key", async () => {
     const user = userEvent.setup();

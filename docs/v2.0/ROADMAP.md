@@ -79,12 +79,12 @@ development → main (Production)
 ### V2-004 — Per-Location Module Configuration
 
 - **GitHub Issue:** [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)
-- **Status:** In progress (V2-004.001 complete; V2-004.002 implementation accepted (delivery PR #301); V2-004.003/.004 not started)
+- **Status:** In progress (V2-004.001/.002 complete; V2-004.003 in progress (#302); V2-004.004 not started)
 - **Directory:** `docs/v2.0/features/004-location-module-configuration/`
 - **Subfeatures:**
   - [x] **V2-004.001**: Module Configuration Contract (Schema and types for per-location module flags and metadata — Issue [#298](https://github.com/KrapaGoutam/The-Lineup/issues/298); PR #299; validated on the official local stack and hosted DEV, real-JWT 10/10; see its [STATUS.md](features/004-location-module-configuration/001-module-configuration-contract/STATUS.md))
-  - [ ] **V2-004.002**: Location Module Settings (Management UI for enabling/disabling modules per location)
-  - [ ] **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module tabs and navigation entries)
+  - [x] **V2-004.002**: Location Module Settings (Management UI for enabling/disabling modules per location) - COMPLETE, PR #301 merge `6000e6c`
+  - [ ] **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module tabs and navigation entries) - IN PROGRESS, #302; [status](features/004-location-module-configuration/003-navigation-enforcement/STATUS.md)
   - [ ] **V2-004.004**: Backend Enforcement (Server Actions and RPCs fail-closed if module is disabled at target location)
 
 ### V2-005 — Existing Module Location Scoping
@@ -158,6 +158,6 @@ development → main (Production)
   - [ ] **V2-009.006**: Production Readiness Audit (Database index usage, connection pool limits, and performance under load)
   - [ ] **V2-009.007**: Owner-Approved Release (Formal owner acceptance sign-off, promotion from `development` to `main`)
 
-## V2-004.002 — accepted implementation and delivery record
+## V2-004.002 - complete
 
-Issue [#300](https://github.com/KrapaGoutam/The-Lineup/issues/300): per-location module preferences editor and authorized single-module writer implemented, no migration, no seeding, no navigation/backend enforcement. DEV JWT and local authenticated Chromium/WebKit flows pass with verified synthetic cleanup; HTTPS Preview and source-head CI pass; final-head verification and integration outcome are recorded on [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301). [Evidence](features/004-location-module-configuration/002-location-module-settings/EVIDENCE.md). Q1–Q4 remain open; V2-004.003/.004, V2-005 and V2-008.004 deferred. Main/Production untouched.
+PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, development merge `6000e6cdffeb24496fce192020d3edce0f669341`. Its accepted schema/reader/writer/editor are the baseline for V2-004.003. No schema or backend enforcement change in .003. Q1-Q4 remain open. See the .003 evidence for current acceptance and delivery status.

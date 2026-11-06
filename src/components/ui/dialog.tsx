@@ -34,12 +34,19 @@ export function Dialog({
   className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
+    if (
+      open &&
+      document.activeElement instanceof HTMLElement &&
+      !dialog.contains(document.activeElement)
+    )
+      triggerRef.current = document.activeElement;
     if (open && !dialog.open) {
       if (typeof dialog.showModal === "function") {
         dialog.showModal();
@@ -54,6 +61,15 @@ export function Dialog({
         dialog.removeAttribute("open");
       }
     }
+    // Conditional callers remove an open dialog instead of rendering open=false.
+    // Removal alone does not consistently restore native focus (mobile More).
+    // Do not call close() here: Strict Mode's simulated effect cleanup would
+    // queue a close event that dismisses the newly reopened dialog.
+    if (open)
+      return () => {
+        if (!dialog.isConnected && triggerRef.current?.isConnected)
+          triggerRef.current.focus();
+      };
   }, [open]);
 
   return (
