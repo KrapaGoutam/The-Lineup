@@ -66,7 +66,7 @@ This matrix formalizes the verification suite for Table Allocation / Rotation lo
 | **AL-35** | Demo remains independent from hosted DB               | Unit               | Demo mode uses synthetic in-memory state; no network or DB calls made.             |
 | **AL-36** | Existing module navigation filtering remains intact   | Unit / Integration | Module navigation policy respects location module enablement.                      |
 
-## Executed assertion reconciliation ? independent review
+## Executed assertion reconciliation - independent review
 
 Scenario identifiers describe requirements, not test counts. The original JWT file did not execute under npm test, inserted a nonexistent organization_id column into location_memberships, and used nonexistent board_assign_table RPCs for several denials. Those denials are replaced with actual board_assign calls; the harness now rejects missing-RPC errors as authorization evidence.
 
@@ -79,11 +79,11 @@ Scenario identifiers describe requirements, not test counts. The original JWT fi
 | AL-05/29/31/34/36                                        | New local authenticated Playwright suite exercises independent boards, switch/reload, persisted assign/undo/redo, foreign deep link and disabled module across configured devices; final execution totals are in EVIDENCE.md.                                                           |
 | AL-30/32/33/35                                           | Existing history/stale-context guard, cross-view read-model and demo regression suites; authenticated Back is checked for non-disclosure, but Forward and concurrent in-flight cross-tab races are not exhaustively re-driven here.                                                     |
 
-Audit A?E additionally covers sole-active-location compatibility; two active locations with no assignments; partial rollout; inactive assignment in a sole-active-location org; and public NULL-location refusal. pgTAP expands from 53 to 65 assertions. Both distinct 0063\_\* filenames execute together; no renumbering is required by the runner.
+Audit A-E additionally covers sole-active-location compatibility; two active locations with no assignments; partial rollout; inactive assignment in a sole-active-location org; and public NULL-location refusal. pgTAP expands from 53 to 65 assertions. Both distinct 0063\_\* filenames execute together; no renumbering is required by the runner.
 
-Final hierarchy qualification: three additional actual JWT tests prove Overall Owner/Manager/Assistant Manager can read without tenant membership but mutation fails with 23503 due to actor membership FKs. This is a BLOCKER, not a successful mutation claim. Two further JWT cases reject unassigned Organization Owner/GM; organization admin is not operational location authority under the canonical resolver. Final local JWT suite has 23 tests.
+Previous independent review (superseded by the repair below): three additional actual JWT tests proved Overall Owner/Manager/Assistant Manager can read without tenant membership but mutation fails with 23503 due to actor membership FKs. This is a BLOCKER, not a successful mutation claim. Two further JWT cases reject unassigned Organization Owner/GM; organization admin is not operational location authority under the canonical resolver. Final local JWT suite has 23 tests.
 
-## Overall repair acceptance ? current results supersede the earlier limitation
+## Overall repair acceptance - current results supersede the earlier limitation
 
 Actual real-JWT suites: table-allocation-location-scoping (23) and
 allocation-overall-actor (22), 45 cases total, no skipped acceptance cases.

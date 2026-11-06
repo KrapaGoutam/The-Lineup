@@ -60,3 +60,8 @@ The no-membership actor repair does not enroll Overall people as tenant workforc
 participants. Column targets still retain real tenant membership FKs; no shadow
 memberships or alternative actor IDs are accepted. All tested Overall writes target
 eligible tenant employees. No board operation is promoted to a higher role tier.
+
+Authenticated callers with a stale/revoked location receive the existing
+`contextStale` recovery response; only unauthenticated identity is treated as an
+invalid session. With #305 installed, the private catalog-resolved module assertion
+runs before both floor-session lookup/creation and the roster query.

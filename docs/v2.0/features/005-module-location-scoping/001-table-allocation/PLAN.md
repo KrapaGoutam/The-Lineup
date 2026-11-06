@@ -132,3 +132,7 @@ combined clean replays, catalog/ACL/RI pgTAP, real JWT successful mutations for 
 three roles, unchanged-state denials OA-01–OA-22, concurrent event creation,
 SEC-01/02/03/AUTH-01 regressions, and authenticated three-device browser acceptance.
 `begin_board_write` is not replaced, preserving #305's staged module assertion.
+
+Repair implementation checkpoint: `ee1d1971a54e8eab8d06ab78699ac5b75ed7e377`.
+The optional #305 assertion also runs before floor-session lookup/creation, and
+authority facts are read with their decision in one statement snapshot.

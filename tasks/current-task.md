@@ -15,10 +15,10 @@ hosted migration, hosted configuration change, Production access or Tasks work.
 - [x] Verify authenticated Chromium, WebKit iPad and mobile browser flows
 - [x] Run full format/lint/typecheck/path/unit/build gates and diff review
 - [x] Verify fixture cleanup; update all five feature documents
-- [ ] Commit explicit paths, push PR #306 only and verify exact-head CI
-- [ ] Publish final GO/BLOCKED evidence to PR #306 and issue #307
+- [x] Commit explicit paths, push PR #306 only and verify exact-head CI
+- [x] Publish final GO/BLOCKED evidence to PR #306 and issue #307
 
-## In flight
+## Closeout
 
 Repair implemented. Standalone JWT 45/45; pgTAP 64 files / 2,104 assertions;
 unit 3,176 passed / 7 existing skipped; authenticated browser 15/15 across all
@@ -29,7 +29,12 @@ Combined #305/#306 replay (65 files / 2,163 assertions), JWT 45/45, module JWT
 authenticated combined browser 15/15 and independent zero-residue cleanup verified. Demo initial
 156/159; all three failures pass serial retests (tablet 2/2, mobile 1/1).
 Verified local stack: restaurant-roster API 54321 / DB 54322. JobQuest2.0 uses
-55321/55322 and is outside scope. Initial local database contains no organizations
-or Auth users, and currently has both staged PR migrations from the prior audit.
+55321/55322 and is outside scope. The final local database contains the combined PR migrations plus repair, staged
+enforcement and zero fixture organizations/profiles/Auth users/module rows/events.
 
-Local acceptance complete. Delivery to existing PR #306 and exact-head CI are next.
+Repair implementation `ee1d1971a54e8eab8d06ab78699ac5b75ed7e377` pushed to
+PR #306. Its exact-head application, browser, migration-policy and Vercel checks
+PASS; deploy-migrations SKIPPED. GO-for-owner-review evidence is published on
+PR #306 and issue #307, both OPEN. Documentation-only final delivery receipts
+are reconciled externally on that same PR after this snapshot. No further feature
+work remains; do not begin Tasks or merge/deploy/activate without owner approval.

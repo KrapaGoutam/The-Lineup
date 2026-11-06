@@ -1,6 +1,6 @@
 # The Lineup V2.0 — Current Operational State
 
-Latest checkpoint: V2-005.001 independent review, PR #306 / issue #307, BLOCKED on Overall-only mutation identity/audit-FK incompatibility. Security fixes and local standalone/combined evidence: [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 implemented in open PR #305; activation blocked. No merges, hosted activation, main or Production changes. V2-005.002 through .008 not started. Earlier checkpoints below retain their historical validation scope.
+Latest checkpoint: V2-005.001 Overall actor repair, PR #306 / issue #307, TECHNICALLY READY FOR OWNER REVIEW (OPEN / NOT MERGED). Actual membership-free Overall mutations, real actor attribution, preserved historical data and standalone/combined acceptance pass. Repair-head CI is green; final documentation-delivery receipts are on the PR. [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 remains implemented in open PR #305, staged / activation blocked; R1, hosted DEV deployment and owner merge order remain pending. No main or Production changes/contact. V2-005.002 through .008 NOT STARTED. Earlier checkpoints below retain their historical validation scope.
 
 ```text
 Program:                  The Lineup V2.0

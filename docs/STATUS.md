@@ -2,7 +2,7 @@
 
 ## The Lineup V2.0
 
-V2-005.001 independent review (PR #306 / issue #307): SQL location leaks corrected; standalone/combined local verification recorded in [evidence](v2.0/features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). Overall-only mutation identity/audit-FK incompatibility remains a completion BLOCKER. Neither PR #305/#306 merged or activated; V2-005.002 through .008 not started. Main/Production untouched.
+V2-005.001 Overall actor repair (PR #306 / issue #307): TECHNICALLY READY FOR OWNER REVIEW, OPEN / NOT MERGED. Overall-only authorized mutations and real actor history now work without tenant membership; scoped security regressions, standalone/combined replay, actual JWT and three-device browser acceptance pass. Repair-head CI is green; final documentation-delivery receipts live on the PR. [Evidence](v2.0/features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). PR #305 remains staged / activation blocked; hosted DEV migration/deployment and owner merge order remain pending. V2-005.002 through .008 NOT STARTED. Main/Production untouched.
 
 V2-004.002 is complete (PR #301, merge `6000e6c`). V2-004.003 Navigation Enforcement acceptance is complete; delivery is PR #303 ([#302](https://github.com/KrapaGoutam/The-Lineup/issues/302)); [evidence](v2.0/features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md). No migration/backend module enforcement; main and Production untouched. V2-004 remains open; V2-004.004 is implemented in open PR #305, activation BLOCKED.
 
