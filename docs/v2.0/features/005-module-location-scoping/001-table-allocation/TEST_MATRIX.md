@@ -82,3 +82,48 @@ Scenario identifiers describe requirements, not test counts. The original JWT fi
 Audit A?E additionally covers sole-active-location compatibility; two active locations with no assignments; partial rollout; inactive assignment in a sole-active-location org; and public NULL-location refusal. pgTAP expands from 53 to 65 assertions. Both distinct 0063\_\* filenames execute together; no renumbering is required by the runner.
 
 Final hierarchy qualification: three additional actual JWT tests prove Overall Owner/Manager/Assistant Manager can read without tenant membership but mutation fails with 23503 due to actor membership FKs. This is a BLOCKER, not a successful mutation claim. Two further JWT cases reject unassigned Organization Owner/GM; organization admin is not operational location authority under the canonical resolver. Final local JWT suite has 23 tests.
+
+## Overall repair acceptance ? current results supersede the earlier limitation
+
+Actual real-JWT suites: table-allocation-location-scoping (23) and
+allocation-overall-actor (22), 45 cases total, no skipped acceptance cases.
+
+| ID    | Actual assertion                                                                                                                       | Result |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| OA-01 | Membership-free Overall Owner opens floor, assigns and ends table                                                                      | PASS   |
+| OA-02 | Membership-free Overall Manager opens floor, assigns and ends table                                                                    | PASS   |
+| OA-03 | Membership-free Overall Assistant Manager does permitted floor operations                                                              | PASS   |
+| OA-04 | Event actor/profile, organization, concrete location, operation and timestamp; empty membership roles and exact effective Overall tier | PASS   |
+| OA-05 | Different Overall actor undoes/redoes; immutable original event and reversal linkage; renewed assignment attributed to redo actor      | PASS   |
+| OA-06 | Every Overall tier mutates second organization without any tenant memberships                                                          | PASS   |
+| OA-07 | Existing organization-member manager mutation and physical claim persist                                                               | PASS   |
+| OA-08 | Assigned server mutation and physical claim persist                                                                                    | PASS   |
+| OA-09 | Overall Assistant Manager denied actual Manager-only assignment management; assignment rows unchanged                                  | PASS   |
+| OA-10 | Overall Manager denied Owner-only provision_organization                                                                               | PASS   |
+| OA-11 | Ordinary server cannot insert trusted Overall role                                                                                     | PASS   |
+| OA-12 | A-only staff denied B; no graph changes                                                                                                | PASS   |
+| OA-13 | Foreign member without Overall denied A                                                                                                | PASS   |
+| OA-14 | Inactive tenant membership denied despite remaining location assignment                                                                | PASS   |
+| OA-15 | Inactive location denied to Overall Owner                                                                                              | PASS   |
+| OA-16 | Archived location denied to Overall Owner                                                                                              | PASS   |
+| OA-17 | Raw board-event insertion with forged actor denied                                                                                     | PASS   |
+| OA-18 | Mismatched organization/location and NULL public location denied; action tests reject forged/stale expectations                        | PASS   |
+| OA-19 | Wrong-organization session and foreign-location round denied                                                                           | PASS   |
+| OA-20 | Every denial snapshots all six persisted graph tables; tier denials additionally check relevant identity/assignment rows               | PASS   |
+| OA-21 | Existing Audit A/B/D tests preserve one-active-location/zero-assignment compatibility and deny multi-location/revoked fallback         | PASS   |
+| OA-22 | Overall role revocation denies the same unrefreshed Auth JWT immediately                                                               | PASS   |
+
+Additional tests: serialized simultaneous events from three Overall actors;
+transactional failure creates no event; legacy actor names remain available after
+location assignment removal; validated actor FKs and preserved participant/tenant
+constraints (27 new pgTAP assertions); immutable actor-name presenter fallback.
+All current board actions have existing open-editing capability. OA-09/10 test the
+accepted higher-tier assignment-management and tenant-provisioning boundaries,
+not invented board restrictions.
+
+Browser acceptance now adds each Overall role to the existing two scoped scenarios:
+5 scenarios x desktop Chromium / WebKit iPad / mobile = 15. Each Overall scenario
+writes through the actual Server Action, confirms the persisted actor, undoes and
+redoes, and checks the rendered actor name before and after reload. Stale-context,
+expired historical session, unassigned deep-link and disabled-module regressions
+retain their existing action/browser coverage. Totals and limitations: EVIDENCE.md.

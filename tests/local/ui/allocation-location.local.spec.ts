@@ -215,3 +215,81 @@ test("unassigned deep link and disabled allocation never mount a foreign board",
   ).toHaveCount(0);
   await expect(page.locator("input[data-cell]")).toHaveCount(0);
 });
+
+for (const role of ["owner", "manager", "assistant_manager"] as const) {
+  test(`Overall-only ${role} writes through Server Actions, renders actor history and uses undo/redo`, async ({
+    page,
+    context,
+  }) => {
+    const actor = fx.outsider;
+    expect(
+      (
+        await fx.admin
+          .from("memberships")
+          .select("id")
+          .eq("organization_id", fx.orgId)
+          .eq("profile_id", actor.id)
+      ).data,
+    ).toEqual([]);
+    expect(
+      (
+        await fx.admin
+          .from("overall_roles")
+          .insert({ profile_id: actor.id, role })
+      ).error,
+    ).toBeNull();
+    try {
+      await a.reset();
+      await a.addServer(fx.owner, fx.server1);
+      await authenticate(context, actor, fx.locA);
+      await page.goto(`${base}/r/${slug}?location=${fx.locA}`);
+      await allocation(page);
+      const cell = page
+        .locator(`input[data-cell^="${fx.server1.name}|"]`)
+        .first();
+      await expect(cell).toBeVisible();
+      await cell.fill("12");
+      await cell.press("Enter");
+      await expect
+        .poll(async () => (await a.claims()).has("12"), { timeout: 20000 })
+        .toBe(true);
+      const event = await fx.admin
+        .from("board_events")
+        .select("actor_profile_id, payload")
+        .eq("service_session_id", a.sid)
+        .order("id", { ascending: false })
+        .limit(1)
+        .single();
+      expect(event.error).toBeNull();
+      expect(event.data?.actor_profile_id).toBe(actor.id);
+      expect(event.data?.payload.actor.overall_role).toBe(role);
+      await page.getByRole("button", { name: "Undo", exact: true }).click();
+      await expect
+        .poll(async () => (await a.claims()).has("12"), { timeout: 20000 })
+        .toBe(false);
+      await page.getByRole("button", { name: "Redo", exact: true }).click();
+      await expect
+        .poll(async () => (await a.claims()).has("12"), { timeout: 20000 })
+        .toBe(true);
+      await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
+      await expect(
+        page.getByRole("list", { name: "Recent board activity" }),
+      ).toContainText(actor.name);
+      await page.reload();
+      await allocation(page);
+      await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
+      await expect(
+        page.getByRole("list", { name: "Recent board activity" }),
+      ).toContainText(actor.name);
+    } finally {
+      expect(
+        (
+          await fx.admin
+            .from("overall_roles")
+            .delete()
+            .eq("profile_id", actor.id)
+        ).error,
+      ).toBeNull();
+    }
+  });
+}

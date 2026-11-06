@@ -10,12 +10,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const log = vi.hoisted(() => ({
   tables: [] as string[],
+  rpcs: [] as Array<{ name: string; args: unknown }>,
   eqs: [] as Array<{ table: string; column: string; value: unknown }>,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: null } }) },
+    rpc: async (name: string, args: unknown) => {
+      log.rpcs.push({ name, args });
+      return { data: [], error: null };
+    },
     from: (table: string) => {
       log.tables.push(table);
       const builder: Record<string, unknown> = {};
@@ -70,6 +75,7 @@ const SCOPE = {
 describe("initial loaders honour the verified scope (V2-003.001)", () => {
   beforeEach(() => {
     log.tables.length = 0;
+    log.rpcs.length = 0;
     log.eqs.length = 0;
   });
 
@@ -95,6 +101,12 @@ describe("initial loaders honour the verified scope (V2-003.001)", () => {
 
   it("CTX-19: allocation uses the verified location + time zone and never queries a primary location", async () => {
     const ctx = await getAllocationContext("org-monks", undefined, SCOPE);
+    expect(log.rpcs).toEqual([
+      {
+        name: "board_location_roster",
+        args: { p_organization_id: "org-monks", p_location_id: "loc-webster" },
+      },
+    ]);
     expect(ctx?.locationId).toBe("loc-webster");
     expect(log.tables).not.toContain("locations");
     expect(

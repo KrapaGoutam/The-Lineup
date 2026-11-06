@@ -338,7 +338,7 @@ describe("allocation location authorization through real JWTs", () => {
     }
   });
   it.each(["owner", "manager", "assistant_manager"])(
-    "known contract limit: Overall %s reads A but actor FK prevents a no-membership write",
+    "Overall %s reads and writes A with real actor attribution",
     async (role) => {
       expect(
         (
@@ -354,11 +354,18 @@ describe("allocation location authorization through real JWTs", () => {
           .eq("id", a.sid);
         expect(read.error).toBeNull();
         expect(read.data).toEqual([{ id: a.sid }]);
-        await deniedUnchanged(async () => {
-          const result = await add(fx.outsider, fx.locA, fx.server1.id);
-          expect(result.error?.code).toBe("23503");
-          return result;
-        });
+        const result = await add(fx.outsider, fx.locA, fx.server1.id);
+        expect(result.error).toBeNull();
+        const event = await fx.admin
+          .from("board_events")
+          .select("actor_profile_id, payload")
+          .eq("service_session_id", a.sid)
+          .order("id", { ascending: false })
+          .limit(1)
+          .single();
+        expect(event.error).toBeNull();
+        expect(event.data?.actor_profile_id).toBe(fx.outsider.id);
+        expect(event.data?.payload.actor.overall_role).toBe(role);
       } finally {
         expect(
           (

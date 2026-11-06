@@ -1,34 +1,35 @@
-# V2-005.001 - Independent security closeout / PR #306
+﻿# V2-005.001 — Overall actor contract repair / PR #306
 
-Owner-authorized review, 2026-11-06. Existing feature worktree/branch only.
-Starting HEAD b2a6ddbd798b5e19cd49c30894d71c2441eecb48. Parent changes preserved.
-No merge, hosted activation/migration, Production or Tasks work authorized.
+Owner-authorized targeted repair, 2026-11-06. Starting SHA
+`292e00186963626359687460e0710ca4fb9db439`. Existing feature worktree only;
+parent checkout changes preserved. PR #305 stays staged and untouched. No merge,
+hosted migration, hosted configuration change, Production access or Tasks work.
 
-- [x] Inspect clean feature worktree, refresh refs, verify PRs/baseline SHAs
-- [x] Confirm allocation-data.ts unchanged; canonical fallback safe; correct claims
-- [x] Audit/fix assignment-free fallback, manager policy OR bypass and scoped-admin exemption
-- [x] Audit actions, caller/context/session binding and NULL public operation denial
-- [x] Execute actual standalone JWT 23/23 with persisted-state checks and cleanup
-- [x] Replay standalone migrations; full pgTAP 63 files / 2,077 assertions
-- [x] Validate combined #305/#306 replay; pgTAP 64 / 2,136, JWT 23/23 + module 15/15
-- [x] Combined focused action/module units 183/183; full units 3,163 passed, 7 skipped
-- [x] Authenticated local browser 6/6; demo 155/159 then four serial retests pass
-- [x] Reconcile AL-01 through AL-36 evidence; create issue #307; preserve scope
-- [x] Finish local quality/build and security/accessibility/scope diff review
-- [x] Prepare exact-path corrective delivery and readable PR closeout content
-- [ ] Owner resolves Overall-only write contract and approves PR #305/#306 integration order
+- [x] Verify GitHub PRs, baseline refs, clean worktree and local Docker targets
+- [x] Reproduce exact 23503 chain and inspect all actor/history consumers
+- [x] Document bounded identity, authorization, audit and regression design
+- [x] Implement Allocation actor hydration and forward-only audit repair
+- [x] Verify real JWT OA-01–OA-22 and previous security corrections
+- [x] Replay standalone migrations and run full pgTAP
+- [x] Compose disposable #305/#306 integration and verify staged enforcement
+- [x] Verify authenticated Chromium, WebKit iPad and mobile browser flows
+- [x] Run full format/lint/typecheck/path/unit/build gates and diff review
+- [x] Verify fixture cleanup; update all five feature documents
+- [ ] Commit explicit paths, push PR #306 only and verify exact-head CI
+- [ ] Publish final GO/BLOCKED evidence to PR #306 and issue #307
 
-## In-flight handoff
+## In flight
 
-BLOCKED for unconditional completion: actual JWT tests reproduce Overall-only
-actor-membership FK errors (23503); application identity also requires local
-membership. Do not count these three passing negative tests as successful
-Overall mutations. Bounded identity/audit-contract remediation or explicit owner
-acceptance is needed. PR #305 merge/deployment order and activation remain owner
-controlled. No unrelated FK relaxation or shadow memberships introduced.
+Repair implemented. Standalone JWT 45/45; pgTAP 64 files / 2,104 assertions;
+unit 3,176 passed / 7 existing skipped; authenticated browser 15/15 across all
+three devices, including all three Overall role writes and visible actor names.
+Legacy-data upgrade preserved event, entry and session records byte-for-byte.
+Combined #305/#306 replay (65 files / 2,163 assertions), JWT 45/45, module JWT
+18/18, full units 3,250 passed / 7 skipped, database lint and build pass. Final
+authenticated combined browser 15/15 and independent zero-residue cleanup verified. Demo initial
+156/159; all three failures pass serial retests (tablet 2/2, mobile 1/1).
+Verified local stack: restaurant-roster API 54321 / DB 54322. JobQuest2.0 uses
+55321/55322 and is outside scope. Initial local database contains no organizations
+or Auth users, and currently has both staged PR migrations from the prior audit.
 
-Canonical changes and fixtures are documented in EVIDENCE.md. The disposable
-integration workspace contains safe action conflict resolution plus #305 SQL and
-JWT fixture assignment adaptations; actual PR #305 remains untouched. Local API
-54321 / DB 54322 only; JobQuest 55321/55322 untouched. No environment files
-written. Final commit and CI receipts are tracked on existing PR #306. Do not start V2-005.002.
+Local acceptance complete. Delivery to existing PR #306 and exact-head CI are next.

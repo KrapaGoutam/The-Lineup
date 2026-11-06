@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   from: vi.fn(),
-  getCurrentUser: vi.fn(),
+  getAllocationActor: vi.fn(),
   getPrimaryLocation: vi.fn(),
   getAllocationContext: vi.fn(),
   requireLiveSession: vi.fn(),
@@ -23,8 +23,8 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.requireLiveSession,
 }));
-vi.mock("@/lib/current-user", () => ({
-  getCurrentUser: mocks.getCurrentUser,
+vi.mock("@/features/allocation/data/allocation-actor", () => ({
+  getAllocationActor: mocks.getAllocationActor,
 }));
 vi.mock("@/features/locations/data/primary-location", () => ({
   getPrimaryLocation: mocks.getPrimaryLocation,
@@ -58,7 +58,7 @@ describe("allocation-actions location scoping and consistency", () => {
     vi.clearAllMocks();
     mocks.rpc.mockResolvedValue({ data: 10, error: null });
     mocks.requireLiveSession.mockResolvedValue(null);
-    mocks.getCurrentUser.mockResolvedValue({
+    mocks.getAllocationActor.mockResolvedValue({
       profileId: P,
       name: "Floor Staff",
       designation: "server",
@@ -108,8 +108,23 @@ describe("allocation-actions location scoping and consistency", () => {
   });
 
   describe("executeBoardActionRemote", () => {
+    it("preserves stale-context recovery for an authenticated actor whose scope no longer resolves", async () => {
+      mocks.getAllocationActor.mockResolvedValueOnce({ contextStale: true });
+      const result = await undoBoardAction({
+        restaurantSlug: SLUG,
+        organizationId: O,
+        serviceSessionId: 1,
+      });
+      expect(result).toEqual({
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      });
+      expect(mocks.rpc).not.toHaveBeenCalled();
+      expect(mocks.from).not.toHaveBeenCalled();
+    });
     it("rejects unauthenticated caller", async () => {
-      mocks.getCurrentUser.mockResolvedValueOnce(null);
+      mocks.getAllocationActor.mockResolvedValueOnce(null);
       const res = await executeBoardActionRemote({
         restaurantSlug: SLUG,
         organizationId: O,

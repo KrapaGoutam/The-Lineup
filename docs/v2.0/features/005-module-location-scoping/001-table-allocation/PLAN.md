@@ -93,3 +93,42 @@ Every operational read and mutation must bind strictly to the authenticated call
 ## Independent security corrections
 
 The assignment-free legacy exception requires exactly one active, non-archived location and ZERO assignment rows anywhere in the organization (inactive rows also disable it). It is a compatibility floor, never authority in a multi-location rollout. Target eligibility is checked before session creation. Restrictive location policies on dining_tables and dining_areas constrain pre-existing permissive manager FOR ALL policies. NULL remains an internal preliminary authorization gate; every public operation must resolve/validate a concrete location before writes.
+
+## Overall actor repair — approved bounded implementation (2026-11-06)
+
+The owner request authorizes FUNC-01 identity/audit repair on this PR. Reproduced
+with real local Auth JWTs: an existing-session `board_add_column` inserts via
+`private.emit_board_event`, then fails `23503` on
+`board_events_organization_id_actor_profile_id_fkey` referencing
+`memberships(organization_id, profile_id)`. Initial floor creation separately
+requires membership in `get_or_create_active_session`; sessions and assignment
+entries also carry membership-linked attribution. Application actions fail earlier
+at `getCurrentUser`, despite canonical entry authorization succeeding.
+
+Design: replace exactly the five attribution membership FKs (session started/closed,
+entry assigned/ended, event actor) with validated profile FKs. Keep participant
+membership FKs and every tenant/session/location FK. No nullable actor change,
+new affiliation records, global identity/role-helper change or RLS relaxation.
+RPCs continue deriving actors from `auth.uid()`. New events snapshot display name,
+Overall role, active membership/location role, effective role and concrete location
+inside the existing immutable payload; old events and reversal payloads stay intact.
+A narrowly authorized Allocation roster reader supplies tenant participants' names
+to Overall actors without granting general profile visibility. It filters targets
+to the location and retains historical column participants for history rendering.
+
+Allocation actions use a dedicated canonical-context actor hydrator (authenticated
+profile, verified organization/location, `location:operate`, effective designation).
+Live-session, stale expectation and service-session checks remain. The legacy
+`getCurrentUser` contract stays unchanged outside Allocation. All current board
+RPCs permit open editing by floor staff (Feature 028/V2 Part 1); tier-negative tests
+therefore use existing assignment-management and tenant-provisioning boundaries,
+not newly invented Manager-only board restrictions. No new user-facing controls.
+Existing loading/empty/error/permission-denied/responsive behavior is retained.
+
+Risks/tests: valid historical profiles must survive FK replacement; undo/redo must
+preserve original actors while attributing reversal to the live actor; profile
+names must render without widening identity-table RLS. Verify standalone and
+combined clean replays, catalog/ACL/RI pgTAP, real JWT successful mutations for all
+three roles, unchanged-state denials OA-01–OA-22, concurrent event creation,
+SEC-01/02/03/AUTH-01 regressions, and authenticated three-device browser acceptance.
+`begin_board_write` is not replaced, preserving #305's staged module assertion.

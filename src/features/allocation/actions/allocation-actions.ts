@@ -13,7 +13,7 @@ import { assertWorkspaceExpectation } from "@/features/context/data/workspace-ex
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
-import { getCurrentUser } from "@/lib/current-user";
+import { getAllocationActor } from "@/features/allocation/data/allocation-actor";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -215,7 +215,10 @@ export async function executeBoardActionRemote(
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
-  const caller = await getCurrentUser(input.restaurantSlug);
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
   if (!caller) {
     return {
       ok: false,
@@ -650,7 +653,10 @@ export async function undoBoardAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
-  const caller = await getCurrentUser(input.restaurantSlug);
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
   if (!caller) {
     return {
       ok: false,
@@ -724,7 +730,10 @@ export async function redoBoardAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
-  const caller = await getCurrentUser(input.restaurantSlug);
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
   if (!caller) {
     return {
       ok: false,
@@ -816,7 +825,10 @@ export async function getAllocationContextForDateAction(input: {
     return { ok: false, error: "That date request is invalid." };
   }
 
-  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
+  const currentUser = await getAllocationActor(parsed.data.restaurantSlug);
+  if (currentUser && "contextStale" in currentUser) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
   if (!currentUser) {
     return { ok: false, error: "You need to sign in to see the board." };
   }
