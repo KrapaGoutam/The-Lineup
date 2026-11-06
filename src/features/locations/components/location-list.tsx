@@ -107,6 +107,7 @@ function LocationCard({
             variant="secondary"
             size="sm"
             onClick={() => onManageLocation(loc)}
+            className="min-h-11"
             aria-label={`View modules of ${loc.name}`}
           >
             View modules

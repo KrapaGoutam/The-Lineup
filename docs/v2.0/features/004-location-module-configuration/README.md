@@ -3,7 +3,7 @@
 GitHub Issue: [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `IN PROGRESS` (V2-004.001 complete; V2-004.002 in validation; V2-004.003/.004 not started)
+Status: `IN PROGRESS` (V2-004.001 complete; V2-004.002 implementation accepted (delivery PR #301); V2-004.003/.004 not started)
 
 ---
 
@@ -20,6 +20,6 @@ Feature V2-004 establishes per-location module configuration. It allows restaura
 - **V2-004.003**: Navigation Enforcement (Dynamic hiding of disabled module navigation items).
 - **V2-004.004**: Backend Enforcement (Server Actions and RPCs fail-closed if module is disabled).
 
-## V2-004.002 — implementation in validation
+## V2-004.002 — accepted implementation and delivery record
 
-Location Module Settings is implemented on `feature/v2.0-004.002-location-module-settings` ([#300](https://github.com/KrapaGoutam/The-Lineup/issues/300)). Local application and DEV JWT/browser evidence is recorded in [002 evidence](002-location-module-settings/EVIDENCE.md). HTTPS Preview and exact-head CI/merge remain acceptance gates. No migration or operational enforcement; V2-004.003/.004 remain not started, Q1–Q4 remain open. V2-004 overall remains IN PROGRESS.
+Location Module Settings is implemented on `feature/v2.0-004.002-location-module-settings` ([#300](https://github.com/KrapaGoutam/The-Lineup/issues/300)). Local application and DEV JWT/browser evidence is recorded in [002 evidence](002-location-module-settings/EVIDENCE.md). Prior-head HTTPS Preview and exact-head CI pass. Final delivery/merge evidence is recorded on [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301); the final head must independently pass those gates. No migration or operational enforcement; V2-004.003/.004 remain not started, Q1–Q4 remain open. V2-004 overall remains IN PROGRESS.

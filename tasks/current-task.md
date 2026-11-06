@@ -11,8 +11,8 @@ Baseline main: 5e5b7747693b6e81014eafdf299b87e56c3f033d
 - [x] Focused domain/server/UI tests
 - [x] Full checks and build
 - [x] Hosted DEV JWT and cleanup
-- [ ] Browser/HTTPS Preview validation
-- [ ] Documentation, review, commit, PR and exact-head CI
-- [ ] Regular merge only after mandatory acceptance gates
+- [x] Browser/HTTPS Preview acceptance on prior head; final-head rerun required and recorded on PR #301
+- [x] Documentation, review and existing PR #301 reconciled; final exact-head CI gate recorded on that PR
+- [x] Verified merge policy: PR #301 into development by regular merge only after mandatory gates; actual integration outcome on PR #301
 
-In flight: final local checks and PR preparation. Vitest 3,099 PASS + 7 existing skips; webpack build PASS; DEV JWT 15/15 with zero tracked residue; authenticated Chromium and WebKit local real-mode PASS, responsive light/dark matrix 12/12 PASS. Docker 29.9.2-2 is available with normal sandbox approval (initial sandboxed probe failed). Network requires normal escalation. No Production contact.
+Integration record: [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301) holds the final head, exact-head checks, final HTTPS/DEV cleanup evidence and regular merge outcome. Source checkpoint d0d9a37 has all configured checks green; resumed focused tests 324/324 pass. Final delivery depends on the actual final-head gates and merge recorded there. No additional branch or PR; do not start .003. Main and Production untouched.

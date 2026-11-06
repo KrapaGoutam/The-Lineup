@@ -79,7 +79,7 @@ development → main (Production)
 ### V2-004 — Per-Location Module Configuration
 
 - **GitHub Issue:** [#252](https://github.com/KrapaGoutam/The-Lineup/issues/252)
-- **Status:** In progress (V2-004.001 complete; V2-004.002 in validation; V2-004.003/.004 not started)
+- **Status:** In progress (V2-004.001 complete; V2-004.002 implementation accepted (delivery PR #301); V2-004.003/.004 not started)
 - **Directory:** `docs/v2.0/features/004-location-module-configuration/`
 - **Subfeatures:**
   - [x] **V2-004.001**: Module Configuration Contract (Schema and types for per-location module flags and metadata — Issue [#298](https://github.com/KrapaGoutam/The-Lineup/issues/298); PR #299; validated on the official local stack and hosted DEV, real-JWT 10/10; see its [STATUS.md](features/004-location-module-configuration/001-module-configuration-contract/STATUS.md))
@@ -158,6 +158,6 @@ development → main (Production)
   - [ ] **V2-009.006**: Production Readiness Audit (Database index usage, connection pool limits, and performance under load)
   - [ ] **V2-009.007**: Owner-Approved Release (Formal owner acceptance sign-off, promotion from `development` to `main`)
 
-## V2-004.002 — implementation awaiting final acceptance
+## V2-004.002 — accepted implementation and delivery record
 
-Issue [#300](https://github.com/KrapaGoutam/The-Lineup/issues/300): per-location module preferences editor and authorized single-module writer implemented, no migration, no seeding, no navigation/backend enforcement. DEV JWT and local authenticated Chromium/WebKit flows pass with verified synthetic cleanup; final HTTPS Preview/exact-head CI/merge pending. [Evidence](features/004-location-module-configuration/002-location-module-settings/EVIDENCE.md). Q1–Q4 remain open; V2-004.003/.004, V2-005 and V2-008.004 deferred. Main/Production untouched.
+Issue [#300](https://github.com/KrapaGoutam/The-Lineup/issues/300): per-location module preferences editor and authorized single-module writer implemented, no migration, no seeding, no navigation/backend enforcement. DEV JWT and local authenticated Chromium/WebKit flows pass with verified synthetic cleanup; HTTPS Preview and source-head CI pass; final-head verification and integration outcome are recorded on [PR #301](https://github.com/KrapaGoutam/The-Lineup/pull/301). [Evidence](features/004-location-module-configuration/002-location-module-settings/EVIDENCE.md). Q1–Q4 remain open; V2-004.003/.004, V2-005 and V2-008.004 deferred. Main/Production untouched.
