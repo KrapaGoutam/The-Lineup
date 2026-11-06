@@ -3,16 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-/**
- * MC-020 — V2-004.001 changes no operational behaviour.
- *
- * Nothing outside the module-configuration feature may read the new table or
- * import the feature yet, so (a) the demo application — which has no database
- * — cannot depend on `location_module_configs`, and (b) no navigation, action
- * or RPC can be gated by a row that does not exist. V2-004.003 / .004 will
- * deliberately change this; whoever does must update this test and prove demo
- * mode still bypasses the table.
- */
+/** V2-004.002 permits the settings editor only; enforcement remains deferred. */
 
 const SRC = path.resolve(import.meta.dirname, "../..");
 const OWN_FEATURE = path.join(SRC, "features", "modules");
@@ -26,10 +17,16 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("module configuration is not consumed yet (V2-004.001)", () => {
+describe("module configuration is consumed only by location settings (V2-004.002)", () => {
   const consumers = walk(SRC).filter(
     (file) =>
-      !file.startsWith(OWN_FEATURE + path.sep) && file !== GENERATED_TYPES,
+      !file.startsWith(OWN_FEATURE + path.sep) &&
+      file !== GENERATED_TYPES &&
+      file !==
+        path.join(
+          SRC,
+          "features/locations/components/location-administration.tsx",
+        ),
   );
 
   it("no file outside the feature references the table or imports the feature", () => {

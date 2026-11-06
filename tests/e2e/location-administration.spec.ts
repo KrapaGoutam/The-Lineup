@@ -126,7 +126,7 @@ test.describe("Location Administration (V2-002.003)", () => {
     );
 
     // Switch to Operating Hours tab
-    await page.getByRole("button", { name: "Operating Hours" }).click();
+    await page.getByRole("button", { name: "Hours" }).click();
     await expect(
       page.getByRole("heading", { name: "Weekly Operating Hours" }),
     ).toBeVisible();

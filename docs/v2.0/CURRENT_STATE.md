@@ -22,10 +22,10 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        none in progress — V2-004.001 complete; V2-004.002 not started
-Active Subfeature Status: V2-004.001 COMPLETE (Issue #298, PR #299); V2-004 stays IN PROGRESS (V2-003 still awaiting owner review, parent #251 open)
+Active Subfeature:        V2-004.002 Location Module Settings — implementation in validation
+Active Subfeature Status: V2-004.002 implemented; HTTPS Preview, exact-head CI and merge pending (#300)
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-004.002 Location Module Settings (NOT STARTED; owner decisions Q1–Q4 open)
+Next Subfeature:          V2-004.003 Navigation Enforcement (NOT STARTED; do not begin until .002 accepted; Q1–Q4 open)
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
@@ -63,3 +63,7 @@ Branch `feature/v2.0-003.002-org-location-switcher` from `development` `5333a526
 ## V2-003.003 (COMPLETE — PR #289 merged into development)
 
 No migration. `/` now redirects a signed-in user with no access to the default tenant but exactly one verified eligible context to `/r/<verified-slug>?location=<verified-id>` (built from verified data, never input; ambiguous/invalid/stale/errored cases keep the existing presentation; `/r/*` never redirects). `getPrimaryLocation()` no longer falls back to the oldest location: verified `Referer` selection, else the caller's single eligible location in the organization, else `null`. Hosted DEV real-JWT 22/22 (incl. real Server Action no-`Referer` write-outcome checks), real browser Chromium + WebKit iPad 8/8. Open dependencies: V2-003.004 (replace the temporary `Referer` mechanism), V2-005 (location-scoped RLS and server-authoritative `locationId` binding — release blockers), V2-008 (backfill). See [003-single-context-auto-resolution/EVIDENCE.md](features/003-active-context/003-single-context-auto-resolution/EVIDENCE.md).
+
+## V2-004.002 — implementation awaiting final acceptance
+
+Issue [#300](https://github.com/KrapaGoutam/The-Lineup/issues/300): per-location module preferences editor and authorized single-module writer implemented, no migration, no seeding, no navigation/backend enforcement. DEV JWT and local authenticated Chromium/WebKit flows pass with verified synthetic cleanup; final HTTPS Preview/exact-head CI/merge pending. [Evidence](features/004-location-module-configuration/002-location-module-settings/EVIDENCE.md). Q1–Q4 remain open; V2-004.003/.004, V2-005 and V2-008.004 deferred. Main/Production untouched.

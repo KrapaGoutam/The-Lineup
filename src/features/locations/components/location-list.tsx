@@ -102,6 +102,16 @@ function LocationCard({
       </div>
 
       <div className="border-border mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+        {status === "archived" && canManage ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onManageLocation(loc)}
+            aria-label={`View modules of ${loc.name}`}
+          >
+            View modules
+          </Button>
+        ) : null}
         {status === "archived" ? (
           canManage && onViewHistory ? (
             <Button

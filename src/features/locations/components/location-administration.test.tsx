@@ -254,15 +254,11 @@ describe("LocationAdministration", () => {
     expect(
       screen.getByRole("heading", { name: "Manage Webster Branch" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Location Details & Address" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Operating Hours" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Details" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
 
     // Switch to Operating Hours tab
-    await user.click(screen.getByRole("button", { name: "Operating Hours" }));
+    await user.click(screen.getByRole("button", { name: "Hours" }));
 
     expect(screen.getByText("Weekly Operating Hours")).toBeInTheDocument();
   });
