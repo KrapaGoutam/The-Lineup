@@ -1,6 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { LocationModuleSettings } from "@/features/modules/components/location-module-settings";
+import {
+  createDemoModuleSettingsSource,
+  liveModuleSettingsSource,
+} from "@/features/modules/components/module-settings-source";
 import { ArrowLeft, Building2, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -165,8 +170,14 @@ export function LocationAdministration({
   const [managingLocation, setManagingLocation] =
     React.useState<Location | null>(null);
   const [manageTab, setManageTab] = React.useState<
-    "details" | "hours" | "staff"
+    "details" | "hours" | "staff" | "modules"
   >("details");
+  const [modulesPending, setModulesPending] = React.useState(false);
+  const moduleSource = React.useMemo(
+    () =>
+      demoMode ? createDemoModuleSettingsSource() : liveModuleSettingsSource,
+    [demoMode],
+  );
   const [showStaffOverview, setShowStaffOverview] = React.useState(false);
 
   // Demo mode uses an isolated in-memory source that never reaches the
@@ -498,6 +509,7 @@ export function LocationAdministration({
             variant="secondary"
             size="icon"
             onClick={onBack}
+            disabled={modulesPending}
             aria-label="Back to Settings"
             className="shrink-0"
           >
@@ -521,6 +533,7 @@ export function LocationAdministration({
               Organization:
             </span>
             <Select
+              disabled={modulesPending}
               value={selectedOrgId}
               onChange={(e) => handleSelectOrg(e.target.value)}
               className="h-9 min-h-9 w-48 text-xs font-medium"
@@ -575,7 +588,12 @@ export function LocationAdministration({
             Managers are authorized to manage branch configurations.
           </p>
           <div className="mt-4">
-            <Button variant="secondary" size="sm" onClick={onBack}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onBack}
+              disabled={modulesPending}
+            >
               Return to Settings
             </Button>
           </div>
@@ -613,7 +631,7 @@ export function LocationAdministration({
           onSearchChange={setSearchQuery}
           onManageLocation={(loc) => {
             setManagingLocation(loc);
-            setManageTab("details");
+            setManageTab(loc.archivedAt ? "modules" : "details");
           }}
           onAddLocation={() => setIsAddingLocation(true)}
           canManage={canAdminister}
@@ -687,16 +705,19 @@ export function LocationAdministration({
       {managingLocation && (
         <Dialog
           open={Boolean(managingLocation)}
-          onClose={() => setManagingLocation(null)}
+          onClose={() => {
+            if (!modulesPending) setManagingLocation(null);
+          }}
           title={`Manage ${managingLocation.name}`}
           description={`Branch in ${selectedOrg?.name ?? "organization"} · ${managingLocation.timeZone}`}
           className="max-w-[min(94vw,40rem)]"
         >
           <div className="space-y-4">
             {/* View Switcher Tabs */}
-            <div className="border-border flex border-b">
+            <div className="border-border flex flex-wrap border-b">
               <button
                 type="button"
+                disabled={modulesPending || !!managingLocation.archivedAt}
                 onClick={() => setManageTab("details")}
                 className={`-mb-px border-b-2 px-4 py-2 text-xs font-semibold transition ${
                   manageTab === "details"
@@ -704,10 +725,11 @@ export function LocationAdministration({
                     : "text-muted-foreground hover:text-foreground border-transparent"
                 }`}
               >
-                Location Details & Address
+                Details
               </button>
               <button
                 type="button"
+                disabled={modulesPending || !!managingLocation.archivedAt}
                 onClick={() => setManageTab("hours")}
                 className={`-mb-px border-b-2 px-4 py-2 text-xs font-semibold transition ${
                   manageTab === "hours"
@@ -715,10 +737,11 @@ export function LocationAdministration({
                     : "text-muted-foreground hover:text-foreground border-transparent"
                 }`}
               >
-                Operating Hours
+                Hours
               </button>
               <button
                 type="button"
+                disabled={modulesPending || !!managingLocation.archivedAt}
                 onClick={() => setManageTab("staff")}
                 className={`-mb-px border-b-2 px-4 py-2 text-xs font-semibold transition ${
                   manageTab === "staff"
@@ -728,9 +751,26 @@ export function LocationAdministration({
               >
                 Staff
               </button>
+              <Button
+                variant="ghost"
+                className="min-h-11"
+                disabled={modulesPending || !!managingLocation.archivedAt}
+                onClick={() => setManageTab("modules")}
+              >
+                Modules
+              </Button>
+            </div>
+            <div hidden={manageTab !== "modules"}>
+              <LocationModuleSettings
+                key={managingLocation.id}
+                location={managingLocation}
+                source={moduleSource}
+                demoMode={demoMode}
+                onPendingChange={setModulesPending}
+              />
             </div>
 
-            {manageTab === "details" ? (
+            {manageTab === "modules" ? null : manageTab === "details" ? (
               <LocationForm
                 mode="edit"
                 organizationId={selectedOrgId}

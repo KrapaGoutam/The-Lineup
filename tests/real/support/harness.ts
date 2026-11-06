@@ -28,13 +28,24 @@ type Env = { url: string; anonKey: string; serviceKey: string };
 function loadDevEnv(): Env {
   const file = path.resolve(process.cwd(), ".env.development.local");
   const parsed: Record<string, string> = {};
-  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+  for (const line of (fs.existsSync(file)
+    ? fs.readFileSync(file, "utf8")
+    : ""
+  ).split(/\r?\n/)) {
     const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (match) parsed[match[1]] = match[2].replace(/^"|"$/g, "");
   }
+  // Codespaces provides secrets to the process; never write them to an env file.
+  for (const key of [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+  ]) {
+    if (process.env[key]) parsed[key] = process.env[key]!;
+  }
   const url = parsed.NEXT_PUBLIC_SUPABASE_URL ?? "";
   if (url.includes(PROD_REF)) throw new Error("Refusing to run against PROD.");
-  if (!url.includes(DEV_REF)) {
+  if (url !== `https://${DEV_REF}.supabase.co`) {
     throw new Error("Real-mode tests only run against the-lineup-dev.");
   }
   return {

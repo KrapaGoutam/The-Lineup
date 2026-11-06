@@ -12,6 +12,10 @@
  * URL is the-lineup-dev. Existing DEV data is never read or modified.
  */
 import crypto from "node:crypto";
+import {
+  loadModuleEditor,
+  saveModuleConfig,
+} from "@/features/modules/data/module-config-mutation";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -45,6 +49,25 @@ const orgIds: string[] = [];
 const L: Record<string, string> = {};
 let orgX = "";
 let orgY = "";
+let baseline: Record<string, number | null> = {};
+async function counts() {
+  const result: Record<string, number | null> = {};
+  for (const table of [
+    "organizations",
+    "locations",
+    "memberships",
+    "profiles",
+    "overall_roles",
+    "location_module_configs",
+  ] as const) {
+    const response = await admin
+      .from(table)
+      .select("*", { count: "exact", head: true });
+    if (response.error) throw new Error(`Count unavailable: ${table}`);
+    result[table] = response.count;
+  }
+  return result;
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function ok(
@@ -93,6 +116,7 @@ const anon = createClient<Database>(env.url, env.anonKey, {
 });
 
 beforeAll(async () => {
+  baseline = await counts();
   const keys = [
     "ownerX",
     "gmX",
@@ -102,6 +126,7 @@ beforeAll(async () => {
     "revoked",
     "ownerY",
     "ovOwner",
+    "ovManager",
     "ovAsst",
   ];
   await Promise.all(keys.map(mk));
@@ -197,6 +222,7 @@ beforeAll(async () => {
       .from("overall_roles")
       .insert([
         { profile_id: users.ovOwner.id, role: "owner" },
+        { profile_id: users.ovManager.id, role: "manager" },
         { profile_id: users.ovAsst.id, role: "assistant_manager" },
       ])
       .select("profile_id"),
@@ -282,6 +308,21 @@ afterAll(async () => {
       `survivors: organizations=${leftOrgs} locations=${leftLocs} authUsers=${leftUsers}`,
     );
   }
+  const finalCounts = await counts();
+  if (JSON.stringify(finalCounts) !== JSON.stringify(baseline))
+    errors.push("Pre/post counts differ");
+  console.info(
+    "DEV fixture baseline/readback",
+    JSON.stringify({
+      before: baseline,
+      after: finalCounts,
+      trackedResiduals: {
+        organizations: leftOrgs,
+        locations: leftLocs,
+        users: leftUsers,
+      },
+    }),
+  );
   if (errors.length) {
     throw new Error(
       `V2MC teardown incomplete for run ${runId} (orgs ${orgIds.join(",")} locations ${locationIds.join(",")} users ${ids.join(",")}): ${errors.join(" | ")}`,
@@ -504,3 +545,103 @@ describe("V2-004.001 hosted DEV — module configuration with real JWT + RLS", (
     );
   });
 });
+
+describe("V2-004.002 server writer with real JWTs", () => {
+  it("writes one explicit key, reads back server attribution, denies stale and foreign targets", async () => {
+    const target = { locationId: L.A, organizationId: orgX };
+    const initial = await loadModuleEditor(target, users.gmX.client);
+    expect(initial.ok).toBe(true);
+    if (!initial.ok) throw new Error(initial.code);
+    const old = initial.data.configs.find((c) => c.moduleKey === "attendance");
+    const input = {
+      ...target,
+      actorId: users.gmX.id,
+      moduleKey: "attendance" as const,
+      isEnabled: false,
+      expectedUpdatedAt: old?.updatedAt ?? null,
+    };
+    const saved = await saveModuleConfig(input, users.gmX.client);
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) throw new Error(saved.code);
+    expect(saved.data.updatedBy).toBe(users.gmX.id);
+    expect(saved.data.isEnabled).toBe(false);
+    expect(await saveModuleConfig(input, users.gmX.client)).toEqual({
+      ok: false,
+      code: "conflict",
+    });
+    for (const key of [
+      "staffA",
+      "locMgrA",
+      "shiftX",
+      "revoked",
+      "ovAsst",
+      "ownerY",
+    ]) {
+      expect(
+        (
+          await saveModuleConfig(
+            {
+              ...input,
+              actorId: users[key].id,
+              expectedUpdatedAt: saved.data.updatedAt,
+              isEnabled: true,
+            },
+            users[key].client,
+          )
+        ).ok,
+      ).toBe(false);
+      const stored = await admin
+        .from("location_module_configs")
+        .select("is_enabled,updated_at")
+        .eq("location_id", L.A)
+        .eq("module_key", "attendance")
+        .single();
+      expect(stored.data).toEqual({
+        is_enabled: false,
+        updated_at: saved.data.updatedAt,
+      });
+    }
+    expect(
+      (await saveModuleConfig({ ...input, locationId: L.Y }, users.gmX.client))
+        .ok,
+    ).toBe(false);
+    expect((await saveModuleConfig(input, anon)).ok).toBe(false);
+  });
+});
+
+// Each canonical authorized tier exercises the actual server writer independently.
+it.each(["ownerX", "gmX", "ovOwner", "ovManager"])(
+  "writer authority %s",
+  async (key) => {
+    const result = await saveModuleConfig(
+      {
+        locationId: L.Y,
+        organizationId: orgY,
+        actorId: users[key].id,
+        moduleKey: "payroll",
+        isEnabled: true,
+        expectedUpdatedAt: null,
+      },
+      users[key].client,
+    );
+    if (key === "ownerX" || key === "gmX") expect(result.ok).toBe(false);
+    const current = await loadModuleEditor(
+      { locationId: L.A, organizationId: orgX },
+      users[key].client,
+    );
+    if (!current.ok) throw new Error(current.code);
+    const old = current.data.configs.find((c) => c.moduleKey === "payroll");
+    const own = await saveModuleConfig(
+      {
+        locationId: L.A,
+        organizationId: orgX,
+        actorId: users[key].id,
+        moduleKey: "payroll",
+        isEnabled: true,
+        expectedUpdatedAt: old?.updatedAt ?? null,
+      },
+      users[key].client,
+    );
+    expect(own.ok).toBe(true);
+  },
+);
