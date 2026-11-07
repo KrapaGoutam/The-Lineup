@@ -35,3 +35,21 @@ Actual commands and local receipts: `npm.cmd run check`, `npm.cmd test`, `node .
 Baseline drift rechecked: remote development still `3fa0bf72b50e92c707fa58436cb78b907f67ef4a`; main remains `5e5b7747693b6e81014eafdf299b87e56c3f033d`. No feature branch existed remotely. Final disposable inventory confirms 77/STAGED, zero organizations/profiles/Auth users/tasks/notifications/Overall roles/module configurations and unvalidated FKs. Existing local stacks were not reset; the legacy dblink copies were adapted to the disposable published port after an initial hardcoded-port failure. No hosted SQL/config/activation, retained-backup change, main/Production contact or merge.
 
 Files changed: Tasks migration/generated types and actor/people/loaders/actions; shell/page-data Tasks-only effective role and reminder/badge expectation; scoped notification read-state RPC; Tasks unit/SQL fixtures, JWT/browser suites and local config; feature/parent/global/data-model documentation/current task. Temporary test infrastructure is ignored by Git, Prettier and ESLint. Exact next action: finish final check/build/scans, commit and push the green feature, open development PR, then verify exact-head CI. Hosted Tasks rollout remains separately authorized; unmigrated Preview is fail-closed.
+
+## CP-T07 — feature pushed and PR created
+
+Feature commit `ab8780b1e31016ea417b0013c519212a32baa2a3` pushed. [PR #311](https://github.com/KrapaGoutam/The-Lineup/pull/311) targets development; issue #310. Final check/build/scans PASS; all local results above are verified. CI/Database/Preview are running on that exact SHA (runs42393670673/42393670674); deploy-migrations SKIPPED. Worktree changes at this milestone are documentation/checklist receipts only. Next: verify checks, publish final documentation and verify its exact final head; never merge or deploy hosted SQL.
+
+## CP-T08 — implementation exact-head CI verified
+
+All five gates SUCCESS on `ab8780b1e31016ea417b0013c519212a32baa2a3`: [application / browser CI](https://github.com/KrapaGoutam/The-Lineup/actions/runs/42393670673), [database replay / policies](https://github.com/KrapaGoutam/The-Lineup/actions/runs/42393670674), [Vercel Preview](https://the-lineup-26i4nqxdj-onepiece11.vercel.app) and Preview Comments. The full desktop regression is **337/337 PASS**. Hosted deploy-migrations is **SKIPPED by design**. PR311 remains OPEN, development target, auto-merge disabled. Verification completed November7,2026 at about11:04 America/Chicago.
+
+Read-only exact Preview smoke PASS: HTTP200,10 public script assets, expected DEV binding, no Production reference; unauthenticated and no writes. Local production/dev servers stopped. Disposable Supabase `lineup-tasks-scoping` was stopped with --no-backup only after zero-residue/STAGED receipts; existing projects and retained DEV backup were not stopped/deleted.
+
+This final closeout changes documentation/checklists only. Its own exact-head checks must also pass before delivery. The PR's current Checks tab is authoritative; immutable final SHA/run IDs are captured in the owner delivery report and local CP-T08/T09 handoff, avoiding a self-referential commit hash in this file.
+
+## CP-T09 — owner handoff
+
+Implementation, tests, generated types, migration, six canonical Tasks documents, parent/global status and current-task record are complete. Independent review has no remaining findings. Owner action: review [PR311](https://github.com/KrapaGoutam/The-Lineup/pull/311); no automatic merge or rollout. Hosted DEV stays76/STAGED with no Tasks migration/configuration/activation; main, Production and the November7 backup retained through November14 remain unchanged. Preview Tasks is intentionally unavailable until a separately authorized migration deploys the readiness/authorization contract; old-schema browser and actor tests prove safe refusal. Parent253 remains open and .003–008 are not started.
+
+Local durable handoff: `.tmp/v2-tasks-location-scoping-handoff/{CURRENT_AGENT_STATE,IMPLEMENTATION_HANDOFF,VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md` in the parent checkout. At this checkpoint the actual source SHA is `ab8780b1e31016ea417b0013c519212a32baa2a3`; only final documentation-head checks and the final owner report remain before stopping. Do not regenerate the SQL from the stale scratch helper or perform any hosted action.

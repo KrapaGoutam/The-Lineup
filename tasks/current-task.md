@@ -1,4 +1,4 @@
-# V2-005.002 Tasks location scoping — IN PROGRESS
+# V2-005.002 Tasks location scoping — READY FOR OWNER REVIEW
 
 Approved owner contract: docs/v2.0/features/005-module-location-scoping/002-tasks/PLAN.md. Issue #310 / parent #253 / program #248. Base 3fa0bf72, isolated feature worktree.
 
@@ -9,8 +9,8 @@ Approved owner contract: docs/v2.0/features/005-module-location-scoping/002-task
 - [x] CP-T04 notification/history/recurrence validation.
 - [x] CP-T05 security tests.
 - [x] CP-T06 regression and independent review.
-- [ ] CP-T07 Preview compatibility, push and PR.
-- [ ] CP-T08 exact-head CI.
-- [ ] CP-T09 final handoff.
+- [x] CP-T07 Preview compatibility, push and PR.
+- [x] CP-T08 exact-head CI.
+- [x] CP-T09 final handoff.
 
-Current HEAD baseline with reviewed implementation. Local JWT17, browser18, old-schema compatibility1, replay77, pgTAP2198, units3261/7 skips, upgrade preservation and independent review pass. Final check/build/scans then commit/push/PR/exact-head CI. Hosted changes/activation, backup changes, merge, main and Production prohibited. Keep STAGED. See feature EVIDENCE and local handoff.
+Implementation `ab8780b1e31016ea417b0013c519212a32baa2a3` is pushed in PR311 to development; all five source-head checks SUCCESS, including browser337. Local JWT17, browser18, old-schema compatibility1, replay77, pgTAP2198, units3261/7 skips, check/build/scans and independent review PASS. Final documentation-only PR head is verified before delivery, with exact SHA/run IDs in local CP-T08/T09 handoff and owner report. PR remains open/unmerged, auto-merge off. Next owner action: review/approval. Hosted changes/activation, retained backup changes, merge, main and Production remain prohibited; enforcement STAGED. Parent253 remains open; .003–008 not started.
