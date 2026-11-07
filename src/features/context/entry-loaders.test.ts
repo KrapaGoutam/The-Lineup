@@ -94,9 +94,19 @@ describe("initial loaders honour the verified scope (V2-003.001)", () => {
     expect(ctx?.locationId).toBe("loc-webster");
     expect(ctx?.timeZone).toBe("America/Chicago");
     expect(log.tables).not.toContain("locations");
-    expect(
-      log.eqs.filter((e) => e.column === "location_id").map((e) => e.value),
-    ).toEqual(["loc-webster"]);
+    // V2-005.003: Tips reads only the two location-authorized RPCs, each bound
+    // to the verified location; there are no direct table reads at all.
+    expect(log.tables).toEqual([]);
+    expect(log.rpcs.map((r) => r.name).sort()).toEqual([
+      "tips_get_day_data",
+      "tips_location_roster",
+    ]);
+    for (const call of log.rpcs) {
+      expect(call.args).toMatchObject({
+        p_organization_id: "org-monks",
+        p_location_id: "loc-webster",
+      });
+    }
   });
 
   it("CTX-19: allocation uses the verified location + time zone and never queries a primary location", async () => {

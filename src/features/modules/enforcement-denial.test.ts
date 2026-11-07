@@ -25,6 +25,21 @@ vi.mock("@/features/allocation/data/allocation-actor", () => ({
     name: "Owner",
   }),
 }));
+vi.mock("@/features/tips/data/tips-actor", () => ({
+  getTipsActor: async () => ({
+    organizationId: "22222222-2222-4222-8222-222222222222",
+    scope: {
+      organizationId: "22222222-2222-4222-8222-222222222222",
+      locationId: "33333333-3333-4333-8333-333333333333",
+      timeZone: "America/Chicago",
+    },
+    viewer: {
+      profileId: "11111111-1111-4111-8111-111111111111",
+      name: "Owner",
+      designation: "owner",
+    },
+  }),
+}));
 vi.mock("@/features/context/data/workspace-expectation", () => ({
   assertWorkspaceExpectation: async () => ({
     ok: true,

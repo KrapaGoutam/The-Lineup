@@ -120,6 +120,7 @@ import type {
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
 import type { TipsContext } from "@/features/tips/data/tips-data";
+import { TIPS_UNAVAILABLE_MESSAGES } from "@/features/tips/domain/tips-read-model";
 import {
   type DayHours,
   useRestaurantClock,
@@ -1146,6 +1147,17 @@ function RestaurantOperationsAppInner({
   // a new assignment target. Schedule/allocation/tips all get this
   // filtered view; only TeamWorkspace gets the full `team`.
   const activeTeam = team.filter((member) => member.active !== false);
+  // V2-005.003. Real mode: Tips has its own location-authorized roster (names
+  // for history, plus the ids that may be offered for a NEW interval) and never
+  // borrows the Schedule/Team roster. Demo mode keeps the shared demo team.
+  const tipsTeam = demoMode ? activeTeam : (initialTipsContext?.team ?? []);
+  const tipsSelectableIds = demoMode
+    ? undefined
+    : (initialTipsContext?.selectableIds ?? []);
+  const tipsUnavailableMessage =
+    !demoMode && initialTipsContext?.unavailable
+      ? TIPS_UNAVAILABLE_MESSAGES[initialTipsContext.unavailable]
+      : undefined;
 
   /**
    * Feature 017: signs the client out cleanly and returns to the
@@ -1353,6 +1365,7 @@ function RestaurantOperationsAppInner({
     if (!locationId) return { ok: false, error: "Not ready yet." };
     const result = await addTipIntervalAction({
       restaurantSlug,
+      expectedContext: workspaceExpectation,
       organizationId: currentUser.organizationId,
       locationId,
       timeZone,
@@ -1397,7 +1410,10 @@ function RestaurantOperationsAppInner({
         .map(([profileId]) => profileId);
       return { ok: true, data: profileIds };
     }
-    const result = await getClockedInRosterAction({ restaurantSlug });
+    const result = await getClockedInRosterAction({
+      restaurantSlug,
+      expectedContext: workspaceExpectation,
+    });
     if (!result.ok) {
       if (result.sessionInvalid) forceSignOut();
       return { ok: false, error: result.error };
@@ -1410,6 +1426,7 @@ function RestaurantOperationsAppInner({
       if (!locationId || tipPoolId === null) return;
       const result = await finalizeTipsAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
@@ -1435,6 +1452,7 @@ function RestaurantOperationsAppInner({
       if (!locationId || tipPoolId === null) return;
       const result = await reopenTipsAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
@@ -2493,7 +2511,9 @@ function RestaurantOperationsAppInner({
             {tab === "tips" ? (
               <TipWorkspace
                 user={user}
-                team={activeTeam}
+                team={tipsTeam}
+                selectableIds={tipsSelectableIds}
+                unavailableMessage={tipsUnavailableMessage}
                 status={tipsStatus}
                 intervals={tipIntervals}
                 onAddInterval={addTipInterval}
@@ -2501,6 +2521,14 @@ function RestaurantOperationsAppInner({
                 onReopen={reopenTips}
                 onPullClockedInTeam={pullClockedInTeam}
                 auditLog={tipsAuditLog}
+                isManager={
+                  demoMode
+                    ? user.role !== "server"
+                    : ["owner", "manager", "assistant_manager"].includes(
+                        activeContext?.tasksDesignation ??
+                          (user.role === "server" ? "staff" : "manager"),
+                      )
+                }
               />
             ) : null}
             {tab === "team" && isManager ? (

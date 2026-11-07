@@ -49,6 +49,9 @@ export function TipWorkspace({
   onReopen,
   onPullClockedInTeam,
   auditLog,
+  isManager: isManagerProp,
+  selectableIds,
+  unavailableMessage,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -67,12 +70,24 @@ export function TipWorkspace({
     { ok: true; data: string[] } | { ok: false; error: string }
   >;
   auditLog: TipsAuditEntry[];
+  isManager?: boolean;
+  // V2-005.003. `team` is the name directory (current workforce plus
+  // historical-only people, so history still shows names). Only these ids may
+  // be offered for a NEW interval. Undefined (demo mode) means everyone.
+  selectableIds?: string[];
+  // Set when the location-authorized Tips read failed closed.
+  unavailableMessage?: string;
 }) {
-  const isManager = user.role !== "server";
+  const isManager = isManagerProp ?? user.role !== "server";
   const [error, setError] = useState("");
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
   const split = useMemo(() => calculateTipSplits(intervals), [intervals]);
+  const selectableTeam = useMemo(() => {
+    if (!selectableIds) return team;
+    const allowed = new Set(selectableIds);
+    return team.filter((member) => allowed.has(member.id));
+  }, [team, selectableIds]);
   const ownTotal =
     split.totals.find(({ participantId }) => participantId === user.profileId)
       ?.amountCents ?? 0;
@@ -86,7 +101,7 @@ export function TipWorkspace({
   // anyone who never clicks the button at all.
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<
     Set<string>
-  >(() => new Set(team.slice(0, 4).map((member) => member.id)));
+  >(() => new Set(selectableTeam.slice(0, 4).map((member) => member.id)));
   const [pulling, setPulling] = useState(false);
   const [pullError, setPullError] = useState("");
 
@@ -112,9 +127,9 @@ export function TipWorkspace({
       // an active clock-in resolved for someone outside this roster
       // (shouldn't happen, but defensive) is silently dropped rather
       // than surfaced as a phantom selection.
-      const selectableIds = new Set(team.map((member) => member.id));
+      const pullable = new Set(selectableTeam.map((member) => member.id));
       setSelectedParticipantIds(
-        new Set(result.data.filter((id) => selectableIds.has(id))),
+        new Set(result.data.filter((id) => pullable.has(id))),
       );
     } finally {
       setPulling(false);
@@ -158,7 +173,7 @@ export function TipWorkspace({
       // rather than whatever was left checked for the interval just
       // submitted.
       setSelectedParticipantIds(
-        new Set(team.slice(0, 4).map((member) => member.id)),
+        new Set(selectableTeam.slice(0, 4).map((member) => member.id)),
       );
     } catch (caught) {
       setError(
@@ -181,6 +196,21 @@ export function TipWorkspace({
     }
     onReopen(reason);
     setShowReopenForm(false);
+  }
+
+  if (unavailableMessage) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-[-0.04em]">Tip split</h1>
+        <Card>
+          <CardContent className="p-6">
+            <p role="status" className="text-muted-foreground text-sm">
+              {unavailableMessage}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const lastAuditEntry = auditLog.at(-1);
@@ -445,8 +475,8 @@ export function TipWorkspace({
                 </Button>
               </div>
               <p className="text-muted-foreground mt-1 text-xs">
-                Everyone active at this restaurant is selectable — check or
-                uncheck anyone before calculating.
+                Everyone currently working at this location is selectable —
+                check or uncheck anyone before calculating.
               </p>
               {pullError ? (
                 <p className="text-destructive mt-1 text-xs" aria-live="polite">
@@ -454,7 +484,7 @@ export function TipWorkspace({
                 </p>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {team.map((member) => (
+                {selectableTeam.map((member) => (
                   <Label
                     key={member.id}
                     className="border-border bg-secondary has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 font-normal"

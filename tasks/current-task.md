@@ -1,16 +1,24 @@
-# V2-005.002 Tasks location scoping — READY FOR OWNER REVIEW
+# V2-005.003 Tips location scoping — COMPLETED (merged via PR #312; hosted DEV 77 -> 78)
 
-Approved owner contract: docs/v2.0/features/005-module-location-scoping/002-tasks/PLAN.md. Issue #310 / parent #253 / program #248. Base 3fa0bf72, isolated feature worktree.
+Approved contract: docs/v2.0/features/005-module-location-scoping/README.md. Feature V2-005.003 / parent #253 / program #248 / milestone #8. Base d7268978, isolated worktree `.tmp/v2-tips-location-scoping`.
 
-- [x] CP-T00 baseline and durable handoff.
-- [x] CP-T01 contracts, data/auth/UI risks and tests mapped.
-- [x] CP-T02 database authorization and actor integrity.
-- [x] CP-T03 verified-location application binding.
-- [x] CP-T04 notification/history/recurrence validation.
-- [x] CP-T05 security tests.
-- [x] CP-T06 regression and independent review.
-- [x] CP-T07 Preview compatibility, push and PR.
-- [x] CP-T08 exact-head CI.
-- [x] CP-T09 final handoff.
-
-Implementation `ab8780b1e31016ea417b0013c519212a32baa2a3` is pushed in PR311 to development; all five source-head checks SUCCESS, including browser337. Local JWT17, browser18, old-schema compatibility1, replay77, pgTAP2198, units3261/7 skips, check/build/scans and independent review PASS. Final documentation-only PR head is verified before delivery, with exact SHA/run IDs in local CP-T08/T09 handoff and owner report. PR remains open/unmerged, auto-merge off. Next owner action: review/approval. Hosted changes/activation, retained backup changes, merge, main and Production remain prohibited; enforcement STAGED. Parent253 remains open; .003–008 not started.
+- [x] CP-P00 Baseline verified
+- [x] CP-P01 Existing Tips contracts mapped
+- [x] CP-P02 Database authorization implemented
+- [x] CP-P03 Application location scoping implemented
+- [x] CP-P04 Financial and history integrity verified
+- [x] CP-P05 Real-JWT security acceptance passed
+- [x] CP-P06 Browser and regression acceptance passed
+- [x] CP-P07 Independent review complete
+- [x] CP-P08 Feature committed and PR opened
+- [x] CP-P09 Exact-head CI verified
+- [x] CP-P10 Final owner handoff
+- [x] CP-P11 Targeted security review
+- [x] CP-P12 Corrections verified (local)
+- [x] CP-P13 Exact-head CI verified
+- [x] CP-P14 DEV backup/recovery verified
+- [x] CP-P15 Migration rehearsal passed
+- [x] CP-P16 Hosted DEV migration applied
+- [x] CP-P17 DEV acceptance complete (hosted UI acceptance deferred: zero module configs)
+- [x] CP-P18 PR #312 merged
+- [x] CP-P19 Final delivery handoff
