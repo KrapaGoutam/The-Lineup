@@ -1,7 +1,7 @@
 # V2-005.003 Tips Location Scoping — Status
 
 ```text
-Status: FINAL DELIVERY IN PROGRESS (security corrections applied; DEV rollout and merge pending)
+Status: COMPLETE (merged via PR #312; hosted DEV migrated 77 -> 78)
 Branch: feature/v2.0-005.003-tips-location-scoping
 Base SHA: d72689786984ae55aa480b2f08339db96fcc72ba
 Target: development
@@ -45,4 +45,12 @@ Replaying the deployed (pre-RPC) app against the new schema as real users expose
 - Clean 77→78 replay and a nonempty 77→78 upgrade (finalized + draft pools, intervals, participants, allocations, audit events): all table digests identical before and after.
 - Backend enforcement remains STAGED; no module configuration, no hosted change yet.
 
-Remaining: exact-head CI on the corrected head, encrypted DEV backup and rehearsal, single-migration DEV rollout, hosted acceptance, merge.
+## Rollout record
+
+- Encrypted DEV-only logical backup taken at ledger 77 (DPAPI, owner-only; 6 components; 107 tables reconciled to live DEV with 0 mismatches) and restored into an isolated no-network container; the final migration was rehearsed on that real-data copy (only Tips objects changed; 0 row, digest or grant changes).
+- Single migration `20261107194700_tips_location_scoping.sql` (sha256 `69eabead7cf7b505590c786a115a6ce4e320607f2081fcb01ff450ec3be66a03`) applied to hosted DEV with the Supabase CLI: ledger 77 -> 78. Hosted catalog (635 policy/function/constraint/grant/trigger lines) is identical to the migration-built local catalog.
+- Hosted acceptance used rolled-back transactions with real DEV rows under the `authenticated` role and live-session checks (cross-location, cross-tenant, staff, Overall, eligibility, finalized immutability, audit attribution); nothing persisted. Real GoTrue-JWT coverage is the local disposable-stack suites. The Preview for the final head renders and is bound to DEV only.
+- **Hosted UI acceptance: DEFERRED.** Hosted DEV has zero `location_module_configs`, so the application hides every module; populating configuration or activating enforcement is a separate owner-controlled task and was not done.
+- Backend enforcement remains STAGED. Production, `main` and JobQuest are untouched.
+
+Known debt (not changed here): the global `docs/STATUS.md` and `docs/ROADMAP.md` still carry earlier-program wording; a manager can still finalize/reopen directly through the pre-RPC policies without an audit row (predates Tips scoping).
