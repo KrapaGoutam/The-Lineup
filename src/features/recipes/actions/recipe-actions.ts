@@ -1,5 +1,6 @@
 "use server";
 import { z } from "zod";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,11 @@ export async function getRecipeIndexAction(input: {
   const user = await getCurrentUser(parsed.data.restaurantSlug);
   if (!user)
     return { ok: false, error: "You need to sign in to view recipes." };
+  const blocked = await guardModule({
+    module: "recipes",
+    organizationId: user.organizationId,
+  });
+  if (blocked) return blocked;
   const categories = await client
     .from("bar_recipe_categories")
     .select("id,name,display_order,is_fallback")
@@ -81,6 +87,11 @@ export async function getRecipeDetailAction(input: {
   const user = await getCurrentUser(parsed.data.restaurantSlug);
   if (!user)
     return { ok: false, error: "You need to sign in to view recipes." };
+  const blocked = await guardModule({
+    module: "recipes",
+    organizationId: user.organizationId,
+  });
+  if (blocked) return blocked;
   const org = user.organizationId;
   let recipeQuery = client
     .from("bar_recipes")

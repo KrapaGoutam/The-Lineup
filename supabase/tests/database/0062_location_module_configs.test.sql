@@ -598,6 +598,9 @@ select is(
      and f.prokind = 'f'
      and f.proname not like '%location\_module\_config%'
      and f.proname not like 'can\_%\_location\_module\_configs'
+     -- V2-004.004 adds exactly these two readers (covered by 0063); every
+     -- pre-existing function must still be oblivious to module configuration.
+     and f.proname not in ('location_module_allows', 'module_enforcement_readiness')
      and f.prosrc ilike '%location_module_config%'),
   0, 'MC-014c: no pre-existing function (provision_location, guards, resolvers) reads module configuration');
 select is(

@@ -1,5 +1,6 @@
 "use server";
 import { z } from "zod";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -47,6 +48,11 @@ export async function saveRecipeAction(input: {
       kind: "permission",
       error: "You don't have permission to change recipes.",
     };
+  const blocked = await guardModule({
+    module: "recipes",
+    organizationId: user.organizationId,
+  });
+  if (blocked) return { ok: false, kind: "permission", error: blocked.error };
   return saveRecipeData(
     client,
     user.organizationId,
@@ -72,6 +78,11 @@ export async function getRecipeEditorAction(input: {
   const user = await getCurrentUser(parsed.data.restaurantSlug);
   if (!user || user.designation === "staff")
     return { ok: false, error: "You don't have permission to edit recipes." };
+  const blocked = await guardModule({
+    module: "recipes",
+    organizationId: user.organizationId,
+  });
+  if (blocked) return blocked;
   const org = user.organizationId;
   const categories: EditorCategory[] = [];
   for (let offset = 0; ; offset += 1000) {

@@ -10,6 +10,7 @@ import {
 import type { BoardAction } from "@/features/allocation/domain/rotation-board";
 import type { TableConflictInfo } from "@/features/allocation/domain/table-conflict";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -208,6 +209,15 @@ export async function executeBoardActionRemote(
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  // V2-004.004: the organization/location in the input are untrusted claims;
+  // the guard checks the SERVER-verified location and rejects a mismatch.
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
 
   const serviceDate = zonedWallTimeFromInstant(new Date(), input.timeZone).date;
   const resolvedAction = await withResolvedRounds(
@@ -589,6 +599,12 @@ export async function undoBoardAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: input.organizationId,
+  });
+  if (blocked) return blocked;
+
   const { error } = await supabase.rpc("board_undo", {
     p_organization_id: input.organizationId,
     p_service_session_id: input.serviceSessionId,
@@ -606,6 +622,12 @@ export async function redoBoardAction(input: {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: input.organizationId,
+  });
+  if (blocked) return blocked;
 
   const { error } = await supabase.rpc("board_redo", {
     p_organization_id: input.organizationId,
@@ -647,6 +669,12 @@ export async function getAllocationContextForDateAction(input: {
   if (!location) {
     return { ok: false, error: "No location is set up yet." };
   }
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: currentUser.organizationId,
+    location,
+  });
+  if (blocked) return blocked;
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
   if (parsed.data.serviceDate > today) {
     return { ok: false, error: "You can't browse to a date in the future." };

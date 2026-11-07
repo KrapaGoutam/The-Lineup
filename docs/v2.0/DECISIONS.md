@@ -92,3 +92,11 @@ When evaluating permissions for a user within an active `(organization_id, locat
 ### V2-D020: Elimination of Creator Bypass in `has_org_role`
 
 The historic authorization gap in `private.has_org_role` (Issue #106)—which granted full access to `organizations.created_by` regardless of active membership—is permanently removed in V2-001.007. All authorization must strictly derive from active, server-verified membership and location assignments.
+
+### V2-D021: Module Enforcement Is Activated By The Database, Per Environment, Behind A Reconciliation Gate
+
+Backend module enforcement (V2-004.004) is controlled by one row in `public.module_enforcement_settings` (`staged` by default). Server Actions and the database read the same switch, so they cannot disagree. The database refuses to set it to `active` while any active location lacks an explicit configuration row for every module, requires a non-blank approval reference, and rejects any change carrying an end-user identity. Shipping the code never changes behaviour; a missing row is never treated as Enabled once active. Reversal is a single statement. Details: `features/004-location-module-configuration/004-backend-enforcement/PLAN.md`.
+
+### V2-D022: System Operations Are Exempt From Module Enforcement By An Explicit, Tested List
+
+Settings (location/staff administration, module settings, account recovery), sign-in/out, passcode change/reset, lockout management, deactivate/reactivate and context switching are never gated by an optional module. The exemption list is enforced by `enforcement-coverage.test.ts`: every exported Server Action must be guarded or appear on it with a reason.

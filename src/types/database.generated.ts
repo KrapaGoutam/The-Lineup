@@ -2317,6 +2317,30 @@ export type Database = {
           },
         ];
       };
+      module_enforcement_settings: {
+        Row: {
+          activated_at: string | null;
+          activation_reference: string | null;
+          mode: string;
+          singleton: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          activated_at?: string | null;
+          activation_reference?: string | null;
+          mode?: string;
+          singleton?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          activated_at?: string | null;
+          activation_reference?: string | null;
+          mode?: string;
+          singleton?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       operating_hours: {
         Row: {
           closed: boolean;

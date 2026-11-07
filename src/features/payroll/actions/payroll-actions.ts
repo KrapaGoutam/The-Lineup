@@ -53,6 +53,7 @@ import {
   type PayrollPayment,
   type PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -160,6 +161,12 @@ export async function getPayrollAccessAction(input: {
 
   const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   const { access } = resolved;
   if (access.scope !== "self") return { ok: true, data: access };
 
@@ -189,6 +196,13 @@ export async function getPayrollRateOptionsAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const usersResult = await getActiveNeonUsers();
   if (!usersResult.ok) return { ok: false, error: usersResult.error };
@@ -231,6 +245,13 @@ export async function setPayrollDefaultRateAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -259,6 +280,13 @@ export async function setPayrollRateOverrideAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -286,6 +314,13 @@ export async function removePayrollRateOverrideAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -310,6 +345,12 @@ export async function listPayrollPeriodsAction(input: {
 
   const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   if (resolved.access.scope === "unlinked") return { ok: true, data: [] };
 
   // Identical query for "all" and "self" -- payroll_periods_select_self's
@@ -350,6 +391,12 @@ export async function getPayrollLedgerAction(input: {
 
   const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   if (resolved.access.scope === "unlinked") {
     return { ok: false, error: "That payroll period could not be found." };
   }
@@ -480,6 +527,13 @@ export async function generatePayrollPeriodAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -555,6 +609,13 @@ export async function generatePayrollForEmployeesAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -643,6 +704,13 @@ export async function getPayrollGenerationEligibilityAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const usersResult = await getActiveNeonUsers();
   if (!usersResult.ok) return { ok: false, error: usersResult.error };
 
@@ -689,6 +757,13 @@ export async function regeneratePayrollPeriodAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -752,6 +827,13 @@ export async function lockPayrollPeriodAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -800,6 +882,13 @@ export async function unlockPayrollPeriodAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -857,6 +946,13 @@ export async function recordPaymentAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -900,6 +996,13 @@ export async function editDraftPaymentAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -948,6 +1051,13 @@ export async function deleteDraftPaymentAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -988,6 +1098,13 @@ export async function confirmPaymentAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -1050,6 +1167,13 @@ export async function unconfirmPaymentAction(input: {
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
 
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
+
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
@@ -1090,6 +1214,13 @@ export async function recordAdjustmentAction(input: {
 
   const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
   if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+
+  // V2-004.004: payroll must be turned on at the verified location.
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: currentUser.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -1203,6 +1334,12 @@ export async function getPayrollDashboardAction(input: {
 
   const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+
+  const blocked = await guardModule({
+    module: "payroll",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   if (resolved.access.scope === "unlinked") {
     return { ok: true, data: EMPTY_DASHBOARD };
   }

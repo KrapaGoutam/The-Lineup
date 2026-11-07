@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+import {
+  guardModule,
+  guardModuleForSlug,
+} from "@/features/modules/data/module-enforcement";
 import { getOpeningReminderPrompt } from "@/features/tasks/data/opening-reminder-prompt-data";
 import { getTaskHistory } from "@/features/tasks/data/task-history-data";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
@@ -275,6 +279,14 @@ export async function getTasksSnapshotAction(input: {
   const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
   if (!workspace.ok) return workspace.result;
 
+  // V2-004.004: the module must be turned on at the VERIFIED location.
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
   const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
   return { ok: true, data: snapshot };
@@ -318,6 +330,14 @@ export async function runTaskCommandAction(input: {
   const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
   if (!workspace.ok) return workspace.result;
 
+  // V2-004.004: no write when the module is off at the verified location.
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
   const failure = await runCommand(
     supabase,
     caller.organizationId,
@@ -357,6 +377,13 @@ export async function getTaskHistoryAction(input: {
   const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
   if (!workspace.ok) return workspace.result;
 
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
   const history = await getTaskHistory(caller.organizationId);
   if (!history)
     return { ok: false, error: "Task history could not be loaded." };
@@ -375,6 +402,10 @@ export async function getTasksUnreadCountAction(input: {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { ok: false };
+  // V2-004.004: cheap while staged; resolves the caller only when active.
+  if (await guardModuleForSlug("tasks", parsed.data.restaurantSlug)) {
+    return { ok: false };
+  }
   const { count, error } = await supabase
     .from("task_notifications")
     .select("id", { count: "exact", head: true })
@@ -406,6 +437,12 @@ export async function getOpeningReminderPromptAction(input: {
 
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to see tasks." };
+
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+  });
+  if (blocked) return blocked;
 
   const data = await getOpeningReminderPrompt(
     caller.organizationId,
@@ -440,6 +477,12 @@ export async function acknowledgeOpeningReminderAction(input: {
 
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to do that." };
+
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+  });
+  if (blocked) return blocked;
 
   const { error } = await supabase.rpc("task_notifications_mark_read", {
     p_ids: parsed.data.ids,

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -69,6 +70,13 @@ export async function addTipIntervalAction(
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const blocked = await guardModule({
+    module: "tips",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
 
   const pool = await getOrCreateTipPool(
     supabase,
@@ -200,6 +208,13 @@ export async function finalizeTipsAction(input: {
     };
   }
 
+  const blocked = await guardModule({
+    module: "tips",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
+
   const { error } = await supabase
     .from("tip_pools")
     .update({
@@ -231,6 +246,13 @@ export async function reopenTipsAction(input: {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const blocked = await guardModule({
+    module: "tips",
+    organizationId: input.organizationId,
+    claimedLocationId: input.locationId,
+  });
+  if (blocked) return blocked;
 
   const { error } = await supabase
     .from("tip_pools")
@@ -303,6 +325,13 @@ export async function getClockedInRosterAction(input: {
       error: "This restaurant has no primary location configured.",
     };
   }
+  const blocked = await guardModule({
+    module: "tips",
+    organizationId: currentUser.organizationId,
+    location,
+  });
+  if (blocked) return blocked;
+
   const serviceDate = zonedWallTimeFromInstant(
     new Date(),
     location.time_zone,

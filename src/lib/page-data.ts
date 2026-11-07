@@ -31,6 +31,8 @@ import {
 } from "@/features/tips/data/tips-data";
 import { getEntryUser } from "@/lib/current-user";
 import { readLocationModuleConfigs } from "@/features/modules/data/module-config-reader";
+import { readModuleEnforcementMode } from "@/features/modules/data/module-enforcement";
+import { decideModuleAccess } from "@/features/modules/domain/module-enforcement";
 import {
   serializeModuleNavigation,
   type ModuleNavigationSnapshot,
@@ -219,18 +221,31 @@ export async function loadPageData(
     };
   }
 
-  const [
-    moduleConfigs,
-    scheduleContext,
-    tipsContext,
-    allocationContext,
-    switcher,
-  ] = await Promise.all([
+  // V2-004.004: read the activation switch and this location's module
+  // configuration FIRST, so a module that is turned off at the verified
+  // location never has its data loaded into the page. While enforcement is
+  // staged every module is allowed and the loaders run exactly as before.
+  const [enforcement, moduleConfigs, switcher] = await Promise.all([
+    readModuleEnforcementMode(),
     readLocationModuleConfigs(context.locationId),
-    getScheduleContext(context.organizationId, scope),
-    getTipsContext(context.organizationId, scope),
-    getAllocationContext(context.organizationId, undefined, scope),
     listCurrentEligibleContexts(),
+  ]);
+  const moduleAllowed = (module: "schedule" | "tips" | "table_allocation") =>
+    decideModuleAccess({
+      module,
+      enforcement,
+      configuration: moduleConfigs,
+    }).allowed;
+  const [scheduleContext, tipsContext, allocationContext] = await Promise.all([
+    moduleAllowed("schedule")
+      ? getScheduleContext(context.organizationId, scope)
+      : Promise.resolve(null),
+    moduleAllowed("tips")
+      ? getTipsContext(context.organizationId, scope)
+      : Promise.resolve(null),
+    moduleAllowed("table_allocation")
+      ? getAllocationContext(context.organizationId, undefined, scope)
+      : Promise.resolve(null),
   ]);
 
   // V2-003.004 reconciliation: an explicit selection only needs persisting
