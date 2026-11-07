@@ -403,3 +403,59 @@ it("Overall administrator: real attribution without a membership row, and no bla
   });
   expect(unattributable.error?.code).toBe("23503");
 });
+
+it("direct pool PATCH cannot attribute a finalization to someone else, and allocations cannot be written directly", async () => {
+  const day = (await import("@/lib/timezone")).zonedWallTimeFromInstant(
+    new Date(Date.now() + 24 * 3600_000),
+    CHI,
+  ).date;
+  const add = await fx.manager.client.rpc("tips_add_interval", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_service_date: day,
+    p_starts_at: new Date().toISOString(),
+    p_ends_at: new Date(Date.now() + 3600_000).toISOString(),
+    p_amount_cents: 700,
+    p_participant_ids: [fx.staff.id],
+  });
+  expect(add.error).toBeNull();
+  const poolId = add.data!.tip_pool_id;
+
+  const forged = await fx.manager.client
+    .from("tip_pools")
+    .update({
+      status: "finalized",
+      finalized_at: new Date().toISOString(),
+      finalized_by: fx.staff.id,
+    })
+    .eq("id", poolId)
+    .select();
+  expect(forged.error?.code).toBe("42501");
+  expect(
+    must(
+      await fx.admin
+        .from("tip_pools")
+        .select("status")
+        .eq("id", poolId)
+        .single(),
+    )!.status,
+  ).toBe("draft");
+
+  // Allocations are derived: no direct writes, even on a draft pool.
+  const direct = await fx.manager.client.from("tip_allocations").insert({
+    organization_id: fx.org.id,
+    tip_pool_id: poolId,
+    profile_id: fx.dual.id,
+    amount_cents: 99999,
+  });
+  expect(direct.error?.code).toBe("42501");
+
+  // The RPC recalculation still produced the right allocation.
+  const rows = must(
+    await fx.admin
+      .from("tip_allocations")
+      .select("profile_id, amount_cents")
+      .eq("tip_pool_id", poolId),
+  )!;
+  expect(rows).toEqual([{ profile_id: fx.staff.id, amount_cents: 700 }]);
+});

@@ -322,6 +322,7 @@ create policy "tip_pools_update_draft_manager" on public.tip_pools
   )
   with check (
     private.tips_is_manager(organization_id, location_id)
+    and (finalized_by is null or finalized_by = (select auth.uid()))
   );
 
 drop policy if exists "tip_pools_delete_draft_manager" on public.tip_pools;
@@ -367,6 +368,37 @@ create policy "tip_intervals_write_manager" on public.tip_intervals
     )
   );
 
+-- 10b. Participant insert check for the tip_interval_participants WITH CHECK policy. The policy runs
+-- as the calling role, which cannot (and must not) execute tips_workforce_eligible directly:
+-- granting it would let any user probe who works at any location. This wrapper answers true
+-- only when the caller manages the interval's pool location AND the profile is current
+-- workforce there, so it reveals nothing to anyone else.
+create or replace function private.tips_can_add_participant(
+  p_organization_id uuid,
+  p_tip_interval_id bigint,
+  p_profile_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.tip_intervals interval
+    join public.tip_pools pool
+      on pool.id = interval.tip_pool_id
+     and pool.organization_id = interval.organization_id
+    where interval.id = p_tip_interval_id
+      and interval.organization_id = p_organization_id
+      and private.tips_is_manager(pool.organization_id, pool.location_id)
+      and private.tips_workforce_eligible(pool.organization_id, pool.location_id, p_profile_id)
+  );
+$$;
+revoke all on function private.tips_can_add_participant(uuid, bigint, uuid) from public, anon;
+grant execute on function private.tips_can_add_participant(uuid, bigint, uuid) to authenticated;
+
 -- 11. Update tip_interval_participants RLS policy:
 -- On write, enforce that participants must be workforce-eligible at that location.
 -- On select/delete, allow managers to view/manage existing rows even if eligibility changed later.
@@ -386,32 +418,19 @@ create policy "tip_interval_participants_write_manager" on public.tip_interval_p
     )
   )
   with check (
-    exists (
-      select 1
-      from public.tip_intervals interval
-      join public.tip_pools pool
-        on pool.id = interval.tip_pool_id
-       and pool.organization_id = interval.organization_id
-      where interval.id = tip_interval_id
-        and interval.organization_id = tip_interval_participants.organization_id
-        and private.tips_is_manager(pool.organization_id, pool.location_id)
-        and private.tips_workforce_eligible(pool.organization_id, pool.location_id, profile_id)
-    )
+    private.tips_can_add_participant(organization_id, tip_interval_id, profile_id)
   );
 
 -- 12. Update tip_allocations RLS policies.
+-- Allocations are derived data written only by the SECURITY DEFINER recalculation, which
+-- always pays exactly the interval participants. Managers therefore get READ access only:
+-- a direct write could name any payee and would survive finalization (finalize does not
+-- recalculate). The pre-existing restrictive *_draft_only policies remain as a second guard.
 drop policy if exists "tip_allocations_write_manager" on public.tip_allocations;
-create policy "tip_allocations_write_manager" on public.tip_allocations
-  for all to authenticated
+drop policy if exists "tip_allocations_select_manager" on public.tip_allocations;
+create policy "tip_allocations_select_manager" on public.tip_allocations
+  for select to authenticated
   using (
-    exists (
-      select 1 from public.tip_pools pool
-      where pool.id = tip_pool_id
-        and pool.organization_id = tip_allocations.organization_id
-        and private.tips_is_manager(pool.organization_id, pool.location_id)
-    )
-  )
-  with check (
     exists (
       select 1 from public.tip_pools pool
       where pool.id = tip_pool_id
@@ -440,14 +459,18 @@ declare
 begin
   select id, organization_id, location_id, status into v_pool
   from public.tip_pools
-  where id = target_tip_pool_id;
+  where id = target_tip_pool_id
+  for update;
 
-  if v_pool.id is null or v_pool.status != 'draft' then
+  -- Authorization first, with the SAME error for "no such pool" and "not yours", so a
+  -- caller cannot probe which pool ids exist.
+  if v_pool.id is null
+     or not private.tips_is_manager(v_pool.organization_id, v_pool.location_id) then
     raise exception 'Draft tip pool not found' using errcode = 'P0002';
   end if;
 
-  if not private.tips_is_manager(v_pool.organization_id, v_pool.location_id) then
-    raise exception 'Only an owner, manager or assistant manager can do that.' using errcode = '42501';
+  if v_pool.status != 'draft' then
+    raise exception 'Draft tip pool not found' using errcode = 'P0002';
   end if;
 
   perform private.assert_location_module_enabled(v_pool.location_id, 'tips');
@@ -656,7 +679,8 @@ begin
   select id, status into v_pool_id, v_pool_status
   from public.tip_pools
   where location_id = p_location_id
-    and service_date = p_service_date;
+    and service_date = p_service_date
+  for update;
 
   if v_pool_id is null then
     insert into public.tip_pools (organization_id, location_id, service_date, status)
@@ -712,7 +736,8 @@ begin
 
   select id, organization_id, location_id, status into v_pool
   from public.tip_pools
-  where id = p_tip_pool_id;
+  where id = p_tip_pool_id
+  for update;
 
   if v_pool.id is null or v_pool.organization_id != p_organization_id or v_pool.location_id != p_location_id then
     raise exception 'Tip pool not found for this location.' using errcode = 'P0002';
@@ -778,7 +803,8 @@ begin
 
   select id, organization_id, location_id, status into v_pool
   from public.tip_pools
-  where id = p_tip_pool_id;
+  where id = p_tip_pool_id
+  for update;
 
   if v_pool.id is null or v_pool.organization_id != p_organization_id or v_pool.location_id != p_location_id then
     raise exception 'Tip pool not found for this location.' using errcode = 'P0002';

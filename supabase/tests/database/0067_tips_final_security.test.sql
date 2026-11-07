@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(60);
 
 -- V2-005.003 final security corrections. Unlike 0066, every assertion here that
 -- is about RLS runs as the real `authenticated` role with a live session.
@@ -285,6 +285,98 @@ select ok(
 -- ---------------------------------------------------------------------------
 -- Finalized pool: direct authenticated writes cannot change financial records
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Direct participant inserts (what the pre-RPC app does) run the WITH CHECK as the
+-- calling role: eligible people succeed, ineligible/historical people are refused.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067001', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067001"}', true);
+select lives_ok(
+  $$ select public.tips_add_interval(
+       '00000000-0000-4000-8000-000000067010'::uuid, '00000000-0000-4000-8000-000000067011'::uuid,
+       current_date + 1, now(), now() + interval '1 hour', 900,
+       array['00000000-0000-4000-8000-000000067002'::uuid]) $$,
+  'draft pool for tomorrow created through the RPC'
+);
+select lives_ok(
+  $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
+     values ('00000000-0000-4000-8000-000000067010',
+             (select i.id from public.tip_intervals i join public.tip_pools p on p.id = i.tip_pool_id
+               where p.location_id = '00000000-0000-4000-8000-000000067011' and p.service_date = current_date + 1),
+             '00000000-0000-4000-8000-000000067001') $$,
+  'direct participant insert of a current workforce member succeeds for the location manager'
+);
+select throws_ok(
+  $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
+     values ('00000000-0000-4000-8000-000000067010',
+             (select i.id from public.tip_intervals i join public.tip_pools p on p.id = i.tip_pool_id
+               where p.location_id = '00000000-0000-4000-8000-000000067011' and p.service_date = current_date + 1),
+             '00000000-0000-4000-8000-000000067005') $$,
+  '42501', null, 'direct insert of a historical-only (departed) person is refused'
+);
+select throws_ok(
+  $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
+     values ('00000000-0000-4000-8000-000000067010',
+             (select i.id from public.tip_intervals i join public.tip_pools p on p.id = i.tip_pool_id
+               where p.location_id = '00000000-0000-4000-8000-000000067011' and p.service_date = current_date + 1),
+             '00000000-0000-4000-8000-000000067003') $$,
+  '42501', null, 'direct insert of a Loc B-only employee into a Loc A interval is refused'
+);
+-- Independent review fixes: direct pool state changes cannot forge attribution, allocations
+-- cannot be written directly, and recalculation does not reveal which pool ids exist.
+select throws_ok(
+  $$ update public.tip_pools set status = 'finalized', finalized_at = now(),
+       finalized_by = '00000000-0000-4000-8000-000000067002'
+     where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
+  '42501', null, 'direct finalize cannot attribute the pool to someone else'
+);
+select lives_ok(
+  $$ update public.tip_pools set status = 'finalized', finalized_at = now(),
+       finalized_by = '00000000-0000-4000-8000-000000067001'
+     where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
+  'direct finalize attributed to the caller is still accepted (pre-RPC app compatibility)'
+);
+select lives_ok(
+  $$ update public.tip_pools set status = 'draft', finalized_at = null, finalized_by = null
+     where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
+  'direct reopen still accepted for the pre-RPC app'
+);
+select throws_ok(
+  $$ insert into public.tip_allocations(organization_id, tip_pool_id, profile_id, amount_cents)
+     values ('00000000-0000-4000-8000-000000067010',
+             (select id from public.tip_pools where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1),
+             '00000000-0000-4000-8000-000000067005', 99999) $$,
+  '42501', null, 'managers cannot write allocations directly (no payee can be forged)'
+);
+create temp table before_pool_probe as
+select id as pool_id from public.tip_pools
+ where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067008', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067008"}', true);
+select throws_ok(
+  $$ select public.recalculate_tip_pool((select pool_id from before_pool_probe)) $$,
+  'P0002', null, 'other-organization caller gets the same not-found error as for a missing pool'
+);
+select throws_ok(
+  $$ select public.recalculate_tip_pool(-1) $$,
+  'P0002', null, 'missing pool returns not-found'
+);
+select ok(
+  pg_get_functiondef('public.tips_finalize_pool(uuid,uuid,bigint)'::regprocedure) ~* 'for update'
+  and pg_get_functiondef('public.tips_reopen_pool(uuid,uuid,bigint,text)'::regprocedure) ~* 'for update'
+  and pg_get_functiondef('public.recalculate_tip_pool(bigint)'::regprocedure) ~* 'for update'
+  and pg_get_functiondef('public.tips_add_interval(uuid,uuid,date,timestamptz,timestamptz,integer,uuid[])'::regprocedure) ~* 'for update',
+  'finalize, reopen, add-interval and recalculation lock the pool row (no finalize/edit interleaving)'
+);
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067002', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067002"}', true);
+select ok(
+  not has_function_privilege('authenticated', 'private.tips_workforce_eligible(uuid,uuid,uuid)', 'execute'),
+  'workforce probe helper stays private (cannot be used to enumerate who works where)'
+);
+reset role;
+
 create temp table before_state as
 select
   (select id from public.tip_pools where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date) as pool_id,
@@ -307,14 +399,14 @@ select throws_ok(
   '42501', null, 'manager cannot insert an interval into a finalized pool'
 );
 select lives_ok(
-  $$ update public.tip_intervals set amount_cents = 1 $$, 'direct interval update is a no-op on finalized pools');
-select lives_ok($$ delete from public.tip_intervals $$, 'direct interval delete is a no-op on finalized pools');
+  $$ update public.tip_intervals set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, 'direct interval update is a no-op on finalized pools');
+select lives_ok($$ delete from public.tip_intervals where tip_pool_id = (select pool_id from before_state) $$, 'direct interval delete is a no-op on finalized pools');
 select throws_ok(
   $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
      values ('00000000-0000-4000-8000-000000067010', (select id from public.tip_intervals limit 1), '00000000-0000-4000-8000-000000067002') $$,
   '42501', null, 'manager cannot add a participant to a finalized interval'
 );
-select lives_ok($$ delete from public.tip_interval_participants $$, 'direct participant delete is a no-op on finalized pools');
+select lives_ok($$ delete from public.tip_interval_participants where tip_interval_id in (select id from public.tip_intervals where tip_pool_id = (select pool_id from before_state)) $$, 'direct participant delete is a no-op on finalized pools');
 select throws_ok(
   $$ insert into public.tip_allocations(organization_id, tip_pool_id, profile_id, amount_cents)
      values ('00000000-0000-4000-8000-000000067010',
@@ -322,8 +414,8 @@ select throws_ok(
              '00000000-0000-4000-8000-000000067002', 999999) $$,
   '42501', null, 'manager cannot insert an allocation into a finalized pool'
 );
-select lives_ok($$ update public.tip_allocations set amount_cents = 1 $$, 'direct allocation update is a no-op on finalized pools');
-select lives_ok($$ delete from public.tip_allocations $$, 'direct allocation delete is a no-op on finalized pools');
+select lives_ok($$ update public.tip_allocations set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, 'direct allocation update is a no-op on finalized pools');
+select lives_ok($$ delete from public.tip_allocations where tip_pool_id = (select pool_id from before_state) $$, 'direct allocation delete is a no-op on finalized pools');
 select throws_ok(
   $$ select public.tips_add_interval(
        '00000000-0000-4000-8000-000000067010'::uuid, '00000000-0000-4000-8000-000000067011'::uuid,

@@ -28,9 +28,20 @@ The single, still-unapplied migration `20261107194700_tips_location_scoping.sql`
 
 Two further defects were found by exercising RLS as the real `authenticated` role (the original pgTAP never switched role): `tip_allocations_select_own` returned zero rows to staff because it read `tip_pools` through RLS (baseline allowed own-row reads); fixed with the definer helper `private.tips_allocation_visible`.
 
+## Independent review and further defects (CP-P11 / CP-P12, second pass)
+
+Replaying the deployed (pre-RPC) app against the new schema as real users exposed one more defect, and an independent read-only review confirmed four more. All are fixed in the same unapplied migration:
+
+- Direct `tip_interval_participants` inserts failed with "permission denied" for every caller because the policy called a helper that `authenticated` cannot execute. Now `private.tips_can_add_participant` (definer; true only for a manager of the pool location AND current workforce). `tips_workforce_eligible` itself stays private so it cannot be used to enumerate who works where.
+- A direct `PATCH tip_pools` could finalize with an arbitrary `finalized_by` (the FK now accepts any profile), forging attribution and exposing another tenant display name through the roster. The update policy now requires `finalized_by` to be NULL or the caller. Direct finalize/reopen by a location manager (without an audit row) remains available to the pre-RPC app; this predates Tips scoping and is the documented residual.
+- `tips_add_interval`, `tips_finalize_pool`, `tips_reopen_pool` and `recalculate_tip_pool` now lock the pool row (`for update`), so a finalize cannot interleave with an in-flight edit.
+- Managers can no longer write `tip_allocations` directly (read-only); allocations are derived by the definer recalculation, so a forged payee can no longer survive finalization.
+- `recalculate_tip_pool` authorizes before revealing existence or state (same `P0002` for "missing" and "not yours").
+- Accepted, not changed: staff receive the co-workers opaque profile ids and interval totals, because the existing product shows the total split among N people and the client computes the equal split; no names are disclosed (the roster is self-only).
+
 ## Verification (local, disposable stack)
 
-- Vitest 244 files / 3,303 tests; pgTAP 68 files / 2,289 tests (new `0067_tips_final_security`: 48); real-session suites 17 tests; `npm run check`, `next build --webpack` pass.
+- Vitest 244 files / 3,303 tests; pgTAP 68 files / 2,301 tests (new `0067_tips_final_security`: 60); real-session suites 20 tests (including the deployed app replayed on the new schema); `npm run check`, `next build --webpack` pass.
 - Clean 77→78 replay and a nonempty 77→78 upgrade (finalized + draft pools, intervals, participants, allocations, audit events): all table digests identical before and after.
 - Backend enforcement remains STAGED; no module configuration, no hosted change yet.
 
