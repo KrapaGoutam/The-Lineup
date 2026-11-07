@@ -49,6 +49,7 @@ export function TipWorkspace({
   onReopen,
   onPullClockedInTeam,
   auditLog,
+  isManager: isManagerProp,
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -67,8 +68,9 @@ export function TipWorkspace({
     { ok: true; data: string[] } | { ok: false; error: string }
   >;
   auditLog: TipsAuditEntry[];
+  isManager?: boolean;
 }) {
-  const isManager = user.role !== "server";
+  const isManager = isManagerProp ?? user.role !== "server";
   const [error, setError] = useState("");
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");

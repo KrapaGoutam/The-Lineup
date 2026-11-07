@@ -1353,6 +1353,7 @@ function RestaurantOperationsAppInner({
     if (!locationId) return { ok: false, error: "Not ready yet." };
     const result = await addTipIntervalAction({
       restaurantSlug,
+      expectedContext: workspaceExpectation,
       organizationId: currentUser.organizationId,
       locationId,
       timeZone,
@@ -1397,7 +1398,10 @@ function RestaurantOperationsAppInner({
         .map(([profileId]) => profileId);
       return { ok: true, data: profileIds };
     }
-    const result = await getClockedInRosterAction({ restaurantSlug });
+    const result = await getClockedInRosterAction({
+      restaurantSlug,
+      expectedContext: workspaceExpectation,
+    });
     if (!result.ok) {
       if (result.sessionInvalid) forceSignOut();
       return { ok: false, error: result.error };
@@ -1410,6 +1414,7 @@ function RestaurantOperationsAppInner({
       if (!locationId || tipPoolId === null) return;
       const result = await finalizeTipsAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
@@ -1435,6 +1440,7 @@ function RestaurantOperationsAppInner({
       if (!locationId || tipPoolId === null) return;
       const result = await reopenTipsAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
@@ -2501,6 +2507,14 @@ function RestaurantOperationsAppInner({
                 onReopen={reopenTips}
                 onPullClockedInTeam={pullClockedInTeam}
                 auditLog={tipsAuditLog}
+                isManager={
+                  demoMode
+                    ? user.role !== "server"
+                    : ["owner", "manager", "assistant_manager"].includes(
+                        activeContext?.tasksDesignation ??
+                          (user.role === "server" ? "staff" : "manager"),
+                      )
+                }
               />
             ) : null}
             {tab === "team" && isManager ? (

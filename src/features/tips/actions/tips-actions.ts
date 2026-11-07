@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { getTipsActor } from "@/features/tips/data/tips-actor";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,44 +21,78 @@ export type ActionResult<T> =
   | {
       ok: false;
       error: string;
-      // Feature 017: see requireLiveSession's doc comment.
       sessionInvalid?: true;
+      contextStale?: true;
     };
 
-async function getOrCreateTipPool(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
-  locationId: string,
-  serviceDate: string,
-) {
-  const { data: existing } = await supabase
-    .from("tip_pools")
-    .select("id, status")
-    .eq("location_id", locationId)
-    .eq("service_date", serviceDate)
-    .maybeSingle();
-  if (existing) return existing;
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
-  const { data: created, error } = await supabase
-    .from("tip_pools")
-    .insert({
-      organization_id: organizationId,
-      location_id: locationId,
-      service_date: serviceDate,
-      status: "draft",
-    })
-    .select("id, status")
-    .single();
-  if (error || !created) return null;
-  return created;
+type Caller = NonNullable<Awaited<ReturnType<typeof getTipsActor>>>;
+
+/**
+ * Server-side request-context consistency check (V2-003.005).
+ * Validates that the client's expected context matches the server-verified caller.
+ */
+async function checkWorkspace(
+  raw: unknown,
+  caller: Caller,
+  claimedLocationId?: string,
+) {
+  const expectationRaw = raw ?? {
+    profileId: caller.viewer.profileId,
+    organizationId: caller.organizationId,
+    locationId: claimedLocationId ?? caller.scope.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: caller.viewer.profileId,
+      organizationId: caller.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: caller.scope.locationId,
+        time_zone: caller.scope.timeZone,
+      }),
+    },
+  );
+  if (outcome.ok) return { ok: true as const, location: outcome.location };
+  if (outcome.code === "invalid") {
+    return {
+      ok: false as const,
+      result: { ok: false as const, error: "That request is invalid." },
+    };
+  }
+  return {
+    ok: false as const,
+    result: {
+      ok: false as const,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    },
+  };
+}
+
+function isManagerRole(designation: string): boolean {
+  return (
+    designation === "owner" ||
+    designation === "manager" ||
+    designation === "assistant_manager"
+  );
 }
 
 export type AddTipIntervalInput = {
   restaurantSlug: string;
-  organizationId: string;
-  locationId: string;
-  timeZone: string;
-  serviceDate: string;
+  expectedContext?: unknown;
+  organizationId?: string;
+  locationId?: string;
+  timeZone?: string;
+  serviceDate?: string;
   start: string;
   end: string;
   amountCents: number;
@@ -71,230 +106,250 @@ export async function addTipIntervalAction(
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const caller = await getTipsActor(input.restaurantSlug);
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to add tip intervals.",
+    };
+  }
+
+  if (!isManagerRole(caller.viewer.designation)) {
+    return {
+      ok: false,
+      error: "Only an owner, manager or assistant manager can do that.",
+    };
+  }
+
+  const workspace = await checkWorkspace(
+    input.expectedContext,
+    caller,
+    input.locationId,
+  );
+  if (!workspace.ok) return workspace.result;
+
   const blocked = await guardModule({
     module: "tips",
-    organizationId: input.organizationId,
+    organizationId: caller.organizationId,
     claimedLocationId: input.locationId,
+    location: workspace.location,
   });
   if (blocked) return blocked;
 
-  const pool = await getOrCreateTipPool(
-    supabase,
-    input.organizationId,
-    input.locationId,
-    input.serviceDate,
-  );
-  if (!pool) return { ok: false, error: "Could not prepare today's tip pool." };
-  if (pool.status === "finalized") {
+  if (input.amountCents < 0) {
     return {
       ok: false,
-      error:
-        "This tip pool is finalized. A manager or owner must reopen it first.",
+      error: "Tip amount must be a non-negative number of cents.",
     };
   }
+
+  if (input.start === input.end) {
+    return {
+      ok: false,
+      error: "Tip interval start and end must be different.",
+    };
+  }
+
+  if (!input.participantIds || input.participantIds.length === 0) {
+    return {
+      ok: false,
+      error: "Choose at least one participant.",
+    };
+  }
+
+  const timeZone = workspace.location.time_zone;
+  const serviceDate =
+    input.serviceDate ?? zonedWallTimeFromInstant(new Date(), timeZone).date;
 
   const startsAt = zonedWallTimeToInstant({
-    date: input.serviceDate,
+    date: serviceDate,
     time: input.start,
-    timeZone: input.timeZone,
+    timeZone,
   });
   const endsAt = zonedWallTimeToInstant({
-    date: input.serviceDate,
+    date: serviceDate,
     time: input.end,
-    timeZone: input.timeZone,
+    timeZone,
   });
 
-  const { data: interval, error: intervalError } = await supabase
-    .from("tip_intervals")
-    .insert({
-      organization_id: input.organizationId,
-      tip_pool_id: pool.id,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      amount_cents: input.amountCents,
-    })
-    .select("id")
-    .single();
-  if (intervalError || !interval) {
+  const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    "tips_add_interval",
+    {
+      p_organization_id: caller.organizationId,
+      p_location_id: workspace.location.id,
+      p_service_date: serviceDate,
+      p_starts_at: startsAt.toISOString(),
+      p_ends_at: endsAt.toISOString(),
+      p_amount_cents: input.amountCents,
+      p_participant_ids: input.participantIds,
+    },
+  );
+
+  if (rpcError) {
     return {
       ok: false,
-      error: `Could not add the interval: ${intervalError?.message}`,
+      error: rpcError.message,
     };
   }
 
-  const { error: participantsError } = await supabase
-    .from("tip_interval_participants")
-    .insert(
-      input.participantIds.map((profileId) => ({
-        organization_id: input.organizationId,
-        tip_interval_id: interval.id,
-        profile_id: profileId,
-      })),
-    );
-  if (participantsError) {
-    await supabase.from("tip_intervals").delete().eq("id", interval.id);
-    return {
-      ok: false,
-      error: `Could not record participants: ${participantsError.message}`,
-    };
-  }
-
-  const { error: recalcError } = await supabase.rpc("recalculate_tip_pool", {
-    target_tip_pool_id: pool.id,
-  });
-  if (recalcError) {
-    return {
-      ok: false,
-      error: `Could not recalculate the pool: ${recalcError.message}`,
-    };
-  }
+  const parsed =
+    typeof rpcResult === "string" ? JSON.parse(rpcResult) : rpcResult;
 
   revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidatePath("/");
+
   return {
     ok: true,
     data: {
       interval: {
-        id: String(interval.id),
+        id: String(parsed.interval_id),
         start: input.start,
         end: input.end,
         amountCents: input.amountCents,
         participantIds: input.participantIds,
       },
-      tipPoolId: pool.id,
+      tipPoolId: Number(parsed.tip_pool_id),
     },
   };
 }
 
-async function recordAuditEvent(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  input: {
-    organizationId: string;
-    locationId: string;
-    tipPoolId: number;
-    action: "finalized" | "reopened";
-    reason?: string;
-  },
-) {
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return;
-  await supabase.from("audit_events").insert({
-    organization_id: input.organizationId,
-    location_id: input.locationId,
-    actor_profile_id: auth.user.id,
-    action: input.action,
-    entity_type: "tip_pool",
-    entity_id: String(input.tipPoolId),
-    reason: input.reason ?? null,
-  });
-}
-
-export async function finalizeTipsAction(input: {
+export type FinalizeTipsInput = {
   restaurantSlug: string;
-  organizationId: string;
-  locationId: string;
+  expectedContext?: unknown;
+  organizationId?: string;
+  locationId?: string;
   tipPoolId: number;
-}): Promise<ActionResult<null>> {
-  const supabase = await createClient();
-  // finalized_by needs the raw auth user id, so this reads it directly
-  // rather than going through requireLiveSession (which only reports
-  // live/dead, not the id) -- same underlying getUser() check, just with
-  // the id kept.
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) {
-    return {
-      ok: false,
-      error: "Your session is no longer valid. Please sign in again.",
-      sessionInvalid: true,
-    };
-  }
+};
 
-  const blocked = await guardModule({
-    module: "tips",
-    organizationId: input.organizationId,
-    claimedLocationId: input.locationId,
-  });
-  if (blocked) return blocked;
-
-  const { error } = await supabase
-    .from("tip_pools")
-    .update({
-      status: "finalized",
-      finalized_at: new Date().toISOString(),
-      finalized_by: auth.user.id,
-    })
-    .eq("id", input.tipPoolId);
-  if (error) return { ok: false, error: error.message };
-
-  await recordAuditEvent(supabase, {
-    organizationId: input.organizationId,
-    locationId: input.locationId,
-    tipPoolId: input.tipPoolId,
-    action: "finalized",
-  });
-
-  revalidatePath(`/r/${input.restaurantSlug}`);
-  return { ok: true, data: null };
-}
-
-export async function reopenTipsAction(input: {
-  restaurantSlug: string;
-  organizationId: string;
-  locationId: string;
-  tipPoolId: number;
-  reason: string;
-}): Promise<ActionResult<null>> {
+export async function finalizeTipsAction(
+  input: FinalizeTipsInput,
+): Promise<ActionResult<null>> {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const caller = await getTipsActor(input.restaurantSlug);
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to finalize tips.",
+    };
+  }
+
+  if (!isManagerRole(caller.viewer.designation)) {
+    return {
+      ok: false,
+      error: "Only an owner, manager or assistant manager can do that.",
+    };
+  }
+
+  const workspace = await checkWorkspace(
+    input.expectedContext,
+    caller,
+    input.locationId,
+  );
+  if (!workspace.ok) return workspace.result;
+
   const blocked = await guardModule({
     module: "tips",
-    organizationId: input.organizationId,
+    organizationId: caller.organizationId,
     claimedLocationId: input.locationId,
+    location: workspace.location,
   });
   if (blocked) return blocked;
 
-  const { error } = await supabase
-    .from("tip_pools")
-    .update({ status: "draft", finalized_at: null, finalized_by: null })
-    .eq("id", input.tipPoolId);
+  const { error } = await supabase.rpc("tips_finalize_pool", {
+    p_organization_id: caller.organizationId,
+    p_location_id: workspace.location.id,
+    p_tip_pool_id: input.tipPoolId,
+  });
   if (error) return { ok: false, error: error.message };
 
-  await recordAuditEvent(supabase, {
-    organizationId: input.organizationId,
-    locationId: input.locationId,
-    tipPoolId: input.tipPoolId,
-    action: "reopened",
-    reason: input.reason,
-  });
-
   revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidatePath("/");
   return { ok: true, data: null };
 }
 
-const restaurantSlugSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(120)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export type ReopenTipsInput = {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+  organizationId?: string;
+  locationId?: string;
+  tipPoolId: number;
+  reason: string;
+};
+
+export async function reopenTipsAction(
+  input: ReopenTipsInput,
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
+  const reason = (input.reason ?? "").trim();
+  if (reason.length < 3) {
+    return {
+      ok: false,
+      error: "Enter a short reason (at least 3 characters).",
+    };
+  }
+
+  const caller = await getTipsActor(input.restaurantSlug);
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to reopen tips.",
+    };
+  }
+
+  if (!isManagerRole(caller.viewer.designation)) {
+    return {
+      ok: false,
+      error: "Only an owner, manager or assistant manager can do that.",
+    };
+  }
+
+  const workspace = await checkWorkspace(
+    input.expectedContext,
+    caller,
+    input.locationId,
+  );
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardModule({
+    module: "tips",
+    organizationId: caller.organizationId,
+    claimedLocationId: input.locationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
+  const { error } = await supabase.rpc("tips_reopen_pool", {
+    p_organization_id: caller.organizationId,
+    p_location_id: workspace.location.id,
+    p_tip_pool_id: input.tipPoolId,
+    p_reason: reason,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/r/${input.restaurantSlug}`);
+  revalidatePath("/");
+  return { ok: true, data: null };
+}
 
 /**
- * Feature 029. Read-only: who currently has a genuinely open shift,
- * resolved to this organization's own profile ids. Manager/owner-only,
- * enforced here as defense in depth beyond the UI (which already only
- * ever renders the "Pull clocked-in team" button for a manager) --
- * re-derives `organizationId` via `getCurrentUser`, never trusts a
- * client-supplied one, and computes the service date from the
- * restaurant's own primary location + timezone, never a client-supplied
- * date either (the same discipline `getTipsContext` itself already
- * follows for `serviceDate`).
+ * Feature 029 & V2-005.003: Read-only suggestion: who currently has an open shift,
+ * strictly filtered to the verified location's eligible workforce.
  */
 export async function getClockedInRosterAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<{ profileIds: string[] }>> {
   const parsed = z
-    .object({ restaurantSlug: restaurantSlugSchema })
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "That request is invalid." };
@@ -304,43 +359,65 @@ export async function getClockedInRosterAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
-  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
-  if (!currentUser) {
+  const caller = await getTipsActor(parsed.data.restaurantSlug);
+  if (!caller) {
     return {
       ok: false,
       error: "You need to sign in to pull the clocked-in team.",
     };
   }
-  if (currentUser.role === "server") {
+
+  if (!isManagerRole(caller.viewer.designation)) {
     return {
       ok: false,
       error: "Only a manager or owner can pull the clocked-in team.",
     };
   }
 
-  const location = await getPrimaryLocation(currentUser.organizationId);
-  if (!location) {
-    return {
-      ok: false,
-      error: "This restaurant has no primary location configured.",
-    };
-  }
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
+
   const blocked = await guardModule({
     module: "tips",
-    organizationId: currentUser.organizationId,
-    location,
+    organizationId: caller.organizationId,
+    location: workspace.location,
   });
   if (blocked) return blocked;
 
   const serviceDate = zonedWallTimeFromInstant(
     new Date(),
-    location.time_zone,
+    workspace.location.time_zone,
   ).date;
 
-  const roster = await fetchClockedInRoster(supabase, {
-    organizationId: currentUser.organizationId,
-    serviceDate,
-  });
+  const [roster, { data: locationRoster, error: rosterError }] =
+    await Promise.all([
+      fetchClockedInRoster(supabase, {
+        organizationId: caller.organizationId,
+        serviceDate,
+      }),
+      supabase.rpc("tips_location_roster", {
+        p_organization_id: caller.organizationId,
+        p_location_id: workspace.location.id,
+      }),
+    ]);
+
   if (!roster.ok) return roster;
+
+  // Intersect clocked-in profile IDs with verified location roster
+  if (!rosterError && locationRoster) {
+    const eligibleSet = new Set(
+      (
+        locationRoster as Array<{
+          profile_id: string;
+          active: boolean;
+        }>
+      )
+        .filter((m) => m.active)
+        .map((m) => m.profile_id),
+    );
+    const filtered = roster.data.filter((id) => eligibleSet.has(id));
+    return { ok: true, data: { profileIds: filtered } };
+  }
+
   return { ok: true, data: { profileIds: roster.data } };
 }

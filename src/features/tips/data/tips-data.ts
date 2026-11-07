@@ -8,6 +8,10 @@ import type {
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { locationForLoader } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
+import {
+  designationForRoles,
+  designationToRole,
+} from "@/features/auth/domain/passcode";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -36,15 +40,44 @@ export async function getTipsContext(
     location.time_zone,
   ).date;
 
-  const [team, { data: tipPool }] = await Promise.all([
-    getOrganizationRoster(organizationId),
-    supabase
-      .from("tip_pools")
-      .select("id, status")
-      .eq("location_id", location.id)
-      .eq("service_date", serviceDate)
-      .maybeSingle(),
-  ]);
+  const [{ data: rosterRows, error: rosterError }, { data: tipPool }] =
+    await Promise.all([
+      supabase.rpc("tips_location_roster", {
+        p_organization_id: organizationId,
+        p_location_id: location.id,
+      }),
+      supabase
+        .from("tip_pools")
+        .select("id, status")
+        .eq("location_id", location.id)
+        .eq("service_date", serviceDate)
+        .maybeSingle(),
+    ]);
+
+  let team: TeamMember[] = [];
+  if (rosterRows && !rosterError) {
+    team = (
+      rosterRows as Array<{
+        profile_id: string;
+        display_name: string;
+        roles: string[];
+        active: boolean;
+      }>
+    ).map((row, index) => {
+      const designation = designationForRoles(row.roles);
+      return {
+        id: row.profile_id,
+        name: row.display_name,
+        shortName: row.display_name.split(" ")[0] || row.display_name,
+        role: designationToRole(designation),
+        designation,
+        active: row.active,
+        color: `var(--server-${["one", "two", "three", "four", "five", "six", "seven"][index % 7]})`,
+      };
+    });
+  } else {
+    team = await getOrganizationRoster(organizationId);
+  }
 
   if (!tipPool) {
     // No pool started for today yet -- an empty, all-draft context.
