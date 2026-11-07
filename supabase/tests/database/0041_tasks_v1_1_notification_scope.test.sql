@@ -54,8 +54,13 @@ insert into public.task_notifications (organization_id, recipient_profile_id, ty
 values ('00000000-0000-0000-0000-000000041011', '00000000-0000-0000-0000-000000041004', 'assigned', '00000000-0000-0000-0000-000000041101', 'Old assignment', 'Legacy task');
 
 -- Manager starts Opening and Closing checklists (one item each).
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041002')::text, true);
 select public.checklist_template_save('00000000-0000-0000-0000-000000041011','00000000-0000-0000-0000-000000041021',null,'opening','Weekday Opening','{0,1,2,3,4,5,6}',true,'[{"title":"Unlock entrance","assignment_mode":"anyone"}]'::jsonb);
 select public.checklist_template_save('00000000-0000-0000-0000-000000041011','00000000-0000-0000-0000-000000041021',null,'closing','Weekday Closing','{0,1,2,3,4,5,6}',true,'[{"title":"Lock patio","assignment_mode":"anyone"}]'::jsonb);
 select public.checklist_generate_daily('00000000-0000-0000-0000-000000041011','00000000-0000-0000-0000-000000041021');
@@ -146,6 +151,7 @@ select is(
 -- 5. Real lifecycle: no inbox noise, full audit trail -------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041002')::text, true);
 select set_config('t.task', (
   public.task_create('00000000-0000-0000-0000-000000041011','00000000-0000-0000-0000-000000041021','Ordinary job',null,'other','normal','individual',array['00000000-0000-0000-0000-000000041004']::uuid[],false,null,null,null,null)
 )[1]::text, true);
@@ -154,12 +160,14 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041005')::text, true);
 select public.task_complete(current_setting('t.task')::uuid);
 select public.task_reopen(current_setting('t.task')::uuid);
 reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041002')::text, true);
 select public.task_cancel(current_setting('t.task')::uuid, 'not needed');
 reset role;
 
@@ -187,6 +195,7 @@ select is(
 -- 6. Privacy and tenant isolation of what remains -----------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041005')::text, true);
 select is(
   (select count(*)::int from public.task_notifications where recipient_profile_id <> '00000000-0000-0000-0000-000000041005'),
   0, 'staff cannot read a coworker''s notifications (RLS)'
@@ -195,6 +204,7 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041008')::text, true);
 select is(
   (select count(*)::int from public.task_notifications), 0,
   'another organization sees none of this organization''s notifications'
@@ -203,6 +213,7 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000041004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000041004')::text, true);
 select is(
   public.task_notifications_mark_read(), 8,
   'read state still works for what is stored (2 checklists, 1 legacy, 3 Opening, 2 Closing)'

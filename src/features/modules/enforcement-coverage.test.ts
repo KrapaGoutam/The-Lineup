@@ -42,6 +42,11 @@ const EXEMPT_FILES: Record<string, string> = {
     "Settings: authorized account recovery must work with Team disabled",
 };
 
+const EXEMPT_ACTIONS: Record<string, string> = {
+  "tasks/actions/tasks-actions.ts:acknowledgeOpeningReminderAction":
+    "Own-recipient read-state recovery; SQL validates live identity, never task state or another recipient",
+};
+
 /**
  * Helpers that carry the guard for every action that calls them. The test
  * also asserts the helper itself calls the guard.
@@ -129,7 +134,8 @@ describe("every Server Action is module-guarded or explicitly exempt (BE-21…BE
 
       const unguarded = actions
         .filter(
-          ({ body }) =>
+          ({ name, body }) =>
+            !EXEMPT_ACTIONS[`${rel}:${name}`] &&
             !GUARD_CALL.test(body) &&
             !helpers.some(({ helper }) => body.includes(helper)),
         )

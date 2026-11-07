@@ -42,8 +42,18 @@ values
   ('00000000-0000-0000-0000-000000029012', '00000000-0000-0000-0000-000000029008', array['owner']::public.app_role[], true);
 
 -- Manager creates four tasks; due times are then pinned relative to now().
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029002')::text, true);
 select public.task_create('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021','Soon task',null,'other','normal','individual',array['00000000-0000-0000-0000-000000029004']::uuid[],false,null,null,null,null);
 select public.task_create('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021','Late task',null,'other','normal','individual',array['00000000-0000-0000-0000-000000029004']::uuid[],false,null,null,null,null);
 select public.task_create('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021','Far task',null,'other','normal','individual',array['00000000-0000-0000-0000-000000029005']::uuid[],false,null,null,null,null);
@@ -70,6 +80,8 @@ where title = 'Team task';
 -- 1. Sweep (Tasks V1.1 / T-3: ordinary tasks no longer produce due notifications) -----
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029005')::text, true);
 select is(
   public.task_notifications_sweep('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021'),
   0, 'TS-040 the sweep stores nothing for ordinary tasks (due soon / overdue are suppressed)'
@@ -92,6 +104,8 @@ select is(
 -- 2. Operational notifications remain: Opening and Closing checklists -------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029002')::text, true);
 select public.checklist_template_save('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021',null,'opening','Weekday Opening','{0,1,2,3,4,5,6}',true,'[{"title":"Unlock entrance","assignment_mode":"anyone"}]'::jsonb);
 select public.checklist_template_save('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021',null,'closing','Weekday Closing','{0,1,2,3,4,5,6}',true,'[{"title":"Lock patio","assignment_mode":"anyone"}]'::jsonb);
 select lives_ok(
@@ -103,6 +117,8 @@ reset role;
 -- 3. Reading and read state ----------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029004')::text, true);
 select is(
   (select count(*)::int from public.task_notifications), 2,
   'Ann sees only her own notifications (the Opening and Closing checklists)'
@@ -130,6 +146,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029005')::text, true);
 select is(
   (select count(*)::int from public.task_notifications where read_at is null), 2,
   'another person''s read state is untouched (Bea still has her own two unread)'
@@ -138,6 +156,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000029008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029008')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000029008')::text, true);
 select throws_ok(
   $$select public.task_notifications_sweep('00000000-0000-0000-0000-000000029011','00000000-0000-0000-0000-000000029021')$$,
   '42501', null, 'another organization cannot trigger this location''s sweep'

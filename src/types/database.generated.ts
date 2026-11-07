@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -7,11 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.18";
-  };
   graphql_public: {
     Tables: {
       [_ in never]: never;
@@ -663,11 +658,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "checklist_instances_generator_fk";
-            columns: ["organization_id", "generated_by"];
+            foreignKeyName: "checklist_instances_generated_by_profile_fk";
+            columns: ["generated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "checklist_instances_organization_id_fkey";
@@ -823,11 +818,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "checklist_templates_creator_fk";
-            columns: ["organization_id", "created_by"];
+            foreignKeyName: "checklist_templates_created_by_profile_fk";
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "checklist_templates_location_tenant_fk";
@@ -841,6 +836,13 @@ export type Database = {
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "checklist_templates_updated_by_profile_fk";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -3936,11 +3938,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "task_assignments_assigner_fk";
-            columns: ["organization_id", "assigned_by"];
+            foreignKeyName: "task_assignments_assigned_by_profile_fk";
+            columns: ["assigned_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "task_assignments_member_fk";
@@ -4009,11 +4011,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "task_events_actor_fk";
-            columns: ["organization_id", "actor_profile_id"];
+            foreignKeyName: "task_events_actor_profile_id_profile_fk";
+            columns: ["actor_profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "task_events_instance_fk";
@@ -4045,6 +4047,7 @@ export type Database = {
           created_at: string;
           dedupe_key: string | null;
           id: number;
+          location_id: string | null;
           organization_id: string;
           payload: Json | null;
           read_at: string | null;
@@ -4059,6 +4062,7 @@ export type Database = {
           created_at?: string;
           dedupe_key?: string | null;
           id?: never;
+          location_id?: string | null;
           organization_id: string;
           payload?: Json | null;
           read_at?: string | null;
@@ -4073,6 +4077,7 @@ export type Database = {
           created_at?: string;
           dedupe_key?: string | null;
           id?: never;
+          location_id?: string | null;
           organization_id?: string;
           payload?: Json | null;
           read_at?: string | null;
@@ -4087,6 +4092,13 @@ export type Database = {
             columns: ["checklist_instance_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "checklist_instances";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "task_notifications_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
             referencedColumns: ["id", "organization_id"];
           },
           {
@@ -4227,11 +4239,11 @@ export type Database = {
             referencedColumns: ["slug"];
           },
           {
-            foreignKeyName: "task_recurrence_rules_creator_fk";
-            columns: ["organization_id", "created_by"];
+            foreignKeyName: "task_recurrence_rules_created_by_profile_fk";
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "task_recurrence_rules_location_tenant_fk";
@@ -4245,6 +4257,13 @@ export type Database = {
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_recurrence_rules_updated_by_profile_fk";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -4360,11 +4379,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "tasks_canceller_fk";
-            columns: ["organization_id", "cancelled_by"];
+            foreignKeyName: "tasks_cancelled_by_profile_fk";
+            columns: ["cancelled_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "tasks_category_fkey";
@@ -4374,18 +4393,18 @@ export type Database = {
             referencedColumns: ["slug"];
           },
           {
-            foreignKeyName: "tasks_completer_fk";
-            columns: ["organization_id", "completed_by"];
+            foreignKeyName: "tasks_completed_by_profile_fk";
+            columns: ["completed_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "tasks_creator_fk";
-            columns: ["organization_id", "created_by"];
+            foreignKeyName: "tasks_created_by_profile_fk";
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "tasks_instance_fk";
@@ -4420,17 +4439,24 @@ export type Database = {
             referencedColumns: ["id", "organization_id", "location_id"];
           },
           {
-            foreignKeyName: "tasks_starter_fk";
-            columns: ["organization_id", "started_by"];
+            foreignKeyName: "tasks_started_by_profile_fk";
+            columns: ["started_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "tasks_template_item_id_fkey";
             columns: ["template_item_id"];
             isOneToOne: false;
             referencedRelation: "checklist_template_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_updated_by_profile_fk";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -5427,6 +5453,14 @@ export type Database = {
         };
         Returns: string[];
       };
+      task_notifications_mark_location_read: {
+        Args: {
+          p_ids?: number[];
+          p_location_id: string;
+          p_organization_id: string;
+        };
+        Returns: number;
+      };
       task_notifications_mark_read: {
         Args: { p_ids?: number[] };
         Returns: number;
@@ -5509,6 +5543,19 @@ export type Database = {
           p_title: string;
         };
         Returns: undefined;
+      };
+      tasks_location_authorized: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: boolean;
+      };
+      tasks_location_people: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: {
+          designation: string;
+          display_name: string;
+          eligible: boolean;
+          profile_id: string;
+        }[];
       };
       transition_location_lifecycle: {
         Args: {

@@ -54,6 +54,8 @@ export type PageContextStatus = "demo" | ContextResolutionResult["status"];
 
 /** Serializable, display-safe active context (reusable by V2-003.002). */
 export type ActiveContextDisplay = AvailableContextSummary & {
+  /** Tasks-only effective branch tier; unrelated modules retain their contracts. */
+  tasksDesignation?: SignedInUser["designation"] | null;
   selectedBy:
     | "cookie_preference"
     | "sole_eligible_location"
@@ -294,6 +296,7 @@ export async function loadPageData(
       locationName: context.locationName,
       timeZone: context.timeZone,
       selectedBy: context.selectedBy,
+      tasksDesignation: context.access.effectiveLevel,
     },
     availableContexts: switcher.status === "ok" ? switcher.contexts : [],
     contextReason: null,

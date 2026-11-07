@@ -3,7 +3,7 @@
 GitHub Issue: [#253](https://github.com/KrapaGoutam/The-Lineup/issues/253)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `NOT STARTED`
+Status: `IN PROGRESS` — Allocation merged; Tasks implementation/verification in progress.
 
 ---
 
@@ -14,6 +14,12 @@ Feature V2-005 updates all existing functional modules across the codebase to op
 ---
 
 ## 2. Planned Subfeatures
+
+| Subfeature            | Current state                                                    |
+| --------------------- | ---------------------------------------------------------------- |
+| V2-005.001 Allocation | MERGED / IMPLEMENTED (PR #306, development `3fa0bf72`)           |
+| V2-005.002 Tasks      | IN PROGRESS; issue #310; [Tasks evidence](002-tasks/EVIDENCE.md) |
+| V2-005.003–008        | NOT STARTED                                                      |
 
 - **V2-005.001**: Table Allocation / Rotation (Bind boards, rounds, and physical tables to active location).
 - **V2-005.002**: Tasks (Enforce location scoping in `private.tasks_can_access_location`).

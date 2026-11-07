@@ -1,7 +1,7 @@
 import "server-only";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
-import { getOrganizationRoster } from "@/features/team/data/roster";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { getTasksPeople } from "./tasks-people";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import { addDaysToDate } from "../domain/task-rules";
@@ -16,7 +16,6 @@ import {
   type TasksSnapshot,
 } from "../domain/task-types";
 import {
-  collectProfileIds,
   mapEventRow,
   mapTaskRow,
   mapTemplateRow,
@@ -50,9 +49,10 @@ const MANAGER_HISTORY_DAYS = 30;
 export async function getTasksSnapshot(
   organizationId: string,
   viewer: TaskViewer,
+  scope: VerifiedLocationScope,
 ): Promise<TasksSnapshot | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  if (scope.organizationId !== organizationId) return null;
+  const location = { id: scope.locationId, time_zone: scope.timeZone };
 
   const supabase = await createClient();
   const now = new Date();
@@ -61,6 +61,8 @@ export async function getTasksSnapshot(
     now.getTime() - FINISHED_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
   const manager = isTasksManager(viewer.designation);
+  const people = await getTasksPeople(scope);
+  if (!people) return null;
 
   // Start today's checklists if nobody has yet. Idempotent and best-effort:
   // the snapshot below is still correct (just without a new day) if it fails.
@@ -132,10 +134,10 @@ export async function getTasksSnapshot(
       .from("task_categories")
       .select("slug, name")
       .order("sort_order", { ascending: true }),
-    manager ? getOrganizationRoster(organizationId) : Promise.resolve([]),
+    Promise.resolve(people),
   ]);
 
-  if (tasksResult.error) {
+  if (tasksResult.error || !roster) {
     console.error("getTasksSnapshot: tasks", tasksResult.error);
     return null;
   }
@@ -160,6 +162,7 @@ export async function getTasksSnapshot(
       .from("tasks")
       .select(TASK_ROW_COLUMNS)
       .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
       .in(
         "checklist_instance_id",
         instanceRows.map((row) => row.id),
@@ -190,6 +193,8 @@ export async function getTasksSnapshot(
       .from("task_notifications")
       .select(NOTIFICATION_ROW_COLUMNS)
       .eq("recipient_profile_id", viewer.profileId)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
       .order("id", { ascending: false })
       .limit(50)
       .overrideTypes<NotificationRow[], { merge: false }>(),
@@ -197,6 +202,8 @@ export async function getTasksSnapshot(
       .from("task_notifications")
       .select("id", { count: "exact", head: true })
       .eq("recipient_profile_id", viewer.profileId)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
       .is("read_at", null),
   ]);
   if (notificationResult.error) {
@@ -236,21 +243,12 @@ export async function getTasksSnapshot(
     eventRows = data ?? [];
   }
 
-  const profileIds = [
-    ...new Set([
-      ...collectProfileIds([...rows, ...itemRows], eventRows),
-      ...seriesRows.map((row) => row.created_by),
-    ]),
-  ];
-  const names = new Map<string, string>();
-  if (profileIds.length > 0) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", profileIds);
-    for (const profile of data ?? [])
-      names.set(profile.id, profile.display_name);
-  }
+  const names = new Map(
+    roster.map((person) => [person.profileId, person.name]),
+  );
+  // Generation above may have introduced the first references to an Overall
+  // actor who is intentionally absent from the workforce roster.
+  names.set(viewer.profileId, viewer.name);
 
   const tasks: TaskView[] = rows.map((row) => mapTaskRow(row, names));
   const itemsByInstance = new Map<string, TaskView[]>();
@@ -285,11 +283,11 @@ export async function getTasksSnapshot(
     templates: templateRows.map(mapTemplateRow),
     events,
     team: roster
-      .filter((member) => member.active !== false)
-      .map((member) => ({
-        profileId: member.id,
-        name: member.name,
-        designation: member.designation,
+      .filter((person) => person.eligible)
+      .map(({ profileId, name, designation }) => ({
+        profileId,
+        name,
+        designation,
       })),
     categories:
       categoriesResult.data && categoriesResult.data.length > 0

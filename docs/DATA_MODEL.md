@@ -161,3 +161,25 @@ location FKs preserve authorization and cascade teardown. Dates/rules use the
 existing non-quantity audit; Bulk Count uses the unchanged immutable ledger.
 Detailed fields, precision, constraints and defaults are documented in
 [Bar Inventory DATA_MODEL](features/bar-inventory-v1/DATA_MODEL.md#v11-additive-model).
+
+## Tasks V2 location authorization (V2-005.002)
+
+Migration `20261107160548_tasks_location_scoping.sql` preserves the existing
+Tasks tenant/location/resource graph. Nine attribution membership FKs become
+validated profile FKs, with indexes; updated-by fields gain profile FKs too.
+Assignment targets and notification recipients retain composite membership FKs.
+Overall actors use genuine profiles without fabricated workforce membership.
+
+`task_notifications.location_id` is nullable for historical rows whose source
+cannot be resolved. Existing task/checklist/reminder sources are backfilled;
+new scope is derived by a source trigger, tenant-constrained and indexed with
+recipient/id. Location inbox RLS excludes unresolved historical scope, while
+live own-recipient mark-read remains available for recovery. New audit events
+include real actor, effective tier and concrete location facts; historical
+event payloads remain unchanged. Authorization validates actual live Auth
+session, exact active/unarchived location and effective Overall/location role.
+
+Application rollout is fail-closed before old Tasks mutations when the new
+readiness RPC is missing. Hosted deployment requires separate authorization.
+Use a forward fix for rollback; restoring actor-to-membership FKs after Overall
+writes would require reconciling those genuine actor records first.

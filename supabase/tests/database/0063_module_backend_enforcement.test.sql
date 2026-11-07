@@ -89,8 +89,13 @@ select is((select mode from public.module_enforcement_settings), 'staged', 'BE-D
 select ok(private.location_module_allows('00000000-0000-0000-0000-0000000630b2', 'tasks'), 'BE-DB-03: staged mode allows an explicitly Disabled module (legacy behaviour preserved)');
 select ok(private.location_module_allows('00000000-0000-0000-0000-0000000630b3', 'tasks'), 'BE-DB-04: staged mode allows a Missing module (legacy behaviour preserved)');
 
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063000')::text, true);
 select lives_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b2','Staged at A2',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   'BE-DB-05: staged mode lets the owner create a task at a tasks-Disabled location'
@@ -101,6 +106,7 @@ select lives_ok(
 );
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 
 -- ======================= READINESS GATE =====================================
 select is(
@@ -132,11 +138,13 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063000')::text, true);
 select throws_ok($$update public.module_enforcement_settings set mode = 'active', activation_reference = 'x'$$, '42501', null, 'BE-DB-15: an authenticated owner cannot flip the switch');
 select throws_ok($$delete from public.module_enforcement_settings$$, '42501', null, 'BE-DB-16: an authenticated owner cannot delete the switch');
 select is((select count(*)::int from public.module_enforcement_settings), 1, 'BE-DB-17: authenticated users can read the (non-secret) mode');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 select throws_ok($$delete from public.module_enforcement_settings$$, '55000', null, 'BE-DB-18: even a privileged delete of the switch is refused');
 
 -- Complete the estate: B1 gets explicit rows (tasks enabled, the rest disabled).
@@ -175,6 +183,7 @@ select ok(not private.location_module_allows('00000000-0000-0000-0000-0000000630
 -- ======================= ACTIVE: RPC SEAMS ==================================
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063000')::text, true);
 select lives_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Active at A1',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   'BE-DB-31: task RPC works at a tasks-Enabled location');
@@ -198,6 +207,7 @@ select throws_ok(
   '42501', 'This module is turned off for this location.', 'BE-DB-37: every board_* RPC shares the begin_board_write seam');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 
 select is((select count(*)::int from public.tasks where location_id = '00000000-0000-0000-0000-0000000630b2' and title = 'Active at A2'), 0, 'BE-DB-38: a denied task RPC changed nothing');
 select is((select count(*)::int from public.inventory_vendors where organization_id = '00000000-0000-0000-0000-0000000630a1' and name = 'Vendor A2'), 0, 'BE-DB-39: a denied inventory RPC changed nothing');
@@ -206,37 +216,44 @@ select is((select count(*)::int from public.inventory_vendors where organization
 -- unauthorized caller learns nothing about module state.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063001', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063001')::text, true);
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Staff try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   '42501', 'Only an owner, manager or assistant manager can do that.', 'BE-DB-40: Enabled does not make staff a manager (role check still decides)');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063002')::text, true);
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b2','Foreign try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   '42501', 'You do not have access to tasks for this location.', 'BE-DB-41: a foreign-organization caller gets the access error, not module state');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 
 -- Authorization is untouched by the module check.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063003', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063003')::text, true);
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Revoked try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   '42501', 'You do not have access to tasks for this location.', 'BE-DB-55: a REVOKED membership is denied by the existing check even at an Enabled location');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063000')::text, true);
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b3','Wrong location',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
   '42501', 'You do not have access to tasks for this location.', 'BE-DB-56: a location of another organization is refused even though that location has tasks Enabled');
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b5','Inactive try',null,'other','normal','all_team','{}',false,null,null,null,null)$$,
-  '42501', 'This module is turned off for this location.', 'BE-DB-57: an INACTIVE location is denied operationally even with every module Enabled');
+  '42501', 'You do not have access to tasks for this location.', 'BE-DB-57: an INACTIVE location is denied operationally even with every module Enabled');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 update public.locations set archived_at = now() where id = '00000000-0000-0000-0000-0000000630b5';
 select ok(not private.location_module_allows('00000000-0000-0000-0000-0000000630b5', 'tasks'), 'BE-DB-58: an ARCHIVED location is denied operationally even with every module Enabled');
 
 -- ======================= ACTIVE: DIRECT TABLE ACCESS ========================
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000063000', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000063000')::text, true);
 select lives_ok(
   $$insert into public.dining_areas (organization_id, location_id, name) values ('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Patio A1')$$,
   'BE-DB-42: direct PostgREST write works where table_allocation is Enabled');
@@ -262,6 +279,7 @@ select is(pg_temp.affected($$update public.location_module_configs set is_enable
 select is((select count(*)::int from public.location_module_configs where location_id = '00000000-0000-0000-0000-0000000630b2'), 9, 'BE-DB-51: configuration remains readable at a location whose modules are Disabled');
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '')::text, true);
 
 -- Shared organization data is neither gated nor deleted by a module toggle.
 select is(

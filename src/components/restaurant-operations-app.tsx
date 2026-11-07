@@ -596,7 +596,12 @@ type RestaurantOperationsAppProps = {
    * V2-003.002: server-verified active context + switcher candidates. Absent
    * in demo mode (synthetic identity; no real context picker).
    */
-  activeContext?: (AvailableContextSummary & { selectedBy: string }) | null;
+  activeContext?:
+    | (AvailableContextSummary & {
+        selectedBy: string;
+        tasksDesignation?: SignedInUser["designation"] | null;
+      })
+    | null;
   availableContexts?: readonly AvailableContextSummary[];
   availableContextsFailed?: boolean;
   /** V2-003.004: see `PageData.contextReconcile`. */
@@ -880,7 +885,10 @@ function RestaurantOperationsAppInner({
     let cancelled = false;
     const refresh = async () => {
       try {
-        const result = await getTasksUnreadCountAction({ restaurantSlug });
+        const result = await getTasksUnreadCountAction({
+          restaurantSlug,
+          expectedContext: workspaceExpectation,
+        });
         if (!cancelled && result.ok) setRealTasksUnread(result.unread);
       } catch {
         // A context/document switch may cancel an in-flight action. The badge
@@ -899,6 +907,7 @@ function RestaurantOperationsAppInner({
     signedInProfileId,
     restaurantSlug,
     unreadNonce,
+    workspaceExpectation,
     navigation,
     urlContextMatches,
   ]);
@@ -2435,7 +2444,12 @@ function RestaurantOperationsAppInner({
               <TasksModule
                 key={tasksNavKey}
                 restaurantSlug={restaurantSlug}
-                user={user}
+                user={{
+                  ...user,
+                  designation: demoMode
+                    ? user.designation
+                    : (activeContext?.tasksDesignation ?? "staff"),
+                }}
                 expectedContext={workspaceExpectation}
                 onSessionInvalid={forceSignOut}
                 onUnreadChange={demoMode ? undefined : setRealTasksUnread}
@@ -2707,9 +2721,16 @@ function RestaurantOperationsAppInner({
                     designation: currentUser.designation,
                   },
                 })
-              : createRealOpeningReminderSource(restaurantSlug)
+              : createRealOpeningReminderSource(
+                  restaurantSlug,
+                  workspaceExpectation,
+                )
           }
-          isManagement={currentUser.designation !== "staff"}
+          isManagement={
+            (demoMode
+              ? currentUser.designation
+              : (activeContext?.tasksDesignation ?? "staff")) !== "staff"
+          }
           onViewTasks={() => {
             setTasksNavKey((key) => key + 1);
             setTab("tasks");

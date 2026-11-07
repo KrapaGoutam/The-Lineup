@@ -45,6 +45,7 @@ yarn-error.log*
 next-env.d.ts
 
 # local tooling
+/.tmp/
 .mcp.json
 .claude/settings.local.json
 

@@ -1,7 +1,8 @@
 import "server-only";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { createClient } from "@/lib/supabase/server";
+import { getTasksPeople } from "./tasks-people";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 import {
@@ -42,9 +43,11 @@ const MAX_OPENING_ITEMS = 500;
 export async function getOpeningReminderPrompt(
   organizationId: string,
   viewer: TaskViewer,
+  scope: VerifiedLocationScope,
 ): Promise<OpeningReminderPromptData | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  if (scope.organizationId !== organizationId) return null;
+  const location = { id: scope.locationId, time_zone: scope.timeZone };
+  if (!(await getTasksPeople(scope))) return null;
 
   const supabase = await createClient();
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
@@ -80,6 +83,8 @@ export async function getOpeningReminderPrompt(
       .from("task_notifications")
       .select(NOTIFICATION_ROW_COLUMNS)
       .eq("recipient_profile_id", viewer.profileId)
+      .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
       .eq("type", "opening_reminder")
       .order("id", { ascending: false })
       .limit(MAX_REMINDERS)
@@ -107,6 +112,7 @@ export async function getOpeningReminderPrompt(
       .from("tasks")
       .select(TASK_ROW_COLUMNS)
       .eq("organization_id", organizationId)
+      .eq("location_id", location.id)
       .eq("kind", "opening")
       .in("checklist_instance_id", instanceIds)
       .limit(MAX_OPENING_ITEMS)
