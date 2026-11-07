@@ -108,9 +108,9 @@ describe("tips-actions", () => {
       // Mock location roster: profile-a and profile-b are in this location, profile-c is at another location
       mocks.rpc.mockResolvedValue({
         data: [
-          { profile_id: "profile-a", active: true },
-          { profile_id: "profile-b", active: true },
-          { profile_id: "profile-d", active: true },
+          { profile_id: "profile-a", active: true, eligible: true },
+          { profile_id: "profile-b", active: true, eligible: true },
+          { profile_id: "profile-d", active: true, eligible: true },
         ],
         error: null,
       });
@@ -129,6 +129,65 @@ describe("tips-actions", () => {
         p_organization_id: organizationId,
         p_location_id: locationId,
       });
+    });
+
+    it("never suggests a historical-only (ineligible) person even if they are clocked in", async () => {
+      mocks.getTipsActor.mockResolvedValue(managerCaller);
+      mocks.fetchClockedInRoster.mockResolvedValue({
+        ok: true,
+        data: ["profile-a", "profile-hist"],
+      });
+      mocks.rpc.mockResolvedValue({
+        data: [
+          { profile_id: "profile-a", active: true, eligible: true },
+          { profile_id: "profile-hist", active: true, eligible: false },
+        ],
+        error: null,
+      });
+
+      await expect(
+        getClockedInRosterAction({ restaurantSlug: "the-monks" }),
+      ).resolves.toEqual({ ok: true, data: { profileIds: ["profile-a"] } });
+    });
+
+    it.each([
+      ["PGRST202", "available yet"],
+      ["42883", "available yet"],
+      ["42501", "don't have access"],
+      ["XX000", "couldn't be loaded"],
+    ])(
+      "fails closed (no unfiltered attendance roster) when the location roster RPC errors with %s",
+      async (code, messagePart) => {
+        mocks.getTipsActor.mockResolvedValue(managerCaller);
+        mocks.fetchClockedInRoster.mockResolvedValue({
+          ok: true,
+          data: ["profile-a", "profile-c"],
+        });
+        mocks.rpc.mockResolvedValue({
+          data: null,
+          error: { code, message: "boom" },
+        });
+
+        const result = await getClockedInRosterAction({
+          restaurantSlug: "the-monks",
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toContain(messagePart);
+      },
+    );
+
+    it("fails closed when the roster RPC returns a non-array", async () => {
+      mocks.getTipsActor.mockResolvedValue(managerCaller);
+      mocks.fetchClockedInRoster.mockResolvedValue({
+        ok: true,
+        data: ["profile-a"],
+      });
+      mocks.rpc.mockResolvedValue({ data: null, error: null });
+
+      const result = await getClockedInRosterAction({
+        restaurantSlug: "the-monks",
+      });
+      expect(result.ok).toBe(false);
     });
 
     it("propagates a failure from the roster lookup itself", async () => {

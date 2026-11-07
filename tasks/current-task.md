@@ -1,4 +1,4 @@
-# V2-005.003 Tips location scoping — IN PROGRESS
+# V2-005.003 Tips location scoping — FINAL DELIVERY (security corrections, DEV rollout, merge)
 
 Approved contract: docs/v2.0/features/005-module-location-scoping/README.md. Feature V2-005.003 / parent #253 / program #248 / milestone #8. Base d7268978, isolated worktree `.tmp/v2-tips-location-scoping`.
 
@@ -11,5 +11,14 @@ Approved contract: docs/v2.0/features/005-module-location-scoping/README.md. Fea
 - [x] CP-P06 Browser and regression acceptance passed
 - [x] CP-P07 Independent review complete
 - [x] CP-P08 Feature committed and PR opened
-- [ ] CP-P09 Exact-head CI verified
-- [ ] CP-P10 Final owner handoff
+- [x] CP-P09 Exact-head CI verified
+- [x] CP-P10 Final owner handoff
+- [x] CP-P11 Targeted security review
+- [x] CP-P12 Corrections verified (local)
+- [ ] CP-P13 Exact-head CI verified
+- [ ] CP-P14 DEV backup/recovery verified
+- [ ] CP-P15 Migration rehearsal passed
+- [ ] CP-P16 Hosted DEV migration applied
+- [ ] CP-P17 DEV acceptance complete
+- [ ] CP-P18 PR #312 merged
+- [ ] CP-P19 Final delivery handoff

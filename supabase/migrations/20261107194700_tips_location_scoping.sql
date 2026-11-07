@@ -155,6 +155,31 @@ as $$
 $$;
 revoke all on function private.tips_can_access_location(uuid, uuid) from public, anon, authenticated;
 
+-- 4b. Allocation visibility for the tip_allocations_select_own policy. The policy runs as
+-- the calling role, which (correctly) cannot read tip_pools or execute the private
+-- helpers above, so the pool lookup + location check live in one SECURITY DEFINER
+-- boolean. It answers only "may the caller see an allocation row of this pool".
+create or replace function private.tips_allocation_visible(
+  p_organization_id uuid,
+  p_tip_pool_id bigint
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.tip_pools pool
+    where pool.id = p_tip_pool_id
+      and pool.organization_id = p_organization_id
+      and private.tips_can_access_location(pool.organization_id, pool.location_id)
+  );
+$$;
+revoke all on function private.tips_allocation_visible(uuid, bigint) from public, anon;
+grant execute on function private.tips_allocation_visible(uuid, bigint) to authenticated;
+
 -- 5. Manager check for Tips: caller must have live session and role level >= 2 (Assistant Manager, Manager, Owner).
 create or replace function private.tips_is_manager(
   p_organization_id uuid,
@@ -200,21 +225,64 @@ create index if not exists tip_pools_finalized_by_profile_idx
 
 -- Replace audit_events.actor_profile_id composite membership FK with direct profiles FK
 -- (audit_events_actor_profile_id_fkey already references public.profiles(id)).
+-- The composite FK required a tenant membership row for every actor, which an
+-- Overall administrator does not have. Dropping it is global, so the guarantee it
+-- gave EVERY module (the actor belongs to the row's organization) is re-stated as a
+-- BEFORE INSERT trigger that also admits an Overall actor and nobody else.
+-- Existing rows are untouched; the trigger only checks new inserts.
 alter table public.audit_events
   drop constraint if exists audit_events_actor_member_fk;
 
--- 8. Audit events policies: allow location managers and Overall actors to record and view tip pool audit events.
+create or replace function private.audit_events_actor_authority()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.actor_profile_id is null then
+    return new;
+  end if;
+  if exists (
+    select 1 from public.memberships m
+    where m.organization_id = new.organization_id
+      and m.profile_id = new.actor_profile_id
+  ) or exists (
+    select 1 from public.overall_roles r
+    where r.profile_id = new.actor_profile_id
+  ) then
+    return new;
+  end if;
+  raise exception 'audit_events actor % has no membership in organization %',
+    new.actor_profile_id, new.organization_id
+    using errcode = '23503';
+end;
+$$;
+revoke all on function private.audit_events_actor_authority() from public, anon, authenticated;
+
+drop trigger if exists audit_events_actor_authority on public.audit_events;
+create trigger audit_events_actor_authority
+  before insert on public.audit_events
+  for each row execute function private.audit_events_actor_authority();
+
+-- 8. Audit events policies. The baseline organization-role branch is kept verbatim.
+-- The only addition is a Tips-scoped branch: a caller who manages Tips at the row's
+-- own location (location manager, or an Overall actor, resolved by
+-- private.tips_is_manager) may record and read tip_pool audit events there. It does
+-- NOT extend to any other entity_type, other action, other location or other
+-- organization, so no other module's audit trail becomes writable or readable
+-- through Tips authority.
 drop policy if exists "audit_events_insert_operator" on public.audit_events;
 create policy "audit_events_insert_operator" on public.audit_events
   for insert to authenticated
   with check (
     actor_profile_id = (select auth.uid()) and (
       (select private.has_org_role(organization_id, array['owner','general_manager','shift_manager','host']::public.app_role[]))
-      or (location_id is not null and private.tips_is_manager(organization_id, location_id))
-      or exists (
-        select 1 from public.overall_roles r
-        where r.profile_id = (select auth.uid())
-          and r.role in ('owner', 'manager', 'assistant_manager')
+      or (
+        entity_type = 'tip_pool'
+        and action in ('finalized', 'reopened')
+        and location_id is not null
+        and private.tips_is_manager(organization_id, location_id)
       )
     )
   );
@@ -224,11 +292,10 @@ create policy "audit_events_select_manager" on public.audit_events
   for select to authenticated
   using (
     (select private.has_org_role(organization_id, array['owner','general_manager','shift_manager']::public.app_role[]))
-    or (location_id is not null and private.tips_is_manager(organization_id, location_id))
-    or exists (
-      select 1 from public.overall_roles r
-      where r.profile_id = (select auth.uid())
-        and r.role in ('owner', 'manager', 'assistant_manager')
+    or (
+      entity_type = 'tip_pool'
+      and location_id is not null
+      and private.tips_is_manager(organization_id, location_id)
     )
   );
 
@@ -358,12 +425,7 @@ create policy "tip_allocations_select_own" on public.tip_allocations
   for select to authenticated
   using (
     profile_id = (select auth.uid()) and
-    exists (
-      select 1 from public.tip_pools pool
-      where pool.id = tip_pool_id
-        and pool.organization_id = tip_allocations.organization_id
-        and private.tips_can_access_location(pool.organization_id, pool.location_id)
-    )
+    private.tips_allocation_visible(organization_id, tip_pool_id)
   );
 
 -- 13. Recalculate tip pool RPC: harden authorization, location check and module check.
@@ -426,8 +488,16 @@ $$;
 revoke all on function public.recalculate_tip_pool(bigint) from public, anon;
 grant execute on function public.recalculate_tip_pool(bigint) to authenticated;
 
--- 14. Location Roster RPC: returns eligible workforce + historical actors without widening profile RLS.
-create or replace function public.tips_location_roster(
+-- 14. Location Roster RPC: names for the verified location without widening profile RLS.
+--   * `eligible` is true only for CURRENT workforce at this location (the same
+--     private.tips_workforce_eligible test tips_add_interval enforces). Historical
+--     actors (earlier participants, finalizers, audit actors) stay in the result so
+--     history can show their names, but are `eligible = false` and must never be
+--     offered for a new interval.
+--   * A caller below assistant manager (plain staff) receives only their own row, so
+--     a co-worker's name is never disclosed to a peer.
+drop function if exists public.tips_location_roster(uuid, uuid);
+create function public.tips_location_roster(
   p_organization_id uuid,
   p_location_id uuid
 )
@@ -435,18 +505,24 @@ returns table(
   profile_id uuid,
   display_name text,
   roles public.app_role[],
-  active boolean
+  active boolean,
+  eligible boolean
 )
 language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
+declare
+  v_caller uuid := (select auth.uid());
+  v_level integer;
 begin
   if p_location_id is null or not private.tips_can_access_location(p_organization_id, p_location_id) then
     raise exception 'You do not have access to tips for this location.' using errcode = '42501';
   end if;
   perform private.assert_location_module_enabled(p_location_id, 'tips');
+
+  v_level := private.tips_profile_level(p_organization_id, p_location_id, v_caller);
 
   return query
   with roster_profiles as (
@@ -515,8 +591,14 @@ begin
       where m.organization_id = p_organization_id and m.profile_id = p.id
     )
   )
-  select r.profile_id, r.display_name, r.roles, r.active
+  select
+    r.profile_id,
+    r.display_name,
+    r.roles,
+    r.active,
+    private.tips_workforce_eligible(p_organization_id, p_location_id, r.profile_id) as eligible
   from roster_profiles r
+  where v_level >= 2 or r.profile_id = v_caller
   order by r.created_at, r.profile_id;
 end;
 $$;

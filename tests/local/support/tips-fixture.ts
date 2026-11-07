@@ -5,6 +5,35 @@ import type { Database } from "@/types/database.generated";
 export type TestDatabase = Omit<Database, "public"> & {
   public: Omit<Database["public"], "Functions"> & {
     Functions: Database["public"]["Functions"] & {
+      tips_add_interval: {
+        Args: {
+          p_organization_id: string;
+          p_location_id: string;
+          p_service_date: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_amount_cents: number;
+          p_participant_ids: string[];
+        };
+        Returns: { interval_id: number; tip_pool_id: number };
+      };
+      tips_finalize_pool: {
+        Args: {
+          p_organization_id: string;
+          p_location_id: string;
+          p_tip_pool_id: number;
+        };
+        Returns: undefined;
+      };
+      tips_reopen_pool: {
+        Args: {
+          p_organization_id: string;
+          p_location_id: string;
+          p_tip_pool_id: number;
+          p_reason: string;
+        };
+        Returns: undefined;
+      };
       tips_get_day_data: {
         Args: {
           p_organization_id: string;

@@ -8,6 +8,10 @@ import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expec
 import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
 import { getTipsActor } from "@/features/tips/data/tips-actor";
+import {
+  TIPS_UNAVAILABLE_MESSAGES,
+  classifyTipsReadError,
+} from "@/features/tips/domain/tips-read-model";
 import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -403,21 +407,34 @@ export async function getClockedInRosterAction(input: {
 
   if (!roster.ok) return roster;
 
-  // Intersect clocked-in profile IDs with verified location roster
-  if (!rosterError && locationRoster) {
-    const eligibleSet = new Set(
-      (
-        locationRoster as Array<{
-          profile_id: string;
-          active: boolean;
-        }>
-      )
-        .filter((m) => m.active)
-        .map((m) => m.profile_id),
-    );
-    const filtered = roster.data.filter((id) => eligibleSet.has(id));
-    return { ok: true, data: { profileIds: filtered } };
+  // Fail closed: attendance is an external suggestion source and must never be
+  // returned unfiltered. If the location-authority roster cannot be read (old
+  // schema, denial, bad response) nobody is suggested.
+  if (rosterError || !Array.isArray(locationRoster)) {
+    return {
+      ok: false,
+      error:
+        TIPS_UNAVAILABLE_MESSAGES[
+          rosterError ? classifyTipsReadError(rosterError) : "unavailable"
+        ],
+    };
   }
 
-  return { ok: true, data: { profileIds: roster.data } };
+  // Intersect clocked-in profile IDs with the CURRENT, eligible workforce of
+  // the verified location (historical-only people are not selectable).
+  const eligibleSet = new Set(
+    (
+      locationRoster as Array<{
+        profile_id: string;
+        active: boolean;
+        eligible: boolean;
+      }>
+    )
+      .filter((m) => m.active && m.eligible)
+      .map((m) => m.profile_id),
+  );
+  return {
+    ok: true,
+    data: { profileIds: roster.data.filter((id) => eligibleSet.has(id)) },
+  };
 }

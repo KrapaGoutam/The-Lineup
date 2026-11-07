@@ -1,17 +1,17 @@
 import "server-only";
 
 import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
+import {
+  buildTipsReadModel,
+  classifyTipsReadError,
+  type TipsUnavailableReason,
+} from "@/features/tips/domain/tips-read-model";
 import type {
   TipsAuditEntry,
   TipsDayStatus,
 } from "@/features/tips/domain/tips-status";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { locationForLoader } from "@/features/locations/data/primary-location";
-import { getOrganizationRoster } from "@/features/team/data/roster";
-import {
-  designationForRoles,
-  designationToRole,
-} from "@/features/auth/domain/passcode";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -22,11 +22,34 @@ export type TipsContext = {
   serviceDate: string;
   tipPoolId: number | null;
   status: TipsDayStatus;
+  /** Name directory (current workforce + historical-only people). */
   team: TeamMember[];
+  /** Profiles that may be offered for a NEW interval (current workforce). */
+  selectableIds: string[];
   intervals: TipIntervalInput[];
   auditLog: TipsAuditEntry[];
+  /**
+   * Set when the location-authorized Tips RPCs could not be read (backend not
+   * migrated, caller denied, unexpected response). The context then carries
+   * no people and no money -- the page shows a notice, never a fallback.
+   */
+  unavailable?: TipsUnavailableReason;
 };
 
+/**
+ * V2-005.003. The ONLY read path for the Tips page is the pair of
+ * location-authorized SECURITY DEFINER RPCs bound to the server-verified
+ * active location:
+ *
+ *  - `tips_location_roster`: names for the location (current workforce flagged
+ *    `eligible`, historical actors kept for display, staff see only themselves)
+ *  - `tips_get_day_data`: the day's pool, intervals and audit log, with a
+ *    manager/staff split enforced in the database
+ *
+ * There is deliberately NO fallback to an organization-wide roster or to
+ * direct table reads: if either RPC is missing (old schema), denies the
+ * caller, or returns an unexpected shape, the view fails closed.
+ */
 export async function getTipsContext(
   organizationId: string,
   verifiedLocation?: VerifiedLocationScope,
@@ -40,112 +63,49 @@ export async function getTipsContext(
     location.time_zone,
   ).date;
 
-  const [{ data: rosterRows, error: rosterError }, { data: tipPool }] =
-    await Promise.all([
-      supabase.rpc("tips_location_roster", {
-        p_organization_id: organizationId,
-        p_location_id: location.id,
-      }),
-      supabase
-        .from("tip_pools")
-        .select("id, status")
-        .eq("location_id", location.id)
-        .eq("service_date", serviceDate)
-        .maybeSingle(),
-    ]);
+  const failClosed = (unavailable: TipsUnavailableReason): TipsContext => ({
+    locationId: location.id,
+    timeZone: location.time_zone,
+    serviceDate,
+    tipPoolId: null,
+    status: "estimating",
+    team: [],
+    selectableIds: [],
+    intervals: [],
+    auditLog: [],
+    unavailable,
+  });
 
-  let team: TeamMember[] = [];
-  if (rosterRows && !rosterError) {
-    team = (
-      rosterRows as Array<{
-        profile_id: string;
-        display_name: string;
-        roles: string[];
-        active: boolean;
-      }>
-    ).map((row, index) => {
-      const designation = designationForRoles(row.roles);
-      return {
-        id: row.profile_id,
-        name: row.display_name,
-        shortName: row.display_name.split(" ")[0] || row.display_name,
-        role: designationToRole(designation),
-        designation,
-        active: row.active,
-        color: `var(--server-${["one", "two", "three", "four", "five", "six", "seven"][index % 7]})`,
-      };
-    });
-  } else {
-    team = await getOrganizationRoster(organizationId);
-  }
-
-  if (!tipPool) {
-    // No pool started for today yet -- an empty, all-draft context.
-    // Creating the pool happens lazily on the first interval add
-    // (addTipIntervalAction), same as schedule periods.
-    return {
-      locationId: location.id,
-      timeZone: location.time_zone,
-      serviceDate,
-      tipPoolId: null,
-      status: "estimating",
-      team,
-      intervals: [],
-      auditLog: [],
-    };
-  }
-
-  const [{ data: intervalRows }, { data: auditRows }] = await Promise.all([
-    supabase
-      .from("tip_intervals")
-      .select(
-        "id, starts_at, ends_at, amount_cents, tip_interval_participants(profile_id)",
-      )
-      .eq("tip_pool_id", tipPool.id),
-    supabase
-      .from("audit_events")
-      .select("action, reason, created_at, actor_profile_id")
-      .eq("entity_type", "tip_pool")
-      .eq("entity_id", String(tipPool.id))
-      .order("created_at", { ascending: true }),
+  const [rosterResult, dayResult] = await Promise.all([
+    supabase.rpc("tips_location_roster", {
+      p_organization_id: organizationId,
+      p_location_id: location.id,
+    }),
+    supabase.rpc("tips_get_day_data", {
+      p_organization_id: organizationId,
+      p_location_id: location.id,
+      p_service_date: serviceDate,
+    }),
   ]);
 
-  const nameByProfileId = new Map(
-    team.map((member) => [member.id, member.name]),
-  );
+  if (rosterResult.error) {
+    return failClosed(classifyTipsReadError(rosterResult.error));
+  }
+  if (dayResult.error) {
+    return failClosed(classifyTipsReadError(dayResult.error));
+  }
 
-  const intervals: TipIntervalInput[] = (intervalRows ?? []).map((row) => ({
-    id: String(row.id),
-    start: zonedWallTimeFromInstant(new Date(row.starts_at), location.time_zone)
-      .time,
-    end: zonedWallTimeFromInstant(new Date(row.ends_at), location.time_zone)
-      .time,
-    amountCents: row.amount_cents,
-    participantIds: (row.tip_interval_participants ?? []).map(
-      (p) => p.profile_id,
-    ),
-  }));
-
-  const auditLog: TipsAuditEntry[] = (auditRows ?? [])
-    .filter(
-      (row): row is typeof row & { action: "finalized" | "reopened" } =>
-        row.action === "finalized" || row.action === "reopened",
-    )
-    .map((row) => ({
-      action: row.action,
-      actorName: nameByProfileId.get(row.actor_profile_id ?? "") ?? "Unknown",
-      reason: row.reason ?? undefined,
-      at: row.created_at,
-    }));
+  const built = buildTipsReadModel({
+    roster: rosterResult.data,
+    dayData: dayResult.data,
+    timeZone: location.time_zone,
+  });
+  if (!built.ok) return failClosed(built.reason);
 
   return {
     locationId: location.id,
     timeZone: location.time_zone,
     serviceDate,
-    tipPoolId: tipPool.id,
-    status: tipPool.status === "finalized" ? "finalized" : "estimating",
-    team,
-    intervals,
-    auditLog,
+    ...built.model,
   };
 }

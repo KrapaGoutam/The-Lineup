@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(43);
 
 -- Fixture identities
 insert into auth.users(id, email) values
@@ -59,6 +59,7 @@ select ok(not has_function_privilege('authenticated', 'private.tips_profile_leve
 select ok(not has_function_privilege('authenticated', 'private.tips_workforce_eligible(uuid,uuid,uuid)', 'execute'), 'tips_workforce_eligible private');
 select ok(not has_function_privilege('authenticated', 'private.tips_live_session()', 'execute'), 'tips_live_session private');
 select ok(not has_function_privilege('authenticated', 'private.tips_can_access_location(uuid,uuid)', 'execute'), 'tips_can_access_location private');
+select ok(has_function_privilege('authenticated', 'private.tips_allocation_visible(uuid,bigint)', 'execute') and not has_function_privilege('anon', 'private.tips_allocation_visible(uuid,bigint)', 'execute'), 'tips_allocation_visible executable by authenticated only (RLS helper)');
 
 -- 3. Schema constraints
 select ok(exists(select 1 from pg_constraint where conname='tip_pools_finalized_by_profile_fk' and convalidated), 'tip_pools finalized_by profile FK exists');
