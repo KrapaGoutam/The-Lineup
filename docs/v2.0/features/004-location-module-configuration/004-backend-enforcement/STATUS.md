@@ -3,7 +3,7 @@
 ```text
 Status:            IMPLEMENTED — ACTIVATION BLOCKED   (not COMPLETE)
 GitHub Issue:      #304   (parent #252, program #248, milestone #8)
-Pull Request:      #305   (open, base development; NOT merged)
+Pull Request:      #305   (MERGED to development 2026-11-07; ad878715b84fcdc3f36414b882d52207fb4f139e)
 Target Branch:     development
 Feature Branch:    feature/v2.0-004.004-backend-module-enforcement
 Baseline:          origin/development 53ad8397dd8712b70846b13b067d9c3c1ef0c06a (PR #303 included)
@@ -21,7 +21,7 @@ Production:        not contacted
 | **Environment activation**   | **NOT ACTIVATED anywhere.** Switch is `staged` by default; hosted DEV not migrated by this PR                                                                                      |
 | Hosted DEV readiness (fresh) | **NOT READY** — 44 active locations, 0 with module rows (read-only GET, 2026-11-06)                                                                                                |
 | Owner-approved backfill      | **None recorded** — blocker **R1**                                                                                                                                                 |
-| Merge to `development`       | **Held** — see [ROLLOUT_READINESS.md](ROLLOUT_READINESS.md) and the PR for the exact gate; main untouched                                                                          |
+| Merge to `development`       | **CODE MERGED** - PR #305, ad878715b84fcdc3f36414b882d52207fb4f139e; enforcement STAGED, activation BLOCKED; #304 stays open                                                       |
 
 Next phase (not authorized, not started): **V2-005 — Existing Module Location Scoping.**
 
@@ -35,3 +35,7 @@ Next phase (not authorized, not started): **V2-005 — Existing Module Location 
 6. Hosted DEV real-JWT active-mode tests cannot run (BE-48/49 on DEV) until DEV is reconciled — they pass on the local stack with real sessions.
 
 Q1–Q4 from V2-004.001 remain open; new R1, R2 added in [PLAN.md](PLAN.md) §7.
+
+## Controlled execution - 2026-11-07
+
+Owner-approved staged-only merge completed. Fresh read-only DEV ledger remains73/latest20261105210000, switch absent; no hosted migration/configuration/activation. Actual automatic Vercel deployment AaMab6ZmdNywrXB4RzbahnUCQZYS is READY Preview on development. [Integration handoff](../../005-module-location-scoping/001-table-allocation/INTEGRATION_HANDOFF.md).

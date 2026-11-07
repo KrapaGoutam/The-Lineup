@@ -605,11 +605,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "board_events_organization_id_actor_profile_id_fkey";
-            columns: ["organization_id", "actor_profile_id"];
+            foreignKeyName: "board_events_actor_profile_fk";
+            columns: ["actor_profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "board_events_organization_id_fkey";
@@ -3508,13 +3508,6 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "service_closed_by_member_fk";
-            columns: ["organization_id", "closed_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
             foreignKeyName: "service_sessions_closed_by_fkey";
             columns: ["closed_by"];
             isOneToOne: false;
@@ -3548,13 +3541,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "service_started_by_member_fk";
-            columns: ["organization_id", "started_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
           },
         ];
       };
@@ -3876,11 +3862,18 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "table_rotation_entries_ended_by_fk";
-            columns: ["organization_id", "ended_by"];
+            foreignKeyName: "table_rotation_entries_assigned_profile_fk";
+            columns: ["assigned_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "table_rotation_entries_ended_profile_fk";
+            columns: ["ended_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "table_rotation_entries_member_session_fk";
@@ -3888,13 +3881,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "rotation_members";
             referencedColumns: ["id", "service_session_id"];
-          },
-          {
-            foreignKeyName: "table_rotation_entries_organization_id_assigned_by_fkey";
-            columns: ["organization_id", "assigned_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
           },
           {
             foreignKeyName: "table_rotation_entries_organization_id_fkey";
@@ -4944,6 +4930,15 @@ export type Database = {
           p_service_session_id: number;
         };
         Returns: undefined;
+      };
+      board_location_roster: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: {
+          active: boolean;
+          display_name: string;
+          profile_id: string;
+          roles: Database["public"]["Enums"]["app_role"][];
+        }[];
       };
       board_move_column: {
         Args: {

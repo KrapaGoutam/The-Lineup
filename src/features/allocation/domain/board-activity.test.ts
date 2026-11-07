@@ -1,3 +1,4 @@
+import { boardActorName } from "./board-activity";
 import { describe, expect, it } from "vitest";
 
 import { Constants } from "@/types/database.generated";
@@ -250,5 +251,41 @@ describe("recent activity ordering and limit", () => {
       "edited Mia's column",
     ]);
     expect(new Set(out.map((e) => e.id)).size).toBe(2);
+  });
+});
+
+// Verified audit-name snapshots let Overall-only actors render without a tenant membership.
+describe("boardActorName", () => {
+  it("uses the event's verified snapshot after role revocation or profile rename", () => {
+    expect(
+      boardActorName(
+        {
+          actor_profile_id: "overall",
+          payload: {
+            actor: { profile_id: "overall", display_name: "Original Operator" },
+          },
+        },
+        () => "Renamed Operator",
+      ),
+    ).toBe("Original Operator");
+  });
+  it("retains legacy lookup for old events and refuses a mismatched snapshot", () => {
+    expect(
+      boardActorName(
+        { actor_profile_id: "legacy", payload: {} },
+        () => "Existing Manager",
+      ),
+    ).toBe("Existing Manager");
+    expect(
+      boardActorName(
+        {
+          actor_profile_id: "legacy",
+          payload: {
+            actor: { profile_id: "other", display_name: "Wrong Person" },
+          },
+        },
+        () => "Existing Manager",
+      ),
+    ).toBe("Existing Manager");
   });
 });

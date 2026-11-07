@@ -42,6 +42,15 @@ values
   ('00000000-0000-0000-0000-0000000630b2'::uuid, '00000000-0000-0000-0000-0000000630a1'::uuid, 'A2', 'America/Chicago', '{}'::jsonb),
   ('00000000-0000-0000-0000-0000000630b3'::uuid, '00000000-0000-0000-0000-0000000630a2'::uuid, 'B1', 'America/Chicago', '{}'::jsonb);
 
+-- #306 requires explicit operational assignments independently of module state.
+insert into public.location_memberships (location_id, profile_id, role)
+values
+  ('00000000-0000-0000-0000-0000000630b1', '00000000-0000-0000-0000-000000063000', 'manager'),
+  ('00000000-0000-0000-0000-0000000630b2', '00000000-0000-0000-0000-000000063000', 'manager'),
+  ('00000000-0000-0000-0000-0000000630b1', '00000000-0000-0000-0000-000000063001', 'staff'),
+  ('00000000-0000-0000-0000-0000000630b2', '00000000-0000-0000-0000-000000063001', 'staff'),
+  ('00000000-0000-0000-0000-0000000630b3', '00000000-0000-0000-0000-000000063002', 'manager');
+
 -- Explicit per-module decisions (A1 / A2). Every key has a row.
 insert into public.location_module_configs (location_id, module_key, is_enabled)
 select '00000000-0000-0000-0000-0000000630b1'::uuid, k,

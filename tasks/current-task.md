@@ -1,21 +1,29 @@
-# V2-004.004 - Per-location backend module enforcement
+# PR305 staged merge and PR306 integration execution
 
-Approved: owner prompt 2026-11-06 (explicit implementation authority). Branch feature/v2.0-004.004-backend-module-enforcement.
-Worktree .tmp/v2-module-backend-enforcement; baseline 53ad8397dd8712b70846b13b067d9c3c1ef0c06a (PR #303 verified). Issue #304.
-Main 5e5b7747693b6e81014eafdf299b87e56c3f033d; Production forbidden.
+Owner approved PR305 merge only, PR306 reconciliation/validation and push only after
+verified Preview safety. PR306 merge, hosted migrations/configuration/activation,
+main/Production, JobQuest and V2-005.002 remain unauthorized.
 
-- [x] Fetch/verify remote baseline; worktree; preserve unrelated work
-- [x] Entry-point inventory (98 actions, 9 routes, 80 SQL functions, 31 writable tables)
-- [x] Pure decision + readiness domain, server guard, staged DB switch with readiness gate
-- [x] Wire 78 Server Actions + page-entry loaders; 20 system actions exempt (tested list)
-- [x] DB seams (tasks/inventory/board) + 36 restrictive policies
-- [x] pgTAP 0063 (59), clean replay 74 migrations, full pgTAP, real-JWT local suite 15/15
-- [x] Unit 3222 pass, format/lint/typecheck/paths, cold CI build
-- [x] Hosted DEV read-only readiness: 44 active locations, 0 configured = NOT READY
-- [x] Docs: PLAN, ENTRY_POINT_MATRIX, TEST_MATRIX, ROLLOUT_READINESS, EVIDENCE, STATUS
-- [x] Push, PR #305 to development, exact-head CI at 732b509: application, browser-smoke, migrations-and-policies, Vercel all PASS
-- [ ] Owner decision R1: approved module values for the 44 DEV locations -> then activate DEV and verify
+- [x] CP00: create durable local handoff outside tracked files
+- [x] CP01: exact-head CI, protection and staged preflight
+- [x] CP02/03: merge305 and verify development ad878715; publish actual receipts
+- [x] CP04: inspect clean existing306 worktree and merge origin/development
+- [x] Reuse validated actions/tests/fixture resolutions; reconcile shared docs/types
+- [x] CP05: verify effective tree against validated reference and save local merge
+- [x] CP06: validate combined security gates and cleanup
+- [x] CP07: verify Preview safety before any branch push
+- [ ] CP08/09: BLOCKED - push and new-head CI require compatible Preview/schema
+- [x] CP10: durable handoff and final owner report; push held, never merge306
 
-## Current State & Next Step
+Data/security: three reviewed migrations unchanged; actor/live-session/context,
+stale/timezone/session binding, location RLS, module guards before operational
+reads, real audit actors/undo/redo and recovery exemptions retained. No UI change.
+Prior validated reference bde49c9/b7c7059 is preserved unchanged. Handoff is
+../v2-integration-handoff/{CURRENT_AGENT_STATE,INTEGRATION_HANDOFF,
+VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md; keep it current at checkpoints.
 
-Implemented, NOT activated. Do not set module_enforcement_settings.mode='active' in any environment until the readiness script says READY and the owner has approved the values (the database refuses otherwise). No merge until the owner decides on the activation dependency. Stop after V2-004.004; V2-005 is not authorized.
+Current: local reconciliation and security validation PASS; local merge saved as
+dfd2118003dfd7a2a5f333db81c9007b25e37bb5. Final CP10 handoff records the push block. Live Preview binding to DEV confirmed; no password/SSO
+containment and required rosterRPC absent. Push BLOCKED. Newcheck/build/unit3258,
+pgTAP2163, JWT45+31, browser15 PASS. Fixture-only date correction; migrations unchanged.
+Local cleanup zero/staged; taskserver stopped. No remote306 push/CI/merge.

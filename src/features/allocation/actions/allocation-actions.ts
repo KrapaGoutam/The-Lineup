@@ -9,9 +9,12 @@ import {
 } from "@/features/allocation/data/allocation-data";
 import type { BoardAction } from "@/features/allocation/domain/rotation-board";
 import type { TableConflictInfo } from "@/features/allocation/domain/table-conflict";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
+import { getAllocationActor } from "@/features/allocation/data/allocation-actor";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -31,6 +34,8 @@ export type ActionResult<T> =
       error: string;
       // Feature 017: see requireLiveSession's doc comment.
       sessionInvalid?: true;
+      // V2-003.005 / V2-005.001: workspace drift or stale location expectation.
+      contextStale?: true;
       // Cross-view integrity (X2): the database refused an assign because the
       // table is already held (PT409). Carries who holds it so the client can
       // open the same Transfer / End + Assign / Cancel decision it would have
@@ -201,6 +206,7 @@ export type ExecuteBoardActionInput = {
   timeZone: string;
   serviceSessionId: number | null;
   action: BoardAction;
+  expectedContext?: unknown;
 };
 
 export async function executeBoardActionRemote(
@@ -210,16 +216,72 @@ export async function executeBoardActionRemote(
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
-  // V2-004.004: the organization/location in the input are untrusted claims;
-  // the guard checks the SERVER-verified location and rejects a mismatch.
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to do that.",
+      sessionInvalid: true,
+    };
+  }
+
+  const expectationRaw = input.expectedContext ?? {
+    profileId: caller.profileId,
+    organizationId: caller.organizationId,
+    locationId: input.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(expectationRaw, {
+    profileId: caller.profileId,
+    organizationId: caller.organizationId,
+  });
+  if (!outcome.ok) {
+    if (outcome.code === "invalid") {
+      return { ok: false, error: "That request is invalid." };
+    }
+    return {
+      ok: false,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true,
+    };
+  }
+
+  const verifiedLocation = outcome.location;
+  const verifiedLocationId = verifiedLocation.id;
   const blocked = await guardModule({
     module: "table_allocation",
-    organizationId: input.organizationId,
+    organizationId: caller.organizationId,
     claimedLocationId: input.locationId,
+    location: verifiedLocation,
   });
   if (blocked) return blocked;
 
-  const serviceDate = zonedWallTimeFromInstant(new Date(), input.timeZone).date;
+  const serviceDate = zonedWallTimeFromInstant(
+    new Date(),
+    verifiedLocation.time_zone,
+  ).date;
+
+  if (input.serviceSessionId !== null) {
+    const { data: sessionRow } = await supabase
+      .from("service_sessions")
+      .select("organization_id, location_id")
+      .eq("id", input.serviceSessionId)
+      .maybeSingle();
+
+    if (
+      !sessionRow ||
+      sessionRow.organization_id !== caller.organizationId ||
+      sessionRow.location_id !== verifiedLocationId
+    ) {
+      return {
+        ok: false,
+        error: "That service session belongs to a different location.",
+      };
+    }
+  }
+
   const resolvedAction = await withResolvedRounds(
     supabase,
     input.serviceSessionId,
@@ -253,8 +315,8 @@ export async function executeBoardActionRemote(
         const { data, error } = await supabase.rpc(
           action.endPrevious ? "board_end_previous_and_assign" : "board_assign",
           {
-            p_organization_id: input.organizationId,
-            p_location_id: input.locationId,
+            p_organization_id: caller.organizationId,
+            p_location_id: verifiedLocationId,
             p_service_date: serviceDate,
             p_round_id: Number(action.roundId),
             p_member_id: memberId,
@@ -295,7 +357,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_clear_cell", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_round_id: Number(action.roundId),
           p_member_id: memberId,
@@ -311,8 +373,8 @@ export async function executeBoardActionRemote(
         // demo-mode reducer's own in-memory shape and is intentionally
         // not sent here. See the concurrency-safe-positions migration.
         const { data, error } = await supabase.rpc("board_add_column", {
-          p_organization_id: input.organizationId,
-          p_location_id: input.locationId,
+          p_organization_id: caller.organizationId,
+          p_location_id: verifiedLocationId,
           p_service_date: serviceDate,
           p_server_profile_id: action.column.id,
         });
@@ -349,7 +411,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_set_column_status", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_member_id: memberId,
           p_status: action.status,
@@ -365,7 +427,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "No active floor yet for today." };
         }
         const { error } = await supabase.rpc("board_clear_row", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_round_id: Number(action.roundId),
         });
@@ -388,7 +450,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_clear_column", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_member_id: memberId,
         });
@@ -403,7 +465,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "No active floor yet for today." };
         }
         const { error } = await supabase.rpc("board_clear_board", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
@@ -425,7 +487,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_move_column", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_member_id: memberId,
           p_direction: action.direction,
@@ -441,7 +503,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "No active floor yet for today." };
         }
         const { error } = await supabase.rpc("board_add_row", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
         });
         if (error) return { ok: false, error: error.message };
@@ -455,7 +517,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "No active floor yet for today." };
         }
         const { error } = await supabase.rpc("board_delete_row", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_round_id: Number(action.roundId),
         });
@@ -482,7 +544,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_transfer", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_source_round_id: Number(action.sourceRoundId),
           p_source_member_id: sourceMemberId,
@@ -509,7 +571,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_end_table", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_round_id: Number(action.roundId),
           p_member_id: memberId,
@@ -535,8 +597,8 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { data, error } = await supabase.rpc("board_skip_turn", {
-          p_organization_id: input.organizationId,
-          p_location_id: input.locationId,
+          p_organization_id: caller.organizationId,
+          p_location_id: verifiedLocationId,
           p_service_date: serviceDate,
           p_round_id: Number(action.roundId),
           p_member_id: memberId,
@@ -568,7 +630,7 @@ export async function executeBoardActionRemote(
           return { ok: false, error: "That column no longer exists." };
         }
         const { error } = await supabase.rpc("board_end_and_assign", {
-          p_organization_id: input.organizationId,
+          p_organization_id: caller.organizationId,
           p_service_session_id: sessionId,
           p_end_round_ids: action.endRoundIds.map(Number),
           p_member_id: memberId,
@@ -594,19 +656,79 @@ export async function undoBoardAction(input: {
   restaurantSlug: string;
   organizationId: string;
   serviceSessionId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to do that.",
+      sessionInvalid: true,
+    };
+  }
+
+  let verifiedLocationId: string;
+  if (input.expectedContext) {
+    const outcome = await assertWorkspaceExpectation(input.expectedContext, {
+      profileId: caller.profileId,
+      organizationId: caller.organizationId,
+    });
+    if (!outcome.ok) {
+      if (outcome.code === "invalid") {
+        return { ok: false, error: "That request is invalid." };
+      }
+      return {
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      };
+    }
+    verifiedLocationId = outcome.location.id;
+  } else {
+    const loc = await getPrimaryLocation(caller.organizationId);
+    if (!loc) {
+      return {
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      };
+    }
+    verifiedLocationId = loc.id;
+  }
+
   const blocked = await guardModule({
     module: "table_allocation",
-    organizationId: input.organizationId,
+    organizationId: caller.organizationId,
+    claimedLocationId: verifiedLocationId,
   });
   if (blocked) return blocked;
 
+  const { data: sessionRow } = await supabase
+    .from("service_sessions")
+    .select("organization_id, location_id")
+    .eq("id", input.serviceSessionId)
+    .maybeSingle();
+
+  if (
+    !sessionRow ||
+    sessionRow.organization_id !== caller.organizationId ||
+    sessionRow.location_id !== verifiedLocationId
+  ) {
+    return {
+      ok: false,
+      error: "That service session belongs to a different location.",
+    };
+  }
+
   const { error } = await supabase.rpc("board_undo", {
-    p_organization_id: input.organizationId,
+    p_organization_id: caller.organizationId,
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
@@ -618,19 +740,79 @@ export async function redoBoardAction(input: {
   restaurantSlug: string;
   organizationId: string;
   serviceSessionId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const caller = await getAllocationActor(input.restaurantSlug);
+  if (caller && "contextStale" in caller) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
+  if (!caller) {
+    return {
+      ok: false,
+      error: "You need to sign in to do that.",
+      sessionInvalid: true,
+    };
+  }
+
+  let verifiedLocationId: string;
+  if (input.expectedContext) {
+    const outcome = await assertWorkspaceExpectation(input.expectedContext, {
+      profileId: caller.profileId,
+      organizationId: caller.organizationId,
+    });
+    if (!outcome.ok) {
+      if (outcome.code === "invalid") {
+        return { ok: false, error: "That request is invalid." };
+      }
+      return {
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      };
+    }
+    verifiedLocationId = outcome.location.id;
+  } else {
+    const loc = await getPrimaryLocation(caller.organizationId);
+    if (!loc) {
+      return {
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      };
+    }
+    verifiedLocationId = loc.id;
+  }
+
   const blocked = await guardModule({
     module: "table_allocation",
-    organizationId: input.organizationId,
+    organizationId: caller.organizationId,
+    claimedLocationId: verifiedLocationId,
   });
   if (blocked) return blocked;
 
+  const { data: sessionRow } = await supabase
+    .from("service_sessions")
+    .select("organization_id, location_id")
+    .eq("id", input.serviceSessionId)
+    .maybeSingle();
+
+  if (
+    !sessionRow ||
+    sessionRow.organization_id !== caller.organizationId ||
+    sessionRow.location_id !== verifiedLocationId
+  ) {
+    return {
+      ok: false,
+      error: "That service session belongs to a different location.",
+    };
+  }
+
   const { error } = await supabase.rpc("board_redo", {
-    p_organization_id: input.organizationId,
+    p_organization_id: caller.organizationId,
     p_service_session_id: input.serviceSessionId,
   });
   if (error) return { ok: false, error: error.message };
@@ -639,17 +821,23 @@ export async function redoBoardAction(input: {
 }
 
 /**
- * Feature 028. Client-triggered read for the date/month navigator --
+ * Feature 028 / V2-005.001. Client-triggered read for the date/month navigator --
  * mirrors Attendance's own client-triggered action pattern
  * (getAttendanceReportAction et al.) rather than a route param, since the
  * board is a Server Component's initial data plus client-side history, not
  * a separately routed page. Re-resolves the signed-in user and their
  * organization itself; never trusts a client-supplied organizationId.
+ * Validates workspace expectation when provided.
  */
 export async function getAllocationContextForDateAction(input: {
   restaurantSlug: string;
   serviceDate: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<AllocationContext>> {
+  const supabase = await createClient();
+  const sessionCheck = await requireLiveSession(supabase);
+  if (sessionCheck) return sessionCheck;
+
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
@@ -660,29 +848,64 @@ export async function getAllocationContextForDateAction(input: {
     return { ok: false, error: "That date request is invalid." };
   }
 
-  const currentUser = await getCurrentUser(parsed.data.restaurantSlug);
+  const currentUser = await getAllocationActor(parsed.data.restaurantSlug);
+  if (currentUser && "contextStale" in currentUser) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
   if (!currentUser) {
     return { ok: false, error: "You need to sign in to see the board." };
   }
 
-  const location = await getPrimaryLocation(currentUser.organizationId);
-  if (!location) {
-    return { ok: false, error: "No location is set up yet." };
+  let verifiedLocation: { id: string; time_zone: string };
+  if (input.expectedContext) {
+    const outcome = await assertWorkspaceExpectation(input.expectedContext, {
+      profileId: currentUser.profileId,
+      organizationId: currentUser.organizationId,
+    });
+    if (!outcome.ok) {
+      if (outcome.code === "invalid") {
+        return { ok: false, error: "That request is invalid." };
+      }
+      return {
+        ok: false,
+        error: STALE_CONTEXT_MESSAGE,
+        contextStale: true,
+      };
+    }
+    verifiedLocation = outcome.location;
+  } else {
+    const loc = await getPrimaryLocation(currentUser.organizationId);
+    if (!loc) {
+      return { ok: false, error: "No location is set up yet." };
+    }
+    verifiedLocation = loc;
   }
+
   const blocked = await guardModule({
     module: "table_allocation",
     organizationId: currentUser.organizationId,
-    location,
+    location: verifiedLocation,
   });
   if (blocked) return blocked;
-  const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
+
+  const today = zonedWallTimeFromInstant(
+    new Date(),
+    verifiedLocation.time_zone,
+  ).date;
   if (parsed.data.serviceDate > today) {
     return { ok: false, error: "You can't browse to a date in the future." };
   }
 
+  const scope: VerifiedLocationScope = {
+    organizationId: currentUser.organizationId,
+    locationId: verifiedLocation.id,
+    timeZone: verifiedLocation.time_zone,
+  };
+
   const context = await getAllocationContext(
     currentUser.organizationId,
     parsed.data.serviceDate,
+    scope,
   );
   if (!context) {
     return { ok: false, error: "No location is set up yet." };

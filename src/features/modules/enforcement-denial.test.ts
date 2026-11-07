@@ -17,6 +17,23 @@ const edge = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/features/allocation/data/allocation-actor", () => ({
+  getAllocationActor: async () => ({
+    profileId: "11111111-1111-4111-8111-111111111111",
+    organizationId: "22222222-2222-4222-8222-222222222222",
+    designation: "owner",
+    name: "Owner",
+  }),
+}));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: async () => ({
+    ok: true,
+    location: {
+      id: "33333333-3333-4333-8333-333333333333",
+      time_zone: "America/Chicago",
+    },
+  }),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/modules/data/module-enforcement", () => ({
   guardModule: edge.guard,

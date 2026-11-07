@@ -226,6 +226,14 @@ beforeAll(async () => {
   await makeActor("ownerA", orgA, "owner");
   await makeActor("serverA", orgA, "server");
   await makeActor("ownerB", orgB, "owner");
+  // #306 requires explicit operational assignments even for org administrators.
+  const assigned = await admin.from("location_memberships").insert([
+    { location_id: loc.A1, profile_id: actors.ownerA.id, role: "manager" },
+    { location_id: loc.A2, profile_id: actors.ownerA.id, role: "manager" },
+    { location_id: loc.A1, profile_id: actors.serverA.id, role: "staff" },
+    { location_id: loc.B1, profile_id: actors.ownerB.id, role: "manager" },
+  ]);
+  if (assigned.error) throw new Error(assigned.error.message);
 });
 
 afterAll(async () => {

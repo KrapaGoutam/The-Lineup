@@ -1,5 +1,9 @@
 # The Lineup V2.0 — Current Operational State
 
+Execution checkpoint (2026-11-07): PR #305 is merged into development as ad878715b84fcdc3f36414b882d52207fb4f139e; enforcement remains STAGED. PR #306 is reconciled and validated locally, with push BLOCKED: live Preview uses hosted DEV, which lacks board_location_roster, and no password/SSO containment is configured. No #306 push/merge, hosted migration/configuration/activation or main/Production change. V2-005.002 NOT STARTED. [Integration handoff](features/005-module-location-scoping/001-table-allocation/INTEGRATION_HANDOFF.md).
+
+Previous checkpoint (historical): V2-005.001 Overall actor repair, PR #306 / issue #307, TECHNICALLY READY FOR OWNER REVIEW (OPEN / NOT MERGED). Actual membership-free Overall mutations, real actor attribution, preserved historical data and standalone/combined acceptance pass. Repair-head CI is green; final documentation-delivery receipts are on the PR. [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 remains implemented in open PR #305, staged / activation blocked; R1, hosted DEV deployment and owner merge order remain pending. No main or Production changes/contact. V2-005.002 through .008 NOT STARTED. Earlier checkpoints below retain their historical validation scope.
+
 ```text
 Program:                  The Lineup V2.0
 State:                    IN_PROGRESS
@@ -25,7 +29,7 @@ Blockers:                 NONE
 Active Subfeature:        V2-004.004 Backend Enforcement - issue #304
 Active Subfeature Status: IMPLEMENTED - ACTIVATION BLOCKED (staged; hosted DEV NOT READY 0/44 active locations configured); record: 004-backend-enforcement/STATUS.md
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
-Next Subfeature:          V2-005 Existing Module Location Scoping (NOT STARTED; NOT AUTHORIZED; Q1-Q4, R1-R2 open)
+Next Subfeature:          V2-005.002 Tasks (NOT STARTED; NOT AUTHORIZED); first resolve #306 closeout and #305 order
 Production Changes:       NONE; Production not contacted
 Main Branch Merge:        NONE
 ```
