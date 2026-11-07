@@ -294,3 +294,7 @@ Independent audit of `development` `754b34a5d5860269f2fda48b27efb56fbfb90993` (b
 ## V2-004.002 - complete
 
 PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, development merge `6000e6cdffeb24496fce192020d3edce0f669341`. Its accepted schema/reader/writer/editor are the baseline for V2-004.003. No schema or backend enforcement change in .003. Q1-Q4 remain open. See the .003 evidence for current acceptance and delivery status.
+
+## V2-005.002 Tasks location scoping — ready for owner review
+
+Issue #310 / parent #253. Isolated feature branch from development `3fa0bf72` implements verified-location Tasks reads/writes, effective branch roles, genuine Overall actor history, workforce eligibility and source-bound notification isolation. Local gates: JWT17; production browser18 across three devices; compatibility1 on unmigrated baseline; replay77; pgTAP2198; units3261/7 existing skips; nonempty historical upgrade and independent review PASS. PR #311 is OPEN/UNMERGED. All five implementation-head checks pass, including browser337; the final documentation head is verified before delivery. Hosted migration/configuration/activation, main/Production and backup remain untouched. V2-005.001 is merged; .003–.008 remain not started. [Tasks evidence](v2.0/features/005-module-location-scoping/002-tasks/EVIDENCE.md).

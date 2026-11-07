@@ -1,11 +1,12 @@
 import "server-only";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { createClient } from "@/lib/supabase/server";
+
+import { getTasksPeople } from "./tasks-people";
 
 import type { TaskHistoryData } from "../domain/task-history";
 import {
-  collectHistoryProfileIds,
   mapHistoryRow,
   TASK_HISTORY_COLUMNS,
   type TaskHistoryRow,
@@ -23,9 +24,10 @@ export const MAX_HISTORY_TASKS = 1000;
  */
 export async function getTaskHistory(
   organizationId: string,
+  scope: VerifiedLocationScope,
 ): Promise<TaskHistoryData | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  if (scope.organizationId !== organizationId) return null;
+  const location = { id: scope.locationId, time_zone: scope.timeZone };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -47,17 +49,11 @@ export async function getTaskHistory(
   const truncated = all.length > MAX_HISTORY_TASKS;
   const rows = all.slice(0, MAX_HISTORY_TASKS);
 
-  const names = new Map<string, string>();
-  const profileIds = collectHistoryProfileIds(rows);
-  if (profileIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", profileIds);
-    for (const profile of profiles ?? []) {
-      names.set(profile.id, profile.display_name);
-    }
-  }
+  const people = await getTasksPeople(scope);
+  if (!people) return null;
+  const names = new Map(
+    people.map((person) => [person.profileId, person.name]),
+  );
 
   return {
     entries: rows

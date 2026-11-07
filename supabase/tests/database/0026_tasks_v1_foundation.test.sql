@@ -69,8 +69,18 @@ select ok(
 );
 
 -- 2. Creation permissions ----------------------------------------------
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
 select throws_ok(
   $$select public.task_create('00000000-0000-0000-0000-000000026011','00000000-0000-0000-0000-000000026021','Staff attempt',null,'other','normal','anyone','{}',false,null,null,null,null)$$,
   '42501', null, 'TASK-002 staff cannot create a task'
@@ -79,6 +89,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select lives_ok(
   $$select public.task_create('00000000-0000-0000-0000-000000026011','00000000-0000-0000-0000-000000026021','A patio',null,'cleaning','high','individual',array['00000000-0000-0000-0000-000000026004']::uuid[],false,null,'2026-10-30','15:00','closing')$$,
   'TASK-001/003 manager creates and assigns an individual task'
@@ -131,6 +143,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026003', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
 select lives_ok(
   $$select public.task_create('00000000-0000-0000-0000-000000026011','00000000-0000-0000-0000-000000026021','G by asst',null,'other','normal','anyone','{}',false,null,null,null,null)$$,
   'assistant manager can create'
@@ -139,6 +153,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026001', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026001')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026001')::text, true);
 select lives_ok(
   $$select public.task_create('00000000-0000-0000-0000-000000026011','00000000-0000-0000-0000-000000026021','H by owner',null,'other','normal','anyone','{}',false,null,null,null,null)$$,
   'owner can create'
@@ -182,6 +198,8 @@ select ok(
 -- 3. Completion rules ---------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
 select throws_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.patio')),
   '42501', null, 'TASK-007 unrelated staff cannot complete another employee''s task'
@@ -190,6 +208,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L, 'all wiped')$$, current_setting('t.patio')),
   'TASK-005 assignee completes their own task with a note'
@@ -203,6 +223,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.patio')),
   'completing an already completed task is a no-op'
@@ -233,6 +255,8 @@ select ok(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026003', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
 select lives_ok(
   format($$select public.task_reopen(%L)$$, current_setting('t.behalf')),
   'TASK-012 an assistant manager can reopen'
@@ -246,6 +270,8 @@ select is(
 -- shared-once and team tasks
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
 select throws_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.trash')),
   '42501', null, 'an unrelated member cannot complete a multi-person task'
@@ -257,6 +283,8 @@ select lives_ok(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.trash')),
   'any one assignee completes a shared-once task'
@@ -270,6 +298,8 @@ select is(
 -- 4. Status transitions -------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
 select lives_ok(
   format($$select public.task_set_status(%L, 'in_progress')$$, current_setting('t.ice')),
   'assignee starts a task'
@@ -289,6 +319,8 @@ select is(
 );
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
 select lives_ok(
   format($$select public.task_set_status(%L, 'open')$$, current_setting('t.ice')),
   'TASK-009 unblock returns to open'
@@ -302,6 +334,8 @@ reset role;
 -- 5. Reassign / update / cancel / carry forward -------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
 select throws_ok(
   format($$select public.task_assign(%L, 'individual', array['00000000-0000-0000-0000-000000026005']::uuid[])$$, current_setting('t.ice')),
   '42501', null, 'staff cannot reassign'
@@ -318,6 +352,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select lives_ok(
   format($$select public.task_assign(%L, 'individual', array['00000000-0000-0000-0000-000000026005']::uuid[])$$, current_setting('t.ice')),
   'TASK-008 manager reassigns Ann -> Bea'
@@ -350,6 +386,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
 select throws_ok(
   format($$select public.task_carry_forward(array[%L]::uuid[], '2026-11-03')$$, current_setting('t.ice')),
   '42501', null, 'staff cannot carry tasks forward'
@@ -359,6 +397,8 @@ reset role;
 -- 6. Read visibility (RLS) ---------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
 select is(
   (select count(*)::int from public.tasks where assignment_mode = 'individual' and title in ('A patio', 'B ice (restock)', 'F on behalf')),
   0, 'unrelated staff cannot read other people''s individual tasks'
@@ -371,6 +411,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select ok(
   (select count(*) >= 8 from public.tasks),
   'manager reads every task in the organization'
@@ -379,6 +421,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026008')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026008')::text, true);
 select is(
   (select count(*)::int from public.tasks), 0, 'TASK-072 another organization sees none of these tasks'
 );
@@ -387,6 +431,8 @@ reset role;
 -- 7. No direct writes -----------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select throws_ok(
   format($$update public.tasks set status = 'completed' where id = %L$$, current_setting('t.team')),
   '42501', null, 'TASK-015 even a manager cannot write the table directly'
@@ -400,12 +446,16 @@ reset role;
 -- 8. Audit history privacy ----------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026004')::text, true);
 select is(
   (select count(*)::int from public.task_events), 0, 'TASK-060 staff cannot read audit history'
 );
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026003', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026003')::text, true);
 select ok(
   (select count(*) > 5 from public.task_events), 'TASK-061 an assistant manager can read audit history'
 );
@@ -436,6 +486,8 @@ select ok(
 );
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026005')::text, true);
 select is(
   (select count(*)::int from public.task_notifications where recipient_profile_id = '00000000-0000-0000-0000-000000026004'),
   0, 'notifications are private to their recipient'
@@ -467,6 +519,8 @@ select set_config('t.anyone', (select id::text from public.tasks where title = '
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026007', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026007')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026007')::text, true);
 select throws_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.anyone')),
   '42501', null, 'an inactive member cannot use the RPCs'
@@ -475,6 +529,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026008')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026008')::text, true);
 select throws_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.anyone')),
   '42501', null, 'TASK-070 a manager of another organization cannot complete this organization''s task'
@@ -487,6 +543,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026002')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.anyone')),
   'manager completes a shared task'
@@ -494,6 +552,8 @@ select lives_ok(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000026006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000026006')::text, true);
 select throws_ok(
   format($$select public.task_reopen(%L)$$, current_setting('t.anyone')),
   '42501', null, 'a teammate cannot undo a manager''s completion'

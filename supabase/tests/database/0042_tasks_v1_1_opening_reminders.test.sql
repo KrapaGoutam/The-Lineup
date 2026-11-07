@@ -65,6 +65,15 @@ values
   ('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042107', array['host']::public.app_role[], false),
   ('00000000-0000-0000-0000-000000042112', '00000000-0000-0000-0000-000000042108', array['owner']::public.app_role[], true);
 
+-- Explicit location workforce: these existing semantic tests intentionally cover all four branches.
+insert into public.location_memberships(location_id, profile_id, role, active)
+select l.id, m.profile_id,
+  case when m.roles && array['owner','general_manager']::public.app_role[] then 'manager'
+       when 'shift_manager' = any(m.roles) then 'assistant_manager' else 'staff' end::public.location_role,
+  true
+from public.locations l join public.memberships m on m.organization_id = l.organization_id
+where l.organization_id in ('00000000-0000-0000-0000-000000042111','00000000-0000-0000-0000-000000042112');
+
 -- One Opening template (with the four items) per location.
 insert into public.checklist_templates (id, organization_id, location_id, kind, name, created_by)
 values
@@ -398,6 +407,7 @@ where organization_id = '00000000-0000-0000-0000-000000042111' and profile_id = 
 
 -- Role change: a host promoted to Assistant Manager is judged as management.
 select pg_temp.mk_day(current_setting('t.main')::uuid, date '2026-06-17');
+update public.location_memberships set role = 'assistant_manager' where profile_id = '00000000-0000-0000-0000-000000042106';
 update public.memberships set roles = array['shift_manager']::public.app_role[]
 where organization_id = '00000000-0000-0000-0000-000000042111' and profile_id = '00000000-0000-0000-0000-000000042106';
 select is(pg_temp.run(current_setting('t.main')::uuid, pg_temp.at(date '2026-06-17', '09:00')), 6, 'a role change is honoured at evaluation: still six recipients');
@@ -406,6 +416,7 @@ select is(
    where recipient_profile_id = '00000000-0000-0000-0000-000000042106' and payload ->> 'service_date' = '2026-06-17'),
   4, 'the promoted member''s scope is the whole checklist (4), no longer the 2 items a host could work'
 );
+update public.location_memberships set role = 'staff' where profile_id = '00000000-0000-0000-0000-000000042106';
 update public.memberships set roles = array['host']::public.app_role[]
 where organization_id = '00000000-0000-0000-0000-000000042111' and profile_id = '00000000-0000-0000-0000-000000042106';
 
@@ -592,7 +603,7 @@ select is(
 select private.tasks_notify('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042104', 'assigned', '00000000-0000-0000-0000-000000042901', null, 't', 'still dropped', null);
 select private.tasks_notify('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042104', 'overdue', '00000000-0000-0000-0000-000000042901', null, 't', 'still dropped', 'k');
 select is((select count(*)::int from public.task_notifications where body = 'still dropped'), 0, 'T-3 regression: ordinary kind=task notifications are still suppressed');
-select private.tasks_notify('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042104', 'checklist_available', null, null, 't', 'announce', 'checklist:regress');
+select private.tasks_notify('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042104', 'checklist_available', null, (select id from public.checklist_instances where location_id = current_setting('t.main')::uuid and service_date = '2026-06-01'), 't', 'announce', 'checklist:regress');
 select private.tasks_notify('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042104', 'assigned', pg_temp.item(current_setting('t.main')::uuid, date '2026-06-01', 'U'), null, 't', 'opening assigned', null);
 select is((select count(*)::int from public.task_notifications where body in ('announce', 'opening assigned')), 2, 'T-3 regression: checklist_available and Opening-task notifications still pass the gate');
 select is((select count(*)::int from public.task_notifications where title = 'Old assignment'), 1, 'existing notifications are not deleted');
@@ -609,18 +620,25 @@ select throws_ok(
 );
 reset role;
 
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042108', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042108')::text, true);
 select throws_ok(
   $$select public.task_opening_reminders_sweep('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042121')$$,
   '42501', null, 'TS-038/037 a member of another organization is rejected'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042107', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042107')::text, true);
 select throws_ok(
   $$select public.task_opening_reminders_sweep('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042121')$$,
   '42501', null, 'TS-038 an inactive member is rejected'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042104', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042104')::text, true);
 select throws_ok(
   $$select public.task_opening_reminders_sweep('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042122')$$,
   '42501', null, 'TS-037 a location of another organization is rejected even for a valid member'
@@ -655,8 +673,10 @@ select is(
   3, 'and it counts only her three items'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042108', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042108')::text, true);
 select is((select count(*)::int from public.task_notifications), 0, 'TS-037 org B''s owner reads no org A notification at all');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042107', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042107')::text, true);
 select is((select count(*)::int from public.task_notifications), 0, 'an inactive member reads nothing');
 reset role;
 
@@ -664,10 +684,12 @@ reset role;
 -- Rpc opens at 00:00 local, so OPEN is always due. Mona starts the day, Ann sweeps.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042101', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042101')::text, true);
 select public.checklist_template_save('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042125', null, 'opening', 'Rpc Opening', '{0,1,2,3,4,5,6}', true,
   '[{"title":"Unlock","assignment_mode":"anyone"},{"title":"Ann job","assignment_mode":"individual","assignee_ids":["00000000-0000-0000-0000-000000042104"]}]'::jsonb);
 select public.checklist_generate_daily('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042125');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042104', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042104')::text, true);
 select ok(
   public.task_opening_reminders_sweep('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042125') >= 6,
   'the real RPC stores OPEN for 3 management + Ann + Bea + Hal (and more stages if the clock is already past +15 / +30)'
@@ -677,17 +699,20 @@ select is(
   0, 'TS-026 a second call from the same tab stores nothing'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042106', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042106')::text, true);
 select is(
   public.task_opening_reminders_sweep('00000000-0000-0000-0000-000000042111', '00000000-0000-0000-0000-000000042125'),
   0, 'TS-026 a different member''s call (a second tab or device) stores nothing either'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042104', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042104')::text, true);
 select is(
   (select count(*)::int from public.task_notifications where type = 'opening_reminder' and payload ->> 'location_id' = '00000000-0000-0000-0000-000000042125' and payload ->> 'stage' = 'open'),
   1, 'Ann reads exactly one OPEN of her own'
 );
 -- Work gets finished through the real lifecycle RPCs: no further reminder.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000042101', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000042101')::text, true);
 select public.task_complete(t.id, null) from public.tasks t
   join public.checklist_instances ci on ci.id = t.checklist_instance_id
   where ci.location_id = '00000000-0000-0000-0000-000000042125' and ci.service_date = (now() at time zone 'America/Chicago')::date;

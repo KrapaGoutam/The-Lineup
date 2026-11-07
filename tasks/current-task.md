@@ -1,29 +1,16 @@
-# PR305 staged merge and PR306 integration execution
+# V2-005.002 Tasks location scoping — READY FOR OWNER REVIEW
 
-Owner approved PR305 merge only, PR306 reconciliation/validation and push only after
-verified Preview safety. PR306 merge, hosted migrations/configuration/activation,
-main/Production, JobQuest and V2-005.002 remain unauthorized.
+Approved owner contract: docs/v2.0/features/005-module-location-scoping/002-tasks/PLAN.md. Issue #310 / parent #253 / program #248. Base 3fa0bf72, isolated feature worktree.
 
-- [x] CP00: create durable local handoff outside tracked files
-- [x] CP01: exact-head CI, protection and staged preflight
-- [x] CP02/03: merge305 and verify development ad878715; publish actual receipts
-- [x] CP04: inspect clean existing306 worktree and merge origin/development
-- [x] Reuse validated actions/tests/fixture resolutions; reconcile shared docs/types
-- [x] CP05: verify effective tree against validated reference and save local merge
-- [x] CP06: validate combined security gates and cleanup
-- [x] CP07: verify Preview safety before any branch push
-- [ ] CP08/09: BLOCKED - push and new-head CI require compatible Preview/schema
-- [x] CP10: durable handoff and final owner report; push held, never merge306
+- [x] CP-T00 baseline and durable handoff.
+- [x] CP-T01 contracts, data/auth/UI risks and tests mapped.
+- [x] CP-T02 database authorization and actor integrity.
+- [x] CP-T03 verified-location application binding.
+- [x] CP-T04 notification/history/recurrence validation.
+- [x] CP-T05 security tests.
+- [x] CP-T06 regression and independent review.
+- [x] CP-T07 Preview compatibility, push and PR.
+- [x] CP-T08 exact-head CI.
+- [x] CP-T09 final handoff.
 
-Data/security: three reviewed migrations unchanged; actor/live-session/context,
-stale/timezone/session binding, location RLS, module guards before operational
-reads, real audit actors/undo/redo and recovery exemptions retained. No UI change.
-Prior validated reference bde49c9/b7c7059 is preserved unchanged. Handoff is
-../v2-integration-handoff/{CURRENT_AGENT_STATE,INTEGRATION_HANDOFF,
-VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md; keep it current at checkpoints.
-
-Current: local reconciliation and security validation PASS; local merge saved as
-dfd2118003dfd7a2a5f333db81c9007b25e37bb5. Final CP10 handoff records the push block. Live Preview binding to DEV confirmed; no password/SSO
-containment and required rosterRPC absent. Push BLOCKED. Newcheck/build/unit3258,
-pgTAP2163, JWT45+31, browser15 PASS. Fixture-only date correction; migrations unchanged.
-Local cleanup zero/staged; taskserver stopped. No remote306 push/CI/merge.
+Implementation `ab8780b1e31016ea417b0013c519212a32baa2a3` is pushed in PR311 to development; all five source-head checks SUCCESS, including browser337. Local JWT17, browser18, old-schema compatibility1, replay77, pgTAP2198, units3261/7 skips, check/build/scans and independent review PASS. Final documentation-only PR head is verified before delivery, with exact SHA/run IDs in local CP-T08/T09 handoff and owner report. PR remains open/unmerged, auto-merge off. Next owner action: review/approval. Hosted changes/activation, retained backup changes, merge, main and Production remain prohibited; enforcement STAGED. Parent253 remains open; .003–008 not started.

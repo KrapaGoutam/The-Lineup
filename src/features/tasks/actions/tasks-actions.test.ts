@@ -8,7 +8,7 @@ vi.mock("@/features/modules/data/module-enforcement", () => ({
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
-  getCurrentUser: vi.fn(),
+  getTasksActor: vi.fn(),
   getPrimaryLocation: vi.fn(),
   getTasksSnapshot: vi.fn(),
   getTaskHistory: vi.fn(),
@@ -22,8 +22,8 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.requireLiveSession,
 }));
-vi.mock("@/lib/current-user", () => ({
-  getCurrentUser: mocks.getCurrentUser,
+vi.mock("@/features/tasks/data/tasks-actor", () => ({
+  getTasksActor: mocks.getTasksActor,
 }));
 vi.mock("@/features/locations/data/primary-location", () => ({
   getPrimaryLocation: mocks.getPrimaryLocation,
@@ -61,10 +61,21 @@ const ctx = (locationId: string, over: Record<string, string> = {}) => ({
   locationId,
   ...over,
 });
-const persisted = (id: string | null) =>
-  mocks.getPrimaryLocation.mockResolvedValue(
-    id ? { id, time_zone: "America/Chicago" } : null,
+const persisted = (id: string | null) => {
+  mocks.getTasksActor.mockResolvedValue(
+    id
+      ? {
+          organizationId: O,
+          scope: {
+            organizationId: O,
+            locationId: id,
+            timeZone: "America/Chicago",
+          },
+          viewer: { profileId: P, name: "Pat", designation: "manager" },
+        }
+      : null,
   );
+};
 
 const createCommand: TaskCommand = {
   type: "create",
@@ -93,7 +104,7 @@ const run = (expectedContext: unknown) =>
 beforeEach(() => {
   mocks.rpc.mockReset().mockResolvedValue({ error: null });
   mocks.requireLiveSession.mockReset().mockResolvedValue(null);
-  mocks.getCurrentUser.mockReset().mockResolvedValue({
+  mocks.getTasksActor.mockReset().mockResolvedValue({
     profileId: P,
     name: "Pat",
     designation: "manager",
@@ -185,8 +196,8 @@ describe("runTaskCommandAction workspace consistency (V2-003.005)", () => {
   });
 
   it("an unauthenticated caller never reaches the consistency check or the database", async () => {
-    mocks.getCurrentUser.mockResolvedValue(null);
     persisted(A);
+    mocks.getTasksActor.mockResolvedValue(null);
     expect(await run(ctx(A))).toMatchObject({ ok: false });
     expect(mocks.getPrimaryLocation).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();

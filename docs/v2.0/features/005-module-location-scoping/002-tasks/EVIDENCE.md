@@ -1,0 +1,55 @@
+# Tasks evidence
+
+## CP-T00 baseline confirmed
+
+2026-11-07: remote development and feature HEAD `3fa0bf72b50e92c707fa58436cb78b907f67ef4a`. Dedicated branch/worktree `feature/v2.0-005.002-tasks-location-scoping` / `.tmp/v2-tasks-location-scoping`. No existing feature branch or PR; issue #310 created. Parent checkout preserved. `npm.cmd ci --no-audit --no-fund` installed 514 packages. No tests yet.
+
+## CP-T01 contracts mapped
+
+Snapshot/history/reminder loaders resolve independently through getPrimaryLocation. Notifications/count lack location filters. Org-only manager predicates affect RPCs and child RLS. Attribution FKs require membership; participants must stay membership-linked. Opening evaluator has separate recipient access and manager seams. Existing tasks_begin module assertion must survive. Plan/matrices created; next implement forward migration and verified scope binding. No operational DB writes yet.
+
+## CP-T02 / CP-T03 — implementation present, validation in progress
+
+Worktree `.tmp/v2-tasks-location-scoping`, HEAD still baseline `3fa0bf72`. New migration `20261107160548_tasks_location_scoping.sql` was created with installed CLI migration new. First isolated clean replay applied all 77 migrations successfully on project `lineup-tasks-scoping` (API port 56321); existing restaurant-roster and JobQuest untouched. Live session checks, exact-location effective roles, attribution profile FKs, workforce filtering, child RLS, source-derived notification location, audit snapshots and narrow people RPC implemented. Tasks loaders require verified scope; actions use canonical actor and workspace binding, resource preflight; reminder/badge carry expectation. New-schema people gate refuses unmigrated Preview writes before old RPCs.
+
+Actual tests: first focused unit run 43 PASS / 1 FAIL (revoked context error flag; corrected, rerun pending). First full pgTAP 65 files / 2147 assertions: Tasks opening-reminder fixture still assumed org-wide access (updated explicit assignments); module inactive denial expected old message (updated); unrelated inventory concurrent-open test failed (pending focused retest). No passing final suite claimed. First typecheck exposed untyped narrow RPC result and tests missing scope; fixes applied, rerun in progress.
+
+Modified: migration/types, Tasks actor/people/loaders/actions/reminder source, shell expectation plumbing, module dismissal exemption test, Tasks unit and SQL fixtures, feature docs/current task. Pending: dedicated JWT and pgTAP matrix, authenticated browser, final regressions, independent review, safe push/PR/exact CI. Exact next action: finish dedicated actual-JWT fixture and test suite against isolated stack, then resolve pgTAP findings. No hosted changes, activation, backup or Production contact.
+
+## CP-T04 / CP-T05 — security and semantic outcomes
+
+HEAD remains baseline (not committed yet). Isolated final replay 77 migrations PASS. Full pgTAP 66 files / 2194 assertions PASS (before two additional readiness ACL assertions). Full units 240 files / 3258 PASS, 7 existing skips. Actual JWT acceptance 16/16 PASS, including all Overall roles with real actors/no memberships, A/B dataset separation, unchanged-state denials, exact resource/workspace binding, assignment/membership/session revocation, inactive/archived denial, own-recipient recovery, ACTIVE Enabled/Disabled reminder SELECT/counts and task denial, revoked-assignee checklist/recurrence generation, preserved historical assignments, DST due instants and Overall capability negatives. Local fixture teardown succeeded and switch restored STAGED.
+
+Independent read-only review found and prompted corrections: Tasks-only effective location designation in UI, source-only reminder module RLS, separate module-independent actor readiness gate, first generated Overall name hydration. Existing workspace inbox commands stay module-guarded; SQL mark-read and explicit-ID acknowledgment action retain the recovery exemption after access/module changes. No new inbox module-denial behavior was introduced.
+
+Remaining: authenticated three-device browser currently running, final check/build/scans, review closure, safe Preview compatibility evidence, commit/push/PR/exact CI and final handoff. Exact next action: inspect desktop browser outcome, correct any actual broken boundary, then tablet/mobile. Hosted DEV/main/Production unchanged.
+
+## CP-T06 — full local verification and independent review
+
+Current Git HEAD remains starting `3fa0bf72b50e92c707fa58436cb78b907f67ef4a` while the reviewed implementation is uncommitted in the dedicated feature worktree. Full units 241 files / 3261 PASS / 7 existing skips. Final actual-JWT acceptance 17/17 PASS, including atomic mark-all above the REST row cap. Final clean replay 77 migrations and pgTAP 66 files / 2198 assertions PASS. SQL public/private lint has no errors. Authenticated browser18 PASS on production runtime across desktop/tablet/mobile. Old-schema browser1 PASS against disposable 76-migration baseline; no operational writes. Nonempty 76-to-77 upgrade preserved every compared historical task/assignment/event/notification field and timestamp; only trusted notification scope was backfilled. Upgrade fixture cleanup PASS. New mark-all RPC adds no historical data rewrite.
+
+Independent read-only reviewer found four issues (UI role scope, reminder module RLS, first generated actor name, recovery-contract wording); all corrected, re-review found no remaining concrete defect. The final atomic mark-all RPC/action/test delta was reviewed separately with no finding. Final check/build/scans are being rerun after that bounded action change and documentation updates before commit.
+
+Actual commands and local receipts: `npm.cmd run check`, `npm.cmd test`, `node .tmp/run-tasks-local.mjs "C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js" run build`; `supabase db reset --local --workdir .tmp/tasks-db`; `supabase test db --workdir .tmp/tasks-db`; `supabase db lint --local --schema public,private --level error --fail-on error --workdir .tmp/tasks-db`; JWT and browser commands in TEST_MATRIX. Local logs use `.tmp/tasks-{replay-atomic,pgtap-atomic,jwt-atomic,unit-final,browser-production,browser-compat-pass,upgrade-verify,db-lint}.log`.
+
+Baseline drift rechecked: remote development still `3fa0bf72b50e92c707fa58436cb78b907f67ef4a`; main remains `5e5b7747693b6e81014eafdf299b87e56c3f033d`. No feature branch existed remotely. Final disposable inventory confirms 77/STAGED, zero organizations/profiles/Auth users/tasks/notifications/Overall roles/module configurations and unvalidated FKs. Existing local stacks were not reset; the legacy dblink copies were adapted to the disposable published port after an initial hardcoded-port failure. No hosted SQL/config/activation, retained-backup change, main/Production contact or merge.
+
+Files changed: Tasks migration/generated types and actor/people/loaders/actions; shell/page-data Tasks-only effective role and reminder/badge expectation; scoped notification read-state RPC; Tasks unit/SQL fixtures, JWT/browser suites and local config; feature/parent/global/data-model documentation/current task. Temporary test infrastructure is ignored by Git, Prettier and ESLint. Exact next action: finish final check/build/scans, commit and push the green feature, open development PR, then verify exact-head CI. Hosted Tasks rollout remains separately authorized; unmigrated Preview is fail-closed.
+
+## CP-T07 — feature pushed and PR created
+
+Feature commit `ab8780b1e31016ea417b0013c519212a32baa2a3` pushed. [PR #311](https://github.com/KrapaGoutam/The-Lineup/pull/311) targets development; issue #310. Final check/build/scans PASS; all local results above are verified. CI/Database/Preview are running on that exact SHA (runs42393670673/42393670674); deploy-migrations SKIPPED. Worktree changes at this milestone are documentation/checklist receipts only. Next: verify checks, publish final documentation and verify its exact final head; never merge or deploy hosted SQL.
+
+## CP-T08 — implementation exact-head CI verified
+
+All five gates SUCCESS on `ab8780b1e31016ea417b0013c519212a32baa2a3`: [application / browser CI](https://github.com/KrapaGoutam/The-Lineup/actions/runs/42393670673), [database replay / policies](https://github.com/KrapaGoutam/The-Lineup/actions/runs/42393670674), [Vercel Preview](https://the-lineup-26i4nqxdj-onepiece11.vercel.app) and Preview Comments. The full desktop regression is **337/337 PASS**. Hosted deploy-migrations is **SKIPPED by design**. PR311 remains OPEN, development target, auto-merge disabled. Verification completed November7,2026 at about11:04 America/Chicago.
+
+Read-only exact Preview smoke PASS: HTTP200,10 public script assets, expected DEV binding, no Production reference; unauthenticated and no writes. Local production/dev servers stopped. Disposable Supabase `lineup-tasks-scoping` was stopped with --no-backup only after zero-residue/STAGED receipts; existing projects and retained DEV backup were not stopped/deleted.
+
+This final closeout changes documentation/checklists only. Its own exact-head checks must also pass before delivery. The PR's current Checks tab is authoritative; immutable final SHA/run IDs are captured in the owner delivery report and local CP-T08/T09 handoff, avoiding a self-referential commit hash in this file.
+
+## CP-T09 — owner handoff
+
+Implementation, tests, generated types, migration, six canonical Tasks documents, parent/global status and current-task record are complete. Independent review has no remaining findings. Owner action: review [PR311](https://github.com/KrapaGoutam/The-Lineup/pull/311); no automatic merge or rollout. Hosted DEV stays76/STAGED with no Tasks migration/configuration/activation; main, Production and the November7 backup retained through November14 remain unchanged. Preview Tasks is intentionally unavailable until a separately authorized migration deploys the readiness/authorization contract; old-schema browser and actor tests prove safe refusal. Parent253 remains open and .003–008 are not started.
+
+Local durable handoff: `.tmp/v2-tasks-location-scoping-handoff/{CURRENT_AGENT_STATE,IMPLEMENTATION_HANDOFF,VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md` in the parent checkout. At this checkpoint the actual source SHA is `ab8780b1e31016ea417b0013c519212a32baa2a3`; only final documentation-head checks and the final owner report remain before stopping. Do not regenerate the SQL from the stale scratch helper or perform any hosted action.
