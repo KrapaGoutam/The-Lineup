@@ -1,24 +1,16 @@
-# V2-005.003 Tips location scoping — COMPLETED (merged via PR #312; hosted DEV 77 -> 78)
+# V2-005 Batch A (Schedule/Roster .004 + Team/Settings .008 + Tips Audit Integrity) — IN PROGRESS
 
-Approved contract: docs/v2.0/features/005-module-location-scoping/README.md. Feature V2-005.003 / parent #253 / program #248 / milestone #8. Base d7268978, isolated worktree `.tmp/v2-tips-location-scoping`.
+Approved scope: Consolidated Batch A delivery for V2-005.004 Schedule / Roster Location Scoping + V2-005.008 Team / Settings Hybrid Scoping + Priority correction on Tips audit integrity.
+Parent issue: #253 | Program: #248 | Milestone: #8 (The Lineup V2.0).
+Base: `8e95d9e641d7a76c0010a40c3730a708ae90a0d0` | Branch: `feature/v2.0-005-batch-a-schedule-team-settings` | Worktree: `.tmp/v2-005-batch-a`.
 
-- [x] CP-P00 Baseline verified
-- [x] CP-P01 Existing Tips contracts mapped
-- [x] CP-P02 Database authorization implemented
-- [x] CP-P03 Application location scoping implemented
-- [x] CP-P04 Financial and history integrity verified
-- [x] CP-P05 Real-JWT security acceptance passed
-- [x] CP-P06 Browser and regression acceptance passed
-- [x] CP-P07 Independent review complete
-- [x] CP-P08 Feature committed and PR opened
-- [x] CP-P09 Exact-head CI verified
-- [x] CP-P10 Final owner handoff
-- [x] CP-P11 Targeted security review
-- [x] CP-P12 Corrections verified (local)
-- [x] CP-P13 Exact-head CI verified
-- [x] CP-P14 DEV backup/recovery verified
-- [x] CP-P15 Migration rehearsal passed
-- [x] CP-P16 Hosted DEV migration applied
-- [x] CP-P17 DEV acceptance complete (hosted UI acceptance deferred: zero module configs)
-- [x] CP-P18 PR #312 merged
-- [x] CP-P19 Final delivery handoff
+- [x] BA-P00 Baseline verified: Git status, origin heads, clean typecheck/lint/format on worktree, 78 local migrations.
+- [x] BA-P01 Database migration authored: Tips direct finalize/reopen bypass closed (`entity_type <> 'tip_pool'`), Schedule location RLS & helpers, schedule_location_roster RPC, location settings policies, publisher member FK dropped.
+- [x] BA-P02 Schedule location scoping implementation: schedule-actor, schedule-data, schedule-actions, workforce validation, workspace-expectation.
+- [x] BA-P03 Team & Settings hybrid scoping implementation: organization vs location roster boundaries, executive/Overall checks in member-actions and team-actions, settings authority partition.
+- [x] BA-P04 Targeted tests: Unit suites (3,303/3,303 PASS), pgTAP 0068 (50/50 PASS), pgTAP 0067 (60/60 PASS), real-JWT schedule-location suite (9/9 PASS).
+- [x] BA-P05 Replay and verification: clean migration replay (79 migrations PASS), Next.js production build PASS, full typecheck and lint PASS.
+- [x] BA-P06 Browser acceptance verification: desktop manager, tablet host-stand, and mobile server views responsive with semantic shadcn primitives.
+- [x] BA-P07 Independent review & findings closure: Tips direct audit vulnerability fixed, RLS execute grants validated, local test fixtures verified.
+- [ ] BA-P08 PR creation & CI verification: open single PR to development, verify exact-head CI.
+- [x] BA-P09 Delivery documentation & handoff: 004 and 008 PLAN, EVIDENCE, STATUS completed; status and roadmap references updated.

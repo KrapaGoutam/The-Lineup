@@ -86,7 +86,7 @@ describe("initial loaders honour the verified scope (V2-003.001)", () => {
     expect(log.tables).not.toContain("locations");
     expect(
       log.eqs.filter((e) => e.column === "location_id").map((e) => e.value),
-    ).toEqual(["loc-webster", "loc-webster"]);
+    ).toEqual(["loc-webster", "loc-webster", "loc-webster"]);
   });
 
   it("CTX-19: tips uses the verified location + time zone and never queries a primary location", async () => {

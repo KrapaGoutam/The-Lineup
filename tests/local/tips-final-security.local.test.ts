@@ -311,11 +311,11 @@ it("shared audit_events: Tips authority covers tip_pool events at the managed lo
   const tip = await locMgr.client
     .from("audit_events")
     .insert({ ...base, action: "finalized", entity_type: "tip_pool" });
-  expect(tip.error).toBeNull();
+  expect(tip.error?.code).toBe("42501");
 
   const other = await locMgr.client
     .from("audit_events")
-    .insert({ ...base, action: "published", entity_type: "schedule_period" });
+    .insert({ ...base, action: "finalized", entity_type: "payroll_entry" });
   expect(other.error?.code).toBe("42501");
   const wrongAction = await locMgr.client
     .from("audit_events")
@@ -343,7 +343,7 @@ it("shared audit_events: Tips authority covers tip_pool events at the managed lo
     await fx.admin.from("audit_events").insert({
       ...base,
       action: "published",
-      entity_type: "schedule_period",
+      entity_type: "payroll_entry",
     }),
   );
   const seen = await locMgr.client
@@ -372,22 +372,14 @@ it("Overall administrator: real attribution without a membership row, and no bla
     entity_id: "1",
     reason: "overall correction",
   });
-  expect(tip.error).toBeNull();
-  const stored = must(
-    await fx.admin
-      .from("audit_events")
-      .select("actor_profile_id")
-      .eq("reason", "overall correction")
-      .single(),
-  );
-  expect(stored!.actor_profile_id).toBe(fx.overall.id);
+  expect(tip.error?.code).toBe("42501");
 
   const other = await fx.overall.client.from("audit_events").insert({
     organization_id: fx.org.id,
     location_id: fx.a,
     actor_profile_id: fx.overall.id,
-    action: "published",
-    entity_type: "schedule_period",
+    action: "finalized",
+    entity_type: "payroll_entry",
     entity_id: "1",
   });
   expect(other.error?.code).toBe("42501");
@@ -440,6 +432,47 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
         .single(),
     )!.status,
   ).toBe("draft");
+
+  // Direct finalize attributed to caller is also refused (must use tips_finalize_pool RPC)
+  const selfFinalize = await fx.manager.client
+    .from("tip_pools")
+    .update({
+      status: "finalized",
+      finalized_at: new Date().toISOString(),
+      finalized_by: fx.manager.id,
+    })
+    .eq("id", poolId)
+    .select();
+  expect(selfFinalize.error?.code).toBe("42501");
+
+  // Finalize via RPC so we can test direct reopen
+  const finRpc = await fx.manager.client.rpc("tips_finalize_pool", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_tip_pool_id: poolId,
+  });
+  expect(finRpc.error).toBeNull();
+
+  // Direct reopen on finalized pool affects 0 rows (reopen policy dropped)
+  const directReopen = await fx.manager.client
+    .from("tip_pools")
+    .update({
+      status: "draft",
+      finalized_at: null,
+      finalized_by: null,
+    })
+    .eq("id", poolId)
+    .select();
+  expect(directReopen.data).toHaveLength(0);
+  expect(
+    must(
+      await fx.admin
+        .from("tip_pools")
+        .select("status")
+        .eq("id", poolId)
+        .single(),
+    )!.status,
+  ).toBe("finalized");
 
   // Allocations are derived: no direct writes, even on a draft pool.
   const direct = await fx.manager.client.from("tip_allocations").insert({

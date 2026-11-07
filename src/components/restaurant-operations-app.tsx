@@ -1198,6 +1198,7 @@ function RestaurantOperationsAppInner({
     if (!locationId) return;
     const result = await addShiftAction({
       restaurantSlug,
+      expectedContext: workspaceExpectation,
       organizationId: currentUser.organizationId,
       locationId,
       timeZone,
@@ -1274,7 +1275,9 @@ function RestaurantOperationsAppInner({
     if (!locationId) return { ok: false, error: "No location is set up yet." };
     const result = await updateShiftAction({
       restaurantSlug,
+      expectedContext: workspaceExpectation,
       organizationId: currentUser.organizationId,
+      locationId,
       shiftId: input.shiftId,
       timeZone,
       employeeId: input.employeeId,
@@ -1303,7 +1306,9 @@ function RestaurantOperationsAppInner({
     if (!locationId) return { ok: false, error: "No location is set up yet." };
     const result = await deleteShiftAction({
       restaurantSlug,
+      expectedContext: workspaceExpectation,
       organizationId: currentUser.organizationId,
+      locationId,
       shiftId: input.shiftId,
     });
     if (!result.ok) {
@@ -1321,6 +1326,7 @@ function RestaurantOperationsAppInner({
       if (!locationId) return;
       const result = await publishScheduleAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         locationId,
         timeZone,
       });
@@ -1341,6 +1347,7 @@ function RestaurantOperationsAppInner({
     if (!demoMode && locationId) {
       const result = await saveScheduleConfigAction({
         restaurantSlug,
+        expectedContext: workspaceExpectation,
         organizationId: currentUser.organizationId,
         locationId,
         operatingHours: nextHours,

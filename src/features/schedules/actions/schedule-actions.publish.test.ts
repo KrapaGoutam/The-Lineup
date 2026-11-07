@@ -5,6 +5,28 @@ vi.mock("@/features/modules/data/module-enforcement", () => ({
   guardModule: vi.fn(async () => null),
   guardModuleForSlug: vi.fn(async () => null),
 }));
+const organizationId = "00000000-0000-4000-8000-000000000001";
+const locationId = "00000000-0000-4000-8000-000000000002";
+const profileId = "00000000-0000-4000-8000-000000000003";
+
+vi.mock("@/features/schedules/data/schedule-actor", () => ({
+  getScheduleActor: async () => ({
+    organizationId,
+    scope: {
+      organizationId,
+      locationId,
+      timeZone: "America/Chicago",
+    },
+    viewer: {
+      profileId,
+      name: "Owner",
+      designation: "owner",
+    },
+  }),
+}));
+vi.mock("@/features/team/data/audit-log", () => ({
+  writeAuditEvent: vi.fn(async () => {}),
+}));
 
 // This is the case the pure nextPublishedVersion unit tests can't catch on
 // their own: it exercises publishScheduleAction itself, through a fake
@@ -15,6 +37,7 @@ vi.mock("@/features/modules/data/module-enforcement", () => ({
 // await missing -- would show up here, not just in the arithmetic helper.
 type PeriodRow = {
   id: number;
+  organization_id?: string;
   location_id: string;
   starts_on: string;
   ends_on: string;
@@ -108,7 +131,7 @@ function makeFakeSupabase(periods: PeriodRow[]) {
     // test file is about the publish/version logic, not session
     // handling (that has its own coverage in require-live-session.test.ts).
     auth: {
-      getUser: async () => ({ data: { user: { id: "fake-user" } } }),
+      getUser: async () => ({ data: { user: { id: profileId } } }),
     },
   };
 }
@@ -122,7 +145,6 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 describe("publishScheduleAction", () => {
-  const locationId = "loc-1";
   const startsOn = `${new Date().getFullYear()}-01-01`;
   const endsOn = `${new Date().getFullYear()}-12-31`;
 
@@ -137,6 +159,7 @@ describe("publishScheduleAction", () => {
     // draft, exactly as getOrCreateDraftPeriod first creates one.
     periods.push({
       id: 1,
+      organization_id: organizationId,
       location_id: locationId,
       starts_on: startsOn,
       ends_on: endsOn,
@@ -161,6 +184,7 @@ describe("publishScheduleAction", () => {
     // ends_on). This is the exact state that collided before the fix.
     periods.push({
       id: 2,
+      organization_id: organizationId,
       location_id: locationId,
       starts_on: startsOn,
       ends_on: endsOn,

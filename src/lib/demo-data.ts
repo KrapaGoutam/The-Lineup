@@ -24,6 +24,8 @@ export type TeamMember = {
   // or a real `memberships.active = false` row via getOrganizationRoster)
   // means deactivated.
   active?: boolean;
+  // V2-005.004. Location workforce eligibility for assignment and selection.
+  eligible?: boolean;
 };
 
 export type DemoShift = {

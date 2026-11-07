@@ -78,7 +78,7 @@ it("old app write sequence still works for a location manager: pool, interval, p
     .sort();
   expect(cents).toEqual([5000, 5001]);
 
-  // finalize (direct update with the raw auth user id) + audit event
+  // finalize: direct update is refused (42501) and direct audit insert is refused (42501)
   const user = must(await m.auth.getUser())!.user!;
   const fin = await m
     .from("tip_pools")
@@ -88,7 +88,7 @@ it("old app write sequence still works for a location manager: pool, interval, p
       finalized_by: user.id,
     })
     .eq("id", poolId);
-  expect(fin.error).toBeNull();
+  expect(fin.error?.code).toBe("42501");
   const auditFin = await m.from("audit_events").insert({
     organization_id: fx.org.id,
     location_id: fx.a,
@@ -97,7 +97,15 @@ it("old app write sequence still works for a location manager: pool, interval, p
     entity_type: "tip_pool",
     entity_id: String(poolId),
   });
-  expect(auditFin.error).toBeNull();
+  expect(auditFin.error?.code).toBe("42501");
+
+  // Finalization must use tips_finalize_pool RPC
+  const finalizeRpc = await m.rpc("tips_finalize_pool", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_tip_pool_id: poolId,
+  });
+  expect(finalizeRpc.error).toBeNull();
   expect(
     must(
       await fx.admin
@@ -108,22 +116,31 @@ it("old app write sequence still works for a location manager: pool, interval, p
     )!.status,
   ).toBe("finalized");
 
-  // reopen + audit
+  // reopen: direct update is refused (affects 0 rows)
   const reopen = await m
     .from("tip_pools")
     .update({ status: "draft", finalized_at: null, finalized_by: null })
-    .eq("id", poolId);
-  expect(reopen.error).toBeNull();
-  const auditReopen = await m.from("audit_events").insert({
-    organization_id: fx.org.id,
-    location_id: fx.a,
-    actor_profile_id: user.id,
-    action: "reopened",
-    entity_type: "tip_pool",
-    entity_id: String(poolId),
-    reason: "old app reopen",
+    .eq("id", poolId)
+    .select();
+  expect(reopen.data).toHaveLength(0);
+
+  // Reopening must use tips_reopen_pool RPC
+  const reopenRpc = await m.rpc("tips_reopen_pool", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_tip_pool_id: poolId,
+    p_reason: "old app reopen",
   });
-  expect(auditReopen.error).toBeNull();
+  expect(reopenRpc.error).toBeNull();
+  expect(
+    must(
+      await fx.admin
+        .from("tip_pools")
+        .select("status")
+        .eq("id", poolId)
+        .single(),
+    )!.status,
+  ).toBe("draft");
 
   // old loader reads (manager)
   const readPool = await m

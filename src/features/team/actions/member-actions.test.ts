@@ -52,6 +52,28 @@ function makeFakeSupabase(profiles: ProfileRow[], auditRows: AuditRow[]) {
         },
       };
     }
+    if (table === "memberships") {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({
+          data: { roles: ["owner"] },
+          error: null,
+        }),
+      };
+      return builder;
+    }
+    if (table === "overall_roles") {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({
+          data: null,
+          error: null,
+        }),
+      };
+      return builder;
+    }
     throw new Error(`unexpected table in test fake: ${table}`);
   }
 

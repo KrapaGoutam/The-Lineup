@@ -3,6 +3,10 @@ import "server-only";
 import type { DayHours } from "@/hooks/use-restaurant-clock";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import {
+  designationForRoles,
+  designationToRole,
+} from "@/features/auth/domain/passcode";
+import {
   getPrimaryLocation,
   locationForLoader,
 } from "@/features/locations/data/primary-location";
@@ -14,12 +18,21 @@ import type {
   ShiftDefaults,
   ShiftKind,
 } from "@/features/schedules/domain/shift-planning";
-import { getOrganizationRoster } from "@/features/team/data/roster";
 import type { DemoShift, TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+const SERVER_COLORS = [
+  "var(--server-one)",
+  "var(--server-two)",
+  "var(--server-three)",
+  "var(--server-four)",
+  "var(--server-five)",
+  "var(--server-six)",
+  "var(--server-seven)",
+];
 
 // Matches today's hardcoded demo defaults exactly -- used only until an
 // owner/manager actually configures real operating_hours/shift_kind_defaults
@@ -125,7 +138,7 @@ function mapShiftRows(
 }
 
 /**
- * The shared shift read: one organization, one inclusive date range.
+ * The shared shift read: one organization, one verified location, one inclusive date range.
  * Errors are logged, not thrown -- an empty array here must never be
  * confused with "the query itself failed", so the caller degrades to an
  * empty schedule rather than blanking the whole page.
@@ -133,6 +146,7 @@ function mapShiftRows(
 async function getShiftsInRange(
   supabase: SupabaseClient,
   organizationId: string,
+  locationId: string,
   timeZone: string,
   startDate: string,
   endDate: string,
@@ -141,10 +155,53 @@ async function getShiftsInRange(
     .from("shifts")
     .select(SHIFTS_SELECT)
     .eq("organization_id", organizationId)
+    .eq("location_id", locationId)
     .gte("service_date", startDate)
     .lte("service_date", endDate);
   if (error) console.error("getShiftsInRange: shifts", error);
   return mapShiftRows(shiftRows ?? [], timeZone);
+}
+
+type ScheduleLocationRosterRow = {
+  profile_id: string;
+  display_name: string | null;
+  roles: string[] | null;
+  active: boolean;
+  eligible: boolean;
+};
+
+/**
+ * Loads the location-specific workforce for Schedule via the schedule_location_roster RPC.
+ * Returns both current eligible workforce and historical shift assignees at this location.
+ */
+async function getLocationRoster(
+  supabase: SupabaseClient,
+  organizationId: string,
+  locationId: string,
+): Promise<TeamMember[]> {
+  const { data, error } = await supabase.rpc("schedule_location_roster", {
+    p_organization_id: organizationId,
+    p_location_id: locationId,
+  });
+  if (error) {
+    console.error("getLocationRoster: schedule_location_roster", error);
+    return [];
+  }
+  const rows = (data as unknown as ScheduleLocationRosterRow[] | null) ?? [];
+  return rows.map((row, index) => {
+    const name = row.display_name ?? "Unknown";
+    const designation = designationForRoles((row.roles ?? []) as string[]);
+    return {
+      id: row.profile_id,
+      name,
+      shortName: name.split(" ")[0] || name,
+      role: designationToRole(designation),
+      designation,
+      color: SERVER_COLORS[index % SERVER_COLORS.length],
+      active: row.active,
+      eligible: row.eligible,
+    };
+  });
 }
 
 export async function getScheduleContext(
@@ -182,10 +239,11 @@ export async function getScheduleContext(
       .from("shift_kind_defaults")
       .select("kind, start_local, end_local")
       .eq("location_id", location.id),
-    getOrganizationRoster(organizationId),
+    getLocationRoster(supabase, organizationId, location.id),
     getShiftsInRange(
       supabase,
       organizationId,
+      location.id,
       location.time_zone,
       queryStart,
       queryEnd,
@@ -255,16 +313,18 @@ export type WeekScheduleData = {
 export async function getWeekScheduleData(
   organizationId: string,
   weekStartDate: string,
+  location?: { id: string; time_zone: string },
 ): Promise<WeekScheduleData | null> {
   const supabase = await createClient();
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  const loc = location ?? (await getPrimaryLocation(organizationId));
+  if (!loc) return null;
 
   const weekDates = getWeekDates(weekStartDate);
   const shifts = await getShiftsInRange(
     supabase,
     organizationId,
-    location.time_zone,
+    loc.id,
+    loc.time_zone,
     weekDates[0],
     weekDates.at(-1)!,
   );

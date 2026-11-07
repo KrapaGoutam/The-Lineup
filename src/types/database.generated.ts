@@ -125,13 +125,6 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "audit_events_actor_member_fk";
-            columns: ["organization_id", "actor_profile_id"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
             foreignKeyName: "audit_events_actor_profile_id_fkey";
             columns: ["actor_profile_id"];
             isOneToOne: false;
@@ -3153,13 +3146,6 @@ export type Database = {
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
-          {
-            foreignKeyName: "schedule_publisher_member_fk";
-            columns: ["organization_id", "published_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
         ];
       };
       seating_tables: {
@@ -4712,18 +4698,18 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "tip_pools_finalized_by_profile_fk";
+            columns: ["finalized_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "tip_pools_location_id_organization_id_fkey";
             columns: ["location_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "locations";
             referencedColumns: ["id", "organization_id"];
-          },
-          {
-            foreignKeyName: "tip_pools_organization_id_finalized_by_fkey";
-            columns: ["organization_id", "finalized_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
           },
           {
             foreignKeyName: "tip_pools_organization_id_fkey";
@@ -5415,6 +5401,20 @@ export type Database = {
         Args: { target_tip_pool_id: number };
         Returns: undefined;
       };
+      schedule_location_authorized: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: boolean;
+      };
+      schedule_location_roster: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: {
+          active: boolean;
+          display_name: string;
+          eligible: boolean;
+          profile_id: string;
+          roles: Database["public"]["Enums"]["app_role"][];
+        }[];
+      };
       task_assign: {
         Args: {
           p_assignee_ids: string[];
@@ -5556,6 +5556,57 @@ export type Database = {
           eligible: boolean;
           profile_id: string;
         }[];
+      };
+      tips_add_interval: {
+        Args: {
+          p_amount_cents: number;
+          p_ends_at: string;
+          p_location_id: string;
+          p_organization_id: string;
+          p_participant_ids: string[];
+          p_service_date: string;
+          p_starts_at: string;
+        };
+        Returns: Json;
+      };
+      tips_finalize_pool: {
+        Args: {
+          p_location_id: string;
+          p_organization_id: string;
+          p_tip_pool_id: number;
+        };
+        Returns: undefined;
+      };
+      tips_get_day_data: {
+        Args: {
+          p_location_id: string;
+          p_organization_id: string;
+          p_service_date: string;
+        };
+        Returns: Json;
+      };
+      tips_location_authorized: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: boolean;
+      };
+      tips_location_roster: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: {
+          active: boolean;
+          display_name: string;
+          eligible: boolean;
+          profile_id: string;
+          roles: Database["public"]["Enums"]["app_role"][];
+        }[];
+      };
+      tips_reopen_pool: {
+        Args: {
+          p_location_id: string;
+          p_organization_id: string;
+          p_reason: string;
+          p_tip_pool_id: number;
+        };
+        Returns: undefined;
       };
       transition_location_lifecycle: {
         Args: {

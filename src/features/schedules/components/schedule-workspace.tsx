@@ -274,13 +274,21 @@ function ShiftEditor({
             <Select
               id="employeeId"
               name="employeeId"
-              defaultValue={team[0]?.id}
+              defaultValue={
+                team.find((m) => m.active !== false && m.eligible !== false)
+                  ?.id ?? team[0]?.id
+              }
             >
-              {team.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
+              {team
+                .filter(
+                  (member) =>
+                    member.active !== false && member.eligible !== false,
+                )
+                .map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
             </Select>
           </div>
           <div className="space-y-2">
@@ -637,7 +645,9 @@ export function ScheduleWorkspace({
 
       {showCsvImport && isManager ? (
         <CsvImportPanel
-          employees={team.map(({ id, name }) => ({ id, name }))}
+          employees={team
+            .filter((m) => m.active !== false && m.eligible !== false)
+            .map(({ id, name }) => ({ id, name }))}
           shiftDefaults={shiftDefaults}
           onCommit={(added) => {
             onAddShifts(added);

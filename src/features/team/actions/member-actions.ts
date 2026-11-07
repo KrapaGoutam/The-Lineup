@@ -58,6 +58,39 @@ export async function renameTeamMemberAction(input: {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Not signed in." };
+  }
+
+  // V2-005.008: Local managers cannot rename organization members.
+  // Must hold Overall Owner/Manager or Organization Owner/General Manager.
+  const [{ data: orgMembership }, { data: overallRole }] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("roles")
+      .eq("organization_id", input.organizationId)
+      .eq("profile_id", user.id)
+      .eq("active", true)
+      .maybeSingle(),
+    supabase
+      .from("overall_roles")
+      .select("role")
+      .eq("profile_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const isOverallAdmin =
+    overallRole?.role === "owner" || overallRole?.role === "manager";
+  const orgRoles = (orgMembership?.roles ?? []) as string[];
+  const isOrgExecutive =
+    orgRoles.includes("owner") || orgRoles.includes("general_manager");
+
+  if (!isOverallAdmin && !isOrgExecutive) {
+    return {
+      ok: false,
+      error: "Only an owner or general manager can rename team members.",
+    };
+  }
 
   const { error } = await supabase
     .from("profiles")
