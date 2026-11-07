@@ -13,7 +13,7 @@ main/Production, JobQuest and V2-005.002 remain unauthorized.
 - [x] CP06: validate combined security gates and cleanup
 - [x] CP07: verify Preview safety before any branch push
 - [ ] CP08/09: BLOCKED - push and new-head CI require compatible Preview/schema
-- [ ] CP10: durable handoff and final report; never merge306
+- [x] CP10: durable handoff and final owner report; push held, never merge306
 
 Data/security: three reviewed migrations unchanged; actor/live-session/context,
 stale/timezone/session binding, location RLS, module guards before operational
@@ -22,8 +22,8 @@ Prior validated reference bde49c9/b7c7059 is preserved unchanged. Handoff is
 ../v2-integration-handoff/{CURRENT_AGENT_STATE,INTEGRATION_HANDOFF,
 VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md; keep it current at checkpoints.
 
-Current: local reconciliation and security validation PASS; committing the local
-merge before final CP10. Live Preview binding to DEV confirmed; no password/SSO
+Current: local reconciliation and security validation PASS; local merge saved as
+dfd2118003dfd7a2a5f333db81c9007b25e37bb5. Final CP10 handoff records the push block. Live Preview binding to DEV confirmed; no password/SSO
 containment and required rosterRPC absent. Push BLOCKED. Newcheck/build/unit3258,
 pgTAP2163, JWT45+31, browser15 PASS. Fixture-only date correction; migrations unchanged.
 Local cleanup zero/staged; taskserver stopped. No remote306 push/CI/merge.

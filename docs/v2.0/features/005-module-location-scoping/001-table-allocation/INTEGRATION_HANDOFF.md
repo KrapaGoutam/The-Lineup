@@ -6,7 +6,10 @@ PR305 merged through standard gh CLI, without bypass, at2026-11-07T06:21:30Z.
 Development/merge: ad878715b84fcdc3f36414b882d52207fb4f139e. Its tree matches reviewed
 7271141d0bc0c586ffb2d8477439bc938055cb9f. Enforcement STAGED; issue304 remains open.
 Remote PR306 remains OPEN at40c99addf568c1c34c91678ee09e300d55227437.
-Local integration merge SHA is recorded in the final delivery receipt below.
+Local integration merge: dfd2118003dfd7a2a5f333db81c9007b25e37bb5.
+Parents: original30640c99addf568c1c34c91678ee09e300d55227437 and actual
+developmentad878715b84fcdc3f36414b882d52207fb4f139e. No force/rebase/history replacement.
+A documentation-only delivery commit records this merge; no remote push occurred.
 GitHub main remains5e5b7747693b6e81014eafdf299b87e56c3f033d.
 
 Owner authorized305 merge,306 local integration/validation and push only after
