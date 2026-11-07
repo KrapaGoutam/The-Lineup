@@ -1,6 +1,8 @@
 # The Lineup V2.0 — Current Operational State
 
-Latest checkpoint: V2-005.001 Overall actor repair, PR #306 / issue #307, TECHNICALLY READY FOR OWNER REVIEW (OPEN / NOT MERGED). Actual membership-free Overall mutations, real actor attribution, preserved historical data and standalone/combined acceptance pass. Repair-head CI is green; final documentation-delivery receipts are on the PR. [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 remains implemented in open PR #305, staged / activation blocked; R1, hosted DEV deployment and owner merge order remain pending. No main or Production changes/contact. V2-005.002 through .008 NOT STARTED. Earlier checkpoints below retain their historical validation scope.
+Execution checkpoint (2026-11-07): PR #305 is merged into development as ad878715b84fcdc3f36414b882d52207fb4f139e; enforcement remains STAGED. PR #306 is reconciled and validated locally, with push BLOCKED: live Preview uses hosted DEV, which lacks board_location_roster, and no password/SSO containment is configured. No #306 push/merge, hosted migration/configuration/activation or main/Production change. V2-005.002 NOT STARTED. [Integration handoff](features/005-module-location-scoping/001-table-allocation/INTEGRATION_HANDOFF.md).
+
+Previous checkpoint (historical): V2-005.001 Overall actor repair, PR #306 / issue #307, TECHNICALLY READY FOR OWNER REVIEW (OPEN / NOT MERGED). Actual membership-free Overall mutations, real actor attribution, preserved historical data and standalone/combined acceptance pass. Repair-head CI is green; final documentation-delivery receipts are on the PR. [EVIDENCE.md](features/005-module-location-scoping/001-table-allocation/EVIDENCE.md). V2-004.004 remains implemented in open PR #305, staged / activation blocked; R1, hosted DEV deployment and owner merge order remain pending. No main or Production changes/contact. V2-005.002 through .008 NOT STARTED. Earlier checkpoints below retain their historical validation scope.
 
 ```text
 Program:                  The Lineup V2.0
@@ -24,8 +26,8 @@ WebKit host-tablet:       PASS 16/16
 Canonical Types:          MATCH
 Exact-head CI:            application/browser-smoke/database/Vercel PASS
 Blockers:                 NONE
-Active Subfeature:        V2-004.003 Navigation Enforcement - issue #302 / PR #303
-Active Subfeature Status: Acceptance complete; final exact-head CI/HTTPS/merge record: PR #303
+Active Subfeature:        V2-004.004 Backend Enforcement - issue #304
+Active Subfeature Status: IMPLEMENTED - ACTIVATION BLOCKED (staged; hosted DEV NOT READY 0/44 active locations configured); record: 004-backend-enforcement/STATUS.md
 Previous Subfeature:      V2-003.005 Multi-Tab / Stale Context Safety — COMPLETE (PR #296, merge de8c6732; hosted DEV 17/17, Chromium 20/20, WebKit iPad 20/20, HTTPS Preview 7/7)
 Next Subfeature:          V2-005.002 Tasks (NOT STARTED; NOT AUTHORIZED); first resolve #306 closeout and #305 order
 Production Changes:       NONE; Production not contacted
@@ -73,3 +75,7 @@ PR #301 is merged: source head `2a8ed9c312bfe73bb80a3c1b0250eee9b9911273`, devel
 ## V2-004.003 - acceptance complete (#302; delivery PR #303)
 
 Baseline PR #301 merged at `6000e6c`. Canonical server-verified navigation policy, role intersection, desktop/mobile/URL/context handling and Settings-only recovery implemented. Local application checks and authenticated DEV evidence in [003 evidence](features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md); Chromium/WebKit/Pixel 7 HTTPS acceptance passes. Final exact-head CI, full HTTPS repeat and regular merge are mandatory; authoritative delivery record is PR #303. No schema/backend module enforcement/backfill. Q1-Q4 open; V2-004.004 NOT STARTED. Main/Production untouched.
+
+## V2-004.004 - implemented, activation blocked (#304)
+
+Backend module enforcement is implemented and tested but **not active in any hosted environment**. A database switch (`public.module_enforcement_settings`) defaults to `staged`; the database itself refuses to activate it while any active location lacks an explicit row for every module. Hosted DEV (fresh read-only check): 44 active locations, 0 configured - NOT READY; no owner-approved backfill exists; DEV was not migrated by this work. 98 Server Actions classified (78 guarded, 20 exempt system actions), 9 routes exempt, 80 SQL functions and 36 restrictive policies classified; organization-level data without `location_id` (payroll, recipes, team, attendance links) is Server-Action-guarded only and recorded as a V2-005 gap. Evidence: `features/004-location-module-configuration/004-backend-enforcement/`. Main and Production untouched.

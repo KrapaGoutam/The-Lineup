@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -113,6 +114,12 @@ async function resolveCaller(
   }
   const location = await getPrimaryLocation(user.organizationId);
   if (!location) return { ok: false, error: "No location is set up yet." };
+  const blocked = await guardModule({
+    module: "bar_inventory",
+    organizationId: user.organizationId,
+    location,
+  });
+  if (blocked) return blocked;
   return {
     supabase,
     organizationId: user.organizationId,

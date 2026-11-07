@@ -1,40 +1,29 @@
-﻿# V2-005.001 — Overall actor contract repair / PR #306
+# PR305 staged merge and PR306 integration execution
 
-Owner-authorized targeted repair, 2026-11-06. Starting SHA
-`292e00186963626359687460e0710ca4fb9db439`. Existing feature worktree only;
-parent checkout changes preserved. PR #305 stays staged and untouched. No merge,
-hosted migration, hosted configuration change, Production access or Tasks work.
+Owner approved PR305 merge only, PR306 reconciliation/validation and push only after
+verified Preview safety. PR306 merge, hosted migrations/configuration/activation,
+main/Production, JobQuest and V2-005.002 remain unauthorized.
 
-- [x] Verify GitHub PRs, baseline refs, clean worktree and local Docker targets
-- [x] Reproduce exact 23503 chain and inspect all actor/history consumers
-- [x] Document bounded identity, authorization, audit and regression design
-- [x] Implement Allocation actor hydration and forward-only audit repair
-- [x] Verify real JWT OA-01–OA-22 and previous security corrections
-- [x] Replay standalone migrations and run full pgTAP
-- [x] Compose disposable #305/#306 integration and verify staged enforcement
-- [x] Verify authenticated Chromium, WebKit iPad and mobile browser flows
-- [x] Run full format/lint/typecheck/path/unit/build gates and diff review
-- [x] Verify fixture cleanup; update all five feature documents
-- [x] Commit explicit paths, push PR #306 only and verify exact-head CI
-- [x] Publish final GO/BLOCKED evidence to PR #306 and issue #307
+- [x] CP00: create durable local handoff outside tracked files
+- [x] CP01: exact-head CI, protection and staged preflight
+- [x] CP02/03: merge305 and verify development ad878715; publish actual receipts
+- [x] CP04: inspect clean existing306 worktree and merge origin/development
+- [x] Reuse validated actions/tests/fixture resolutions; reconcile shared docs/types
+- [x] CP05: verify effective tree against validated reference and save local merge
+- [x] CP06: validate combined security gates and cleanup
+- [x] CP07: verify Preview safety before any branch push
+- [ ] CP08/09: BLOCKED - push and new-head CI require compatible Preview/schema
+- [ ] CP10: durable handoff and final report; never merge306
 
-## Closeout
+Data/security: three reviewed migrations unchanged; actor/live-session/context,
+stale/timezone/session binding, location RLS, module guards before operational
+reads, real audit actors/undo/redo and recovery exemptions retained. No UI change.
+Prior validated reference bde49c9/b7c7059 is preserved unchanged. Handoff is
+../v2-integration-handoff/{CURRENT_AGENT_STATE,INTEGRATION_HANDOFF,
+VERIFICATION_RECEIPTS,NEXT_AGENT_INSTRUCTIONS}.md; keep it current at checkpoints.
 
-Repair implemented. Standalone JWT 45/45; pgTAP 64 files / 2,104 assertions;
-unit 3,176 passed / 7 existing skipped; authenticated browser 15/15 across all
-three devices, including all three Overall role writes and visible actor names.
-Legacy-data upgrade preserved event, entry and session records byte-for-byte.
-Combined #305/#306 replay (65 files / 2,163 assertions), JWT 45/45, module JWT
-18/18, full units 3,250 passed / 7 skipped, database lint and build pass. Final
-authenticated combined browser 15/15 and independent zero-residue cleanup verified. Demo initial
-156/159; all three failures pass serial retests (tablet 2/2, mobile 1/1).
-Verified local stack: restaurant-roster API 54321 / DB 54322. JobQuest2.0 uses
-55321/55322 and is outside scope. The final local database contains the combined PR migrations plus repair, staged
-enforcement and zero fixture organizations/profiles/Auth users/module rows/events.
-
-Repair implementation `ee1d1971a54e8eab8d06ab78699ac5b75ed7e377` pushed to
-PR #306. Its exact-head application, browser, migration-policy and Vercel checks
-PASS; deploy-migrations SKIPPED. GO-for-owner-review evidence is published on
-PR #306 and issue #307, both OPEN. Documentation-only final delivery receipts
-are reconciled externally on that same PR after this snapshot. No further feature
-work remains; do not begin Tasks or merge/deploy/activate without owner approval.
+Current: local reconciliation and security validation PASS; committing the local
+merge before final CP10. Live Preview binding to DEV confirmed; no password/SSO
+containment and required rosterRPC absent. Push BLOCKED. Newcheck/build/unit3258,
+pgTAP2163, JWT45+31, browser15 PASS. Fixture-only date correction; migrations unchanged.
+Local cleanup zero/staged; taskserver stopped. No remote306 push/CI/merge.

@@ -95,12 +95,13 @@ values
   (6312, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b1'::uuid, 6301, 'T2', 4, true),
   (6321, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b2'::uuid, 6302, 'P1', 4, true);
 
+-- Current restaurant-local service date keeps active-operation assertions valid on every test day.
 -- Add service sessions
 insert into public.service_sessions (id, organization_id, location_id, service_date, meal_period, status)
 overriding system value
 values
-  (6351, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b1'::uuid, '2026-11-06'::date, 'service', 'active'),
-  (6352, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b2'::uuid, '2026-11-06'::date, 'service', 'active');
+  (6351, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b1'::uuid, (now() at time zone 'America/Chicago')::date, 'service', 'active'),
+  (6352, '00000000-0000-0000-0000-0000000630a1'::uuid, '00000000-0000-0000-0000-0000000630b2'::uuid, (now() at time zone 'America/Chicago')::date, 'service', 'active');
 
 insert into public.rotation_rounds (id, organization_id, service_session_id, sequence)
 overriding system value
@@ -240,7 +241,7 @@ select lives_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063008'::uuid
      ) $$,
   'AL-07: Adding server assigned to location succeeds'
@@ -251,7 +252,7 @@ select lives_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063000'::uuid
      ) $$,
   'AL-08: Adding Overall role user to any location succeeds'
@@ -262,7 +263,7 @@ select throws_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063009'::uuid
      ) $$,
   'That person is not assigned to this location.',
@@ -274,7 +275,7 @@ select throws_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063010'::uuid
      ) $$,
   'That person is not assigned to this location.',
@@ -286,7 +287,7 @@ select throws_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063011'::uuid
      ) $$,
   'That person is not an active member of this restaurant.',
@@ -298,7 +299,7 @@ select throws_ok(
   $$ select public.board_add_column(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        '00000000-0000-0000-0000-000000063012'::uuid
      ) $$,
   'That person is not an active member of this restaurant.',
@@ -358,7 +359,7 @@ select throws_ok(
   $$ select public.board_assign(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        6361,
        6371,
        'T2'
@@ -372,7 +373,7 @@ select throws_ok(
   $$ select public.board_skip_turn(
        '00000000-0000-0000-0000-0000000630a1'::uuid,
        '00000000-0000-0000-0000-0000000630b1'::uuid,
-       '2026-11-06'::date,
+       (now() at time zone 'America/Chicago')::date,
        6361,
        6371
      ) $$,

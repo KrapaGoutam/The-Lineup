@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
+
 // This is the case the pure nextPublishedVersion unit tests can't catch on
 // their own: it exercises publishScheduleAction itself, through a fake
 // Supabase client shaped closely enough to the real query builder (chainable

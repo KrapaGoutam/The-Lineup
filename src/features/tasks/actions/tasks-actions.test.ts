@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
+
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   getCurrentUser: vi.fn(),
@@ -249,5 +255,58 @@ describe("Tasks reads never render another location under this tab's label", () 
       error: "That request is invalid.",
     });
     expect(mocks.getTasksSnapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe("module enforcement (V2-004.004, BE-22)", () => {
+  it("a module denial refuses the write with NO database call, and checks the VERIFIED location", async () => {
+    const { guardModule } = await import(
+      "@/features/modules/data/module-enforcement"
+    );
+    persisted(A);
+    vi.mocked(guardModule).mockResolvedValueOnce({
+      ok: false,
+      error: "This feature is turned off for this location.",
+      moduleUnavailable: true,
+    });
+
+    const result = await run(ctx(A));
+
+    expect(result).toMatchObject({ ok: false, moduleUnavailable: true });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.getTasksSnapshot).not.toHaveBeenCalled();
+    expect(guardModule).toHaveBeenLastCalledWith({
+      module: "tasks",
+      organizationId: O,
+      location: { id: A, time_zone: "America/Chicago" },
+    });
+  });
+
+  it("the read paths are guarded too (snapshot and history)", async () => {
+    const { guardModule } = await import(
+      "@/features/modules/data/module-enforcement"
+    );
+    persisted(A);
+    const denied = {
+      ok: false as const,
+      error: "This feature is turned off for this location.",
+      moduleUnavailable: true as const,
+    };
+    vi.mocked(guardModule).mockResolvedValueOnce(denied);
+    expect(
+      await getTasksSnapshotAction({
+        restaurantSlug: SLUG,
+        expectedContext: ctx(A),
+      }),
+    ).toMatchObject({ ok: false, moduleUnavailable: true });
+    vi.mocked(guardModule).mockResolvedValueOnce(denied);
+    expect(
+      await getTaskHistoryAction({
+        restaurantSlug: SLUG,
+        expectedContext: ctx(A),
+      }),
+    ).toMatchObject({ ok: false, moduleUnavailable: true });
+    expect(mocks.getTasksSnapshot).not.toHaveBeenCalled();
+    expect(mocks.getTaskHistory).not.toHaveBeenCalled();
   });
 });

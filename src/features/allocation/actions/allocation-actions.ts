@@ -13,6 +13,7 @@ import { assertWorkspaceExpectation } from "@/features/context/data/workspace-ex
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getAllocationActor } from "@/features/allocation/data/allocation-actor";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -249,6 +250,14 @@ export async function executeBoardActionRemote(
 
   const verifiedLocation = outcome.location;
   const verifiedLocationId = verifiedLocation.id;
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: caller.organizationId,
+    claimedLocationId: input.locationId,
+    location: verifiedLocation,
+  });
+  if (blocked) return blocked;
+
   const serviceDate = zonedWallTimeFromInstant(
     new Date(),
     verifiedLocation.time_zone,
@@ -694,6 +703,13 @@ export async function undoBoardAction(input: {
     verifiedLocationId = loc.id;
   }
 
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: caller.organizationId,
+    claimedLocationId: verifiedLocationId,
+  });
+  if (blocked) return blocked;
+
   const { data: sessionRow } = await supabase
     .from("service_sessions")
     .select("organization_id, location_id")
@@ -770,6 +786,13 @@ export async function redoBoardAction(input: {
     }
     verifiedLocationId = loc.id;
   }
+
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: caller.organizationId,
+    claimedLocationId: verifiedLocationId,
+  });
+  if (blocked) return blocked;
 
   const { data: sessionRow } = await supabase
     .from("service_sessions")
@@ -857,6 +880,13 @@ export async function getAllocationContextForDateAction(input: {
     }
     verifiedLocation = loc;
   }
+
+  const blocked = await guardModule({
+    module: "table_allocation",
+    organizationId: currentUser.organizationId,
+    location: verifiedLocation,
+  });
+  if (blocked) return blocked;
 
   const today = zonedWallTimeFromInstant(
     new Date(),

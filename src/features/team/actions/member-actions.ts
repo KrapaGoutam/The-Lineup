@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isValidDisplayName } from "@/features/auth/domain/registration";
 import { writeAuditEvent } from "@/features/team/data/audit-log";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,15 @@ export async function renameTeamMemberAction(input: {
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  // V2-004.004: Team is an optional module. Passcode reset, deactivation,
+  // sign-in and the Settings account-recovery path are platform operations
+  // and are intentionally NOT gated here (see ENTRY_POINT_MATRIX.md).
+  const blocked = await guardModule({
+    module: "team",
+    organizationId: input.organizationId,
+  });
+  if (blocked) return blocked;
 
   const {
     data: { user },

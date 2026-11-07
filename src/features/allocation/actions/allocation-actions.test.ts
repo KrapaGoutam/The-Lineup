@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  guardModule: vi.fn(),
   rpc: vi.fn(),
   from: vi.fn(),
   getAllocationActor: vi.fn(),
@@ -11,6 +12,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: mocks.guardModule,
+}));
 vi.mock("next/cache", () => ({
   revalidatePath: mocks.revalidatePath,
 }));
@@ -56,6 +60,7 @@ const validCtx = (locationId = A) => ({
 describe("allocation-actions location scoping and consistency", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.guardModule.mockResolvedValue(null);
     mocks.rpc.mockResolvedValue({ data: 10, error: null });
     mocks.requireLiveSession.mockResolvedValue(null);
     mocks.getAllocationActor.mockResolvedValue({
@@ -105,6 +110,81 @@ describe("allocation-actions location scoping and consistency", () => {
         }),
       };
     });
+  });
+
+  describe("combined module boundary", () => {
+    const denied = {
+      ok: false as const,
+      error: "Disabled",
+      moduleUnavailable: true as const,
+    };
+    const actions = {
+      execute: () =>
+        executeBoardActionRemote({
+          restaurantSlug: SLUG,
+          organizationId: O,
+          locationId: A,
+          timeZone: "Etc/UTC",
+          serviceSessionId: 1,
+          expectedContext: validCtx(),
+          action: { type: "clear-board" },
+        }),
+      undo: () =>
+        undoBoardAction({
+          restaurantSlug: SLUG,
+          organizationId: O,
+          serviceSessionId: 1,
+          expectedContext: validCtx(),
+        }),
+      redo: () =>
+        redoBoardAction({
+          restaurantSlug: SLUG,
+          organizationId: O,
+          serviceSessionId: 1,
+          expectedContext: validCtx(),
+        }),
+      history: () =>
+        getAllocationContextForDateAction({
+          restaurantSlug: SLUG,
+          serviceDate: "2026-01-01",
+          expectedContext: validCtx(),
+        }),
+    };
+    for (const [name, call] of Object.entries(actions)) {
+      it(
+        name +
+          ": denies before operational reads after canonical actor/context",
+        async () => {
+          mocks.guardModule.mockResolvedValueOnce(denied);
+          expect(await call()).toEqual(denied);
+          expect(mocks.getAllocationActor).toHaveBeenCalled();
+          expect(mocks.guardModule).toHaveBeenCalledWith(
+            expect.objectContaining({
+              module: "table_allocation",
+              organizationId: O,
+            }),
+          );
+          expect(
+            mocks.getAllocationActor.mock.invocationCallOrder[0],
+          ).toBeLessThan(mocks.guardModule.mock.invocationCallOrder[0]);
+          expect(mocks.from).not.toHaveBeenCalled();
+          expect(mocks.rpc).not.toHaveBeenCalled();
+          expect(mocks.getAllocationContext).not.toHaveBeenCalled();
+        },
+      );
+      it(
+        name + ": preserves stale-context recovery before module errors",
+        async () => {
+          mocks.getAllocationActor.mockResolvedValueOnce({
+            contextStale: true,
+          });
+          expect(await call()).toMatchObject({ ok: false, contextStale: true });
+          expect(mocks.guardModule).not.toHaveBeenCalled();
+          expect(mocks.from).not.toHaveBeenCalled();
+          expect(mocks.rpc).not.toHaveBeenCalled();
+        },
+      );
+    }
   });
 
   describe("executeBoardActionRemote", () => {

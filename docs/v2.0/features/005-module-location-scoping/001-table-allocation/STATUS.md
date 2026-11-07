@@ -1,33 +1,19 @@
-# V2-005.001 - Overall actor repair closeout
+# V2-005.001 - locally integrated; Preview push blocked
 
-**TECHNICALLY READY FOR OWNER REVIEW - OPEN / NOT MERGED.**
-Existing issue #307 and PR #306; neither PR is merged.
+PR #305 is merged into development as ad878715b84fcdc3f36414b882d52207fb4f139e; enforcement remains STAGED. PR #306 is reconciled and validated locally, with push BLOCKED: live Preview uses hosted DEV, which lacks board_location_roster, and no password/SSO containment is configured. No #306 push/merge, hosted migration/configuration/activation or main/Production change. V2-005.002 NOT STARTED.
 
-The 23503 actor-membership blocker is repaired through Allocation-specific
-canonical actor hydration, validated profile attribution FKs and immutable real
-actor/authority snapshots. No fake memberships, nullable actor relaxation, global
-identity replacement or tenant/location RLS expansion. Participant membership and
-composite tenant/session/location constraints remain intact. Existing history is
-preserved, including names for former location actors and attributed undo/redo.
+The bounded Overall actor repair remains intact: canonical Allocation actor,
+real profile attribution and immutable authority facts, ordinary assignment/RLS,
+live-session/stale/timezone/session ownership, revocation and undo/redo. No shadow
+memberships, participant-FK weakening or global identity replacement.
 
-Current verification is recorded in EVIDENCE.md and OA-01 through OA-22 in TEST_MATRIX.md.
-The earlier independent security corrections remain covered. This is a targeted
-repair; no new feature/module work is included.
+Actual local integration validation: targeted57; fullunits3258 passed/7 existing
+skipped; check/build/scans PASS; pgTAP65files2163 assertions; actual AllocationJWT45,
+module/OverallJWT18, eleven-role matrix13; authenticated three-device browser15.
+One pgTAP fixture's fixed2026-11-06 date expired; corrected to current restaurant-local
+date. No application or migration change from prior validated composition.
+Prior cleanreplay76 and legacy upgrade evidence reused for unchanged migrations.
 
-## Owner-controlled rollout remains pending
-
-- PR #305 stays OPEN / staged / activation blocked. R1 configuration decisions
-  for hosted DEV locations remain unresolved.
-- Prefer #305 then #306 for migration chronology. The detached integration has
-  verified the three-migration sequence and documented action/type/fixture
-  reconciliation; the original #305 branch is untouched.
-- Hosted DEV deployment and acceptance remain SKIPPED. No migrations or module
-  configuration were applied there; this task made no hosted DEV contact.
-- No merge approval or Production reconciliation V2-008.004 is implied.
-- main and development remain at their verified starting SHAs. Production was
-  never contacted. V2-005.002 Tasks is next and NOT STARTED.
-
-Implementation SHA `ee1d1971a54e8eab8d06ab78699ac5b75ed7e377` has green
-application, browser, database, Vercel and Preview Comments checks; migration
-deployment is SKIPPED. Final documentation-delivery SHA and its own exact-head
-receipts are maintained on the existing PR/issue. No automatic merge is authorized.
+New remote exact-head CI is NOT RUN because branch push is held. Existing remote
+PR306 remains40c99addf568c1c34c91678ee09e300d55227437, OPEN/UNMERGED. #307 and
+parent253 stay open. [Integration details and resume gate](INTEGRATION_HANDOFF.md).

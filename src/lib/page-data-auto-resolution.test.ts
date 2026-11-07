@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// V2-004.004: staged enforcement (legacy behaviour) for entry-loader tests.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  readModuleEnforcementMode: vi.fn(async () => ({
+    status: "ok",
+    mode: "staged",
+    source: "database",
+  })),
+}));
+
 import {
   IDS,
   addAssignment,
