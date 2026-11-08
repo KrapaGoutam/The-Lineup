@@ -8,6 +8,7 @@ Target: `development`
 ## 1. Objective
 
 Implement hybrid scoping for Team and Settings modules:
+
 1. **Organization-Level Governance**:
    - Maintain org-level membership authority for Organization Owners and General Managers, and Overall Owners and Managers.
    - Restrict organization-level actions (member renaming, team designation updates, organization membership modifications, account recovery) to authorized organization executives and Overall actors.

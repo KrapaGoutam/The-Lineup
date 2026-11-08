@@ -1,6 +1,7 @@
 # V2-005.004 Schedule / Roster Location Scoping — Evidence
 
 ## 1. Baseline & Environment
+
 - **Repository**: `KrapaGoutam/The-Lineup`
 - **Worktree**: `.tmp/v2-005-batch-a`
 - **Base SHA**: `8e95d9e641d7a76c0010a40c3730a708ae90a0d0` (`origin/development`)
@@ -8,6 +9,7 @@
 - **Parent Issue**: #253 | Program: #248 | Milestone: #8 — The Lineup V2.0
 
 ## 2. Implemented Schema & Security Architecture
+
 - **Single Forward-Only Migration**: `supabase/migrations/20261107224300_batch_a_schedule_team_settings.sql` (all 79 migrations replayed cleanly with 0 errors).
 - **Security Definer RLS Helpers**:
   - `private.schedule_workforce_eligible(p_org uuid, p_location uuid, p_profile uuid)`: Determines if profile is active in `location_memberships` (or sole active location in organization).
@@ -26,6 +28,7 @@
   - Hardened `tip_pools_update_draft_manager` with `with check (status = 'draft' and finalized_at is null and finalized_by is null and private.tips_is_manager(organization_id, location_id))`.
 
 ## 3. Server-Side Actions & Workspace Enforcement
+
 - `src/features/schedules/data/schedule-actor.ts`:
   - `getScheduleActor(restaurantSlug)` resolves the verified active location and actor role, validating with `schedule_location_authorized` RPC.
 - `src/features/schedules/actions/schedule-actions.ts`:
@@ -39,6 +42,7 @@
 ## 4. Verification Receipts
 
 ### A. Database pgTAP Tests
+
 - `supabase/tests/database/0068_batch_a_schedule_team_settings.test.sql`: **50/50 PASS**
   - Tips audit integrity tests (blocked direct finalize, blocked direct reopen, blocked direct audit event insertion).
   - Schedule location scoping (manager A operates Loc A, Manager A blocked at Loc B).
@@ -51,6 +55,7 @@
 - `supabase/tests/database/0067_tips_final_security.test.sql`: **60/60 PASS**
 
 ### B. Local Real-JWT Integration Tests
+
 - `tests/local/schedule-location.local.test.ts`: **9/9 PASS**
   - Manager A adds, updates, and deletes shifts at Loc A.
   - Manager A cross-location write rejected at Loc B (action and DB RLS 42501).
@@ -63,6 +68,7 @@
   - Org Owner CAN rename members and change designations.
 
 ### C. Full Test Suite & Quality Gates
+
 - `npm run check`: **PASS**
   - `prettier --check .`: All matched files use Prettier code style.
   - `eslint . --max-warnings=0`: 0 warnings, 0 errors.

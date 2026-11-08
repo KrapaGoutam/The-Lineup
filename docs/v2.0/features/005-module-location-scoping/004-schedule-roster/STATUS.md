@@ -8,6 +8,7 @@
 **Migration**: `supabase/migrations/20261107224300_batch_a_schedule_team_settings.sql`
 
 ## Acceptance Checklist
+
 - [x] Schedules, shifts, shift templates, operating hours, and shift defaults scoped strictly to the verified active location.
 - [x] Location-scoped workforce roster via `schedule_location_roster` RPC ensuring cross-location assignment is prevented while historical assignees are retained for display.
 - [x] RLS policies enforced on `schedule_periods`, `shifts`, `shift_assignments`, `shift_templates`, `operating_hours`, `shift_kind_defaults`.

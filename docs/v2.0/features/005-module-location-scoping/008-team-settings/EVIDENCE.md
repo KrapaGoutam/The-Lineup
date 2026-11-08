@@ -1,6 +1,7 @@
 # V2-005.008 Team / Settings Hybrid Scoping — Evidence
 
 ## 1. Baseline & Context
+
 - **Repository**: `KrapaGoutam/The-Lineup`
 - **Worktree**: `.tmp/v2-005-batch-a`
 - **Base SHA**: `8e95d9e641d7a76c0010a40c3730a708ae90a0d0` (`origin/development`)
@@ -8,6 +9,7 @@
 - **Parent Issue**: #253 | Program: #248 | Milestone: #8 — The Lineup V2.0
 
 ## 2. Implemented Hybrid Architecture & RLS
+
 - **Migration**: `supabase/migrations/20261107224300_batch_a_schedule_team_settings.sql`
 - **Security Definer Helpers**:
   - `private.can_view_profile(target_profile_id uuid)`: Admits profile self, Overall roles, and active organization membership co-affiliates.
@@ -18,12 +20,14 @@
   - `public.operating_hours` & `public.shift_kind_defaults`: Scoped write permissions to location managers via `private.schedule_is_manager(organization_id, location_id)`.
 
 ## 3. Server-Side Protection
+
 - `src/features/team/actions/member-actions.ts`:
   - `renameTeamMemberAction`: Enforces check for Overall Owner/Manager or Org Owner/General Manager. Rejects local managers with `"Only an owner or general manager can rename members."`.
 - `src/features/team/actions/team-actions.ts`:
   - `updateTeamDesignationAction`: Enforces check for Overall Owner/Manager or Org Owner/General Manager. Rejects local managers with `"Only an owner or general manager can change designations."`.
 
 ## 4. Verification Receipts
+
 - **pgTAP Tests** (`supabase/tests/database/0068_batch_a_schedule_team_settings.test.sql` Part 5):
   - Local Manager A update on memberships affects 0 rows (PASS).
   - Member roles unaffected by local manager (PASS).

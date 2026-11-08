@@ -8,6 +8,7 @@
 **Migration**: `supabase/migrations/20261107224300_batch_a_schedule_team_settings.sql`
 
 ## Acceptance Checklist
+
 - [x] Organization-level memberships, roles, affiliations, and account recovery preserved under Organization Owner/General Manager and Overall Owner/Manager governance.
 - [x] Local managers prevented from acquiring organization-wide management privileges (cannot rename members, promote to org owner/GM, or delete memberships).
 - [x] Branch operational settings (operating hours, shift kind defaults, shift templates) scoped to location managers.
