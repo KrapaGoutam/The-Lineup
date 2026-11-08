@@ -28,11 +28,40 @@ alter table public.payroll_periods
   add constraint payroll_periods_location_org_fk
   foreign key (location_id, organization_id)
   references public.locations (id, organization_id)
-  on delete set null;
+  on delete restrict;
 
 create index if not exists payroll_periods_location_id_idx
   on public.payroll_periods (location_id)
   where location_id is not null;
+
+-- Drop dependent child composite foreign keys first if re-running
+alter table public.payroll_payments
+  drop constraint if exists payroll_payments_period_org_fk;
+
+alter table public.payroll_adjustments
+  drop constraint if exists payroll_adjustments_period_org_fk;
+
+-- Composite unique constraint on payroll_periods(id, organization_id)
+alter table public.payroll_periods
+  drop constraint if exists payroll_periods_id_org_unique;
+
+alter table public.payroll_periods
+  add constraint payroll_periods_id_org_unique
+  unique (id, organization_id);
+
+-- Enforce parent/child tenant integrity: payment must belong to the exact organization of its period
+alter table public.payroll_payments
+  add constraint payroll_payments_period_org_fk
+  foreign key (payroll_period_id, organization_id)
+  references public.payroll_periods (id, organization_id)
+  on delete cascade;
+
+-- Enforce parent/child tenant integrity: adjustment must belong to the exact organization of its period
+alter table public.payroll_adjustments
+  add constraint payroll_adjustments_period_org_fk
+  foreign key (payroll_period_id, organization_id)
+  references public.payroll_periods (id, organization_id)
+  on delete cascade;
 
 -- =============================================================================
 -- PART 2: ATTRIBUTION FOREIGN KEY REPAIR & ACTOR GUARDS
@@ -183,6 +212,25 @@ begin
     if tg_op = 'INSERT' and new.generated_by is distinct from v_actor then
       raise exception 'The generator of a payroll period must be the signed-in user.' using errcode = '42501';
     elsif tg_op = 'UPDATE' then
+      if new.organization_id is distinct from old.organization_id then
+        raise exception 'Cannot change the organization of a payroll period.' using errcode = '42501';
+      end if;
+      if new.neon_user_id is distinct from old.neon_user_id then
+        raise exception 'Cannot change the employee of a payroll period.' using errcode = '42501';
+      end if;
+      if new.period_month is distinct from old.period_month then
+        raise exception 'Cannot change the period month of a payroll period.' using errcode = '42501';
+      end if;
+      if new.generated_by is distinct from old.generated_by then
+        raise exception 'Cannot change the generator of a payroll period.' using errcode = '42501';
+      end if;
+      if old.status = 'locked' and new.location_id is distinct from old.location_id then
+        raise exception 'Cannot change the location of a locked payroll period.' using errcode = '42501';
+      end if;
+      if exists (select 1 from public.payroll_payments where payroll_period_id = old.id)
+         and new.location_id is distinct from old.location_id then
+        raise exception 'Cannot change the location of a payroll period with recorded payments.' using errcode = '42501';
+      end if;
       if new.regenerated_by is distinct from old.regenerated_by and new.regenerated_by is not null and new.regenerated_by is distinct from v_actor then
         raise exception 'The regenerator of a payroll period must be the signed-in user.' using errcode = '42501';
       end if;
@@ -214,6 +262,15 @@ begin
     if tg_op = 'INSERT' and new.created_by is distinct from v_actor then
       raise exception 'The creator of a payroll payment must be the signed-in user.' using errcode = '42501';
     elsif tg_op = 'UPDATE' then
+      if new.payroll_period_id is distinct from old.payroll_period_id then
+        raise exception 'Cannot reassign a payment to a different payroll period.' using errcode = '42501';
+      end if;
+      if new.organization_id is distinct from old.organization_id then
+        raise exception 'Cannot reassign a payment to a different organization.' using errcode = '42501';
+      end if;
+      if new.created_by is distinct from old.created_by then
+        raise exception 'Cannot alter the creator of a payment.' using errcode = '42501';
+      end if;
       if new.confirmed_by is distinct from old.confirmed_by and new.confirmed_by is not null and new.confirmed_by is distinct from v_actor then
         raise exception 'The confirmer of a payroll payment must be the signed-in user.' using errcode = '42501';
       end if;
@@ -354,13 +411,6 @@ as $$
             and (
               'owner' = any(m.roles)
               or 'general_manager' = any(m.roles)
-              or (
-                'shift_manager' = any(m.roles)
-                and (
-                  (select count(*) from public.locations x
-                   where x.organization_id = p_org and x.active and x.archived_at is null) <= 1
-                )
-              )
             )
         )
       )
@@ -415,17 +465,6 @@ as $$
         or (
           p.location_id is not null
           and private.payroll_can_manage_location(p.organization_id, p.location_id)
-        )
-        -- Or single-location fallback for unassigned periods
-        or (
-          p.location_id is null
-          and (select count(*) from public.locations l
-               where l.organization_id = p.organization_id and l.active and l.archived_at is null) = 1
-          and private.payroll_can_manage_location(
-            p.organization_id,
-            (select l.id from public.locations l
-             where l.organization_id = p.organization_id and l.active and l.archived_at is null limit 1)
-          )
         )
       )
   );
@@ -586,16 +625,6 @@ create policy "payroll_periods_select_manager" on public.payroll_periods
       location_id is not null
       and private.payroll_can_manage_location(organization_id, location_id)
     )
-    or (
-      location_id is null
-      and (select count(*) from public.locations l
-           where l.organization_id = payroll_periods.organization_id and l.active and l.archived_at is null) = 1
-      and private.payroll_can_manage_location(
-        organization_id,
-        (select l.id from public.locations l
-         where l.organization_id = payroll_periods.organization_id and l.active and l.archived_at is null limit 1)
-      )
-    )
   );
 
 -- Self-select for staff (locked periods only, verified active membership)
@@ -622,16 +651,6 @@ create policy "payroll_periods_insert_manager" on public.payroll_periods
     or (
       location_id is not null
       and private.payroll_can_manage_location(organization_id, location_id)
-    )
-    or (
-      location_id is null
-      and (select count(*) from public.locations l
-           where l.organization_id = payroll_periods.organization_id and l.active and l.archived_at is null) = 1
-      and private.payroll_can_manage_location(
-        organization_id,
-        (select l.id from public.locations l
-         where l.organization_id = payroll_periods.organization_id and l.active and l.archived_at is null limit 1)
-      )
     )
   );
 
