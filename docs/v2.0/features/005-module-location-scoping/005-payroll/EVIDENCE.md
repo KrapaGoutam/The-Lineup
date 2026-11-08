@@ -159,3 +159,16 @@ so it was corrected in place; no second migration was created.
 - pgTAP `0021`: **78/78**; `0010`, `0011`, `0018`: pass; shared regression `0060`, `0066`, `0067`, `0068`: pass.
 - Populated-data migration rehearsal: **3/3**.
 - Payroll + modules unit tests: pass (regenerate refusal test updated).
+
+## 5. Controlled DEV Rollout (Stage 3)
+
+- **Reviewed head:** `faa7bfe8e813305141fc12d14d469539f5ad2b6c`; exact-head CI green (application, browser-smoke, migrations-and-policies, Vercel; deploy job skipped on the PR as designed).
+- **Migration:** `20261108021714_payroll_location_scoping.sql`, sha256 `ed2101947429d793c2bca335259d7cec57419517b4243e42cc5ff2fdae3dd395` (the reviewed PR file, applied byte-for-byte).
+- **Preflight (read-only):** project `the-lineup-dev`, ledger 79 (digest `598f888f824399351e07575c75ca46db`, max `20261107224300`), enforcement STAGED, 0 module configs, all Payroll tables empty. The deploy bundle's first 79 files were byte-identical to `origin/development`; the dry run listed exactly one migration.
+- **Backup:** fresh encrypted (Windows DPAPI) ledger-79 backup in `%LOCALAPPDATA%\TheLineup-DEV-Backups`; six components hash-verified; counts reconcile with live DEV. Older backups preserved.
+- **Isolated restore:** restored into a no-network, no-port, tmpfs-backed PostgreSQL 17 container: 107 table-count checks, 0 mismatches, FK anti-joins pass.
+- **Populated rehearsal:** DEV's Payroll tables are empty, so a representative financial dataset (unpaid, partially paid, fully paid, adjusted, locked, confirmed/unconfirmed history, multi-month) was seeded into the disposable restore only, on DEV's real pre-migration schema, then the exact migration applied. Payments, adjustments, rates, settings, identity links and audit rows: digests identical before/after; `payroll_periods` old-shape digest identical (cents, hours, ids unchanged; every row `location_id IS NULL`); only change besides the new column is the ledger (79 -> 80). Catalog delta limited to Payroll objects and the two `audit_events` policies; all legacy `*_privileged` policies replaced; no grant, RLS flag, trigger or index lost.
+- **Hosted result:** ledger 79 -> 80; functions, triggers, indexes, grants and RLS flags identical to the migrated rehearsal; policy names/commands identical (text differs only by `uid()`/`auth.uid()` deparse).
+- **Hosted authorization probe:** 73/73 in one transaction ending in a forced rollback (nothing persisted; post-state counts identical). Uses SQL role simulation with synthetic JWT claims, not live GoTrue tokens; real GoTrue JWT coverage is the local 44/44 suite.
+- **Not exercised on hosted DEV:** ACTIVE module enforcement (policy exercised in pgTAP only) and authenticated browser UI (DEV has 0 module configs, so module UIs stay hidden; DEFERRED, no seeding).
+- **Preview:** Vercel Preview for `faa7bfe` READY; client bundle contains the DEV project ref and no Production ref.

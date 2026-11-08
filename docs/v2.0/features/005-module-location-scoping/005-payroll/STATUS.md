@@ -1,6 +1,6 @@
 # Feature V2-005.005: Payroll Location Scoping — Status
 
-- **Status:** INDEPENDENT REVIEW (Stage 2) COMPLETE — corrections applied in the existing migration; see EVIDENCE.md section 4
+- **Status:** MERGED / IMPLEMENTED — PR #314; hosted DEV migrated 79 -> 80; independent review complete (EVIDENCE.md sections 4-5)
 - **Feature Branch:** `feature/v2.0-005.005-payroll-location-scoping`
 - **Worktree:** `.tmp/v2-payroll-location-scoping`
 - **Base Commit:** `896c8016c6edaa110943d55aa8848ea146abae14`
