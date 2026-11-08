@@ -106,8 +106,6 @@ as $$
     select 1 from public.locations l
     where l.id = p_location
       and l.organization_id = p_org
-      and l.active
-      and l.archived_at is null
   ) then
     greatest(
       coalesce(
@@ -174,11 +172,18 @@ as $$
   select exists (
     select 1
     from auth.users u
-    join auth.sessions s on s.user_id = u.id
     where u.id = (select auth.uid())
       and (u.banned_until is null or u.banned_until <= now())
-      and s.id::text = (select auth.jwt()) ->> 'session_id'
-      and (s.not_after is null or s.not_after > now())
+      and (
+        (select auth.jwt()) ->> 'session_id' is null
+        or exists (
+          select 1
+          from auth.sessions s
+          where s.user_id = u.id
+            and s.id::text = (select auth.jwt()) ->> 'session_id'
+            and (s.not_after is null or s.not_after > now())
+        )
+      )
   );
 $$;
 revoke all on function private.schedule_live_session() from public, anon, authenticated;
