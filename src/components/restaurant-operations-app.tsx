@@ -2438,6 +2438,16 @@ function RestaurantOperationsAppInner({
               <ScheduleWorkspace
                 user={user}
                 team={activeTeam}
+                isManager={
+                  demoMode
+                    ? undefined
+                    : activeContext?.tasksDesignation === "owner" ||
+                      activeContext?.tasksDesignation === "manager" ||
+                      activeContext?.tasksDesignation === "assistant_manager"
+                }
+                rosterUnavailable={
+                  initialScheduleContext?.rosterUnavailable === true
+                }
                 shiftDefaults={shiftDefaults}
                 shifts={shifts}
                 weekDates={weekDates}

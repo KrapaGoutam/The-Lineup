@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(50);
+select plan(53);
 
 -- ===========================================================================
 -- V2-005 Batch A: Schedule / Roster Location Scoping + Team / Settings Scoping
@@ -286,8 +286,9 @@ select is(
   'staff cannot read draft shifts'
 );
 
--- Publish Loc A schedule
+-- Publish Loc A schedule (trusted setup write: no end-user identity, like the service role)
 reset role;
+select set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claims', '', true);
 update public.schedule_periods set status = 'published', published_version = 1, published_at = now(), published_by = '00000000-0000-4000-8000-000000068001'
  where id = 68301;
 
@@ -346,6 +347,40 @@ select is(
   '00000000-0000-4000-8000-000000068004',
   'published_by accurately attributes Overall manager'
 );
+
+-- Publisher identity cannot be forged by a direct client (trigger schedule_periods_publisher_guard)
+reset role;
+select set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claims', '', true);
+insert into public.schedule_periods (id, organization_id, location_id, starts_on, ends_on, status, published_version) overriding system value
+values (68303, '00000000-0000-4000-8000-000000068010', '00000000-0000-4000-8000-000000068011', '2027-01-01', '2027-12-31', 'draft', 0);
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000068004', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000068004"}', true);
+
+select throws_ok(
+  $$ update public.schedule_periods set status = 'published', published_version = 1, published_at = now(), published_by = '00000000-0000-4000-8000-000000068001'
+     where id = 68303 $$,
+  '42501', null, 'a publication cannot be attributed to another profile'
+);
+
+select throws_ok(
+  $$ insert into public.schedule_periods (id, organization_id, location_id, starts_on, ends_on, status, published_version, published_by) overriding system value
+     values (68304, '00000000-0000-4000-8000-000000068010', '00000000-0000-4000-8000-000000068011', '2028-01-01', '2028-12-31', 'draft', 0, '00000000-0000-4000-8000-000000068001') $$,
+  '42501', null, 'a new period cannot be created with a forged publisher stamp'
+);
+
+select lives_ok(
+  $$ update public.schedule_periods set status = 'published', published_version = 1, published_at = now(), published_by = '00000000-0000-4000-8000-000000068004'
+     where id = 68303 $$,
+  'a publication stamped with the caller own identity succeeds'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claims', '', true);
+delete from public.schedule_periods where id = 68303;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000068004', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000068004"}', true);
 
 -- ---------------------------------------------------------------------------
 -- PART 4: AUDIT EVENTS LOCATION OPERATOR POLICIES

@@ -425,3 +425,93 @@ it("Org Owner CAN rename members and change designations", async () => {
   });
   expect(renameResult.ok).toBe(true);
 });
+
+it("direct client: publisher identity cannot be forged; the previous app's own-stamp publish sequence still works", async () => {
+  // The previous (deployed) app writes straight through PostgREST: draft period,
+  // shift, assignment, then a publish stamped with the caller's own profile id.
+  const m = fx.managerA.client;
+  const period = await m
+    .from("schedule_periods")
+    .insert({
+      organization_id: fx.org.id,
+      location_id: fx.a,
+      starts_on: "2031-01-01",
+      ends_on: "2031-12-31",
+      status: "draft",
+    })
+    .select("id")
+    .single();
+  expect(period.error).toBeNull();
+  const periodId = period.data!.id;
+
+  const shift = await m
+    .from("shifts")
+    .insert({
+      organization_id: fx.org.id,
+      location_id: fx.a,
+      schedule_period_id: periodId,
+      service_date: "2031-03-03",
+      end_date: "2031-03-03",
+      kind: "evening",
+      starts_at: "2031-03-03T22:00:00Z",
+      ends_at: "2031-03-04T04:00:00Z",
+      role_label: "Server",
+    })
+    .select("id")
+    .single();
+  expect(shift.error).toBeNull();
+  const assignment = await m.from("shift_assignments").insert({
+    organization_id: fx.org.id,
+    shift_id: shift.data!.id,
+    profile_id: fx.staffA.id,
+  });
+  expect(assignment.error).toBeNull();
+
+  const publish = (publishedBy: string) =>
+    m
+      .from("schedule_periods")
+      .update({
+        status: "published",
+        published_version: 1,
+        published_at: new Date().toISOString(),
+        published_by: publishedBy,
+      })
+      .eq("id", periodId)
+      .select("id, status, published_by");
+
+  // Forged attribution (to another real profile) is refused and changes nothing.
+  const forged = await publish(fx.staffA.id);
+  expect(forged.error?.code).toBe("42501");
+  const stillDraft = await fx.admin
+    .from("schedule_periods")
+    .select("status, published_by")
+    .eq("id", periodId)
+    .single();
+  expect(stillDraft.data).toEqual({ status: "draft", published_by: null });
+
+  // A forged stamp at creation time is refused too.
+  const forgedInsert = await m.from("schedule_periods").insert({
+    organization_id: fx.org.id,
+    location_id: fx.a,
+    starts_on: "2032-01-01",
+    ends_on: "2032-12-31",
+    status: "draft",
+    published_by: fx.staffA.id,
+  });
+  expect(forgedInsert.error?.code).toBe("42501");
+
+  // The honest sequence works and is attributed to the real caller.
+  const honest = await publish(fx.managerA.id);
+  expect(honest.error).toBeNull();
+  expect(honest.data?.[0]).toMatchObject({
+    status: "published",
+    published_by: fx.managerA.id,
+  });
+
+  // Staff can now read the published shift; the publisher stays distinguishable.
+  const staffView = await fx.staffA.client
+    .from("shifts")
+    .select("id")
+    .eq("id", shift.data!.id);
+  expect(staffView.data).toHaveLength(1);
+});

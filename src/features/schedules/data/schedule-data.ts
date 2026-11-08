@@ -6,10 +6,7 @@ import {
   designationForRoles,
   designationToRole,
 } from "@/features/auth/domain/passcode";
-import {
-  getPrimaryLocation,
-  locationForLoader,
-} from "@/features/locations/data/primary-location";
+import { locationForLoader } from "@/features/locations/data/primary-location";
 import {
   getMonthDates,
   getWeekDates,
@@ -59,6 +56,13 @@ export type ScheduleContext = {
   operatingHours: DayHours[];
   shiftDefaults: ShiftDefaults;
   team: TeamMember[];
+  /**
+   * True when the location workforce could not be loaded (RPC denied or
+   * failed). `team` is then empty for that reason, NOT because the location
+   * has no eligible staff -- the UI must say so instead of showing an
+   * authorized-but-empty roster.
+   */
+  rosterUnavailable: boolean;
   weekDates: string[];
   monthDates: string[];
   shifts: DemoShift[];
@@ -178,17 +182,19 @@ async function getLocationRoster(
   supabase: SupabaseClient,
   organizationId: string,
   locationId: string,
-): Promise<TeamMember[]> {
+): Promise<{ team: TeamMember[]; unavailable: boolean }> {
   const { data, error } = await supabase.rpc("schedule_location_roster", {
     p_organization_id: organizationId,
     p_location_id: locationId,
   });
   if (error) {
     console.error("getLocationRoster: schedule_location_roster", error);
-    return [];
+    // Fail closed (never fall back to an organization-wide roster) AND say so:
+    // an empty team caused by a denial must not look like an empty workforce.
+    return { team: [], unavailable: true };
   }
   const rows = (data as unknown as ScheduleLocationRosterRow[] | null) ?? [];
-  return rows.map((row, index) => {
+  const team = rows.map((row, index) => {
     const name = row.display_name ?? "Unknown";
     const designation = designationForRoles((row.roles ?? []) as string[]);
     return {
@@ -202,6 +208,7 @@ async function getLocationRoster(
       eligible: row.eligible,
     };
   });
+  return { team, unavailable: false };
 }
 
 export async function getScheduleContext(
@@ -228,7 +235,7 @@ export async function getScheduleContext(
   const [
     { data: hoursRows, error: hoursError },
     { data: defaultsRows, error: defaultsError },
-    team,
+    roster,
     shifts,
   ] = await Promise.all([
     supabase
@@ -287,7 +294,8 @@ export async function getScheduleContext(
     timeZone: location.time_zone,
     operatingHours,
     shiftDefaults,
-    team,
+    team: roster.team,
+    rosterUnavailable: roster.unavailable,
     weekDates,
     monthDates,
     shifts,
@@ -313,11 +321,11 @@ export type WeekScheduleData = {
 export async function getWeekScheduleData(
   organizationId: string,
   weekStartDate: string,
-  location?: { id: string; time_zone: string },
+  // Required: the caller passes the server-verified location. There is no
+  // primary-location fallback, so a request can never read another location.
+  loc: { id: string; time_zone: string },
 ): Promise<WeekScheduleData | null> {
   const supabase = await createClient();
-  const loc = location ?? (await getPrimaryLocation(organizationId));
-  if (!loc) return null;
 
   const weekDates = getWeekDates(weekStartDate);
   const shifts = await getShiftsInRange(

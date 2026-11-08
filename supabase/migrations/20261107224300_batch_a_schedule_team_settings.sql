@@ -40,6 +40,43 @@ alter table public.schedule_periods
 create index if not exists schedule_periods_published_by_idx
   on public.schedule_periods (published_by) where published_by is not null;
 
+-- Dropping the membership FK removed the only (weak) check that tied the stamp to a real
+-- tenant member, so the publisher stamp must now be bound to the caller's own identity.
+-- A direct PostgREST client could otherwise attribute a publication to any other profile.
+-- Invoker rights on purpose: auth.uid() is the caller. Service-role / maintenance writes
+-- carry no end-user identity and are exempt, as everywhere else in this schema.
+create or replace function private.schedule_periods_publisher_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_actor uuid := (select auth.uid());
+begin
+  if v_actor is null then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.published_by is not null and new.published_by is distinct from v_actor then
+      raise exception 'The publisher of a schedule must be the signed-in user.' using errcode = '42501';
+    end if;
+  elsif new.published_by is distinct from old.published_by
+        and new.published_by is not null
+        and new.published_by is distinct from v_actor then
+    raise exception 'The publisher of a schedule must be the signed-in user.' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+revoke all on function private.schedule_periods_publisher_guard() from public, anon, authenticated;
+
+drop trigger if exists schedule_periods_publisher_guard on public.schedule_periods;
+create trigger schedule_periods_publisher_guard
+  before insert or update on public.schedule_periods
+  for each row execute function private.schedule_periods_publisher_guard();
+
 -- =============================================================================
 -- PART 3: SCHEDULE LOCATION AUTHORIZATION HELPERS
 -- =============================================================================

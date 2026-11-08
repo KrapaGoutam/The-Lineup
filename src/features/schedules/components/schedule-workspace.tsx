@@ -407,6 +407,8 @@ function ShiftEditor({
 export function ScheduleWorkspace({
   user,
   team,
+  isManager: isManagerProp,
+  rosterUnavailable = false,
   shiftDefaults,
   shifts,
   weekDates,
@@ -421,6 +423,15 @@ export function ScheduleWorkspace({
 }: {
   user: SignedInUser;
   team: TeamMember[];
+  /**
+   * Whether the viewer may manage the schedule at the ACTIVE location. Real mode
+   * passes the server-verified effective location tier (a manager assigned only
+   * at this location has organization role "server"); demo mode omits it and the
+   * legacy role label applies. Presentation only: actions and RLS re-check.
+   */
+  isManager?: boolean;
+  /** The location workforce failed to load; an empty `team` is not "no staff". */
+  rosterUnavailable?: boolean;
   shiftDefaults: ShiftDefaults;
   shifts: DemoShift[];
   weekDates: string[];
@@ -440,7 +451,7 @@ export function ScheduleWorkspace({
   }) => Promise<ShiftEditResult>;
   onDeleteShift: (input: { shiftId: string }) => Promise<ShiftEditResult>;
 }) {
-  const isManager = user.role !== "server";
+  const isManager = isManagerProp ?? user.role !== "server";
   const [view, setView] = useState<"week" | "month">("week");
   const [showEditor, setShowEditor] = useState(false);
   const [showCsvImport, setShowCsvImport] = useState(false);
@@ -630,6 +641,18 @@ export function ScheduleWorkspace({
           ) : null}
         </div>
       </div>
+
+      {rosterUnavailable ? (
+        <p
+          role="alert"
+          data-testid="schedule-roster-unavailable"
+          className="border-destructive/40 bg-destructive/5 text-destructive rounded-xl border px-4 py-3 text-sm"
+        >
+          This location&rsquo;s team could not be loaded, so shifts cannot be
+          assigned right now. This is a loading or access problem, not an empty
+          team. Refresh the page; if it persists, contact an owner.
+        </p>
+      ) : null}
 
       {showEditor && isManager ? (
         <ShiftEditor

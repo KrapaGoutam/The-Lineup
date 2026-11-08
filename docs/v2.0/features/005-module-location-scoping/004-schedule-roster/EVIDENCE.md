@@ -75,3 +75,14 @@
   - `next typegen && tsc --noEmit`: Types generated successfully, 0 errors.
 - `npm test`: **244 passed (244 test files), 3,303 passed tests**, 0 failed.
 - `npm run build`: **PASS** (Next.js 16.4.3 production build succeeded, all dynamic and static routes generated).
+
+## 5. Closeout review (Claude, BA-F1)
+
+An independent review of PR #313 found and fixed four defects the original tests could not see (details and dispositions: `.tmp/v2-005-batch-a-handoff/CURRENT_AGENT_STATE.md`):
+
+- **Publisher identity forgery** — `published_by` was settable by any direct client once the membership FK was dropped. New trigger `schedule_periods_publisher_guard` binds a non-null stamp to `auth.uid()`; pgTAP 0068 now 53/53, real-JWT `schedule-location.local.test.ts` 10/10.
+- **Location-only managers saw the staff Schedule** — UI gated on the organization role label, not the verified effective tier. Schedule now receives `isManager` from the active context (real mode).
+- **Roster failure indistinguishable from an empty workforce** — `ScheduleContext.rosterUnavailable` + alert banner; no organization-wide fallback.
+- **`getWeekScheduleData` primary-location fallback** — removed; the verified location is now required.
+
+Dedicated authenticated browser acceptance (`tests/local/ui/schedule-location.local.spec.ts`, `playwright.schedule-local.config.ts`) did not exist in the original PR and now passes 18/18 on desktop, tablet and phone viewports. Full pgTAP 69 files / 2,354 assertions; `npm test` 3,307 passed; `npm run check` and `npm run build` pass.

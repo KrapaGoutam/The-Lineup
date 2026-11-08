@@ -48,3 +48,9 @@
   - `npm run check`: PASS.
   - `npm test`: 244 test files, 3,303 tests PASS (100% green).
   - `npm run build`: Next.js production build PASS.
+
+## Closeout review (Claude, BA-F1)
+
+- Browser acceptance (desktop/tablet/phone, 18/18 shared spec): a location-only manager has no Team tab and changes nothing; the organization Owner and an Overall manager can rename members (DB-verified).
+- Real-JWT: local manager cannot rename or change designations; Org Owner can.
+- Residual (not changed here): `/api/team/deactivate|reactivate` and `/api/auth/passcode/reset` authorize by organization-membership designation, so an Overall administrator with no membership cannot use them (fails closed). Track as a follow-up if Overall admins must manage those.
