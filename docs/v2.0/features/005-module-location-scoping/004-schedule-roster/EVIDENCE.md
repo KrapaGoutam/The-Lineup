@@ -86,3 +86,11 @@ An independent review of PR #313 found and fixed four defects the original tests
 - **`getWeekScheduleData` primary-location fallback** — removed; the verified location is now required.
 
 Dedicated authenticated browser acceptance (`tests/local/ui/schedule-location.local.spec.ts`, `playwright.schedule-local.config.ts`) did not exist in the original PR and now passes 18/18 on desktop, tablet and phone viewports. Full pgTAP 69 files / 2,354 assertions; `npm test` 3,307 passed; `npm run check` and `npm run build` pass.
+
+## 6. Hosted DEV rollout (Claude, BA-F2)
+
+- Code head for the rollout: `3939b8970271f91a68b54890ff6b62f6a64eb747`; exact-head CI (application, migrations-and-policies, browser-smoke, Vercel) green. Migration sha256 `f16ca5cd43c5251ceb65a6a92b2650e98754f89d98167e56d1835fa5e1920d26`.
+- Fresh encrypted (DPAPI) ledger-78 backup verified, restored into an isolated network-less Postgres 17.11 (107 table checks, FK anti-joins pass), then the migration was rehearsed on that populated copy: row count + md5 of all 109 tables unchanged, no grant/RLS-flag changes, catalog diff limited to the Batch A objects.
+- `db push --linked` applied exactly `20261107224300_batch_a_schedule_team_settings.sql`: DEV ledger 78 -> 79, enforcement `staged`, 0 module configs.
+- Hosted authorization probe (rolled-back, real `authenticated` roles): 40/40 — cross-location, eligibility, publisher forgery, Overall without membership, Team authority, Tips audited finalize/reopen. No row changed afterwards.
+- New Preview against the previous schema fails closed (PGRST202 on `schedule_location_authorized` / `schedule_location_roster`). Hosted UI acceptance is DEFERRED: DEV has no `location_module_configs`, so every module is hidden; none were seeded.

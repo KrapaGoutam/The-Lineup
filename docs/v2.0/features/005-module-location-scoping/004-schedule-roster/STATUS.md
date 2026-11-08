@@ -1,6 +1,6 @@
 # V2-005.004 Schedule / Roster Location Scoping — Status
 
-**Current State**: COMPLETE (Implemented, Tested, Verified in Batch A)  
+**Current State**: COMPLETE (PR #313; independently reviewed, corrected, deployed to hosted DEV 78 -> 79; hosted UI acceptance DEFERRED until owner-approved module configuration exists)  
 **Parent Issue**: #253  
 **Milestone**: #8 — The Lineup V2.0  
 **Target**: `development`  

@@ -1,6 +1,6 @@
 # V2-005.008 Team / Settings Hybrid Scoping — Status
 
-**Current State**: COMPLETE (Implemented, Tested, Verified in Batch A)  
+**Current State**: COMPLETE (PR #313; deployed to hosted DEV with the Batch A migration; hosted UI acceptance DEFERRED until owner-approved module configuration exists)
 **Parent Issue**: #253  
 **Milestone**: #8 — The Lineup V2.0  
 **Target**: `development`  

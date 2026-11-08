@@ -93,14 +93,14 @@ development → main (Production)
 - **Status:** Planned
 - **Directory:** `docs/v2.0/features/005-module-location-scoping/`
 - **Subfeatures:**
-  - [ ] **V2-005.001**: Table Allocation / Rotation (Bind rotation board sessions and physical tables strictly to active location)
-  - [ ] **V2-005.002**: Tasks (Enforce location scoping in `private.tasks_can_access_location` and UI filters)
-  - [ ] **V2-005.003**: Tips (Scope tip pools, intervals, and splits to active location)
-  - [ ] **V2-005.004**: Schedule / Roster (Scope schedule periods, shifts, and templates to active location)
+  - [x] **V2-005.001**: Table Allocation / Rotation (Bind rotation board sessions and physical tables strictly to active location)
+  - [x] **V2-005.002**: Tasks (Enforce location scoping in `private.tasks_can_access_location` and UI filters)
+  - [x] **V2-005.003**: Tips (Scope tip pools, intervals, and splits to active location)
+  - [x] **V2-005.004**: Schedule / Roster (Scope schedule periods, shifts, and templates to active location)
   - [ ] **V2-005.005**: Payroll (Retain org-level compensation settings with location-filtered reporting and snapshots)
   - [ ] **V2-005.006**: Bar Inventory (Retain org catalog with location-scoped stock ledger, counts, and orders)
   - [ ] **V2-005.007**: Recipes (Retain org-wide recipe book by default with optional location menu filtering)
-  - [ ] **V2-005.008**: Team / Settings (Hybrid scoping: org-level memberships vs location-specific staff rosters)
+  - [x] **V2-005.008**: Team / Settings (Hybrid scoping: org-level memberships vs location-specific staff rosters)
 
 ### V2-006 — Attendance V2
 
