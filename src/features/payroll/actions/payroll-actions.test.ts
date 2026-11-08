@@ -916,22 +916,28 @@ describe("location scoping and multi-location safeguards", () => {
     );
   });
 
-  it("regeneratePayrollPeriodAction refuses foreign location period for branch manager", async () => {
+  it("regeneratePayrollPeriodAction refuses a branch manager for any period (no attendance location provenance)", async () => {
     mocks.getPayrollActor.mockResolvedValue(branchManagerActor);
-    mocks.getPayrollPeriodById.mockResolvedValue({
-      ok: true,
-      data: period({ id: 2, locationId: locationIdB }),
-    });
+    for (const locationId of [
+      locationIdB,
+      branchManagerActor.scope.locationId,
+    ]) {
+      mocks.getPayrollPeriodById.mockResolvedValue({
+        ok: true,
+        data: period({ id: 2, locationId }),
+      });
 
-    const result = await regeneratePayrollPeriodAction({
-      restaurantSlug: "the-monks",
-      periodId: 2,
-    });
+      const result = await regeneratePayrollPeriodAction({
+        restaurantSlug: "the-monks",
+        periodId: 2,
+      });
 
-    expect(result).toEqual({
-      ok: false,
-      error: "You do not have permission to manage payroll for this location.",
-    });
+      expect(result).toEqual({
+        ok: false,
+        error:
+          "Payroll regeneration requires organization manager authority because attendance records do not have verified physical location provenance.",
+      });
+    }
     expect(mocks.regeneratePayrollPeriod).not.toHaveBeenCalled();
   });
 

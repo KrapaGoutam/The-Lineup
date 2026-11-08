@@ -219,7 +219,7 @@ describe("Real-JWT and Direct PostgREST Payroll Authorization Suite", () => {
       expect(res.data?.location_id).toBeNull();
     });
 
-    it("Location A Manager can insert period for Loc A", async () => {
+    it("Location A Manager CANNOT fabricate a period for Loc A by direct insert (no verified attendance provenance)", async () => {
       const res = await fx.mgrA.client
         .from("payroll_periods")
         .insert({
@@ -227,15 +227,37 @@ describe("Real-JWT and Direct PostgREST Payroll Authorization Suite", () => {
           location_id: fx.locA,
           neon_user_id: 88802,
           period_month: "2026-08-01",
-          hours_snapshot: 20,
-          rate_cents_snapshot: 1500,
-          gross_cents: 30000,
+          hours_snapshot: 9999,
+          rate_cents_snapshot: 99999,
+          gross_cents: 999999999,
           generated_by: fx.mgrA.id,
         })
-        .select()
-        .single();
-      expect(res.error).toBeNull();
-      expect(res.data?.location_id).toBe(fx.locA);
+        .select();
+      expect(res.error).not.toBeNull();
+      expect(res.error?.code).toBe("42501");
+      const stored = must(
+        await fx.admin
+          .from("payroll_periods")
+          .select("id")
+          .eq("organization_id", fx.orgA.id)
+          .eq("neon_user_id", 88802),
+      );
+      expect(stored).toHaveLength(0);
+    });
+
+    it("Location A Assistant Manager CANNOT fabricate a period either", async () => {
+      const res = await fx.asstA.client.from("payroll_periods").insert({
+        organization_id: fx.orgA.id,
+        location_id: fx.locA,
+        neon_user_id: 88808,
+        period_month: "2026-08-01",
+        hours_snapshot: 1,
+        rate_cents_snapshot: 1,
+        gross_cents: 1,
+        generated_by: fx.asstA.id,
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error?.code).toBe("42501");
     });
 
     it("Location A Manager CANNOT insert period with location_id = null", async () => {
@@ -786,6 +808,148 @@ describe("Real-JWT and Direct PostgREST Payroll Authorization Suite", () => {
       const res = await fx.admin.from("locations").delete().eq("id", fx.locA);
       expect(res.error).not.toBeNull();
       expect(res.error?.code).toBe("23503"); // Foreign key restriction
+    });
+  });
+
+  // ===========================================================================
+  // 7. INDEPENDENT REVIEW HARDENING (direct PostgREST bypass attempts)
+  // ===========================================================================
+  describe("Independent-review hardening", () => {
+    let periodId: number;
+
+    beforeAll(async () => {
+      const p = must(
+        await fx.admin
+          .from("payroll_periods")
+          .insert({
+            organization_id: fx.orgA.id,
+            location_id: fx.locA,
+            neon_user_id: 88830,
+            period_month: "2026-10-01",
+            hours_snapshot: 10,
+            rate_cents_snapshot: 1000,
+            gross_cents: 10000,
+            generated_by: fx.orgAGM.id,
+            status: "draft",
+          })
+          .select("id")
+          .single(),
+      );
+      periodId = p.id;
+    });
+
+    it("Location Manager CANNOT rewrite hours/rate/gross of an unpaid, unlocked period", async () => {
+      const res = await fx.mgrA.client
+        .from("payroll_periods")
+        .update({ hours_snapshot: 500, gross_cents: 500000 })
+        .eq("id", periodId)
+        .select();
+      expect(res.error).not.toBeNull();
+      expect(res.error?.code).toBe("42501");
+      const row = must(
+        await fx.admin
+          .from("payroll_periods")
+          .select("gross_cents")
+          .eq("id", periodId)
+          .single(),
+      );
+      expect(row.gross_cents).toBe(10000);
+    });
+
+    it("Location Manager CANNOT move a period to another branch or detach it", async () => {
+      const toB = await fx.mgrA.client
+        .from("payroll_periods")
+        .update({ location_id: fx.locB })
+        .eq("id", periodId)
+        .select();
+      expect(toB.error).not.toBeNull();
+      const detach = await fx.mgrA.client
+        .from("payroll_periods")
+        .update({ location_id: null })
+        .eq("id", periodId)
+        .select();
+      expect(detach.error).not.toBeNull();
+      expect(detach.error?.code).toBe("42501");
+    });
+
+    it("Forged confirmed_by on direct payment insert is rejected", async () => {
+      const res = await fx.mgrA.client.from("payroll_payments").insert({
+        organization_id: fx.orgA.id,
+        payroll_period_id: periodId,
+        amount_cents: 100,
+        payment_date: "2026-10-15",
+        created_by: fx.mgrA.id,
+        status: "confirmed",
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: fx.orgAGM.id,
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error?.code).toBe("42501");
+    });
+
+    it("Locked period snapshot is frozen even for organization authority", async () => {
+      const lock = await fx.orgAGM.client
+        .from("payroll_periods")
+        .update({
+          status: "locked",
+          locked_at: new Date().toISOString(),
+          locked_by: fx.orgAGM.id,
+        })
+        .eq("id", periodId)
+        .select();
+      expect(lock.error).toBeNull();
+      const res = await fx.orgAGM.client
+        .from("payroll_periods")
+        .update({ gross_cents: 1 })
+        .eq("id", periodId)
+        .select();
+      expect(res.error).not.toBeNull();
+      expect(res.error?.code).toBe("42501");
+    });
+
+    it("Org GM can still create an org-wide (unattributed) period directly", async () => {
+      const res = await fx.orgAGM.client
+        .from("payroll_periods")
+        .insert({
+          organization_id: fx.orgA.id,
+          location_id: null,
+          neon_user_id: 88831,
+          period_month: "2026-10-01",
+          hours_snapshot: 5,
+          rate_cents_snapshot: 1000,
+          gross_cents: 5000,
+          generated_by: fx.orgAGM.id,
+        })
+        .select()
+        .single();
+      expect(res.error).toBeNull();
+      expect(res.data?.location_id).toBeNull();
+    });
+
+    it("A banned manager's still-valid JWT loses payroll write authority immediately", async () => {
+      const ban = await fx.admin.auth.admin.updateUserById(fx.orgAGM.id, {
+        ban_duration: "1h",
+      });
+      expect(ban.error).toBeNull();
+      try {
+        const res = await fx.orgAGM.client.from("payroll_periods").insert({
+          organization_id: fx.orgA.id,
+          location_id: null,
+          neon_user_id: 88832,
+          period_month: "2026-10-01",
+          hours_snapshot: 5,
+          rate_cents_snapshot: 1000,
+          gross_cents: 5000,
+          generated_by: fx.orgAGM.id,
+        });
+        expect(res.error).not.toBeNull();
+        expect(res.error?.code).toBe("42501");
+      } finally {
+        const unban = await fx.admin.auth.admin.updateUserById(fx.orgAGM.id, {
+          ban_duration: "none",
+        });
+        expect(unban.error).toBeNull();
+      }
     });
   });
 });

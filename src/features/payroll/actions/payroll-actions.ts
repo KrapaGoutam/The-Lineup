@@ -937,10 +937,14 @@ export async function regeneratePayrollPeriodAction(input: {
   if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
   }
-  if (!actor.isOrgManager && period.locationId !== actor.scope.locationId) {
+  if (!actor.isOrgManager) {
+    // Regeneration recomputes hours from Neon attendance, which has no verified
+    // physical location provenance; the database also rejects a branch manager
+    // changing a snapshot (payroll_periods_actor_guard).
     return {
       ok: false,
-      error: NOT_LOCATION_MANAGER_ERROR,
+      error:
+        "Payroll regeneration requires organization manager authority because attendance records do not have verified physical location provenance.",
     };
   }
   if (period.status === "locked") {

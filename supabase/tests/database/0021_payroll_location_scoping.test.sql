@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(65);
+select plan(78);
 
 -- =============================================================================
 -- TEST IDENTITIES & FIXTURES (0021 namespace)
@@ -286,7 +286,7 @@ select is(
 
 -- Location Manager at Loc A can generate period for Loc A
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
-select lives_ok(
+select throws_ok(
   $$
     insert into public.payroll_periods (
       organization_id, location_id, neon_user_id, period_month,
@@ -296,8 +296,26 @@ select lives_ok(
       2101, '2026-09-01', 100, 1800, 180000, '00000000-0000-0000-0000-000000021003'
     )
   $$,
-  '35. Loc A manager can generate period for Loc A'
+  '42501',
+  null,
+  '35. Loc A manager cannot fabricate a payroll period for Loc A by direct insert'
 );
+
+-- The Loc A fixture period is created by organization-wide authority (Org GM)
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
+select lives_ok(
+  $$
+    insert into public.payroll_periods (
+      organization_id, location_id, neon_user_id, period_month,
+      hours_snapshot, rate_cents_snapshot, gross_cents, generated_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', '00000000-0000-0000-0000-000000021111',
+      2101, '2026-09-01', 100, 1800, 180000, '00000000-0000-0000-0000-000000021002'
+    )
+  $$,
+  '35b. Org GM can generate period for Loc A'
+);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
 
 -- Store Loc A period id
 insert into test_period_loc_a
@@ -679,9 +697,9 @@ set is_enabled = false
 where location_id = '00000000-0000-0000-0000-000000021111'
   and module_key = 'payroll';
 
--- Loc A manager attempts to insert period on Loc A -> blocked by module enforcement
+-- Org GM attempts to insert period on Loc A -> blocked by module enforcement
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
 select throws_ok(
   $$
     insert into public.payroll_periods (
@@ -689,7 +707,7 @@ select throws_ok(
       hours_snapshot, rate_cents_snapshot, gross_cents, generated_by
     ) values (
       '00000000-0000-0000-0000-000000021101', '00000000-0000-0000-0000-000000021111',
-      2108, '2026-11-01', 50, 1600, 80000, '00000000-0000-0000-0000-000000021003'
+      2108, '2026-11-01', 50, 1600, 80000, '00000000-0000-0000-0000-000000021002'
     )
   $$,
   '42501',
@@ -705,9 +723,9 @@ set is_enabled = true
 where location_id = '00000000-0000-0000-0000-000000021111'
   and module_key = 'payroll';
 
--- Loc A manager inserts period on Loc A -> succeeds
+-- Org GM inserts period on Loc A -> succeeds
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
 select lives_ok(
   $$
     insert into public.payroll_periods (
@@ -715,7 +733,7 @@ select lives_ok(
       hours_snapshot, rate_cents_snapshot, gross_cents, generated_by
     ) values (
       '00000000-0000-0000-0000-000000021101', '00000000-0000-0000-0000-000000021111',
-      2108, '2026-11-01', 50, 1600, 80000, '00000000-0000-0000-0000-000000021003'
+      2108, '2026-11-01', 50, 1600, 80000, '00000000-0000-0000-0000-000000021002'
     )
   $$,
   '64. Period insert succeeds when payroll module is enabled'
@@ -725,6 +743,165 @@ select is(
   (select count(*)::int from public.payroll_periods where neon_user_id = 2108 and period_month = '2026-11-01'),
   1,
   '65. Period successfully persisted in database'
+);
+
+-- =============================================================================
+-- PART 9: INDEPENDENT-REVIEW HARDENING (11 tests)
+-- =============================================================================
+
+-- Org GM creates a fresh unpaid Loc A period for mutation probes
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
+select lives_ok(
+  $$
+    insert into public.payroll_periods (
+      organization_id, location_id, neon_user_id, period_month,
+      hours_snapshot, rate_cents_snapshot, gross_cents, generated_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', '00000000-0000-0000-0000-000000021111',
+      2109, '2026-12-01', 10, 1000, 10000, '00000000-0000-0000-0000-000000021002'
+    )
+  $$,
+  'R1. Org GM creates an unpaid Loc A period'
+);
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select throws_ok(
+  $$ update public.payroll_periods set hours_snapshot = 999, gross_cents = 999000
+     where neon_user_id = 2109 and period_month = '2026-12-01' $$,
+  '42501',
+  null,
+  'R2. Branch manager cannot rewrite the snapshot of an unpaid, unlocked period'
+);
+select throws_ok(
+  $$ update public.payroll_periods set location_id = null
+     where neon_user_id = 2109 and period_month = '2026-12-01' $$,
+  '42501',
+  null,
+  'R3. Branch manager cannot detach a period from its location'
+);
+
+-- Locked period snapshot is frozen even for organization authority (no payments)
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
+select lives_ok(
+  $$ update public.payroll_periods
+     set status = 'locked', locked_at = now(), locked_by = '00000000-0000-0000-0000-000000021002'
+     where neon_user_id = 2109 and period_month = '2026-12-01' $$,
+  'R4. Org GM can lock the period'
+);
+select throws_ok(
+  $$ update public.payroll_periods set gross_cents = 1
+     where neon_user_id = 2109 and period_month = '2026-12-01' $$,
+  '42501',
+  null,
+  'R5. Locked period snapshot cannot be rewritten even without payments'
+);
+
+-- Forged locker on insert
+select throws_ok(
+  $$
+    insert into public.payroll_periods (
+      organization_id, location_id, neon_user_id, period_month,
+      hours_snapshot, rate_cents_snapshot, gross_cents, generated_by, status, locked_at, locked_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', null,
+      2110, '2026-12-01', 1, 1000, 1000, '00000000-0000-0000-0000-000000021002',
+      'locked', now(), '00000000-0000-0000-0000-000000021003'
+    )
+  $$,
+  '42501',
+  null,
+  'R6. Forged locked_by on period insert is rejected'
+);
+
+-- Forged confirmer on payment insert (Loc A manager, Loc A period 2101)
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select throws_ok(
+  $$
+    insert into public.payroll_payments (
+      organization_id, payroll_period_id, amount_cents, payment_date, created_by,
+      status, confirmed_at, confirmed_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', (select id from test_period_loc_a), 100, '2026-09-20',
+      '00000000-0000-0000-0000-000000021003', 'confirmed', now(), '00000000-0000-0000-0000-000000021002'
+    )
+  $$,
+  '42501',
+  null,
+  'R7. Forged confirmed_by on payment insert is rejected'
+);
+
+-- Module disabled at Loc A: child tables are blocked too, even for org authority
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+update public.location_module_configs
+set is_enabled = false
+where location_id = '00000000-0000-0000-0000-000000021111' and module_key = 'payroll';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select throws_ok(
+  $$
+    insert into public.payroll_payments (
+      organization_id, payroll_period_id, amount_cents, payment_date, created_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', (select id from test_period_loc_a), 100, '2026-09-21',
+      '00000000-0000-0000-0000-000000021003'
+    )
+  $$,
+  '42501',
+  null,
+  'R8. Module enforcement blocks payment insert when payroll is disabled for the location'
+);
+select throws_ok(
+  $$
+    insert into public.payroll_adjustments (
+      organization_id, payroll_period_id, delta_cents, reason, created_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', (select id from test_period_loc_a), 100,
+      'Blocked adjustment', '00000000-0000-0000-0000-000000021003'
+    )
+  $$,
+  '42501',
+  null,
+  'R9. Module enforcement blocks adjustment insert when payroll is disabled for the location'
+);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021002', true);
+select throws_ok(
+  $$
+    insert into public.payroll_adjustments (
+      organization_id, payroll_period_id, delta_cents, reason, created_by
+    ) values (
+      '00000000-0000-0000-0000-000000021101', (select id from test_period_loc_a), 100,
+      'Blocked org adjustment', '00000000-0000-0000-0000-000000021002'
+    )
+  $$,
+  '42501',
+  null,
+  'R10. Module enforcement also blocks organization authority on a disabled location period'
+);
+
+-- Re-enable payroll, then deactivate the location: branch authority disappears
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+update public.location_module_configs
+set is_enabled = true
+where location_id = '00000000-0000-0000-0000-000000021111' and module_key = 'payroll';
+update public.locations set active = false
+where id = '00000000-0000-0000-0000-000000021111';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000021003', true);
+select is(
+  (select count(*)::int from public.payroll_periods where location_id = '00000000-0000-0000-0000-000000021111'),
+  0,
+  'R11. Branch manager of an inactive location loses payroll authority'
+);
+
+
+select is(
+  (select count(*)::int from pg_policies where schemaname = 'public' and tablename = 'payroll_payments' and policyname = 'payroll_payments_delete_privileged_draft'),
+  0,
+  'R12. Legacy org-role draft-payment delete policy no longer exists'
 );
 
 rollback;

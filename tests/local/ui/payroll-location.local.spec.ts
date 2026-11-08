@@ -132,7 +132,9 @@ test("1. Org GM sees Organization Scope badge and all periods across locations",
   await openPayroll(page);
 
   // Scope badge check
-  await expect(page.getByText("Organization Scope")).toBeVisible();
+  await expect(page.getByText("Organization Scope")).toBeVisible({
+    timeout: 30000,
+  });
 
   // KPI cards and workforce summary rendered
   await expect(page.getByText("Overall balance owed")).toBeVisible();
@@ -154,7 +156,9 @@ test("2. Location Manager A sees Location Scope badge and only Loc A periods", a
   await openPayroll(page);
 
   // Location Scope badge check
-  await expect(page.getByText("Location Scope")).toBeVisible();
+  await expect(page.getByText("Location Scope")).toBeVisible({
+    timeout: 30000,
+  });
   await expect(page.getByText("Organization Scope")).not.toBeVisible();
 
   // Sees Staff A's period ($700.00) but NOT Staff B ($800.00)

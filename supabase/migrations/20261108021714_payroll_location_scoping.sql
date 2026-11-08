@@ -209,8 +209,16 @@ declare
   v_actor uuid := (select auth.uid());
 begin
   if v_actor is not null then
-    if tg_op = 'INSERT' and new.generated_by is distinct from v_actor then
-      raise exception 'The generator of a payroll period must be the signed-in user.' using errcode = '42501';
+    if tg_op = 'INSERT' then
+      if new.generated_by is distinct from v_actor then
+        raise exception 'The generator of a payroll period must be the signed-in user.' using errcode = '42501';
+      end if;
+      if new.regenerated_by is not null and new.regenerated_by is distinct from v_actor then
+        raise exception 'The regenerator of a payroll period must be the signed-in user.' using errcode = '42501';
+      end if;
+      if new.locked_by is not null and new.locked_by is distinct from v_actor then
+        raise exception 'The locker of a payroll period must be the signed-in user.' using errcode = '42501';
+      end if;
     elsif tg_op = 'UPDATE' then
       if new.organization_id is distinct from old.organization_id then
         raise exception 'Cannot change the organization of a payroll period.' using errcode = '42501';
@@ -224,12 +232,31 @@ begin
       if new.generated_by is distinct from old.generated_by then
         raise exception 'Cannot change the generator of a payroll period.' using errcode = '42501';
       end if;
+      -- A locked period is a frozen financial record: its snapshot cannot change
+      -- until it is explicitly unlocked (a separate, audited transition).
+      if old.status = 'locked'
+         and (new.hours_snapshot is distinct from old.hours_snapshot
+              or new.rate_cents_snapshot is distinct from old.rate_cents_snapshot
+              or new.gross_cents is distinct from old.gross_cents) then
+        raise exception 'Cannot change the snapshot of a locked payroll period.' using errcode = '42501';
+      end if;
       if old.status = 'locked' and new.location_id is distinct from old.location_id then
         raise exception 'Cannot change the location of a locked payroll period.' using errcode = '42501';
       end if;
       if exists (select 1 from public.payroll_payments where payroll_period_id = old.id)
          and new.location_id is distinct from old.location_id then
         raise exception 'Cannot change the location of a payroll period with recorded payments.' using errcode = '42501';
+      end if;
+      -- Only organization-wide authority may recompute a snapshot or move an
+      -- obligation between locations: Neon attendance has no verified physical
+      -- location provenance, so a branch manager can neither regenerate hours
+      -- nor re-attribute a period to a different (or no) branch.
+      if not private.payroll_is_org_manager(old.organization_id)
+         and (new.hours_snapshot is distinct from old.hours_snapshot
+              or new.rate_cents_snapshot is distinct from old.rate_cents_snapshot
+              or new.gross_cents is distinct from old.gross_cents
+              or new.location_id is distinct from old.location_id) then
+        raise exception 'Only organization-wide payroll authority can change a payroll period snapshot or location.' using errcode = '42501';
       end if;
       if new.regenerated_by is distinct from old.regenerated_by and new.regenerated_by is not null and new.regenerated_by is distinct from v_actor then
         raise exception 'The regenerator of a payroll period must be the signed-in user.' using errcode = '42501';
@@ -259,8 +286,13 @@ declare
   v_actor uuid := (select auth.uid());
 begin
   if v_actor is not null then
-    if tg_op = 'INSERT' and new.created_by is distinct from v_actor then
-      raise exception 'The creator of a payroll payment must be the signed-in user.' using errcode = '42501';
+    if tg_op = 'INSERT' then
+      if new.created_by is distinct from v_actor then
+        raise exception 'The creator of a payroll payment must be the signed-in user.' using errcode = '42501';
+      end if;
+      if new.confirmed_by is not null and new.confirmed_by is distinct from v_actor then
+        raise exception 'The confirmer of a payroll payment must be the signed-in user.' using errcode = '42501';
+      end if;
     elsif tg_op = 'UPDATE' then
       if new.payroll_period_id is distinct from old.payroll_period_id then
         raise exception 'Cannot reassign a payment to a different payroll period.' using errcode = '42501';
@@ -386,6 +418,35 @@ $$;
 revoke all on function private.payroll_profile_level(uuid, uuid, uuid) from public, anon;
 grant execute on function private.payroll_profile_level(uuid, uuid, uuid) to authenticated;
 
+-- Live-session gate (same contract as private.schedule_live_session): a banned user,
+-- or a JWT whose Supabase session was revoked/expired, loses payroll authority
+-- immediately instead of when the access token expires.
+create or replace function private.payroll_live_session()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from auth.users u
+    where u.id = (select auth.uid())
+      and (u.banned_until is null or u.banned_until <= now())
+      and (
+        (select auth.jwt()) ->> 'session_id' is null
+        or exists (
+          select 1
+          from auth.sessions s
+          where s.user_id = u.id
+            and s.id::text = (select auth.jwt()) ->> 'session_id'
+            and (s.not_after is null or s.not_after > now())
+        )
+      )
+  );
+$$;
+revoke all on function private.payroll_live_session() from public, anon, authenticated;
+
 -- Helper: True if caller has organization-wide management authority
 create or replace function private.payroll_is_org_manager(p_org uuid)
 returns boolean
@@ -397,6 +458,7 @@ as $$
   select exists (
     select 1
     where (select auth.uid()) is not null
+      and private.payroll_live_session()
       and (
         exists (
           select 1 from public.overall_roles r
@@ -437,6 +499,15 @@ as $$
         private.payroll_is_org_manager(p_org)
         or (
           p_location is not null
+          and private.payroll_live_session()
+          -- Branch authority requires a live, non-archived location of this organization
+          and exists (
+            select 1 from public.locations l
+            where l.id = p_location
+              and l.organization_id = p_org
+              and l.active
+              and l.archived_at is null
+          )
           and private.payroll_profile_level(p_org, p_location, (select auth.uid())) >= 2
         )
       )
@@ -644,14 +715,15 @@ create policy "payroll_periods_select_self" on public.payroll_periods
     )
   );
 
+-- Only organization-wide authority may create a period. Neon attendance has no
+-- verified physical location provenance, so a branch manager must not be able
+-- to fabricate (or attribute to their branch) an hours/rate/gross snapshot by
+-- writing the table directly; the server actions already refuse branch
+-- generation and this policy makes the database the authority.
 create policy "payroll_periods_insert_manager" on public.payroll_periods
   for insert to authenticated
   with check (
     private.payroll_is_org_manager(organization_id)
-    or (
-      location_id is not null
-      and private.payroll_can_manage_location(organization_id, location_id)
-    )
   );
 
 create policy "payroll_periods_update_manager" on public.payroll_periods
@@ -668,6 +740,9 @@ drop policy if exists "payroll_payments_select_privileged" on public.payroll_pay
 drop policy if exists "payroll_payments_insert_privileged" on public.payroll_payments;
 drop policy if exists "payroll_payments_update_privileged" on public.payroll_payments;
 drop policy if exists "payroll_payments_delete_privileged" on public.payroll_payments;
+-- Legacy permissive policy (20260907200000) that granted draft-payment deletes to any
+-- org-level owner/general_manager/shift_manager regardless of the new authority model.
+drop policy if exists "payroll_payments_delete_privileged_draft" on public.payroll_payments;
 drop policy if exists "payroll_payments_select_manager" on public.payroll_payments;
 drop policy if exists "payroll_payments_insert_manager" on public.payroll_payments;
 drop policy if exists "payroll_payments_update_manager" on public.payroll_payments;
@@ -820,6 +895,9 @@ begin
   if not private.payroll_can_manage_period(v_payment.payroll_period_id) then
     raise exception 'You do not have permission to unconfirm this payment.';
   end if;
+  if not private.payroll_period_module_allows(v_payment.payroll_period_id) then
+    raise exception 'Payroll is not enabled for this location.';
+  end if;
   if v_payment.status <> 'confirmed' then
     raise exception 'This payment is not confirmed.';
   end if;
@@ -868,5 +946,45 @@ create policy payroll_periods_module_enforcement on public.payroll_periods
     location_id is null
     or private.location_module_allows(location_id, 'payroll'::public.location_module_key)
   );
+
+-- Children carry no location_id of their own: they inherit the module decision of
+-- their parent period (location-bound periods only; organization-wide periods
+-- are always allowed, matching the period policy above).
+create or replace function private.payroll_period_module_allows(p_period_id bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select not private.module_enforcement_active()
+    or exists (
+      select 1
+      from public.payroll_periods p
+      where p.id = p_period_id
+        and (
+          p.location_id is null
+          or private.location_module_allows(p.location_id, 'payroll'::public.location_module_key)
+        )
+    );
+$$;
+revoke all on function private.payroll_period_module_allows(bigint) from public, anon;
+grant execute on function private.payroll_period_module_allows(bigint) to authenticated;
+
+drop policy if exists payroll_payments_module_enforcement on public.payroll_payments;
+create policy payroll_payments_module_enforcement on public.payroll_payments
+  as restrictive
+  for all
+  to authenticated
+  using (private.payroll_period_module_allows(payroll_period_id))
+  with check (private.payroll_period_module_allows(payroll_period_id));
+
+drop policy if exists payroll_adjustments_module_enforcement on public.payroll_adjustments;
+create policy payroll_adjustments_module_enforcement on public.payroll_adjustments
+  as restrictive
+  for all
+  to authenticated
+  using (private.payroll_period_module_allows(payroll_period_id))
+  with check (private.payroll_period_module_allows(payroll_period_id));
 
 commit;

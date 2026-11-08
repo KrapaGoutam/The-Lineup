@@ -64,10 +64,9 @@ export type PayrollTestUser = {
 export function must<
   R extends { data: unknown; error: { message: string } | null },
 >(r: R): NonNullable<R["data"]> {
+  // Plain insert()/update() return null data; callers that need a row use .single(),
+  // which itself errors when no row is returned.
   if (r.error) throw Error(r.error.message);
-  if (r.data === null || r.data === undefined) {
-    throw Error("Expected non-null data");
-  }
   return r.data as NonNullable<R["data"]>;
 }
 
