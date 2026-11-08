@@ -46,10 +46,19 @@ export type HistoryPage = { entries: HistoryEntry[]; truncated: boolean };
  */
 export async function getHistoryEntries(
   organizationId: string,
-  options: { since: string | null; productId: string | null; limit: number },
+  options: {
+    since: string | null;
+    productId: string | null;
+    limit: number;
+    locationId?: string;
+  },
 ): Promise<HistoryPage | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  let effectiveLocationId = options.locationId;
+  if (!effectiveLocationId) {
+    const location = await getPrimaryLocation(organizationId);
+    if (!location) return null;
+    effectiveLocationId = location.id;
+  }
   const supabase = await createClient();
 
   // The API caps every response (max_rows), however large a limit is asked
@@ -60,7 +69,7 @@ export async function getHistoryEntries(
       .from("inventory_adjustments")
       .select(COLUMNS)
       .eq("organization_id", organizationId)
-      .eq("location_id", location.id);
+      .eq("location_id", effectiveLocationId);
     if (options.since) query = query.gte("created_at", options.since);
     if (options.productId) query = query.eq("product_id", options.productId);
     if (cursor) query = query.or(olderThan(cursor));

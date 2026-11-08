@@ -1,17 +1,59 @@
 "use server";
 import { z } from "zod";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
+import { getRecipesActor } from "../data/recipes-actor";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import type { RecipeIndex } from "../domain/recipe-index";
 import { signRecipeImages } from "../data/recipe-image-data";
 
+const STALE_CONTEXT_MESSAGE =
+  "Your active restaurant or location changed in another tab. Please reload before saving.";
+
+async function checkWorkspace(
+  raw: unknown,
+  actor: NonNullable<Awaited<ReturnType<typeof getRecipesActor>>>,
+) {
+  const expectationRaw = (raw as Record<string, unknown> | undefined)
+    ?.expectation ??
+    raw ?? {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+      locationId: actor.scope.locationId,
+    };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: actor.scope.locationId,
+        time_zone: actor.scope.timeZone ?? "UTC",
+      }),
+    },
+  );
+  if (!outcome.ok) {
+    return {
+      ok: false as const,
+      error:
+        outcome.code === "invalid"
+          ? "That request is invalid."
+          : STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    };
+  }
+  return { ok: true as const };
+}
+
 export async function getRecipeIndexAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<
   | { ok: true; data: RecipeIndex }
-  | { ok: false; error: string; sessionInvalid?: true }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true }
 > {
   const parsed = z
     .object({
@@ -21,24 +63,28 @@ export async function getRecipeIndexAction(input: {
         .min(1)
         .max(120)
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
   const client = await createClient();
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
-  const user = await getCurrentUser(parsed.data.restaurantSlug);
-  if (!user)
+  const actor = await getRecipesActor(parsed.data.restaurantSlug);
+  if (!actor)
     return { ok: false, error: "You need to sign in to view recipes." };
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace;
   const blocked = await guardModule({
     module: "recipes",
-    organizationId: user.organizationId,
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
   });
   if (blocked) return blocked;
   const categories = await client
     .from("bar_recipe_categories")
     .select("id,name,display_order,is_fallback")
-    .eq("organization_id", user.organizationId);
+    .eq("organization_id", actor.organizationId);
   if (categories.error)
     return { ok: false, error: "Recipes could not be loaded." };
   const recipes: RecipeIndex["recipes"] = [];
@@ -48,8 +94,8 @@ export async function getRecipeIndexAction(input: {
       .select(
         "id,category_id,recipe_number,name,slug,alternate_name,base_spirit,is_popular,is_menu_item,is_alcoholic,image_thumb_path,is_active",
       )
-      .eq("organization_id", user.organizationId);
-    if (user.designation === "staff") query = query.eq("is_active", true);
+      .eq("organization_id", actor.organizationId);
+    if (!actor.isManager) query = query.eq("is_active", true);
     const page = await query.order("recipe_number").range(offset, offset + 999);
     if (page.error) return { ok: false, error: "Recipes could not be loaded." };
     recipes.push(...page.data);
@@ -61,9 +107,10 @@ export async function getRecipeIndexAction(input: {
 export async function getRecipeDetailAction(input: {
   restaurantSlug: string;
   slug: string;
+  expectedContext?: unknown;
 }): Promise<
   | { ok: true; data: import("../domain/recipe-detail").RecipeDetail | null }
-  | { ok: false; error: string; sessionInvalid?: true }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true }
 > {
   const parsed = z
     .object({
@@ -78,21 +125,25 @@ export async function getRecipeDetailAction(input: {
         .min(1)
         .max(120)
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: true, data: null };
   const client = await createClient();
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
-  const user = await getCurrentUser(parsed.data.restaurantSlug);
-  if (!user)
+  const actor = await getRecipesActor(parsed.data.restaurantSlug);
+  if (!actor)
     return { ok: false, error: "You need to sign in to view recipes." };
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace;
   const blocked = await guardModule({
     module: "recipes",
-    organizationId: user.organizationId,
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
   });
   if (blocked) return blocked;
-  const org = user.organizationId;
+  const org = actor.organizationId;
   let recipeQuery = client
     .from("bar_recipes")
     .select(
@@ -100,8 +151,7 @@ export async function getRecipeDetailAction(input: {
     )
     .eq("organization_id", org)
     .eq("slug", parsed.data.slug);
-  if (user.designation === "staff")
-    recipeQuery = recipeQuery.eq("is_active", true);
+  if (!actor.isManager) recipeQuery = recipeQuery.eq("is_active", true);
   const recipe = await recipeQuery.maybeSingle();
   if (recipe.error) return { ok: false, error: "Recipes could not be loaded." };
   if (!recipe.data) return { ok: true, data: null };

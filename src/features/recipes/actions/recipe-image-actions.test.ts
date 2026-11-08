@@ -18,7 +18,13 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.session,
 }));
-vi.mock("@/lib/current-user", () => ({ getCurrentUser: mocks.user }));
+vi.mock("../data/recipes-actor", () => ({ getRecipesActor: mocks.user }));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: vi.fn(async () => ({
+    ok: true,
+    location: { id: "loc-1", time_zone: "America/New_York" },
+  })),
+}));
 vi.mock("../data/recipe-image-data", () => ({
   mutateRecipeImageData: mocks.mutate,
   signRecipeImages: mocks.sign,
@@ -48,14 +54,36 @@ const query = {
   maybeSingle: vi.fn(),
 };
 const client = { from: vi.fn(() => query) };
+
+const makeActor = (designation: string, orgId = "server-org") => {
+  const isManager = [
+    "owner",
+    "general_manager",
+    "assistant_manager",
+    "manager",
+    "shift_manager",
+  ].includes(designation);
+  return {
+    organizationId: orgId,
+    scope: {
+      organizationId: orgId,
+      locationId: "loc-1",
+      timeZone: "America/New_York",
+    },
+    viewer: {
+      profileId: "p-1",
+      name: "User",
+      designation,
+    },
+    isManager,
+  };
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.client.mockResolvedValue(client);
   mocks.session.mockResolvedValue(null);
-  mocks.user.mockResolvedValue({
-    organizationId: "server-org",
-    designation: "manager",
-  });
+  mocks.user.mockResolvedValue(makeActor("manager"));
   mocks.mutate.mockResolvedValue({ ok: true, data: { version: 6 } });
   mocks.sign.mockResolvedValue({ hero: "signed", thumb: null, expiresAt: 123 });
   query.maybeSingle.mockResolvedValue({
@@ -75,10 +103,7 @@ describe("image server actions", () => {
   it.each(["upload", "remove"])(
     "denies Staff %s before Storage",
     async (operation) => {
-      mocks.user.mockResolvedValue({
-        organizationId: "org",
-        designation: "staff",
-      });
+      mocks.user.mockResolvedValue(makeActor("staff", "org"));
       expect(
         await (operation === "upload"
           ? uploadRecipeImageAction(form())
@@ -125,10 +150,7 @@ describe("image server actions", () => {
     );
   });
   it("permits Staff signed reads via own org query", async () => {
-    mocks.user.mockResolvedValue({
-      organizationId: "server-org",
-      designation: "staff",
-    });
+    mocks.user.mockResolvedValue(makeActor("staff", "server-org"));
     expect((await getRecipeImageUrlsAction(scope)).ok).toBe(true);
     expect(query.eq).toHaveBeenCalledWith("organization_id", "server-org");
     expect(mocks.sign).toHaveBeenCalledWith(client, "server-org", recipeId, {
@@ -139,7 +161,7 @@ describe("image server actions", () => {
   it.each(["staff", "manager"])(
     "does not sign inaccessible recipe for %s",
     async (designation) => {
-      mocks.user.mockResolvedValue({ organizationId: "foreign", designation });
+      mocks.user.mockResolvedValue(makeActor(designation, "foreign"));
       query.maybeSingle.mockResolvedValue({ data: null });
       expect((await getRecipeImageUrlsAction(scope)).ok).toBe(false);
       expect(mocks.sign).not.toHaveBeenCalled();
@@ -167,10 +189,7 @@ describe("image server actions", () => {
       });
     });
     it("signs all requested thumbnails with one org-scoped read for Staff", async () => {
-      mocks.user.mockResolvedValue({
-        organizationId: "server-org",
-        designation: "staff",
-      });
+      mocks.user.mockResolvedValue(makeActor("staff", "server-org"));
       const result = await getRecipeThumbUrlsAction({
         restaurantSlug: "the-monks",
         recipeIds: [recipeId, other],

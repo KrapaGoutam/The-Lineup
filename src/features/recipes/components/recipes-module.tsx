@@ -118,12 +118,14 @@ export function RecipesModule({
   onSessionInvalid,
   isManagement = false,
   onRecipeDetailActive,
+  expectedContext,
 }: {
   restaurantSlug: string;
   demo: boolean;
   onSessionInvalid: () => void;
   isManagement?: boolean;
   onRecipeDetailActive?: (active: boolean) => void;
+  expectedContext?: unknown;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -178,13 +180,18 @@ export function RecipesModule({
   );
   const [attempt, setAttempt] = useState(0);
   const invalidRef = useRef(onSessionInvalid);
+  const expectedContextRef = useRef(expectedContext);
   useEffect(() => {
     invalidRef.current = onSessionInvalid;
-  }, [onSessionInvalid]);
+    expectedContextRef.current = expectedContext;
+  }, [onSessionInvalid, expectedContext]);
   useEffect(() => {
     if (demo || slug) return;
     let live = true;
-    getRecipeIndexAction({ restaurantSlug })
+    getRecipeIndexAction({
+      restaurantSlug,
+      expectedContext: expectedContextRef.current,
+    })
       .then((result) => {
         if (!live) return;
         if (result.ok) setState({ data: result.data });
@@ -257,7 +264,11 @@ export function RecipesModule({
         if (live) setDetail({ slug, data });
       });
     } else {
-      getRecipeDetailAction({ restaurantSlug, slug })
+      getRecipeDetailAction({
+        restaurantSlug,
+        slug,
+        expectedContext: expectedContextRef.current,
+      })
         .then((result) => {
           if (!live) return;
           if (result.ok) setDetail({ slug, data: result.data });

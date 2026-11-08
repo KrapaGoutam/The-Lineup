@@ -2504,10 +2504,12 @@ function RestaurantOperationsAppInner({
             ) : null}
             {tab === "barInventory" && isManager ? (
               <InventoryModule
+                key={`inventory-${locationId ?? "default"}`}
                 restaurantSlug={restaurantSlug}
                 user={user}
                 timeZone={timeZone}
                 locationId={locationId}
+                expectedContext={workspaceExpectation}
                 onSessionInvalid={forceSignOut}
                 demo={
                   demoMode
@@ -2520,6 +2522,7 @@ function RestaurantOperationsAppInner({
               <RecipesModule
                 restaurantSlug={restaurantSlug}
                 demo={demoMode}
+                expectedContext={workspaceExpectation}
                 isManagement={currentUser.designation !== "staff"}
                 onSessionInvalid={forceSignOut}
                 onRecipeDetailActive={setRecipeDetailActive}

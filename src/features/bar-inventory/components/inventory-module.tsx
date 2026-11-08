@@ -102,6 +102,7 @@ type Props = {
   /** The location whose stock changes are listened for (real mode). */
   locationId?: string | null;
   onSessionInvalid?: () => void;
+  expectedContext?: unknown;
 };
 
 /**
@@ -126,7 +127,7 @@ export function InventoryModule(props: Props) {
   return (
     <TableProfileContext.Provider value={props.user.profileId}>
       <ManagerInventory
-        key={`${props.restaurantSlug}.${props.user.profileId}`}
+        key={`${props.restaurantSlug}.${props.user.profileId}.${props.locationId ?? ""}`}
         {...props}
       />
     </TableProfileContext.Provider>
@@ -140,6 +141,7 @@ function ManagerInventory({
   timeZone,
   locationId = null,
   onSessionInvalid,
+  expectedContext,
 }: Props) {
   const viewer = useMemo(
     () => ({
@@ -154,6 +156,7 @@ function ManagerInventory({
     restaurantSlug,
     viewer,
     onSessionInvalid,
+    expectedContext,
   });
   // Realtime = invalidation only: any change to a count or the ledger makes
   // the controller re-read the snapshot (quietly, folded into one read). The
@@ -172,6 +175,7 @@ function ManagerInventory({
     restaurantSlug,
     viewer,
     onSessionInvalid,
+    expectedContext,
   });
   const reloadDrafts = orderDrafts.api.reload;
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
@@ -235,6 +239,7 @@ function ManagerInventory({
     timeZone,
     onSessionInvalid,
     actorName: user.name,
+    expectedContext,
   });
   useLayoutEffect(() => {
     latest.current = {
@@ -244,12 +249,18 @@ function ManagerInventory({
       timeZone,
       onSessionInvalid,
       actorName: user.name,
+      expectedContext,
     };
   });
   const loadHistory = useCallback(
     async (days: number, productId: string | null): Promise<HistoryLoad> => {
-      const { demo, snapshot, restaurantSlug, onSessionInvalid } =
-        latest.current;
+      const {
+        demo,
+        snapshot,
+        restaurantSlug,
+        onSessionInvalid,
+        expectedContext,
+      } = latest.current;
       if (demo) {
         const since = days === 0 ? 0 : Date.now() - days * 86_400_000;
         const all = (snapshot?.ledger ?? []).filter(
@@ -268,6 +279,7 @@ function ManagerInventory({
         restaurantSlug,
         days,
         productId,
+        expectedContext,
       });
       if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
       return result;
@@ -314,6 +326,7 @@ function ManagerInventory({
       restaurantSlug,
       format,
       request,
+      expectedContext: latest.current.expectedContext,
     });
     if (!result.ok) {
       if (result.sessionInvalid) onSessionInvalid?.();
@@ -336,18 +349,21 @@ function ManagerInventory({
   const importApi = useMemo<ImportApi>(
     () => ({
       async preview(request) {
-        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+          latest.current;
         if (demo) return planImport(request, demo.state);
         const result = await previewImportAction({
           restaurantSlug,
           ...request,
           mapping: request.mapping as Record<string, ImportField | null>,
+          expectedContext,
         });
         if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
         return result;
       },
       async readWorkbook({ base64, sheet }) {
-        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+          latest.current;
         if (demo) {
           // Demo has no server: the same guard and reader run here, the
           // browser build of the reader loaded only now.
@@ -358,13 +374,19 @@ function ManagerInventory({
           restaurantSlug,
           base64,
           sheet,
+          expectedContext,
         });
         if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
         return result;
       },
       async commit(request) {
-        const { demo, restaurantSlug, onSessionInvalid, actorName } =
-          latest.current;
+        const {
+          demo,
+          restaurantSlug,
+          onSessionInvalid,
+          actorName,
+          expectedContext,
+        } = latest.current;
         if (demo) {
           const already = demo.state.importBatches?.find(
             (b) => b.id === request.requestId,
@@ -431,6 +453,7 @@ function ManagerInventory({
           restaurantSlug,
           ...request,
           mapping: request.mapping as Record<string, ImportField | null>,
+          expectedContext,
         });
         if (!result.ok && "sessionInvalid" in result && result.sessionInvalid) {
           onSessionInvalid?.();
@@ -438,9 +461,13 @@ function ManagerInventory({
         return result;
       },
       async loadBatches() {
-        const { demo, restaurantSlug, onSessionInvalid } = latest.current;
+        const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+          latest.current;
         if (demo) return { ok: true, batches: demo.state.importBatches ?? [] };
-        const result = await listImportBatchesAction({ restaurantSlug });
+        const result = await listImportBatchesAction({
+          restaurantSlug,
+          expectedContext,
+        });
         if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
         return result;
       },

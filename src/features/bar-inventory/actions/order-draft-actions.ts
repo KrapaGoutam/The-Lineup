@@ -2,12 +2,16 @@
 
 import { z } from "zod";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  getInventoryActor,
+  type InventoryActor,
+} from "../data/inventory-actor";
 import {
   getActiveOrderDrafts,
   getOrderDraftById,
@@ -15,10 +19,7 @@ import {
 } from "../data/order-draft-data";
 import { conflictFrom, type RpcError } from "../domain/db-conflict";
 import { friendlyDbMessage } from "../domain/db-error";
-import {
-  isInventoryManager,
-  type CatalogConflict,
-} from "../domain/inventory-types";
+import { type CatalogConflict } from "../domain/inventory-types";
 import { ORDER_DRAFT_FILL_MODES } from "../domain/order-draft";
 import type { SentDraftPage } from "../domain/order-draft-sent";
 import type { OrderDraftView } from "../domain/order-draft-view";
@@ -54,6 +55,7 @@ export type OrderDraftActionResult =
       error: string;
       conflict?: CatalogConflict;
       sessionInvalid?: true;
+      contextStale?: true;
     };
 
 const slugSchema = z
@@ -68,6 +70,7 @@ const draftRef = z.object({
   restaurantSlug: slugSchema,
   draftId: idSchema,
   expectedVersion: versionSchema,
+  expectedContext: z.unknown().optional(),
 });
 
 const saveSchema = draftRef.extend({
@@ -84,6 +87,7 @@ const saveSchema = draftRef.extend({
       }),
     )
     .max(500),
+  expectedContext: z.unknown().optional(),
 });
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -95,35 +99,66 @@ type Caller = {
 
 const BAD_REQUEST = { ok: false as const, error: "That request is invalid." };
 
+async function checkWorkspace(raw: unknown, actor: InventoryActor) {
+  const expectationRaw = raw ?? {
+    profileId: actor.viewer.profileId,
+    organizationId: actor.organizationId,
+    locationId: actor.scope.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: actor.scope.locationId,
+        time_zone: actor.scope.timeZone ?? "UTC",
+      }),
+    },
+  );
+  if (!outcome.ok) {
+    return {
+      ok: false as const,
+      error:
+        outcome.code === "invalid"
+          ? "That request is invalid."
+          : STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    };
+  }
+  return { ok: true as const };
+}
+
 async function resolveCaller(
   restaurantSlug: string,
+  expectedContext?: unknown,
 ): Promise<Caller | Extract<OrderDraftActionResult, { ok: false }>> {
   const supabase = await createClient();
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const user = await getCurrentUser(restaurantSlug);
-  if (!user) {
-    return { ok: false, error: "You need to sign in to use Bar Inventory." };
-  }
-  if (!isInventoryManager(user.designation)) {
+  const actor = await getInventoryActor(restaurantSlug);
+  if (!actor) {
     return {
       ok: false,
-      error: "Bar Inventory is not available for your role.",
+      error: "You are not authorized to manage Bar Inventory at this location.",
     };
   }
-  const location = await getPrimaryLocation(user.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
+  const workspace = await checkWorkspace(expectedContext, actor);
+  if (!workspace.ok) return workspace;
+
   const blocked = await guardModule({
     module: "bar_inventory",
-    organizationId: user.organizationId,
-    location,
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
   });
   if (blocked) return blocked;
   return {
     supabase,
-    organizationId: user.organizationId,
-    locationId: location.id,
+    organizationId: actor.organizationId,
+    locationId: actor.scope.locationId,
   };
 }
 
@@ -161,10 +196,19 @@ const changedFlag = (data: unknown): boolean =>
 /** Authoritative read: on open, on focus, and after a refused (stale) write. */
 export async function listOrderDraftsAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
   return finish(caller, null, { draftId: null, changed: false });
 }
@@ -173,12 +217,20 @@ export async function listOrderDraftsAction(input: {
 export async function openOrderDraftAction(input: {
   restaurantSlug: string;
   vendorId: string;
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = z
-    .object({ restaurantSlug: slugSchema, vendorId: idSchema })
+    .object({
+      restaurantSlug: slugSchema,
+      vendorId: idSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -207,10 +259,14 @@ export async function saveOrderDraftAction(input: {
     itemNote: string | null;
     included: boolean;
   }[];
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -242,12 +298,16 @@ export async function fillOrderDraftAction(input: {
   draftId: string;
   expectedVersion: number;
   mode: (typeof ORDER_DRAFT_FILL_MODES)[number];
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = draftRef
     .extend({ mode: z.enum(ORDER_DRAFT_FILL_MODES) })
     .safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -271,10 +331,14 @@ export async function clearOrderDraftAction(input: {
   restaurantSlug: string;
   draftId: string;
   expectedVersion: number;
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = draftRef.safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -297,10 +361,14 @@ export async function syncOrderDraftAction(input: {
   restaurantSlug: string;
   draftId: string;
   expectedVersion: number;
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = draftRef.safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -332,10 +400,14 @@ export async function markOrderDraftSentAction(input: {
   restaurantSlug: string;
   draftId: string;
   expectedVersion: number;
+  expectedContext?: unknown;
 }): Promise<OrderDraftActionResult> {
   const parsed = draftRef.safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { data, error } = await caller.supabase.rpc(
@@ -363,21 +435,26 @@ export async function markOrderDraftSentAction(input: {
 
 export type SentOrdersResult =
   | { ok: true; page: SentDraftPage }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 /** One page of the Sent history, newest first. */
 export async function listSentOrderDraftsAction(input: {
   restaurantSlug: string;
   page: number;
+  expectedContext?: unknown;
 }): Promise<SentOrdersResult> {
   const parsed = z
     .object({
       restaurantSlug: slugSchema,
       page: z.number().int().min(0).max(100_000),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const page = await getSentOrderDraftsPage(
@@ -391,18 +468,26 @@ export async function listSentOrderDraftsAction(input: {
 
 export type SentOrderResult =
   | { ok: true; draft: OrderDraftView }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 /** One Sent order with its frozen lines, for the read-only view. */
 export async function getSentOrderDraftAction(input: {
   restaurantSlug: string;
   draftId: string;
+  expectedContext?: unknown;
 }): Promise<SentOrderResult> {
   const parsed = z
-    .object({ restaurantSlug: slugSchema, draftId: idSchema })
+    .object({
+      restaurantSlug: slugSchema,
+      draftId: idSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return BAD_REQUEST;
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  const caller = await resolveCaller(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (isFailure(caller)) return caller;
 
   const { draft, failed } = await getOrderDraftById(

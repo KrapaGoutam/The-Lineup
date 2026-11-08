@@ -151,14 +151,19 @@ async function readAll<T>(
  */
 export async function getCatalogSnapshot(
   organizationId: string,
+  locationId?: string,
 ): Promise<CatalogSnapshot | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  let effectiveLocationId = locationId;
+  if (!effectiveLocationId) {
+    const location = await getPrimaryLocation(organizationId);
+    if (!location) return null;
+    effectiveLocationId = location.id;
+  }
   const supabase = await createClient();
 
   const boot = await supabase.rpc("inventory_bootstrap", {
     p_organization_id: organizationId,
-    p_location_id: location.id,
+    p_location_id: effectiveLocationId,
   });
   if (boot.error) {
     console.error("getCatalogSnapshot: inventory_bootstrap", boot.error);
@@ -207,7 +212,7 @@ export async function getCatalogSnapshot(
       organizationId,
       {
         orderBy: "product_id",
-        locationId: location.id,
+        locationId: effectiveLocationId,
       },
     ),
     getOrganizationRoster(organizationId),
@@ -216,21 +221,21 @@ export async function getCatalogSnapshot(
       "inventory_date_lots",
       "id,product_id,quantity,manufacture_date,manufacture_precision,expiration_date,expiration_precision,notes,active,version,updated_at,updated_by",
       organizationId,
-      { orderBy: "id", locationId: location.id },
+      { orderBy: "id", locationId: effectiveLocationId },
     ),
     readAll<RuleRow>(
       supabase,
       "inventory_freshness_rules",
       "id,subcategory_id,tracking_enabled,maximum_months,warning_months,active,version,updated_at,updated_by",
       organizationId,
-      { orderBy: "id", locationId: location.id },
+      { orderBy: "id", locationId: effectiveLocationId },
     ),
     readAll<SavedViewRow>(
       supabase,
       "inventory_saved_views",
       "id,profile_id,name,is_default,version,payload",
       organizationId,
-      { orderBy: "id", locationId: location.id },
+      { orderBy: "id", locationId: effectiveLocationId },
     ),
   ]);
   if (

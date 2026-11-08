@@ -1,35 +1,49 @@
-# V2-005.005 Payroll Location Scoping — COMPLETED
+# V2-005 Batch B: Bar Inventory & Recipes Location Scoping — COMPLETE (Awaiting Review)
 
 Parent issue: #253 | Program: #248 | Milestone: #8 (The Lineup V2.0)
-Branch: `feature/v2.0-005.005-payroll-location-scoping` | Target: `development`
-Worktree: `.tmp/v2-payroll-location-scoping` | Mode: IMPLEMENT → VERIFY → CREATE ONE PR → OWNER HANDOFF
+Branch: `feature/v2.0-005-batch-b-inventory-recipes` | Target: `development`
+Worktree: `.tmp/v2-005-batch-b` | Mode: IMPLEMENT → VERIFY → CREATE ONE PR → REVIEWER HANDOFF
 
 ## Checklist
 
-### STAGE 1 — IMPLEMENT
+### STAGE 1 — AUDIT & PLAN
 
-- [x] P00: Verify baseline git commit (`896c8016c6edaa110943d55aa8848ea146abae14`), initialize feature worktree & branch.
-- [x] P01: Documentation suite initialization (`PLAN.md`, `ENTRY_POINT_MATRIX.md`, `FINANCIAL_INVARIANTS.md`, `TEST_MATRIX.md`, `STATUS.md`, `INTEGRATION_HANDOFF.md`, `EVIDENCE.md`).
-- [x] P02: Database migration: Add optional `location_id` to `payroll_periods` with composite tenant FK, repair actor attribution FKs to `profiles(id)`, actor identity triggers, helper functions (`payroll_profile_level`, `payroll_is_org_manager`, `payroll_can_manage_location`, `payroll_can_manage_period`, `payroll_can_read_period`), public RPC `payroll_location_authorized`, update `unconfirm_payroll_payment`, RLS policies on `payroll_settings`, `payroll_rates`, `payroll_periods`, `payroll_payments`, `payroll_adjustments`, `audit_events`, backend module enforcement policy (`20261108021714_payroll_location_scoping.sql`).
-- [x] P03: Server-side authorization & actor resolution: Implement `src/features/payroll/data/payroll-actor.ts`, update `payroll-actions.ts` and `statement-actions.ts` with V2 active-context resolution, workspace expectation assertions (`checkWorkspace`), multi-location double-count safeguards, and location-scoped filtering.
-- [x] P04: Data layer updates: Update `src/features/payroll/data/payroll-data.ts` to support optional `location_id` on periods, location-scoped period listing, and actor attribution.
-- [x] P05: UI updates: Thread `expectedContext` into `PayrollWorkspace`, display location scope indicators, multi-location generation guards, rate override disablement for non-org managers, and preserve export/print parity.
+- [x] B00: Verify baseline git commit (`279909bcfa16e02af0d5acdf1e6796d28f6514e2`), initialize feature worktree & branch.
+- [x] B01: Documentation suite initialization for 006 Bar Inventory and 007 Recipes (`PLAN.md`, `ENTRY_POINT_MATRIX.md`, `SCOPE_AND_SECURITY.md`, `ORGANIZATION_CATALOG_CONTRACT.md`, `TEST_MATRIX.md`, `STATUS.md`).
+- [x] B02: Audit entry points and authorization seams: reconcile `private.inventory_can_access_location`, `private.inventory_is_manager`, `private.recipes_is_member`, `private.recipes_is_manager`, `private.recipes_begin`, and identify composite membership FKs blocking Overall actors.
 
-### STAGE 2 — VERIFY
+### STAGE 2 — DATABASE MIGRATION & RECONCILIATION
 
-- [x] P06: Vitest unit tests: 9 payroll test files passing, 121/121 tests pass. Full repository vitest suite passes (247 files, 3,336 tests). Registered `guardPayrollModule` in `enforcement-coverage.test.ts`.
-- [x] P07: pgTAP & real-JWT database tests: Created `0021_payroll_location_scoping.test.sql` (65/65 tests pass). Full payroll suite (0010, 0011, 0018, 0021): 151/151 tests pass.
-- [x] P08: Migration replay & populated data rehearsal: `supabase db reset` rehearsed cleanly; all 80 migrations applied from scratch; pgTAP verified against fresh database.
-- [x] P09: Full quality gates: `npm run check` (prettier, eslint with 0 warnings, typecheck) and `npm run build` (`next build --webpack`) cleanly pass.
+- [x] B03: Single consolidated forward-only migration `20261108160000_batch_b_inventory_recipes.sql`:
+  - Decouple composite membership FKs on inventory and recipe tables to `profiles(id)`.
+  - Implement `private.inventory_live_session()`.
+  - Implement `private.inventory_profile_level(p_org, p_location, p_profile)`.
+  - Reconcile `private.inventory_is_manager(p_org)` and `private.inventory_can_access_location(p_org, p_location)`.
+  - Add public RPC `public.inventory_location_authorized(p_org, p_location)`.
+  - Reconcile `private.recipes_is_member(p_org)` and `private.recipes_is_manager(p_org)`.
+  - Reconcile `private.recipes_begin(p_org)`.
+  - Add public RPC `public.recipes_org_authorized(p_org)`.
+- [x] B04: Replay migration locally and verify existing database pgTAP suites (100% pass across all 16 suites including 0033 and 0069).
+- [x] B05: Regenerate database types (`src/types/database.generated.ts`).
 
-### STAGE 3 — DELIVER
+### STAGE 3 — APPLICATION CODE & CONTEXT INTEGRATION
 
-- [x] P10: Independent review: verified security, tenant isolation, location scoping, financial invariants, and RLS policies.
-- [x] P11: Evidence documentation: finalized `EVIDENCE.md`, `STATUS.md`, `INTEGRATION_HANDOFF.md`.
-- [x] P12: Commit, push branch, open PR targeting `development` with full evidence, stop for owner handoff.
+- [x] B06: Implement `src/features/bar-inventory/data/inventory-actor.ts` and `src/features/recipes/data/recipes-actor.ts` for authoritative context resolution.
+- [x] B07: Update Bar Inventory data layer (`catalog-data.ts`, `history-data.ts`, `order-draft-data.ts`) to accept `locationId` parameter and eliminate `getPrimaryLocation` fallback.
+- [x] B08: Update Bar Inventory server actions (`inventory-actions.ts`, `import-actions.ts`, `order-draft-actions.ts`) to accept and assert `expectedContext`, use verified active location, and pass location to `guardModule`.
+- [x] B09: Update Recipes server actions (`recipe-actions.ts`, `recipe-management-actions.ts`, `recipe-write-actions.ts`, `recipe-image-actions.ts`) to accept and assert `expectedContext` and pass verified active location to `guardModule`.
+- [x] B10: Update UI and hooks (`inventory-module.tsx`, `use-catalog-controller.ts`, `use-order-drafts.ts`, `restaurant-operations-app.tsx`) to propagate `workspaceExpectation`.
 
-## Current State & Next Step
+### STAGE 4 — COMPREHENSIVE VERIFICATION
 
-- All implementation and verification stages complete.
-- Quality gates: check (clean), test (3,336 passed), build (clean), db test (151 passed).
-- Ready for final commit and pull request creation targeting `development`.
+- [x] B11: pgTAP database tests (`0069_batch_b_inventory_recipes.test.sql` 44/44 pass; `0033_bar_inventory_catalog.test.sql` 108/108 pass) covering location isolation, catalog sharing, Overall actors, direct PostgREST DML denial, and module gating.
+- [x] B12: Vitest unit tests for actions, data, hooks, and domain rules (`npm run test` passed 249/249 test files, 3,342/3,342 tests).
+- [x] B13: Real-JWT authorization suite (`tests/local/inventory-recipes-location.local.test.ts` 11/11 tests pass).
+- [x] B14: Playwright browser acceptance test suite (`tests/local/ui/inventory-recipes-location.local.spec.ts` 9/9 tests pass across desktop, tablet, and mobile).
+- [x] B15: Quality gates: `npm run check` (0 errors, 0 warnings), `npm run test` (100% pass), `npm run build` (compiled clean).
+
+### STAGE 5 — DELIVERY & HANDOFF
+
+- [x] B16: Finalize documentation (`EVIDENCE.md`, `STATUS.md`).
+- [ ] B17: Commit, push branch `feature/v2.0-005-batch-b-inventory-recipes`, and open single PR targeting `development`.
+- [ ] B18: Halt for independent reviewer handoff to Claude Code LOCAL.
