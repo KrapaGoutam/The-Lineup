@@ -2,7 +2,8 @@
 
 Parent issue: #253 | Program: #248 | Milestone: #8 (The Lineup V2.0)
 Branch: `feature/v2.0-005-batch-b-inventory-recipes` | Target: `development`
-Worktree: `.tmp/v2-005-batch-b` | Mode: IMPLEMENT → VERIFY → CREATE ONE PR → REVIEWER HANDOFF
+Worktree: `.tmp/v2-005-batch-b` | PR: [#315](https://github.com/KrapaGoutam/The-Lineup/pull/315)
+Status: HALTED CLEANLY FOR CLAUDE CODE LOCAL INDEPENDENT REVIEWER
 
 ## Checklist
 
@@ -45,5 +46,5 @@ Worktree: `.tmp/v2-005-batch-b` | Mode: IMPLEMENT → VERIFY → CREATE ONE PR �
 ### STAGE 5 — DELIVERY & HANDOFF
 
 - [x] B16: Finalize documentation (`EVIDENCE.md`, `STATUS.md`).
-- [ ] B17: Commit, push branch `feature/v2.0-005-batch-b-inventory-recipes`, and open single PR targeting `development`.
-- [ ] B18: Halt for independent reviewer handoff to Claude Code LOCAL.
+- [x] B17: Commit, push branch `feature/v2.0-005-batch-b-inventory-recipes`, and open single PR targeting `development` ([#315](https://github.com/KrapaGoutam/The-Lineup/pull/315)).
+- [x] B18: Halt for independent reviewer handoff to Claude Code LOCAL.
