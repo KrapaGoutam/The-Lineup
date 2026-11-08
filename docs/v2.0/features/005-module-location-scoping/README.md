@@ -22,7 +22,8 @@ Feature V2-005 updates all existing functional modules across the codebase to op
 | V2-005.003 Tips       | MERGED / IMPLEMENTED (PR #312); [Tips plan](003-tips/PLAN.md) |
 | V2-005.004 Schedule   | MERGED / IMPLEMENTED (PR #313); DEV migrated 78 -> 79         |
 | V2-005.008 Team       | MERGED / IMPLEMENTED (PR #313)                                |
-| V2-005.005–007        | NOT STARTED (Payroll, Bar Inventory, Recipes)                 |
+| V2-005.005 Payroll    | MERGED / IMPLEMENTED (PR #314); DEV migrated 79 -> 80         |
+| V2-005.006–007        | NOT STARTED (Bar Inventory, Recipes)                          |
 
 - **V2-005.001**: Table Allocation / Rotation (Bind boards, rounds, and physical tables to active location).
 - **V2-005.002**: Tasks (Enforce location scoping in `private.tasks_can_access_location`).

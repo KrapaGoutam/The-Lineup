@@ -2576,6 +2576,7 @@ function RestaurantOperationsAppInner({
                 restaurantSlug={restaurantSlug}
                 timeZone={timeZone}
                 onGoToPayRates={() => setTab("settings")}
+                expectedContext={workspaceExpectation}
               />
             ) : null}
             {tab === "settings" ? (

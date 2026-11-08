@@ -9,6 +9,8 @@ vi.mock("@/features/modules/data/module-enforcement", () => ({
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   getCurrentUser: vi.fn(),
+  getPayrollActor: vi.fn(),
+  resolveEmployeeLocationProvenance: vi.fn(),
   getOwnAttendanceLink: vi.fn(),
   getActiveNeonUsers: vi.fn(),
   getAttendanceRows: vi.fn(),
@@ -24,6 +26,12 @@ vi.mock("@/lib/current-user", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mocks.createClient,
+}));
+vi.mock("@/features/payroll/data/payroll-actor", () => ({
+  getPayrollActor: mocks.getPayrollActor,
+}));
+vi.mock("@/features/payroll/data/payroll-provenance", () => ({
+  resolveEmployeeLocationProvenance: mocks.resolveEmployeeLocationProvenance,
 }));
 vi.mock("@/features/attendance/data/identity-links", () => ({
   getOwnAttendanceLink: mocks.getOwnAttendanceLink,
@@ -57,6 +65,48 @@ const staffUser = {
   role: "server" as const,
   designation: "server" as const,
   organizationId,
+};
+
+const managerActor = {
+  organizationId,
+  scope: { organizationId, locationId: null },
+  viewer: {
+    profileId: managerUser.profileId,
+    name: managerUser.name,
+    designation: managerUser.designation,
+  },
+  isOrgManager: true,
+  isLocationManager: false,
+  canManage: true,
+};
+
+const staffActor = {
+  organizationId,
+  scope: { organizationId, locationId: null },
+  viewer: {
+    profileId: staffUser.profileId,
+    name: staffUser.name,
+    designation: staffUser.designation,
+  },
+  isOrgManager: false,
+  isLocationManager: false,
+  canManage: false,
+};
+
+const locationIdA = "00000000-0000-0000-0000-000000030010";
+const locationIdB = "00000000-0000-0000-0000-000000030020";
+
+const branchManagerActor = {
+  organizationId,
+  scope: { organizationId, locationId: locationIdA },
+  viewer: {
+    profileId: "00000000-0000-0000-0000-000000030004",
+    name: "Branch Lead",
+    designation: "manager",
+  },
+  isOrgManager: false,
+  isLocationManager: true,
+  canManage: true,
 };
 
 describe("getCombinedMonthlyStatementAction", () => {
@@ -102,6 +152,7 @@ describe("getCombinedMonthlyStatementAction", () => {
       data: {
         id: 55,
         organizationId,
+        locationId: null,
         neonUserId: 101,
         periodMonth: "2026-09-01",
         hoursSnapshot: 12.0,
@@ -151,7 +202,7 @@ describe("getCombinedMonthlyStatementAction", () => {
   });
 
   it("fails if caller is not authenticated", async () => {
-    mocks.getCurrentUser.mockResolvedValue(null);
+    mocks.getPayrollActor.mockResolvedValue(null);
 
     const result = await getCombinedMonthlyStatementAction({
       restaurantSlug: "the-monks",
@@ -167,7 +218,7 @@ describe("getCombinedMonthlyStatementAction", () => {
   });
 
   it("rejects staff user attempting to view another employee's statement", async () => {
-    mocks.getCurrentUser.mockResolvedValue(staffUser);
+    mocks.getPayrollActor.mockResolvedValue(staffActor);
     mocks.getOwnAttendanceLink.mockResolvedValue({
       ok: true,
       data: { neonUserId: 101 },
@@ -187,7 +238,7 @@ describe("getCombinedMonthlyStatementAction", () => {
   });
 
   it("allows staff user viewing their own statement", async () => {
-    mocks.getCurrentUser.mockResolvedValue(staffUser);
+    mocks.getPayrollActor.mockResolvedValue(staffActor);
     mocks.getOwnAttendanceLink.mockResolvedValue({
       ok: true,
       data: { neonUserId: 101 },
@@ -212,7 +263,7 @@ describe("getCombinedMonthlyStatementAction", () => {
   });
 
   it("allows manager to view any employee's statement", async () => {
-    mocks.getCurrentUser.mockResolvedValue(managerUser);
+    mocks.getPayrollActor.mockResolvedValue(managerActor);
 
     const result = await getCombinedMonthlyStatementAction({
       restaurantSlug: "the-monks",
@@ -230,7 +281,7 @@ describe("getCombinedMonthlyStatementAction", () => {
   });
 
   it("handles when no payroll period has been generated yet", async () => {
-    mocks.getCurrentUser.mockResolvedValue(managerUser);
+    mocks.getPayrollActor.mockResolvedValue(managerActor);
     mocks.getPayrollPeriod.mockResolvedValue({
       ok: true,
       data: null,
@@ -247,6 +298,67 @@ describe("getCombinedMonthlyStatementAction", () => {
     if (result.ok) {
       expect(result.data.attendance.totalHours).toBe(12.0);
       expect(result.data.payroll).toBeNull();
+    }
+  });
+
+  it("allows location manager to view statement for employee assigned to their branch", async () => {
+    mocks.getPayrollActor.mockResolvedValue(branchManagerActor);
+    mocks.resolveEmployeeLocationProvenance.mockResolvedValue({
+      status: "single_location",
+      locationId: locationIdA,
+    });
+
+    const result = await getCombinedMonthlyStatementAction({
+      restaurantSlug: "the-monks",
+      year: 2026,
+      month: 9,
+      neonUserId: 101,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.employee.neonUserId).toBe(101);
+    }
+  });
+
+  it("rejects location manager attempting to view statement for employee assigned to another branch or multi-location", async () => {
+    mocks.getPayrollActor.mockResolvedValue(branchManagerActor);
+    mocks.resolveEmployeeLocationProvenance.mockResolvedValue({
+      status: "single_location",
+      locationId: locationIdB,
+    });
+
+    const foreignResult = await getCombinedMonthlyStatementAction({
+      restaurantSlug: "the-monks",
+      year: 2026,
+      month: 9,
+      neonUserId: 102,
+    });
+
+    expect(foreignResult.ok).toBe(false);
+    if (!foreignResult.ok) {
+      expect(foreignResult.error).toBe(
+        "You can only view statements for employees assigned to your location.",
+      );
+    }
+
+    mocks.resolveEmployeeLocationProvenance.mockResolvedValue({
+      status: "multi_location",
+      locationIds: [locationIdA, locationIdB],
+    });
+
+    const multiResult = await getCombinedMonthlyStatementAction({
+      restaurantSlug: "the-monks",
+      year: 2026,
+      month: 9,
+      neonUserId: 102,
+    });
+
+    expect(multiResult.ok).toBe(false);
+    if (!multiResult.ok) {
+      expect(multiResult.error).toBe(
+        "You can only view statements for employees assigned to your location.",
+      );
     }
   });
 });

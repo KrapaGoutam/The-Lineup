@@ -20,6 +20,7 @@ const UNAVAILABLE_ERROR = "Unable to reach payroll data right now.";
 export type PayrollPeriod = {
   id: number;
   organizationId: string;
+  locationId: string | null;
   neonUserId: number;
   periodMonth: string;
   hoursSnapshot: number;
@@ -34,9 +35,13 @@ export type PayrollPeriod = {
   lockedBy: string | null;
 };
 
+const PERIOD_COLUMNS =
+  "id, organization_id, location_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by";
+
 function mapPeriodRow(row: {
   id: number;
   organization_id: string;
+  location_id?: string | null;
   neon_user_id: number;
   period_month: string;
   hours_snapshot: number | string;
@@ -53,6 +58,7 @@ function mapPeriodRow(row: {
   return {
     id: row.id,
     organizationId: row.organization_id,
+    locationId: row.location_id ?? null,
     neonUserId: row.neon_user_id,
     // period_month is a plain `date` column -- forced to text at the
     // query layer below the same way attendance.date is (see
@@ -78,22 +84,26 @@ async function recordAuditEvent(
   supabase: TypedSupabaseClient,
   input: {
     organizationId: string;
+    locationId?: string | null;
     actorProfileId: string;
     action: string;
     entityType: "payroll_period" | "payroll_payment" | "payroll_adjustment";
     entityId: string;
     beforeState: Record<string, unknown> | null;
     afterState: Record<string, unknown> | null;
+    reason?: string | null;
   },
 ): Promise<PayrollResult<null>> {
   const { error } = await supabase.from("audit_events").insert({
     organization_id: input.organizationId,
+    location_id: input.locationId ?? null,
     actor_profile_id: input.actorProfileId,
     action: input.action,
     entity_type: input.entityType,
     entity_id: input.entityId,
     before_state: input.beforeState,
     after_state: input.afterState,
+    reason: input.reason ?? null,
   });
   if (error) {
     console.error("recordPayrollAuditEvent failed", error, input.action);
@@ -248,9 +258,7 @@ export async function getPayrollPeriod(
 ): Promise<PayrollResult<PayrollPeriod | null>> {
   const { data, error } = await supabase
     .from("payroll_periods")
-    .select(
-      "id, organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-    )
+    .select(PERIOD_COLUMNS)
     .eq("organization_id", input.organizationId)
     .eq("neon_user_id", input.neonUserId)
     .eq("period_month", input.periodMonth)
@@ -268,9 +276,7 @@ export async function getPayrollPeriodById(
 ): Promise<PayrollResult<PayrollPeriod | null>> {
   const { data, error } = await supabase
     .from("payroll_periods")
-    .select(
-      "id, organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-    )
+    .select(PERIOD_COLUMNS)
     .eq("id", input.periodId)
     .maybeSingle();
   if (error) {
@@ -282,17 +288,26 @@ export async function getPayrollPeriodById(
 
 export async function listPayrollPeriods(
   supabase: TypedSupabaseClient,
-  input: { organizationId: string; periodMonth?: string },
+  input: {
+    organizationId: string;
+    periodMonth?: string;
+    locationId?: string | null;
+  },
 ): Promise<PayrollResult<PayrollPeriod[]>> {
   let query = supabase
     .from("payroll_periods")
-    .select(
-      "id, organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-    )
+    .select(PERIOD_COLUMNS)
     .eq("organization_id", input.organizationId)
     .order("period_month", { ascending: false });
   if (input.periodMonth) {
     query = query.eq("period_month", input.periodMonth);
+  }
+  if (input.locationId !== undefined) {
+    if (input.locationId === null) {
+      query = query.is("location_id", null);
+    } else {
+      query = query.eq("location_id", input.locationId);
+    }
   }
   const { data, error } = await query;
   if (error) {
@@ -327,6 +342,7 @@ export async function generatePayrollPeriod(
   supabase: TypedSupabaseClient,
   input: {
     organizationId: string;
+    locationId?: string | null;
     neonUserId: number;
     periodMonth: string;
     hoursSnapshot: number;
@@ -339,6 +355,7 @@ export async function generatePayrollPeriod(
     .from("payroll_periods")
     .insert({
       organization_id: input.organizationId,
+      location_id: input.locationId ?? null,
       neon_user_id: input.neonUserId,
       period_month: input.periodMonth,
       hours_snapshot: input.hoursSnapshot,
@@ -346,9 +363,7 @@ export async function generatePayrollPeriod(
       gross_cents: input.grossCents,
       generated_by: input.actorProfileId,
     })
-    .select(
-      "id, organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-    )
+    .select(PERIOD_COLUMNS)
     .single();
   if (error) {
     if (error.code === "23505") {
@@ -365,6 +380,7 @@ export async function generatePayrollPeriod(
   const period = mapPeriodRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_generated",
     entityType: "payroll_period",
@@ -411,9 +427,7 @@ export async function regeneratePayrollPeriod(
       regenerated_by: input.actorProfileId,
     })
     .eq("id", input.period.id)
-    .select(
-      "id, organization_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-    )
+    .select(PERIOD_COLUMNS)
     .single();
   if (error) {
     console.error("regeneratePayrollPeriod failed", error);
@@ -423,6 +437,7 @@ export async function regeneratePayrollPeriod(
   const period = mapPeriodRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: period.organizationId,
+    locationId: input.period.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_regenerated",
     entityType: "payroll_period",
@@ -451,7 +466,12 @@ export async function regeneratePayrollPeriod(
 
 export async function lockPayrollPeriod(
   supabase: TypedSupabaseClient,
-  input: { periodId: number; organizationId: string; actorProfileId: string },
+  input: {
+    periodId: number;
+    organizationId: string;
+    locationId?: string | null;
+    actorProfileId: string;
+  },
 ): Promise<PayrollResult<null>> {
   const { error } = await supabase
     .from("payroll_periods")
@@ -468,6 +488,7 @@ export async function lockPayrollPeriod(
 
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_locked",
     entityType: "payroll_period",
@@ -510,6 +531,7 @@ export async function unlockPayrollPeriod(
   input: {
     periodId: number;
     organizationId: string;
+    locationId?: string | null;
     actorProfileId: string;
     reason: string;
     previousLockedAt: string | null;
@@ -527,6 +549,7 @@ export async function unlockPayrollPeriod(
 
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_period_unlocked",
     entityType: "payroll_period",
@@ -537,6 +560,7 @@ export async function unlockPayrollPeriod(
       locked_by: input.previousLockedBy,
     },
     afterState: { status: "draft", reason: input.reason },
+    reason: input.reason,
   });
   if (!audit.ok) {
     const { error: rollbackError } = await supabase
@@ -654,6 +678,7 @@ export async function recordPayment(
   supabase: TypedSupabaseClient,
   input: {
     organizationId: string;
+    locationId?: string | null;
     periodId: number;
     amountCents: number;
     paymentDate: string;
@@ -681,6 +706,7 @@ export async function recordPayment(
   const payment = mapPaymentRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_payment_recorded",
     entityType: "payroll_payment",
@@ -708,6 +734,7 @@ export async function editDraftPayment(
   supabase: TypedSupabaseClient,
   input: {
     payment: PayrollPayment;
+    locationId?: string | null;
     amountCents: number;
     paymentDate: string;
     comment: string | null;
@@ -733,6 +760,7 @@ export async function editDraftPayment(
   const payment = mapPaymentRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: payment.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_payment_edited",
     entityType: "payroll_payment",
@@ -765,7 +793,11 @@ export async function editDraftPayment(
 
 export async function deleteDraftPayment(
   supabase: TypedSupabaseClient,
-  input: { payment: PayrollPayment; actorProfileId: string },
+  input: {
+    payment: PayrollPayment;
+    locationId?: string | null;
+    actorProfileId: string;
+  },
 ): Promise<PayrollResult<null>> {
   const { error } = await supabase
     .from("payroll_payments")
@@ -778,6 +810,7 @@ export async function deleteDraftPayment(
 
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.payment.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_payment_deleted",
     entityType: "payroll_payment",
@@ -812,7 +845,11 @@ export async function deleteDraftPayment(
 
 export async function confirmPayment(
   supabase: TypedSupabaseClient,
-  input: { payment: PayrollPayment; actorProfileId: string },
+  input: {
+    payment: PayrollPayment;
+    locationId?: string | null;
+    actorProfileId: string;
+  },
 ): Promise<PayrollResult<PayrollPayment>> {
   const { data, error } = await supabase
     .from("payroll_payments")
@@ -832,6 +869,7 @@ export async function confirmPayment(
   const payment = mapPaymentRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: payment.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_payment_confirmed",
     entityType: "payroll_payment",
@@ -912,6 +950,7 @@ export async function recordAdjustment(
   supabase: TypedSupabaseClient,
   input: {
     organizationId: string;
+    locationId?: string | null;
     periodId: number;
     deltaCents: number;
     reason: string;
@@ -939,6 +978,7 @@ export async function recordAdjustment(
   const adjustment = mapAdjustmentRow(data);
   const audit = await recordAuditEvent(supabase, {
     organizationId: input.organizationId,
+    locationId: input.locationId ?? null,
     actorProfileId: input.actorProfileId,
     action: "payroll_adjustment_recorded",
     entityType: "payroll_adjustment",
@@ -948,6 +988,7 @@ export async function recordAdjustment(
       delta_cents: adjustment.deltaCents,
       reason: adjustment.reason,
     },
+    reason: input.reason,
   });
   if (!audit.ok) return audit;
   return { ok: true, data: adjustment };

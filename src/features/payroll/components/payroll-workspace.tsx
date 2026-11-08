@@ -75,12 +75,25 @@ export function monthLabel(periodMonth: string): string {
   });
 }
 
-function Header() {
+function Header({
+  isOrgManager,
+  canManage,
+}: {
+  isOrgManager?: boolean;
+  canManage?: boolean;
+}) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
         <Badge tone="accent">Module 6</Badge>
         <Badge tone="warning">Phase 5 of 5</Badge>
+        {canManage ? (
+          isOrgManager ? (
+            <Badge tone="neutral">Organization Scope</Badge>
+          ) : (
+            <Badge tone="accent">Location Scope</Badge>
+          )
+        ) : null}
       </div>
       <h1 className="text-3xl font-semibold tracking-[-0.04em]">Payroll</h1>
       <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
@@ -110,6 +123,7 @@ export function PayrollWorkspace({
   restaurantSlug,
   timeZone,
   onGoToPayRates,
+  expectedContext,
 }: {
   restaurantSlug: string;
   timeZone: string;
@@ -117,6 +131,7 @@ export function PayrollWorkspace({
    * own "Pay rates" button, distinct from `RateSettings` staying
    * rendered inline on this same tab too (unchanged). */
   onGoToPayRates: () => void;
+  expectedContext?: unknown;
 }) {
   const todayLocalDate = zonedWallTimeFromInstant(new Date(), timeZone).date;
   const [access, setAccess] = useState<PayrollAccessView | null>(null);
@@ -127,7 +142,10 @@ export function PayrollWorkspace({
     let cancelled = false;
     async function load() {
       setAccessError(null);
-      const result = await getPayrollAccessAction({ restaurantSlug });
+      const result = await getPayrollAccessAction({
+        restaurantSlug,
+        expectedContext,
+      });
       if (cancelled) return;
       if (!result.ok) {
         setAccessError(result.error);
@@ -139,7 +157,7 @@ export function PayrollWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, accessReloadKey]);
+  }, [restaurantSlug, accessReloadKey, expectedContext]);
 
   if (accessError) {
     return (
@@ -165,7 +183,7 @@ export function PayrollWorkspace({
   if (access.scope === "unlinked") {
     return (
       <div className="space-y-4">
-        <Header />
+        <Header canManage={false} />
         <Card>
           <CardContent className="space-y-1.5 pt-4">
             <p className="text-sm font-semibold">
@@ -188,22 +206,27 @@ export function PayrollWorkspace({
       : "Your attendance";
     return (
       <div className="space-y-4">
+        <Header canManage={false} />
         <SelfPayrollView
           restaurantSlug={restaurantSlug}
           todayLocalDate={todayLocalDate}
           personLabel={personLabel}
           timeZone={timeZone}
+          expectedContext={expectedContext}
         />
       </div>
     );
   }
   return (
     <div className="space-y-4">
+      <Header isOrgManager={access.isOrgManager} canManage={access.canManage} />
       <PrivilegedPayrollView
         restaurantSlug={restaurantSlug}
         todayLocalDate={todayLocalDate}
         onGoToPayRates={onGoToPayRates}
         timeZone={timeZone}
+        isOrgManager={access.isOrgManager}
+        expectedContext={expectedContext}
       />
     </div>
   );
@@ -214,11 +237,15 @@ function PrivilegedPayrollView({
   todayLocalDate,
   onGoToPayRates,
   timeZone,
+  isOrgManager,
+  expectedContext,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
   onGoToPayRates: () => void;
   timeZone: string;
+  isOrgManager?: boolean;
+  expectedContext?: unknown;
 }) {
   const [rateOptions, setRateOptions] = useState<PayrollRateOptions | null>(
     null,
@@ -250,7 +277,10 @@ function PrivilegedPayrollView({
     let cancelled = false;
     async function load() {
       setRateOptionsError(null);
-      const result = await getPayrollRateOptionsAction({ restaurantSlug });
+      const result = await getPayrollRateOptionsAction({
+        restaurantSlug,
+        expectedContext,
+      });
       if (cancelled) return;
       if (!result.ok) {
         setRateOptionsError(result.error);
@@ -262,7 +292,7 @@ function PrivilegedPayrollView({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, rateReloadKey]);
+  }, [restaurantSlug, rateReloadKey, expectedContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,6 +301,7 @@ function PrivilegedPayrollView({
       const result = await getPayrollDashboardAction({
         restaurantSlug,
         todayLocalDate,
+        expectedContext,
       });
       if (cancelled) return;
       if (!result.ok) {
@@ -283,7 +314,7 @@ function PrivilegedPayrollView({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, todayLocalDate, dashboardReloadKey]);
+  }, [restaurantSlug, todayLocalDate, dashboardReloadKey, expectedContext]);
 
   function reloadEverything() {
     setRateReloadKey((key) => key + 1);
@@ -326,6 +357,8 @@ function PrivilegedPayrollView({
             <GenerateForm
               restaurantSlug={restaurantSlug}
               users={rateOptions.users}
+              isOrgManager={isOrgManager}
+              expectedContext={expectedContext}
               // Deliberately doesn't close the dialog -- a bulk generate
               // can partially succeed, and the manager needs to actually
               // see GenerateForm's own generated/skipped/failed summary
@@ -347,6 +380,7 @@ function PrivilegedPayrollView({
             onChanged={reloadEverything}
             selectedPeriodId={selectedPeriodId}
             onSelectPeriod={setSelectedPeriodId}
+            expectedContext={expectedContext}
             onPrintPerson={(neonUserId) => setPrintDialogState({ neonUserId })}
           />
           <PayrollBalancePanel
@@ -372,6 +406,7 @@ function PrivilegedPayrollView({
           readOnly={false}
           onChanged={reloadEverything}
           timeZone={timeZone}
+          expectedContext={expectedContext}
           onClose={() => setSelectedPeriodId(null)}
           personLabel={(() => {
             const selectedPeriod = dashboard?.periods.find(
@@ -395,11 +430,13 @@ function SelfPayrollView({
   todayLocalDate,
   personLabel,
   timeZone,
+  expectedContext,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
   personLabel: string;
   timeZone: string;
+  expectedContext?: unknown;
 }) {
   const [periods, setPeriods] = useState<PayrollPeriod[] | null>(null);
   const [periodsError, setPeriodsError] = useState<string | null>(null);
@@ -410,7 +447,10 @@ function SelfPayrollView({
     let cancelled = false;
     async function load() {
       setPeriodsError(null);
-      const result = await listPayrollPeriodsAction({ restaurantSlug });
+      const result = await listPayrollPeriodsAction({
+        restaurantSlug,
+        expectedContext,
+      });
       if (cancelled) return;
       if (!result.ok) {
         setPeriodsError(result.error);
@@ -426,7 +466,7 @@ function SelfPayrollView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantSlug, reloadKey]);
+  }, [restaurantSlug, reloadKey, expectedContext]);
 
   if (periodsError) {
     return (
@@ -479,6 +519,7 @@ function SelfPayrollView({
         scope="self"
         users={[]}
         reloadKey={reloadKey}
+        expectedContext={expectedContext}
       />
       <Card>
         <CardContent className="pt-4">
@@ -507,6 +548,7 @@ function SelfPayrollView({
           onChanged={() => setReloadKey((key) => key + 1)}
           personLabel={personLabel}
           timeZone={timeZone}
+          expectedContext={expectedContext}
         />
       ) : null}
     </div>
@@ -549,12 +591,14 @@ function PayrollDashboardTiles({
   scope,
   users,
   reloadKey,
+  expectedContext,
 }: {
   restaurantSlug: string;
   todayLocalDate: string;
   scope: "all" | "self";
   users: { id: number; fullName: string; role: string }[];
   reloadKey: number;
+  expectedContext?: unknown;
 }) {
   const [dashboard, setDashboard] = useState<PayrollDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -567,6 +611,7 @@ function PayrollDashboardTiles({
       const result = await getPayrollDashboardAction({
         restaurantSlug,
         todayLocalDate,
+        expectedContext,
       });
       if (cancelled) return;
       if (!result.ok) {
@@ -579,7 +624,13 @@ function PayrollDashboardTiles({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, todayLocalDate, reloadKey, localReloadKey]);
+  }, [
+    restaurantSlug,
+    todayLocalDate,
+    reloadKey,
+    localReloadKey,
+    expectedContext,
+  ]);
 
   if (error) {
     return (
@@ -688,10 +739,14 @@ export function RateSettings({
   restaurantSlug,
   options,
   onChanged,
+  isOrgManager,
+  expectedContext,
 }: {
   restaurantSlug: string;
   options: PayrollRateOptions;
   onChanged: () => void;
+  isOrgManager?: boolean;
+  expectedContext?: unknown;
 }) {
   const [defaultInput, setDefaultInput] = useState(
     centsToInputValue(options.defaultRateCents),
@@ -716,6 +771,7 @@ export function RateSettings({
       const result = await setPayrollDefaultRateAction({
         restaurantSlug,
         rateCents,
+        expectedContext,
       });
       if (!result.ok) {
         setDefaultError(result.error);
@@ -741,6 +797,12 @@ export function RateSettings({
         <h2 className="font-semibold">Pay rates</h2>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
+        {isOrgManager === false ? (
+          <p className="text-muted-foreground text-xs">
+            Compensation rates and overrides are configured at the organization
+            level.
+          </p>
+        ) : null}
         <form onSubmit={saveDefault} className="flex items-end gap-2">
           <div className="space-y-1">
             <Label htmlFor="default-rate">Organization default ($/hr)</Label>
@@ -748,12 +810,17 @@ export function RateSettings({
               id="default-rate"
               inputMode="decimal"
               value={defaultInput}
+              disabled={isOrgManager === false}
               onChange={(event) => setDefaultInput(event.target.value)}
               placeholder="10.00"
               className="w-32"
             />
           </div>
-          <Button type="submit" disabled={defaultPending} size="sm">
+          <Button
+            type="submit"
+            disabled={defaultPending || isOrgManager === false}
+            size="sm"
+          >
             {defaultPending ? "Saving…" : "Save default"}
           </Button>
         </form>
@@ -772,6 +839,8 @@ export function RateSettings({
               neonUserId={user.id}
               currentRateCents={overrideByUser.get(user.id) ?? null}
               onChanged={onChanged}
+              isOrgManager={isOrgManager}
+              expectedContext={expectedContext}
             />
           ))}
         </div>
@@ -786,12 +855,16 @@ function RateOverrideRow({
   neonUserId,
   currentRateCents,
   onChanged,
+  isOrgManager,
+  expectedContext,
 }: {
   restaurantSlug: string;
   label: string;
   neonUserId: number;
   currentRateCents: number | null;
   onChanged: () => void;
+  isOrgManager?: boolean;
+  expectedContext?: unknown;
 }) {
   const [value, setValue] = useState(centsToInputValue(currentRateCents));
   const [error, setError] = useState("");
@@ -812,6 +885,7 @@ function RateOverrideRow({
         restaurantSlug,
         neonUserId,
         rateCents,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -830,6 +904,7 @@ function RateOverrideRow({
       const result = await removePayrollRateOverrideAction({
         restaurantSlug,
         neonUserId,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -849,6 +924,7 @@ function RateOverrideRow({
         aria-label={`${label}'s hourly rate override`}
         inputMode="decimal"
         value={value}
+        disabled={pending || isOrgManager === false}
         onChange={(event) => setValue(event.target.value)}
         placeholder="uses default"
         className="w-28"
@@ -858,7 +934,7 @@ function RateOverrideRow({
         variant="secondary"
         size="sm"
         onClick={save}
-        disabled={pending}
+        disabled={pending || isOrgManager === false}
       >
         Save
       </Button>
@@ -868,7 +944,7 @@ function RateOverrideRow({
           variant="ghost"
           size="sm"
           onClick={remove}
-          disabled={pending}
+          disabled={pending || isOrgManager === false}
         >
           Remove
         </Button>
@@ -945,10 +1021,14 @@ function GenerateForm({
   restaurantSlug,
   users,
   onGenerated,
+  isOrgManager,
+  expectedContext,
 }: {
   restaurantSlug: string;
   users: { id: number; fullName: string; role: string }[];
   onGenerated: () => void;
+  isOrgManager?: boolean;
+  expectedContext?: unknown;
 }) {
   const displayLabels = buildDisplayLabels(users);
   const [month, setMonth] = useState("");
@@ -971,6 +1051,7 @@ function GenerateForm({
       const response = await getPayrollGenerationEligibilityAction({
         restaurantSlug,
         periodMonth: `${month}-01`,
+        expectedContext,
       });
       if (cancelled) return;
       if (!response.ok) {
@@ -981,7 +1062,11 @@ function GenerateForm({
       setSelected(
         new Set(
           response.data
-            .filter((person) => !person.alreadyGenerated)
+            .filter(
+              (person) =>
+                !person.alreadyGenerated &&
+                (isOrgManager || !person.multiLocation),
+            )
             .map((person) => person.neonUserId),
         ),
       );
@@ -990,7 +1075,7 @@ function GenerateForm({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, month]);
+  }, [restaurantSlug, month, isOrgManager, expectedContext]);
 
   function toggle(neonUserId: number) {
     setSelected((current) => {
@@ -1020,6 +1105,7 @@ function GenerateForm({
         restaurantSlug,
         neonUserIds: [...selected],
         periodMonth: `${month}-01`,
+        expectedContext,
       });
       if (!response.ok) {
         setError(response.error);
@@ -1080,7 +1166,13 @@ function GenerateForm({
                   className="text-primary underline"
                   onClick={() =>
                     setSelected(
-                      new Set(eligibility.map((person) => person.neonUserId)),
+                      new Set(
+                        eligibility
+                          .filter(
+                            (person) => isOrgManager || !person.multiLocation,
+                          )
+                          .map((person) => person.neonUserId),
+                      ),
                     )
                   }
                 >
@@ -1096,31 +1188,39 @@ function GenerateForm({
               </div>
             </div>
             <div className="border-border grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto rounded-xl border p-2 sm:grid-cols-2">
-              {eligibility.map((person) => (
-                <label
-                  key={person.neonUserId}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(person.neonUserId)}
-                    onChange={() => toggle(person.neonUserId)}
-                    className="accent-[var(--primary)]"
-                  />
-                  <span
-                    className={
-                      person.alreadyGenerated
-                        ? "text-muted-foreground"
-                        : undefined
-                    }
+              {eligibility.map((person) => {
+                const isBlocked =
+                  !isOrgManager && Boolean(person.multiLocation);
+                return (
+                  <label
+                    key={person.neonUserId}
+                    className="flex items-center gap-2 text-sm"
                   >
-                    {displayLabels.get(person.neonUserId) ?? person.fullName}
-                  </span>
-                  {person.alreadyGenerated ? (
-                    <Badge tone="neutral">Already generated</Badge>
-                  ) : null}
-                </label>
-              ))}
+                    <input
+                      type="checkbox"
+                      checked={selected.has(person.neonUserId)}
+                      onChange={() => toggle(person.neonUserId)}
+                      disabled={isBlocked}
+                      className="accent-[var(--primary)]"
+                    />
+                    <span
+                      className={
+                        person.alreadyGenerated || isBlocked
+                          ? "text-muted-foreground"
+                          : undefined
+                      }
+                    >
+                      {displayLabels.get(person.neonUserId) ?? person.fullName}
+                    </span>
+                    {person.alreadyGenerated ? (
+                      <Badge tone="neutral">Already generated</Badge>
+                    ) : null}
+                    {person.multiLocation ? (
+                      <Badge tone="warning">Multi-location (Org only)</Badge>
+                    ) : null}
+                  </label>
+                );
+              })}
             </div>
             <p className="text-muted-foreground text-xs">
               {selected.size} of {eligibility.length} selected
@@ -1279,6 +1379,7 @@ function PeriodLedgerPanel({
   personLabel,
   timeZone,
   onClose,
+  expectedContext,
 }: {
   restaurantSlug: string;
   periodId: number;
@@ -1287,6 +1388,7 @@ function PeriodLedgerPanel({
   personLabel: string;
   timeZone: string;
   onClose?: () => void;
+  expectedContext?: unknown;
 }) {
   const [ledger, setLedger] = useState<PayrollLedger | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1308,7 +1410,11 @@ function PeriodLedgerPanel({
     let cancelled = false;
     async function load() {
       setError(null);
-      const result = await getPayrollLedgerAction({ restaurantSlug, periodId });
+      const result = await getPayrollLedgerAction({
+        restaurantSlug,
+        periodId,
+        expectedContext,
+      });
       if (cancelled) return;
       if (!result.ok) {
         setError(result.error);
@@ -1320,7 +1426,7 @@ function PeriodLedgerPanel({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, periodId, reloadKey]);
+  }, [restaurantSlug, periodId, reloadKey, expectedContext]);
 
   function refresh() {
     setReloadKey((key) => key + 1);
@@ -1537,6 +1643,7 @@ function PeriodLedgerPanel({
                     onUnconfirmClick={() =>
                       setUnconfirmingPaymentId(payment.id)
                     }
+                    expectedContext={expectedContext}
                   />
                 ))}
               </tbody>
@@ -1586,11 +1693,13 @@ function PeriodLedgerPanel({
             restaurantSlug={restaurantSlug}
             periodId={period.id}
             onRecorded={refresh}
+            expectedContext={expectedContext}
           />
           <RecordAdjustmentForm
             restaurantSlug={restaurantSlug}
             periodId={period.id}
             onRecorded={refresh}
+            expectedContext={expectedContext}
           />
         </div>
       )}
@@ -1655,6 +1764,7 @@ function PeriodLedgerPanel({
       month={Number(period.periodMonth.slice(5, 7))}
       timeZone={timeZone}
       onClose={() => setShowCombinedStatement(false)}
+      expectedContext={expectedContext}
     />
   ) : null;
 
@@ -1664,6 +1774,7 @@ function PeriodLedgerPanel({
       periodId={period.id}
       onClose={() => setShowUnlockDialog(false)}
       onUnlocked={refresh}
+      expectedContext={expectedContext}
     />
   ) : null;
 
@@ -1674,6 +1785,7 @@ function PeriodLedgerPanel({
         paymentId={unconfirmingPaymentId}
         onClose={() => setUnconfirmingPaymentId(null)}
         onUnconfirmed={refresh}
+        expectedContext={expectedContext}
       />
     ) : null;
 
@@ -1719,11 +1831,13 @@ function UnlockLedgerDialog({
   periodId,
   onClose,
   onUnlocked,
+  expectedContext,
 }: {
   restaurantSlug: string;
   periodId: number;
   onClose: () => void;
   onUnlocked: () => void;
+  expectedContext?: unknown;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -1741,6 +1855,7 @@ function UnlockLedgerDialog({
         restaurantSlug,
         periodId,
         reason: reason.trim(),
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -1831,11 +1946,13 @@ function UnconfirmPaymentDialog({
   paymentId,
   onClose,
   onUnconfirmed,
+  expectedContext,
 }: {
   restaurantSlug: string;
   paymentId: number;
   onClose: () => void;
   onUnconfirmed: () => void;
+  expectedContext?: unknown;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -1853,6 +1970,7 @@ function UnconfirmPaymentDialog({
         restaurantSlug,
         paymentId,
         reason: reason.trim(),
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -1964,6 +2082,7 @@ function PaymentRow({
   readOnly,
   onChanged,
   onUnconfirmClick,
+  expectedContext,
 }: {
   restaurantSlug: string;
   payment: PayrollPayment;
@@ -1973,6 +2092,7 @@ function PaymentRow({
    * PeriodLedgerPanel's own level -- see that component's own comment
    * for why this can't be a modal owned by the row itself. */
   onUnconfirmClick: () => void;
+  expectedContext?: unknown;
 }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState<"confirm" | "delete" | "save" | null>(
@@ -1996,6 +2116,7 @@ function PaymentRow({
       const result = await confirmPaymentAction({
         restaurantSlug,
         paymentId: payment.id,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -2014,6 +2135,7 @@ function PaymentRow({
       const result = await deleteDraftPaymentAction({
         restaurantSlug,
         paymentId: payment.id,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -2058,6 +2180,7 @@ function PaymentRow({
         amountCents,
         paymentDate: editDate,
         comment: editComment.trim() || null,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -2209,10 +2332,12 @@ function RecordPaymentForm({
   restaurantSlug,
   periodId,
   onRecorded,
+  expectedContext,
 }: {
   restaurantSlug: string;
   periodId: number;
   onRecorded: () => void;
+  expectedContext?: unknown;
 }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
@@ -2246,6 +2371,7 @@ function RecordPaymentForm({
         amountCents,
         paymentDate: date,
         comment: comment.trim() || null,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -2317,10 +2443,12 @@ function RecordAdjustmentForm({
   restaurantSlug,
   periodId,
   onRecorded,
+  expectedContext,
 }: {
   restaurantSlug: string;
   periodId: number;
   onRecorded: () => void;
+  expectedContext?: unknown;
 }) {
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState<"reduce" | "increase">("reduce");
@@ -2364,6 +2492,7 @@ function RecordAdjustmentForm({
         periodId,
         deltaCents,
         reason: reason.trim(),
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);

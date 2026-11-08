@@ -58,6 +58,7 @@ export function CombinedStatementDialog({
   month,
   timeZone,
   onClose,
+  expectedContext,
 }: {
   restaurantSlug: string;
   target: CombinedStatementTarget;
@@ -69,6 +70,7 @@ export function CombinedStatementDialog({
    * comment for the bug this closes. */
   timeZone: string;
   onClose: () => void;
+  expectedContext?: unknown;
 }) {
   const [statements, setStatements] = useState<
     CombinedMonthlyStatement[] | null
@@ -101,6 +103,7 @@ export function CombinedStatementDialog({
             year,
             month,
             neonUserId,
+            expectedContext,
           }),
         ),
       );
@@ -131,7 +134,7 @@ export function CombinedStatementDialog({
     // contents instead, so this effect only re-runs when the actual
     // set of ids changes, not on every parent re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantSlug, year, month, neonUserIdsKey]);
+  }, [restaurantSlug, year, month, neonUserIdsKey, expectedContext]);
 
   function printStatements() {
     if (!statements || statements.length === 0) return;
