@@ -1,4 +1,4 @@
-# V2-005 Batch A (Schedule/Roster .004 + Team/Settings .008 + Tips Audit Integrity) — IN PROGRESS
+# V2-005 Batch A (Schedule/Roster .004 + Team/Settings .008 + Tips Audit Integrity) — READY FOR OWNER REVIEW
 
 Approved scope: Consolidated Batch A delivery for V2-005.004 Schedule / Roster Location Scoping + V2-005.008 Team / Settings Hybrid Scoping + Priority correction on Tips audit integrity.
 Parent issue: #253 | Program: #248 | Milestone: #8 (The Lineup V2.0).
@@ -12,5 +12,5 @@ Base: `8e95d9e641d7a76c0010a40c3730a708ae90a0d0` | Branch: `feature/v2.0-005-bat
 - [x] BA-P05 Replay and verification: clean migration replay (79 migrations PASS), Next.js production build PASS, full typecheck and lint PASS.
 - [x] BA-P06 Browser acceptance verification: desktop manager, tablet host-stand, and mobile server views responsive with semantic shadcn primitives.
 - [x] BA-P07 Independent review & findings closure: Tips direct audit vulnerability fixed, RLS execute grants validated, local test fixtures verified.
-- [ ] BA-P08 PR creation & CI verification: open single PR to development, verify exact-head CI.
+- [x] BA-P08 PR creation & CI verification: open single PR to development (PR #313), all checks 100% green on exact commit `962661c`.
 - [x] BA-P09 Delivery documentation & handoff: 004 and 008 PLAN, EVIDENCE, STATUS completed; status and roadmap references updated.
