@@ -70,6 +70,9 @@ const GUARDING_HELPERS: Record<
   "recipes/actions/recipe-image-actions.ts": [
     { helper: "context(", module: "recipes" },
   ],
+  "payroll/actions/payroll-actions.ts": [
+    { helper: "guardPayrollModule(", module: "payroll" },
+  ],
 };
 
 function exportedActions(text: string): { name: string; body: string }[] {

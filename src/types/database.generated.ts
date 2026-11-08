@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2608,11 +2608,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "payroll_adjustments_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
+            foreignKeyName: "payroll_adjustments_created_by_fkey";
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "payroll_adjustments_organization_id_fkey";
@@ -2678,18 +2678,18 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "payroll_payments_organization_id_confirmed_by_fkey";
-            columns: ["organization_id", "confirmed_by"];
+            foreignKeyName: "payroll_payments_confirmed_by_fkey";
+            columns: ["confirmed_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "payroll_payments_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
+            foreignKeyName: "payroll_payments_created_by_fkey";
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "payroll_payments_organization_id_fkey";
@@ -2721,6 +2721,7 @@ export type Database = {
           gross_cents: number;
           hours_snapshot: number;
           id: number;
+          location_id: string | null;
           locked_at: string | null;
           locked_by: string | null;
           neon_user_id: number;
@@ -2737,6 +2738,7 @@ export type Database = {
           gross_cents: number;
           hours_snapshot: number;
           id?: never;
+          location_id?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
           neon_user_id: number;
@@ -2753,6 +2755,7 @@ export type Database = {
           gross_cents?: number;
           hours_snapshot?: number;
           id?: never;
+          location_id?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
           neon_user_id?: number;
@@ -2765,6 +2768,34 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "payroll_periods_generated_by_fkey";
+            columns: ["generated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_location_org_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_locked_by_fkey";
+            columns: ["locked_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "payroll_periods_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
@@ -2772,25 +2803,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "payroll_periods_organization_id_generated_by_fkey";
-            columns: ["organization_id", "generated_by"];
+            foreignKeyName: "payroll_periods_regenerated_by_fkey";
+            columns: ["regenerated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
-            foreignKeyName: "payroll_periods_organization_id_locked_by_fkey";
-            columns: ["organization_id", "locked_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
-            foreignKeyName: "payroll_periods_organization_id_regenerated_by_fkey";
-            columns: ["organization_id", "regenerated_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2828,11 +2845,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "payroll_rates_organization_id_updated_by_fkey";
-            columns: ["organization_id", "updated_by"];
+            foreignKeyName: "payroll_rates_updated_by_fkey";
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2864,11 +2881,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "payroll_settings_organization_id_updated_by_fkey";
-            columns: ["organization_id", "updated_by"];
+            foreignKeyName: "payroll_settings_updated_by_fkey";
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -5342,6 +5359,10 @@ export type Database = {
           profile_id: string;
           roles: Database["public"]["Enums"]["app_role"][];
         }[];
+      };
+      payroll_location_authorized: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: boolean;
       };
       provision_location: {
         Args: {

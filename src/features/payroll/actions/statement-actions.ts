@@ -14,6 +14,8 @@ import {
   demoNeonUsers,
 } from "@/features/attendance/demo-data";
 import { resolvePeriodRange } from "@/features/attendance/domain/attendance-report";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import {
   derivePeriodStatus,
   type PeriodDisplayStatus,
@@ -27,13 +29,22 @@ import {
   type PayrollAdjustment,
   type PayrollPayment,
 } from "@/features/payroll/data/payroll-data";
+import {
+  getPayrollActor,
+  type PayrollActor,
+} from "@/features/payroll/data/payroll-actor";
+import { resolveEmployeeLocationProvenance } from "@/features/payroll/data/payroll-provenance";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | {
+      ok: false;
+      error: string;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
 
 const restaurantSlugSchema = z
   .string()
@@ -96,11 +107,55 @@ const MONTH_NAMES = [
   "December",
 ];
 
+async function checkWorkspace(
+  raw: unknown,
+  caller: PayrollActor,
+  claimedLocationId?: string,
+) {
+  if (!caller.scope.locationId) {
+    return { ok: true as const, location: null };
+  }
+  const expectationRaw = raw ?? {
+    profileId: caller.viewer.profileId,
+    organizationId: caller.organizationId,
+    locationId: claimedLocationId ?? caller.scope.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: caller.viewer.profileId,
+      organizationId: caller.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: caller.scope.locationId!,
+        time_zone: caller.scope.timeZone,
+      }),
+    },
+  );
+  if (outcome.ok) return { ok: true as const, location: outcome.location };
+  if (outcome.code === "invalid") {
+    return {
+      ok: false as const,
+      result: { ok: false as const, error: "Invalid statement parameters." },
+    };
+  }
+  return {
+    ok: false as const,
+    result: {
+      ok: false as const,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    },
+  };
+}
+
 export async function getCombinedMonthlyStatementAction(input: {
   restaurantSlug: string;
   year: number;
   month: number;
   neonUserId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<CombinedMonthlyStatement>> {
   const parsed = z
     .object({
@@ -108,6 +163,7 @@ export async function getCombinedMonthlyStatementAction(input: {
       year: yearSchema,
       month: monthSchema,
       neonUserId: neonUserIdSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
 
@@ -117,22 +173,7 @@ export async function getCombinedMonthlyStatementAction(input: {
 
   const { restaurantSlug, year, month, neonUserId } = parsed.data;
 
-  // CI fix: demo mode must be checked BEFORE getCurrentUser() is ever
-  // called. getCurrentUser() unconditionally builds a real Supabase
-  // client (createClient() -> getPublicSupabaseConfig()), which throws
-  // when NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-  // are absent -- which they always are in CI's browser-smoke job (no
-  // Supabase secrets are provided there by design; see
-  // .github/workflows/ci.yml). With the old ordering, that throw
-  // happened before this function's own demo-mode fallback (below) was
-  // ever reached, so the Combined Statement dialog's data fetch always
-  // rejected in CI, even though NEXT_PUBLIC_DEMO_MODE=true was set --
-  // deterministically failing the one e2e test that opens it, while
-  // passing locally only because a developer's own .env.local happens
-  // to have some (even if unused) Supabase values present.
-  // `loadPageData` (src/lib/page-data.ts) already establishes the
-  // correct ordering for this exact reason; mirrored here rather than
-  // inventing a new pattern.
+  // CI / demo mode check before live session
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
     const matchedUser = demoNeonUsers.find((u) => u.id === neonUserId) ?? null;
     const employeeName = matchedUser?.fullName ?? `Employee #${neonUserId}`;
@@ -207,25 +248,28 @@ export async function getCombinedMonthlyStatementAction(input: {
     };
   }
 
-  const currentUser = await getCurrentUser(restaurantSlug);
-  if (!currentUser) {
+  const actor = await getPayrollActor(restaurantSlug);
+  if (!actor) {
     return { ok: false, error: "You must be signed in to view statements." };
   }
 
-  // V2-004.004: demo returned above; a live read needs payroll turned on.
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
   const blocked = await guardModule({
     module: "payroll",
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
+    location: actor.scope.locationId ? { id: actor.scope.locationId } : null,
   });
   if (blocked) return blocked;
 
   const supabase = await createClient();
 
   // Multi-tenant & role authorization check
-  if (currentUser.role === "server") {
+  if (!actor.canManage) {
     const linkResult = await getOwnAttendanceLink(supabase, {
-      organizationId: currentUser.organizationId,
-      profileId: currentUser.profileId,
+      organizationId: actor.organizationId,
+      profileId: actor.viewer.profileId,
     });
     if (!linkResult.ok || !linkResult.data) {
       return {
@@ -239,11 +283,28 @@ export async function getCombinedMonthlyStatementAction(input: {
         error: "You are only authorized to view your own monthly statement.",
       };
     }
+  } else if (!actor.isOrgManager) {
+    // Location Manager: can only view statement for staff assigned to this location
+    const provenance = await resolveEmployeeLocationProvenance(
+      supabase,
+      actor.organizationId,
+      neonUserId,
+    );
+    if (
+      provenance.status !== "single_location" ||
+      provenance.locationId !== actor.scope.locationId
+    ) {
+      return {
+        ok: false,
+        error:
+          "You can only view statements for employees assigned to your location.",
+      };
+    }
   }
 
   // 1. Fetch organization name
   const orgNameResult = await getOrganizationName(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
   });
   const orgName = orgNameResult.ok ? orgNameResult.data : "The Monk's";
 
@@ -272,7 +333,7 @@ export async function getCombinedMonthlyStatementAction(input: {
   // 4. Fetch payroll period if generated
   const periodMonth = `${year}-${String(month).padStart(2, "0")}-01`;
   const periodResult = await getPayrollPeriod(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId,
     periodMonth,
   });
@@ -281,6 +342,20 @@ export async function getCombinedMonthlyStatementAction(input: {
 
   if (periodResult.ok && periodResult.data) {
     const period = periodResult.data;
+
+    // Defense in depth: if period has location_id, ensure location manager has authority
+    if (
+      !actor.isOrgManager &&
+      period.locationId &&
+      period.locationId !== actor.scope.locationId
+    ) {
+      return {
+        ok: false,
+        error:
+          "You can only view statements for employees assigned to your location.",
+      };
+    }
+
     const [paymentsResult, adjustmentsResult, balanceResult] =
       await Promise.all([
         listPaymentsForPeriod(supabase, { periodId: period.id }),
@@ -293,10 +368,9 @@ export async function getCombinedMonthlyStatementAction(input: {
     const balance = balanceResult.ok ? balanceResult.data : null;
 
     // Staff only sees confirmed payments; managers see both draft & confirmed
-    const visiblePayments =
-      currentUser.role === "server"
-        ? payments.filter((p) => p.status === "confirmed")
-        : payments;
+    const visiblePayments = !actor.canManage
+      ? payments.filter((p) => p.status === "confirmed")
+      : payments;
 
     const displayStatus = derivePeriodStatus({
       status: period.status,

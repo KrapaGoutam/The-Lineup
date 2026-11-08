@@ -96,6 +96,7 @@ export function PayrollPeriodGroups({
   selectedPeriodId,
   onSelectPeriod,
   onPrintPerson,
+  expectedContext,
 }: {
   restaurantSlug: string;
   periods: PayrollPeriodWithBalance[];
@@ -107,6 +108,7 @@ export function PayrollPeriodGroups({
    * this one person -- the row-level entry point, distinct from the
    * toolbar's own no-preselection one. */
   onPrintPerson?: (neonUserId: number) => void;
+  expectedContext?: unknown;
 }) {
   const displayLabels = buildDisplayLabels(users);
   const [monthFilter, setMonthFilter] = useState<string>("all");
@@ -281,6 +283,7 @@ export function PayrollPeriodGroups({
                               period={period}
                               onChanged={onChanged}
                               isSelected={selectedPeriodId === period.id}
+                              expectedContext={expectedContext}
                               onToggleSelect={() =>
                                 onSelectPeriod(
                                   selectedPeriodId === period.id
@@ -310,12 +313,14 @@ function PeriodGroupRow({
   onChanged,
   isSelected,
   onToggleSelect,
+  expectedContext,
 }: {
   restaurantSlug: string;
   period: PayrollPeriodWithBalance;
   onChanged: () => void;
   isSelected: boolean;
   onToggleSelect: () => void;
+  expectedContext?: unknown;
 }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState<"regenerate" | "lock" | null>(null);
@@ -329,6 +334,7 @@ function PeriodGroupRow({
       const result = await regeneratePayrollPeriodAction({
         restaurantSlug,
         periodId: period.id,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);
@@ -347,6 +353,7 @@ function PeriodGroupRow({
       const result = await lockPayrollPeriodAction({
         restaurantSlug,
         periodId: period.id,
+        expectedContext,
       });
       if (!result.ok) {
         setError(result.error);

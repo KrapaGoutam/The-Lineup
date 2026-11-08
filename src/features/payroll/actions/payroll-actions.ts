@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 
-import type { SignedInUser } from "@/components/login-screen";
 import {
   getActiveNeonUsers,
   getAttendanceRows,
@@ -10,6 +9,8 @@ import {
 } from "@/features/attendance/data/attendance-data";
 import { aggregateHours } from "@/features/attendance/domain/attendance-report";
 import { getOwnAttendanceLink } from "@/features/attendance/data/identity-links";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import {
   computeGrossCents,
   monthDateRange,
@@ -53,17 +54,28 @@ import {
   type PayrollPayment,
   type PayrollPeriod,
 } from "@/features/payroll/data/payroll-data";
+import {
+  getPayrollActor,
+  type PayrollActor,
+} from "@/features/payroll/data/payroll-actor";
+import { resolveEmployeeLocationProvenance } from "@/features/payroll/data/payroll-provenance";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | {
+      ok: false;
+      error: string;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
 
 const NOT_SIGNED_IN_ERROR = "You need to sign in to see payroll.";
 const NOT_MANAGER_ERROR = "You don't have access to payroll.";
+const NOT_LOCATION_MANAGER_ERROR =
+  "You do not have permission to manage payroll for this location.";
 
 const restaurantSlugSchema = z
   .string()
@@ -91,92 +103,154 @@ function invalidRequest<T>(): ActionResult<T> {
   return { ok: false, error: "That payroll request is invalid." };
 }
 
-export type PayrollAccess =
-  | { scope: "all" }
-  | { scope: "self"; neonUserId: number }
-  | { scope: "unlinked" };
-
 /**
- * Feature 020 Phase 3. The sole authority for payroll scope, resolved
- * fresh server-side on every action -- identical shape and identical
- * source of truth to attendance's `resolveAttendanceAccess`
- * (attendance-actions.ts), reusing the exact same
- * `attendance_identity_links` row via `getOwnAttendanceLink` rather than
- * a second linking mechanism. Write actions (rates, generate/regenerate/
- * lock, recording a payment or an adjustment, confirming/editing/deleting
- * a payment) all still require `scope === "all"` -- a regular member
- * never generates their own payroll, sets their own rate, or writes
- * anything on this feature, only reads their own. Read actions
- * (listing periods, the ledger/balance for one period) accept "self" too,
- * and lean on `payroll_periods`/`payroll_payments`/`payroll_adjustments`'
- * own RLS self-select policies to do the actual row-scoping -- the same
- * query runs for a privileged or a self-scoped caller; RLS decides what
- * comes back, not a second app-layer filter that could disagree with it.
+ * Server-side request-context consistency check (V2-003.005).
+ * Validates that the client's expected context matches the server-verified caller.
  */
-async function resolvePayrollAccess(
-  restaurantSlug: string,
-): Promise<{ user: SignedInUser; access: PayrollAccess } | null> {
-  const currentUser = await getCurrentUser(restaurantSlug);
-  if (!currentUser) return null;
-  if (currentUser.role !== "server") {
-    return { user: currentUser, access: { scope: "all" } };
+async function checkWorkspace(
+  raw: unknown,
+  caller: PayrollActor,
+  claimedLocationId?: string,
+) {
+  if (!caller.scope.locationId) {
+    // Org-level manager without specific location binding
+    return { ok: true as const, location: null };
+  }
+  const expectationRaw = raw ?? {
+    profileId: caller.viewer.profileId,
+    organizationId: caller.organizationId,
+    locationId: claimedLocationId ?? caller.scope.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: caller.viewer.profileId,
+      organizationId: caller.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: caller.scope.locationId!,
+        time_zone: caller.scope.timeZone,
+      }),
+    },
+  );
+  if (outcome.ok) return { ok: true as const, location: outcome.location };
+  if (outcome.code === "invalid") {
+    return {
+      ok: false as const,
+      result: {
+        ok: false as const,
+        error: "That payroll request is invalid.",
+      },
+    };
+  }
+  return {
+    ok: false as const,
+    result: {
+      ok: false as const,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    },
+  };
+}
+
+function guardPayrollModule(actor: PayrollActor) {
+  return guardModule({
+    module: "payroll",
+    organizationId: actor.organizationId,
+    location: actor.scope.locationId ? { id: actor.scope.locationId } : null,
+  });
+}
+
+export type PayrollAccessView =
+  | {
+      scope: "all";
+      canManage: true;
+      isOrgManager: boolean;
+      locationId: string | null;
+    }
+  | {
+      scope: "self";
+      neonUserId: number;
+      person: NeonUser | null;
+      canManage: false;
+      isOrgManager: false;
+      locationId: string | null;
+    }
+  | {
+      scope: "unlinked";
+      canManage: false;
+      isOrgManager: false;
+      locationId: string | null;
+    };
+
+/** Tells the client what to render -- never what to enforce. */
+export async function getPayrollAccessAction(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+}): Promise<ActionResult<PayrollAccessView>> {
+  const parsed = z
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return invalidRequest();
+
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
+  if (blocked) return blocked;
+
+  if (actor.canManage) {
+    return {
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: actor.isOrgManager,
+        locationId: actor.scope.locationId,
+      },
+    };
   }
 
   const supabase = await createClient();
   const link = await getOwnAttendanceLink(supabase, {
-    organizationId: currentUser.organizationId,
-    profileId: currentUser.profileId,
+    organizationId: actor.organizationId,
+    profileId: actor.viewer.profileId,
   });
   if (!link.ok || !link.data) {
-    return { user: currentUser, access: { scope: "unlinked" } };
+    return {
+      ok: true,
+      data: {
+        scope: "unlinked",
+        canManage: false,
+        isOrgManager: false,
+        locationId: actor.scope.locationId,
+      },
+    };
   }
-  return {
-    user: currentUser,
-    access: { scope: "self", neonUserId: link.data.neonUserId },
-  };
-}
-
-/** Privileged-only actions (every write in this file) still use this. */
-async function requirePayrollManager(
-  restaurantSlug: string,
-): Promise<SignedInUser | null> {
-  const resolved = await resolvePayrollAccess(restaurantSlug);
-  if (!resolved || resolved.access.scope !== "all") return null;
-  return resolved.user;
-}
-
-export type PayrollAccessView =
-  | { scope: "all" }
-  | { scope: "self"; neonUserId: number; person: NeonUser | null }
-  | { scope: "unlinked" };
-
-/** Tells the client what to render -- never what to enforce, exactly like attendance's getAttendanceAccessAction. */
-export async function getPayrollAccessAction(input: {
-  restaurantSlug: string;
-}): Promise<ActionResult<PayrollAccessView>> {
-  const parsed = z
-    .object({ restaurantSlug: restaurantSlugSchema })
-    .safeParse(input);
-  if (!parsed.success) return invalidRequest();
-
-  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
-  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
-
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: resolved.user.organizationId,
-  });
-  if (blocked) return blocked;
-  const { access } = resolved;
-  if (access.scope !== "self") return { ok: true, data: access };
 
   const usersResult = await getActiveNeonUsers();
   const person = usersResult.ok
-    ? (usersResult.data.find((user) => user.id === access.neonUserId) ?? null)
+    ? (usersResult.data.find((user) => user.id === link.data?.neonUserId) ??
+      null)
     : null;
+
   return {
     ok: true,
-    data: { scope: "self", neonUserId: access.neonUserId, person },
+    data: {
+      scope: "self",
+      neonUserId: link.data.neonUserId,
+      person,
+      canManage: false,
+      isOrgManager: false,
+      locationId: actor.scope.locationId,
+    },
   };
 }
 
@@ -188,32 +262,59 @@ export type PayrollRateOptions = {
 
 export async function getPayrollRateOptionsAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollRateOptions>> {
   const parsed = z
-    .object({ restaurantSlug: restaurantSlugSchema })
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const usersResult = await getActiveNeonUsers();
   if (!usersResult.ok) return { ok: false, error: usersResult.error };
 
   const supabase = await createClient();
+
+  // If location manager (not org manager), filter workforce to members of this location
+  let candidateUsers = usersResult.data;
+  if (!actor.isOrgManager && actor.scope.locationId) {
+    const { data: locMembers } = await supabase
+      .from("location_memberships")
+      .select("profile_id")
+      .eq("location_id", actor.scope.locationId)
+      .eq("active", true);
+    const profileIds = (locMembers ?? []).map((m) => m.profile_id);
+    if (profileIds.length === 0) {
+      candidateUsers = [];
+    } else {
+      const { data: links } = await supabase
+        .from("attendance_identity_links")
+        .select("neon_user_id")
+        .eq("organization_id", actor.organizationId)
+        .in("profile_id", profileIds);
+      const linkedNeonIds = new Set((links ?? []).map((l) => l.neon_user_id));
+      candidateUsers = usersResult.data.filter((u) => linkedNeonIds.has(u.id));
+    }
+  }
+
   const [defaultRateResult, overridesResult] = await Promise.all([
     getPayrollDefaultRateCents(supabase, {
-      organizationId: currentUser.organizationId,
+      organizationId: actor.organizationId,
     }),
     listPayrollRateOverrides(supabase, {
-      organizationId: currentUser.organizationId,
+      organizationId: actor.organizationId,
     }),
   ]);
   if (!defaultRateResult.ok)
@@ -223,7 +324,7 @@ export async function getPayrollRateOptionsAction(input: {
   return {
     ok: true,
     data: {
-      users: usersResult.data,
+      users: candidateUsers,
       defaultRateCents: defaultRateResult.data,
       overrides: overridesResult.data,
     },
@@ -233,23 +334,32 @@ export async function getPayrollRateOptionsAction(input: {
 export async function setPayrollDefaultRateAction(input: {
   restaurantSlug: string;
   rateCents: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       rateCents: rateCentsSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  if (!actor.isOrgManager) {
+    return {
+      ok: false,
+      error: "Only organization managers can configure compensation rates.",
+    };
+  }
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -257,9 +367,9 @@ export async function setPayrollDefaultRateAction(input: {
   if (sessionCheck) return sessionCheck;
 
   return setPayrollDefaultRateCents(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     rateCents: parsed.data.rateCents,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
@@ -267,24 +377,33 @@ export async function setPayrollRateOverrideAction(input: {
   restaurantSlug: string;
   neonUserId: number;
   rateCents: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       neonUserId: neonUserIdSchema,
       rateCents: rateCentsSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  if (!actor.isOrgManager) {
+    return {
+      ok: false,
+      error: "Only organization managers can configure compensation rates.",
+    };
+  }
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -292,33 +411,42 @@ export async function setPayrollRateOverrideAction(input: {
   if (sessionCheck) return sessionCheck;
 
   return setPayrollRateOverrideCents(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId: parsed.data.neonUserId,
     rateCents: parsed.data.rateCents,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
 export async function removePayrollRateOverrideAction(input: {
   restaurantSlug: string;
   neonUserId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       neonUserId: neonUserIdSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  if (!actor.isOrgManager) {
+    return {
+      ok: false,
+      error: "Only organization managers can configure compensation rates.",
+    };
+  }
+
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -326,7 +454,7 @@ export async function removePayrollRateOverrideAction(input: {
   if (sessionCheck) return sessionCheck;
 
   return removePayrollRateOverride(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId: parsed.data.neonUserId,
   });
 }
@@ -334,32 +462,47 @@ export async function removePayrollRateOverrideAction(input: {
 export async function listPayrollPeriodsAction(input: {
   restaurantSlug: string;
   periodMonth?: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPeriod[]>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       periodMonth: periodMonthSchema.optional(),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
-  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor) return { ok: false, error: NOT_SIGNED_IN_ERROR };
 
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: resolved.user.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
-  if (resolved.access.scope === "unlinked") return { ok: true, data: [] };
 
-  // Identical query for "all" and "self" -- payroll_periods_select_self's
-  // own RLS is what actually restricts a self-scoped caller to their own
-  // linked periods; this action does not duplicate that filter.
   const supabase = await createClient();
+  if (!actor.canManage) {
+    const link = await getOwnAttendanceLink(supabase, {
+      organizationId: actor.organizationId,
+      profileId: actor.viewer.profileId,
+    });
+    if (!link.ok || !link.data) return { ok: true, data: [] };
+    // RLS payroll_periods_select_self handles scoping to own neon_user_id
+    return listPayrollPeriods(supabase, {
+      organizationId: actor.organizationId,
+      periodMonth: parsed.data.periodMonth,
+    });
+  }
+
+  const filterLocationId = !actor.isOrgManager
+    ? actor.scope.locationId
+    : undefined;
   return listPayrollPeriods(supabase, {
-    organizationId: resolved.user.organizationId,
+    organizationId: actor.organizationId,
     periodMonth: parsed.data.periodMonth,
+    locationId: filterLocationId,
   });
 }
 
@@ -368,54 +511,62 @@ export type PayrollLedger = {
   payments: PayrollPayment[];
   adjustments: PayrollAdjustment[];
   balance: PayrollBalance;
-  /** Feature 020 Phase 5: for the printed/exported statement header. */
   organizationName: string;
 };
 
-/**
- * The full ledger for one period: the frozen snapshot, every payment
- * (confirmed-only for a self-scoped caller, both statuses for privileged
- * -- again purely a consequence of `payroll_payments`' own RLS, not an
- * app-layer filter here), every adjustment, and the computed balance.
- * `payment_date` is never part of how any of this is selected -- see
- * `listPaymentsForPeriod`'s own comment in payroll-data.ts.
- */
 export async function getPayrollLedgerAction(input: {
   restaurantSlug: string;
   periodId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollLedger>> {
   const parsed = z
-    .object({ restaurantSlug: restaurantSlugSchema, periodId: periodIdSchema })
+    .object({
+      restaurantSlug: restaurantSlugSchema,
+      periodId: periodIdSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
-  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor) return { ok: false, error: NOT_SIGNED_IN_ERROR };
 
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: resolved.user.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
-  if (resolved.access.scope === "unlinked") {
-    return { ok: false, error: "That payroll period could not be found." };
-  }
 
   const supabase = await createClient();
+  let ownNeonUserId: number | null = null;
+  if (!actor.canManage) {
+    const link = await getOwnAttendanceLink(supabase, {
+      organizationId: actor.organizationId,
+      profileId: actor.viewer.profileId,
+    });
+    if (!link.ok || !link.data) {
+      return { ok: false, error: "That payroll period could not be found." };
+    }
+    ownNeonUserId = link.data.neonUserId;
+  }
+
   const periodResult = await getPayrollPeriodById(supabase, {
     periodId: parsed.data.periodId,
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  if (!period || period.organizationId !== resolved.user.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
   }
-  // Defense in depth beyond RLS: a self-scoped caller only ever gets a
-  // period belonging to their own linked Neon id, checked explicitly here
-  // too, not solely relied on from the select policy.
-  if (
-    resolved.access.scope === "self" &&
-    period.neonUserId !== resolved.access.neonUserId
+
+  if (!actor.canManage) {
+    if (period.neonUserId !== ownNeonUserId) {
+      return { ok: false, error: "That payroll period could not be found." };
+    }
+  } else if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
   ) {
     return { ok: false, error: "That payroll period could not be found." };
   }
@@ -430,7 +581,7 @@ export async function getPayrollLedgerAction(input: {
     listAdjustmentsForPeriod(supabase, { periodId: period.id }),
     getPayrollBalance(supabase, { period }),
     getOrganizationName(supabase, {
-      organizationId: resolved.user.organizationId,
+      organizationId: actor.organizationId,
     }),
   ]);
   if (!paymentsResult.ok) return { ok: false, error: paymentsResult.error };
@@ -440,11 +591,15 @@ export async function getPayrollLedgerAction(input: {
   if (!organizationNameResult.ok)
     return { ok: false, error: organizationNameResult.error };
 
+  const payments = !actor.canManage
+    ? paymentsResult.data.filter((p) => p.status === "confirmed")
+    : paymentsResult.data;
+
   return {
     ok: true,
     data: {
       period,
-      payments: paymentsResult.data,
+      payments,
       adjustments: adjustmentsResult.data,
       balance: balanceResult.data,
       organizationName: organizationNameResult.data,
@@ -452,14 +607,6 @@ export async function getPayrollLedgerAction(input: {
   };
 }
 
-/**
- * Fetches this month's Neon hours for one person and computes gross cents
- * -- the one piece of logic generate and regenerate both need identically.
- * Never called with a rate resolved from anywhere but the CURRENT
- * payroll_rates/payroll_settings state, per the spec's hard question 4
- * answer (a rate change only ever affects what a future generate/
- * regenerate computes, never an already-generated snapshot).
- */
 async function computeSnapshot(
   supabase: Awaited<ReturnType<typeof createClient>>,
   input: { organizationId: string; neonUserId: number; periodMonth: string },
@@ -514,34 +661,69 @@ export async function generatePayrollPeriodAction(input: {
   restaurantSlug: string;
   neonUserId: number;
   periodMonth: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPeriod>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       neonUserId: neonUserIdSchema,
       periodMonth: periodMonthSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  const provenance = await resolveEmployeeLocationProvenance(
+    supabase,
+    actor.organizationId,
+    parsed.data.neonUserId,
+  );
+
+  let targetLocationId: string | null = null;
+  if (!actor.isOrgManager) {
+    if (provenance.status === "multi_location") {
+      return {
+        ok: false,
+        error:
+          "This employee is assigned to multiple locations. Multi-location payroll must be generated by an organization manager.",
+      };
+    }
+    if (
+      provenance.status !== "single_location" ||
+      provenance.locationId !== actor.scope.locationId
+    ) {
+      return {
+        ok: false,
+        error:
+          "You cannot generate payroll for an employee assigned to another location.",
+      };
+    }
+    targetLocationId = actor.scope.locationId;
+  } else {
+    targetLocationId =
+      provenance.status === "single_location"
+        ? provenance.locationId
+        : (actor.scope.locationId ?? null);
+  }
+
   const periodMonth = normalizePeriodMonth(parsed.data.periodMonth);
 
   const existing = await getPayrollPeriod(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId: parsed.data.neonUserId,
     periodMonth,
   });
@@ -555,66 +737,54 @@ export async function generatePayrollPeriodAction(input: {
   }
 
   const snapshot = await computeSnapshot(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId: parsed.data.neonUserId,
     periodMonth,
   });
   if (!snapshot.ok) return snapshot;
 
   return generatePayrollPeriod(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
+    locationId: targetLocationId,
     neonUserId: parsed.data.neonUserId,
     periodMonth,
     ...snapshot.data,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
 export type BulkGeneratePayrollResult = {
   successful: Array<{ neonUserId: number; period: PayrollPeriod }>;
-  /** Already has a period for this person/month -- not silently
-   * overwritten; regenerate is a separate, single-person action. */
   skipped: Array<{ neonUserId: number; reason: string }>;
   failed: Array<{ neonUserId: number; error: string }>;
 };
 
 const neonUserIdsSchema = z.array(neonUserIdSchema).min(1).max(200);
 
-/**
- * Single, multiple, or "all" employee generation are all the same call --
- * the UI just decides which `neonUserIds` to pass (every active employee
- * for "all"). Deliberately NOT wrapped in one all-or-nothing database
- * transaction: this loop reuses `getPayrollPeriod` (the exact duplicate
- * check `generatePayrollPeriodAction` already makes) and `computeSnapshot`/
- * `generatePayrollPeriod` (the exact calculation and insert
- * `generatePayrollPeriodAction` already makes) per person, one at a time,
- * so one person's Neon/rate lookup failing can never roll back or block
- * every other person's already-successful generation in the same batch --
- * the structured result below is how the caller finds out which is which,
- * never a silent partial success.
- */
 export async function generatePayrollForEmployeesAction(input: {
   restaurantSlug: string;
   neonUserIds: number[];
   periodMonth: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<BulkGeneratePayrollResult>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       neonUserIds: neonUserIdsSchema,
       periodMonth: periodMonthSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -622,8 +792,6 @@ export async function generatePayrollForEmployeesAction(input: {
   if (sessionCheck) return sessionCheck;
 
   const periodMonth = normalizePeriodMonth(parsed.data.periodMonth);
-  // De-duplicated -- a caller passing the same id twice (e.g. a UI bug)
-  // generates it once, not twice.
   const neonUserIds = [...new Set(parsed.data.neonUserIds)];
 
   const result: BulkGeneratePayrollResult = {
@@ -634,7 +802,7 @@ export async function generatePayrollForEmployeesAction(input: {
 
   for (const neonUserId of neonUserIds) {
     const existing = await getPayrollPeriod(supabase, {
-      organizationId: currentUser.organizationId,
+      organizationId: actor.organizationId,
       neonUserId,
       periodMonth,
     });
@@ -650,8 +818,42 @@ export async function generatePayrollForEmployeesAction(input: {
       continue;
     }
 
+    const provenance = await resolveEmployeeLocationProvenance(
+      supabase,
+      actor.organizationId,
+      neonUserId,
+    );
+
+    let targetLocationId: string | null = null;
+    if (!actor.isOrgManager) {
+      if (provenance.status === "multi_location") {
+        result.skipped.push({
+          neonUserId,
+          reason:
+            "Assigned to multiple locations; requires organization manager generation.",
+        });
+        continue;
+      }
+      if (
+        provenance.status !== "single_location" ||
+        provenance.locationId !== actor.scope.locationId
+      ) {
+        result.skipped.push({
+          neonUserId,
+          reason: "Not assigned to this location.",
+        });
+        continue;
+      }
+      targetLocationId = actor.scope.locationId;
+    } else {
+      targetLocationId =
+        provenance.status === "single_location"
+          ? provenance.locationId
+          : (actor.scope.locationId ?? null);
+    }
+
     const snapshot = await computeSnapshot(supabase, {
-      organizationId: currentUser.organizationId,
+      organizationId: actor.organizationId,
       neonUserId,
       periodMonth,
     });
@@ -661,11 +863,12 @@ export async function generatePayrollForEmployeesAction(input: {
     }
 
     const generated = await generatePayrollPeriod(supabase, {
-      organizationId: currentUser.organizationId,
+      organizationId: actor.organizationId,
+      locationId: targetLocationId,
       neonUserId,
       periodMonth,
       ...snapshot.data,
-      actorProfileId: currentUser.profileId,
+      actorProfileId: actor.viewer.profileId,
     });
     if (!generated.ok) {
       result.failed.push({ neonUserId, error: generated.error });
@@ -681,88 +884,106 @@ export type PayrollGenerationEligibility = {
   neonUserId: number;
   fullName: string;
   alreadyGenerated: boolean;
+  multiLocation?: boolean;
 };
 
-/**
- * Feeds the bulk-generate dialog's own per-employee status column
- * ("Already generated" / "Ready") -- read-only, no write, so the
- * dialog can show this BEFORE the manager commits to generating,
- * rather than only finding out about a skip after the fact.
- */
 export async function getPayrollGenerationEligibilityAction(input: {
   restaurantSlug: string;
   periodMonth: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollGenerationEligibility[]>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       periodMonth: periodMonthSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const usersResult = await getActiveNeonUsers();
   if (!usersResult.ok) return { ok: false, error: usersResult.error };
 
   const supabase = await createClient();
+
+  let candidateUsers = usersResult.data;
+  if (!actor.isOrgManager && actor.scope.locationId) {
+    const { data: locMembers } = await supabase
+      .from("location_memberships")
+      .select("profile_id")
+      .eq("location_id", actor.scope.locationId)
+      .eq("active", true);
+    const profileIds = (locMembers ?? []).map((m) => m.profile_id);
+    if (profileIds.length === 0) {
+      candidateUsers = [];
+    } else {
+      const { data: links } = await supabase
+        .from("attendance_identity_links")
+        .select("neon_user_id")
+        .eq("organization_id", actor.organizationId)
+        .in("profile_id", profileIds);
+      const linkedNeonIds = new Set((links ?? []).map((l) => l.neon_user_id));
+      candidateUsers = usersResult.data.filter((u) => linkedNeonIds.has(u.id));
+    }
+  }
+
   const periodMonth = normalizePeriodMonth(parsed.data.periodMonth);
-  const existingResults = await Promise.all(
-    usersResult.data.map((user) =>
-      getPayrollPeriod(supabase, {
-        organizationId: currentUser.organizationId,
+  const eligibility = await Promise.all(
+    candidateUsers.map(async (user) => {
+      const existing = await getPayrollPeriod(supabase, {
+        organizationId: actor.organizationId,
         neonUserId: user.id,
         periodMonth,
-      }),
-    ),
-  );
-  const failed = existingResults.find((result) => !result.ok);
-  if (failed && !failed.ok) return { ok: false, error: failed.error };
-
-  return {
-    ok: true,
-    data: usersResult.data.map((user, index) => {
-      const existingResult = existingResults[index];
+      });
+      const prov = await resolveEmployeeLocationProvenance(
+        supabase,
+        actor.organizationId,
+        user.id,
+      );
       return {
         neonUserId: user.id,
         fullName: user.fullName,
-        alreadyGenerated: existingResult.ok
-          ? Boolean(existingResult.data)
-          : false,
+        alreadyGenerated: existing.ok ? Boolean(existing.data) : false,
+        multiLocation: prov.status === "multi_location",
       };
     }),
-  };
+  );
+
+  return { ok: true, data: eligibility };
 }
 
 export async function regeneratePayrollPeriodAction(input: {
   restaurantSlug: string;
   periodId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPeriod>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       periodId: z.number().int().positive(),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -774,11 +995,18 @@ export async function regeneratePayrollPeriodAction(input: {
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  // Not found, or belongs to a different organization -- RLS would already
-  // block the write below either way, but this gives a clear message
-  // instead of a raw "no rows updated" surprise.
-  if (!period || period.organizationId !== currentUser.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
   }
   if (period.status === "locked") {
     return {
@@ -799,7 +1027,7 @@ export async function regeneratePayrollPeriodAction(input: {
   }
 
   const snapshot = await computeSnapshot(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
     neonUserId: period.neonUserId,
     periodMonth: period.periodMonth,
   });
@@ -808,30 +1036,32 @@ export async function regeneratePayrollPeriodAction(input: {
   return regeneratePayrollPeriod(supabase, {
     period,
     ...snapshot.data,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
 export async function lockPayrollPeriodAction(input: {
   restaurantSlug: string;
   periodId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       periodId: z.number().int().positive(),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -843,8 +1073,18 @@ export async function lockPayrollPeriodAction(input: {
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  if (!period || period.organizationId !== currentUser.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
   }
   if (period.status === "locked") {
     return { ok: false, error: "This payroll period is already locked." };
@@ -852,42 +1092,36 @@ export async function lockPayrollPeriodAction(input: {
 
   return lockPayrollPeriod(supabase, {
     periodId: period.id,
-    organizationId: currentUser.organizationId,
-    actorProfileId: currentUser.profileId,
+    organizationId: actor.organizationId,
+    locationId: period.locationId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
-/**
- * The explicit, audited reversal of `lockPayrollPeriodAction`.
- * Manager-only (`requirePayrollManager`, identical to every other write
- * in this file), and requires a mandatory reason -- unlocking a period
- * is exactly the kind of sensitive, "allows further modification"
- * action Section 10 of the spec asks to gate behind explicit
- * confirmation, and the reason is what makes the resulting audit event
- * actually useful later, not just "someone unlocked this."
- */
 export async function unlockPayrollPeriodAction(input: {
   restaurantSlug: string;
   periodId: number;
   reason: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       periodId: z.number().int().positive(),
       reason: reasonSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -899,8 +1133,18 @@ export async function unlockPayrollPeriodAction(input: {
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  if (!period || period.organizationId !== currentUser.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
   }
   if (period.status !== "locked") {
     return { ok: false, error: "This payroll period isn't locked." };
@@ -908,29 +1152,22 @@ export async function unlockPayrollPeriodAction(input: {
 
   return unlockPayrollPeriod(supabase, {
     periodId: period.id,
-    organizationId: currentUser.organizationId,
-    actorProfileId: currentUser.profileId,
+    organizationId: actor.organizationId,
+    locationId: period.locationId,
+    actorProfileId: actor.viewer.profileId,
     reason: parsed.data.reason,
     previousLockedAt: period.lockedAt,
     previousLockedBy: period.lockedBy,
   });
 }
 
-// -- Payments ---------------------------------------------------------------
-
-/**
- * Records a payment AGAINST a target period, identified only by
- * `periodId` -- `paymentDate` is stored purely as metadata (when the
- * money changed hands) and never used to derive, validate, or restrict
- * which period this reduces. A payment dated any month can target any
- * period; nothing here checks the two against each other.
- */
 export async function recordPaymentAction(input: {
   restaurantSlug: string;
   periodId: number;
   amountCents: number;
   paymentDate: string;
   comment?: string | null;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPayment>> {
   const parsed = z
     .object({
@@ -939,18 +1176,19 @@ export async function recordPaymentAction(input: {
       amountCents: amountCentsSchema,
       paymentDate: paymentDateSchema,
       comment: commentSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -962,17 +1200,28 @@ export async function recordPaymentAction(input: {
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  if (!period || period.organizationId !== currentUser.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
   }
 
   return recordPayment(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
+    locationId: period.locationId,
     periodId: period.id,
     amountCents: parsed.data.amountCents,
     paymentDate: parsed.data.paymentDate,
     comment: parsed.data.comment ?? null,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
@@ -982,6 +1231,7 @@ export async function editDraftPaymentAction(input: {
   amountCents: number;
   paymentDate: string;
   comment?: string | null;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPayment>> {
   const parsed = z
     .object({
@@ -990,18 +1240,19 @@ export async function editDraftPaymentAction(input: {
       amountCents: amountCentsSchema,
       paymentDate: paymentDateSchema,
       comment: commentSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -1013,12 +1264,9 @@ export async function editDraftPaymentAction(input: {
   });
   if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
   const payment = paymentResult.data;
-  if (!payment || payment.organizationId !== currentUser.organizationId) {
+  if (!payment || payment.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payment could not be found." };
   }
-  // The database trigger is the real backstop; this just gives a clear
-  // message instead of letting a confirmed-row edit surface as a raw
-  // Postgres error.
   if (payment.status === "confirmed") {
     return {
       ok: false,
@@ -1027,35 +1275,56 @@ export async function editDraftPaymentAction(input: {
     };
   }
 
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: payment.payrollPeriodId,
+  });
+  if (!periodResult.ok || !periodResult.data) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  const period = periodResult.data;
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
+  }
+
   return editDraftPayment(supabase, {
     payment,
+    locationId: period.locationId,
     amountCents: parsed.data.amountCents,
     paymentDate: parsed.data.paymentDate,
     comment: parsed.data.comment ?? null,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
 export async function deleteDraftPaymentAction(input: {
   restaurantSlug: string;
   paymentId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       paymentId: paymentIdSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -1067,7 +1336,7 @@ export async function deleteDraftPaymentAction(input: {
   });
   if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
   const payment = paymentResult.data;
-  if (!payment || payment.organizationId !== currentUser.organizationId) {
+  if (!payment || payment.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payment could not be found." };
   }
   if (payment.status === "confirmed") {
@@ -1078,32 +1347,53 @@ export async function deleteDraftPaymentAction(input: {
     };
   }
 
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: payment.payrollPeriodId,
+  });
+  if (!periodResult.ok || !periodResult.data) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  const period = periodResult.data;
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
+  }
+
   return deleteDraftPayment(supabase, {
     payment,
-    actorProfileId: currentUser.profileId,
+    locationId: period.locationId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
 export async function confirmPaymentAction(input: {
   restaurantSlug: string;
   paymentId: number;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollPayment>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       paymentId: paymentIdSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -1115,68 +1405,92 @@ export async function confirmPaymentAction(input: {
   });
   if (!paymentResult.ok) return { ok: false, error: paymentResult.error };
   const payment = paymentResult.data;
-  if (!payment || payment.organizationId !== currentUser.organizationId) {
+  if (!payment || payment.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payment could not be found." };
   }
   if (payment.status === "confirmed") {
     return { ok: false, error: "This payment is already confirmed." };
   }
 
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: payment.payrollPeriodId,
+  });
+  if (!periodResult.ok || !periodResult.data) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  const period = periodResult.data;
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
+  }
+
   return confirmPayment(supabase, {
     payment,
-    actorProfileId: currentUser.profileId,
+    locationId: period.locationId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
-/**
- * The explicit, audited reversal of `confirmPaymentAction`. Unlike
- * every other write in this file, this does NOT call a plain
- * `payroll-data.ts` update function -- `private.forbid_confirmed_payment_edit()`
- * (the trigger `20260907200000` added specifically to close a real,
- * proven vulnerability: a privileged role flipping status back to
- * draft and silently re-editing a "confirmed" payment) unconditionally
- * blocks any ordinary UPDATE that changes a confirmed payment's status,
- * for every role, including this one. The only door is the
- * `public.unconfirm_payroll_payment` SECURITY DEFINER RPC
- * (`20260911130000_payroll_payment_unconfirm.sql`), which re-validates
- * privilege and payment state itself, requires a mandatory reason, and
- * writes its own audit event atomically in the same transaction --
- * this action is a thin, validated wrapper around it, not a second
- * authorization layer duplicating what the RPC already does.
- *
- * Deliberately still checks `requirePayrollManager` up front anyway,
- * even though the RPC re-checks privilege itself: a cheap early exit
- * for the common case, consistent with every other action in this
- * file, not a claim that it's the real security boundary here (the
- * RPC is).
- */
 export async function unconfirmPaymentAction(input: {
   restaurantSlug: string;
   paymentId: number;
   reason: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<null>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       paymentId: paymentIdSchema,
       reason: reasonSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
+
+  const paymentResult = await getPaymentById(supabase, {
+    paymentId: parsed.data.paymentId,
+  });
+  if (!paymentResult.ok || !paymentResult.data) {
+    return { ok: false, error: "That payment could not be found." };
+  }
+  const payment = paymentResult.data;
+  const periodResult = await getPayrollPeriodById(supabase, {
+    periodId: payment.payrollPeriodId,
+  });
+  if (!periodResult.ok || !periodResult.data) {
+    return { ok: false, error: "That payroll period could not be found." };
+  }
+  const period = periodResult.data;
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
+  }
 
   const { error } = await supabase.rpc("unconfirm_payroll_payment", {
     p_payment_id: parsed.data.paymentId,
@@ -1186,21 +1500,12 @@ export async function unconfirmPaymentAction(input: {
   return { ok: true, data: null };
 }
 
-// -- Adjustments --------------------------------------------------------------
-
-/**
- * The escape hatch for a wrong CONFIRMED payment (frozen, per the two
- * triggers on payroll_payments) and for a wrong generated snapshot once
- * regeneration is blocked (per forbid_payroll_period_snapshot_edit) --
- * never an edit to either. A signed delta plus a mandatory reason,
- * targeting a period the same way a payment does: by `periodId`, nothing
- * else.
- */
 export async function recordAdjustmentAction(input: {
   restaurantSlug: string;
   periodId: number;
   deltaCents: number;
   reason: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollAdjustment>> {
   const parsed = z
     .object({
@@ -1208,18 +1513,19 @@ export async function recordAdjustmentAction(input: {
       periodId: periodIdSchema,
       deltaCents: deltaCentsSchema,
       reason: reasonSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const currentUser = await requirePayrollManager(parsed.data.restaurantSlug);
-  if (!currentUser) return { ok: false, error: NOT_MANAGER_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.canManage)
+    return { ok: false, error: NOT_MANAGER_ERROR };
 
-  // V2-004.004: payroll must be turned on at the verified location.
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: currentUser.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
 
   const supabase = await createClient();
@@ -1231,69 +1537,43 @@ export async function recordAdjustmentAction(input: {
   });
   if (!periodResult.ok) return { ok: false, error: periodResult.error };
   const period = periodResult.data;
-  if (!period || period.organizationId !== currentUser.organizationId) {
+  if (!period || period.organizationId !== actor.organizationId) {
     return { ok: false, error: "That payroll period could not be found." };
+  }
+  if (
+    !actor.isOrgManager &&
+    period.locationId &&
+    period.locationId !== actor.scope.locationId
+  ) {
+    return {
+      ok: false,
+      error: NOT_LOCATION_MANAGER_ERROR,
+    };
   }
 
   return recordAdjustment(supabase, {
-    organizationId: currentUser.organizationId,
+    organizationId: actor.organizationId,
+    locationId: period.locationId,
     periodId: period.id,
     deltaCents: parsed.data.deltaCents,
     reason: parsed.data.reason,
-    actorProfileId: currentUser.profileId,
+    actorProfileId: actor.viewer.profileId,
   });
 }
 
-// -- Dashboard ----------------------------------------------------------
-
 export type PayrollDashboardPerson = {
   neonUserId: number;
-  /**
-   * Net across every one of this person's periods (gross - confirmed
-   * payments - adjustments, summed) -- can be negative if they've been
-   * overpaid. Unlike the org-wide `totalBalanceOwedCents` below, this is
-   * NOT clamped per period before summing, since "does this person owe
-   * money or were they overpaid" is a real, useful distinction to show
-   * for one person that a clamped aggregate would hide.
-   */
   balanceCents: number;
-  /** Sum of gross_cents across every one of this person's periods, all-time. */
   totalGeneratedCents: number;
 };
 
 export type PayrollDashboard = {
-  /**
-   * Sum, across every period in the organization, of that period's
-   * balance clamped to zero before summing -- an overpaid period for one
-   * person never offsets what's still owed to someone else (or even to
-   * that same person in a different month). "How much more do I need to
-   * pay out, in total" is the question this answers.
-   */
   totalBalanceOwedCents: number;
-  /** Sum of gross_cents for periods whose period_month is literally last
-   * calendar month (relative to `todayLocalDate`) -- a fixed reference
-   * point, independent of any period/person filter elsewhere on the page. */
   previousMonthGeneratedCents: number;
-  /**
-   * Feature 026. Outstanding (not gross-generated) balance for the
-   * current/previous calendar month's periods -- a genuinely different
-   * figure from `previousMonthGeneratedCents` above (a fully-paid period
-   * contributes zero here, not its original gross amount). See
-   * `computeOwedForMonth`'s own doc comment.
-   */
   owedThisMonthCents: number;
   owedLastMonthCents: number;
-  /** The chronologically earliest period with a positive outstanding
-   * balance, or null once everything is settled. See
-   * `findOldestOpenPeriod`. */
   oldestOpenPeriod: OldestOpenPeriod | null;
   perPerson: PayrollDashboardPerson[];
-  /** Feature 026. Every period in scope (RLS already limits this to the
-   * org for a privileged caller, or just the caller's own locked
-   * periods for a self-scoped one), each carrying its own already-
-   * computed `balanceCents` -- what the grouped-by-person view renders
-   * from, reusing this exact fetch rather than a second N+1 balance
-   * query. */
   periods: PayrollPeriodWithBalance[];
 };
 
@@ -1307,46 +1587,47 @@ const EMPTY_DASHBOARD: PayrollDashboard = {
   periods: [],
 };
 
-/**
- * Feature 020 Phase 4. Read-only aggregation -- no write anywhere in this
- * function. Every figure is derived from `listPayrollPeriods` (RLS-scoped
- * to "every period in the org" for a privileged caller, "only my own
- * linked periods" for a self-scoped one -- the identical query, same as
- * every other Phase 3 read action) and `getPayrollBalance` per period,
- * the exact same function `getPayrollLedgerAction` already uses. Nothing
- * here re-derives balance a second way from a raw payments/adjustments
- * aggregation that could disagree with Phase 3's proven-correct,
- * period-keyed calculation -- every number here traces back to either
- * `period.grossCents` (the frozen snapshot itself) or a `getPayrollBalance`
- * result, both keyed on `payroll_period_id`.
- */
 export async function getPayrollDashboardAction(input: {
   restaurantSlug: string;
   todayLocalDate: string;
+  expectedContext?: unknown;
 }): Promise<ActionResult<PayrollDashboard>> {
   const parsed = z
     .object({
       restaurantSlug: restaurantSlugSchema,
       todayLocalDate: periodMonthSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return invalidRequest();
 
-  const resolved = await resolvePayrollAccess(parsed.data.restaurantSlug);
-  if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const actor = await getPayrollActor(parsed.data.restaurantSlug);
+  if (!actor) return { ok: false, error: NOT_SIGNED_IN_ERROR };
 
-  const blocked = await guardModule({
-    module: "payroll",
-    organizationId: resolved.user.organizationId,
-  });
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardPayrollModule(actor);
   if (blocked) return blocked;
-  if (resolved.access.scope === "unlinked") {
-    return { ok: true, data: EMPTY_DASHBOARD };
-  }
 
   const supabase = await createClient();
+
+  if (!actor.canManage) {
+    const link = await getOwnAttendanceLink(supabase, {
+      organizationId: actor.organizationId,
+      profileId: actor.viewer.profileId,
+    });
+    if (!link.ok || !link.data) {
+      return { ok: true, data: EMPTY_DASHBOARD };
+    }
+  }
+
+  const filterLocationId = !actor.isOrgManager
+    ? actor.scope.locationId
+    : undefined;
   const periodsResult = await listPayrollPeriods(supabase, {
-    organizationId: resolved.user.organizationId,
+    organizationId: actor.organizationId,
+    locationId: filterLocationId,
   });
   if (!periodsResult.ok) return { ok: false, error: periodsResult.error };
 
@@ -1365,7 +1646,7 @@ export async function getPayrollDashboardAction(input: {
 
   periodsResult.data.forEach((period, index) => {
     const balanceResult = balanceResults[index];
-    if (!balanceResult.ok) return; // unreachable -- already checked above
+    if (!balanceResult.ok) return;
     const { balanceCents } = balanceResult.data;
 
     totalBalanceOwedCents += Math.max(0, balanceCents);

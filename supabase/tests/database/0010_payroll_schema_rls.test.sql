@@ -515,7 +515,7 @@ select throws_ok(
     values
       ('00000000-0000-0000-0000-000000020101', 999, '2026-06-01', 10.0, 1000, 10000, '00000000-0000-0000-0000-000000020005')
   $$,
-  '23503',
+  '42501',
   null,
   'a payroll period cannot be attributed to an actor from a different organization'
 );
