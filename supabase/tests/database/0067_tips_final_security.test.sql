@@ -187,16 +187,16 @@ select is(
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067001', true);
 select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067001"}', true);
-select lives_ok(
+select throws_ok(
   $$ insert into public.audit_events(organization_id, location_id, actor_profile_id, action, entity_type, entity_id)
      values ('00000000-0000-4000-8000-000000067010', '00000000-0000-4000-8000-000000067011',
              '00000000-0000-4000-8000-000000067001', 'finalized', 'tip_pool', '1') $$,
-  'location manager may record a tip_pool audit event at the location they manage'
+  '42501', null, 'location manager cannot directly insert a tip_pool audit event (RPC only)'
 );
 select throws_ok(
   $$ insert into public.audit_events(organization_id, location_id, actor_profile_id, action, entity_type, entity_id)
      values ('00000000-0000-4000-8000-000000067010', '00000000-0000-4000-8000-000000067011',
-             '00000000-0000-4000-8000-000000067001', 'published', 'schedule_period', '1') $$,
+             '00000000-0000-4000-8000-000000067001', 'finalized', 'payroll_entry', '1') $$,
   '42501', null, 'location manager cannot fabricate another module''s audit record'
 );
 select throws_ok(
@@ -218,7 +218,7 @@ select throws_ok(
   '42501', null, 'cannot attribute an audit event to someone else'
 );
 select is(
-  (select count(*)::int from public.audit_events where entity_type = 'schedule_period'),
+  (select count(*)::int from public.audit_events where entity_type = 'payroll_entry'),
   0, 'location manager cannot read other modules'' audit events'
 );
 select is(
@@ -232,16 +232,16 @@ select ok(
 
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067004', true);
 select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067004"}', true);
-select lives_ok(
+select throws_ok(
   $$ insert into public.audit_events(organization_id, location_id, actor_profile_id, action, entity_type, entity_id)
      values ('00000000-0000-4000-8000-000000067010', '00000000-0000-4000-8000-000000067011',
              '00000000-0000-4000-8000-000000067004', 'reopened', 'tip_pool', '1') $$,
-  'Overall manager without a membership keeps real attribution on a tip_pool audit event'
+  '42501', null, 'Overall manager cannot directly insert tip_pool audit events (must use RPC)'
 );
 select throws_ok(
   $$ insert into public.audit_events(organization_id, location_id, actor_profile_id, action, entity_type, entity_id)
      values ('00000000-0000-4000-8000-000000067010', '00000000-0000-4000-8000-000000067011',
-             '00000000-0000-4000-8000-000000067004', 'published', 'schedule_period', '1') $$,
+             '00000000-0000-4000-8000-000000067004', 'finalized', 'payroll_entry', '1') $$,
   '42501', null, 'Overall manager has no blanket audit_events insert for other modules'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067008', true);
@@ -255,7 +255,7 @@ select throws_ok(
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067004', true);
 select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067004"}', true);
 select is(
-  (select count(*)::int from public.audit_events where entity_type = 'schedule_period'),
+  (select count(*)::int from public.audit_events where entity_type = 'payroll_entry'),
   0, 'Overall manager has no blanket audit_events read for other modules'
 );
 
@@ -331,16 +331,16 @@ select throws_ok(
      where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
   '42501', null, 'direct finalize cannot attribute the pool to someone else'
 );
-select lives_ok(
+select throws_ok(
   $$ update public.tip_pools set status = 'finalized', finalized_at = now(),
        finalized_by = '00000000-0000-4000-8000-000000067001'
      where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
-  'direct finalize attributed to the caller is still accepted (pre-RPC app compatibility)'
+  '42501', null, 'direct table finalize is refused (must use tips_finalize_pool RPC)'
 );
 select lives_ok(
   $$ update public.tip_pools set status = 'draft', finalized_at = null, finalized_by = null
-     where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
-  'direct reopen still accepted for the pre-RPC app'
+     where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date $$,
+  'direct reopen on finalized pool affects no rows (reopen policy dropped)'
 );
 select throws_ok(
   $$ insert into public.tip_allocations(organization_id, tip_pool_id, profile_id, amount_cents)
