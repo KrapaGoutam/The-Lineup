@@ -3,7 +3,7 @@
 GitHub Issue: [#253](https://github.com/KrapaGoutam/The-Lineup/issues/253)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `IMPLEMENTED` — all eight subfeatures merged into `development`; hosted DEV at ledger 81; issue #253 stays open for the formal closeout / hosted-acceptance gate.
+Status: `IMPLEMENTED` — all eight subfeatures merged into `development`; hosted DEV at ledger 82 (incl. the PR #316 Inventory enhancement); issue #253 stays open: formal closeout is BLOCKED on owner module decisions and the hosted acceptance smoke ([closeout package](closeout/CLOSEOUT_DECISION.md)).
 
 ---
 

@@ -1,0 +1,15 @@
+# V2-005 Closeout — Open Dependencies
+
+| Item                                   | State                                                                                                                          | Blocks #253?                    | Owner action                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ------------------------------ |
+| Owner module decisions (D1–D5)         | None recorded                                                                                                                  | **Yes** (needs hosted smoke)    | Answer D1–D5; grant P-1        |
+| Hosted authenticated owner acceptance  | Not executed; unreachable until `bar_inventory` is Enabled somewhere                                                           | **Yes**                         | Owner sign-off after the smoke |
+| 42 `V2 Harness` fixture locations      | Active on DEV; counted by the activation gate                                                                                  | No (affects #304/#252)          | D2                             |
+| #304 backend enforcement activation    | STAGED; DEV 0/44 ready; needs P-2, a `READY` readiness check, an activation reference, operator, rollback, verification window | No (separate gate)              | P-2 then P-3                   |
+| #252 per-location module configuration | Contract, editor, navigation done; no per-location values exist on DEV                                                         | No                              | Same decisions                 |
+| V2-008.004 legacy reconciliation       | Owns Production reconciliation and the Monks backfill; not started                                                             | No for #253; yes for Production | Separate program step          |
+| Q1 / R2 (V2-004)                       | Open                                                                                                                           | No                              | Owner                          |
+| P2-4 Realtime for storage tables       | Accepted; peers refresh on next action/focus, versioned writes prevent overwrite                                               | No                              | Accepted                       |
+| P2-5 / P2-6                            | Accepted                                                                                                                       | No                              | Accepted                       |
+| Multi-branch actor for All branches    | The two non-harness DEV orgs have one location each                                                                            | Yes, for that smoke item        | D3                             |
+| Production                             | Untouched; blocked on V2-008 and V2-009                                                                                        | n/a                             | n/a                            |
