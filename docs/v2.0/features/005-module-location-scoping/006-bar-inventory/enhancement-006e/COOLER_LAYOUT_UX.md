@@ -75,3 +75,17 @@ Authorized managers can configure the layout directly:
 - **Desktop (>=1024px):** Multi-column grid for All Storage Areas; full 2D shelf representations for single cooler view.
 - **Tablet (768px - 1023px):** Two-column or single-column layout with horizontal slot scrolling if necessary, maintaining touch targets >= 44x44px.
 - **Mobile (<768px):** Single-column stacked cards for areas and shelves, full vertical flow, no horizontal viewport overflow.
+
+---
+
+## Stage E6 amendments
+
+- **Branch control.** The Cooler Layout edits exactly one server-verified branch and labels it by name. The
+  earlier "All Locations" label was cosmetic and has been removed.
+- **All authorized branches (view only).** A real, read-only overview: the server proves each candidate branch
+  with the database authority RPC and the Bar Inventory module gate, reads only those branches, and returns each
+  branch's own stock row. Quantities are never added together. Editing needs one verified branch, so the overview
+  offers only "Edit this branch's layout" for the branch the viewer is in.
+- **Selection.** Select All / individual selection live in the Inventory Table (single selection system). The
+  Cooler Layout intentionally has no selection controls; opening a product edits that one product in the branch.
+- **Place Item** lets the person choose the product. Controls have accessible names and 36 px touch targets.

@@ -215,6 +215,8 @@ export type DateGroupPlanRow = {
   manufacture: InventoryDate | null;
   expiration: InventoryDate | null;
   notes: string | null;
+  /** The version of the existing group this row was planned against (updates). */
+  expectedVersion?: number | null;
   changes: string[];
 };
 
@@ -253,6 +255,7 @@ export function buildDateGroupImportPlan(
 
   const rows: DateGroupPlanRow[] = [];
   const existingLots = catalog.dateLots ?? [];
+  const seenLotIds = new Set<string>();
 
   for (const record of records) {
     const vendorText = cleanText(readCell(record, "vendor"));
@@ -543,6 +546,26 @@ export function buildDateGroupImportPlan(
       continue;
     }
 
+    if (notesText.length > 500) {
+      rows.push({
+        rowNumber: record.rowNumber,
+        action: "error",
+        reason: "Notes can be at most 500 characters.",
+        productId: product.id,
+        productName: product.name,
+        vendorName: vendor.name,
+        size: product.size,
+        unit: product.unitLabel ?? product.unitType,
+        dateGroupId: lotIdText || null,
+        quantity,
+        manufacture,
+        expiration,
+        notes: null,
+        changes: [],
+      });
+      continue;
+    }
+
     // 5. Match lot ID if provided
     let existingLot: DateLot | null = null;
     if (lotIdText) {
@@ -585,6 +608,46 @@ export function buildDateGroupImportPlan(
         });
         continue;
       }
+      // An archived group is never silently reactivated by an import.
+      if (!existingLot.active) {
+        rows.push({
+          rowNumber: record.rowNumber,
+          action: "error",
+          reason: `Date group “${lotIdText}” is archived. Restore it in Date Tracking before importing changes.`,
+          productId: product.id,
+          productName: product.name,
+          vendorName: vendor.name,
+          size: product.size,
+          unit: product.unitLabel ?? product.unitType,
+          dateGroupId: lotIdText,
+          quantity,
+          manufacture,
+          expiration,
+          notes: notesText || null,
+          changes: [],
+        });
+        continue;
+      }
+      if (seenLotIds.has(existingLot.id)) {
+        rows.push({
+          rowNumber: record.rowNumber,
+          action: "error",
+          reason: `Date group ID “${lotIdText}” appears more than once in this file.`,
+          productId: product.id,
+          productName: product.name,
+          vendorName: vendor.name,
+          size: product.size,
+          unit: product.unitLabel ?? product.unitType,
+          dateGroupId: lotIdText,
+          quantity,
+          manufacture,
+          expiration,
+          notes: notesText || null,
+          changes: [],
+        });
+        continue;
+      }
+      seenLotIds.add(existingLot.id);
     }
 
     const notes = notesText || null;
@@ -632,6 +695,7 @@ export function buildDateGroupImportPlan(
         manufacture,
         expiration,
         notes,
+        expectedVersion: existingLot.version,
         changes,
       });
     } else {
@@ -674,17 +738,43 @@ export function buildDateGroupImportPlan(
   return { rows, summary, canCommit };
 }
 
+/**
+ * A 53-bit hash (cyrb53) of everything a commit would write, including the
+ * version of every group being updated and every date precision. If anything a
+ * reviewer saw has changed by the time they confirm (another manager edited a
+ * group, the catalog changed), the fingerprint no longer matches and the commit
+ * is refused rather than overwriting.
+ */
 export function fingerprintDateGroupPlan(plan: DateGroupPlan): string {
   const payload = plan.rows
-    .map(
-      (r) =>
-        `${r.rowNumber}:${r.action}:${r.productId}:${r.dateGroupId}:${r.quantity}:${r.manufacture?.date}:${r.expiration?.date}`,
+    .map((r) =>
+      [
+        r.rowNumber,
+        r.action,
+        r.productId,
+        r.dateGroupId,
+        r.expectedVersion ?? "",
+        r.quantity,
+        r.manufacture?.date ?? "",
+        r.manufacture?.precision ?? "",
+        r.expiration?.date ?? "",
+        r.expiration?.precision ?? "",
+        r.notes ?? "",
+      ].join("|"),
     )
     .join(";");
-  let hash = 0;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
   for (let i = 0; i < payload.length; i++) {
-    hash = (hash << 5) - hash + payload.charCodeAt(i);
-    hash |= 0;
+    const ch = payload.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
   }
-  return `dg_${Math.abs(hash).toString(16)}`;
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `dg_${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16)}`;
 }

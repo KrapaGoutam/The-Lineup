@@ -261,6 +261,7 @@ export function buildDemoCatalog(): CatalogState {
   // Physical Storage Areas & Placements (V2-005.006-E)
   run({
     type: "storageAreaUpsert",
+    expectedVersion: null,
     id: "demo-area-cooler-1",
     name: "Cooler 1 (Main)",
     kind: "cooler",
@@ -269,6 +270,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storageAreaUpsert",
+    expectedVersion: null,
     id: "demo-area-cooler-2",
     name: "Cooler 2 (Draft & Cans)",
     kind: "cooler",
@@ -277,6 +279,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storageAreaUpsert",
+    expectedVersion: null,
     id: "demo-area-back-bar",
     name: "Back Bar",
     kind: "back_bar",
@@ -285,6 +288,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storageAreaUpsert",
+    expectedVersion: null,
     id: "demo-area-dry-storage",
     name: "Dry Storage",
     kind: "dry_storage",
@@ -295,6 +299,7 @@ export function buildDemoCatalog(): CatalogState {
   // Shelves in Cooler 1
   run({
     type: "storageShelfUpsert",
+    expectedVersion: null,
     id: "demo-shelf-c1-top",
     storageAreaId: "demo-area-cooler-1",
     name: "Top Shelf - Spirits",
@@ -303,6 +308,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storageShelfUpsert",
+    expectedVersion: null,
     id: "demo-shelf-c1-mid",
     storageAreaId: "demo-area-cooler-1",
     name: "Middle Shelf - Mixers",
@@ -311,6 +317,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storageShelfUpsert",
+    expectedVersion: null,
     id: "demo-shelf-c1-bot",
     storageAreaId: "demo-area-cooler-1",
     name: "Bottom Shelf - Heavy Jugs",
@@ -321,6 +328,7 @@ export function buildDemoCatalog(): CatalogState {
   // Shelves in Cooler 2
   run({
     type: "storageShelfUpsert",
+    expectedVersion: null,
     id: "demo-shelf-c2-tier",
     storageAreaId: "demo-area-cooler-2",
     name: "Upper Can Deck",
@@ -335,6 +343,7 @@ export function buildDemoCatalog(): CatalogState {
 
   run({
     type: "storagePlacementSet",
+    expectedVersion: null,
     id: "demo-place-1",
     storageAreaId: "demo-area-cooler-1",
     shelfId: "demo-shelf-c1-top",
@@ -345,6 +354,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storagePlacementSet",
+    expectedVersion: null,
     id: "demo-place-2",
     storageAreaId: "demo-area-cooler-1",
     shelfId: "demo-shelf-c1-top",
@@ -355,6 +365,7 @@ export function buildDemoCatalog(): CatalogState {
   });
   run({
     type: "storagePlacementSet",
+    expectedVersion: null,
     id: "demo-place-3",
     storageAreaId: "demo-area-cooler-2",
     shelfId: "demo-shelf-c2-tier",

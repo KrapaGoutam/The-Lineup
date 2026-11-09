@@ -212,8 +212,26 @@ export type StorageShelfView = {
   name: string;
   sectionName: string | null;
   displayOrder: number;
+  version: number;
   updatedAt: string;
   updatedByName: string | null;
+};
+
+/** One branch's storage layout with THAT branch's own stock rows (never mixed). */
+export type BranchStorageView = {
+  locationId: string;
+  locationName: string;
+  areas: StorageAreaView[];
+  shelves: StorageShelfView[];
+  placements: StoragePlacementView[];
+  stock: StockView[];
+};
+
+/** Read-only overview of every branch the viewer may manage. */
+export type BranchStorageOverview = {
+  branches: BranchStorageView[];
+  /** The server-verified branch the viewer is currently working in. */
+  activeLocationId: string;
 };
 
 export type StoragePlacementView = {

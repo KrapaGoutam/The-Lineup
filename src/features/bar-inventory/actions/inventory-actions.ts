@@ -18,7 +18,9 @@ import {
   getInventoryActor,
   type InventoryActor,
 } from "../data/inventory-actor";
+import type { Database } from "@/types/database.generated";
 import { getCatalogSnapshot } from "../data/catalog-data";
+import { getBranchStorageOverview } from "../data/storage-overview-data";
 import { getOrderDraftById } from "../data/order-draft-data";
 import {
   getHistoryEntries,
@@ -43,6 +45,7 @@ import {
   orderDraftExportRequestSchema,
 } from "../domain/order-draft-share";
 import {
+  type BranchStorageOverview,
   type CatalogConflict,
   type CatalogSnapshot,
   type HistoryEntry,
@@ -67,6 +70,16 @@ const slugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
+/**
+ * Every named argument of a generated RPC, nullable. PostgREST resolves RPCs by
+ * argument NAME, so a drifted or omitted name would silently deny every caller
+ * (PGRST202); `satisfies RpcArgs<...>` makes that a compile error.
+ */
+type RpcArgs<N extends keyof Database["public"]["Functions"]> = {
+  [K in keyof Database["public"]["Functions"][N]["Args"]]:
+    | Database["public"]["Functions"][N]["Args"][K]
+    | null;
+};
 type CommandArgs = { p_organization_id: string; p_location_id: string };
 
 async function runCommand(
@@ -295,14 +308,16 @@ async function runCommand(
           p_kind: command.kind,
           p_display_order: command.displayOrder,
           p_active: command.active,
-        })
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_area_upsert">)
       ).error;
     case "storageAreaArchive":
       return (
         await supabase.rpc("inventory_storage_area_archive", {
           ...base,
           p_area_id: command.id,
-        })
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_area_archive">)
       ).error;
     case "storageShelfUpsert":
       return (
@@ -313,14 +328,17 @@ async function runCommand(
           p_name: command.name,
           p_section_name: command.sectionName,
           p_display_order: command.displayOrder,
-        })
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_shelf_upsert">)
       ).error;
     case "storageShelfDelete":
       return (
         await supabase.rpc("inventory_storage_shelf_delete", {
           ...base,
           p_shelf_id: command.id,
-        })
+          p_expected_version: command.expectedVersion,
+          p_remove_placements: command.removePlacements,
+        } satisfies RpcArgs<"inventory_storage_shelf_delete">)
       ).error;
     case "storagePlacementSet":
       return (
@@ -333,14 +351,16 @@ async function runCommand(
           p_slot_number: command.slotNumber,
           p_slot_label: command.slotLabel,
           p_display_order: command.displayOrder,
-        })
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_placement_set">)
       ).error;
     case "storagePlacementDelete":
       return (
         await supabase.rpc("inventory_storage_placement_delete", {
           ...base,
           p_placement_id: command.id,
-        })
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_placement_delete">)
       ).error;
     case "storagePlacementReorder":
       return (
@@ -348,7 +368,7 @@ async function runCommand(
           ...base,
           p_shelf_id: command.shelfId,
           p_placement_ids: command.placementIds,
-        })
+        } satisfies RpcArgs<"inventory_storage_placement_reorder">)
       ).error;
   }
 }
@@ -446,6 +466,60 @@ export async function getCatalogSnapshotAction(input: {
   if (!snapshot)
     return { ok: false, error: "Bar Inventory could not be loaded." };
   return { ok: true, data: snapshot };
+}
+
+export type BranchOverviewActionResult =
+  | { ok: true; data: BranchStorageOverview }
+  | {
+      ok: false;
+      error: string;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
+
+/**
+ * READ-ONLY storage layout + per-branch stock for every branch this manager may
+ * manage ("All authorized branches"). The caller must first be a verified
+ * manager at their active branch; each additional branch is then proven by the
+ * database's own authority check inside getBranchStorageOverview. Nothing here
+ * can write, and no branch id is accepted from the client.
+ */
+export async function getBranchStorageOverviewAction(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+}): Promise<BranchOverviewActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveManager(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
+  if (!caller.ok) return caller;
+
+  const overview = await getBranchStorageOverview(
+    caller.organizationId,
+    caller.locationId,
+    async (locationId) =>
+      (await guardModule({
+        module: "bar_inventory",
+        organizationId: caller.organizationId,
+        location: { id: locationId },
+      })) === null,
+  );
+  if (!overview) {
+    return { ok: false, error: "Branch layouts could not be loaded." };
+  }
+  return { ok: true, data: overview };
 }
 
 /**

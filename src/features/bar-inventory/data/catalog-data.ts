@@ -61,7 +61,7 @@ type RuleRow = {
 const PAGE = 1000;
 const MAX_PAGES = 6;
 
-type Audit = {
+export type Audit = {
   version: number;
   updated_at: string;
   updated_by: string | null;
@@ -97,10 +97,10 @@ const CATEGORY_COLUMNS = `id, name, active, ${AUDIT}`;
 const SUBCATEGORY_COLUMNS = `id, category_id, name, active, ${AUDIT}`;
 const PRODUCT_COLUMNS = `id, vendor_id, name, category_id, subcategory_id, size, unit_type, unit_label, sku, notes, active, ${AUDIT}`;
 
-const STOCK_COLUMNS =
+export const STOCK_COLUMNS =
   "product_id, on_hand, backup, cutoff, warning, par, version, updated_at, updated_by, last_adjusted_at";
 
-type StockRow = {
+export type StockRow = {
   product_id: string;
   on_hand: number;
   backup: number;
@@ -113,7 +113,7 @@ type StockRow = {
   last_adjusted_at: string | null;
 };
 
-type StorageAreaRow = Audit & {
+export type StorageAreaRow = Audit & {
   id: string;
   location_id: string;
   name: string;
@@ -122,18 +122,19 @@ type StorageAreaRow = Audit & {
   active: boolean;
 };
 
-type StorageShelfRow = {
+export type StorageShelfRow = {
   id: string;
   location_id: string;
   storage_area_id: string;
   name: string;
   section_name: string | null;
   display_order: number;
+  version: number;
   updated_at: string;
   updated_by: string | null;
 };
 
-type StoragePlacementRow = {
+export type StoragePlacementRow = {
   id: string;
   location_id: string;
   storage_area_id: string;
@@ -147,20 +148,25 @@ type StoragePlacementRow = {
   updated_by: string | null;
 };
 
-const STORAGE_AREA_COLUMNS = `id, location_id, name, kind, display_order, active, ${AUDIT}`;
-const STORAGE_SHELF_COLUMNS =
-  "id, location_id, storage_area_id, name, section_name, display_order, updated_at, updated_by";
-const STORAGE_PLACEMENT_COLUMNS =
+export const STORAGE_AREA_COLUMNS = `id, location_id, name, kind, display_order, active, ${AUDIT}`;
+export const STORAGE_SHELF_COLUMNS =
+  "id, location_id, storage_area_id, name, section_name, display_order, version, updated_at, updated_by";
+export const STORAGE_PLACEMENT_COLUMNS =
   "id, location_id, storage_area_id, shelf_id, product_id, slot_number, slot_label, display_order, version, updated_at, updated_by";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-async function readAll<T>(
+export async function readAll<T>(
   supabase: Supabase,
   table: string,
   columns: string,
   organizationId: string,
-  options: { orderBy?: string; locationId?: string } = {},
+  options: {
+    orderBy?: string;
+    locationId?: string;
+    /** Read several named branches at once (RLS still decides what comes back). */
+    locationIds?: readonly string[];
+  } = {},
 ): Promise<T[] | null> {
   const rows: T[] = [];
   const orderBy = options.orderBy ?? "name";
@@ -170,6 +176,8 @@ async function readAll<T>(
       .select(columns)
       .eq("organization_id", organizationId);
     if (options.locationId) query = query.eq("location_id", options.locationId);
+    if (options.locationIds)
+      query = query.in("location_id", [...options.locationIds]);
     const { data, error } = await query
       .order(orderBy, { ascending: true })
       .order(options.orderBy === "product_id" ? "location_id" : "id", {
@@ -447,6 +455,7 @@ export async function getCatalogSnapshot(
         name: row.name,
         sectionName: row.section_name,
         displayOrder: row.display_order,
+        version: row.version,
         updatedAt: row.updated_at,
         updatedByName: row.updated_by
           ? (names.get(row.updated_by) ?? null)

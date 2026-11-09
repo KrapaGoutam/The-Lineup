@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Archive,
   Boxes,
   Edit2,
   FolderPlus,
@@ -9,6 +10,7 @@ import {
   MapPin,
   MoveRight,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
   Warehouse,
@@ -22,94 +24,166 @@ import { Select } from "@/components/ui/select";
 
 import {
   STORAGE_AREA_KIND_LABELS,
+  type BranchStorageOverview,
   type CatalogSnapshot,
   type ProductView,
   type StorageAreaView,
   type StoragePlacementView,
   type StorageShelfView,
 } from "../../domain/inventory-types";
-import { evaluateStock, type StockStatus } from "../../domain/stock-rules";
+import {
+  evaluateStock,
+  formatQuantity,
+  type StockStatus,
+} from "../../domain/stock-rules";
 import { StatusBadge } from "../table-kit/status-badge";
 import type { RunCatalogCommand } from "../catalog-dialogs";
+import { AllBranchesOverview } from "./all-branches-overview";
 import { StorageAreaDialog } from "./storage-area-dialog";
 import { StorageShelfDialog } from "./storage-shelf-dialog";
 import { PlacementMoveDialog } from "./placement-move-dialog";
 
+type OverviewResult =
+  | { ok: true; data: BranchStorageOverview }
+  | { ok: false; error: string };
+
 type Props = {
   snapshot: CatalogSnapshot;
+  /** The server-verified branch this layout edits. */
   locationId?: string | null;
+  /** That branch's display name (never a guess: the label shows what is edited). */
+  locationName?: string | null;
   run: RunCatalogCommand;
   timeZone: string;
   onSelectProduct: (productId: string) => void;
+  /**
+   * Loads the read-only "All authorized branches" overview. When absent the
+   * control is not offered at all (there is no fake all-branches mode).
+   */
+  loadBranchOverview?: () => Promise<OverviewResult>;
 };
+
+const ALL_AREAS = "all";
+const UNASSIGNED = "unassigned";
+const ARCHIVED = "archived";
 
 export function CoolerLayoutView({
   snapshot,
   locationId,
+  locationName,
   run,
   onSelectProduct,
+  loadBranchOverview,
 }: Props) {
-  const [selectedAreaId, setSelectedAreaId] = useState<string>("all");
+  const [branchScope, setBranchScope] = useState<"current" | "all">("current");
+  const [selectedAreaId, setSelectedAreaId] = useState<string>(ALL_AREAS);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Dialog states
-  const [areaDialogOpen, setAreaDialogOpen] = useState(false);
-  const [editingArea, setEditingArea] = useState<StorageAreaView | null>(null);
+  // The all-branches overview (read-only), loaded on demand.
+  const [overview, setOverview] = useState<{
+    state: "idle" | "loading" | "ready" | "error";
+    data: BranchStorageOverview | null;
+    error: string | null;
+  }>({ state: "idle", data: null, error: null });
+  const [overviewNonce, setOverviewNonce] = useState(0);
 
+  useEffect(() => {
+    if (branchScope !== "all" || !loadBranchOverview) return;
+    let cancelled = false;
+    loadBranchOverview()
+      .then((result) => {
+        if (cancelled) return;
+        setOverview(
+          result.ok
+            ? { state: "ready", data: result.data, error: null }
+            : { state: "error", data: null, error: result.error },
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOverview({
+          state: "error",
+          data: null,
+          error: "Branch layouts could not be loaded.",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // loadBranchOverview is a stable controller callback; reload on demand only.
+  }, [branchScope, overviewNonce, loadBranchOverview]);
+
+  // Dialog states. Ids (not row copies) are held so the dialogs always see the
+  // CURRENT row after a refresh; each dialog captures its own opened version.
+  const [areaDialogOpen, setAreaDialogOpen] = useState(false);
+  const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
-  const [editingShelf, setEditingShelf] = useState<StorageShelfView | null>(
+  const [editingShelfId, setEditingShelfId] = useState<string | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [movingProductId, setMovingProductId] = useState<string | null>(null);
+  const [movingPlacementId, setMovingPlacementId] = useState<string | null>(
     null,
   );
-
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
-  const [movingProduct, setMovingProduct] = useState<ProductView | null>(null);
-  const [movingPlacement, setMovingPlacement] =
-    useState<StoragePlacementView | null>(null);
   const [defaultShelfForMove, setDefaultShelfForMove] = useState<string | null>(
     null,
   );
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Active storage areas, shelves, placements (filtered to location if applicable)
-  const allAreas = useMemo(() => {
-    const list = snapshot.storageAreas ?? [];
-    return list.filter((a) => !locationId || a.locationId === locationId);
-  }, [snapshot.storageAreas, locationId]);
+  const allAreas = useMemo(
+    () =>
+      (snapshot.storageAreas ?? []).filter(
+        (a) => !locationId || a.locationId === locationId,
+      ),
+    [snapshot.storageAreas, locationId],
+  );
+  const activeAreas = useMemo(
+    () => allAreas.filter((a) => a.active),
+    [allAreas],
+  );
+  const archivedAreas = useMemo(
+    () => allAreas.filter((a) => !a.active),
+    [allAreas],
+  );
+  const allShelves = useMemo(
+    () =>
+      (snapshot.storageShelves ?? []).filter(
+        (s) => !locationId || s.locationId === locationId,
+      ),
+    [snapshot.storageShelves, locationId],
+  );
+  const allPlacements = useMemo(
+    () =>
+      (snapshot.storagePlacements ?? []).filter(
+        (p) => !locationId || p.locationId === locationId,
+      ),
+    [snapshot.storagePlacements, locationId],
+  );
 
-  const activeAreas = useMemo(() => {
-    return allAreas.filter((a) => a.active);
-  }, [allAreas]);
+  const productMap = useMemo(
+    () => new Map(snapshot.products.map((p) => [p.id, p])),
+    [snapshot.products],
+  );
+  const stockMap = useMemo(
+    () => new Map(snapshot.stock.map((s) => [s.productId, s])),
+    [snapshot.stock],
+  );
+  const vendorMap = useMemo(
+    () => new Map(snapshot.vendors.map((v) => [v.id, v.name])),
+    [snapshot.vendors],
+  );
+  const categoryMap = useMemo(
+    () => new Map(snapshot.categories.map((c) => [c.id, c.name])),
+    [snapshot.categories],
+  );
+  const areaById = useMemo(
+    () => new Map(allAreas.map((a) => [a.id, a])),
+    [allAreas],
+  );
+  const activeProducts = useMemo(
+    () => snapshot.products.filter((p) => p.active),
+    [snapshot.products],
+  );
 
-  const allShelves = useMemo(() => {
-    const list = snapshot.storageShelves ?? [];
-    return list.filter((s) => !locationId || s.locationId === locationId);
-  }, [snapshot.storageShelves, locationId]);
-
-  const allPlacements = useMemo(() => {
-    const list = snapshot.storagePlacements ?? [];
-    return list.filter((p) => !locationId || p.locationId === locationId);
-  }, [snapshot.storagePlacements, locationId]);
-
-  // Map products by ID
-  const productMap = useMemo(() => {
-    return new Map(snapshot.products.map((p) => [p.id, p]));
-  }, [snapshot.products]);
-
-  // Map stock by product ID
-  const stockMap = useMemo(() => {
-    return new Map(snapshot.stock.map((s) => [s.productId, s]));
-  }, [snapshot.stock]);
-
-  // Map vendor by ID
-  const vendorMap = useMemo(() => {
-    return new Map(snapshot.vendors.map((v) => [v.id, v.name]));
-  }, [snapshot.vendors]);
-
-  // Map category by ID
-  const categoryMap = useMemo(() => {
-    return new Map(snapshot.categories.map((c) => [c.id, c.name]));
-  }, [snapshot.categories]);
-
-  // Placements grouped by shelfId
   const placementsByShelf = useMemo(() => {
     const map = new Map<string, StoragePlacementView[]>();
     for (const p of allPlacements) {
@@ -117,19 +191,16 @@ export function CoolerLayoutView({
       arr.push(p);
       map.set(p.shelfId, arr);
     }
-    // Sort each shelf's placements by displayOrder, then slotNumber
     for (const arr of map.values()) {
-      arr.sort((a, b) => {
-        if (a.displayOrder !== b.displayOrder) {
-          return a.displayOrder - b.displayOrder;
-        }
-        return (a.slotNumber ?? 9999) - (b.slotNumber ?? 9999);
-      });
+      arr.sort(
+        (a, b) =>
+          a.displayOrder - b.displayOrder ||
+          (a.slotNumber ?? 9999) - (b.slotNumber ?? 9999),
+      );
     }
     return map;
   }, [allPlacements]);
 
-  // Shelves grouped by storageAreaId
   const shelvesByArea = useMemo(() => {
     const map = new Map<string, StorageShelfView[]>();
     for (const s of allShelves) {
@@ -143,219 +214,348 @@ export function CoolerLayoutView({
     return map;
   }, [allShelves]);
 
-  // Find unassigned products (active products with no placement at this location)
-  const unassignedProducts = useMemo(() => {
-    const placedProductIds = new Set(allPlacements.map((p) => p.productId));
-    return snapshot.products.filter(
-      (p) => p.active && !placedProductIds.has(p.id),
-    );
-  }, [snapshot.products, allPlacements]);
+  // Three distinct states (a product must never vanish from every view):
+  //  - placed in an ACTIVE area            -> shown in that area's rack
+  //  - placed ONLY in an archived area     -> "In archived storage" (recoverable)
+  //  - no placement anywhere               -> "Unassigned"
+  const { unassignedProducts, archivedOnlyProducts } = useMemo(() => {
+    const activeIds = new Set(activeAreas.map((a) => a.id));
+    const inActive = new Set<string>();
+    const inArchived = new Map<string, Set<string>>();
+    for (const p of allPlacements) {
+      if (activeIds.has(p.storageAreaId)) inActive.add(p.productId);
+      else {
+        const set = inArchived.get(p.productId) ?? new Set<string>();
+        set.add(p.storageAreaId);
+        inArchived.set(p.productId, set);
+      }
+    }
+    const unassigned: ProductView[] = [];
+    const archivedOnly: { product: ProductView; areaIds: string[] }[] = [];
+    for (const product of activeProducts) {
+      if (inActive.has(product.id)) continue;
+      const archived = inArchived.get(product.id);
+      if (archived) archivedOnly.push({ product, areaIds: [...archived] });
+      else unassigned.push(product);
+    }
+    return {
+      unassignedProducts: unassigned,
+      archivedOnlyProducts: archivedOnly,
+    };
+  }, [allPlacements, activeAreas, activeProducts]);
 
-  // Filtered unassigned products by search
-  const filteredUnassigned = useMemo(() => {
-    if (!searchQuery.trim()) return unassignedProducts;
+  const matchesSearch = (product: ProductView, extra?: string | null) => {
     const q = searchQuery.toLowerCase().trim();
-    return unassignedProducts.filter((p) => {
-      const vendor = vendorMap.get(p.vendorId)?.toLowerCase() ?? "";
-      const cat =
-        (p.categoryId ? categoryMap.get(p.categoryId) : "")?.toLowerCase() ??
-        "";
-      return (
-        p.name.toLowerCase().includes(q) ||
-        vendor.includes(q) ||
-        cat.includes(q) ||
-        (p.size && p.size.toLowerCase().includes(q))
-      );
-    });
-  }, [unassignedProducts, searchQuery, vendorMap, categoryMap]);
+    if (!q) return true;
+    const vendor = vendorMap.get(product.vendorId)?.toLowerCase() ?? "";
+    const cat = (
+      product.categoryId ? (categoryMap.get(product.categoryId) ?? "") : ""
+    ).toLowerCase();
+    return (
+      product.name.toLowerCase().includes(q) ||
+      vendor.includes(q) ||
+      cat.includes(q) ||
+      (product.size?.toLowerCase().includes(q) ?? false) ||
+      (extra?.toLowerCase().includes(q) ?? false)
+    );
+  };
 
-  // Helpers
+  const filteredUnassigned = unassignedProducts.filter((p) => matchesSearch(p));
+  const filteredArchivedOnly = archivedOnlyProducts.filter(({ product }) =>
+    matchesSearch(product),
+  );
+
   function getProductStatus(productId: string): {
     status: StockStatus;
     onHand: number;
     backup: number;
-    total: number;
   } {
     const stock = stockMap.get(productId);
-    if (!stock) {
-      return { status: "no_cutoff", onHand: 0, backup: 0, total: 0 };
-    }
-    const evaluated = evaluateStock({
-      onHand: stock.onHand,
-      backup: stock.backup,
-      cutoff: stock.cutoff,
-      warning: stock.warning,
-      par: stock.par,
-    });
+    if (!stock) return { status: "no_cutoff", onHand: 0, backup: 0 };
     return {
-      status: evaluated.status,
+      status: evaluateStock({
+        onHand: stock.onHand,
+        backup: stock.backup,
+        cutoff: stock.cutoff,
+        warning: stock.warning,
+        par: stock.par,
+      }).status,
       onHand: stock.onHand,
       backup: stock.backup,
-      total: stock.onHand + stock.backup,
     };
   }
 
+  const editingArea = editingAreaId
+    ? (areaById.get(editingAreaId) ?? null)
+    : null;
+  const editingShelf = editingShelfId
+    ? (allShelves.find((s) => s.id === editingShelfId) ?? null)
+    : null;
+  const movingProduct = movingProductId
+    ? (productMap.get(movingProductId) ?? null)
+    : null;
+  const movingPlacement = movingPlacementId
+    ? (allPlacements.find((p) => p.id === movingPlacementId) ?? null)
+    : null;
+
   function handleOpenAddArea() {
-    setEditingArea(null);
+    setEditingAreaId(null);
     setAreaDialogOpen(true);
   }
 
   function handleOpenEditArea(area: StorageAreaView) {
-    setEditingArea(area);
+    setEditingAreaId(area.id);
     setAreaDialogOpen(true);
   }
 
-  async function handleArchiveArea(areaId: string) {
+  async function handleArchiveArea(area: StorageAreaView) {
+    const placed = allPlacements.filter(
+      (p) => p.storageAreaId === area.id,
+    ).length;
     if (
       !window.confirm(
-        "Are you sure you want to archive this storage area? Its shelves and placements will be preserved in history.",
+        `Archive "${area.name}"? Its shelves and ${placed} placement${placed === 1 ? "" : "s"} are kept, and you can restore the area at any time. Stock counts are not affected.`,
       )
     ) {
       return;
     }
-    await run({ type: "storageAreaArchive", id: areaId });
-    if (selectedAreaId === areaId) setSelectedAreaId("all");
+    const result = await run({
+      type: "storageAreaArchive",
+      id: area.id,
+      expectedVersion: area.version,
+    });
+    setNotice(result.ok ? null : result.error);
+    if (result.ok && selectedAreaId === area.id) setSelectedAreaId(ALL_AREAS);
+  }
+
+  async function handleRestoreArea(area: StorageAreaView) {
+    const result = await run({
+      type: "storageAreaUpsert",
+      id: area.id,
+      name: area.name,
+      kind: area.kind,
+      displayOrder: area.displayOrder,
+      active: true,
+      expectedVersion: area.version,
+    });
+    setNotice(result.ok ? null : result.error);
   }
 
   function handleOpenAddShelf(areaId?: string) {
-    setEditingShelf(null);
+    setEditingShelfId(null);
     setShelfDialogOpen(true);
     if (areaId) setSelectedAreaId(areaId);
   }
 
   function handleOpenEditShelf(shelf: StorageShelfView) {
-    setEditingShelf(shelf);
+    setEditingShelfId(shelf.id);
     setShelfDialogOpen(true);
   }
 
-  async function handleDeleteShelf(shelfId: string) {
-    if (
-      !window.confirm(
-        "Delete this shelf? Any product placements on this shelf will be returned to Unassigned Storage.",
-      )
-    ) {
-      return;
-    }
-    await run({ type: "storageShelfDelete", id: shelfId });
+  async function handleDeleteShelf(shelf: StorageShelfView) {
+    const placed = (placementsByShelf.get(shelf.id) ?? []).length;
+    const message =
+      placed === 0
+        ? `Delete the empty shelf "${shelf.name}"?`
+        : `Delete "${shelf.name}" and remove its ${placed} placed product${placed === 1 ? "" : "s"}? The placement records are deleted (and logged). The products and their stock counts are NOT affected; a product with no other placement becomes Unassigned.`;
+    if (!window.confirm(message)) return;
+    const result = await run({
+      type: "storageShelfDelete",
+      id: shelf.id,
+      expectedVersion: shelf.version,
+      removePlacements: placed > 0,
+    });
+    setNotice(result.ok ? null : result.error);
   }
 
   function handlePlaceProductOnShelf(shelf: StorageShelfView) {
-    setMovingPlacement(null);
-    setMovingProduct(null);
+    setMovingPlacementId(null);
+    setMovingProductId(null);
     setDefaultShelfForMove(shelf.id);
     setSelectedAreaId(shelf.storageAreaId);
-    // Open move dialog with unassigned product choice or first unassigned
-    if (unassignedProducts.length > 0) {
-      setMovingProduct(unassignedProducts[0]);
-      setMoveDialogOpen(true);
-    } else {
-      alert(
-        "All catalog products are already placed! Create new products or move existing ones.",
-      );
-    }
+    setMoveDialogOpen(true);
   }
 
   function handleMovePlacement(placement: StoragePlacementView) {
-    const product = productMap.get(placement.productId);
-    if (!product) return;
-    setMovingProduct(product);
-    setMovingPlacement(placement);
+    if (!productMap.has(placement.productId)) return;
+    setMovingProductId(placement.productId);
+    setMovingPlacementId(placement.id);
     setDefaultShelfForMove(placement.shelfId);
     setMoveDialogOpen(true);
   }
 
-  async function handleRemovePlacement(placementId: string) {
+  async function handleRemovePlacement(placement: StoragePlacementView) {
     if (
       !window.confirm(
-        "Remove this product from the shelf? (Authoritative stock is unaffected; product becomes unassigned).",
+        "Remove this product from the shelf? Its stock count is unaffected; if it has no other placement it becomes Unassigned.",
       )
     ) {
       return;
     }
-    await run({ type: "storagePlacementDelete", id: placementId });
+    const result = await run({
+      type: "storagePlacementDelete",
+      id: placement.id,
+      expectedVersion: placement.version,
+    });
+    setNotice(result.ok ? null : result.error);
   }
 
-  function handleAssignUnassigned(product: ProductView) {
-    setMovingProduct(product);
-    setMovingPlacement(null);
+  function handleAssignProduct(product: ProductView) {
+    setMovingProductId(product.id);
+    setMovingPlacementId(null);
     setDefaultShelfForMove(null);
     setMoveDialogOpen(true);
   }
 
   const activeArea = activeAreas.find((a) => a.id === selectedAreaId);
+  const branchLabel = locationName?.trim() || "This branch";
+  const showingCurrent = branchScope === "current";
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* 1. Header toolbar */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-muted/30 text-muted-foreground flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium">
-            <MapPin className="text-primary size-3.5" />
-            <span>
-              Branch: {locationId ? "Current Location" : "All Locations"}
-            </span>
-          </div>
-
           <div className="flex items-center gap-2">
-            <Warehouse className="text-muted-foreground size-4" />
-            <Select
-              id="cooler-area-select"
-              aria-label="Select storage area"
-              value={selectedAreaId}
-              onChange={(e) => setSelectedAreaId(e.target.value)}
-              className="w-[200px] sm:w-[240px]"
-            >
-              <option value="all">All Storage Areas</option>
-              {activeAreas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({STORAGE_AREA_KIND_LABELS[a.kind]})
+            <MapPin className="text-primary size-4" aria-hidden="true" />
+            {loadBranchOverview ? (
+              <Select
+                id="cooler-branch-select"
+                aria-label="Restaurant branch"
+                value={branchScope}
+                onChange={(e) => {
+                  // Entering the overview always starts from a fresh load.
+                  setOverview({ state: "idle", data: null, error: null });
+                  setBranchScope(e.target.value as "current" | "all");
+                  setNotice(null);
+                }}
+                className="w-[220px] sm:w-[260px]"
+              >
+                <option value="current">{branchLabel}</option>
+                <option value="all">All authorized branches (view only)</option>
+              </Select>
+            ) : (
+              <span
+                className="bg-muted/30 text-muted-foreground rounded-md border px-3 py-1.5 text-xs font-medium"
+                data-testid="cooler-branch-label"
+              >
+                Branch: {branchLabel}
+              </span>
+            )}
+          </div>
+
+          {showingCurrent ? (
+            <div className="flex items-center gap-2">
+              <Warehouse
+                className="text-muted-foreground size-4"
+                aria-hidden="true"
+              />
+              <Select
+                id="cooler-area-select"
+                aria-label="Select storage area"
+                value={selectedAreaId}
+                onChange={(e) => setSelectedAreaId(e.target.value)}
+                className="w-[220px] sm:w-[260px]"
+              >
+                <option value={ALL_AREAS}>All Storage Areas</option>
+                {activeAreas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({STORAGE_AREA_KIND_LABELS[a.kind]})
+                  </option>
+                ))}
+                <option value={UNASSIGNED}>
+                  Unassigned Storage (
+                  {unassignedProducts.length + archivedOnlyProducts.length})
                 </option>
-              ))}
-              <option value="unassigned">
-                Unassigned Storage ({unassignedProducts.length})
-              </option>
-            </Select>
-          </div>
+                {archivedAreas.length > 0 ? (
+                  <option value={ARCHIVED}>
+                    Archived areas ({archivedAreas.length})
+                  </option>
+                ) : null}
+              </Select>
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-56">
-            <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-            <Input
-              placeholder="Filter products or slots…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleOpenAddArea}
-            className="gap-1.5"
-          >
-            <FolderPlus className="size-4" />
-            <span>Add Area</span>
-          </Button>
-
-          {activeAreas.length > 0 && (
+        {showingCurrent ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search
+                className="text-muted-foreground absolute top-2.5 left-2.5 size-4"
+                aria-hidden="true"
+              />
+              <Input
+                aria-label="Filter products or slots"
+                placeholder="Filter products or slots…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             <Button
+              variant="outline"
               size="sm"
-              onClick={() => handleOpenAddShelf(activeArea?.id)}
-              className="gap-1.5"
+              onClick={handleOpenAddArea}
+              className="min-h-9 gap-1.5"
             >
-              <Plus className="size-4" />
-              <span>Add Shelf</span>
+              <FolderPlus className="size-4" />
+              <span>Add Area</span>
             </Button>
-          )}
-        </div>
+            {activeAreas.length > 0 && (
+              <Button
+                size="sm"
+                onClick={() => handleOpenAddShelf(activeArea?.id)}
+                className="min-h-9 gap-1.5"
+              >
+                <Plus className="size-4" />
+                <span>Add Shelf</span>
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
 
-      {/* 2. Main Content Views */}
+      {notice ? (
+        <p
+          role="alert"
+          className="border-destructive/30 bg-destructive/15 text-destructive rounded-lg border px-3 py-2 text-sm"
+        >
+          {notice}
+        </p>
+      ) : null}
+
+      {/* 2. All authorized branches (read-only) */}
+      {!showingCurrent ? (
+        overview.state === "ready" && overview.data ? (
+          <AllBranchesOverview
+            overview={overview.data}
+            products={snapshot.products}
+            onEditCurrentBranch={() => setBranchScope("current")}
+          />
+        ) : overview.state === "error" ? (
+          <div role="alert" className="rounded-lg border p-6 text-center">
+            <p className="text-destructive text-sm">{overview.error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                setOverview({ state: "idle", data: null, error: null });
+                setOverviewNonce((n) => n + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <p role="status" className="text-muted-foreground text-sm">
+            Loading every branch you can manage…
+          </p>
+        )
+      ) : null}
 
       {/* 2A. ALL STORAGE AREAS OVERVIEW */}
-      {selectedAreaId === "all" && (
+      {showingCurrent && selectedAreaId === ALL_AREAS && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {activeAreas.map((area) => {
@@ -379,14 +579,14 @@ export function CoolerLayoutView({
                   <CardContent className="flex flex-1 flex-col justify-between pt-0">
                     <div className="text-muted-foreground space-y-1.5 text-xs">
                       <div className="flex items-center gap-1.5">
-                        <Layers className="size-3.5" />
+                        <Layers className="size-3.5" aria-hidden="true" />
                         <span>
                           {shelves.length}{" "}
                           {shelves.length === 1 ? "shelf" : "shelves"}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Boxes className="size-3.5" />
+                        <Boxes className="size-3.5" aria-hidden="true" />
                         <span>
                           {placements.length} placed{" "}
                           {placements.length === 1 ? "item" : "items"}
@@ -399,7 +599,7 @@ export function CoolerLayoutView({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleOpenEditArea(area)}
-                        className="text-muted-foreground h-8 px-2 text-xs"
+                        className="text-muted-foreground min-h-9 px-2 text-xs"
                       >
                         <Edit2 className="mr-1 size-3" />
                         Edit
@@ -408,7 +608,7 @@ export function CoolerLayoutView({
                         variant="secondary"
                         size="sm"
                         onClick={() => setSelectedAreaId(area.id)}
-                        className="h-8 gap-1 px-3 text-xs"
+                        className="min-h-9 gap-1 px-3 text-xs"
                       >
                         <span>View Rack</span>
                         <MoveRight className="size-3" />
@@ -419,7 +619,6 @@ export function CoolerLayoutView({
               );
             })}
 
-            {/* Unassigned Storage Card */}
             <Card className="bg-muted/20 hover:border-primary/50 flex flex-col border-dashed">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -427,21 +626,26 @@ export function CoolerLayoutView({
                     Unassigned Storage
                   </h3>
                   <Badge tone="neutral" className="text-xs">
-                    {unassignedProducts.length} items
+                    {unassignedProducts.length + archivedOnlyProducts.length}{" "}
+                    items
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col justify-between pt-0">
                 <p className="text-muted-foreground text-xs">
-                  Catalog products currently with no physical placement in this
-                  branch.
+                  Catalog products with no physical placement in an active
+                  storage area at this branch
+                  {archivedOnlyProducts.length > 0
+                    ? ` (${archivedOnlyProducts.length} only in archived storage)`
+                    : ""}
+                  .
                 </p>
                 <div className="mt-4 flex items-center justify-end border-t pt-3">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedAreaId("unassigned")}
-                    className="h-8 gap-1 px-3 text-xs"
+                    onClick={() => setSelectedAreaId(UNASSIGNED)}
+                    className="min-h-9 gap-1 px-3 text-xs"
                   >
                     <span>Manage Unassigned</span>
                     <MoveRight className="size-3" />
@@ -473,12 +677,13 @@ export function CoolerLayoutView({
         </div>
       )}
 
-      {/* 2B. SPECIFIC STORAGE AREA 2D SHELF LAYOUT */}
-      {selectedAreaId !== "all" &&
-        selectedAreaId !== "unassigned" &&
+      {/* 2B. SPECIFIC STORAGE AREA SHELF LAYOUT */}
+      {showingCurrent &&
+        selectedAreaId !== ALL_AREAS &&
+        selectedAreaId !== UNASSIGNED &&
+        selectedAreaId !== ARCHIVED &&
         activeArea && (
           <div className="space-y-6">
-            {/* Area Banner */}
             <div className="bg-card flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -490,17 +695,17 @@ export function CoolerLayoutView({
                   </Badge>
                 </div>
                 <p className="text-muted-foreground mt-0.5 text-xs">
-                  Physical rack layout. Products placed here retain
-                  authoritative stock at the branch level (Option A).
+                  Physical rack layout. Placement is for organization only; each
+                  product&apos;s stock is counted once, for the whole branch.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleOpenEditArea(activeArea)}
-                  className="gap-1.5 text-xs"
+                  className="min-h-9 gap-1.5 text-xs"
                 >
                   <Edit2 className="size-3.5" />
                   <span>Edit Area</span>
@@ -508,16 +713,16 @@ export function CoolerLayoutView({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleArchiveArea(activeArea.id)}
-                  className="text-destructive hover:text-destructive gap-1.5 text-xs"
+                  onClick={() => handleArchiveArea(activeArea)}
+                  className="text-destructive hover:text-destructive min-h-9 gap-1.5 text-xs"
                 >
-                  <Trash2 className="size-3.5" />
+                  <Archive className="size-3.5" />
                   <span>Archive</span>
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => handleOpenAddShelf(activeArea.id)}
-                  className="gap-1.5 text-xs"
+                  className="min-h-9 gap-1.5 text-xs"
                 >
                   <Plus className="size-3.5" />
                   <span>Add Shelf</span>
@@ -525,23 +730,16 @@ export function CoolerLayoutView({
               </div>
             </div>
 
-            {/* Shelves List (Rendered Top-to-Bottom as 2D Racks) */}
             <div className="space-y-6">
               {(shelvesByArea.get(activeArea.id) ?? []).map((shelf) => {
                 const placements = placementsByShelf.get(shelf.id) ?? [];
-                const query = searchQuery.toLowerCase().trim();
-
                 return (
                   <div
                     key={shelf.id}
                     className="border-muted/80 bg-muted/10 rounded-lg border-2 p-4 shadow-sm"
                   >
-                    {/* Shelf Header */}
                     <div className="border-muted flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-primary/10 text-primary flex size-6 items-center justify-center rounded text-xs font-semibold">
-                          {shelf.displayOrder}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-foreground text-sm font-semibold">
                           {shelf.name}
                         </h3>
@@ -561,7 +759,7 @@ export function CoolerLayoutView({
                           variant="ghost"
                           size="sm"
                           onClick={() => handlePlaceProductOnShelf(shelf)}
-                          className="h-7 px-2 text-xs"
+                          className="min-h-9 px-2 text-xs"
                         >
                           <Plus className="mr-1 size-3" />
                           Place Item
@@ -570,68 +768,60 @@ export function CoolerLayoutView({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenEditShelf(shelf)}
-                          className="text-muted-foreground h-7 px-2 text-xs"
+                          aria-label={`Edit shelf ${shelf.name}`}
+                          className="text-muted-foreground size-9 p-0"
                         >
-                          <Edit2 className="size-3" />
+                          <Edit2 className="size-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteShelf(shelf.id)}
-                          className="text-destructive hover:text-destructive h-7 px-2 text-xs"
+                          onClick={() => handleDeleteShelf(shelf)}
+                          aria-label={`Delete shelf ${shelf.name}`}
+                          className="text-destructive hover:text-destructive size-9 p-0"
                         >
-                          <Trash2 className="size-3" />
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </div>
 
-                    {/* Horizontal Slots Rack */}
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                       {placements.map((placement) => {
                         const product = productMap.get(placement.productId);
                         if (!product) return null;
-
                         const vendor = vendorMap.get(product.vendorId) ?? "—";
-                        const category = product.categoryId
-                          ? (categoryMap.get(product.categoryId) ?? "—")
-                          : "—";
                         const stockInfo = getProductStatus(product.id);
-
-                        const matches =
-                          !query ||
-                          product.name.toLowerCase().includes(query) ||
-                          vendor.toLowerCase().includes(query) ||
-                          category.toLowerCase().includes(query) ||
-                          (placement.slotLabel &&
-                            placement.slotLabel.toLowerCase().includes(query));
+                        const matches = matchesSearch(
+                          product,
+                          placement.slotLabel,
+                        );
 
                         return (
                           <div
                             key={placement.id}
-                            className={`group bg-card hover:border-primary/70 relative flex flex-col justify-between rounded-md border p-3 shadow-xs transition hover:shadow-sm ${
+                            data-testid="placement-tile"
+                            className={`bg-card hover:border-primary/70 relative flex flex-col justify-between rounded-md border p-3 shadow-xs transition hover:shadow-sm ${
                               matches ? "" : "opacity-35"
                             }`}
                           >
-                            {/* Slot Position Badge */}
                             <div className="flex items-center justify-between gap-1 pb-1.5">
                               <Badge
                                 tone="neutral"
                                 className="font-mono text-[11px] font-bold"
                               >
                                 {placement.slotLabel ||
-                                  (placement.slotNumber
+                                  (placement.slotNumber !== null
                                     ? `#${placement.slotNumber}`
                                     : `Slot ${placement.displayOrder}`)}
                               </Badge>
                               <StatusBadge status={stockInfo.status} />
                             </div>
 
-                            {/* Product Details (Click to open ItemSheet) */}
                             <button
                               type="button"
                               onClick={() => onSelectProduct(product.id)}
-                              className="py-1 text-left hover:underline focus:outline-hidden"
-                              title="Click to view and edit product counts and details"
+                              className="min-h-11 py-1 text-left hover:underline focus-visible:ring-2 focus-visible:outline-hidden"
+                              title="Open this product to view and edit counts and details"
                             >
                               <div className="text-foreground line-clamp-2 text-xs font-medium">
                                 {product.name}
@@ -642,34 +832,35 @@ export function CoolerLayoutView({
                               </div>
                             </button>
 
-                            {/* Stock Count Display & Actions */}
                             <div className="border-muted/50 mt-2 flex items-center justify-between border-t pt-2 text-[11px]">
                               <div className="text-foreground font-semibold">
-                                {stockInfo.onHand} on hand
+                                {formatQuantity(stockInfo.onHand)} on hand
                                 {stockInfo.backup > 0
-                                  ? ` · ${stockInfo.backup} bkp`
+                                  ? ` · ${formatQuantity(stockInfo.backup)} bkp`
                                   : ""}
                               </div>
-                              <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                              <div className="flex items-center gap-0.5">
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleMovePlacement(placement)}
-                                  className="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                                  title="Move / Reassign position"
+                                  aria-label={`Move ${product.name}`}
+                                  className="text-muted-foreground hover:text-foreground size-9 p-0"
+                                  title="Move / reassign position"
                                 >
-                                  <Edit2 className="size-3" />
+                                  <Edit2 className="size-3.5" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() =>
-                                    handleRemovePlacement(placement.id)
+                                    handleRemovePlacement(placement)
                                   }
-                                  className="text-destructive/80 hover:text-destructive h-6 w-6 p-0"
-                                  title="Remove from shelf (returns to Unassigned)"
+                                  aria-label={`Remove ${product.name} from shelf`}
+                                  className="text-destructive/80 hover:text-destructive size-9 p-0"
+                                  title="Remove from shelf"
                                 >
-                                  <Trash2 className="size-3" />
+                                  <Trash2 className="size-3.5" />
                                 </Button>
                               </div>
                             </div>
@@ -677,7 +868,6 @@ export function CoolerLayoutView({
                         );
                       })}
 
-                      {/* Place Item Button Tile on Shelf */}
                       <button
                         type="button"
                         onClick={() => handlePlaceProductOnShelf(shelf)}
@@ -716,79 +906,133 @@ export function CoolerLayoutView({
         )}
 
       {/* 2C. UNASSIGNED STORAGE VIEW */}
-      {selectedAreaId === "unassigned" && (
-        <div className="space-y-4">
+      {showingCurrent && selectedAreaId === UNASSIGNED && (
+        <div className="space-y-6">
           <div className="bg-card rounded-lg border p-4">
             <h2 className="text-lg font-semibold tracking-tight">
               Unassigned Storage
             </h2>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              These catalog products currently have no physical placement in
-              this restaurant branch. Place them into a cooler or shelf to
+              These catalog products have no physical placement in an active
+              storage area at this branch. Place them into a cooler or shelf to
               organize your floor.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {filteredUnassigned.map((product) => {
-              const vendor = vendorMap.get(product.vendorId) ?? "—";
-              const category = product.categoryId
-                ? (categoryMap.get(product.categoryId) ?? "—")
-                : "—";
-              const stockInfo = getProductStatus(product.id);
-
-              return (
-                <div
-                  key={product.id}
-                  className="bg-card hover:border-primary/50 flex flex-col justify-between rounded-md border p-4 shadow-xs"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 pb-2">
-                      <Badge tone="neutral" className="text-xs">
-                        {category}
-                      </Badge>
-                      <StatusBadge status={stockInfo.status} />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => onSelectProduct(product.id)}
-                      className="text-foreground text-left text-sm font-medium hover:underline"
-                    >
-                      {product.name}
-                    </button>
-                    <div className="text-muted-foreground mt-0.5 text-xs">
-                      {product.size ? `${product.size} · ` : ""}
-                      {vendor}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between border-t pt-3">
-                    <span className="text-foreground text-xs font-semibold">
-                      {stockInfo.onHand} on hand
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleAssignUnassigned(product)}
-                      disabled={activeAreas.length === 0}
-                      className="h-8 gap-1 text-xs"
-                    >
-                      <Plus className="size-3" />
-                      <span>Place on Shelf</span>
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+            {filteredUnassigned.map((product) => (
+              <UnassignedCard
+                key={product.id}
+                product={product}
+                vendor={vendorMap.get(product.vendorId) ?? "—"}
+                category={
+                  product.categoryId
+                    ? (categoryMap.get(product.categoryId) ?? "—")
+                    : "—"
+                }
+                stock={getProductStatus(product.id)}
+                canPlace={activeAreas.length > 0}
+                onOpen={() => onSelectProduct(product.id)}
+                onPlace={() => handleAssignProduct(product)}
+              />
+            ))}
           </div>
 
           {filteredUnassigned.length === 0 && (
             <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
               {searchQuery
                 ? "No unassigned products match your filter."
-                : "All catalog products have physical placements!"}
+                : "Every catalog product has a physical placement."}
             </div>
+          )}
+
+          {filteredArchivedOnly.length > 0 && (
+            <div className="space-y-3">
+              <div className="bg-card rounded-lg border p-4">
+                <h3 className="text-sm font-semibold">
+                  In archived storage ({filteredArchivedOnly.length})
+                </h3>
+                <p className="text-muted-foreground mt-0.5 text-xs">
+                  These products are placed only in an archived area, so they do
+                  not appear in any active rack. Restore the area, or place them
+                  somewhere active.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {filteredArchivedOnly.map(({ product, areaIds }) => (
+                  <UnassignedCard
+                    key={product.id}
+                    product={product}
+                    vendor={vendorMap.get(product.vendorId) ?? "—"}
+                    category={
+                      product.categoryId
+                        ? (categoryMap.get(product.categoryId) ?? "—")
+                        : "—"
+                    }
+                    stock={getProductStatus(product.id)}
+                    canPlace={activeAreas.length > 0}
+                    note={`In archived: ${areaIds
+                      .map((id) => areaById.get(id)?.name ?? "area")
+                      .join(", ")}`}
+                    onOpen={() => onSelectProduct(product.id)}
+                    onPlace={() => handleAssignProduct(product)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2D. ARCHIVED AREAS (recoverable) */}
+      {showingCurrent && selectedAreaId === ARCHIVED && (
+        <div className="space-y-4">
+          <div className="bg-card rounded-lg border p-4">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Archived areas
+            </h2>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Archiving keeps an area&apos;s shelves and placements. Restore an
+              area to use it again.
+            </p>
+          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {archivedAreas.map((area) => {
+              const placed = allPlacements.filter(
+                (p) => p.storageAreaId === area.id,
+              ).length;
+              return (
+                <li key={area.id}>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-semibold">{area.name}</h3>
+                        <Badge tone="neutral" className="text-xs">
+                          {STORAGE_AREA_KIND_LABELS[area.kind]}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between gap-2 pt-0">
+                      <span className="text-muted-foreground text-xs">
+                        {placed} placed {placed === 1 ? "item" : "items"}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="min-h-9 gap-1.5 text-xs"
+                        onClick={() => handleRestoreArea(area)}
+                      >
+                        <RotateCcw className="size-3.5" />
+                        Restore {area.name}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+          {archivedAreas.length === 0 && (
+            <p className="text-muted-foreground text-sm">No archived areas.</p>
           )}
         </div>
       )}
@@ -806,7 +1050,9 @@ export function CoolerLayoutView({
         onOpenChange={setShelfDialogOpen}
         shelf={editingShelf}
         defaultAreaId={
-          selectedAreaId !== "all" && selectedAreaId !== "unassigned"
+          selectedAreaId !== ALL_AREAS &&
+          selectedAreaId !== UNASSIGNED &&
+          selectedAreaId !== ARCHIVED
             ? selectedAreaId
             : activeAreas[0]?.id
         }
@@ -820,15 +1066,82 @@ export function CoolerLayoutView({
         product={movingProduct}
         existingPlacement={movingPlacement}
         defaultAreaId={
-          selectedAreaId !== "all" && selectedAreaId !== "unassigned"
+          selectedAreaId !== ALL_AREAS &&
+          selectedAreaId !== UNASSIGNED &&
+          selectedAreaId !== ARCHIVED
             ? selectedAreaId
             : activeAreas[0]?.id
         }
         defaultShelfId={defaultShelfForMove}
         areas={activeAreas}
         shelves={allShelves}
+        placements={allPlacements}
+        products={activeProducts}
         run={run}
       />
+    </div>
+  );
+}
+
+function UnassignedCard({
+  product,
+  vendor,
+  category,
+  stock,
+  canPlace,
+  note,
+  onOpen,
+  onPlace,
+}: {
+  product: ProductView;
+  vendor: string;
+  category: string;
+  stock: { status: StockStatus; onHand: number };
+  canPlace: boolean;
+  note?: string;
+  onOpen: () => void;
+  onPlace: () => void;
+}) {
+  return (
+    <div className="bg-card hover:border-primary/50 flex flex-col justify-between rounded-md border p-4 shadow-xs">
+      <div>
+        <div className="flex items-center justify-between gap-2 pb-2">
+          <Badge tone="neutral" className="text-xs">
+            {category}
+          </Badge>
+          <StatusBadge status={stock.status} />
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="text-foreground min-h-11 text-left text-sm font-medium hover:underline"
+        >
+          {product.name}
+        </button>
+        <div className="text-muted-foreground mt-0.5 text-xs">
+          {product.size ? `${product.size} · ` : ""}
+          {vendor}
+        </div>
+        {note ? (
+          <div className="text-muted-foreground mt-1 text-[11px]">{note}</div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t pt-3">
+        <span className="text-foreground text-xs font-semibold">
+          {formatQuantity(stock.onHand)} on hand
+        </span>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onPlace}
+          disabled={!canPlace}
+          className="min-h-9 gap-1 text-xs"
+        >
+          <Plus className="size-3" />
+          <span>Place on Shelf</span>
+        </Button>
+      </div>
     </div>
   );
 }

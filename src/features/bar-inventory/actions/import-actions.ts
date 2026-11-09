@@ -19,6 +19,7 @@ import { IMPORT_FIELDS, type HeaderMapping } from "../domain/import-columns";
 import type { ImportPlan } from "../domain/import-plan";
 import { planImport, prepareCommit } from "../domain/import-run";
 import { friendlyDbMessage } from "../domain/db-error";
+import type { Database } from "@/types/database.generated";
 import type {
   ImportCommitResult,
   ImportConflict,
@@ -482,6 +483,8 @@ export type DateGroupCommitActionResult =
         updated: number;
         skipped: number;
         errors: number;
+        /** True when this was a retry of an import that had already been saved. */
+        replayed?: boolean;
       };
     }
   | {
@@ -585,51 +588,65 @@ export async function commitDateGroupImportAction(
       !excludedSet.has(r.rowNumber) &&
       r.productId !== null,
   );
-
-  let createdCount = 0;
-  let updatedCount = 0;
-
-  for (const row of rowsToApply) {
-    const lotId =
-      row.action === "update" && row.dateGroupId
-        ? row.dateGroupId
-        : crypto.randomUUID();
-    const existing = snapshot.dateLots?.find((l) => l.id === lotId);
-
-    const { error } = await supabase.rpc("inventory_date_lot_save", {
-      p_organization_id: who.organizationId,
-      p_location_id: who.locationId,
-      p_id: lotId,
-      p_product_id: row.productId!,
-      p_quantity: row.quantity,
-      p_manufacture_date: row.manufacture?.date ?? null,
-      p_manufacture_precision: row.manufacture?.precision ?? null,
-      p_expiration_date: row.expiration?.date ?? null,
-      p_expiration_precision: row.expiration?.precision ?? null,
-      p_notes: row.notes,
-      p_active: true,
-      p_expected_version: existing?.version ?? null,
-    });
-
-    if (error) {
-      console.error(
-        "inventory_date_lot_save error in commitDateGroupImportAction",
-        error,
-      );
-      return { ok: false, error: friendlyDbMessage(error) };
-    }
-
-    if (row.action === "create") createdCount++;
-    else updatedCount++;
+  if (rowsToApply.length === 0) {
+    return { ok: false, error: "There are no rows to import." };
   }
+  const rejected = plan.summary.error;
+  const skipped = plan.rows.length - rowsToApply.length - rejected;
 
+  // ONE database call = ONE transaction: every approved row is saved or none
+  // is, and the request id makes a retry (double click, dropped connection)
+  // replay the original result instead of creating duplicates. Nothing here
+  // touches authoritative stock or the stock ledger.
+  const args = {
+    p_organization_id: who.organizationId,
+    p_location_id: who.locationId,
+    p_request_id: data.requestId,
+    p_filename: data.filename,
+    p_fingerprint: fingerprint,
+    p_skipped: skipped,
+    p_rejected: rejected,
+    p_rows: rowsToApply.map((row) => ({
+      row_number: row.rowNumber,
+      action: row.action,
+      product_id: row.productId,
+      date_group_id: row.action === "update" ? row.dateGroupId : null,
+      expected_version: row.action === "update" ? row.expectedVersion : null,
+      quantity: row.quantity,
+      manufacture_date: row.manufacture?.date ?? null,
+      manufacture_precision: row.manufacture?.precision ?? null,
+      expiration_date: row.expiration?.date ?? null,
+      expiration_precision: row.expiration?.precision ?? null,
+      notes: row.notes,
+    })),
+  } satisfies {
+    [K in keyof Database["public"]["Functions"]["inventory_date_group_import_commit"]["Args"]]:
+      | Database["public"]["Functions"]["inventory_date_group_import_commit"]["Args"][K]
+      | null;
+  };
+  const { data: committed, error } = await supabase.rpc(
+    "inventory_date_group_import_commit",
+    args,
+  );
+  if (error) {
+    console.error("inventory_date_group_import_commit", error);
+    return { ok: false, error: friendlyDbMessage(error) };
+  }
+  const outcome = committed as {
+    created?: number;
+    updated?: number;
+    skipped?: number;
+    rejected?: number;
+    replayed?: boolean;
+  } | null;
   return {
     ok: true,
     result: {
-      created: createdCount,
-      updated: updatedCount,
-      skipped: plan.summary.skip + (data.excluded.length || 0),
-      errors: plan.summary.error,
+      created: outcome?.created ?? 0,
+      updated: outcome?.updated ?? 0,
+      skipped: outcome?.skipped ?? skipped,
+      errors: outcome?.rejected ?? rejected,
+      replayed: outcome?.replayed === true,
     },
   };
 }

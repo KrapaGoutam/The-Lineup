@@ -55,6 +55,9 @@ function StorageAreaForm({
   const [name, setName] = useState(area?.name ?? "");
   const [kind, setKind] = useState<StorageAreaKind>(area?.kind ?? "cooler");
   const [displayOrder, setDisplayOrder] = useState(area?.displayOrder ?? 1);
+  // The version the editor SAW when this form opened. A later refresh of the
+  // snapshot must not silently re-base a save on someone else's newer change.
+  const [openedVersion] = useState(area?.version ?? null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -79,7 +82,9 @@ function StorageAreaForm({
         name: trimmed,
         kind,
         displayOrder,
-        active: true,
+        // Editing never changes whether an area is archived (Restore is its own action).
+        active: area?.active ?? true,
+        expectedVersion: openedVersion,
       });
       if (!result.ok) {
         setError(result.error);

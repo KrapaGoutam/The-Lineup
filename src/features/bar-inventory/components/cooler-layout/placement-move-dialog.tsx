@@ -19,12 +19,17 @@ import type { RunCatalogCommand } from "../catalog-dialogs";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The product being placed or moved; null lets the person choose one. */
   product: ProductView | null;
   existingPlacement: StoragePlacementView | null;
   defaultAreaId?: string | null;
   defaultShelfId?: string | null;
   areas: readonly StorageAreaView[];
   shelves: readonly StorageShelfView[];
+  /** Every placement at this branch, to keep a product off a shelf it is already on. */
+  placements: readonly StoragePlacementView[];
+  /** Active catalog products (for the picker when `product` is null). */
+  products: readonly ProductView[];
   run: RunCatalogCommand;
 };
 
@@ -37,26 +42,28 @@ export function PlacementMoveDialog({
   defaultShelfId,
   areas,
   shelves,
+  placements,
+  products,
   run,
 }: Props) {
-  if (!product) return null;
-
   return (
     <Dialog
       open={open}
       onClose={() => onOpenChange(false)}
       title={existingPlacement ? "Move Placement" : "Place Product on Shelf"}
-      description={`Assign physical cooler or shelf position for ${product.name} (${product.size ?? "Standard"}).`}
+      description="Choose where this product physically sits. This is organization only: it never changes the stock count."
     >
       {open ? (
         <PlacementMoveForm
-          key={existingPlacement?.id ?? product.id}
+          key={existingPlacement?.id ?? product?.id ?? "pick"}
           product={product}
           existingPlacement={existingPlacement}
           defaultAreaId={defaultAreaId}
           defaultShelfId={defaultShelfId}
           areas={areas}
           shelves={shelves}
+          placements={placements}
+          products={products}
           run={run}
           onClose={() => onOpenChange(false)}
         />
@@ -72,20 +79,30 @@ function PlacementMoveForm({
   defaultShelfId,
   areas,
   shelves,
+  placements,
+  products,
   run,
   onClose,
 }: {
-  product: ProductView;
+  product: ProductView | null;
   existingPlacement: StoragePlacementView | null;
   defaultAreaId?: string | null;
   defaultShelfId?: string | null;
   areas: readonly StorageAreaView[];
   shelves: readonly StorageShelfView[];
+  placements: readonly StoragePlacementView[];
+  products: readonly ProductView[];
   run: RunCatalogCommand;
   onClose: () => void;
 }) {
   const initialAreaId =
-    existingPlacement?.storageAreaId ?? defaultAreaId ?? areas[0]?.id ?? "";
+    existingPlacement?.storageAreaId ??
+    (defaultShelfId
+      ? shelves.find((s) => s.id === defaultShelfId)?.storageAreaId
+      : null) ??
+    defaultAreaId ??
+    areas[0]?.id ??
+    "";
   const [selectedAreaId, setSelectedAreaId] = useState(initialAreaId);
 
   const initialShelfId =
@@ -94,6 +111,7 @@ function PlacementMoveForm({
     shelves.find((s) => s.storageAreaId === initialAreaId)?.id ??
     "";
   const [selectedShelfId, setSelectedShelfId] = useState(initialShelfId);
+  const [productId, setProductId] = useState(product?.id ?? "");
 
   const [slotLabel, setSlotLabel] = useState(
     existingPlacement?.slotLabel ?? "",
@@ -101,15 +119,30 @@ function PlacementMoveForm({
   const [slotNumber, setSlotNumber] = useState<number | "">(
     existingPlacement?.slotNumber ?? "",
   );
+  // The version the editor SAW; a refresh while the dialog is open must not rebase the save.
+  const [openedVersion] = useState(existingPlacement?.version ?? null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Filter shelves for selected storage area
-  const areaShelves = useMemo(() => {
-    return shelves.filter((s) => s.storageAreaId === selectedAreaId);
-  }, [shelves, selectedAreaId]);
+  const areaShelves = useMemo(
+    () => shelves.filter((s) => s.storageAreaId === selectedAreaId),
+    [shelves, selectedAreaId],
+  );
 
-  // Keep shelf synced if area changes and shelf is not in new area
+  // Picker choices: active products not already placed on the chosen shelf.
+  const pickable = useMemo(() => {
+    const onShelf = new Set(
+      placements
+        .filter((p) => p.shelfId === selectedShelfId)
+        .map((p) => p.productId),
+    );
+    return products
+      .filter((p) => p.active && !onShelf.has(p.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, placements, selectedShelfId]);
+
+  const chosen = product ?? products.find((p) => p.id === productId) ?? null;
+
   function handleAreaChange(areaId: string) {
     setSelectedAreaId(areaId);
     const firstShelf = shelves.find((s) => s.storageAreaId === areaId);
@@ -118,6 +151,10 @@ function PlacementMoveForm({
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!chosen) {
+      setError("Choose a product to place.");
+      return;
+    }
     if (!selectedAreaId) {
       setError("Select a storage area.");
       return;
@@ -139,10 +176,11 @@ function PlacementMoveForm({
         id: existingPlacement?.id ?? null,
         storageAreaId: selectedAreaId,
         shelfId: selectedShelfId,
-        productId: product.id,
+        productId: chosen.id,
         slotNumber: slotNumber === "" ? null : Number(slotNumber),
         slotLabel: slotLabel.trim() || null,
         displayOrder: existingPlacement?.displayOrder ?? 0,
+        expectedVersion: openedVersion,
       });
       if (!result.ok) {
         setError(result.error);
@@ -156,13 +194,37 @@ function PlacementMoveForm({
 
   return (
     <form onSubmit={handleSave} className="flex flex-col gap-4">
-      <div className="bg-muted/50 rounded-md border p-3 text-sm">
-        <div className="text-foreground font-medium">{product.name}</div>
-        <div className="text-muted-foreground text-xs">
-          {product.size ? `${product.size} · ` : ""}
-          Option A: Physical placement only; does not alter stock counts.
+      {product ? (
+        <div className="bg-muted/50 rounded-md border p-3 text-sm">
+          <div className="text-foreground font-medium">{product.name}</div>
+          <div className="text-muted-foreground text-xs">
+            {product.size ? `${product.size} · ` : ""}
+            Physical placement only; it does not alter stock counts.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-2">
+          <Label htmlFor="place-product">Product</Label>
+          <Select
+            id="place-product"
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            required
+          >
+            <option value="">Choose a product…</option>
+            {pickable.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.size ? ` (${p.size})` : ""}
+              </option>
+            ))}
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            A product can sit in more than one place. Placement never changes
+            its stock count.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-2">
         <Label htmlFor="place-area">Storage Area</Label>
@@ -245,7 +307,10 @@ function PlacementMoveForm({
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={saving || areaShelves.length === 0}>
+        <Button
+          type="submit"
+          disabled={saving || areaShelves.length === 0 || !chosen}
+        >
           {saving
             ? "Saving…"
             : existingPlacement

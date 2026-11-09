@@ -1,7 +1,13 @@
 "use client";
 
 import { History, Minus, Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatBusinessDateTime } from "@/lib/date-time";
@@ -81,6 +87,8 @@ import { CoolerLayoutView } from "./cooler-layout/cooler-layout-view";
 export function InventoryView({
   snapshot,
   locationId = null,
+  locationName = null,
+  loadBranchOverview,
   run,
   restaurantSlug,
   timeZone,
@@ -91,6 +99,10 @@ export function InventoryView({
 }: {
   snapshot: CatalogSnapshot;
   locationId?: string | null;
+  locationName?: string | null;
+  loadBranchOverview?: ComponentProps<
+    typeof CoolerLayoutView
+  >["loadBranchOverview"];
   run: RunCatalogCommand;
   restaurantSlug: string;
   timeZone: string;
@@ -480,6 +492,8 @@ export function InventoryView({
         <CoolerLayoutView
           snapshot={snapshot}
           locationId={locationId}
+          locationName={locationName}
+          loadBranchOverview={loadBranchOverview}
           run={run}
           timeZone={timeZone}
           onSelectProduct={(productId) => setSheetFor(productId)}

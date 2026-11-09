@@ -21,6 +21,7 @@ import { readWorkbook } from "@/lib/xlsx/workbook";
 
 import {
   exportDataAction,
+  getBranchStorageOverviewAction,
   getHistoryAction,
 } from "../actions/inventory-actions";
 import {
@@ -110,6 +111,8 @@ type Props = {
   timeZone: string;
   /** The location whose stock changes are listened for (real mode). */
   locationId?: string | null;
+  /** That location's display name, shown on the Cooler Layout branch control. */
+  locationName?: string | null;
   onSessionInvalid?: () => void;
   expectedContext?: unknown;
 };
@@ -149,6 +152,7 @@ function ManagerInventory({
   demo,
   timeZone,
   locationId = null,
+  locationName = null,
   onSessionInvalid,
   expectedContext,
 }: Props) {
@@ -261,6 +265,39 @@ function ManagerInventory({
       expectedContext,
     };
   });
+
+  // Read-only "All authorized branches" layout for the Cooler Layout. Real mode
+  // asks the server, which proves each branch itself; demo mode has exactly one
+  // (the demo) branch. Stable identity: it reads everything through the ref.
+  const loadBranchOverview = useCallback(async () => {
+    const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+      latest.current;
+    if (demo) {
+      const state = demo.state;
+      return {
+        ok: true as const,
+        data: {
+          activeLocationId: "demo-location",
+          branches: [
+            {
+              locationId: "demo-location",
+              locationName: "Demo restaurant",
+              areas: state.storageAreas ?? [],
+              shelves: state.storageShelves ?? [],
+              placements: state.storagePlacements ?? [],
+              stock: state.stock,
+            },
+          ],
+        },
+      };
+    }
+    const result = await getBranchStorageOverviewAction({
+      restaurantSlug,
+      expectedContext,
+    });
+    if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+    return result;
+  }, []);
   const loadHistory = useCallback(
     async (days: number, productId: string | null): Promise<HistoryLoad> => {
       const {
@@ -760,6 +797,8 @@ function ManagerInventory({
             profileId={user.profileId}
             snapshot={controller.snapshot}
             locationId={locationId}
+            locationName={locationName}
+            loadBranchOverview={loadBranchOverview}
             run={controller.run}
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}

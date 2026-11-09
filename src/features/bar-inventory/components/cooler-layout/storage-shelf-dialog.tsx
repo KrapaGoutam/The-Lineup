@@ -71,6 +71,7 @@ function StorageShelfForm({
   const [name, setName] = useState(shelf?.name ?? "");
   const [sectionName, setSectionName] = useState(shelf?.sectionName ?? "");
   const [displayOrder, setDisplayOrder] = useState(shelf?.displayOrder ?? 1);
+  const [openedVersion] = useState(shelf?.version ?? null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -100,6 +101,7 @@ function StorageShelfForm({
         name: trimmedName,
         sectionName: sectionName.trim() || null,
         displayOrder,
+        expectedVersion: openedVersion,
       });
       if (!result.ok) {
         setError(result.error);

@@ -188,10 +188,13 @@ export const catalogCommandSchema = z.discriminatedUnion("type", [
     kind: z.enum(STORAGE_AREA_KINDS),
     displayOrder: z.number().int(),
     active: z.boolean(),
+    /** The version the editor saw; null only for a brand-new area. */
+    expectedVersion: version.nullable(),
   }),
   z.object({
     type: z.literal("storageAreaArchive"),
     id: uuid,
+    expectedVersion: version,
   }),
   z.object({
     type: z.literal("storageShelfUpsert"),
@@ -200,10 +203,14 @@ export const catalogCommandSchema = z.discriminatedUnion("type", [
     name: z.string().trim().min(1).max(120),
     sectionName: optionalText(120),
     displayOrder: z.number().int(),
+    expectedVersion: version.nullable(),
   }),
   z.object({
     type: z.literal("storageShelfDelete"),
     id: uuid,
+    expectedVersion: version,
+    /** Must be explicitly true to remove a shelf that still has placed products. */
+    removePlacements: z.boolean(),
   }),
   z.object({
     type: z.literal("storagePlacementSet"),
@@ -214,10 +221,12 @@ export const catalogCommandSchema = z.discriminatedUnion("type", [
     slotNumber: z.number().int().min(0).nullable(),
     slotLabel: optionalText(30),
     displayOrder: z.number().int(),
+    expectedVersion: version.nullable(),
   }),
   z.object({
     type: z.literal("storagePlacementDelete"),
     id: uuid,
+    expectedVersion: version,
   }),
   z.object({
     type: z.literal("storagePlacementReorder"),

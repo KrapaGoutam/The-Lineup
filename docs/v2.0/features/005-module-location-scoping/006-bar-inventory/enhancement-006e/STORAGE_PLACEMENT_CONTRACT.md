@@ -81,3 +81,19 @@ Restaurant Branch (public.locations)
 - Read policy: `USING (private.inventory_can_access_location(organization_id, location_id))` paired with backend module enforcement restrictive policy.
 - Write access: Restricted to `SECURITY DEFINER` RPCs (`inventory_storage_area_upsert`, `inventory_storage_area_archive`, `inventory_storage_shelf_upsert`, `inventory_storage_shelf_delete`, `inventory_storage_placement_set`, `inventory_storage_placement_delete`, `inventory_storage_placement_reorder`).
 - Every RPC calls `v_actor uuid := private.inventory_begin(p_organization_id, p_location_id);` verifying caller authorization, location activity, and module availability.
+
+---
+
+## Stage E6 amendments
+
+- Every mutating RPC takes the version the editor saw (`p_expected_version`; NULL only for a brand-new row)
+  and raises `PT409` when it is stale. Shelves now carry a `version`.
+- `inventory_storage_shelf_delete(..., p_expected_version, p_remove_placements)` refuses a shelf that still has
+  placed products unless removal is explicitly confirmed. Each removed placement and the shelf are written to
+  `inventory_change_log` (`storage_placement` / `storage_shelf`, action `delete`). Stock is never touched.
+- Archiving an area keeps its shelves and placements. The UI distinguishes products placed in an active area,
+  products placed ONLY in archived areas ("In archived storage", restorable), and unassigned products.
+  Nothing new can be placed into, or shelved under, an archived area until it is restored.
+- Uniqueness: one placement per product per shelf; one slot number per shelf; one active area name per
+  restaurant; one shelf name+section per area. The same product MAY sit on several shelves (one stock row).
+- All foreign keys to `locations` are `DEFERRABLE INITIALLY DEFERRED` like every other inventory table.

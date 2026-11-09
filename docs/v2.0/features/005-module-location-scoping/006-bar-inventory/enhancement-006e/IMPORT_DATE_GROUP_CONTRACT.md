@@ -53,3 +53,23 @@ Exported date group reports can be re-imported directly without schema restructu
 - Atomic batch execution via `inventory_date_group_import_commit` RPC.
 - Date group imports **never** modify authoritative stock on hand or backup in `inventory_stock`.
 - Date group imports **never** create entries in the immutable stock ledger (`inventory_adjustments`).
+
+---
+
+## 3. Stage E6 amendments (verified by tests, not by inspection)
+
+- **Atomicity.** `inventory_date_group_import_commit` is one transaction. The server action makes exactly one
+  RPC call; a failure at any row rolls back every earlier row. (The first implementation looped
+  `inventory_date_lot_save` from JavaScript, which was NOT atomic; that was fixed in E6.)
+- **Idempotency.** The browser's `requestId` is only the key. Durability is the receipt table
+  `inventory_date_group_imports` (`unique (organization_id, request_id)`), written in the same transaction.
+  A retry with the same payload replays the stored result (`replayed: true`); the same id with a different
+  payload is refused; two identical concurrent requests serialize on an advisory lock and commit once.
+  A failed attempt writes no receipt, so a corrected retry under the same id succeeds.
+- **Stale preview protection.** The plan carries the version of every group it will update; the fingerprint
+  (53-bit) covers versions, dates, precision, quantity and notes; the database re-checks every version (PT409).
+- **Archive state.** A row that names an archived group is a row error; imports never reactivate.
+- **Round trip.** The real Date Groups export (MM/DD/YY, MM/YY, "—", extra status columns) re-imports as all
+  "unchanged" with no header rewriting and no precision drift (domain test uses the real exporter).
+- **No stock effect.** Verified: every stock row (quantity and version), the ledger and `stock_levels` audit
+  entries are identical before and after (pgTAP 0072, real-JWT).
