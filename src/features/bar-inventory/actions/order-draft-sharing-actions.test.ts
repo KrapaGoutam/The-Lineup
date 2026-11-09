@@ -8,7 +8,7 @@ vi.mock("@/features/modules/data/module-enforcement", () => ({
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
-  getCurrentUser: vi.fn(),
+  getInventoryActor: vi.fn(),
   getPrimaryLocation: vi.fn(),
   requireLiveSession: vi.fn(),
   getActiveOrderDrafts: vi.fn(),
@@ -18,8 +18,17 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
 }));
 
-vi.mock("@/lib/current-user", () => ({
-  getCurrentUser: mocks.getCurrentUser,
+vi.mock("../data/inventory-actor", () => ({
+  getInventoryActor: mocks.getInventoryActor,
+}));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: vi.fn(async () => ({
+    ok: true,
+    location: {
+      id: "00000000-0000-0000-0000-000000031002",
+      time_zone: "America/New_York",
+    },
+  })),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mocks.createClient,
@@ -46,6 +55,7 @@ vi.mock("../data/history-data", () => ({
 
 import { buildDemoCatalog } from "../domain/demo-catalog";
 import type { OrderDraftView } from "../domain/order-draft-view";
+import type { InventoryActor } from "../data/inventory-actor";
 import { exportDataAction } from "./inventory-actions";
 import {
   getSentOrderDraftAction,
@@ -58,15 +68,24 @@ const LOC = "00000000-0000-0000-0000-000000031002";
 const DRAFT = "31000000-0000-4000-8000-000000000003";
 const OTHER_DRAFT = "31000000-0000-4000-8000-000000000004";
 
-const user = (
+const actor = (
   designation: "owner" | "manager" | "assistant_manager" | "staff",
-) => ({
-  profileId: "profile-1",
-  name: "Mia",
-  role: designation === "staff" ? "server" : "manager",
-  designation,
-  organizationId: ORG,
-});
+): InventoryActor | null => {
+  if (designation === "staff") return null;
+  return {
+    organizationId: ORG,
+    scope: {
+      organizationId: ORG,
+      locationId: LOC,
+      timeZone: "America/New_York",
+    },
+    viewer: {
+      profileId: "profile-1",
+      name: "Mia",
+      designation,
+    },
+  };
+};
 
 const sentDraft: OrderDraftView = {
   id: DRAFT,
@@ -101,11 +120,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.createClient.mockResolvedValue({ rpc: mocks.rpc });
   mocks.requireLiveSession.mockResolvedValue(null);
-  mocks.getCurrentUser.mockResolvedValue(user("manager"));
-  mocks.getPrimaryLocation.mockResolvedValue({
-    id: LOC,
-    time_zone: "America/New_York",
-  });
+  mocks.getInventoryActor.mockResolvedValue(actor("manager"));
   mocks.getActiveOrderDrafts.mockResolvedValue([]);
   mocks.getCatalogSnapshot.mockResolvedValue({
     ...buildDemoCatalog(),
@@ -206,12 +221,12 @@ describe("markOrderDraftSentAction (VOD-070/073/076)", () => {
   });
 
   it("refuses staff, a bad draft id and a bad version before any database call", async () => {
-    mocks.getCurrentUser.mockResolvedValue(user("staff"));
+    mocks.getInventoryActor.mockResolvedValue(actor("staff"));
     expect(await markOrderDraftSentAction(input)).toEqual({
       ok: false,
-      error: "Bar Inventory is not available for your role.",
+      error: "You are not authorized to manage Bar Inventory at this location.",
     });
-    mocks.getCurrentUser.mockResolvedValue(user("manager"));
+    mocks.getInventoryActor.mockResolvedValue(actor("manager"));
     expect(
       await markOrderDraftSentAction({ ...input, draftId: "nope" }),
     ).toEqual({ ok: false, error: "That request is invalid." });
@@ -224,10 +239,10 @@ describe("markOrderDraftSentAction (VOD-070/073/076)", () => {
 
 describe("Sent reads: staff denied (VOD-093)", () => {
   it("list and detail refuse staff and never read the data layer", async () => {
-    mocks.getCurrentUser.mockResolvedValue(user("staff"));
+    mocks.getInventoryActor.mockResolvedValue(actor("staff"));
     const denied = {
       ok: false,
-      error: "Bar Inventory is not available for your role.",
+      error: "You are not authorized to manage Bar Inventory at this location.",
     };
     expect(
       await listSentOrderDraftsAction({ restaurantSlug: "the-monks", page: 0 }),
@@ -396,7 +411,7 @@ describe("exportDataAction order_draft (VOD-060/061/062/063)", () => {
   });
 
   it("refuses staff before reading anything", async () => {
-    mocks.getCurrentUser.mockResolvedValue(user("staff"));
+    mocks.getInventoryActor.mockResolvedValue(actor("staff"));
     expect(
       await exportDataAction({
         restaurantSlug: "the-monks",
@@ -405,7 +420,7 @@ describe("exportDataAction order_draft (VOD-060/061/062/063)", () => {
       }),
     ).toEqual({
       ok: false,
-      error: "Bar Inventory is not available for your role.",
+      error: "You are not authorized to manage Bar Inventory at this location.",
     });
     expect(mocks.getOrderDraftById).not.toHaveBeenCalled();
     expect(mocks.getCatalogSnapshot).not.toHaveBeenCalled();

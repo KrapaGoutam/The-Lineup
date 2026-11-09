@@ -13,7 +13,13 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.client }));
-vi.mock("@/lib/current-user", () => ({ getCurrentUser: mocks.user }));
+vi.mock("../data/recipes-actor", () => ({ getRecipesActor: mocks.user }));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: vi.fn(async () => ({
+    ok: true,
+    location: { id: "loc-1", time_zone: "America/New_York" },
+  })),
+}));
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.session,
 }));
@@ -38,14 +44,37 @@ const category = {
     name: "Test",
   },
 };
+
+const makeActor = (designation: string | null) => {
+  if (!designation) return null;
+  const isManager = [
+    "owner",
+    "general_manager",
+    "assistant_manager",
+    "manager",
+    "shift_manager",
+  ].includes(designation);
+  return {
+    organizationId: "server-org",
+    scope: {
+      organizationId: "server-org",
+      locationId: "loc-1",
+      timeZone: "America/New_York",
+    },
+    viewer: {
+      profileId: "p-1",
+      name: "User",
+      designation,
+    },
+    isManager,
+  };
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.client.mockResolvedValue({ rpc: mocks.rpc, from: mocks.from });
   mocks.session.mockResolvedValue(null);
-  mocks.user.mockResolvedValue({
-    designation: "manager",
-    organizationId: "server-org",
-  });
+  mocks.user.mockResolvedValue(makeActor("manager"));
   mocks.rpc.mockResolvedValue({ data: { id, version: 2 }, error: null });
 });
 describe("management action boundaries", () => {
@@ -65,9 +94,7 @@ describe("management action boundaries", () => {
   it.each(["staff", null])(
     "rejects %s before all management access",
     async (designation) => {
-      mocks.user.mockResolvedValue(
-        designation ? { designation, organizationId: "org" } : null,
-      );
+      mocks.user.mockResolvedValue(makeActor(designation));
       for (const result of [
         await setRecipeArchivedAction(archive),
         await manageRecipeCategoryAction(category),

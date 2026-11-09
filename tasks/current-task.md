@@ -1,35 +1,41 @@
-# V2-005.005 Payroll Location Scoping — COMPLETED
+# V2-005 Batch B: Bar Inventory & Recipes Location Scoping — REVIEWED, ROLLED OUT TO DEV, READY TO MERGE
 
 Parent issue: #253 | Program: #248 | Milestone: #8 (The Lineup V2.0)
-Branch: `feature/v2.0-005.005-payroll-location-scoping` | Target: `development`
-Worktree: `.tmp/v2-payroll-location-scoping` | Mode: IMPLEMENT → VERIFY → CREATE ONE PR → OWNER HANDOFF
+Branch: `feature/v2.0-005-batch-b-inventory-recipes` | Target: `development`
+Worktree: `.tmp/v2-005-batch-b` | PR: [#315](https://github.com/KrapaGoutam/The-Lineup/pull/315)
+Status: Stage 1 (Antigravity implementation) -> Stage 2 (independent review + corrections, Claude Code) -> Stage 3 (backup, rehearsal, hosted DEV migration) complete. Merge into `development` is the last step.
 
 ## Checklist
 
-### STAGE 1 — IMPLEMENT
+### STAGE 1 — IMPLEMENTATION (Antigravity)
 
-- [x] P00: Verify baseline git commit (`896c8016c6edaa110943d55aa8848ea146abae14`), initialize feature worktree & branch.
-- [x] P01: Documentation suite initialization (`PLAN.md`, `ENTRY_POINT_MATRIX.md`, `FINANCIAL_INVARIANTS.md`, `TEST_MATRIX.md`, `STATUS.md`, `INTEGRATION_HANDOFF.md`, `EVIDENCE.md`).
-- [x] P02: Database migration: Add optional `location_id` to `payroll_periods` with composite tenant FK, repair actor attribution FKs to `profiles(id)`, actor identity triggers, helper functions (`payroll_profile_level`, `payroll_is_org_manager`, `payroll_can_manage_location`, `payroll_can_manage_period`, `payroll_can_read_period`), public RPC `payroll_location_authorized`, update `unconfirm_payroll_payment`, RLS policies on `payroll_settings`, `payroll_rates`, `payroll_periods`, `payroll_payments`, `payroll_adjustments`, `audit_events`, backend module enforcement policy (`20261108021714_payroll_location_scoping.sql`).
-- [x] P03: Server-side authorization & actor resolution: Implement `src/features/payroll/data/payroll-actor.ts`, update `payroll-actions.ts` and `statement-actions.ts` with V2 active-context resolution, workspace expectation assertions (`checkWorkspace`), multi-location double-count safeguards, and location-scoped filtering.
-- [x] P04: Data layer updates: Update `src/features/payroll/data/payroll-data.ts` to support optional `location_id` on periods, location-scoped period listing, and actor attribution.
-- [x] P05: UI updates: Thread `expectedContext` into `PayrollWorkspace`, display location scope indicators, multi-location generation guards, rate override disablement for non-org managers, and preserve export/print parity.
+- [x] B00-B18: baseline, docs suite, migration `20261108160000_batch_b_inventory_recipes.sql`, actor helpers, server actions, UI propagation, first test pass, PR #315.
 
-### STAGE 2 — VERIFY
+### STAGE 2 — INDEPENDENT REVIEW AND CORRECTION (Claude Code)
 
-- [x] P06: Vitest unit tests: 9 payroll test files passing, 121/121 tests pass. Full repository vitest suite passes (247 files, 3,336 tests). Registered `guardPayrollModule` in `enforcement-coverage.test.ts`.
-- [x] P07: pgTAP & real-JWT database tests: Created `0021_payroll_location_scoping.test.sql` (65/65 tests pass). Full payroll suite (0010, 0011, 0018, 0021): 151/151 tests pass.
-- [x] P08: Migration replay & populated data rehearsal: `supabase db reset` rehearsed cleanly; all 80 migrations applied from scratch; pgTAP verified against fresh database.
-- [x] P09: Full quality gates: `npm run check` (prettier, eslint with 0 warnings, typecheck) and `npm run build` (`next build --webpack`) cleanly pass.
+- [x] R01: Reproduce both red CI assertions locally; root-cause them (0037: actor FKs re-created NOT DEFERRABLE under new names; 0039 and the hidden 0037 abort: fixtures used a multi-location Shift Manager with no assignment, which V2 denies).
+- [x] R02: Fix the migration (original FK names and deferrability, `IF EXISTS` removed from drops) and the fixtures; add regressions (0039 +5).
+- [x] R03: P0 found and fixed: `getInventoryActor` / `getRecipesActor` used `p_org` / `p_location` RPC argument names (actual: `p_organization_id` / `p_location_id`), so the actor was `null` for every user. RPC args now typed with `satisfies Database[...]["Args"]`.
+- [x] R04: Hardening: live-session / profile-level helpers not client-executable; `inventory_is_manager` mirrors the Shift Manager rule; primary-location fallbacks removed; types regenerated; fixture no longer embeds keys.
+- [x] R05: New tests: pgTAP 0070 (78), real-JWT +5 (16 total, incl. genuine sign-out revocation), Playwright content assertions (21 across desktop/tablet/mobile).
+- [x] R06: Gates: `npm run check`, full Vitest (249 files / 3,342 passed / 7 skipped), production build, secret scan, exact-head CI green (`26ebe138`: application, browser-smoke, migrations-and-policies Files=72 Tests=2559, Vercel).
 
-### STAGE 3 — DELIVER
+### STAGE 3 — CONTROLLED DEV ROLLOUT
 
-- [x] P10: Independent review: verified security, tenant isolation, location scoping, financial invariants, and RLS policies.
-- [x] P11: Evidence documentation: finalized `EVIDENCE.md`, `STATUS.md`, `INTEGRATION_HANDOFF.md`.
-- [x] P12: Commit, push branch, open PR targeting `development` with full evidence, stop for owner handoff.
+- [x] D01: Fresh encrypted ledger-80 backup (`dev-20261109T065747Z.zip.dpapi`), hash-verified; isolated no-network restore (107 tables, 0 mismatches).
+- [x] D02: Populated rehearsal on the restored real DEV data with the exact migration bytes: 76 data digests identical; catalog delta as designed; old-app/new-schema and new-app/old-schema compatibility executed.
+- [x] D03: Hosted DEV migration 80 -> 81 via `db push --linked` (dry run listed only this file); enforcement STAGED, 0 module configs; data digests identical; catalog parity (2,761/2,763, remaining 2 = untouched CHECK deparse); rolled-back probe 94/94 (SQL-simulated roles).
+- [ ] D04: Hosted authenticated UI acceptance: DEFERRED (no module configuration; none seeded).
+
+### STAGE 4 — INTEGRATION
+
+- [ ] M01: Final exact-head CI green on the docs/test-support head, Preview READY and DEV-bound.
+- [ ] M02: Normal merge commit of PR #315 into `development` (no squash, no force); verify parents, development HEAD, Preview, `main` unchanged.
+- [ ] M03: Update #253 (do not close); #248 and milestone #8 stay open.
 
 ## Current State & Next Step
 
-- All implementation and verification stages complete.
-- Quality gates: check (clean), test (3,336 passed), build (clean), db test (151 passed).
-- Ready for final commit and pull request creation targeting `development`.
+- Migration (reviewed bytes): sha256 `ccd95597016a333b3f5982ebd00f02655689901cec59a69c0bbc5a14ee18ccc8`; already applied to hosted DEV (ledger 81). Never re-apply.
+- Next: push the docs/test-support commit to PR #315, wait for exact-head CI, confirm Preview READY (DEV-bound), then merge PR #315 with a regular merge commit.
+- Not in scope and not started: Inventory enhancement phases 1-2, V2-006 Attendance, V2-007 Clock Kiosk, any module-enforcement activation or module-config seeding.
+- Accepted P2 residuals and the PROD pre-release read-only check (shift managers in multi-location orgs without a location assignment lose Bar Inventory): see `docs/v2.0/features/005-module-location-scoping/006-bar-inventory/EVIDENCE.md` section 3.

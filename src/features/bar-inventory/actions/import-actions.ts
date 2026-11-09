@@ -2,10 +2,13 @@
 
 import { z } from "zod";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import {
+  getInventoryActor,
+  type InventoryActor,
+} from "../data/inventory-actor";
 import { getOrganizationRoster } from "@/features/team/data/roster";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { readWorkbookNode } from "@/lib/xlsx/read-node";
@@ -20,10 +23,7 @@ import type {
   ImportCommitResult,
   ImportConflict,
 } from "../domain/import-stage";
-import {
-  isInventoryManager,
-  type ImportBatchView,
-} from "../domain/inventory-types";
+import type { ImportBatchView } from "../domain/inventory-types";
 
 // A "use server" file may only export async functions (and types): the
 // constants below are deliberately private.
@@ -56,6 +56,7 @@ const requestSchema = z.object({
         .optional(),
     })
     .default({}),
+  expectedContext: z.unknown().optional(),
 });
 
 // A row number is the line in the file, blank lines included, so it can exceed
@@ -88,6 +89,7 @@ export type ImportPreviewActionResult =
       error: string;
       header: HeaderMapping | null;
       sessionInvalid?: true;
+      contextStale?: true;
     };
 
 export type ImportCommitActionResult =
@@ -103,6 +105,7 @@ export type ImportCommitActionResult =
       kind: "changed" | "invalid" | "error";
       error: string;
       sessionInvalid?: true;
+      contextStale?: true;
     };
 
 export type WorkbookActionResult =
@@ -114,11 +117,11 @@ export type WorkbookActionResult =
       csv: string;
       warnings: string[];
     }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 export type ImportBatchesActionResult =
   | { ok: true; batches: ImportBatchView[] }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 const toRequest = (input: z.infer<typeof requestSchema>) => ({
   csv: input.csv,
@@ -129,49 +132,72 @@ const toRequest = (input: z.infer<typeof requestSchema>) => ({
   choices: input.choices,
 });
 
-async function resolveManager(restaurantSlug: string) {
-  const user = await getCurrentUser(restaurantSlug);
-  if (!user) {
-    return {
-      ok: false as const,
-      error: "You need to sign in to use Bar Inventory.",
-    };
-  }
-  if (!isInventoryManager(user.designation)) {
-    return {
-      ok: false as const,
-      error: "Bar Inventory is not available for your role.",
-    };
-  }
-  // V2-004.004: after the role check, the module must be on at the verified
-  // location. Shared catalog data is untouched; only this location's use of it.
-  const blocked = await guardModule({
-    module: "bar_inventory",
-    organizationId: user.organizationId,
-  });
-  if (blocked) return blocked;
-  return { ok: true as const, organizationId: user.organizationId };
-}
+const STALE_CONTEXT_MESSAGE =
+  "Your active restaurant or location changed in another tab. Please reload before saving.";
 
-async function caller(
+async function resolveManager(
   supabase: Supabase,
   restaurantSlug: string,
+  expectedContext?: unknown,
 ): Promise<
-  | { ok: true; organizationId: string; locationId: string }
-  | { ok: false; error: string; sessionInvalid?: true }
+  | {
+      ok: true;
+      organizationId: string;
+      locationId: string;
+      actor: InventoryActor;
+    }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true }
 > {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
-  const manager = await resolveManager(restaurantSlug);
-  if (!manager.ok) return manager;
-  const location = await getPrimaryLocation(manager.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
+  const actor = await getInventoryActor(restaurantSlug);
+  if (!actor) {
+    return {
+      ok: false,
+      error: "You are not authorized to manage Bar Inventory at this location.",
+    };
+  }
+  const expectationRaw =
+    (expectedContext as Record<string, unknown> | undefined)?.expectation ??
+    expectedContext;
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: actor.scope.locationId,
+        time_zone: actor.scope.timeZone ?? "UTC",
+      }),
+    },
+  );
+  if (!outcome.ok) {
+    return {
+      ok: false,
+      error:
+        outcome.code === "invalid"
+          ? "That request is invalid."
+          : STALE_CONTEXT_MESSAGE,
+      contextStale: true,
+    };
+  }
+  const blocked = await guardModule({
+    module: "bar_inventory",
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
+  });
+  if (blocked) return blocked;
   return {
     ok: true,
-    organizationId: manager.organizationId,
-    locationId: location.id,
+    organizationId: actor.organizationId,
+    locationId: actor.scope.locationId,
+    actor,
   };
 }
+
+const caller = resolveManager;
 
 /**
  * Reads an .xlsx the person chose and hands back the selected sheet as CSV
@@ -182,6 +208,7 @@ export async function readWorkbookAction(input: {
   restaurantSlug: string;
   base64: string;
   sheet: string | null;
+  expectedContext?: unknown;
 }): Promise<WorkbookActionResult> {
   const parsed = z
     .object({
@@ -189,12 +216,17 @@ export async function readWorkbookAction(input: {
       // 5 MB of file is about 6.7 million base64 characters.
       base64: z.string().min(1).max(7_000_000),
       sheet: z.string().max(100).nullable(),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
-  const who = await caller(supabase, parsed.data.restaurantSlug);
+  const who = await caller(
+    supabase,
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!who.ok) return who;
 
   const bytes = new Uint8Array(Buffer.from(parsed.data.base64, "base64"));
@@ -213,10 +245,14 @@ export async function previewImportAction(
     return { ok: false, error: "That request is invalid.", header: null };
   }
   const supabase = await createClient();
-  const who = await caller(supabase, parsed.data.restaurantSlug);
+  const who = await caller(
+    supabase,
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!who.ok) return { ...who, header: null };
 
-  const snapshot = await getCatalogSnapshot(who.organizationId);
+  const snapshot = await getCatalogSnapshot(who.organizationId, who.locationId);
   if (!snapshot) {
     return {
       ok: false,
@@ -241,10 +277,10 @@ export async function commitImportAction(
   }
   const data = parsed.data;
   const supabase = await createClient();
-  const who = await caller(supabase, data.restaurantSlug);
+  const who = await caller(supabase, data.restaurantSlug, data.expectedContext);
   if (!who.ok) return { ...who, kind: "error" };
 
-  const snapshot = await getCatalogSnapshot(who.organizationId);
+  const snapshot = await getCatalogSnapshot(who.organizationId, who.locationId);
   if (!snapshot) {
     return {
       ok: false,
@@ -333,11 +369,21 @@ type BatchRow = {
 /** The location's most recent import batches (RLS decides what comes back). */
 export async function listImportBatchesAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<ImportBatchesActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
   const supabase = await createClient();
-  const who = await caller(supabase, parsed.data.restaurantSlug);
+  const who = await caller(
+    supabase,
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!who.ok) return who;
 
   const [{ data, error }, roster] = await Promise.all([

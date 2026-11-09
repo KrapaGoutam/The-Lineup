@@ -93,4 +93,5 @@ export type SaveResult =
       kind?: "validation" | "duplicate" | "stale" | "permission" | "unknown";
       field?: string;
       sessionInvalid?: true;
+      contextStale?: true;
     };

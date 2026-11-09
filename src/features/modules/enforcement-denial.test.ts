@@ -55,6 +55,39 @@ vi.mock("@/features/schedules/data/schedule-actor", () => ({
     },
   }),
 }));
+vi.mock("@/features/bar-inventory/data/inventory-actor", () => ({
+  getInventoryActor: async () => ({
+    organizationId: "22222222-2222-4222-8222-222222222222",
+    scope: {
+      organizationId: "22222222-2222-4222-8222-222222222222",
+      locationId: "33333333-3333-4333-8333-333333333333",
+      timeZone: "America/Chicago",
+    },
+    viewer: {
+      profileId: "11111111-1111-4111-8111-111111111111",
+      name: "Owner",
+      designation: "owner",
+    },
+    membershipRole: "owner",
+  }),
+}));
+vi.mock("@/features/recipes/data/recipes-actor", () => ({
+  getRecipesActor: async () => ({
+    organizationId: "22222222-2222-4222-8222-222222222222",
+    scope: {
+      organizationId: "22222222-2222-4222-8222-222222222222",
+      locationId: "33333333-3333-4333-8333-333333333333",
+      timeZone: "America/Chicago",
+    },
+    viewer: {
+      profileId: "11111111-1111-4111-8111-111111111111",
+      name: "Owner",
+      designation: "owner",
+    },
+    membershipRole: "owner",
+    canManage: true,
+  }),
+}));
 vi.mock("@/features/context/data/workspace-expectation", () => ({
   assertWorkspaceExpectation: async () => ({
     ok: true,

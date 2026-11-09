@@ -1,7 +1,8 @@
 "use server";
 import { z } from "zod";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
+import { getRecipesActor } from "../data/recipes-actor";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
 import { createClient } from "@/lib/supabase/server";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { saveRecipeData } from "../data/recipe-write-data";
@@ -11,6 +12,47 @@ import {
 } from "../domain/recipe-validation";
 import type { EditorCategory, EditorLoad } from "../domain/recipe-editor-state";
 import { getRecipeDetailAction } from "./recipe-actions";
+
+const STALE_CONTEXT_MESSAGE =
+  "Your active restaurant or location changed in another tab. Please reload before saving.";
+
+async function checkWorkspace(
+  raw: unknown,
+  actor: NonNullable<Awaited<ReturnType<typeof getRecipesActor>>>,
+) {
+  const expectationRaw = (raw as Record<string, unknown> | undefined)
+    ?.expectation ??
+    raw ?? {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+      locationId: actor.scope.locationId,
+    };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: actor.scope.locationId,
+        time_zone: actor.scope.timeZone ?? "UTC",
+      }),
+    },
+  );
+  if (!outcome.ok) {
+    return {
+      ok: false as const,
+      error:
+        outcome.code === "invalid"
+          ? "That request is invalid."
+          : STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
+    };
+  }
+  return { ok: true as const };
+}
+
 const restaurant = z
   .string()
   .trim()
@@ -22,6 +64,7 @@ export async function saveRecipeAction(input: {
   recipeId: string | null;
   expectedVersion: number | null;
   payload: unknown;
+  expectedContext?: unknown;
 }): Promise<SaveResult> {
   const parsed = z
     .object({
@@ -29,6 +72,7 @@ export async function saveRecipeAction(input: {
       recipeId: z.uuid().nullable(),
       expectedVersion: z.number().int().positive().nullable(),
       payload: recipePayloadSchema.extend({ category_id: z.uuid() }),
+      expectedContext: z.unknown().optional(),
     })
     .refine((v) => (v.recipeId === null) === (v.expectedVersion === null))
     .safeParse(input);
@@ -41,21 +85,31 @@ export async function saveRecipeAction(input: {
   const client = await createClient();
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
-  const user = await getCurrentUser(parsed.data.restaurantSlug);
-  if (!user || user.designation === "staff")
+  const actor = await getRecipesActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.isManager)
     return {
       ok: false,
       kind: "permission",
       error: "You don't have permission to change recipes.",
     };
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) {
+    return {
+      ok: false,
+      kind: "permission",
+      error: workspace.error,
+      contextStale: true,
+    };
+  }
   const blocked = await guardModule({
     module: "recipes",
-    organizationId: user.organizationId,
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
   });
   if (blocked) return { ok: false, kind: "permission", error: blocked.error };
   return saveRecipeData(
     client,
-    user.organizationId,
+    actor.organizationId,
     parsed.data.recipeId,
     parsed.data.expectedVersion,
     parsed.data.payload,
@@ -64,26 +118,34 @@ export async function saveRecipeAction(input: {
 export async function getRecipeEditorAction(input: {
   restaurantSlug: string;
   slug: string | null;
+  expectedContext?: unknown;
 }): Promise<
   | { ok: true; data: EditorLoad }
-  | { ok: false; error: string; sessionInvalid?: true }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true }
 > {
   const parsed = z
-    .object({ restaurantSlug: restaurant, slug: restaurant.nullable() })
+    .object({
+      restaurantSlug: restaurant,
+      slug: restaurant.nullable(),
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
   const client = await createClient();
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
-  const user = await getCurrentUser(parsed.data.restaurantSlug);
-  if (!user || user.designation === "staff")
+  const actor = await getRecipesActor(parsed.data.restaurantSlug);
+  if (!actor || !actor.isManager)
     return { ok: false, error: "You don't have permission to edit recipes." };
+  const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
+  if (!workspace.ok) return workspace;
   const blocked = await guardModule({
     module: "recipes",
-    organizationId: user.organizationId,
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
   });
   if (blocked) return blocked;
-  const org = user.organizationId;
+  const org = actor.organizationId;
   const categories: EditorCategory[] = [];
   for (let offset = 0; ; offset += 1000) {
     const page = await client
@@ -128,6 +190,7 @@ export async function getRecipeEditorAction(input: {
   const detail = await getRecipeDetailAction({
     restaurantSlug: parsed.data.restaurantSlug,
     slug: parsed.data.slug,
+    expectedContext: parsed.data.expectedContext,
   });
   if (!detail.ok) return detail;
   if (!detail.data)

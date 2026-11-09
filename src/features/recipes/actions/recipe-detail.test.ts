@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // V2-004.004: the module guard is covered by its own tests; action tests isolate it.
 vi.mock("@/features/modules/data/module-enforcement", () => ({
@@ -12,16 +12,38 @@ const { client, user, session, from } = vi.hoisted(() => ({
   from: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: client }));
-vi.mock("@/lib/current-user", () => ({ getCurrentUser: user }));
+vi.mock("../data/recipes-actor", () => ({ getRecipesActor: user }));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: vi.fn(async () => ({
+    ok: true,
+    location: { id: "loc-1", time_zone: "America/New_York" },
+  })),
+}));
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: session,
 }));
 import { getRecipeDetailAction } from "./recipe-actions";
+
+const makeActor = (designation: "staff" | "manager" = "staff") => ({
+  organizationId: "org-a",
+  scope: {
+    organizationId: "org-a",
+    locationId: "loc-1",
+    timeZone: "America/New_York",
+  },
+  viewer: {
+    profileId: "p-1",
+    name: "User",
+    designation,
+  },
+  isManager: designation === "manager",
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   client.mockResolvedValue({ from });
   session.mockResolvedValue(null);
-  user.mockResolvedValue({ organizationId: "org-a", designation: "staff" });
+  user.mockResolvedValue(makeActor("staff"));
 });
 describe("detail authorization", () => {
   it("scopes active recipe and all related reads to the resolved organization", async () => {

@@ -258,10 +258,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "bar_recipe_categories_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "bar_recipe_categories_organization_id_fkey";
@@ -272,10 +272,10 @@ export type Database = {
           },
           {
             foreignKeyName: "bar_recipe_categories_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -522,10 +522,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "bar_recipes_archiver_fk";
-            columns: ["organization_id", "archived_by"];
+            columns: ["archived_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "bar_recipes_category_fk";
@@ -536,10 +536,10 @@ export type Database = {
           },
           {
             foreignKeyName: "bar_recipes_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "bar_recipes_organization_id_fkey";
@@ -550,10 +550,10 @@ export type Database = {
           },
           {
             foreignKeyName: "bar_recipes_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1095,10 +1095,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_adjustments_actor_fk";
-            columns: ["organization_id", "actor_profile_id"];
+            columns: ["actor_profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_adjustments_import_batch_fk";
@@ -1166,10 +1166,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_categories_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_categories_organization_id_fkey";
@@ -1180,10 +1180,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_categories_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1224,10 +1224,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_change_log_actor_fk";
-            columns: ["organization_id", "actor_profile_id"];
+            columns: ["actor_profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_change_log_location_fk";
@@ -1302,18 +1302,18 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "inventory_date_lots_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "inventory_date_lots_location_id_organization_id_fkey";
             columns: ["location_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "locations";
             referencedColumns: ["id", "organization_id"];
-          },
-          {
-            foreignKeyName: "inventory_date_lots_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
           },
           {
             foreignKeyName: "inventory_date_lots_organization_id_fkey";
@@ -1323,18 +1323,18 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_date_lots_organization_id_updated_by_fkey";
-            columns: ["organization_id", "updated_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
             foreignKeyName: "inventory_date_lots_product_id_organization_id_fkey";
             columns: ["product_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "inventory_products";
             referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "inventory_date_lots_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1386,18 +1386,18 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "inventory_freshness_rules_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "inventory_freshness_rules_location_id_organization_id_fkey";
             columns: ["location_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "locations";
             referencedColumns: ["id", "organization_id"];
-          },
-          {
-            foreignKeyName: "inventory_freshness_rules_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
           },
           {
             foreignKeyName: "inventory_freshness_rules_organization_id_fkey";
@@ -1407,18 +1407,18 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_freshness_rules_organization_id_updated_by_fkey";
-            columns: ["organization_id", "updated_by"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
             foreignKeyName: "inventory_freshness_rules_subcategory_id_organization_id_fkey";
             columns: ["subcategory_id", "organization_id"];
             isOneToOne: false;
             referencedRelation: "inventory_subcategories";
             referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "inventory_freshness_rules_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1498,10 +1498,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_import_batches_actor_fk";
-            columns: ["organization_id", "actor_profile_id"];
+            columns: ["actor_profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_import_batches_location_fk";
@@ -1649,10 +1649,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_order_drafts_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_order_drafts_location_fk";
@@ -1670,17 +1670,17 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_order_drafts_sender_fk";
-            columns: ["organization_id", "sent_by"];
+            columns: ["sent_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_order_drafts_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_order_drafts_vendor_fk";
@@ -1774,10 +1774,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_products_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_products_organization_id_fkey";
@@ -1795,10 +1795,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_products_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_products_vendor_fk";
@@ -1868,11 +1868,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_saved_views_organization_id_profile_id_fkey";
-            columns: ["organization_id", "profile_id"];
+            foreignKeyName: "inventory_saved_views_profile_id_fkey";
+            columns: ["profile_id"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1942,10 +1942,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_stock_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -1999,10 +1999,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_subcategories_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_subcategories_org_fk";
@@ -2013,10 +2013,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_subcategories_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2066,10 +2066,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_vendors_creator_fk";
-            columns: ["organization_id", "created_by"];
+            columns: ["created_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "inventory_vendors_organization_id_fkey";
@@ -2080,10 +2080,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_vendors_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2628,6 +2628,13 @@ export type Database = {
             referencedRelation: "payroll_periods";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "payroll_adjustments_period_org_fk";
+            columns: ["payroll_period_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: ["id", "organization_id"];
+          },
         ];
       };
       payroll_payments: {
@@ -2711,6 +2718,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "payroll_periods";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_period_org_fk";
+            columns: ["payroll_period_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: ["id", "organization_id"];
           },
         ];
       };
@@ -4777,10 +4791,10 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_stock_updater_fk";
-            columns: ["organization_id", "updated_by"];
+            columns: ["updated_by"];
             isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -5139,6 +5153,10 @@ export type Database = {
         };
         Returns: string;
       };
+      inventory_location_authorized: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: boolean;
+      };
       inventory_order_draft_clear: {
         Args: {
           p_draft_id: string;
@@ -5421,6 +5439,10 @@ export type Database = {
       recalculate_tip_pool: {
         Args: { target_tip_pool_id: number };
         Returns: undefined;
+      };
+      recipes_org_authorized: {
+        Args: { p_organization_id: string };
+        Returns: boolean;
       };
       schedule_location_authorized: {
         Args: { p_location_id: string; p_organization_id: string };
