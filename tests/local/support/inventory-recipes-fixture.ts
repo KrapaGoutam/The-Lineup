@@ -1,21 +1,56 @@
+import { execSync } from "node:child_process";
 import crypto from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.generated";
 
-export const localEnv = {
-  url:
-    process.env.LOCAL_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "http://127.0.0.1:54321",
-  anon:
-    process.env.LOCAL_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
-  secret:
-    process.env.LOCAL_SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_SECRET_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU",
-};
+function resolveLocalEnv() {
+  let url =
+    process.env.LOCAL_SUPABASE_URL ??
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    "";
+  let anon =
+    process.env.LOCAL_SUPABASE_ANON_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    "";
+  let secret =
+    process.env.LOCAL_SUPABASE_SERVICE_KEY ??
+    process.env.SUPABASE_SECRET_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    "";
+
+  // Never embed keys in the repository: take them from the environment or from the
+  // disposable local stack (`supabase status -o env`, loopback only).
+  if (!url || !anon || !secret) {
+    try {
+      const out = execSync("npx supabase status -o env", {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      if (!anon) {
+        const m =
+          out.match(/PUBLISHABLE_KEY=["']?([^"'\r\n]+)/) ||
+          out.match(/ANON_KEY=["']?([^"'\r\n]+)/);
+        if (m) anon = m[1].trim();
+      }
+      if (!secret) {
+        const m =
+          out.match(/SECRET_KEY=["']?([^"'\r\n]+)/) ||
+          out.match(/SERVICE_ROLE_KEY=["']?([^"'\r\n]+)/);
+        if (m) secret = m[1].trim();
+      }
+      if (!url) {
+        const m = out.match(/API_URL=["']?([^"'\r\n]+)/);
+        if (m) url = m[1].trim();
+      }
+    } catch {
+      // handled below
+    }
+  }
+
+  return { url: url || "http://127.0.0.1:54321", anon, secret };
+}
+
+export const localEnv = resolveLocalEnv();
 
 export type TestUser = {
   id: string;
@@ -54,7 +89,9 @@ export async function createInventoryRecipesFixture(): Promise<InventoryRecipesF
     !localEnv.secret ||
     !localEnv.anon
   ) {
-    throw Error("Disposable loopback Supabase credentials required");
+    throw Error(
+      "Disposable loopback Supabase credentials required (set LOCAL_SUPABASE_* or run `supabase start`)",
+    );
   }
 
   const admin = createClient<Database>(localEnv.url, localEnv.secret, {

@@ -28,4 +28,5 @@
 4. **Foreign Key Decoupling for Overall Actors:**
    - `bar_recipe_categories`: `created_by`, `updated_by` reference `public.profiles(id)`.
    - `bar_recipes`: `created_by`, `updated_by`, `archived_by` reference `public.profiles(id)`.
+   - The five constraints keep their original names (`bar_recipe_categories_creator_fk`, `..._updater_fk`, `bar_recipes_creator_fk`, `..._updater_fk`, `..._archiver_fk`) and stay non-deferrable, as before.
    - Overall Owner / Manager can create, edit, and archive recipes without needing artificial rows in `public.memberships`.

@@ -98,8 +98,8 @@ development → main (Production)
   - [x] **V2-005.003**: Tips (Scope tip pools, intervals, and splits to active location)
   - [x] **V2-005.004**: Schedule / Roster (Scope schedule periods, shifts, and templates to active location)
   - [x] **V2-005.005**: Payroll (Retain org-level compensation settings with location-filtered reporting and snapshots)
-  - [ ] **V2-005.006**: Bar Inventory (Retain org catalog with location-scoped stock ledger, counts, and orders)
-  - [ ] **V2-005.007**: Recipes (Retain org-wide recipe book by default with optional location menu filtering)
+  - [x] **V2-005.006**: Bar Inventory (Retain org catalog with location-scoped stock ledger, counts, and orders)
+  - [x] **V2-005.007**: Recipes (Retain org-wide recipe book by default with optional location menu filtering)
   - [x] **V2-005.008**: Team / Settings (Hybrid scoping: org-level memberships vs location-specific staff rosters)
 
 ### V2-006 — Attendance V2

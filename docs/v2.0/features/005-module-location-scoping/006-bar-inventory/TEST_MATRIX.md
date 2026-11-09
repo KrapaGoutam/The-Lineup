@@ -18,3 +18,16 @@
 | TC-INV-12 | Context     | Stale workspace context passed                            | Rejected by `assertWorkspaceExpectation` with stale-context recovery signal          |
 | TC-INV-13 | Enforcement | Module disabled at location                               | `guardModule` blocks access; RPC raises 42501                                        |
 | TC-INV-14 | Direct DML  | Direct PostgREST INSERT/UPDATE/DELETE on inventory tables | Rejected by database grants (SELECT only for authenticated)                          |
+
+## Independent review additions (Batch B)
+
+| Test ID   | Area        | Scenario                                                                                    | Where                                          |
+| --------- | ----------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| TC-INV-15 | Authority   | Effective role at the target location (Manager A / Staff B, Overall, GM, Shift Manager)     | pgTAP 0070 RV-001..013; hosted probe           |
+| TC-INV-16 | Revocation  | Inactive org/location membership, banned user, dead session, archived location, forged pair | pgTAP 0070 RV-014..025; real-JWT sign-out test |
+| TC-INV-17 | Bypass      | Every location-bearing RPC family refuses a second branch for a Staff-there caller          | pgTAP 0070 RV-036..047                         |
+| TC-INV-18 | Isolation   | Same product 12.50 at A / 4.75 at B; ledger actor and location are genuine                  | pgTAP 0070 RV-028..035; browser                |
+| TC-INV-19 | Invariants  | No client write grants, RLS on, no actor parameter on client RPCs, FK deferrability/names   | pgTAP 0070 RV-048..055                         |
+| TC-INV-20 | Draft       | Unauthorized caller refused before fill-mode validation; invalid request never mutates      | pgTAP 0039 (93)                                |
+| TC-INV-21 | Contract    | Actor RPC argument names match the generated schema                                         | tsc (`satisfies`), real-JWT, browser content   |
+| TC-INV-22 | Enforcement | ACTIVE + disabled location refuses an authorized manager and hides its stock                | pgTAP 0070 RV-076..078                         |
