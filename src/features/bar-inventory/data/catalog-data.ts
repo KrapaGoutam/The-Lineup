@@ -9,7 +9,6 @@ type SavedViewRow = {
   payload: unknown;
 };
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import { createClient } from "@/lib/supabase/server";
 
@@ -151,14 +150,11 @@ async function readAll<T>(
  */
 export async function getCatalogSnapshot(
   organizationId: string,
-  locationId?: string,
+  // Required: the caller passes the server-verified active location. There is
+  // deliberately no primary-location fallback (it could read another branch).
+  locationId: string,
 ): Promise<CatalogSnapshot | null> {
-  let effectiveLocationId = locationId;
-  if (!effectiveLocationId) {
-    const location = await getPrimaryLocation(organizationId);
-    if (!location) return null;
-    effectiveLocationId = location.id;
-  }
+  const effectiveLocationId = locationId;
   const supabase = await createClient();
 
   const boot = await supabase.rpc("inventory_bootstrap", {

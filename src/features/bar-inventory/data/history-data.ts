@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,7 +38,7 @@ type LedgerRow = {
 export type HistoryPage = { entries: HistoryEntry[]; truncated: boolean };
 
 /**
- * Ledger rows for the caller's organization and primary location, newest
+ * Ledger rows for the caller's organization and verified active location, newest
  * first. RLS (not this function) decides what comes back: staff and other
  * tenants get nothing. `since` bounds the range; `productId` narrows to one
  * item; the read asks for one row more than the limit to know if it was cut.
@@ -50,15 +49,11 @@ export async function getHistoryEntries(
     since: string | null;
     productId: string | null;
     limit: number;
-    locationId?: string;
+    // Required: the server-verified active location (no primary-location fallback).
+    locationId: string;
   },
 ): Promise<HistoryPage | null> {
-  let effectiveLocationId = options.locationId;
-  if (!effectiveLocationId) {
-    const location = await getPrimaryLocation(organizationId);
-    if (!location) return null;
-    effectiveLocationId = location.id;
-  }
+  const effectiveLocationId = options.locationId;
   const supabase = await createClient();
 
   // The API caps every response (max_rows), however large a limit is asked

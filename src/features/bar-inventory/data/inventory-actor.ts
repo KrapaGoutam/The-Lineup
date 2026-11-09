@@ -4,6 +4,7 @@ import { resolveCurrentActiveContext } from "@/features/context/data/active-cont
 import { toVerifiedLocationScope } from "@/features/context/domain/active-context";
 import { getEntryUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/database.generated";
 
 export type InventoryActor = {
   organizationId: string;
@@ -44,10 +45,13 @@ export async function getInventoryActor(
 
   // Validate the live SQL session and exact location authority
   const supabase = await createClient();
-  const authorized = await supabase.rpc("inventory_location_authorized", {
-    p_org: scope.organizationId,
-    p_location: scope.locationId,
-  });
+  // Typed against the generated schema: PostgREST resolves RPCs by argument name,
+  // so a drifted name would silently deny every user (PGRST202 -> null actor).
+  const args = {
+    p_organization_id: scope.organizationId,
+    p_location_id: scope.locationId,
+  } satisfies Database["public"]["Functions"]["inventory_location_authorized"]["Args"];
+  const authorized = await supabase.rpc("inventory_location_authorized", args);
   if (authorized.error || authorized.data !== true) return null;
 
   return {

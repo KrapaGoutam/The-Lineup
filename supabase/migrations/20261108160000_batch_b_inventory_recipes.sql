@@ -14,20 +14,41 @@
 -- 6. Expose public RPC public.recipes_org_authorized(p_org).
 
 -- ============================================================================
--- PART 1: Decouple Composite Membership FKs to Profiles
+-- PART 1: Re-point actor foreign keys from memberships to profiles(id)
 -- ============================================================================
+--
+-- Every actor column below used to reference public.memberships(organization_id,
+-- profile_id), which Overall-only actors (no tenant membership row) cannot satisfy.
+-- Each constraint is re-created under its ORIGINAL NAME with its ORIGINAL
+-- deferrability, verified against the real hosted-DEV schema before this change:
+--
+--   * all 20 Inventory actor constraints were DEFERRABLE INITIALLY DEFERRED
+--     (20261026190000 / 20261026190100 / 20261027120000 / 20261027195142 /
+--     20261029005940 / 20261029010756), so ledger writes and tenant teardown can
+--     cascade in any order inside one transaction (pgTAP BI-IMP-DB-001);
+--   * the 5 Recipes constraints were never deferrable and stay that way.
+--
+-- Only the referenced target changes. NO ACTION / ON DELETE CASCADE behaviour is
+-- preserved (saved views keep ON DELETE CASCADE). Existing rows are valid by
+-- construction: every membership row already referenced an existing profile.
+--
+-- A profile FK only proves the profile exists. Actor attribution stays unforgeable
+-- because (a) `authenticated` holds no INSERT/UPDATE/DELETE privilege on any of
+-- these tables (asserted in 0069), and (b) every writer is a SECURITY DEFINER RPC
+-- that derives the actor from auth.uid() and accepts no actor parameter.
+--
+-- The composite (organization_id, actor) indexes are kept; the narrow indexes added
+-- below serve profile-deletion checks and actor look-ups on the new constraint.
 
 -- 1.1 inventory_vendors
 alter table public.inventory_vendors
-  drop constraint if exists inventory_vendors_creator_fk,
-  drop constraint if exists inventory_vendors_updater_fk;
-
+  drop constraint inventory_vendors_creator_fk,
+  drop constraint inventory_vendors_updater_fk;
 alter table public.inventory_vendors
-  add constraint inventory_vendors_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_vendors_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_vendors_creator_fk
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_vendors_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_vendors_created_by_profile_idx
   on public.inventory_vendors(created_by);
 create index if not exists inventory_vendors_updated_by_profile_idx
@@ -35,15 +56,13 @@ create index if not exists inventory_vendors_updated_by_profile_idx
 
 -- 1.2 inventory_categories
 alter table public.inventory_categories
-  drop constraint if exists inventory_categories_creator_fk,
-  drop constraint if exists inventory_categories_updater_fk;
-
+  drop constraint inventory_categories_creator_fk,
+  drop constraint inventory_categories_updater_fk;
 alter table public.inventory_categories
-  add constraint inventory_categories_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_categories_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_categories_creator_fk
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_categories_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_categories_created_by_profile_idx
   on public.inventory_categories(created_by);
 create index if not exists inventory_categories_updated_by_profile_idx
@@ -51,15 +70,13 @@ create index if not exists inventory_categories_updated_by_profile_idx
 
 -- 1.3 inventory_subcategories
 alter table public.inventory_subcategories
-  drop constraint if exists inventory_subcategories_creator_fk,
-  drop constraint if exists inventory_subcategories_updater_fk;
-
+  drop constraint inventory_subcategories_creator_fk,
+  drop constraint inventory_subcategories_updater_fk;
 alter table public.inventory_subcategories
-  add constraint inventory_subcategories_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_subcategories_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_subcategories_creator_fk
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_subcategories_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_subcategories_created_by_profile_idx
   on public.inventory_subcategories(created_by);
 create index if not exists inventory_subcategories_updated_by_profile_idx
@@ -67,15 +84,13 @@ create index if not exists inventory_subcategories_updated_by_profile_idx
 
 -- 1.4 inventory_products
 alter table public.inventory_products
-  drop constraint if exists inventory_products_creator_fk,
-  drop constraint if exists inventory_products_updater_fk;
-
+  drop constraint inventory_products_creator_fk,
+  drop constraint inventory_products_updater_fk;
 alter table public.inventory_products
-  add constraint inventory_products_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_products_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_products_creator_fk
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_products_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_products_created_by_profile_idx
   on public.inventory_products(created_by);
 create index if not exists inventory_products_updated_by_profile_idx
@@ -83,62 +98,52 @@ create index if not exists inventory_products_updated_by_profile_idx
 
 -- 1.5 inventory_change_log
 alter table public.inventory_change_log
-  drop constraint if exists inventory_change_log_actor_fk;
-
+  drop constraint inventory_change_log_actor_fk;
 alter table public.inventory_change_log
-  add constraint inventory_change_log_actor_profile_id_profile_fk
-    foreign key (actor_profile_id) references public.profiles(id);
-
+  add constraint inventory_change_log_actor_fk
+    foreign key (actor_profile_id) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_change_log_actor_profile_id_idx
   on public.inventory_change_log(actor_profile_id);
 
 -- 1.6 inventory_stock
 alter table public.inventory_stock
-  drop constraint if exists inventory_stock_updater_fk;
-
+  drop constraint inventory_stock_updater_fk;
 alter table public.inventory_stock
-  add constraint inventory_stock_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_stock_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_stock_updated_by_profile_idx
   on public.inventory_stock(updated_by) where updated_by is not null;
 
 -- 1.7 inventory_adjustments
 alter table public.inventory_adjustments
-  drop constraint if exists inventory_adjustments_actor_fk;
-
+  drop constraint inventory_adjustments_actor_fk;
 alter table public.inventory_adjustments
-  add constraint inventory_adjustments_actor_profile_id_profile_fk
-    foreign key (actor_profile_id) references public.profiles(id);
-
+  add constraint inventory_adjustments_actor_fk
+    foreign key (actor_profile_id) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_adjustments_actor_profile_id_idx
   on public.inventory_adjustments(actor_profile_id);
 
 -- 1.8 inventory_import_batches
 alter table public.inventory_import_batches
-  drop constraint if exists inventory_import_batches_actor_fk;
-
+  drop constraint inventory_import_batches_actor_fk;
 alter table public.inventory_import_batches
-  add constraint inventory_import_batches_actor_profile_id_profile_fk
-    foreign key (actor_profile_id) references public.profiles(id);
-
+  add constraint inventory_import_batches_actor_fk
+    foreign key (actor_profile_id) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_import_batches_actor_profile_id_idx
   on public.inventory_import_batches(actor_profile_id);
 
 -- 1.9 inventory_order_drafts
 alter table public.inventory_order_drafts
-  drop constraint if exists inventory_order_drafts_creator_fk,
-  drop constraint if exists inventory_order_drafts_updater_fk,
-  drop constraint if exists inventory_order_drafts_sender_fk;
-
+  drop constraint inventory_order_drafts_creator_fk,
+  drop constraint inventory_order_drafts_updater_fk,
+  drop constraint inventory_order_drafts_sender_fk;
 alter table public.inventory_order_drafts
-  add constraint inventory_order_drafts_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_order_drafts_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id),
-  add constraint inventory_order_drafts_sent_by_profile_fk
-    foreign key (sent_by) references public.profiles(id);
-
+  add constraint inventory_order_drafts_creator_fk
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_order_drafts_updater_fk
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_order_drafts_sender_fk
+    foreign key (sent_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_order_drafts_created_by_profile_idx
   on public.inventory_order_drafts(created_by);
 create index if not exists inventory_order_drafts_updated_by_profile_idx
@@ -146,83 +151,73 @@ create index if not exists inventory_order_drafts_updated_by_profile_idx
 create index if not exists inventory_order_drafts_sent_by_profile_idx
   on public.inventory_order_drafts(sent_by) where sent_by is not null;
 
--- 1.10 inventory_date_lots
+-- 1.10 inventory_date_lots (original constraints were unnamed: <table>_<cols>_fkey)
 alter table public.inventory_date_lots
-  drop constraint if exists inventory_date_lots_organization_id_created_by_fkey,
-  drop constraint if exists inventory_date_lots_organization_id_updated_by_fkey;
-
+  drop constraint inventory_date_lots_organization_id_created_by_fkey,
+  drop constraint inventory_date_lots_organization_id_updated_by_fkey;
 alter table public.inventory_date_lots
-  add constraint inventory_date_lots_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_date_lots_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_date_lots_created_by_fkey
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_date_lots_updated_by_fkey
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_date_lots_created_by_profile_idx
   on public.inventory_date_lots(created_by);
 create index if not exists inventory_date_lots_updated_by_profile_idx
   on public.inventory_date_lots(updated_by) where updated_by is not null;
 
--- 1.11 inventory_freshness_rules
+-- 1.11 inventory_freshness_rules (original constraints were unnamed)
 alter table public.inventory_freshness_rules
-  drop constraint if exists inventory_freshness_rules_organization_id_created_by_fkey,
-  drop constraint if exists inventory_freshness_rules_organization_id_updated_by_fkey;
-
+  drop constraint inventory_freshness_rules_organization_id_created_by_fkey,
+  drop constraint inventory_freshness_rules_organization_id_updated_by_fkey;
 alter table public.inventory_freshness_rules
-  add constraint inventory_freshness_rules_created_by_profile_fk
-    foreign key (created_by) references public.profiles(id),
-  add constraint inventory_freshness_rules_updated_by_profile_fk
-    foreign key (updated_by) references public.profiles(id);
-
+  add constraint inventory_freshness_rules_created_by_fkey
+    foreign key (created_by) references public.profiles(id) deferrable initially deferred,
+  add constraint inventory_freshness_rules_updated_by_fkey
+    foreign key (updated_by) references public.profiles(id) deferrable initially deferred;
 create index if not exists inventory_freshness_rules_created_by_profile_idx
   on public.inventory_freshness_rules(created_by);
 create index if not exists inventory_freshness_rules_updated_by_profile_idx
   on public.inventory_freshness_rules(updated_by) where updated_by is not null;
 
--- 1.12 inventory_saved_views
+-- 1.12 inventory_saved_views (original: unnamed, ON DELETE CASCADE, deferrable)
 alter table public.inventory_saved_views
-  drop constraint if exists inventory_saved_views_organization_id_profile_id_fkey;
-
+  drop constraint inventory_saved_views_organization_id_profile_id_fkey;
 alter table public.inventory_saved_views
-  add constraint inventory_saved_views_profile_id_profile_fk
-    foreign key (profile_id) references public.profiles(id) on delete cascade;
+  add constraint inventory_saved_views_profile_id_fkey
+    foreign key (profile_id) references public.profiles(id) on delete cascade deferrable initially deferred;
 
--- 1.13 bar_recipe_categories
+-- 1.13 bar_recipe_categories (never deferrable)
 alter table public.bar_recipe_categories
-  drop constraint if exists bar_recipe_categories_creator_fk,
-  drop constraint if exists bar_recipe_categories_updater_fk;
-
+  drop constraint bar_recipe_categories_creator_fk,
+  drop constraint bar_recipe_categories_updater_fk;
 alter table public.bar_recipe_categories
-  add constraint bar_recipe_categories_created_by_profile_fk
+  add constraint bar_recipe_categories_creator_fk
     foreign key (created_by) references public.profiles(id),
-  add constraint bar_recipe_categories_updated_by_profile_fk
+  add constraint bar_recipe_categories_updater_fk
     foreign key (updated_by) references public.profiles(id);
-
 create index if not exists bar_recipe_categories_created_by_profile_idx
   on public.bar_recipe_categories(created_by);
 create index if not exists bar_recipe_categories_updated_by_profile_idx
   on public.bar_recipe_categories(updated_by) where updated_by is not null;
 
--- 1.14 bar_recipes
+-- 1.14 bar_recipes (never deferrable)
 alter table public.bar_recipes
-  drop constraint if exists bar_recipes_creator_fk,
-  drop constraint if exists bar_recipes_updater_fk,
-  drop constraint if exists bar_recipes_archiver_fk;
-
+  drop constraint bar_recipes_creator_fk,
+  drop constraint bar_recipes_updater_fk,
+  drop constraint bar_recipes_archiver_fk;
 alter table public.bar_recipes
-  add constraint bar_recipes_created_by_profile_fk
+  add constraint bar_recipes_creator_fk
     foreign key (created_by) references public.profiles(id),
-  add constraint bar_recipes_updated_by_profile_fk
+  add constraint bar_recipes_updater_fk
     foreign key (updated_by) references public.profiles(id),
-  add constraint bar_recipes_archived_by_profile_fk
+  add constraint bar_recipes_archiver_fk
     foreign key (archived_by) references public.profiles(id);
-
 create index if not exists bar_recipes_created_by_profile_idx
   on public.bar_recipes(created_by);
 create index if not exists bar_recipes_updated_by_profile_idx
   on public.bar_recipes(updated_by) where updated_by is not null;
 create index if not exists bar_recipes_archived_by_profile_idx
   on public.bar_recipes(archived_by) where archived_by is not null;
-
 
 -- ============================================================================
 -- PART 2: Inventory Authorization Helpers
@@ -253,8 +248,9 @@ as $$
       )
   );
 $$;
-revoke all on function private.inventory_live_session() from public, anon;
-grant execute on function private.inventory_live_session() to authenticated;
+-- Only ever called from inside the SECURITY DEFINER helpers below (which run as
+-- the function owner), so clients never need EXECUTE.
+revoke all on function private.inventory_live_session() from public, anon, authenticated;
 
 -- Resolves effective level for inventory:
 -- 4 = Owner, 3 = Manager, 2 = Assistant Manager, 1 = Staff, 0 = None.
@@ -322,8 +318,9 @@ as $$
     else 0 end
   );
 $$;
-revoke all on function private.inventory_profile_level(uuid, uuid, uuid) from public, anon;
-grant execute on function private.inventory_profile_level(uuid, uuid, uuid) to authenticated;
+-- Takes an arbitrary profile id, so it must never be client-callable (it would be
+-- a role-probing oracle). Only the SECURITY DEFINER helpers below call it.
+revoke all on function private.inventory_profile_level(uuid, uuid, uuid) from public, anon, authenticated;
 
 -- Reconciled: Can access inventory at verified location (effective level >= 2).
 create or replace function private.inventory_can_access_location(
@@ -349,7 +346,11 @@ $$;
 revoke all on function private.inventory_can_access_location(uuid, uuid) from public, anon;
 grant execute on function private.inventory_can_access_location(uuid, uuid) to authenticated;
 
--- Reconciled: Can read organization-wide catalog items.
+-- Reconciled: Can read organization-wide catalog items. Mirrors the tiers of
+-- inventory_profile_level (>= Assistant Manager somewhere in the organization):
+-- an org-role Shift Manager only counts in the single-location fallback, so a
+-- multi-location Shift Manager with no assignment cannot read the catalog while
+-- being denied at every location.
 create or replace function private.inventory_is_manager(p_organization_id uuid)
 returns boolean
 language sql
@@ -370,7 +371,13 @@ as $$
           and m.profile_id = (select auth.uid())
           and m.active
           and (
-            m.roles && array['owner', 'general_manager', 'shift_manager']::public.app_role[]
+            m.roles && array['owner', 'general_manager']::public.app_role[]
+            or (
+              'shift_manager' = any(m.roles)
+              and (select count(*) from public.locations x
+                   where x.organization_id = p_organization_id
+                     and x.active and x.archived_at is null) <= 1
+            )
             or exists (
               select 1 from public.location_memberships lm
               join public.locations l on l.id = lm.location_id

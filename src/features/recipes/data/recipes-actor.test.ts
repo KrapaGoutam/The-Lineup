@@ -55,7 +55,7 @@ it("hydrates recipes actor for staff member with read access", async () => {
     isManager: false,
   });
   expect(mocks.rpc).toHaveBeenCalledWith("recipes_org_authorized", {
-    p_org: "org",
+    p_organization_id: "org",
   });
 });
 

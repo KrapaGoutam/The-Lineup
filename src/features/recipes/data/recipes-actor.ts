@@ -4,6 +4,7 @@ import { resolveCurrentActiveContext } from "@/features/context/data/active-cont
 import { toVerifiedLocationScope } from "@/features/context/domain/active-context";
 import { getEntryUser } from "@/lib/current-user";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/database.generated";
 
 export type RecipesActor = {
   organizationId: string;
@@ -55,9 +56,12 @@ export async function getRecipesActor(
 
   // Validate the live SQL session and organization-wide recipe access
   const supabase = await createClient();
-  const authorized = await supabase.rpc("recipes_org_authorized", {
-    p_org: scope.organizationId,
-  });
+  // Typed against the generated schema (see inventory-actor.ts): argument-name
+  // drift would deny every user at runtime and no mock-based test would notice.
+  const args = {
+    p_organization_id: scope.organizationId,
+  } satisfies Database["public"]["Functions"]["recipes_org_authorized"]["Args"];
+  const authorized = await supabase.rpc("recipes_org_authorized", args);
   if (authorized.error || authorized.data !== true) return null;
 
   return {

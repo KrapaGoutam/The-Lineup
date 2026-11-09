@@ -257,7 +257,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "bar_recipe_categories_created_by_profile_fk";
+            foreignKeyName: "bar_recipe_categories_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -271,7 +271,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "bar_recipe_categories_updated_by_profile_fk";
+            foreignKeyName: "bar_recipe_categories_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -521,7 +521,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "bar_recipes_archived_by_profile_fk";
+            foreignKeyName: "bar_recipes_archiver_fk";
             columns: ["archived_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -535,7 +535,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "bar_recipes_created_by_profile_fk";
+            foreignKeyName: "bar_recipes_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -549,7 +549,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "bar_recipes_updated_by_profile_fk";
+            foreignKeyName: "bar_recipes_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1094,7 +1094,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_adjustments_actor_profile_id_profile_fk";
+            foreignKeyName: "inventory_adjustments_actor_fk";
             columns: ["actor_profile_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1165,7 +1165,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_categories_created_by_profile_fk";
+            foreignKeyName: "inventory_categories_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1179,7 +1179,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_categories_updated_by_profile_fk";
+            foreignKeyName: "inventory_categories_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1223,7 +1223,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_change_log_actor_profile_id_profile_fk";
+            foreignKeyName: "inventory_change_log_actor_fk";
             columns: ["actor_profile_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1302,7 +1302,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_date_lots_created_by_profile_fk";
+            foreignKeyName: "inventory_date_lots_created_by_fkey";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1330,7 +1330,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_date_lots_updated_by_profile_fk";
+            foreignKeyName: "inventory_date_lots_updated_by_fkey";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1386,7 +1386,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_freshness_rules_created_by_profile_fk";
+            foreignKeyName: "inventory_freshness_rules_created_by_fkey";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1414,7 +1414,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_freshness_rules_updated_by_profile_fk";
+            foreignKeyName: "inventory_freshness_rules_updated_by_fkey";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1497,7 +1497,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_import_batches_actor_profile_id_profile_fk";
+            foreignKeyName: "inventory_import_batches_actor_fk";
             columns: ["actor_profile_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1648,7 +1648,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_order_drafts_created_by_profile_fk";
+            foreignKeyName: "inventory_order_drafts_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1669,14 +1669,14 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_order_drafts_sent_by_profile_fk";
+            foreignKeyName: "inventory_order_drafts_sender_fk";
             columns: ["sent_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_order_drafts_updated_by_profile_fk";
+            foreignKeyName: "inventory_order_drafts_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1773,7 +1773,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_products_created_by_profile_fk";
+            foreignKeyName: "inventory_products_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1794,7 +1794,7 @@ export type Database = {
             referencedColumns: ["id", "category_id"];
           },
           {
-            foreignKeyName: "inventory_products_updated_by_profile_fk";
+            foreignKeyName: "inventory_products_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1868,7 +1868,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_saved_views_profile_id_profile_fk";
+            foreignKeyName: "inventory_saved_views_profile_id_fkey";
             columns: ["profile_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1941,7 +1941,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_stock_updated_by_profile_fk";
+            foreignKeyName: "inventory_stock_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -1998,7 +1998,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_subcategories_created_by_profile_fk";
+            foreignKeyName: "inventory_subcategories_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -2012,7 +2012,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_subcategories_updated_by_profile_fk";
+            foreignKeyName: "inventory_subcategories_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -2065,7 +2065,7 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "inventory_vendors_created_by_profile_fk";
+            foreignKeyName: "inventory_vendors_creator_fk";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -2079,7 +2079,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "inventory_vendors_updated_by_profile_fk";
+            foreignKeyName: "inventory_vendors_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -4790,7 +4790,7 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
-            foreignKeyName: "inventory_stock_updated_by_profile_fk";
+            foreignKeyName: "inventory_stock_updater_fk";
             columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";

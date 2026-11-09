@@ -54,8 +54,8 @@ it("hydrates genuine Overall/location authority using the verified scope", async
     },
   });
   expect(mocks.rpc).toHaveBeenCalledWith("inventory_location_authorized", {
-    p_org: "org",
-    p_location: "location",
+    p_organization_id: "org",
+    p_location_id: "location",
   });
 });
 

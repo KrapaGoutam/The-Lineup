@@ -3,6 +3,7 @@ import {
   createInventoryRecipesFixture,
   type InventoryRecipesFixture,
   type TestUser,
+  localEnv,
   must,
 } from "./support/inventory-recipes-fixture";
 import type { InventoryActor } from "@/features/bar-inventory/data/inventory-actor";
@@ -672,5 +673,142 @@ describe("Direct PostgREST DML Denial (RLS)", () => {
       } as never);
     expect(recipeError).not.toBeNull();
     expect(recipeError?.code).toBe("42501");
+  });
+});
+
+// The actor helpers (getInventoryActor / getRecipesActor) are mocked everywhere above,
+// so the database authorization contract they depend on is exercised here with REAL
+// GoTrue JWTs. The typed client makes a drifted RPC argument name a compile error: the
+// original Batch B actors called these functions with p_org / p_location, which
+// PostgREST rejects (PGRST202) and which silently denied every user.
+describe("Actor authorization RPC contract (real GoTrue JWTs)", () => {
+  const authorized = (user: TestUser, locationId: string) =>
+    user.client.rpc("inventory_location_authorized", {
+      p_organization_id: fx.org.id,
+      p_location_id: locationId,
+    });
+  const recipes = (user: TestUser, orgId = fx.org.id) =>
+    user.client.rpc("recipes_org_authorized", { p_organization_id: orgId });
+
+  it("Inventory: authority is per location, never the highest role anywhere", async () => {
+    const result = {
+      managerAatA: must(await authorized(fx.managerA, fx.locA)),
+      managerAatB: must(await authorized(fx.managerA, fx.locB)),
+      managerBatB: must(await authorized(fx.managerB, fx.locB)),
+      managerBatA: must(await authorized(fx.managerB, fx.locA)),
+      staffAatA: must(await authorized(fx.staffA, fx.locA)),
+      overallAtA: must(await authorized(fx.overallManager, fx.locA)),
+      overallAtB: must(await authorized(fx.overallManager, fx.locB)),
+      foreignAtA: must(await authorized(fx.foreignUser, fx.locA)),
+    };
+    expect(result).toEqual({
+      managerAatA: true,
+      managerAatB: false,
+      managerBatB: true,
+      managerBatA: false,
+      staffAatA: false,
+      overallAtA: true,
+      overallAtB: true,
+      foreignAtA: false,
+    });
+  });
+
+  it("Inventory: a forged organization/location pair is denied", async () => {
+    const forged = await fx.managerA.client.rpc(
+      "inventory_location_authorized",
+      {
+        p_organization_id: fx.foreignOrg.id,
+        p_location_id: fx.locA,
+      },
+    );
+    expect(must(forged)).toBe(false);
+    const swapped = await fx.managerA.client.rpc(
+      "inventory_location_authorized",
+      {
+        p_organization_id: fx.org.id,
+        p_location_id: fx.foreignLoc,
+      },
+    );
+    expect(must(swapped)).toBe(false);
+  });
+
+  it("Recipes: org members and Overall roles read the one book; outsiders do not", async () => {
+    expect(must(await recipes(fx.managerA))).toBe(true);
+    expect(must(await recipes(fx.managerB))).toBe(true);
+    expect(must(await recipes(fx.staffA))).toBe(true);
+    expect(must(await recipes(fx.overallManager))).toBe(true);
+    expect(must(await recipes(fx.foreignUser))).toBe(false);
+    expect(must(await recipes(fx.foreignUser, fx.foreignOrg.id))).toBe(true);
+  });
+
+  it("anon cannot call the authorization RPCs", async () => {
+    const anon = await fetch(
+      `${localEnv.url}/rest/v1/rpc/inventory_location_authorized`,
+      {
+        method: "POST",
+        headers: {
+          apikey: localEnv.anon,
+          Authorization: `Bearer ${localEnv.anon}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_organization_id: fx.org.id,
+          p_location_id: fx.locA,
+        }),
+      },
+    );
+    expect(anon.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("Revocation: after a real sign-out the old access token no longer authorizes", async () => {
+    const session = must(await fx.managerB.client.auth.getSession()).session!;
+    const call = async (fn: string, body: Record<string, string>) => {
+      const res = await fetch(`${localEnv.url}/rest/v1/rpc/${fn}`, {
+        method: "POST",
+        headers: {
+          apikey: localEnv.anon,
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: await res.json() };
+    };
+    const inv = {
+      p_organization_id: fx.org.id,
+      p_location_id: fx.locB,
+    };
+    const before = await call("inventory_location_authorized", inv);
+    expect(before.body).toBe(true);
+    const beforeRecipes = await call("recipes_org_authorized", {
+      p_organization_id: fx.org.id,
+    });
+    expect(beforeRecipes.body).toBe(true);
+
+    // Global sign-out deletes the session row server-side; the JWT itself is still
+    // cryptographically valid until it expires.
+    const signedOut = await fx.managerB.client.auth.signOut({
+      scope: "global",
+    });
+    expect(signedOut.error).toBeNull();
+
+    const afterInv = await call("inventory_location_authorized", inv);
+    expect(afterInv.body).toBe(false);
+    const afterRecipes = await call("recipes_org_authorized", {
+      p_organization_id: fx.org.id,
+    });
+    expect(afterRecipes.body).toBe(false);
+    const stock = await call("inventory_stock_adjust", {
+      p_organization_id: fx.org.id,
+      p_location_id: fx.locB,
+      p_product_id: "00000000-0000-4000-8000-0000000000aa",
+      p_mode: "set",
+      p_on_hand: "1",
+      p_backup: "0",
+      p_reason: "stock_count",
+      p_note: "revoked",
+      p_expected_version: "1",
+    });
+    expect(stock.status).toBeGreaterThanOrEqual(400);
   });
 });
