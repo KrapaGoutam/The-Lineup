@@ -286,6 +286,70 @@ async function runCommand(
           p_expected_version: command.expectedVersion,
         })
       ).error;
+    case "storageAreaUpsert":
+      return (
+        await supabase.rpc("inventory_storage_area_upsert", {
+          ...base,
+          p_area_id: command.id,
+          p_name: command.name,
+          p_kind: command.kind,
+          p_display_order: command.displayOrder,
+          p_active: command.active,
+        })
+      ).error;
+    case "storageAreaArchive":
+      return (
+        await supabase.rpc("inventory_storage_area_archive", {
+          ...base,
+          p_area_id: command.id,
+        })
+      ).error;
+    case "storageShelfUpsert":
+      return (
+        await supabase.rpc("inventory_storage_shelf_upsert", {
+          ...base,
+          p_shelf_id: command.id,
+          p_storage_area_id: command.storageAreaId,
+          p_name: command.name,
+          p_section_name: command.sectionName,
+          p_display_order: command.displayOrder,
+        })
+      ).error;
+    case "storageShelfDelete":
+      return (
+        await supabase.rpc("inventory_storage_shelf_delete", {
+          ...base,
+          p_shelf_id: command.id,
+        })
+      ).error;
+    case "storagePlacementSet":
+      return (
+        await supabase.rpc("inventory_storage_placement_set", {
+          ...base,
+          p_placement_id: command.id,
+          p_storage_area_id: command.storageAreaId,
+          p_shelf_id: command.shelfId,
+          p_product_id: command.productId,
+          p_slot_number: command.slotNumber,
+          p_slot_label: command.slotLabel,
+          p_display_order: command.displayOrder,
+        })
+      ).error;
+    case "storagePlacementDelete":
+      return (
+        await supabase.rpc("inventory_storage_placement_delete", {
+          ...base,
+          p_placement_id: command.id,
+        })
+      ).error;
+    case "storagePlacementReorder":
+      return (
+        await supabase.rpc("inventory_storage_placement_reorder", {
+          ...base,
+          p_shelf_id: command.shelfId,
+          p_placement_ids: command.placementIds,
+        })
+      ).error;
   }
 }
 

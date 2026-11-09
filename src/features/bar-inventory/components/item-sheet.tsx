@@ -12,7 +12,7 @@ import type { CatalogConflict } from "../domain/inventory-types";
 import {
   ADJUSTMENT_REASONS,
   ADJUSTMENT_REASON_LABELS,
-  toCents,
+  parseQuantityInput,
   type AdjustmentReason,
 } from "../domain/stock-rules";
 import type { LoadHistory } from "./history-view";
@@ -47,21 +47,9 @@ function parseQuantity(
   text: string,
   required: boolean,
 ): { ok: true; value: number | null } | { ok: false; error: string } {
-  if (text.trim() === "") {
-    return required
-      ? { ok: false, error: `Enter a number for ${label}.` }
-      : { ok: true, value: null };
-  }
-  const n = Number(text);
-  if (!Number.isFinite(n))
-    return { ok: false, error: `Enter a number for ${label}.` };
-  try {
-    toCents(n);
-  } catch (e) {
-    return { ok: false, error: `${label}: ${(e as Error).message}` };
-  }
-  if (n < 0) return { ok: false, error: `${label} cannot be negative.` };
-  return { ok: true, value: n };
+  const res = parseQuantityInput(text, { allowBlank: !required, label });
+  if (res.ok) return { ok: true, value: res.value };
+  return { ok: false, error: res.error };
 }
 
 const text = (value: number | null) => (value === null ? "" : String(value));
@@ -229,10 +217,8 @@ function ItemForm({
             <Label htmlFor={`${id}-on`}>On hand</Label>
             <Input
               id={`${id}-on`}
-              type="number"
+              type="text"
               inputMode="decimal"
-              step="any"
-              min={0}
               value={onHand}
               onChange={(e) => setOnHand(e.target.value)}
             />
@@ -241,10 +227,8 @@ function ItemForm({
             <Label htmlFor={`${id}-back`}>Backup</Label>
             <Input
               id={`${id}-back`}
-              type="number"
+              type="text"
               inputMode="decimal"
-              step="any"
-              min={0}
               value={backup}
               onChange={(e) => setBackup(e.target.value)}
             />
@@ -289,10 +273,8 @@ function ItemForm({
             <Label htmlFor={`${id}-cutoff`}>Cutoff</Label>
             <Input
               id={`${id}-cutoff`}
-              type="number"
+              type="text"
               inputMode="decimal"
-              step="any"
-              min={0}
               value={cutoff}
               onChange={(e) => setCutoff(e.target.value)}
             />
@@ -301,10 +283,8 @@ function ItemForm({
             <Label htmlFor={`${id}-warning`}>Warning</Label>
             <Input
               id={`${id}-warning`}
-              type="number"
+              type="text"
               inputMode="decimal"
-              step="any"
-              min={0}
               value={warning}
               onChange={(e) => setWarning(e.target.value)}
             />
@@ -313,10 +293,8 @@ function ItemForm({
             <Label htmlFor={`${id}-par`}>Par</Label>
             <Input
               id={`${id}-par`}
-              type="number"
+              type="text"
               inputMode="decimal"
-              step="any"
-              min={0}
               value={par}
               onChange={(e) => setPar(e.target.value)}
             />

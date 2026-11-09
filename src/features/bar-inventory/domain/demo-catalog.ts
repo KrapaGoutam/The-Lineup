@@ -257,6 +257,114 @@ export function buildDemoCatalog(): CatalogState {
   stock("Casamigos Blanco", 3, null, 10, 6, 2);
   stock("Modelo Especial", 2, null, 12, 3, 0);
   stock("House Rail Gin", null, null, null, 5, 0);
+
+  // Physical Storage Areas & Placements (V2-005.006-E)
+  run({
+    type: "storageAreaUpsert",
+    id: "demo-area-cooler-1",
+    name: "Cooler 1 (Main)",
+    kind: "cooler",
+    displayOrder: 1,
+    active: true,
+  });
+  run({
+    type: "storageAreaUpsert",
+    id: "demo-area-cooler-2",
+    name: "Cooler 2 (Draft & Cans)",
+    kind: "cooler",
+    displayOrder: 2,
+    active: true,
+  });
+  run({
+    type: "storageAreaUpsert",
+    id: "demo-area-back-bar",
+    name: "Back Bar",
+    kind: "back_bar",
+    displayOrder: 3,
+    active: true,
+  });
+  run({
+    type: "storageAreaUpsert",
+    id: "demo-area-dry-storage",
+    name: "Dry Storage",
+    kind: "dry_storage",
+    displayOrder: 4,
+    active: true,
+  });
+
+  // Shelves in Cooler 1
+  run({
+    type: "storageShelfUpsert",
+    id: "demo-shelf-c1-top",
+    storageAreaId: "demo-area-cooler-1",
+    name: "Top Shelf - Spirits",
+    sectionName: "Spirits",
+    displayOrder: 1,
+  });
+  run({
+    type: "storageShelfUpsert",
+    id: "demo-shelf-c1-mid",
+    storageAreaId: "demo-area-cooler-1",
+    name: "Middle Shelf - Mixers",
+    sectionName: "Mixers",
+    displayOrder: 2,
+  });
+  run({
+    type: "storageShelfUpsert",
+    id: "demo-shelf-c1-bot",
+    storageAreaId: "demo-area-cooler-1",
+    name: "Bottom Shelf - Heavy Jugs",
+    sectionName: "Bulk",
+    displayOrder: 3,
+  });
+
+  // Shelves in Cooler 2
+  run({
+    type: "storageShelfUpsert",
+    id: "demo-shelf-c2-tier",
+    storageAreaId: "demo-area-cooler-2",
+    name: "Upper Can Deck",
+    sectionName: "Cans",
+    displayOrder: 1,
+  });
+
+  // Placements (Option A: metadata only, no quantity)
+  const titosId = byName("Tito's Handmade Vodka");
+  const casamigosId = byName("Casamigos Blanco");
+  const modeloId = byName("Modelo Especial");
+
+  run({
+    type: "storagePlacementSet",
+    id: "demo-place-1",
+    storageAreaId: "demo-area-cooler-1",
+    shelfId: "demo-shelf-c1-top",
+    productId: titosId,
+    slotNumber: 1,
+    slotLabel: "L1",
+    displayOrder: 1,
+  });
+  run({
+    type: "storagePlacementSet",
+    id: "demo-place-2",
+    storageAreaId: "demo-area-cooler-1",
+    shelfId: "demo-shelf-c1-top",
+    productId: casamigosId,
+    slotNumber: 2,
+    slotLabel: "L2",
+    displayOrder: 2,
+  });
+  run({
+    type: "storagePlacementSet",
+    id: "demo-place-3",
+    storageAreaId: "demo-area-cooler-2",
+    shelfId: "demo-shelf-c2-tier",
+    productId: modeloId,
+    slotNumber: 1,
+    slotLabel: "C1",
+    displayOrder: 1,
+  });
+  // Note: House Rail Gin is intentionally left with no placement so it displays under Unassigned Storage!
+
   // Replaces the four same-day seed counts above with a believable past.
   return withDemoHistory(state, ctx.now);
 }

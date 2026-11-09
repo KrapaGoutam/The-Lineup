@@ -5,6 +5,7 @@ import {
   ADJUSTMENT_REASONS,
   effectiveWarning,
   evaluateStock,
+  parseQuantityInput,
   sourceForReason,
   statusRank,
   toCents,
@@ -45,6 +46,81 @@ describe("exact quantity arithmetic", () => {
     expect(() => toCents(Number.POSITIVE_INFINITY)).toThrow();
     expect(() => toCents(99_999_999_999)).toThrow(/too large/);
     expect(toCents(1.25)).toBe(125);
+  });
+});
+
+describe("fraction and decimal quantity parsing", () => {
+  it.each([
+    ["0", 0],
+    ["0.5", 0.5],
+    ["0.75", 0.75],
+    ["1/2", 0.5],
+    ["3/4", 0.75],
+    ["1/4", 0.25],
+    ["1 1/2", 1.5],
+    ["2", 2],
+    ["2.25", 2.25],
+    ["2 1/4", 2.25],
+    ["3 3/4", 3.75],
+    [".5", 0.5],
+    ["  1 1/2  ", 1.5],
+  ])("parses valid input %j -> %s", (input, expected) => {
+    const res = parseQuantityInput(input);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.value).toBe(expected);
+      expect(res.cents).toBe(Math.round(expected * 100));
+    }
+  });
+
+  it.each([
+    ["1/8", /fraction cannot be represented/i],
+    ["3/8", /fraction cannot be represented/i],
+    ["1/3", /fraction cannot be represented/i],
+    ["2/3", /fraction cannot be represented/i],
+    ["1/6", /fraction cannot be represented/i],
+    ["1 1/8", /fraction cannot be represented/i],
+  ])(
+    "rejects nonrepresentable fraction %j without silent rounding",
+    (input, pattern) => {
+      const res = parseQuantityInput(input);
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toMatch(pattern);
+      }
+    },
+  );
+
+  it.each([
+    ["-1", /cannot be negative/i],
+    ["-1/2", /cannot be negative/i],
+    ["-0.5", /cannot be negative/i],
+    ["1/0", /division by zero/i],
+    ["abc", /not a number/i],
+    ["5.", /not a number/i],
+    ["1,200", /thousand/i],
+    ["1 200", /thousand/i],
+    ["1.234", /at most two decimal/i],
+  ])("rejects invalid input %j with clear message", (input, pattern) => {
+    const res = parseQuantityInput(input);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toMatch(pattern);
+    }
+  });
+
+  it("handles blank input with allowBlank option", () => {
+    expect(parseQuantityInput("", { allowBlank: true })).toEqual({
+      ok: true,
+      value: null,
+      cents: null,
+    });
+    expect(parseQuantityInput("   ", { allowBlank: true })).toEqual({
+      ok: true,
+      value: null,
+      cents: null,
+    });
+    expect(parseQuantityInput("", { allowBlank: false }).ok).toBe(false);
   });
 });
 

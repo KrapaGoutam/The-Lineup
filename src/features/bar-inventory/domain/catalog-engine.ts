@@ -16,6 +16,9 @@ import {
   type ProductInput,
   type ProductView,
   type StockView,
+  type StorageAreaView,
+  type StoragePlacementView,
+  type StorageShelfView,
   type SubcategoryView,
   type VendorView,
 } from "./inventory-types";
@@ -1001,6 +1004,131 @@ function apply(
       return adjustStock(state, command, ctx);
     case "stockSetLevels":
       return setLevels(state, command, ctx);
+    case "storageAreaUpsert": {
+      const areas = state.storageAreas ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = areas.find((a) => a.id === id);
+      const name = validName("storage area name", command.name, 120);
+      const row: StorageAreaView = existing
+        ? touch(
+            existing,
+            {
+              name,
+              kind: command.kind,
+              displayOrder: command.displayOrder,
+              active: command.active,
+            },
+            ctx,
+          )
+        : {
+            id,
+            locationId: "demo-location",
+            name,
+            kind: command.kind,
+            displayOrder: command.displayOrder,
+            active: command.active,
+            version: 1,
+            updatedAt: ctx.now.toISOString(),
+            updatedByName: ctx.actorName,
+          };
+      return {
+        ...state,
+        storageAreas: existing ? replace(areas, row) : [...areas, row],
+      };
+    }
+    case "storageAreaArchive": {
+      const areas = state.storageAreas ?? [];
+      const existing = areas.find((a) => a.id === command.id);
+      if (!existing) return state;
+      const row = touch(existing, { active: false }, ctx);
+      return {
+        ...state,
+        storageAreas: replace(areas, row),
+      };
+    }
+    case "storageShelfUpsert": {
+      const shelves = state.storageShelves ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = shelves.find((s) => s.id === id);
+      const name = validName("shelf name", command.name, 120);
+      const sectionName = optionalText(
+        "section name",
+        command.sectionName,
+        120,
+      );
+      const row: StorageShelfView = {
+        id,
+        locationId: "demo-location",
+        storageAreaId: command.storageAreaId,
+        name,
+        sectionName,
+        displayOrder: command.displayOrder,
+        updatedAt: ctx.now.toISOString(),
+        updatedByName: ctx.actorName,
+      };
+      return {
+        ...state,
+        storageShelves: existing ? replace(shelves, row) : [...shelves, row],
+      };
+    }
+    case "storageShelfDelete": {
+      const shelves = (state.storageShelves ?? []).filter(
+        (s) => s.id !== command.id,
+      );
+      const placements = (state.storagePlacements ?? []).filter(
+        (p) => p.shelfId !== command.id,
+      );
+      return {
+        ...state,
+        storageShelves: shelves,
+        storagePlacements: placements,
+      };
+    }
+    case "storagePlacementSet": {
+      const placements = state.storagePlacements ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = placements.find((p) => p.id === id);
+      const slotLabel = optionalText("slot label", command.slotLabel, 30);
+      const row: StoragePlacementView = {
+        id,
+        locationId: "demo-location",
+        storageAreaId: command.storageAreaId,
+        shelfId: command.shelfId,
+        productId: command.productId,
+        slotNumber: command.slotNumber,
+        slotLabel,
+        displayOrder: command.displayOrder,
+        version: existing ? existing.version + 1 : 1,
+        updatedAt: ctx.now.toISOString(),
+        updatedByName: ctx.actorName,
+      };
+      return {
+        ...state,
+        storagePlacements: existing
+          ? replace(placements, row)
+          : [...placements, row],
+      };
+    }
+    case "storagePlacementDelete": {
+      const placements = (state.storagePlacements ?? []).filter(
+        (p) => p.id !== command.id,
+      );
+      return {
+        ...state,
+        storagePlacements: placements,
+      };
+    }
+    case "storagePlacementReorder": {
+      const placements = [...(state.storagePlacements ?? [])];
+      command.placementIds.forEach((pid, idx) => {
+        const item = placements.find((p) => p.id === pid);
+        if (item) item.displayOrder = idx + 1;
+      });
+      return {
+        ...state,
+        storagePlacements: placements,
+      };
+    }
   }
 }
 
@@ -1026,5 +1154,8 @@ export function emptyCatalogState(): CatalogState {
     subcategories: [],
     products: [],
     stock: [],
+    storageAreas: [],
+    storageShelves: [],
+    storagePlacements: [],
   };
 }

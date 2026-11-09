@@ -1,10 +1,43 @@
 "use client";
 
 import { History, Minus, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatBusinessDateTime } from "@/lib/date-time";
+
+function HeaderCheckbox({
+  allSelected,
+  someSelected,
+  onChange,
+  disabled,
+}: {
+  allSelected: boolean;
+  someSelected: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
+
+  return (
+    <label className="flex min-h-11 min-w-11 items-center justify-center">
+      <input
+        ref={ref}
+        type="checkbox"
+        aria-label="Select all visible products"
+        className="size-4"
+        disabled={disabled}
+        checked={allSelected}
+        onChange={onChange}
+      />
+    </label>
+  );
+}
 
 import {
   buildInventoryRows,
@@ -43,9 +76,11 @@ import {
   hasExplicitInventoryState,
   readViewPayload,
 } from "../domain/saved-views";
+import { CoolerLayoutView } from "./cooler-layout/cooler-layout-view";
 
 export function InventoryView({
   snapshot,
+  locationId = null,
   run,
   restaurantSlug,
   timeZone,
@@ -55,6 +90,7 @@ export function InventoryView({
   profileId,
 }: {
   snapshot: CatalogSnapshot;
+  locationId?: string | null;
   run: RunCatalogCommand;
   restaurantSlug: string;
   timeZone: string;
@@ -93,9 +129,15 @@ export function InventoryView({
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [filtered, setFiltered] = useState<InventoryRow[]>([]);
+  const [prevLocationId, setPrevLocationId] = useState(locationId);
+  if (prevLocationId !== locationId) {
+    setPrevLocationId(locationId);
+    setSelected([]);
+  }
+  const [filtered, setFiltered] = useState<InventoryRow[] | null>(null);
   const [bulkRows, setBulkRows] = useState<InventoryRow[] | null>(null);
   const [dateFor, setDateFor] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "cooler">("table");
 
   const today = businessDate(new Date(), timeZone);
   const allRows = useMemo(
@@ -106,6 +148,23 @@ export function InventoryView({
     () => allRows.filter((row) => showArchived || row.status !== "archived"),
     [allRows, showArchived],
   );
+  const activeVisibleRows = filtered ?? rows;
+  const eligibleFiltered = useMemo(
+    () => activeVisibleRows.filter((r) => r.status !== "archived"),
+    [activeVisibleRows],
+  );
+  const eligibleAll = useMemo(
+    () => allRows.filter((r) => r.status !== "archived"),
+    [allRows],
+  );
+
+  const isAllVisibleSelected =
+    eligibleFiltered.length > 0 &&
+    eligibleFiltered.every((r) => selected.includes(r.productId));
+  const isSomeVisibleSelected = eligibleFiltered.some((r) =>
+    selected.includes(r.productId),
+  );
+
   const sheetRow = sheetFor
     ? (allRows.find((row) => row.productId === sheetFor) ?? null)
     : null;
@@ -240,6 +299,28 @@ export function InventoryView({
         type: "text",
         get: () => null,
         noFilter: true,
+        headerRender: () => (
+          <HeaderCheckbox
+            allSelected={isAllVisibleSelected}
+            someSelected={isSomeVisibleSelected}
+            disabled={eligibleFiltered.length === 0}
+            onChange={() => {
+              if (isAllVisibleSelected) {
+                const visibleIds = new Set(
+                  eligibleFiltered.map((r) => r.productId),
+                );
+                setSelected((current) =>
+                  current.filter((id) => !visibleIds.has(id)),
+                );
+              } else {
+                const visibleIds = eligibleFiltered.map((r) => r.productId);
+                setSelected((current) =>
+                  Array.from(new Set([...current, ...visibleIds])),
+                );
+              }
+            }}
+          />
+        ),
         render: (row) => (
           <label className="flex min-h-11 min-w-11 items-center justify-center">
             <input
@@ -345,7 +426,15 @@ export function InventoryView({
     ];
     // The save callbacks close over `run` and `lastReason` only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeZone, lastReason, run, selected]);
+  }, [
+    timeZone,
+    lastReason,
+    run,
+    selected,
+    eligibleFiltered,
+    isAllVisibleSelected,
+    isSomeVisibleSelected,
+  ]);
 
   const selection = allRows.filter(
     (r) => selected.includes(r.productId) && r.status !== "archived",
@@ -363,207 +452,248 @@ export function InventoryView({
           {notice}
         </p>
       ) : null}
-      <FilterableTable<InventoryRow>
-        tableKey="inv"
-        toolbarState={(state, onChange) => (
-          <DateFilters state={state} onChange={onChange} />
-        )}
-        savedViews={{
-          views: (snapshot.savedViews ?? []).filter(
-            (v) => v.profileId === profileId,
-          ),
-          run,
-          showArchived,
-          setShowArchived,
-        }}
-        restaurantSlug={restaurantSlug}
-        label="Inventory"
-        rows={rows}
-        columns={columns}
-        sortOnlyColumns={INVENTORY_SORT_ONLY_COLUMNS}
-        getRowId={(row) => row.productId}
-        timeZone={timeZone}
-        defaultSort={INVENTORY_DEFAULT_SORT}
-        sortPresets={INVENTORY_SORT_PRESETS}
-        onVisibleRows={(visible, state) => {
-          onVisibleRows(visible, state);
-          setFiltered((current) =>
-            current.length === visible.length &&
-            current.every((r, i) => r === visible[i])
-              ? current
-              : visible,
-          );
-        }}
-        emptyMessage="No products yet. Add products under Manage to start counting."
-        toolbarExtras={
-          <>
-            <span role="status" className="text-sm">
-              {selection.length} selected
-            </span>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setSelected(
-                  filtered
-                    .filter((r) => r.status !== "archived")
-                    .map((r) => r.productId),
-                )
-              }
-            >
-              Select filtered results
-            </Button>
-            <Button
-              disabled={!selection.length}
-              onClick={() => setBulkRows(selection)}
-            >
-              Bulk Edit
-            </Button>
-            {selected.length ? (
-              <Button variant="ghost" onClick={() => setSelected([])}>
-                Clear selection
-              </Button>
-            ) : null}
-            <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="size-4"
-                checked={showArchived}
-                onChange={(event) => setShowArchived(event.target.checked)}
-              />
-              Show archived
-            </label>
-            <Button variant="ghost" onClick={onOpenHistory}>
-              <History aria-hidden="true" /> History
-            </Button>
-            <ExportControl
-              label="Export inventory"
-              info={exportInfo}
-              build={(filters) => ({ kind: "inventory", filters })}
-              run={runExport}
-            />
-            <ExportControl
-              label="Export date groups"
-              info={exportInfo}
-              build={(filters) => ({ kind: "date_groups", filters })}
-              run={runExport}
-            />
-          </>
-        }
-        rowActions={(row) => (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Adjust ${row.name}`}
-              onClick={() => setSheetFor(row.productId)}
-            >
-              Adjust
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Date tracking for ${row.name}`}
-              onClick={() => setDateFor(row.productId)}
-            >
-              Dates
-            </Button>
-          </div>
-        )}
-        renderCard={(row) => (
-          <article
-            aria-label={row.name}
-            className="border-border bg-card flex flex-col gap-2 rounded-xl border p-3"
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+        <div className="bg-muted/40 inline-flex rounded-lg border p-1">
+          <Button
+            type="button"
+            variant={viewMode === "table" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+            className="h-8 px-3 text-xs font-medium"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h3 className="truncate font-semibold">
-                  {row.name}
-                  {row.size ? ` ${row.size}` : ""}
-                </h3>
-                <p className="text-muted-foreground text-xs">
-                  {row.vendor}
-                  {row.category
-                    ? ` · ${row.category}${row.subcategory ? ` › ${row.subcategory}` : ""}`
-                    : ""}
-                </p>
-              </div>
-              <StatusBadge status={row.status} />
-            </div>
-            <DateAlert row={row} />
-            <p className="text-sm">
-              <span className="font-semibold">
-                Total {formatQuantity(row.total)}
-              </span>{" "}
-              <span className="text-muted-foreground">
-                (On hand {formatQuantity(row.onHand)} + Backup{" "}
-                {formatQuantity(row.backup)})
+            Inventory Table
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "cooler" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("cooler")}
+            className="h-8 px-3 text-xs font-medium"
+          >
+            Cooler Layout
+          </Button>
+        </div>
+      </div>
+
+      {viewMode === "cooler" ? (
+        <CoolerLayoutView
+          snapshot={snapshot}
+          locationId={locationId}
+          run={run}
+          timeZone={timeZone}
+          onSelectProduct={(productId) => setSheetFor(productId)}
+        />
+      ) : (
+        <FilterableTable<InventoryRow>
+          tableKey="inv"
+          toolbarState={(state, onChange) => (
+            <DateFilters state={state} onChange={onChange} />
+          )}
+          savedViews={{
+            views: (snapshot.savedViews ?? []).filter(
+              (v) => v.profileId === profileId,
+            ),
+            run,
+            showArchived,
+            setShowArchived,
+          }}
+          restaurantSlug={restaurantSlug}
+          label="Inventory"
+          rows={rows}
+          columns={columns}
+          sortOnlyColumns={INVENTORY_SORT_ONLY_COLUMNS}
+          getRowId={(row) => row.productId}
+          timeZone={timeZone}
+          defaultSort={INVENTORY_DEFAULT_SORT}
+          sortPresets={INVENTORY_SORT_PRESETS}
+          onVisibleRows={(visible, state) => {
+            onVisibleRows(visible, state);
+            setFiltered((current) =>
+              current &&
+              current.length === visible.length &&
+              current.every((r, i) => r === visible[i])
+                ? current
+                : visible,
+            );
+          }}
+          emptyMessage="No products yet. Add products under Manage to start counting."
+          toolbarExtras={
+            <>
+              <span role="status" className="text-sm">
+                {selection.length} selected
               </span>
-            </p>
-            <p className="text-muted-foreground text-xs">
-              Cutoff {formatQuantity(row.cutoff)} · Warn{" "}
-              {formatQuantity(row.effectiveWarning)} · Par{" "}
-              {formatQuantity(row.par)}
-              {row.status === "critical" || row.status === "low"
-                ? ` · Order ${suggestedOrderText(row)}`
-                : ""}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
+                onClick={() =>
+                  setSelected(eligibleFiltered.map((r) => r.productId))
+                }
+              >
+                Select filtered results
+              </Button>
+              {eligibleAll.length > eligibleFiltered.length ? (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setSelected(eligibleAll.map((r) => r.productId))
+                  }
+                >
+                  Select all eligible ({eligibleAll.length})
+                </Button>
+              ) : null}
+              <Button
+                disabled={!selection.length}
+                onClick={() => setBulkRows(selection)}
+              >
+                Bulk Edit
+              </Button>
+              {selected.length ? (
+                <Button variant="ghost" onClick={() => setSelected([])}>
+                  Clear selection
+                </Button>
+              ) : null}
+              <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={showArchived}
+                  onChange={(event) => setShowArchived(event.target.checked)}
+                />
+                Show archived
+              </label>
+              <Button variant="ghost" onClick={onOpenHistory}>
+                <History aria-hidden="true" /> History
+              </Button>
+              <ExportControl
+                label="Export inventory"
+                info={exportInfo}
+                build={(filters) => ({ kind: "inventory", filters })}
+                run={runExport}
+              />
+              <ExportControl
+                label="Export date groups"
+                info={exportInfo}
+                build={(filters) => ({ kind: "date_groups", filters })}
+                run={runExport}
+              />
+            </>
+          }
+          rowActions={(row) => (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Adjust ${row.name}`}
+                onClick={() => setSheetFor(row.productId)}
+              >
+                Adjust
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 aria-label={`Date tracking for ${row.name}`}
                 onClick={() => setDateFor(row.productId)}
               >
                 Dates
               </Button>
-              <label className="flex min-h-11 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${row.name}`}
-                  className="size-4"
-                  disabled={row.status === "archived"}
-                  checked={
-                    selected.includes(row.productId) &&
-                    row.status !== "archived"
-                  }
-                  onChange={() =>
-                    setSelected((current) =>
-                      current.includes(row.productId)
-                        ? current.filter((id) => id !== row.productId)
-                        : [...current, row.productId],
-                    )
-                  }
-                />
-                Select
-              </label>
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label={`One used: ${row.name} (${ADJUSTMENT_REASON_LABELS.usage})`}
-                disabled={row.status === "archived"}
-                onClick={() => void quickAdjust(row, -1)}
-              >
-                <Minus aria-hidden="true" />
-              </Button>
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label={`One received: ${row.name} (${ADJUSTMENT_REASON_LABELS.delivery_restock})`}
-                disabled={row.status === "archived"}
-                onClick={() => void quickAdjust(row, 1)}
-              >
-                <Plus aria-hidden="true" />
-              </Button>
-              <Button
-                variant="outline"
-                aria-label={`Adjust ${row.name}`}
-                onClick={() => setSheetFor(row.productId)}
-              >
-                Adjust…
-              </Button>
             </div>
-          </article>
-        )}
-      />
+          )}
+          renderCard={(row) => (
+            <article
+              aria-label={row.name}
+              className="border-border bg-card flex flex-col gap-2 rounded-xl border p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="truncate font-semibold">
+                    {row.name}
+                    {row.size ? ` ${row.size}` : ""}
+                  </h3>
+                  <p className="text-muted-foreground text-xs">
+                    {row.vendor}
+                    {row.category
+                      ? ` · ${row.category}${row.subcategory ? ` › ${row.subcategory}` : ""}`
+                      : ""}
+                  </p>
+                </div>
+                <StatusBadge status={row.status} />
+              </div>
+              <DateAlert row={row} />
+              <p className="text-sm">
+                <span className="font-semibold">
+                  Total {formatQuantity(row.total)}
+                </span>{" "}
+                <span className="text-muted-foreground">
+                  (On hand {formatQuantity(row.onHand)} + Backup{" "}
+                  {formatQuantity(row.backup)})
+                </span>
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Cutoff {formatQuantity(row.cutoff)} · Warn{" "}
+                {formatQuantity(row.effectiveWarning)} · Par{" "}
+                {formatQuantity(row.par)}
+                {row.status === "critical" || row.status === "low"
+                  ? ` · Order ${suggestedOrderText(row)}`
+                  : ""}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  aria-label={`Date tracking for ${row.name}`}
+                  onClick={() => setDateFor(row.productId)}
+                >
+                  Dates
+                </Button>
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${row.name}`}
+                    className="size-4"
+                    disabled={row.status === "archived"}
+                    checked={
+                      selected.includes(row.productId) &&
+                      row.status !== "archived"
+                    }
+                    onChange={() =>
+                      setSelected((current) =>
+                        current.includes(row.productId)
+                          ? current.filter((id) => id !== row.productId)
+                          : [...current, row.productId],
+                      )
+                    }
+                  />
+                  Select
+                </label>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  aria-label={`One used: ${row.name} (${ADJUSTMENT_REASON_LABELS.usage})`}
+                  disabled={row.status === "archived"}
+                  onClick={() => void quickAdjust(row, -1)}
+                >
+                  <Minus aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  aria-label={`One received: ${row.name} (${ADJUSTMENT_REASON_LABELS.delivery_restock})`}
+                  disabled={row.status === "archived"}
+                  onClick={() => void quickAdjust(row, 1)}
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-label={`Adjust ${row.name}`}
+                  onClick={() => setSheetFor(row.productId)}
+                >
+                  Adjust…
+                </Button>
+              </div>
+            </article>
+          )}
+        />
+      )}
       <ItemSheet
         row={sheetRow}
         defaultReason={lastReason}

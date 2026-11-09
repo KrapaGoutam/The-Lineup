@@ -165,4 +165,24 @@ describe("EditableCell", () => {
     expect(onSave).toHaveBeenCalledTimes(1);
     finish();
   });
+
+  it("accepts valid fractions like 1 1/2 and saves decimal 1.5", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn<CellSave>().mockResolvedValue({ ok: true });
+    render(
+      <EditableCell
+        {...base}
+        label="Cutoff"
+        mode="level"
+        value={2}
+        expectedVersion={1}
+        onSave={onSave}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /currently 2/ }));
+    const input = screen.getByLabelText("Cutoff for Tito's");
+    await user.clear(input);
+    await user.type(input, "1 1/2{Enter}");
+    expect(onSave).toHaveBeenCalledWith(1.5, null, 1);
+  });
 });

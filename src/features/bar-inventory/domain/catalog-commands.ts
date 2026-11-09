@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { UNIT_LABEL_MAX, UNIT_TYPES } from "./inventory-types";
+import {
+  STORAGE_AREA_KINDS,
+  UNIT_LABEL_MAX,
+  UNIT_TYPES,
+} from "./inventory-types";
 import { ADJUSTMENT_REASONS } from "./stock-rules";
 import { viewPayloadSchema } from "./saved-views";
 
@@ -176,6 +180,49 @@ export const catalogCommandSchema = z.discriminatedUnion("type", [
     warning: z.number().nullable(),
     par: z.number().nullable(),
     expectedVersion: version,
+  }),
+  z.object({
+    type: z.literal("storageAreaUpsert"),
+    id: uuid.nullable(),
+    name: z.string().trim().min(1).max(120),
+    kind: z.enum(STORAGE_AREA_KINDS),
+    displayOrder: z.number().int(),
+    active: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("storageAreaArchive"),
+    id: uuid,
+  }),
+  z.object({
+    type: z.literal("storageShelfUpsert"),
+    id: uuid.nullable(),
+    storageAreaId: uuid,
+    name: z.string().trim().min(1).max(120),
+    sectionName: optionalText(120),
+    displayOrder: z.number().int(),
+  }),
+  z.object({
+    type: z.literal("storageShelfDelete"),
+    id: uuid,
+  }),
+  z.object({
+    type: z.literal("storagePlacementSet"),
+    id: uuid.nullable(),
+    storageAreaId: uuid,
+    shelfId: uuid,
+    productId: uuid,
+    slotNumber: z.number().int().min(0).nullable(),
+    slotLabel: optionalText(30),
+    displayOrder: z.number().int(),
+  }),
+  z.object({
+    type: z.literal("storagePlacementDelete"),
+    id: uuid,
+  }),
+  z.object({
+    type: z.literal("storagePlacementReorder"),
+    shelfId: uuid,
+    placementIds: z.array(uuid),
   }),
 ]);
 
