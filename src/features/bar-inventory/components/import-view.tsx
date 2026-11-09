@@ -23,6 +23,8 @@ import { EXPORT_MIME } from "@/lib/export/document";
 import type { SheetInfo } from "@/lib/xlsx/workbook";
 
 import type {
+  DateGroupCommitActionResult,
+  DateGroupPreviewActionResult,
   ImportCommitActionResult,
   ImportPreviewActionResult,
   WorkbookActionResult,
@@ -34,6 +36,16 @@ import {
   type HeaderMapping,
   type ImportField,
 } from "../domain/import-columns";
+import { displayInventoryDate } from "../domain/freshness";
+import {
+  DATE_GROUP_FIELD_LABELS,
+  DATE_GROUP_IMPORT_FIELDS,
+  DATE_GROUP_TEMPLATE,
+  type DateGroupHeaderMapping,
+  type DateGroupImportField,
+  type DateGroupPlan,
+  type DateGroupPlanRow,
+} from "../domain/import-date-groups";
 import type {
   ImportChoices,
   ImportPlan,
@@ -45,12 +57,13 @@ import { includedRows, type ImportSelection } from "../domain/import-stage";
 import type { ImportBatchView } from "../domain/inventory-types";
 import { ADJUSTMENT_REASON_LABELS } from "../domain/stock-rules";
 import type { ColumnSpec } from "../domain/table-filters";
+import { formatQuantity } from "./editable-cell";
 import {
   FilterableTable,
   type TableColumn,
 } from "./table-kit/filterable-table";
 
-/** The three operations the import needs, from the server (real) or the engine (demo). */
+/** The operations the import needs, from the server (real) or the engine (demo). */
 export type ImportApi = {
   preview: (request: ImportRequest) => Promise<ImportPreviewActionResult>;
   /** Reads an .xlsx (base64) into the chosen sheet's CSV text; nothing is written. */
@@ -72,6 +85,18 @@ export type ImportApi = {
   loadBatches: () => Promise<
     { ok: true; batches: ImportBatchView[] } | { ok: false; error: string }
   >;
+  previewDateGroups?: (request: {
+    csv: string;
+    mapping: Record<number, DateGroupImportField | null>;
+  }) => Promise<DateGroupPreviewActionResult>;
+  commitDateGroups?: (request: {
+    csv: string;
+    filename: string;
+    mapping: Record<number, DateGroupImportField | null>;
+    requestId: string;
+    fingerprint: string;
+    excluded: number[];
+  }) => Promise<DateGroupCommitActionResult>;
 };
 
 type Source = {
@@ -100,6 +125,22 @@ const ACTION_LABEL = {
 const ACTION_TONE = {
   create: "success",
   update: "accent",
+  skip: "neutral",
+  error: "danger",
+} as const;
+
+const DATE_GROUP_ACTION_LABEL = {
+  create: "Create",
+  update: "Update",
+  unchanged: "Unchanged",
+  skip: "Skip",
+  error: "Error",
+} as const;
+
+const DATE_GROUP_ACTION_TONE = {
+  create: "success",
+  update: "accent",
+  unchanged: "neutral",
   skip: "neutral",
   error: "danger",
 } as const;
@@ -190,6 +231,9 @@ export function ImportView({
   const fileId = useId();
   const reasonId = useId();
   const sheetId = useId();
+  const [importMode, setImportMode] = useState<"stock" | "date_groups">(
+    "stock",
+  );
   const [source, setSource] = useState<Source | null>(null);
   const [params, setParams] = useState<Params>({
     reason: "stock_count",
@@ -207,6 +251,27 @@ export function ImportView({
   const [confirming, setConfirming] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [dateGroupMapping, setDateGroupMapping] = useState<
+    Record<number, DateGroupImportField | null>
+  >({});
+  const [dateGroupPreview, setDateGroupPreview] =
+    useState<DateGroupPreviewActionResult | null>(null);
+  const [dateGroupProblem, setDateGroupProblem] = useState<{
+    message: string;
+    header: DateGroupHeaderMapping | null;
+  } | null>(null);
+  const [dateGroupExcluded, setDateGroupExcluded] = useState<
+    ReadonlySet<number>
+  >(new Set());
+  const [confirmingDateGroup, setConfirmingDateGroup] = useState(false);
+  const [committingDateGroup, setCommittingDateGroup] = useState(false);
+  const [dateGroupCommitError, setDateGroupCommitError] = useState<
+    string | null
+  >(null);
+  const [doneDateGroups, setDoneDateGroups] = useState<{
+    filename: string;
+    result: Extract<DateGroupCommitActionResult, { ok: true }>["result"];
+  } | null>(null);
   // The chosen workbook, kept so another sheet can be read without re-uploading.
   const [workbook, setWorkbook] = useState<{
     filename: string;
@@ -227,8 +292,8 @@ export function ImportView({
   // button that opened the confirm dialog is gone by then.
   const doneHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (done) doneHeading.current?.focus();
-  }, [done]);
+    if (done || doneDateGroups) doneHeading.current?.focus();
+  }, [done, doneDateGroups]);
 
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -289,6 +354,42 @@ export function ImportView({
     [api],
   );
 
+  const runDateGroups = useCallback(
+    async (
+      next: Source,
+      mappingOverride?: Record<number, DateGroupImportField | null>,
+    ) => {
+      if (!api.previewDateGroups) return;
+      setBusy(true);
+      setDateGroupCommitError(null);
+      try {
+        const mapping = mappingOverride ?? dateGroupMapping;
+        const result = await api.previewDateGroups({
+          csv: next.csv,
+          mapping,
+        });
+        setDateGroupExcluded(new Set());
+        attempt.current = null;
+        if (result.ok) {
+          setDateGroupPreview(result);
+          setDateGroupProblem(null);
+        } else {
+          setDateGroupPreview(null);
+          setDateGroupProblem({ message: result.error, header: result.header });
+        }
+      } catch {
+        setDateGroupPreview(null);
+        setDateGroupProblem({
+          message: "That didn't work. Please try again.",
+          header: null,
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, dateGroupMapping],
+  );
+
   /** Reads one sheet of the chosen workbook, then previews it like any CSV. */
   async function readSheet(
     filename: string,
@@ -301,7 +402,9 @@ export function ImportView({
       if (!result.ok) {
         setSource(null);
         setPreview(null);
+        setDateGroupPreview(null);
         setProblem({ message: result.error, header: null });
+        setDateGroupProblem(null);
         return;
       }
       const next: Source = {
@@ -312,18 +415,25 @@ export function ImportView({
         sheet: result.selected,
         sheets: result.sheets,
       };
-      const fresh: Params = { ...params, mapping: {}, choices: {} };
       setWorkbook({ filename, base64 });
       setSource(next);
-      setParams(fresh);
-      await run(next, fresh);
+      if (importMode === "date_groups") {
+        setDateGroupMapping({});
+        await runDateGroups(next, {});
+      } else {
+        const fresh: Params = { ...params, mapping: {}, choices: {} };
+        setParams(fresh);
+        await run(next, fresh);
+      }
     } catch {
       setSource(null);
       setPreview(null);
+      setDateGroupPreview(null);
       setProblem({
         message: "That didn't work. Please try again.",
         header: null,
       });
+      setDateGroupProblem(null);
     } finally {
       setBusy(false);
     }
@@ -332,15 +442,18 @@ export function ImportView({
   async function onFile(file: File | undefined) {
     if (!file) return;
     setDone(null);
+    setDoneDateGroups(null);
     setWorkbook(null);
     if (/.(xls|xlsm|xlsb)$/i.test(file.name)) {
       setSource(null);
       setPreview(null);
+      setDateGroupPreview(null);
       setProblem({
         message:
           "That is an older Excel format. In Excel, use Save As → Excel Workbook (.xlsx) or CSV, then upload that.",
         header: null,
       });
+      setDateGroupProblem(null);
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -352,7 +465,9 @@ export function ImportView({
     if (!decoded.ok) {
       setSource(null);
       setPreview(null);
+      setDateGroupPreview(null);
       setProblem({ message: decoded.error, header: null });
+      setDateGroupProblem(null);
       return;
     }
     const next: Source = {
@@ -363,10 +478,15 @@ export function ImportView({
       sheet: null,
       sheets: [],
     };
-    const fresh: Params = { ...params, mapping: {}, choices: {} };
     setSource(next);
-    setParams(fresh);
-    await run(next, fresh);
+    if (importMode === "date_groups") {
+      setDateGroupMapping({});
+      await runDateGroups(next, {});
+    } else {
+      const fresh: Params = { ...params, mapping: {}, choices: {} };
+      setParams(fresh);
+      await run(next, fresh);
+    }
   }
 
   const update = (patch: Partial<Params>) => {
@@ -600,13 +720,205 @@ export function ImportView({
   const created = chosen.filter((r) => r.action === "create").length;
   const updated = chosen.length - created;
 
+  const dgPlan: DateGroupPlan | null = dateGroupPreview?.ok
+    ? dateGroupPreview.plan
+    : null;
+  const chosenDateGroups = useMemo(
+    () =>
+      dgPlan
+        ? dgPlan.rows.filter(
+            (r) =>
+              (r.action === "create" || r.action === "update") &&
+              !dateGroupExcluded.has(r.rowNumber),
+          )
+        : [],
+    [dgPlan, dateGroupExcluded],
+  );
+  const canConfirmDateGroups = chosenDateGroups.length > 0 && !busy;
+  const createdDateGroups = chosenDateGroups.filter(
+    (r) => r.action === "create",
+  ).length;
+  const updatedDateGroups = chosenDateGroups.filter(
+    (r) => r.action === "update",
+  ).length;
+
+  const dateGroupColumns = useMemo<TableColumn<DateGroupPlanRow>[]>(() => {
+    const spec = (
+      id: string,
+      label: string,
+      type: ColumnSpec<DateGroupPlanRow>["type"],
+      get: ColumnSpec<DateGroupPlanRow>["get"],
+    ) => ({ id, label, type, get });
+    return [
+      {
+        ...spec("include", "Import", "text", () => null),
+        noFilter: true,
+        render: (row) =>
+          row.action === "create" || row.action === "update" ? (
+            <input
+              type="checkbox"
+              className="size-4"
+              aria-label={`Include row ${row.rowNumber}: ${row.productName ?? "item"}`}
+              checked={!dateGroupExcluded.has(row.rowNumber)}
+              onChange={() => {
+                attempt.current = null;
+                setDateGroupExcluded((cur) => {
+                  const next = new Set(cur);
+                  if (next.has(row.rowNumber)) next.delete(row.rowNumber);
+                  else next.add(row.rowNumber);
+                  return next;
+                });
+              }}
+            />
+          ) : null,
+      },
+      {
+        ...spec("row", "Row", "number", (r) => r.rowNumber),
+        sortable: true,
+        render: (row) => row.rowNumber,
+      },
+      {
+        ...spec(
+          "action",
+          "Action",
+          "select",
+          (r) => DATE_GROUP_ACTION_LABEL[r.action],
+        ),
+        sortable: true,
+        render: (row) => (
+          <Badge tone={DATE_GROUP_ACTION_TONE[row.action]}>
+            {DATE_GROUP_ACTION_LABEL[row.action]}
+          </Badge>
+        ),
+      },
+      {
+        ...spec("vendor", "Vendor", "select", (r) => r.vendorName),
+        sortable: true,
+        render: (row) => row.vendorName ?? "—",
+      },
+      {
+        ...spec("name", "Name", "text", (r) => r.productName),
+        sortable: true,
+        render: (row) => (
+          <span className="font-medium">
+            {row.productName ?? "—"}
+            {row.size ? ` ${row.size}` : ""}
+          </span>
+        ),
+      },
+      {
+        ...spec("unit", "Unit", "select", (r) => r.unit),
+        sortable: true,
+        tabletHidden: true,
+        render: (row) => row.unit ?? "—",
+      },
+      {
+        ...spec("quantity", "Dated qty", "number", (r) => r.quantity),
+        sortable: true,
+        align: "right",
+        render: (row) =>
+          row.quantity !== null ? formatQuantity(row.quantity) : "—",
+      },
+      {
+        ...spec(
+          "manufactured",
+          "Manufactured",
+          "text",
+          (r) => displayInventoryDate(r.manufacture) || null,
+        ),
+        render: (row) => displayInventoryDate(row.manufacture) || "—",
+      },
+      {
+        ...spec(
+          "expires",
+          "Expires",
+          "text",
+          (r) => displayInventoryDate(r.expiration) || null,
+        ),
+        render: (row) => displayInventoryDate(row.expiration) || "—",
+      },
+      {
+        ...spec("notes", "Notes", "text", (r) => r.notes),
+        render: (row) => row.notes || "—",
+      },
+      {
+        ...spec("status", "Status", "text", (r) =>
+          r.changes.length > 0 ? r.changes.join(" · ") : (r.reason ?? null),
+        ),
+        render: (row) =>
+          row.changes.length > 0 ? row.changes.join(" · ") : row.reason || "—",
+      },
+    ];
+  }, [dateGroupExcluded]);
+
+  async function confirmDateGroups() {
+    if (
+      !source ||
+      !dateGroupPreview ||
+      !dateGroupPreview.ok ||
+      committingDateGroup ||
+      !api.commitDateGroups
+    )
+      return;
+    attempt.current ??= crypto.randomUUID();
+    setCommittingDateGroup(true);
+    setDateGroupCommitError(null);
+    try {
+      const result = await api.commitDateGroups({
+        csv: source.csv,
+        filename: source.filename,
+        mapping: dateGroupMapping,
+        requestId: attempt.current,
+        fingerprint: dateGroupPreview.fingerprint,
+        excluded: [...dateGroupExcluded],
+      });
+      if (result.ok) {
+        setDoneDateGroups({ filename: source.filename, result: result.result });
+        setConfirmingDateGroup(false);
+        setDateGroupPreview(null);
+        setSource(null);
+        attempt.current = null;
+        onImported();
+        setReload((n) => n + 1);
+        return;
+      }
+      setDateGroupCommitError(result.error);
+    } catch {
+      setDateGroupCommitError("That didn't work. Please try again.");
+    } finally {
+      setCommittingDateGroup(false);
+    }
+  }
+
+  function downloadDateGroupErrors() {
+    if (!source || !dgPlan) return;
+    const parsed = parseCsv(source.csv);
+    const raw = new Map(
+      parsed.ok ? parsed.rows.map((r) => [r.rowNumber, r.cells.join(",")]) : [],
+    );
+    const rows = dgPlan.rows
+      .filter((row) => row.action === "error")
+      .map((row) => [
+        row.rowNumber,
+        row.reason ?? "",
+        raw.get(row.rowNumber) ?? "",
+      ]);
+    downloadFile(
+      `${source.filename.replace(/\.csv$/i, "")}-date-groups-errors.csv`,
+      toCsv([["Row", "Problem", "Original row"], ...rows]),
+      EXPORT_MIME.csv,
+    );
+  }
+
   const announcement = done
     ? `Finished importing: ${done.result.created} created, ${done.result.updated} updated, ${done.result.skipped} skipped, ${done.result.errors} with errors.`
-    : busy
-      ? "Working on your file."
-      : preview
-        ? "Preview ready. Review the changes, then choose Review and import."
-        : "";
+    : doneDateGroups
+      ? `Finished Date Groups import: ${doneDateGroups.result.created} created, ${doneDateGroups.result.updated} updated, ${doneDateGroups.result.skipped} skipped, ${doneDateGroups.result.errors} with errors.`
+      : busy
+        ? "Working on your file."
+        : preview || dateGroupPreview
+          ? "Preview ready. Review the changes, then choose Review and import."
+          : "";
 
   return (
     <div
@@ -618,13 +930,62 @@ export function ImportView({
       </p>
       <Card>
         <CardContent className="flex flex-col gap-3 py-4">
-          <h2 className="text-lg font-semibold">Import from a file</h2>
-          <p className="text-muted-foreground text-sm">
-            Upload a CSV or an Excel (.xlsx) file, review exactly what it would
-            do, then confirm. Nothing changes until you confirm. A blank cell
-            leaves the current value alone; a <strong>0</strong> sets it to
-            zero.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Import from a file</h2>
+            <div className="flex gap-2">
+              <Button
+                variant={importMode === "stock" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  if (importMode === "stock") return;
+                  setImportMode("stock");
+                  setDone(null);
+                  setDoneDateGroups(null);
+                  if (source) {
+                    const fresh: Params = {
+                      ...params,
+                      mapping: {},
+                      choices: {},
+                    };
+                    setParams(fresh);
+                    void run(source, fresh);
+                  }
+                }}
+              >
+                Stock Inventory
+              </Button>
+              <Button
+                variant={importMode === "date_groups" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => {
+                  if (importMode === "date_groups") return;
+                  setImportMode("date_groups");
+                  setDone(null);
+                  setDoneDateGroups(null);
+                  if (source) {
+                    setDateGroupMapping({});
+                    void runDateGroups(source, {});
+                  }
+                }}
+              >
+                Date Groups
+              </Button>
+            </div>
+          </div>
+          {importMode === "stock" ? (
+            <p className="text-muted-foreground text-sm">
+              Upload a CSV or an Excel (.xlsx) file, review exactly what it
+              would do, then confirm. Nothing changes until you confirm. A blank
+              cell leaves the current value alone; a <strong>0</strong> sets it
+              to zero.
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Upload a CSV or an Excel (.xlsx) file to update or add manufacture
+              and expiration dates for your inventory lots. You can also edit
+              and re-upload an exported Date Groups file.
+            </p>
+          )}
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor={fileId} className="text-sm font-medium">
@@ -641,32 +1002,36 @@ export function ImportView({
                 }}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={reasonId} className="text-sm font-medium">
-                Counts are a
-              </label>
-              <Select
-                id={reasonId}
-                className="w-auto"
-                value={params.reason}
-                onChange={(e) =>
-                  update({ reason: e.target.value as Params["reason"] })
-                }
-              >
-                <option value="stock_count">
-                  {ADJUSTMENT_REASON_LABELS.stock_count}
-                </option>
-                <option value="delivery_restock">
-                  {ADJUSTMENT_REASON_LABELS.delivery_restock}
-                </option>
-              </Select>
-            </div>
+            {importMode === "stock" ? (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={reasonId} className="text-sm font-medium">
+                  Counts are a
+                </label>
+                <Select
+                  id={reasonId}
+                  className="w-auto"
+                  value={params.reason}
+                  onChange={(e) =>
+                    update({ reason: e.target.value as Params["reason"] })
+                  }
+                >
+                  <option value="stock_count">
+                    {ADJUSTMENT_REASON_LABELS.stock_count}
+                  </option>
+                  <option value="delivery_restock">
+                    {ADJUSTMENT_REASON_LABELS.delivery_restock}
+                  </option>
+                </Select>
+              </div>
+            ) : null}
             <Button
               variant="ghost"
               onClick={() =>
                 downloadFile(
-                  "bar-inventory-import-template.csv",
-                  TEMPLATE,
+                  importMode === "stock"
+                    ? "bar-inventory-import-template.csv"
+                    : "bar-inventory-date-groups-template.csv",
+                  importMode === "stock" ? TEMPLATE : DATE_GROUP_TEMPLATE,
                   EXPORT_MIME.csv,
                 )
               }
@@ -701,11 +1066,19 @@ export function ImportView({
               </Select>
             </div>
           ) : null}
-          <p className="text-muted-foreground text-xs">
-            Needs the columns Vendor, Name, On Hand, Backup and Cutoff Limit.
-            Category, Subcategory, Size, Unit, SKU, Warning Level, Par Level and
-            Notes are optional.
-          </p>
+          {importMode === "stock" ? (
+            <p className="text-muted-foreground text-xs">
+              Needs the columns Vendor, Name, On Hand, Backup and Cutoff Limit.
+              Category, Subcategory, Size, Unit, SKU, Warning Level, Par Level
+              and Notes are optional.
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              Needs the columns Vendor and Name, plus Date group ID (if updating
+              existing) or Dated quantity (if creating new). Manufactured and
+              Expires accept YYYY-MM-DD or MM/DD/YYYY.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -731,6 +1104,26 @@ export function ImportView({
         </Card>
       ) : null}
 
+      {doneDateGroups ? (
+        <Card>
+          <CardContent className="flex flex-col gap-2 py-4">
+            <h3
+              ref={doneHeading}
+              tabIndex={-1}
+              className="font-semibold outline-none"
+            >
+              Date Groups import complete
+            </h3>
+            <p className="text-sm">
+              {doneDateGroups.filename}: {doneDateGroups.result.created}{" "}
+              created, {doneDateGroups.result.updated} updated,{" "}
+              {doneDateGroups.result.skipped} skipped,{" "}
+              {doneDateGroups.result.errors} with errors.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {source?.warnings.length ? (
         <p
           role="status"
@@ -746,7 +1139,7 @@ export function ImportView({
         </p>
       ) : null}
 
-      {problem ? (
+      {importMode === "stock" && problem ? (
         <Card>
           <CardContent className="flex flex-col gap-3 py-4">
             <p role="alert" className="text-destructive text-sm">
@@ -763,7 +1156,27 @@ export function ImportView({
         </Card>
       ) : null}
 
-      {preview && plan && source ? (
+      {importMode === "date_groups" && dateGroupProblem ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3 py-4">
+            <p role="alert" className="text-destructive text-sm">
+              {dateGroupProblem.message}
+            </p>
+            {dateGroupProblem.header && source ? (
+              <DateGroupColumnMapper
+                header={dateGroupProblem.header}
+                onChange={(mapping) => {
+                  setDateGroupMapping(mapping);
+                  if (source) void runDateGroups(source, mapping);
+                }}
+                current={dateGroupMapping}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {importMode === "stock" && preview && plan && source ? (
         <section aria-label="Import preview" className="flex flex-col gap-3">
           <h3 className="text-base font-semibold">
             Preview: {source.filename}
@@ -933,6 +1346,143 @@ export function ImportView({
         </section>
       ) : null}
 
+      {importMode === "date_groups" &&
+      dateGroupPreview?.ok &&
+      dgPlan &&
+      source ? (
+        <section
+          aria-label="Date groups import preview"
+          className="flex flex-col gap-3"
+        >
+          <h3 className="text-base font-semibold">
+            Preview: {source.filename}
+          </h3>
+          <p className="text-sm" data-testid="date-group-import-counts">
+            Create {dgPlan.summary.create} · Update {dgPlan.summary.update} ·
+            Unchanged {dgPlan.summary.unchanged} · Skip {dgPlan.summary.skip} ·
+            Error {dgPlan.summary.error}
+          </p>
+
+          {dateGroupPreview.header.unmapped.length > 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Ignored columns: {wordList(dateGroupPreview.header.unmapped)}.
+            </p>
+          ) : null}
+
+          <details className="border-border rounded-lg border px-3 py-2 text-sm">
+            <summary className="cursor-pointer font-medium">Columns</summary>
+            <DateGroupColumnMapper
+              header={dateGroupPreview.header}
+              onChange={(mapping) => {
+                setDateGroupMapping(mapping);
+                if (source) void runDateGroups(source, mapping);
+              }}
+              current={dateGroupMapping}
+            />
+          </details>
+
+          <FilterableTable<DateGroupPlanRow>
+            tableKey="dgimp"
+            restaurantSlug="date-group-import-preview"
+            label="Date groups import preview"
+            rows={dgPlan.rows}
+            columns={dateGroupColumns}
+            getRowId={(row) => String(row.rowNumber)}
+            timeZone={timeZone}
+            emptyMessage="The file has no rows."
+            renderCard={(row) => (
+              <article
+                aria-label={`Row ${row.rowNumber}: ${row.productName ?? "item"}`}
+                className="border-border bg-card flex flex-col gap-1.5 rounded-xl border p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold">
+                      {row.productName ?? "—"}
+                      {row.size ? ` ${row.size}` : ""}
+                    </h3>
+                    <p className="text-muted-foreground text-xs">
+                      Row {row.rowNumber} · {row.vendorName ?? "—"}
+                    </p>
+                  </div>
+                  <Badge tone={DATE_GROUP_ACTION_TONE[row.action]}>
+                    {DATE_GROUP_ACTION_LABEL[row.action]}
+                  </Badge>
+                </div>
+                <p className="text-sm">
+                  Qty:{" "}
+                  {row.quantity !== null ? formatQuantity(row.quantity) : "—"}
+                  {row.manufacture
+                    ? ` · Mfd: ${displayInventoryDate(row.manufacture)}`
+                    : ""}
+                  {row.expiration
+                    ? ` · Exp: ${displayInventoryDate(row.expiration)}`
+                    : ""}
+                </p>
+                {row.notes ? (
+                  <p className="text-muted-foreground text-xs">{row.notes}</p>
+                ) : null}
+                {row.changes.length > 0 || row.reason ? (
+                  <p className="text-muted-foreground text-xs">
+                    {row.changes.length > 0
+                      ? row.changes.join(" · ")
+                      : (row.reason ?? "")}
+                  </p>
+                ) : null}
+                {row.action === "create" || row.action === "update" ? (
+                  <label className="flex min-h-9 items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      aria-label={`Include row ${row.rowNumber}: ${row.productName ?? "item"}`}
+                      checked={!dateGroupExcluded.has(row.rowNumber)}
+                      onChange={() => {
+                        attempt.current = null;
+                        setDateGroupExcluded((cur) => {
+                          const next = new Set(cur);
+                          if (next.has(row.rowNumber))
+                            next.delete(row.rowNumber);
+                          else next.add(row.rowNumber);
+                          return next;
+                        });
+                      }}
+                    />
+                    Include
+                  </label>
+                ) : null}
+              </article>
+            )}
+          />
+
+          {dateGroupCommitError ? (
+            <p
+              role="alert"
+              className="border-destructive/30 bg-destructive/15 text-destructive rounded-lg border px-3 py-2 text-sm"
+            >
+              {dateGroupCommitError}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => {
+                attempt.current ??= crypto.randomUUID();
+                setConfirmingDateGroup(true);
+              }}
+              disabled={!canConfirmDateGroups}
+            >
+              <FileUp aria-hidden="true" /> Review and import (
+              {chosenDateGroups.length})
+            </Button>
+            {dgPlan.summary.error > 0 ? (
+              <Button variant="ghost" onClick={downloadDateGroupErrors}>
+                <Download aria-hidden="true" /> Download error report
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       <Dialog
         open={confirming}
         onClose={() => {
@@ -971,6 +1521,45 @@ export function ImportView({
             </Button>
             <Button onClick={() => void confirm()} disabled={committing}>
               {committing ? "Importing…" : "Import now"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={confirmingDateGroup}
+        onClose={() => {
+          if (!committingDateGroup) setConfirmingDateGroup(false);
+        }}
+        title="Import Date Groups?"
+        description="Review what is about to happen. Date Groups are applied all at once, or not at all."
+      >
+        <div
+          className="flex flex-col gap-3 text-sm"
+          data-testid="date-group-import-confirm"
+        >
+          <ul className="list-disc pl-5">
+            <li>{createdDateGroups} new date groups will be created</li>
+            <li>{updatedDateGroups} existing date groups will be updated</li>
+          </ul>
+          {dateGroupCommitError ? (
+            <p role="alert" className="text-destructive">
+              {dateGroupCommitError}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmingDateGroup(false)}
+              disabled={committingDateGroup}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void confirmDateGroups()}
+              disabled={committingDateGroup}
+            >
+              {committingDateGroup ? "Importing…" : "Import now"}
             </Button>
           </div>
         </div>
@@ -1029,6 +1618,54 @@ function ColumnMapper({
             {IMPORT_FIELDS.map((field) => (
               <option key={field} value={field}>
                 {IMPORT_FIELD_LABELS[field]}
+              </option>
+            ))}
+          </Select>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DateGroupColumnMapper({
+  header,
+  current,
+  onChange,
+}: {
+  header: DateGroupHeaderMapping;
+  current: Record<number, DateGroupImportField | null>;
+  onChange: (mapping: Record<number, DateGroupImportField | null>) => void;
+}) {
+  return (
+    <ul
+      className="mt-2 flex flex-col gap-2"
+      aria-label="Date group column mapping"
+    >
+      {header.headerCells.map((label, index) => (
+        <li key={index} className="flex flex-wrap items-center gap-2">
+          <span className="min-w-32 font-medium">
+            {label || `Column ${index + 1}`}
+          </span>
+          <Select
+            aria-label={`Use column ${label || index + 1} as`}
+            className="w-auto"
+            value={
+              index in current
+                ? (current[index] ?? "")
+                : (header.byColumnIndex[index] ?? "")
+            }
+            onChange={(event) =>
+              onChange({
+                ...current,
+                [index]: (event.target.value ||
+                  null) as DateGroupImportField | null,
+              })
+            }
+          >
+            <option value="">Ignore</option>
+            {DATE_GROUP_IMPORT_FIELDS.map((field) => (
+              <option key={field} value={field}>
+                {DATE_GROUP_FIELD_LABELS[field]}
               </option>
             ))}
           </Select>

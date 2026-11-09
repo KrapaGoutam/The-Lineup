@@ -2509,6 +2509,7 @@ function RestaurantOperationsAppInner({
                 user={user}
                 timeZone={timeZone}
                 locationId={locationId}
+                locationName={activeContext?.locationName ?? null}
                 expectedContext={workspaceExpectation}
                 onSessionInvalid={forceSignOut}
                 demo={

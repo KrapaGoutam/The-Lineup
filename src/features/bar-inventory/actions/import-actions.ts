@@ -19,11 +19,22 @@ import { IMPORT_FIELDS, type HeaderMapping } from "../domain/import-columns";
 import type { ImportPlan } from "../domain/import-plan";
 import { planImport, prepareCommit } from "../domain/import-run";
 import { friendlyDbMessage } from "../domain/db-error";
+import type { Database } from "@/types/database.generated";
 import type {
   ImportCommitResult,
   ImportConflict,
 } from "../domain/import-stage";
 import type { ImportBatchView } from "../domain/inventory-types";
+import { parseCsv } from "@/lib/csv/read";
+import {
+  buildDateGroupImportPlan,
+  fingerprintDateGroupPlan,
+  mapDateGroupHeaders,
+  DATE_GROUP_IMPORT_FIELDS,
+  type DateGroupHeaderMapping,
+  type DateGroupImportField,
+  type DateGroupPlan,
+} from "../domain/import-date-groups";
 
 // A "use server" file may only export async functions (and types): the
 // constants below are deliberately private.
@@ -427,5 +438,215 @@ export async function listImportBatchesAction(input: {
         committedAt: row.committed_at,
       }),
     ),
+  };
+}
+
+const dateGroupRequestSchema = z.object({
+  restaurantSlug: slugSchema,
+  csv: z.string().min(1).max(MAX_CSV_CHARS),
+  mapping: z
+    .record(
+      z.string().regex(/^\d{1,2}$/),
+      z.enum(DATE_GROUP_IMPORT_FIELDS).nullable(),
+    )
+    .default({}),
+  expectedContext: z.unknown().optional(),
+});
+
+const dateGroupCommitSchema = dateGroupRequestSchema.extend({
+  filename: z.string().trim().min(1).max(255),
+  requestId: z.string().uuid(),
+  fingerprint: z.string().regex(/^[0-9a-zA-Z_-]{1,32}$/),
+  excluded: z.array(z.number().int().min(1).max(MAX_ROW_NUMBER)).max(MAX_ROWS),
+});
+
+export type DateGroupPreviewActionResult =
+  | {
+      ok: true;
+      header: DateGroupHeaderMapping;
+      plan: DateGroupPlan;
+      fingerprint: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      header: DateGroupHeaderMapping | null;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
+
+export type DateGroupCommitActionResult =
+  | {
+      ok: true;
+      result: {
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: number;
+        /** True when this was a retry of an import that had already been saved. */
+        replayed?: boolean;
+      };
+    }
+  | {
+      ok: false;
+      error: string;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
+
+export async function previewDateGroupImportAction(
+  input: z.input<typeof dateGroupRequestSchema>,
+): Promise<DateGroupPreviewActionResult> {
+  const parsed = dateGroupRequestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "That request is invalid.", header: null };
+  }
+  const supabase = await createClient();
+  const who = await caller(
+    supabase,
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
+  if (!who.ok) return { ...who, header: null };
+
+  const snapshot = await getCatalogSnapshot(who.organizationId, who.locationId);
+  if (!snapshot) {
+    return {
+      ok: false,
+      error: "Bar Inventory could not be loaded.",
+      header: null,
+    };
+  }
+
+  const csvResult = parseCsv(parsed.data.csv);
+  if (!csvResult.ok) {
+    return { ok: false, error: csvResult.error, header: null };
+  }
+
+  const mappingOverride: Record<number, DateGroupImportField | null> = {};
+  for (const [colIdx, field] of Object.entries(parsed.data.mapping)) {
+    mappingOverride[Number(colIdx)] = field;
+  }
+
+  const header = mapDateGroupHeaders(csvResult.header.cells, mappingOverride);
+  if (header.missing.length > 0) {
+    return {
+      ok: false,
+      header,
+      error: `Missing required columns: ${header.missing.join(", ")}.`,
+    };
+  }
+
+  const plan = buildDateGroupImportPlan(csvResult.rows, header, snapshot);
+  const fingerprint = fingerprintDateGroupPlan(plan);
+  return { ok: true, header, plan, fingerprint };
+}
+
+export async function commitDateGroupImportAction(
+  input: z.input<typeof dateGroupCommitSchema>,
+): Promise<DateGroupCommitActionResult> {
+  const parsed = dateGroupCommitSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "That request is invalid." };
+  }
+  const data = parsed.data;
+  const supabase = await createClient();
+  const who = await caller(supabase, data.restaurantSlug, data.expectedContext);
+  if (!who.ok) return who;
+
+  const snapshot = await getCatalogSnapshot(who.organizationId, who.locationId);
+  if (!snapshot) {
+    return { ok: false, error: "Bar Inventory could not be loaded." };
+  }
+
+  const csvResult = parseCsv(data.csv);
+  if (!csvResult.ok) {
+    return { ok: false, error: csvResult.error };
+  }
+
+  const mappingOverride: Record<number, DateGroupImportField | null> = {};
+  for (const [colIdx, field] of Object.entries(data.mapping)) {
+    mappingOverride[Number(colIdx)] = field;
+  }
+
+  const header = mapDateGroupHeaders(csvResult.header.cells, mappingOverride);
+  const plan = buildDateGroupImportPlan(csvResult.rows, header, snapshot);
+  const fingerprint = fingerprintDateGroupPlan(plan);
+
+  if (fingerprint !== data.fingerprint) {
+    return {
+      ok: false,
+      error:
+        "The inventory changed since you previewed this file. Please preview again.",
+    };
+  }
+
+  const excludedSet = new Set(data.excluded);
+  const rowsToApply = plan.rows.filter(
+    (r) =>
+      (r.action === "create" || r.action === "update") &&
+      !excludedSet.has(r.rowNumber) &&
+      r.productId !== null,
+  );
+  if (rowsToApply.length === 0) {
+    return { ok: false, error: "There are no rows to import." };
+  }
+  const rejected = plan.summary.error;
+  const skipped = plan.rows.length - rowsToApply.length - rejected;
+
+  // ONE database call = ONE transaction: every approved row is saved or none
+  // is, and the request id makes a retry (double click, dropped connection)
+  // replay the original result instead of creating duplicates. Nothing here
+  // touches authoritative stock or the stock ledger.
+  const args = {
+    p_organization_id: who.organizationId,
+    p_location_id: who.locationId,
+    p_request_id: data.requestId,
+    p_filename: data.filename,
+    p_fingerprint: fingerprint,
+    p_skipped: skipped,
+    p_rejected: rejected,
+    p_rows: rowsToApply.map((row) => ({
+      row_number: row.rowNumber,
+      action: row.action,
+      product_id: row.productId,
+      date_group_id: row.action === "update" ? row.dateGroupId : null,
+      expected_version: row.action === "update" ? row.expectedVersion : null,
+      quantity: row.quantity,
+      manufacture_date: row.manufacture?.date ?? null,
+      manufacture_precision: row.manufacture?.precision ?? null,
+      expiration_date: row.expiration?.date ?? null,
+      expiration_precision: row.expiration?.precision ?? null,
+      notes: row.notes,
+    })),
+  } satisfies {
+    [K in keyof Database["public"]["Functions"]["inventory_date_group_import_commit"]["Args"]]:
+      | Database["public"]["Functions"]["inventory_date_group_import_commit"]["Args"][K]
+      | null;
+  };
+  const { data: committed, error } = await supabase.rpc(
+    "inventory_date_group_import_commit",
+    args,
+  );
+  if (error) {
+    console.error("inventory_date_group_import_commit", error);
+    return { ok: false, error: friendlyDbMessage(error) };
+  }
+  const outcome = committed as {
+    created?: number;
+    updated?: number;
+    skipped?: number;
+    rejected?: number;
+    replayed?: boolean;
+  } | null;
+  return {
+    ok: true,
+    result: {
+      created: outcome?.created ?? 0,
+      updated: outcome?.updated ?? 0,
+      skipped: outcome?.skipped ?? skipped,
+      errors: outcome?.rejected ?? rejected,
+      replayed: outcome?.replayed === true,
+    },
   };
 }

@@ -170,6 +170,82 @@ export type CatalogState = {
   importBatches?: ImportBatchView[];
   /** Demo mode only: its order drafts, active and sent. Real mode reads them from the database. */
   orderDrafts?: OrderDraftView[];
+  storageAreas?: StorageAreaView[];
+  storageShelves?: StorageShelfView[];
+  storagePlacements?: StoragePlacementView[];
+};
+
+export const STORAGE_AREA_KINDS = [
+  "cooler",
+  "freezer",
+  "back_bar",
+  "shelf_rack",
+  "cabinet",
+  "dry_storage",
+  "other",
+] as const;
+export type StorageAreaKind = (typeof STORAGE_AREA_KINDS)[number];
+
+export const STORAGE_AREA_KIND_LABELS: Record<StorageAreaKind, string> = {
+  cooler: "Cooler",
+  freezer: "Freezer",
+  back_bar: "Back Bar",
+  shelf_rack: "Shelf Rack",
+  cabinet: "Cabinet",
+  dry_storage: "Dry Storage",
+  other: "Other",
+};
+
+export type StorageAreaView = Audited & {
+  id: string;
+  locationId: string;
+  name: string;
+  kind: StorageAreaKind;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type StorageShelfView = {
+  id: string;
+  locationId: string;
+  storageAreaId: string;
+  name: string;
+  sectionName: string | null;
+  displayOrder: number;
+  version: number;
+  updatedAt: string;
+  updatedByName: string | null;
+};
+
+/** One branch's storage layout with THAT branch's own stock rows (never mixed). */
+export type BranchStorageView = {
+  locationId: string;
+  locationName: string;
+  areas: StorageAreaView[];
+  shelves: StorageShelfView[];
+  placements: StoragePlacementView[];
+  stock: StockView[];
+};
+
+/** Read-only overview of every branch the viewer may manage. */
+export type BranchStorageOverview = {
+  branches: BranchStorageView[];
+  /** The server-verified branch the viewer is currently working in. */
+  activeLocationId: string;
+};
+
+export type StoragePlacementView = {
+  id: string;
+  locationId: string;
+  storageAreaId: string;
+  shelfId: string;
+  productId: string;
+  slotNumber: number | null;
+  slotLabel: string | null;
+  displayOrder: number;
+  version: number;
+  updatedAt: string;
+  updatedByName: string | null;
 };
 
 export type CatalogSnapshot = CatalogState & {

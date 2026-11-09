@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(108);
+select plan(110);
 
 -- ---------------------------------------------------------------------
 -- Bar Inventory V1 / BI-1 -- catalog, authorization and audit boundary.
@@ -127,9 +127,44 @@ select is(
    where n.nspname = 'public' and p.proname like 'inventory_%' and p.proname not like 'inventory_stock_%'
      and p.proname not like 'inventory_import_%'
      and p.proname not like 'inventory_order_draft_%'
+     -- The physical-storage RPCs and the transactional Date Group import are pinned by the
+     -- explicit allow-list assertions below rather than folded into this legacy count.
+     and p.proname not like 'inventory\_storage\_%'
+     and p.proname <> 'inventory_date_group_import_commit'
      and has_function_privilege('authenticated', p.oid, 'execute')
      and not has_function_privilege('anon', p.oid, 'execute')),
   19, 'BI-SEC-003 catalog and V1.1 management RPCs are executable by authenticated and not anon'
+);
+
+-- The whole public Inventory RPC surface is an explicit, reviewed allow-list. A new RPC must be
+-- added here deliberately, so it cannot become callable by accident.
+select is(
+  (select array_agg(p.proname::text order by p.proname)
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname like 'inventory\_%'
+     and has_function_privilege('authenticated', p.oid, 'execute')),
+  array[
+    'inventory_bootstrap','inventory_bulk_count','inventory_category_create','inventory_category_set_active',
+    'inventory_category_update','inventory_date_group_import_commit','inventory_date_lot_save',
+    'inventory_freshness_rule_save','inventory_import_commit','inventory_import_stage',
+    'inventory_location_authorized','inventory_order_draft_clear','inventory_order_draft_fill',
+    'inventory_order_draft_mark_sent','inventory_order_draft_open','inventory_order_draft_save',
+    'inventory_order_draft_sync','inventory_product_create','inventory_product_set_active',
+    'inventory_product_update','inventory_saved_view_delete','inventory_saved_view_save',
+    'inventory_stock_adjust','inventory_stock_set_levels','inventory_storage_area_archive',
+    'inventory_storage_area_upsert','inventory_storage_placement_delete','inventory_storage_placement_reorder',
+    'inventory_storage_placement_set','inventory_storage_shelf_delete','inventory_storage_shelf_upsert',
+    'inventory_subcategory_create','inventory_subcategory_set_active','inventory_subcategory_update',
+    'inventory_vendor_create','inventory_vendor_set_active','inventory_vendor_update'
+  ]::text[],
+  'BI-SEC-003 the authenticated-callable public Inventory RPC set is exactly the reviewed allow-list'
+);
+
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname like 'inventory\_%'
+     and (has_function_privilege('anon', p.oid, 'execute') or not p.prosecdef)),
+  0, 'BI-SEC-003 no public Inventory RPC is executable by anon and every one is SECURITY DEFINER'
 );
 
 -- 2. Role matrix --------------------------------------------------------

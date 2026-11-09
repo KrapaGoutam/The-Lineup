@@ -16,6 +16,9 @@ import {
   type ProductInput,
   type ProductView,
   type StockView,
+  type StorageAreaView,
+  type StoragePlacementView,
+  type StorageShelfView,
   type SubcategoryView,
   type VendorView,
 } from "./inventory-types";
@@ -1001,6 +1004,275 @@ function apply(
       return adjustStock(state, command, ctx);
     case "stockSetLevels":
       return setLevels(state, command, ctx);
+    case "storageAreaUpsert": {
+      const areas = state.storageAreas ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = areas.find((a) => a.id === id);
+      const name = validName("storage area name", command.name, 120);
+      if (existing) {
+        checkVersion("storage area", existing, command.expectedVersion ?? 0);
+      } else if (command.expectedVersion !== null) {
+        throw new CatalogRefusal("That storage area is not available here.");
+      }
+      if (
+        command.active &&
+        areas.some(
+          (a) =>
+            a.id !== id &&
+            a.active &&
+            a.name.toLowerCase() === name.toLowerCase(),
+        )
+      ) {
+        throw new CatalogRefusal(
+          `A storage area named "${name}" already exists at this restaurant.`,
+        );
+      }
+      const row: StorageAreaView = existing
+        ? touch(
+            existing,
+            {
+              name,
+              kind: command.kind,
+              displayOrder: command.displayOrder,
+              active: command.active,
+            },
+            ctx,
+          )
+        : {
+            id,
+            locationId: "demo-location",
+            name,
+            kind: command.kind,
+            displayOrder: command.displayOrder,
+            active: command.active,
+            version: 1,
+            updatedAt: ctx.now.toISOString(),
+            updatedByName: ctx.actorName,
+          };
+      return {
+        ...state,
+        storageAreas: existing ? replace(areas, row) : [...areas, row],
+      };
+    }
+    case "storageAreaArchive": {
+      const areas = state.storageAreas ?? [];
+      const existing = areas.find((a) => a.id === command.id);
+      if (!existing) {
+        throw new CatalogRefusal("That storage area is not available here.");
+      }
+      checkVersion("storage area", existing, command.expectedVersion);
+      if (!existing.active) return state;
+      return {
+        ...state,
+        storageAreas: replace(areas, touch(existing, { active: false }, ctx)),
+      };
+    }
+    case "storageShelfUpsert": {
+      const shelves = state.storageShelves ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = shelves.find((s) => s.id === id);
+      const name = validName("shelf name", command.name, 120);
+      const sectionName = optionalText(
+        "section name",
+        command.sectionName,
+        120,
+      );
+      const area = (state.storageAreas ?? []).find(
+        (a) => a.id === command.storageAreaId,
+      );
+      if (!area) throw new CatalogRefusal("Storage area does not exist.");
+      if (existing) {
+        checkVersion("shelf", existing, command.expectedVersion ?? 0);
+        if (existing.storageAreaId !== command.storageAreaId) {
+          throw new CatalogRefusal(
+            "A shelf cannot be moved to another storage area.",
+          );
+        }
+      } else {
+        if (command.expectedVersion !== null) {
+          throw new CatalogRefusal("That shelf is not available here.");
+        }
+        if (!area.active) {
+          throw new CatalogRefusal(
+            "Restore the archived storage area before adding shelves to it.",
+          );
+        }
+      }
+      const key = (n: string, s: string | null) =>
+        `${n.toLowerCase()}|${(s ?? "").toLowerCase()}`;
+      if (
+        shelves.some(
+          (s) =>
+            s.id !== id &&
+            s.storageAreaId === command.storageAreaId &&
+            key(s.name, s.sectionName) === key(name, sectionName),
+        )
+      ) {
+        throw new CatalogRefusal(
+          `A shelf named "${name}" already exists in this storage area.`,
+        );
+      }
+      const row: StorageShelfView = existing
+        ? touch(
+            existing,
+            { name, sectionName, displayOrder: command.displayOrder },
+            ctx,
+          )
+        : {
+            id,
+            locationId: "demo-location",
+            storageAreaId: command.storageAreaId,
+            name,
+            sectionName,
+            displayOrder: command.displayOrder,
+            version: 1,
+            updatedAt: ctx.now.toISOString(),
+            updatedByName: ctx.actorName,
+          };
+      return {
+        ...state,
+        storageShelves: existing ? replace(shelves, row) : [...shelves, row],
+      };
+    }
+    case "storageShelfDelete": {
+      const existing = (state.storageShelves ?? []).find(
+        (s) => s.id === command.id,
+      );
+      if (!existing) {
+        throw new CatalogRefusal("That shelf is not available here.");
+      }
+      checkVersion("shelf", existing, command.expectedVersion);
+      const placed = (state.storagePlacements ?? []).filter(
+        (p) => p.shelfId === command.id,
+      ).length;
+      if (placed > 0 && !command.removePlacements) {
+        throw new CatalogRefusal(
+          `This shelf still has ${placed} placed product(s). Remove them first or confirm removing them with the shelf.`,
+        );
+      }
+      return {
+        ...state,
+        storageShelves: (state.storageShelves ?? []).filter(
+          (s) => s.id !== command.id,
+        ),
+        storagePlacements: (state.storagePlacements ?? []).filter(
+          (p) => p.shelfId !== command.id,
+        ),
+      };
+    }
+    case "storagePlacementSet": {
+      const placements = state.storagePlacements ?? [];
+      const id = command.id ?? ctx.newId();
+      const existing = placements.find((p) => p.id === id);
+      const slotLabel = optionalText("slot label", command.slotLabel, 30);
+      const shelf = (state.storageShelves ?? []).find(
+        (s) => s.id === command.shelfId,
+      );
+      if (!shelf || shelf.storageAreaId !== command.storageAreaId) {
+        throw new CatalogRefusal("Shelf does not exist in this storage area.");
+      }
+      const area = (state.storageAreas ?? []).find(
+        (a) => a.id === command.storageAreaId,
+      );
+      if (!area?.active) {
+        throw new CatalogRefusal(
+          "Restore the archived storage area before placing products in it.",
+        );
+      }
+      const product = state.products.find((p) => p.id === command.productId);
+      if (!product?.active) {
+        throw new CatalogRefusal("Product does not exist or is inactive.");
+      }
+      if (existing) {
+        checkVersion("placement", existing, command.expectedVersion ?? 0);
+        if (existing.productId !== command.productId) {
+          throw new CatalogRefusal(
+            "A placement cannot be reassigned to another product.",
+          );
+        }
+      } else if (command.expectedVersion !== null) {
+        throw new CatalogRefusal("That placement is not available here.");
+      }
+      if (
+        placements.some(
+          (p) =>
+            p.id !== id &&
+            p.shelfId === command.shelfId &&
+            (p.productId === command.productId ||
+              (command.slotNumber !== null &&
+                p.slotNumber === command.slotNumber)),
+        )
+      ) {
+        throw new CatalogRefusal(
+          "That product or slot is already placed on this shelf.",
+        );
+      }
+      const row: StoragePlacementView = {
+        id,
+        locationId: "demo-location",
+        storageAreaId: command.storageAreaId,
+        shelfId: command.shelfId,
+        productId: command.productId,
+        slotNumber: command.slotNumber,
+        slotLabel,
+        displayOrder: command.displayOrder,
+        version: existing ? existing.version + 1 : 1,
+        updatedAt: ctx.now.toISOString(),
+        updatedByName: ctx.actorName,
+      };
+      return {
+        ...state,
+        storagePlacements: existing
+          ? replace(placements, row)
+          : [...placements, row],
+      };
+    }
+    case "storagePlacementDelete": {
+      const existing = (state.storagePlacements ?? []).find(
+        (p) => p.id === command.id,
+      );
+      if (!existing) {
+        throw new CatalogRefusal("That placement is not available here.");
+      }
+      checkVersion("placement", existing, command.expectedVersion);
+      return {
+        ...state,
+        storagePlacements: (state.storagePlacements ?? []).filter(
+          (p) => p.id !== command.id,
+        ),
+      };
+    }
+    case "storagePlacementReorder": {
+      const all = state.storagePlacements ?? [];
+      const onShelf = all.filter((p) => p.shelfId === command.shelfId);
+      const listed = new Set(command.placementIds);
+      if (listed.size !== command.placementIds.length) {
+        throw new CatalogRefusal("A placement was listed more than once.");
+      }
+      if (
+        !command.placementIds.every((pid) => onShelf.some((p) => p.id === pid))
+      ) {
+        throw new CatalogRefusal("Some placements are not on this shelf.");
+      }
+      const ordered = [
+        ...command.placementIds.map(
+          (pid) => onShelf.find((p) => p.id === pid)!,
+        ),
+        ...onShelf
+          .filter((p) => !listed.has(p.id))
+          .sort((a, b) => a.displayOrder - b.displayOrder),
+      ];
+      const nextOrder = new Map(ordered.map((p, i) => [p.id, i + 1]));
+      return {
+        ...state,
+        storagePlacements: all.map((p) => {
+          const order = nextOrder.get(p.id);
+          return order === undefined || order === p.displayOrder
+            ? p
+            : touch(p, { displayOrder: order }, ctx);
+        }),
+      };
+    }
   }
 }
 
@@ -1026,5 +1298,8 @@ export function emptyCatalogState(): CatalogState {
     subcategories: [],
     products: [],
     stock: [],
+    storageAreas: [],
+    storageShelves: [],
+    storagePlacements: [],
   };
 }

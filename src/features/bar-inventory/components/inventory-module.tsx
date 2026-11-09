@@ -21,14 +21,24 @@ import { readWorkbook } from "@/lib/xlsx/workbook";
 
 import {
   exportDataAction,
+  getBranchStorageOverviewAction,
   getHistoryAction,
 } from "../actions/inventory-actions";
 import {
+  commitDateGroupImportAction,
   commitImportAction,
   listImportBatchesAction,
-  readWorkbookAction,
+  previewDateGroupImportAction,
   previewImportAction,
+  readWorkbookAction,
 } from "../actions/import-actions";
+import { parseCsv } from "@/lib/csv/read";
+import {
+  buildDateGroupImportPlan,
+  fingerprintDateGroupPlan,
+  mapDateGroupHeaders,
+  type DateGroupImportField,
+} from "../domain/import-date-groups";
 import type { ImportField } from "../domain/import-columns";
 import { applyStagedPlanDemo } from "../domain/import-demo";
 import { planImport, prepareCommit } from "../domain/import-run";
@@ -101,6 +111,8 @@ type Props = {
   timeZone: string;
   /** The location whose stock changes are listened for (real mode). */
   locationId?: string | null;
+  /** That location's display name, shown on the Cooler Layout branch control. */
+  locationName?: string | null;
   onSessionInvalid?: () => void;
   expectedContext?: unknown;
 };
@@ -140,6 +152,7 @@ function ManagerInventory({
   demo,
   timeZone,
   locationId = null,
+  locationName = null,
   onSessionInvalid,
   expectedContext,
 }: Props) {
@@ -252,6 +265,39 @@ function ManagerInventory({
       expectedContext,
     };
   });
+
+  // Read-only "All authorized branches" layout for the Cooler Layout. Real mode
+  // asks the server, which proves each branch itself; demo mode has exactly one
+  // (the demo) branch. Stable identity: it reads everything through the ref.
+  const loadBranchOverview = useCallback(async () => {
+    const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+      latest.current;
+    if (demo) {
+      const state = demo.state;
+      return {
+        ok: true as const,
+        data: {
+          activeLocationId: "demo-location",
+          branches: [
+            {
+              locationId: "demo-location",
+              locationName: "Demo restaurant",
+              areas: state.storageAreas ?? [],
+              shelves: state.storageShelves ?? [],
+              placements: state.storagePlacements ?? [],
+              stock: state.stock,
+            },
+          ],
+        },
+      };
+    }
+    const result = await getBranchStorageOverviewAction({
+      restaurantSlug,
+      expectedContext,
+    });
+    if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+    return result;
+  }, []);
   const loadHistory = useCallback(
     async (days: number, productId: string | null): Promise<HistoryLoad> => {
       const {
@@ -471,6 +517,146 @@ function ManagerInventory({
         if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
         return result;
       },
+      async previewDateGroups(request) {
+        const { demo, restaurantSlug, onSessionInvalid, expectedContext } =
+          latest.current;
+        if (demo) {
+          const parsed = parseCsv(request.csv);
+          if (!parsed.ok)
+            return { ok: false, error: parsed.error, header: null };
+          const header = mapDateGroupHeaders(
+            parsed.header.cells,
+            request.mapping,
+          );
+          if (header.missing.length > 0) {
+            return {
+              ok: false,
+              header,
+              error: `Missing required columns: ${header.missing.join(", ")}.`,
+            };
+          }
+          const plan = buildDateGroupImportPlan(
+            parsed.rows,
+            header,
+            demo.state,
+          );
+          return {
+            ok: true,
+            header,
+            plan,
+            fingerprint: fingerprintDateGroupPlan(plan),
+          };
+        }
+        const result = await previewDateGroupImportAction({
+          restaurantSlug,
+          csv: request.csv,
+          mapping: request.mapping as Record<
+            string,
+            DateGroupImportField | null
+          >,
+          expectedContext,
+        });
+        if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+        return result;
+      },
+      async commitDateGroups(request) {
+        const {
+          demo,
+          restaurantSlug,
+          onSessionInvalid,
+          actorName,
+          expectedContext,
+        } = latest.current;
+        if (demo) {
+          const parsed = parseCsv(request.csv);
+          if (!parsed.ok) return { ok: false, error: parsed.error };
+          const header = mapDateGroupHeaders(
+            parsed.header.cells,
+            request.mapping,
+          );
+          const plan = buildDateGroupImportPlan(
+            parsed.rows,
+            header,
+            demo.state,
+          );
+          const fp = fingerprintDateGroupPlan(plan);
+          if (fp !== request.fingerprint) {
+            return {
+              ok: false,
+              error:
+                "The inventory changed since preview. Please preview again.",
+            };
+          }
+          const excluded = new Set(request.excluded);
+          const rows = plan.rows.filter(
+            (r) =>
+              (r.action === "create" || r.action === "update") &&
+              !excluded.has(r.rowNumber) &&
+              r.productId !== null,
+          );
+          let lots = demo.state.dateLots ? [...demo.state.dateLots] : [];
+          let created = 0;
+          let updated = 0;
+          for (const r of rows) {
+            if (r.action === "create") {
+              lots.push({
+                id: crypto.randomUUID(),
+                productId: r.productId!,
+                quantity: r.quantity,
+                manufacture: r.manufacture,
+                expiration: r.expiration,
+                notes: r.notes,
+                active: true,
+                version: 1,
+                updatedAt: new Date().toISOString(),
+                updatedByName: actorName,
+              });
+              created++;
+            } else if (r.action === "update") {
+              lots = lots.map((l) =>
+                l.id === r.dateGroupId
+                  ? {
+                      ...l,
+                      quantity: r.quantity,
+                      manufacture: r.manufacture,
+                      expiration: r.expiration,
+                      notes: r.notes,
+                      version: l.version + 1,
+                      updatedAt: new Date().toISOString(),
+                      updatedByName: actorName,
+                    }
+                  : l,
+              );
+              updated++;
+            }
+          }
+          demo.setState({ ...demo.state, dateLots: lots });
+          return {
+            ok: true,
+            result: {
+              created,
+              updated,
+              skipped: plan.summary.skip + request.excluded.length,
+              errors: plan.summary.error,
+            },
+          };
+        }
+        const result = await commitDateGroupImportAction({
+          restaurantSlug,
+          csv: request.csv,
+          filename: request.filename,
+          mapping: request.mapping as Record<
+            string,
+            DateGroupImportField | null
+          >,
+          requestId: request.requestId,
+          fingerprint: request.fingerprint,
+          excluded: request.excluded,
+          expectedContext,
+        });
+        if (!result.ok && result.sessionInvalid) onSessionInvalid?.();
+        return result;
+      },
     }),
     [],
   );
@@ -610,6 +796,9 @@ function ManagerInventory({
           <InventoryView
             profileId={user.profileId}
             snapshot={controller.snapshot}
+            locationId={locationId}
+            locationName={locationName}
+            loadBranchOverview={loadBranchOverview}
             run={controller.run}
             restaurantSlug={restaurantSlug}
             timeZone={timeZone}
