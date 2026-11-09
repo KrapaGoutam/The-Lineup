@@ -47,12 +47,10 @@ Status: IN PROGRESS — Phase E5 (Verification & PR Handoff)
 - [x] E6-A.3 Storage RPCs hardened: versions/PT409, audit, duplicate guards, shelf delete requires explicit removal, archived-area recovery.
 - [x] E6-A.4 Real read-only "All authorized branches" (replaces the fake "All Locations" label); per-branch stock never blended.
 - [x] E6-A.5 Tests: pgTAP 0033/0035/0071/0072; real-JWT 29/29 (local GoTrue); Vitest incl. exhaustive fraction proof; Playwright 21/21 cooler + regression sweep.
-- [ ] E6-A.6 Final consolidated gate: `npm run check`, one full Vitest run, production build, secret/path scan, push, exact-head CI green.
-- [ ] E6-B DEV: encrypted ledger-81 backup, isolated restore, populated rehearsal, controlled `db push` (81 -> 82), hosted verification.
+- [x] E6-A.6 Final gate: check, full Vitest (3517 tests), webpack build, path/secret scan, push, exact-head CI green (277efd6).
+- [x] E6-B DEV: encrypted ledger-81 backup, isolated restore, populated rehearsal, controlled `db push` (81 -> 82), hosted verification.
 - [ ] E6-C Merge PR #316 normally into `development`, update #253, final report.
 
 ## Current State & Next Step
 
-All code and tests for E6-A are in the working tree (uncommitted until the final gate). Next: run the final gate,
-commit explicit paths (never `git add -A`; repo is public), push the feature branch, wait for exact-head CI.
-Do NOT apply anything to hosted DEV before CI is green and the encrypted backup + restore rehearsal pass.
+DEV is at ledger 82. Docs commit pushed; after its CI is green, merge PR #316 with a normal merge commit, then update #253 (do not close).
