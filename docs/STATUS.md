@@ -1,8 +1,18 @@
 # Project Status & Milestone Tracker
 
-Execution checkpoint (2026-11-07): PR #305 is merged into development as ad878715b84fcdc3f36414b882d52207fb4f139e; enforcement remains STAGED. PR #306 is reconciled and validated locally, with push BLOCKED: live Preview uses hosted DEV, which lacks board_location_roster, and no password/SSO containment is configured. No #306 push/merge, hosted migration/configuration/activation or main/Production change. V2-005.002 NOT STARTED. [Integration handoff](v2.0/features/005-module-location-scoping/001-table-allocation/INTEGRATION_HANDOFF.md).
+Execution checkpoint (2026-11-09): Feature V2-006 Attendance V2 Batch B browser acceptance, reconciliation, and verification are COMPLETE locally on `feature/v2-006-attendance-v2` (issue #254). Real Playwright browser acceptance passed across desktop, tablet, and mobile (39/39 tests). Full local Vitest (3,663/3,663) and pgTAP (778 assertions) pass. Local branch based on `origin/development: e796eee3`. No remote push (prevents unmigrated hosted preview failures), no PR, no merge into development, hosted DEV untouched. Batch C readiness gate is clear pending owner decisions on Q1–Q8. [Attendance V2 README](v2.0/features/006-attendance-v2/README.md).
 
 ## The Lineup V2.0
+
+### V2-006 Attendance V2 — Batch B Browser Acceptance & Readiness Gate (UNMERGED / LOCAL)
+
+Issue [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254) | Parent [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248) | Milestone #8. Local feature branch `feature/v2-006-attendance-v2` based on `origin/development: e796eee3`.
+
+- **Batch A**: Verified and corrected in place (14 audit findings resolved, break-pay facts stored, pgTAP 0073 108/108 passing).
+- **Batch B**: Manager corrections (.004) and Unified Attendance Reporting (.005) verified with pgTAP 0074 (66/66), full Vitest (3,663/3,663), and full real-browser Playwright acceptance (39/39 passing across desktop 1280×800, tablet 820×1180, and mobile 390×844 viewports).
+- **Authorization & Data Integrity**: Verified manager correction workflows, read-only correction history audit trails, all 4 reporting modes (`INTERNAL_THE_LINEUP`, `EXTERNAL`, `DISABLED`, `UNCONFIGURED`), staff self-service boundaries, cross-location manager isolation, revoked manager refusal, overall admin cross-org access without tenant membership (`src/lib/current-user.ts`), optimistic concurrency control (`P0004`), ledger immutability, and complete absence of mutations to payroll or tips tables.
+- **Batch C Gate**: Batch C not started. Financial and external payroll/tip integration blocked pending owner decisions on policy questions Q1–Q8.
+- **Repository Safety**: Branch unpushed, no PR created, no merge to development, no changes to hosted DEV or Production.
 
 V2-004.002 is complete (PR #301, merge `6000e6c`). V2-004.003 Navigation Enforcement acceptance is complete; delivery is PR #303 ([#302](https://github.com/KrapaGoutam/The-Lineup/issues/302)); [evidence](v2.0/features/004-location-module-configuration/003-navigation-enforcement/EVIDENCE.md). V2-004.004 Backend Enforcement ([#304](https://github.com/KrapaGoutam/The-Lineup/issues/304)) is IMPLEMENTED - ACTIVATION BLOCKED: guards, database seams and a staged-by-default switch exist and are tested, but enforcement is not active anywhere because hosted DEV has 44 active locations with no module rows and no owner-approved values ([status](v2.0/features/004-location-module-configuration/004-backend-enforcement/STATUS.md)). Main and Production untouched. V2-004 remains open.
 

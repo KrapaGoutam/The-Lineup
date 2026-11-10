@@ -27,8 +27,8 @@ Status: BATCH A VERIFIED + CORRECTED — BATCH B DELIVERED (UNMERGED) — BATCH 
 - [x] V2-006.005 Unified Attendance Reporting: source selection, native report, tests; Batch A module-guard defect fixed (`76099f9`).
 - [x] Focused regression: 15 pgTAP files / 778 assertions on a freshly reset DB; vitest 765+; tsc / ESLint / Prettier clean; `next build --webpack` OK.
 - [x] Docs, receipts, Batch C handoff (README §5–§12).
-- [ ] Browser/Playwright verification of the new screens (not done; component-tested in jsdom only).
+- [x] Browser/Playwright verification of the new screens (39/39 passing across desktop, tablet, and mobile viewports in real browser via `tests/local/ui/attendance-location.local.spec.ts`).
 
 ## Current State & Next Step
 
-Batch B is complete and committed locally. Stop here. Next (needs the owner): answer README §11 decisions Q1/Q4/Q6 (and Q8 for hosted rollout), then start Batch C per README §12.
+Batch B browser acceptance, reconciliation, and verification are 100% complete and verified locally. Stop here. Next (needs the owner): answer README §11 decisions Q1/Q4/Q6 (and Q8 for hosted rollout), then start Batch C per README §12.

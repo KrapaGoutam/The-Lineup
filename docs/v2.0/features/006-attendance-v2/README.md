@@ -4,7 +4,7 @@ GitHub Issue: [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 Branch: `feature/v2-006-attendance-v2`  
-Status: `IN PROGRESS — BATCH A VERIFIED + CORRECTED; BATCH B DELIVERED (UNMERGED); BATCH C NOT STARTED`
+Status: `IN PROGRESS — BATCH A VERIFIED + CORRECTED; BATCH B VERIFIED VIA REAL-BROWSER ACCEPTANCE (UNMERGED); BATCH C NOT STARTED`
 
 ---
 
@@ -187,8 +187,29 @@ Full replay from scratch (`supabase db reset`, local disposable stack): 84 migra
 
 - pgTAP `0073` 108/108 and `0074` 66/66 (real `authenticated` JWT subjects). Targeted regression on a freshly reset DB: `0001 0002 0009 0010 0021 0050 0055 0059 0061 0062 0063 0066 0067 0073 0074` — **778 assertions, all pass** (catalog/RLS invariants, module enforcement, identity links, payroll, tips, lifecycle).
 - Parallel real-session concurrency: clock-ins, break races, clock-out vs break-end, and 6-way simultaneous corrections (see §4 and §5.1).
-- Vitest: attendance, locations, modules, payroll, tips, context, schedules, components — 765+ tests, including the repo-wide `enforcement-coverage` invariant. `tsc --noEmit`, ESLint (`--max-warnings=0`) and Prettier clean. `next build --webpack` (CI=1) succeeds. (Turbopack cannot resolve the junctioned `node_modules` of a worktree — an environment trap, not a code issue.)
-- **Not performed**: browser/Playwright verification of the new screens (component-tested in jsdom only), hosted DEV, and full-repository database and E2E regression (deferred to Batch C + final review per plan).
+- Vitest: 271 test files, 3,663/3,663 tests passed across full suite (including attendance, locations, modules, payroll, tips, context, schedules, components, and repo-wide `enforcement-coverage` invariant).
+- Code quality & check gates: `npm run check` (`format:check`, `lint` with `--max-warnings=0`, `typecheck` with `next typegen && tsc --noEmit`) clean with 0 errors and 0 warnings. `CI=1 npx next build --webpack` succeeds cleanly.
+- **Playwright Real-Browser Acceptance** (`tests/local/ui/attendance-location.local.spec.ts` via `playwright.attendance-local.config.ts`):
+  - Executed against local disposable Supabase (ports 54321/54322) and local Next.js server (port 3137).
+  - **39 / 39 tests PASSED** across three viewports (13 per viewport):
+    - Desktop (1280×800): 13/13 PASSED
+    - Tablet (820×1180): 13/13 PASSED
+    - Mobile (390×844): 13/13 PASSED
+  - Verified test matrix:
+    1. Manager correction workflow: review before/after, mandatory reason validation, immutable ledger append, audit entry inspection, version incrementation, and "Corrected ×1" badge rendering.
+    2. Read-only correction history audit trail dialog for managers.
+    3. Location report rendering with service dates, formatted timestamps in location timezone, separated gross/break/payable columns, and unresolved break flags.
+    4. External attendance source mode rendering with "Source: External" badge and Neon integration preserved.
+    5. Disabled attendance source mode rendering with "Source: Attendance off" and punch actions disabled.
+    6. Unconfigured legacy attendance mode rendering with "Source: External (not configured)".
+    7. Staff self-service attendance view restricted to own records with punch actions and no manager correction controls.
+    8. Staff forbidden from viewing other employees' attendance or accessing manager correction dialogs.
+    9. Cross-location manager restricted from viewing or correcting unassigned location records.
+    10. Revoked manager session immediately refused access to location attendance records.
+    11. Overall organization administrator able to inspect and manage location attendance across organizations without local tenant membership row (`src/lib/current-user.ts` overall role resolution).
+    12. Optimistic concurrency control rejecting stale concurrent writes with `P0004` version conflict.
+    13. Ledger immutability and financial non-mutation verification: original punch events untouched, zero ledger deletions/updates, and zero payroll/tips table mutations.
+- **Deferred**: Hosted DEV rollout (migrations 83 and 84 pending owner authorization per Q8) and full production E2E suites (deferred to post-Batch C).
 
 ## 10. Additional Batch A finding discovered during Batch B regression
 

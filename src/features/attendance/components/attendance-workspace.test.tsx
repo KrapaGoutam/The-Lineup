@@ -294,7 +294,8 @@ describe("who sees which actions", () => {
     renderWorkspace();
     expect(await screen.findByLabelText("Employee")).toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: /Correct Ada Lovelace/ }).length,
+      (await screen.findAllByRole("button", { name: /Correct Ada Lovelace/ }))
+        .length,
     ).toBeGreaterThan(0);
   });
 
