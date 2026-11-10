@@ -175,3 +175,62 @@ export async function listSessionBreaks(
     return { ok: false, error: "Unable to load breaks." };
   }
 }
+
+export interface AttendanceEmployeeOption {
+  readonly profileId: string;
+  readonly displayName: string;
+}
+
+/**
+ * Lists active employees assigned to this location for manager selection.
+ * Queries location_memberships (active=true) and retrieves display names from profiles.
+ */
+export async function listLocationEmployees(
+  supabase: SupabaseClient<Database>,
+  locationId: string,
+): Promise<
+  | { readonly ok: true; readonly employees: AttendanceEmployeeOption[] }
+  | { readonly ok: false; readonly error: string }
+> {
+  try {
+    const { data: assignments, error: assignErr } = await supabase
+      .from("location_memberships")
+      .select("profile_id")
+      .eq("location_id", locationId)
+      .eq("active", true);
+
+    if (assignErr) {
+      console.error("listLocationEmployees assignErr", assignErr);
+      return { ok: false, error: "Unable to load location employees." };
+    }
+
+    const profileIds = [
+      ...new Set((assignments ?? []).map((a) => a.profile_id).filter(Boolean)),
+    ];
+    if (profileIds.length === 0) {
+      return { ok: true, employees: [] };
+    }
+
+    const { data: profiles, error: profErr } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", profileIds);
+
+    if (profErr) {
+      console.error("listLocationEmployees profErr", profErr);
+      return { ok: false, error: "Unable to load location employees." };
+    }
+
+    const employees = (profiles ?? [])
+      .map((p) => ({
+        profileId: p.id,
+        displayName: p.display_name?.trim() || "Employee",
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    return { ok: true, employees };
+  } catch (err: unknown) {
+    console.error("listLocationEmployees unexpected error", err);
+    return { ok: false, error: "Unable to load location employees." };
+  }
+}

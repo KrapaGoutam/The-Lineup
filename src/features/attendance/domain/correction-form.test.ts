@@ -47,10 +47,9 @@ describe("local time conversion uses the location's zone", () => {
     );
   });
 
-  it("resolves the repeated 1:30 AM at fall back to its first occurrence", () => {
-    expect(localInputToInstant("2026-11-01T01:30", TZ)).toBe(
-      "2026-11-01T06:30:00.000Z",
-    );
+  it("rejects repeated and nonexistent daylight-saving wall times", () => {
+    expect(localInputToInstant("2026-11-01T01:30", TZ)).toBeNull();
+    expect(localInputToInstant("2026-03-08T02:30", TZ)).toBeNull();
   });
 
   it("rejects incomplete text", () => {

@@ -1,14 +1,20 @@
-# Inventory Item Sheet Dates tab — IN PROGRESS
+# Attendance manual entry and corrections — IN PROGRESS
 
-Branch `feature/inventory-item-sheet-dates`; separate worktree `.tmp/inventory-item-sheet-dates`; base `origin/development` `d09b6c4600e46653710a8e92a507415af78c5d77`. Attendance branch remains isolated and hosted authorization gated. Spec: `docs/features/inventory-item-sheet-dates-tab.md`. No database or hosted work.
+Branch `feature/attendance-manual-entry`; isolated worktree `.tmp/attendance-manual-entry`; base `origin/development` `d09b6c4600e46653710a8e92a507415af78c5d77`. Root checkout and other worktrees are preserved. Source feature: `docs/features/attendance-manual-entry.md`. Private handoff: `.tmp/attendance-manual-entry-handoff/`.
 
-- [x] Verify PR #316's existing Item Sheet, Dates sheet and Cooler Layout on current development; read project instructions and create the scoped approved spec.
-- [x] Implement one Item Sheet with Counts, Levels, Dates and History tabs, preserving the date command and location contract.
-- [x] Run targeted component and browser checks for list/cooler entry, tab keyboard/touch navigation, Dates save and responsive layouts.
-- [x] Run final check/build, review tenant/accessibility/scope diff and commit one local feature checkpoint.
-- [ ] Push one Inventory PR to development, require exact-head CI/review and normal merge. Keep main, Production, Neon, native financial activation, enforcement and V2-007 unchanged.
+- [x] Verify development tip, read project instructions, V2-006 closeout, and inspect Attendance contracts.
+- [x] Write capability inventory and bounded feature spec with data, auth, UI, risks and tests.
+- [x] Implement one vertical Attendance slice: audited explicit-time creation, strict local time, manager action and reviewed single/bulk UI.
+- [x] Run targeted unit, database, real-browser and concurrency checks.
+- [x] Run consolidated `npm run check`, `npm run test`, `npm run build`; inspect security, tenant scope and accessibility diff.
+- [ ] Commit; prepare hosted DEV recovery/compatibility package. Hosted writes require new owner approval.
+- [ ] Push and open one Attendance PR when binding and gates allow; merge only after exact-head CI and required review.
+
+Native financial activation OFF; backend enforcement STAGED. No Production, main, Neon, Kiosk or V2-007 work. Inventory starts on its own branch from updated development only after Attendance integration.
 
 ---
+
+## Completed V2-006 Closeout Archive (Merged in PR #321)
 
 # The Lineup V2.0 — V2-006 Attendance V2
 
