@@ -1,38 +1,61 @@
-# The Lineup V2.0 — V2-005 Stage C7 Final Smoke Correction & Owner Closeout Gate
+# The Lineup V2.0 — V2-006 Attendance V2 (Batch A: Foundation)
 
-Parent issue: #253 | Related: #252, #304 | Program: #248 | Milestone: #8 (OPEN)
-Branch: `docs/v2-005-c6-hosted-pilot-acceptance` | Target: `development` | Worktree: `.tmp/v2-005-c6-pilot`
-Status: IN PROGRESS — READY FOR PR #318 UPDATE & MERGE
+Parent issue: #254 | Program: #248 | Milestone: #8 (OPEN)
+Branch: `feature/v2-006-attendance-v2` | Base: `origin/development` (`e796eee3`) | Worktree: `.tmp/v2-006-attendance`
+Status: BATCH A COMPLETE — READY FOR BATCH B
+
+## Scope — Batch A Only
+
+- **V2-006.001**: Per-Location Attendance Mode Configuration (`EXTERNAL`, `INTERNAL_THE_LINEUP`, `DISABLED`)
+- **V2-006.002**: Native Internal Attendance Data Model (`attendance_sessions`, `attendance_events`, `attendance_breaks`)
+- **V2-006.003**: Clock Integrity Rules (Duplicate prevention, state transitions, concurrency safety, idempotency, timezone rules)
+
+Batch B (.004, .005) and Batch C (.006, .007) are NOT in scope for this batch.
+
+## Invariants & Guardrails
+
+- `main` remains untouched.
+- `development` remains untouched until consolidated PR after all batches.
+- Production: NO CONTACT / NO WRITE.
+- Hosted DEV: No unapproved migration application or backfill.
+- Existing Neon attendance: Preserved 100%.
+- Single feature branch across all three batches: `feature/v2-006-attendance-v2`.
 
 ## Checkpoints
 
-- [x] Stage C6-A: Baseline and Preflight Verification
-  - GitHub: `origin/development` @ `1d5bb986`, `origin/main` @ `5e5b7747` (unchanged), PRs #316 and #317 merged.
-  - Hosted Preview: `dpl_DQm4UB7vUQ3BX3CMpP3HJ7pTVohU` READY, DEV ref verified, 0 Production refs.
-  - Hosted DEV: Ledger 82, enforcement STAGED, 0 configs, 44 active locations.
-  - Baseline counts: 148 products, 236 stock (32 at DEV Location), 123 adjustments, 47 date lots, 32 recipes, 0 storage records.
-  - Operator: TestOwner (`b3add6a2-fd5f-45ac-93bc-0fbbd55b9e2f`) authenticated with legitimate session.
-- [x] Stage C6-B: Apply P-1 Pilot Configuration
-  - Owner explicit P-1 approval granted.
-  - Inserted `(location_id: a5d46f61-cf64-4b96-8d9f-41d6812d561c, module_key: bar_inventory, is_enabled: true)`.
-  - Actor attribution verified (`updated_by: b3add6a2-fd5f-45ac-93bc-0fbbd55b9e2f`).
-  - Total `location_module_configs` = 1 (other 8 modules and 43 other locations remain unconfigured).
-  - Enforcement remains STAGED.
-- [x] Stage C7-A: Smoke Evidence Correction & Strengthened Assertions (Playwright 4/4 PASS in 16.3s)
-  - C1: Navigation & Availability: Bar Inventory visible, active location DEV Location, unconfigured modules hidden, Settings accessible (PASS 983ms).
-  - C2: Inventory Table: Search presence, matching display, exclusion on nonmatching queries, and restoration on clear; Name column descending (header toggle) and ascending (Sort order preset) sorting verified against visible table values with `Intl.Collator`; non-mutating row selection (individual, selection status counter, indeterminate header checkbox, select all visible, clear selection) verified (PASS 1.9s).
-  - C3: Cooler Layout: View toggle, branch selector "DEV Location", storage filter, Unassigned Storage, empty state guidance ("No storage areas defined"), Manage Unassigned view & read-only ItemSheet inspection verified without saving data (PASS 798ms).
-  - C4: Responsive Viewports: Desktop (1280×800), Tablet (820×1180), Mobile (390×844) zero overflow in Chromium test browser; native WebKit & Android deferred (PASS 435ms).
-- [x] Stage C7-B: Documentation Correction
-  - Qualified data preservation claims: "All relevant table counts unchanged across all 10 tables; no stock-changing actions performed."
-  - Formally recorded three accepted P2 items (P2-4 Realtime, P2-5 CSV import fraction parsing, P2-6 Item sheet branch scope labeling).
-  - Clarified that closing Issue #253 does NOT close Milestone #8 (Milestone #8 contains V2-006, V2-007, V2-008, V2-009).
-  - Formally marked multi-branch hosted acceptance and write-dependent hosted acceptance as DEFERRED.
-- [ ] Stage C7-C: Commit and push corrected head to PR #318.
-- [ ] Stage C7-D: Verify required GitHub CI checks pass on PR #318.
-- [ ] Stage C7-E: Merge PR #318 to `development`.
-- [ ] Stage C7-F: Prepare Issue #253 Owner Sign-off summary.
-
-## Current State & Next Step
-
-Evidence corrections and Playwright assertions complete (4/4 PASS). Ready to run formatting/lint, push corrected commit to PR #318, await CI, and merge to `development`.
+- [x] Preflight: Verify Git baseline, worktrees, issue status, and create `.tmp/v2-006-attendance`.
+- [x] Documentation discrepancy review: Confirm V2-005 closeout commit `b4056738` exists locally at `.tmp/v2-005-c6-pilot` and is preserved.
+- [x] Subfeature 1: Per-Location Attendance Mode Configuration (V2-006.001)
+  - [x] Migration: `public.attendance_mode` enum, add column to `public.locations` (nullable, no silent default).
+  - [x] Authority helper (`private.attendance_can_manage_location`) and audit logging on mode changes.
+  - [x] Optimistic concurrency control for mode updates (`p_expected_updated_at` / `P0004`).
+  - [x] Domain types, reader, and validation (`attendance-mode.ts`).
+  - [x] Server actions for location attendance mode (`attendance-mode-actions.ts`).
+- [x] Subfeature 2: Native Attendance Data Model (V2-006.002)
+  - [x] Migration: `attendance_sessions`, `attendance_events`, `attendance_breaks` tables.
+  - [x] Composite tenant foreign keys `(location_id, organization_id) references locations(id, organization_id)`.
+  - [x] Actor attribution to `memberships` (`(organization_id, profile_id)`).
+  - [x] Append-only immutability trigger for `attendance_events` (`attendance_events_immutable_trigger`).
+  - [x] Partial unique indexes for atomic concurrency (one open session per employee, one active break per session).
+  - [x] RLS policies and grants (fail-closed, no direct client table write).
+  - [x] Local typegen update (`src/types/database.generated.ts`).
+- [x] Subfeature 3: Clock Integrity Rules (V2-006.003)
+  - [x] Atomic database functions (`attendance_clock_in`, `attendance_clock_out`, `attendance_break_start`, `attendance_break_end`).
+  - [x] Strict state machine enforcement:
+    - [x] Reject duplicate clock-in for open session (`23505`).
+    - [x] Reject clock-out without open session (`P0002`).
+    - [x] Reject invalid break transitions (`break_start` when already on break or not clocked in; `break_end` when not on break).
+    - [x] Auto-close break on clock-out if still open.
+  - [x] Location assignment & membership verification.
+  - [x] Idempotency key tracking on events (`attendance_events_idempotency_idx`).
+  - [x] Timezone integrity: UTC storage (`timestamptz`), location-local `service_date` assignment, elapsed duration arithmetic.
+  - [x] Server actions and domain layer for native clock operations (`native-clock-actions.ts`, `native-attendance-data.ts`, `clock-integrity.ts`).
+- [x] Verification & Tests
+  - [x] pgTAP tests in `supabase/tests/database/0073_attendance_v2_foundation.test.sql` (41/41 PASS).
+  - [x] Vitest unit tests for domain, actions, clock integrity, and timezone handling (12 suites, 94 tests PASS).
+  - [x] Location regression tests (17 suites, 245 tests PASS).
+  - [x] Quality gates: `npm run check` (Prettier, ESLint, TypeScript all PASS), `next build --webpack` (PASS).
+- [x] Documentation & Batch B Handoff
+  - [x] Update `docs/v2.0/features/006-attendance-v2/README.md` and `STATUS.md`.
+  - [x] Update `tasks/current-task.md`.
+  - [x] Halt without implementing Batch B or merging. Ready for Batch B execution.

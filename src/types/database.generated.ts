@@ -34,6 +34,192 @@ export type Database = {
   };
   public: {
     Tables: {
+      attendance_breaks: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          end_time: string | null;
+          id: number;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          session_id: string;
+          start_time: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          end_time?: string | null;
+          id?: never;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          session_id: string;
+          start_time?: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          end_time?: string | null;
+          id?: never;
+          location_id?: string;
+          organization_id?: string;
+          profile_id?: string;
+          session_id?: string;
+          start_time?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_breaks_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "attendance_breaks_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "attendance_breaks_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_breaks_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_breaks_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "attendance_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      attendance_events: {
+        Row: {
+          actor_profile_id: string;
+          correction_reason: string | null;
+          created_at: string;
+          event_time: string;
+          event_type: Database["public"]["Enums"]["attendance_event_type"];
+          id: number;
+          idempotency_key: string | null;
+          is_manager_correction: boolean;
+          location_id: string;
+          metadata: Json;
+          organization_id: string;
+          profile_id: string;
+          reverses_event_id: number | null;
+          service_date: string;
+          session_id: string;
+          source: Database["public"]["Enums"]["attendance_event_source"];
+        };
+        Insert: {
+          actor_profile_id: string;
+          correction_reason?: string | null;
+          created_at?: string;
+          event_time?: string;
+          event_type: Database["public"]["Enums"]["attendance_event_type"];
+          id?: never;
+          idempotency_key?: string | null;
+          is_manager_correction?: boolean;
+          location_id: string;
+          metadata?: Json;
+          organization_id: string;
+          profile_id: string;
+          reverses_event_id?: number | null;
+          service_date: string;
+          session_id: string;
+          source?: Database["public"]["Enums"]["attendance_event_source"];
+        };
+        Update: {
+          actor_profile_id?: string;
+          correction_reason?: string | null;
+          created_at?: string;
+          event_time?: string;
+          event_type?: Database["public"]["Enums"]["attendance_event_type"];
+          id?: never;
+          idempotency_key?: string | null;
+          is_manager_correction?: boolean;
+          location_id?: string;
+          metadata?: Json;
+          organization_id?: string;
+          profile_id?: string;
+          reverses_event_id?: number | null;
+          service_date?: string;
+          session_id?: string;
+          source?: Database["public"]["Enums"]["attendance_event_source"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_events_actor_membership_fk";
+            columns: ["organization_id", "actor_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "attendance_events_actor_profile_id_fkey";
+            columns: ["actor_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_events_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "attendance_events_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "attendance_events_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_events_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_events_reverses_event_id_fkey";
+            columns: ["reverses_event_id"];
+            isOneToOne: false;
+            referencedRelation: "attendance_events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_events_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "attendance_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attendance_identity_links: {
         Row: {
           id: number;
@@ -80,6 +266,100 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "memberships";
             referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
+      attendance_sessions: {
+        Row: {
+          clock_in_at: string;
+          clock_out_at: string | null;
+          created_at: string;
+          created_by: string;
+          id: string;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          service_date: string;
+          status: Database["public"]["Enums"]["attendance_session_status"];
+          total_break_seconds: number;
+          total_worked_seconds: number | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          clock_in_at?: string;
+          clock_out_at?: string | null;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          service_date: string;
+          status?: Database["public"]["Enums"]["attendance_session_status"];
+          total_break_seconds?: number;
+          total_worked_seconds?: number | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          clock_in_at?: string;
+          clock_out_at?: string | null;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          location_id?: string;
+          organization_id?: string;
+          profile_id?: string;
+          service_date?: string;
+          status?: Database["public"]["Enums"]["attendance_session_status"];
+          total_break_seconds?: number;
+          total_worked_seconds?: number | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_sessions_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -2537,6 +2817,9 @@ export type Database = {
           active: boolean;
           address: Json;
           archived_at: string | null;
+          attendance_mode:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
           closing_local: string;
           cover_weight: number;
           created_at: string;
@@ -2551,6 +2834,9 @@ export type Database = {
           active?: boolean;
           address?: Json;
           archived_at?: string | null;
+          attendance_mode?:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
           closing_local?: string;
           cover_weight?: number;
           created_at?: string;
@@ -2565,6 +2851,9 @@ export type Database = {
           active?: boolean;
           address?: Json;
           archived_at?: string | null;
+          attendance_mode?:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
           closing_local?: string;
           cover_weight?: number;
           created_at?: string;
@@ -5133,6 +5422,40 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      attendance_break_end: {
+        Args: {
+          p_idempotency_key?: string;
+          p_location_id: string;
+          p_profile_id?: string;
+        };
+        Returns: Json;
+      };
+      attendance_break_start: {
+        Args: {
+          p_idempotency_key?: string;
+          p_location_id: string;
+          p_profile_id?: string;
+        };
+        Returns: Json;
+      };
+      attendance_clock_in: {
+        Args: {
+          p_idempotency_key?: string;
+          p_location_id: string;
+          p_notes?: string;
+          p_profile_id?: string;
+        };
+        Returns: Json;
+      };
+      attendance_clock_out: {
+        Args: {
+          p_idempotency_key?: string;
+          p_location_id: string;
+          p_notes?: string;
+          p_profile_id?: string;
+        };
+        Returns: Json;
+      };
       bar_recipe_category_reorder: {
         Args: { p_ordered_ids: string[]; p_organization_id: string };
         Returns: Json;
@@ -5802,6 +6125,9 @@ export type Database = {
           active: boolean;
           address: Json;
           archived_at: string | null;
+          attendance_mode:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
           closing_local: string;
           cover_weight: number;
           created_at: string;
@@ -5863,6 +6189,37 @@ export type Database = {
           profile_id: string;
           roles: Database["public"]["Enums"]["app_role"][];
         }[];
+      };
+      set_location_attendance_mode: {
+        Args: {
+          p_expected_updated_at?: string;
+          p_location_id: string;
+          p_mode: Database["public"]["Enums"]["attendance_mode"];
+          p_reason?: string;
+        };
+        Returns: {
+          active: boolean;
+          address: Json;
+          archived_at: string | null;
+          attendance_mode:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
+          closing_local: string;
+          cover_weight: number;
+          created_at: string;
+          id: string;
+          name: string;
+          opening_local: string;
+          organization_id: string;
+          time_zone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "locations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       task_assign: {
         Args: {
@@ -6068,6 +6425,9 @@ export type Database = {
           active: boolean;
           address: Json;
           archived_at: string | null;
+          attendance_mode:
+            | Database["public"]["Enums"]["attendance_mode"]
+            | null;
           closing_local: string;
           cover_weight: number;
           created_at: string;
@@ -6098,6 +6458,19 @@ export type Database = {
         | "shift_manager"
         | "host"
         | "server";
+      attendance_event_source: "web" | "kiosk" | "manager" | "system";
+      attendance_event_type:
+        | "clock_in"
+        | "clock_out"
+        | "break_start"
+        | "break_end"
+        | "manager_edit";
+      attendance_mode: "external" | "internal_the_lineup" | "disabled";
+      attendance_session_status:
+        | "active"
+        | "on_break"
+        | "completed"
+        | "auto_clocked_out";
       board_event_type:
         | "assign"
         | "add_column"
@@ -6317,6 +6690,21 @@ export const Constants = {
     Enums: {
       access_request_status: ["pending", "approved", "declined"],
       app_role: ["owner", "general_manager", "shift_manager", "host", "server"],
+      attendance_event_source: ["web", "kiosk", "manager", "system"],
+      attendance_event_type: [
+        "clock_in",
+        "clock_out",
+        "break_start",
+        "break_end",
+        "manager_edit",
+      ],
+      attendance_mode: ["external", "internal_the_lineup", "disabled"],
+      attendance_session_status: [
+        "active",
+        "on_break",
+        "completed",
+        "auto_clocked_out",
+      ],
       board_event_type: [
         "assign",
         "add_column",

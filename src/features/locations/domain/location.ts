@@ -51,6 +51,15 @@ export interface Location {
    * Optional for backward compatibility; use `getLocationLifecycleStatus`.
    */
   readonly archivedAt?: string | null;
+  /**
+   * V2-006.001: Per-location attendance mode configuration.
+   * Null if unconfigured (legacy/unmigrated).
+   */
+  readonly attendanceMode?:
+    | "external"
+    | "internal_the_lineup"
+    | "disabled"
+    | null;
   readonly openingLocal: string;
   readonly closingLocal: string;
   readonly createdAt: string;
@@ -361,6 +370,16 @@ export function mapLocationRow(row: DatabaseLocationRow): Location {
     coverWeight: Number(row.cover_weight),
     active: Boolean(row.active),
     archivedAt: (row as { archived_at?: string | null }).archived_at ?? null,
+    attendanceMode:
+      (
+        row as {
+          attendance_mode?:
+            | "external"
+            | "internal_the_lineup"
+            | "disabled"
+            | null;
+        }
+      ).attendance_mode ?? null,
     openingLocal: row.opening_local,
     closingLocal: row.closing_local,
     createdAt: row.created_at,
