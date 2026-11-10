@@ -69,9 +69,14 @@ On `payroll_periods` and `payroll_rates`:
 - add `profile_id uuid null`, with composite FK `(profile_id, organization_id)` →
   `memberships (profile_id, organization_id)`;
 - relax `neon_user_id` to nullable;
-- **exactly-one-identity check**:
-  `(attendance_source = 'external_neon' and neon_user_id is not null and profile_id is null)
- or (attendance_source = 'internal_the_lineup' and profile_id is not null and neon_user_id is null)`.
+- add the **exactly-one-identity check**:
+
+```sql
+check (
+  (attendance_source = 'external_neon' and neon_user_id is not null and profile_id is null)
+  or (attendance_source = 'internal_the_lineup' and profile_id is not null and neon_user_id is null)
+)
+```
 
 Existing rows satisfy the first branch with the default; the existing
 `UNIQUE (organization_id, neon_user_id, period_month)` is kept untouched (NULLs are distinct, so
