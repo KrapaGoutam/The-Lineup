@@ -1,10 +1,11 @@
 # V2-006 owner-authorized DEV rollout
 
-2026-11-10: **DEV validation PASS; staged scope ready for integration.** The
-single feature PR into `development` must pass all CI and Preview checks before
-merge. GitHub's PR/merge record is the integration receipt. Issue #254 may close
+2026-11-10: **DEV and Preview acceptance PASS; staged scope accepted.** Delivery
+is through the single [PR #321](https://github.com/KrapaGoutam/The-Lineup/pull/321)
+into `development`. All exact-head CI checks must pass before merge. GitHub's
+PR/merge record is the authoritative integration receipt; issue #254 may close
 only after that merge. Native financial activation is **OFF**; backend module
-enforcement is **STAGED**. Production and `main` were not contacted or changed.
+enforcement is **STAGED**. Production was not contacted; `main` is unchanged.
 
 ## Authorization and scope
 
@@ -117,7 +118,35 @@ all application/browser/database/Vercel checks are still mandatory.
 - [#320](https://github.com/KrapaGoutam/The-Lineup/issues/320): native financial activation readiness, Q5/Q7 and operating policies; Tips warning-only dependency, DST ambiguity, module-off recovery and self-RLS roster ordering. This grants no activation authority.
 - Existing #255/#256/#257 and #304 retain kiosk, compatibility, release and backend-enforcement scope. They were not started or closed by this operation.
 
-Private handoff receipts contain encrypted-backup/recovery results, canonical
-catalog comparisons, exact CLI logs, fixture manifests and authenticated/browser
-results. They contain no committed credentials or generated artifacts. Cleanup
-and final integration receipts must be recorded before final closure.
+## Preview, cleanup and integration receipt
+
+Protected Preview acceptance passed **8/8** on application head
+`d4e51e0af6d917a22e02c10460278833133ca043`, deployment
+`dpl_2EQeKqw5zUNAgMRHvfrRXJitoV8o`: native report/readiness and disabled mode
+on desktop/WebKit tablet/mobile, authenticated reason/review/save correction and
+staff self-only access. Short-lived project credentials were origin-scoped;
+Production and external Neon were not visited. The final receipt commit changes
+documentation only; application code is identical to this browser-tested head.
+The final documentation head still requires its own CI and READY Preview.
+
+Both fixture attempts were removed using manifest UUIDs and synthetic identity
+guards. Transaction-local replication mode allowed removal of only the task's
+append-only test records, then reverted before commit; no persistent trigger,
+RLS, grant or enforcement setting changed. Exactly five verified synthetic Auth
+users were deleted per attempt. No pre-existing harness tenant was cleaned up.
+
+Final DEV reconciliation: ledger 86/latest `20261110160147`; users/profiles 53,
+organizations 30, locations 44, memberships 52, Storage metadata 34, Vault 0,
+existing module configuration 1. Attendance sessions/breaks/events, Payroll
+periods/rates/payments/adjustments/consumptions/reviews and Tips pools/allocations
+are all zero. Financial OFF; enforcement STAGED. Functions, policies, grants,
+RLS, indexes, constraints and ledger still equal the verified post-migration
+catalog (83 RLS tables, no exposed table without RLS, no invalid constraint).
+No sequence was rewound. Auth security audit records remain operational history.
+Local regression fixtures were reset; the task-only isolated recovery container
+was removed after saving receipts. The encrypted backup remains recoverable.
+
+Private handoff receipts contain backup/recovery results, canonical catalog
+comparisons, exact CLI logs, fixture manifests and browser results. No credentials
+or generated artifacts are committed. Final CI/merge/issue-closure SHA and URLs
+are recorded on PR #321 and in the private handoff after the protected gate.

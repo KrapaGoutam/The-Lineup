@@ -5,7 +5,7 @@ implementation. This is the consolidated closeout, with no new audit phase.
 
 ## Current owner-authorized rollout
 
-2026-11-10 Q8 update: Owner approved DEV rollout and staged closeout. DEV backup/recovery and populated rehearsal passed; exact four migrations applied, ledger 82 → 86. Authenticated DEV acceptance 26/26 across API and desktop/WebKit tablet/mobile passed. Native financial activation OFF; backend enforcement STAGED; no real payments. Deferred UI and activation tracked in #319/#320. Single PR/CI/Preview/merge gate remains pending; #254 closes only after accepted merge into development. Production/main untouched. [Current rollout evidence](Q8_DEV_ROLLOUT.md).
+2026-11-10 Q8 staged closeout: Owner-approved scope is delivered through [PR #321](https://github.com/KrapaGoutam/The-Lineup/pull/321) into development. DEV recovery/rehearsal and exact migration rollout passed (82 → 86); authenticated acceptance 26/26 and protected Preview 8/8 passed. Synthetic-only cleanup restored original counts, with financial activation OFF and enforcement STAGED. Deferred UI and activation remain open in #319/#320. GitHub PR #321 records exact-head CI and the actual merge outcome; #254 closes only after accepted merge. Production/main remain untouched. [Current rollout evidence](Q8_DEV_ROLLOUT.md).
 
 The report below preserves the completed independent local review and its pre-approval state; its missing-Q8 gates are superseded by the current rollout evidence.
 

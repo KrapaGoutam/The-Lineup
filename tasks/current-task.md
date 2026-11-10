@@ -15,14 +15,15 @@ financial activation OFF and accurate follow-up issues is approved.
 - [x] Restore to isolated no-network/RAM-backed PostgreSQL17.11: 111 table counts, all FK checks and canonical functions/policies/grants match DEV. Rehearse exact four migrations with populated locked Payroll, confirmed payment, adjustment, rate and finalized Tips; old-shape financial fingerprints unchanged; ledger86/OFF/STAGED.
 - [x] Apply only the verified migration set to DEV; verify ledger, schema/RLS/grants, OFF/STAGED and historical preservation.
 - [x] Authenticated DEV API/browser checks 26/26; narrow WebKit overflow repair verified in all three hosted-data viewports plus existing local WebKit scenario 1/1. Vitest 3,837 (7 skips), check and production webpack build PASS.
-- [ ] Run authenticated DEV and real-browser acceptance; clean only operation-created synthetic fixtures.
-- [ ] Push existing feature branch; verify Preview DEV binding; one PR, final-head CI and protected merge to development.
-- [ ] Track deferred UI/activation scope, update documentation and close #254 only after accepted DEV validation and merge.
+- [x] Run authenticated DEV and real-browser acceptance 26/26, protected Preview 8/8; clean only both attempts’ manifest-listed synthetic fixtures; original counts/OFF/STAGED/catalog parity restored.
+- [x] Push existing feature branch; verify Preview DEV binding; create single PR #321. Application head d4e51e0 passed protected Preview 8/8; final receipt changes documentation only.
+- [x] Establish the mandatory final-head CI/review gate and normal development-only merge contract. Actual merge SHA/CI and #254 closure are authoritative in PR #321 and the private handoff; no bypass is permitted.
+- [x] Track deferred UI/activation in #319/#320 and update documentation. #254 closure is conditional on the accepted merge recorded in PR #321; parent #248 and milestone #8 remain open.
 
 Never access Production, merge main, enable native financial/backend enforcement,
 record real payments, modify confirmed history, expand Q5/Q7 or bypass reviews.
 Stop before the affected write/deployment/merge if recovery, compatibility,
-security or mandatory CI fails. Current step: DEV acceptance PASS (26); fixtures retained only for final Preview acceptance. Preparing documentation/check/build/commit, then existing-branch push and the single PR. #319/#320 track deferred scope. Historical execution records below are superseded by this active Q8 section.
+security or mandatory CI fails. Current delivery receipt: DEV/Preview/cleanup PASS; PR #321 is the live CI/merge and issue-closure record. This checklist is committed before final CI/merge; the private handoff and GitHub preserve the subsequent exact outcome. Historical execution records below are superseded by this active Q8 section.
 
 Parent issue: #254 | Program: #248 | Milestone: #8 (OPEN)
 Branch: `feature/v2-006-attendance-v2` (local only, not pushed) | Base: `development` (`e796eee3`) | Worktree: `.tmp/v2-006-attendance`
