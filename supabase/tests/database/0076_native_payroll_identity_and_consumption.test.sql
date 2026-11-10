@@ -456,7 +456,17 @@ set local "request.jwt.claim.sub" to '00000000-0000-0000-0000-000000076001';
 select throws_like(
   $$ select public.payroll_generate_native_period('00000000-0000-0000-0000-0000000760a1', '00000000-0000-0000-0000-000000076003', (select m from t76)) $$,
   'PERIOD_FROZEN%', 'a locked period can never be regenerated');
+select throws_like(
+  $$ update public.payroll_periods set status = 'draft', locked_at = null, locked_by = null
+     where profile_id = '00000000-0000-0000-0000-000000076003' $$,
+  'PERIOD_FROZEN%', 'Q6: a confirmed native period cannot use the legacy unlock path to rewrite consumption');
 reset role;
+select throws_like(
+  $$ update public.payroll_periods set status = 'draft', locked_at = null, locked_by = null
+     where profile_id = '00000000-0000-0000-0000-000000076003' $$,
+  'PERIOD_FROZEN%', 'native confirmation cannot be undone even by a privileged writer');
+select is((select prosecdef from pg_proc where oid = 'private.payroll_periods_native_write_guard()'::regprocedure),
+  false, 'the native client-write guard remains SECURITY INVOKER (current_user is the caller)');
 
 -- Digest of the locked native snapshot, to prove the correction below cannot change it.
 create temp table h76 as

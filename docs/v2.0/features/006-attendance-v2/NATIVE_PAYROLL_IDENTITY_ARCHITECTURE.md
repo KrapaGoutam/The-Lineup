@@ -219,3 +219,8 @@ or the read-only preview.
   stores only the payable-seconds difference and never a money amount (no new rounding rule).
 - Q9b is implemented as: a native/external change is allowed only on the first local day of a payroll month, with the other dependencies resolved.
 - A default-off database switch gates generation and the source-transition rule; the application keeps its own closed gate.
+- Consolidated independent review added forward-only migration `20261110160147`:
+  native confirmation tries the shared employee attendance lock before proving
+  finality (a busy employee is refused, avoiding period-row/advisory deadlock),
+  and confirmed native periods cannot reopen through the legacy unlock workflow.
+  Neon unlock remains unchanged. See [the closeout](FINAL_CONSOLIDATED_CLOSEOUT.md).

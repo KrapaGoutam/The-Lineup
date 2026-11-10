@@ -621,3 +621,110 @@ test.describe("Data integrity and ledger immutability", () => {
     expect(deleteRes.error?.code).toBe("23514");
   });
 });
+
+test("R1-F1: stale tabs never display another location's attendance and readiness", async ({
+  page,
+  context,
+}, testInfo) => {
+  // Overall Manager has canonical access to both locations. The orgGM fixture
+  // intentionally has no location assignments and cannot enter either workspace.
+  must(
+    await fx.admin.from("attendance_sessions").insert({
+      organization_id: fx.orgA.id,
+      location_id: fx.locB,
+      profile_id: fx.staffB.id,
+      service_date: "2026-11-09",
+      status: "completed",
+      clock_in_at: "2026-11-09T14:00:00Z",
+      clock_out_at: "2026-11-09T22:00:00Z",
+      gross_elapsed_seconds: 28800,
+      total_break_seconds: 0,
+      created_by: fx.staffB.id,
+    }),
+  );
+  await authenticate(context, fx.overallManager, fx.orgA.id, fx.locInternal);
+  await page.goto(`/r/${fx.orgA.slug}?tab=attendance`);
+  await openAttendance(page);
+  await expect(employeeInList(page, "Sam Staff A").first()).toBeVisible();
+  await expect(
+    page.getByTestId("payroll-readiness").getByTestId("readiness-counts"),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("attendance-internal.png"),
+    fullPage: true,
+  });
+
+  // Both tabs share the persisted cookie; the first tab retains its rendered
+  // location header. This deliberately avoids a full navigation of that tab.
+  await context.addCookies([
+    {
+      name: "lineup_active_context",
+      value: JSON.stringify({ v: 1, o: fx.orgA.id, l: fx.locB }),
+      domain: "localhost",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const other = await context.newPage();
+  try {
+    await other.goto(`/r/${fx.orgA.slug}?tab=attendance`);
+    await openAttendance(other);
+    await expect(
+      other
+        .getByRole("main")
+        .getByText("Attendance Loc B", { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(employeeInList(other, "Bob Staff B").first()).toBeVisible();
+    await page.bringToFront();
+    // A focus/route guard may already remove stale controls. Otherwise exercise
+    // both protected reads via the date filter. Guard removal can race the fill.
+    const from = page.getByLabel("From", { exact: true });
+    if (await from.isVisible()) {
+      try {
+        await from.fill("2026-11-08", { timeout: 2000 });
+      } catch (error) {
+        if (await from.isVisible()) throw error;
+      }
+    }
+    // The focus guard or action boundary can refuse first; route disagreement
+    // also deliberately resolves to no location. All paths must refuse reads.
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({
+          hasText:
+            /Choose a location first|active location|workspace.*changed|location.*changed/i,
+        })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("payroll-readiness").getByTestId("readiness-counts"),
+    ).toHaveCount(0);
+    await expect(employeeInList(page, "Bob Staff B")).toHaveCount(0);
+    // Explicit selection with matching persisted context restores normal reads.
+    await context.addCookies([
+      {
+        name: "lineup_active_context",
+        value: JSON.stringify({ v: 1, o: fx.orgA.id, l: fx.locB }),
+        domain: "localhost",
+        path: "/",
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`/r/${fx.orgA.slug}?location=${fx.locB}&tab=attendance`);
+    await openAttendance(page);
+    await expect(
+      page
+        .getByRole("main")
+        .getByText("Attendance Loc B", { exact: true })
+        .first(),
+    ).toBeVisible();
+    await expect(employeeInList(page, "Sam Staff A")).toHaveCount(0);
+    await expect(employeeInList(page, "Bob Staff B").first()).toBeVisible();
+  } finally {
+    await other.close();
+  }
+});

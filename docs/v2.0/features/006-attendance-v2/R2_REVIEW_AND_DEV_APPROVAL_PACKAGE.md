@@ -1,5 +1,14 @@
 # V2-006 R2 — Financial gap closure: review scope and hosted DEV approval package
 
+> Updated by the consolidated independent closeout: review and narrow integrity
+> repairs and all local verification are complete (Attendance browser 42 cases,
+> Payroll browser 15/15). Add corrective
+> migration `20261110160147_attendance_native_confirmation_guards.sql` to the
+> historical three-file package below. Expected DEV transition is **82 → 86**.
+> The original three checksums are unchanged. Use
+> [FINAL_CONSOLIDATED_CLOSEOUT.md](FINAL_CONSOLIDATED_CLOSEOUT.md) for current
+> findings, receipts, full checksums and approval gates. Q8 remains unapproved.
+
 ```text
 Status:   IMPLEMENTED LOCALLY, ACTIVATION OFF. Not pushed. No PR. Hosted DEV untouched. Production untouched.
 Branch:   feature/v2-006-attendance-v2   (R2 commits: b1fa651 database, 29ed814 TypeScript; docs commit follows)

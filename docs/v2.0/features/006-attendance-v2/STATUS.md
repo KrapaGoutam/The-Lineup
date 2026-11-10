@@ -3,7 +3,8 @@
 ```text
 Status: IN PROGRESS — BATCH A/B/C VERIFIED; R1 REVIEW DONE; R2 FINANCIAL GAP CLOSURE IMPLEMENTED LOCALLY
         (decisions Q1/Q4/Q6/Q9/Q9b approved 2026-11-10; ACTIVATION, payments, hosted DEV NOT authorized);
-        INDEPENDENT FINANCIAL/SECURITY REVIEW + R1-F1 SECOND REVIEW PENDING; HOSTED DEV PENDING OWNER APPROVAL (Q8); FINAL PR NOT CREATED
+        INDEPENDENT REVIEW COMPLETE, TWO P1 FIXES AND ALL LOCAL VERIFICATION PASS;
+        HOSTED DEV PENDING OWNER APPROVAL (Q8); FINAL PR NOT CREATED
 GitHub Issue: #254 (OPEN)
 Parent Issue: #248
 Milestone: #8 (The Lineup V2.0)
@@ -14,15 +15,15 @@ Commits: 378ee9e (WIP snapshot, unverified) -> 3428e5a (Batch A verified)
          -> a76e00a (P1: restore membership-strict getCurrentUser) -> 3dea698 (Batch C contract,
             native adapter, readiness preview, source-aware roster) -> e45f74e (pgTAP 0075)
          -> 5ccb4b2 (Allocation pass-through, e2e) -> Batch C documentation
-Migrations: 20261110000000, 20261110010000, 20261110145124 (R2, sha256 fb0fe460b803fab6…fb610381). Local ledger 85.
-Hosted DEV: ledger 82, untouched. Production: untouched. Neon: untouched.
+Migrations: 20261110000000, 20261110010000, 20261110145124, 20261110160147 (confirmation integrity). Local ledger 86.
+Hosted DEV: prior reported ledger 82, not contacted. Production: untouched. Neon: untouched.
 Target Merge Branch: development (ONE consolidated PR, only after independent review)
 ```
 
 ## Batch C summary
 
 - Native attendance is implemented as an inactive, testable financial source: canonical provenance-aware contract, eligibility with reasons, authority-before-read reader, read-only manager preview (no hours, no money). Payroll and Tips calculations, snapshots and confirmed records are untouched.
-- **No owner approval exists for Q1–Q8.** Native attendance stays `BLOCKED_POLICY` (Q1, Q4, Q6). External and unconfigured locations keep their legacy Neon path unchanged.
+- **Historical Batch C receipt:** no owner approvals existed then. R2 subsequently recorded Q1/Q4/Q6/Q9/Q9b decisions; activation remains separately blocked and external compatibility is preserved.
 - **P1 fixed:** Batch B had widened `getCurrentUser` to accept an Overall role with no membership, which gates service-role passcode-reset and member-deactivation routes. Restored; attendance uses a canonical-context actor instead (README §13.6).
 - Tips "Pull clocked-in team" and the Allocation board prioritisation are source-aware for the verified location (suggestion only).
 - Evidence: Vitest 3,784 pass (7 pre-existing skips); pgTAP 77 files / 2,929 assertions on a pristine DB; Prettier, ESLint, tsc and `next build --webpack` clean; Playwright 39/39; 150 reads during 40 corrections with 0 torn reads.
@@ -35,3 +36,13 @@ Target Merge Branch: development (ONE consolidated PR, only after independent re
 - Review scope, limits and the hosted DEV package: R2_REVIEW_AND_DEV_APPROVAL_PACKAGE.md.
 
 Details: README §13, §15. Open owner decisions: README §11 and §13.2. Activation prerequisites: README §13.7. Independent review scope: README §13.11.
+
+## Consolidated independent closeout (2026-11-10)
+
+Two P1 native confirmation defects reproduced with actual JWTs and repaired by a
+forward-only migration: busy attendance now blocks confirmation; confirmed native
+periods cannot reopen. Neon unlock is unchanged. Local results: pristine replay
+86; pgTAP 78 files/3,079; Vitest 3,837; actual JWT 12/12; concurrency 25/25;
+check/build pass; real browser Attendance 42 cases and Payroll 15/15. Q8 and staged closure remain
+unapproved; expected DEV migration set is now four files (82 → 86).
+See [the authoritative closeout](FINAL_CONSOLIDATED_CLOSEOUT.md).

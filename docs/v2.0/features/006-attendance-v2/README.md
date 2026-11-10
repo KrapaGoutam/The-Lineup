@@ -4,7 +4,7 @@ GitHub Issue: [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 Branch: `feature/v2-006-attendance-v2`  
-Status: `IN PROGRESS — BATCH A VERIFIED; BATCH B VERIFIED; BATCH C IMPLEMENTED LOCALLY (FINANCIAL ACTIVATION POLICY-BLOCKED); INDEPENDENT REVIEW PENDING; HOSTED DEV PENDING OWNER APPROVAL; NO PR`
+Status: `LOCAL CONSOLIDATED REVIEW, TWO P1 FIXES AND ALL VERIFICATION COMPLETE; FINANCIAL ACTIVATION OFF; HOSTED DEV PENDING Q8; STAGED CLOSURE UNAPPROVED; NO PR`
 
 ---
 
@@ -421,3 +421,20 @@ Implemented locally on this branch (commits b1fa651 database, 29ed814 TypeScript
 `NATIVE_PAYROLL_IDENTITY_ARCHITECTURE.md` §8. Review scope, honest limits, evidence and the hosted DEV approval package:
 `R2_REVIEW_AND_DEV_APPROVAL_PACKAGE.md`. The application activation record (`RECORDED_FINANCIAL_POLICY_APPROVALS`) intentionally stays `not_approved`: it is the
 activation gate, not the decision register.
+
+## 16. Final consolidated independent closeout (2026-11-10)
+
+The [consolidated closeout](FINAL_CONSOLIDATED_CLOSEOUT.md) supersedes the historical
+approval/status statements in earlier batch sections. Independent R2 source review
+reproduced and repaired two P1 confirmation defects through the forward-only
+`20261110160147_attendance_native_confirmation_guards.sql` migration. Native
+confirmation refuses an in-flight employee attendance edit, and native confirmed
+periods cannot reopen through the legacy Neon unlock path. No historical row or
+financial activation setting is changed by the migration.
+
+Clean local replay is 86 migrations; pgTAP 3,079, Vitest 3,837, actual JWT 12/12,
+concurrency 25/25, check and production webpack build pass. Real Supabase-backed
+browser acceptance: Attendance 42 cases (39 existing + 3 two-tab), Payroll 15/15.
+No new full audit phase; Q8 and owner acceptance of
+staged closure gate the four-migration hosted DEV set and the single PR. Native
+financial activation remains OFF, Payroll UI remains Neon-oriented, #254 OPEN.

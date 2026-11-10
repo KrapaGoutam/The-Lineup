@@ -36,6 +36,18 @@ erDiagram
 
 ## Important invariants
 
+V2-006 staged native Payroll adds source-discriminated identity to periods/rates:
+exactly one of `neon_user_id` or native `profile_id`, with cross-key duplicate
+protection through manager-set identity links. Organization-level monthly periods
+consume immutable, versioned attendance rows in `payroll_attendance_consumptions`;
+one active consumption per session, composite tenant/location/person/month FKs,
+no client writes. Draft regeneration supersedes history atomically. Native
+confirmation acquires the employee attendance lock without blocking and re-proves
+finality; a confirmed native period cannot reopen. Corrected frozen consumption
+uses append-only reviews linked to existing audited adjustments. Neon unlock and
+historical financial records retain their existing behavior. Activation defaults
+OFF. See [V2-006 closeout](v2.0/features/006-attendance-v2/FINAL_CONSOLIDATED_CLOSEOUT.md).
+
 - A location belongs to exactly one organization.
 - A membership is unique by organization and profile.
 - A membership carries one or more explicit roles; role names are not compared by rank.
