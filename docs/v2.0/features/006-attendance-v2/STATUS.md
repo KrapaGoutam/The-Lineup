@@ -1,9 +1,9 @@
 # Feature V2-006: Attendance V2 — Status
 
 ```text
-Status: IN PROGRESS — BATCH A VERIFIED; BATCH B VERIFIED; BATCH C IMPLEMENTED LOCALLY
-        (financial activation POLICY-BLOCKED); INDEPENDENT REVIEW R1 DONE (PARTIAL, one P2 fixed b4d056e);
-        HOSTED DEV PENDING OWNER APPROVAL; FINAL PR NOT CREATED
+Status: IN PROGRESS — BATCH A/B/C VERIFIED; R1 REVIEW DONE; R2 FINANCIAL GAP CLOSURE IMPLEMENTED LOCALLY
+        (decisions Q1/Q4/Q6/Q9/Q9b approved 2026-11-10; ACTIVATION, payments, hosted DEV NOT authorized);
+        INDEPENDENT FINANCIAL/SECURITY REVIEW + R1-F1 SECOND REVIEW PENDING; HOSTED DEV PENDING OWNER APPROVAL (Q8); FINAL PR NOT CREATED
 GitHub Issue: #254 (OPEN)
 Parent Issue: #248
 Milestone: #8 (The Lineup V2.0)
@@ -14,7 +14,7 @@ Commits: 378ee9e (WIP snapshot, unverified) -> 3428e5a (Batch A verified)
          -> a76e00a (P1: restore membership-strict getCurrentUser) -> 3dea698 (Batch C contract,
             native adapter, readiness preview, source-aware roster) -> e45f74e (pgTAP 0075)
          -> 5ccb4b2 (Allocation pass-through, e2e) -> Batch C documentation
-Migrations: 20261110000000, 20261110010000 (unchanged; Batch C adds none). Local ledger 84.
+Migrations: 20261110000000, 20261110010000, 20261110145124 (R2, sha256 fb0fe460b803fab6…fb610381). Local ledger 85.
 Hosted DEV: ledger 82, untouched. Production: untouched. Neon: untouched.
 Target Merge Branch: development (ONE consolidated PR, only after independent review)
 ```
@@ -27,4 +27,11 @@ Target Merge Branch: development (ONE consolidated PR, only after independent re
 - Tips "Pull clocked-in team" and the Allocation board prioritisation are source-aware for the verified location (suggestion only).
 - Evidence: Vitest 3,784 pass (7 pre-existing skips); pgTAP 77 files / 2,929 assertions on a pristine DB; Prettier, ESLint, tsc and `next build --webpack` clean; Playwright 39/39; 150 reads during 40 corrections with 0 torn reads.
 
-Details: README §13. Open owner decisions: README §11 and §13.2. Activation prerequisites: README §13.7. Independent review scope: README §13.11.
+## R2 summary (2026-11-10)
+
+- Native Payroll identity (Option A), atomic version-aware consumption ledger, cross-key double-pay guard, correction-after-confirmation review (no automatic money), and a first-of-month source-transition gate — all behind a default-off switch. Payroll UI for native employees is NOT built.
+- Evidence: full pgTAP 78 files / 3,076 PASS on a fresh DB (0076 = 146); full Vitest 3,837 PASS; cold `next build --webpack` PASS; concurrency harness 25/25; Playwright deferred to the final PR gate.
+- Two pre-existing test defects fixed (UTC-hour-dependent fixtures in 0074/0075; vacuous isolation assertion in 0075). One own P1 caught by tests before commit.
+- Review scope, limits and the hosted DEV package: R2_REVIEW_AND_DEV_APPROVAL_PACKAGE.md.
+
+Details: README §13, §15. Open owner decisions: README §11 and §13.2. Activation prerequisites: README §13.7. Independent review scope: README §13.11.

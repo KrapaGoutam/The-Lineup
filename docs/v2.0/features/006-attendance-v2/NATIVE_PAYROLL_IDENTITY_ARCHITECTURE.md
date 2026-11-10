@@ -1,8 +1,9 @@
 # V2-006 — Native Payroll identity and duplicate-consumption architecture
 
 ```text
-Status:   PROPOSAL — NOT APPROVED, NOT IMPLEMENTED. No migration, no Payroll code, no financial
-          activation is part of this document. Decision Q9 (below) is open.
+Status:   APPROVED (Q9 Option A + ledger + Q9b, owner, 2026-11-10) and IMPLEMENTED LOCALLY in R2 behind a
+          default-off activation switch (see R2_REVIEW_AND_DEV_APPROVAL_PACKAGE.md). Activation, real payments
+          and hosted DEV remain NOT authorized. Differences from this proposal are listed in section 8.
 Written:  2026-11-10, V2-006 R1 independent review (Claude). Base e796eee, reviewed HEAD 44f6e8a.
 Scope:    How a native attendance record (keyed by `profile_id`) can ever become Payroll hours
           (keyed by `neon_user_id`), and how a record is guaranteed to be consumed at most once.
@@ -205,3 +206,16 @@ cutoff (§5). **Alternatives:** C (subject indirection; larger, requires touchin
 B only (keeps native-only employees permanently out of Payroll). **Blocks:** native financial
 activation and the final PR's "financially integrated" claim; does **not** block local development
 or the read-only preview.
+
+## 8. As implemented (R2) — differences from the proposal
+
+- Ledger and review tables are named `payroll_attendance_consumptions` / `payroll_attendance_consumption_reviews` (payroll side), not
+  `attendance_*`, so the attendance ledger tables stay free of any payroll reference (R1 isolation, pgTAP 0075, still holds; its assertions were
+  made schema-exact and the ledger is the one sanctioned bridge).
+- The cross-key guard serialises on one **organization-level** advisory lock instead of a per-person lock (deadlock-free, payroll writes are rare).
+- A Neon period for a person who has native attendance in that month is also refused once activation is on (`MIXED_SOURCE_MONTH`).
+- Unlinking/relinking is refused while the person has native payroll history, or Neon payroll history together with native attendance.
+- A correction after a frozen period raises a **pending review** that LINKS an adjustment recorded through the existing audited flow; the review
+  stores only the payable-seconds difference and never a money amount (no new rounding rule).
+- Q9b is implemented as: a native/external change is allowed only on the first local day of a payroll month, with the other dependencies resolved.
+- A default-off database switch gates generation and the source-transition rule; the application keeps its own closed gate.

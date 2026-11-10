@@ -407,3 +407,17 @@ Confirmed historical Payroll/Tips:  PRESERVED
 
 - **Q9** — Native Payroll identity and consumption contract (technical dependency, not an approved policy): recommended Option A + guard + ledger.
 - **Q9b** — Source-switch cutoff: recommended a payroll-month boundary; today only open sessions block leaving internal mode. Unapproved.
+
+## 15. R2 — Native Payroll identity, consumption ledger and financial gap closure (2026-11-10)
+
+**Owner approvals (2026-11-10), decisions only:** Q1 (explicit paid / unpaid / unclassified, authorized manager, audited, never inferred), Q4 (keep
+existing payroll rules, organization-level monthly periods and management authority; no new rounding / overtime / rate rules), Q6 (confirmed snapshots
+immutable; corrections go to a separate auditable adjustment review; no automatic payment, deduction or silent recalculation), Q9 Option A (source-discriminated
+identity, cross-key guard, atomic correction-version-aware ledger, no fabricated Neon ids), Q9b (source change only at a payroll-period boundary after open work and
+financial dependencies are resolved). **Still not authorized:** activation of native financial processing, real payments, Q8 hosted DEV, backend-enforcement
+activation, production, merge. **Still open:** Q2, Q3, Q5, Q7, Q8.
+
+Implemented locally on this branch (commits b1fa651 database, 29ed814 TypeScript) behind a default-off switch. Architecture as built:
+`NATIVE_PAYROLL_IDENTITY_ARCHITECTURE.md` §8. Review scope, honest limits, evidence and the hosted DEV approval package:
+`R2_REVIEW_AND_DEV_APPROVAL_PACKAGE.md`. The application activation record (`RECORDED_FINANCIAL_POLICY_APPROVALS`) intentionally stays `not_approved`: it is the
+activation gate, not the decision register.
