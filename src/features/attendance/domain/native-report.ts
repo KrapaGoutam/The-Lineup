@@ -194,3 +194,32 @@ export function crossesLocalMidnight(
   const b = zonedWallTimeFromInstant(new Date(clockOutAt), timeZone).date;
   return b > a;
 }
+
+/** "Mon, Nov 9, 9:05 AM CST" — an instant rendered in the LOCATION's zone with its label. */
+export function formatInstantInZone(
+  iso: string | null,
+  timeZone: string,
+): string {
+  if (!iso) return "—";
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(instant);
+}
+
+/** Payable time for display: unresolved is stated, never shown as zero. */
+export function describePayable(
+  netPayableSeconds: number | null,
+  unit: (seconds: number) => string,
+): string {
+  return netPayableSeconds === null
+    ? "Pending break classification"
+    : unit(netPayableSeconds);
+}

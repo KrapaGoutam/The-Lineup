@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { guardModuleForSlug } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import {
   nativeBreakEnd,
@@ -24,6 +25,12 @@ export type ActionResult<T> =
 
 const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const restaurantSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const locationIdSchema = z
   .string()
   .trim()
@@ -38,6 +45,7 @@ const optionalIdempotencySchema = z.string().max(128).nullable().optional();
 const optionalNotesSchema = z.string().max(500).nullable().optional();
 
 const clockInputSchema = z.object({
+  restaurantSlug: restaurantSlugSchema,
   locationId: locationIdSchema,
   profileId: optionalProfileIdSchema,
   idempotencyKey: optionalIdempotencySchema,
@@ -45,6 +53,7 @@ const clockInputSchema = z.object({
 });
 
 const breakInputSchema = z.object({
+  restaurantSlug: restaurantSlugSchema,
   locationId: locationIdSchema,
   profileId: optionalProfileIdSchema,
   idempotencyKey: optionalIdempotencySchema,
@@ -73,6 +82,13 @@ export async function nativeClockInAction(
         error: parsed.error.issues[0]?.message || "Invalid input.",
       };
     }
+
+    const blocked = await guardModuleForSlug(
+      "attendance",
+      parsed.data.restaurantSlug,
+      { claimedLocationId: parsed.data.locationId },
+    );
+    if (blocked) return blocked;
 
     const result = await nativeClockIn(supabase, {
       locationId: parsed.data.locationId,
@@ -114,6 +130,13 @@ export async function nativeClockOutAction(
       };
     }
 
+    const blocked = await guardModuleForSlug(
+      "attendance",
+      parsed.data.restaurantSlug,
+      { claimedLocationId: parsed.data.locationId },
+    );
+    if (blocked) return blocked;
+
     const result = await nativeClockOut(supabase, {
       locationId: parsed.data.locationId,
       profileId: parsed.data.profileId,
@@ -154,6 +177,13 @@ export async function nativeBreakStartAction(
       };
     }
 
+    const blocked = await guardModuleForSlug(
+      "attendance",
+      parsed.data.restaurantSlug,
+      { claimedLocationId: parsed.data.locationId },
+    );
+    if (blocked) return blocked;
+
     const result = await nativeBreakStart(supabase, {
       locationId: parsed.data.locationId,
       profileId: parsed.data.profileId,
@@ -193,6 +223,13 @@ export async function nativeBreakEndAction(
       };
     }
 
+    const blocked = await guardModuleForSlug(
+      "attendance",
+      parsed.data.restaurantSlug,
+      { claimedLocationId: parsed.data.locationId },
+    );
+    if (blocked) return blocked;
+
     const result = await nativeBreakEnd(supabase, {
       locationId: parsed.data.locationId,
       profileId: parsed.data.profileId,
@@ -215,6 +252,7 @@ export async function nativeBreakEndAction(
  * Server Action: Query an employee's currently active/on_break attendance session.
  */
 export async function getActiveAttendanceSessionAction(input: {
+  restaurantSlug: string;
   locationId: string;
   profileId: string;
 }): Promise<ActionResult<AttendanceSessionModel | null>> {
@@ -231,9 +269,19 @@ export async function getActiveAttendanceSessionAction(input: {
       .trim()
       .regex(uuidRegex, "Invalid profile ID")
       .safeParse(input.profileId);
-    if (!locationParsed.success || !profileParsed.success) {
+    const slugParsed = restaurantSlugSchema.safeParse(input.restaurantSlug);
+    if (
+      !locationParsed.success ||
+      !profileParsed.success ||
+      !slugParsed.success
+    ) {
       return { ok: false, error: "Invalid location or profile ID." };
     }
+
+    const blocked = await guardModuleForSlug("attendance", slugParsed.data, {
+      claimedLocationId: locationParsed.data,
+    });
+    if (blocked) return blocked;
 
     const result = await getActiveAttendanceSession(supabase, {
       locationId: locationParsed.data,

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifySessionState,
   crossesLocalMidnight,
+  describePayable,
+  formatInstantInZone,
   formatLocalTime,
   openElapsedSeconds,
   summarizeNativeReport,
@@ -180,5 +182,21 @@ describe("time zone display", () => {
     expect(
       crossesLocalMidnight("2026-11-09T15:00:00Z", null, "America/Chicago"),
     ).toBe(false);
+  });
+});
+
+describe("display helpers", () => {
+  it("renders an instant with the location's zone label", () => {
+    expect(formatInstantInZone("2026-11-09T15:00:00Z", "America/Chicago")).toBe(
+      "Mon, Nov 9, 9:00 AM CST",
+    );
+    expect(formatInstantInZone(null, "America/Chicago")).toBe("—");
+  });
+
+  it("never presents unresolved payable time as zero", () => {
+    const fmt = (s: number) => `${s}s`;
+    expect(describePayable(null, fmt)).toBe("Pending break classification");
+    expect(describePayable(0, fmt)).toBe("0s");
+    expect(describePayable(3600, fmt)).toBe("3600s");
   });
 });

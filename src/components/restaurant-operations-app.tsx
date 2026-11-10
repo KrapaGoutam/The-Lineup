@@ -51,7 +51,7 @@ import {
   setAttendanceIdentityLinkAction,
   type AttendanceLinkOptions,
 } from "@/features/attendance/actions/attendance-actions";
-import { AttendanceReport } from "@/features/attendance/components/attendance-report";
+import { AttendanceWorkspace } from "@/features/attendance/components/attendance-workspace";
 import {
   demoNeonAttendance,
   demoNeonUsers,
@@ -2567,7 +2567,7 @@ function RestaurantOperationsAppInner({
               />
             ) : null}
             {tab === "attendance" ? (
-              <AttendanceReport
+              <AttendanceWorkspace
                 restaurantSlug={restaurantSlug}
                 demoMode={demoMode}
                 timeZone={timeZone}
