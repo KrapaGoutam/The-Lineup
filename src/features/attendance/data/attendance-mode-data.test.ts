@@ -130,4 +130,39 @@ describe("attendance-mode-data", () => {
       expect(res.code).toBe("conflict");
     }
   });
+
+  it("distinguishes open sessions from an archived location (both SQLSTATE 55000)", async () => {
+    const run = async (message: string) =>
+      setLocationAttendanceMode(
+        {
+          rpc: vi.fn().mockResolvedValue({
+            data: null,
+            error: { code: "55000", message },
+          }),
+        } as unknown as SupabaseClient<Database>,
+        { locationId, mode: "EXTERNAL" },
+      );
+
+    const open = await run(
+      "Close all open attendance sessions before leaving internal attendance mode",
+    );
+    const archived = await run(
+      "Cannot configure attendance mode on archived or inactive location",
+    );
+    expect(!open.ok && open.code).toBe("open_sessions");
+    expect(!archived.ok && archived.code).toBe("archived");
+  });
+
+  it("maps a bad reason length (22023) to a controlled input error", async () => {
+    const res = await setLocationAttendanceMode(
+      {
+        rpc: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "22023", message: "Reason must be between 3 and 500" },
+        }),
+      } as unknown as SupabaseClient<Database>,
+      { locationId, mode: "EXTERNAL", reason: "x" },
+    );
+    expect(!res.ok && res.code).toBe("invalid_input");
+  });
 });

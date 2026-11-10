@@ -18,6 +18,8 @@ export type AttendanceModeDataResult<T> =
         | "unauthorized"
         | "conflict"
         | "archived"
+        | "open_sessions"
+        | "invalid_input"
         | "unexpected";
     };
 
@@ -120,11 +122,26 @@ export async function setLocationAttendanceMode(
         };
       }
       if (error.code === "55000") {
+        if (/open attendance sessions/i.test(error.message ?? "")) {
+          return {
+            ok: false,
+            error:
+              "Close all open attendance sessions before leaving internal attendance mode.",
+            code: "open_sessions",
+          };
+        }
         return {
           ok: false,
           error:
             "Cannot configure attendance mode on archived or inactive location.",
           code: "archived",
+        };
+      }
+      if (error.code === "22023") {
+        return {
+          ok: false,
+          error: "Reason must be between 3 and 500 characters.",
+          code: "invalid_input",
         };
       }
       if (error.code === "P0004") {

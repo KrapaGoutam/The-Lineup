@@ -30,7 +30,13 @@ const setModeInputSchema = z.object({
   locationId: locationIdSchema,
   mode: attendanceModeSchema,
   expectedUpdatedAt: z.string().datetime().nullable().optional(),
-  reason: z.string().max(500).nullable().optional(),
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Reason must be at least 3 characters.")
+    .max(500)
+    .nullable()
+    .optional(),
 });
 
 export type SetAttendanceModeInput = z.infer<typeof setModeInputSchema>;

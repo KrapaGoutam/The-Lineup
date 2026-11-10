@@ -36,73 +36,88 @@ export type Database = {
     Tables: {
       attendance_breaks: {
         Row: {
+          classified_at: string | null;
+          classified_by: string | null;
           created_at: string;
           duration_seconds: number | null;
           end_time: string | null;
           id: number;
           location_id: string;
           organization_id: string;
+          pay_classification: Database["public"]["Enums"]["attendance_break_pay_classification"];
           profile_id: string;
           session_id: string;
           start_time: string;
         };
         Insert: {
+          classified_at?: string | null;
+          classified_by?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
           end_time?: string | null;
           id?: never;
           location_id: string;
           organization_id: string;
+          pay_classification?: Database["public"]["Enums"]["attendance_break_pay_classification"];
           profile_id: string;
           session_id: string;
           start_time?: string;
         };
         Update: {
+          classified_at?: string | null;
+          classified_by?: string | null;
           created_at?: string;
           duration_seconds?: number | null;
           end_time?: string | null;
           id?: never;
           location_id?: string;
           organization_id?: string;
+          pay_classification?: Database["public"]["Enums"]["attendance_break_pay_classification"];
           profile_id?: string;
           session_id?: string;
           start_time?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "attendance_breaks_location_tenant_fk";
-            columns: ["location_id", "organization_id"];
-            isOneToOne: false;
-            referencedRelation: "locations";
-            referencedColumns: ["id", "organization_id"];
-          },
-          {
-            foreignKeyName: "attendance_breaks_membership_fk";
-            columns: ["organization_id", "profile_id"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
-            foreignKeyName: "attendance_breaks_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "attendance_breaks_profile_id_fkey";
-            columns: ["profile_id"];
+            foreignKeyName: "attendance_breaks_classified_by_fkey";
+            columns: ["classified_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "attendance_breaks_session_id_fkey";
-            columns: ["session_id"];
+            foreignKeyName: "attendance_breaks_session_tenant_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_session_summaries";
+            referencedColumns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+          {
+            foreignKeyName: "attendance_breaks_session_tenant_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
             isOneToOne: false;
             referencedRelation: "attendance_sessions";
-            referencedColumns: ["id"];
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
           },
         ];
       };
@@ -163,43 +178,8 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "attendance_events_actor_membership_fk";
-            columns: ["organization_id", "actor_profile_id"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
             foreignKeyName: "attendance_events_actor_profile_id_fkey";
             columns: ["actor_profile_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "attendance_events_location_tenant_fk";
-            columns: ["location_id", "organization_id"];
-            isOneToOne: false;
-            referencedRelation: "locations";
-            referencedColumns: ["id", "organization_id"];
-          },
-          {
-            foreignKeyName: "attendance_events_membership_fk";
-            columns: ["organization_id", "profile_id"];
-            isOneToOne: false;
-            referencedRelation: "memberships";
-            referencedColumns: ["organization_id", "profile_id"];
-          },
-          {
-            foreignKeyName: "attendance_events_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "attendance_events_profile_id_fkey";
-            columns: ["profile_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
@@ -212,11 +192,38 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "attendance_events_session_id_fkey";
-            columns: ["session_id"];
+            foreignKeyName: "attendance_events_session_tenant_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_session_summaries";
+            referencedColumns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+          {
+            foreignKeyName: "attendance_events_session_tenant_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
             isOneToOne: false;
             referencedRelation: "attendance_sessions";
-            referencedColumns: ["id"];
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
           },
         ];
       };
@@ -275,6 +282,7 @@ export type Database = {
           clock_out_at: string | null;
           created_at: string;
           created_by: string;
+          gross_elapsed_seconds: number | null;
           id: string;
           location_id: string;
           organization_id: string;
@@ -282,7 +290,6 @@ export type Database = {
           service_date: string;
           status: Database["public"]["Enums"]["attendance_session_status"];
           total_break_seconds: number;
-          total_worked_seconds: number | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -291,6 +298,7 @@ export type Database = {
           clock_out_at?: string | null;
           created_at?: string;
           created_by: string;
+          gross_elapsed_seconds?: number | null;
           id?: string;
           location_id: string;
           organization_id: string;
@@ -298,7 +306,6 @@ export type Database = {
           service_date: string;
           status?: Database["public"]["Enums"]["attendance_session_status"];
           total_break_seconds?: number;
-          total_worked_seconds?: number | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -307,6 +314,7 @@ export type Database = {
           clock_out_at?: string | null;
           created_at?: string;
           created_by?: string;
+          gross_elapsed_seconds?: number | null;
           id?: string;
           location_id?: string;
           organization_id?: string;
@@ -314,7 +322,6 @@ export type Database = {
           service_date?: string;
           status?: Database["public"]["Enums"]["attendance_session_status"];
           total_break_seconds?: number;
-          total_worked_seconds?: number | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -5357,6 +5364,60 @@ export type Database = {
       };
     };
     Views: {
+      attendance_session_summaries: {
+        Row: {
+          break_count: number | null;
+          break_policy_resolved: boolean | null;
+          clock_in_at: string | null;
+          clock_out_at: string | null;
+          gross_elapsed_seconds: number | null;
+          is_closed: boolean | null;
+          location_id: string | null;
+          net_payable_seconds: number | null;
+          open_break_count: number | null;
+          organization_id: string | null;
+          paid_break_seconds: number | null;
+          profile_id: string | null;
+          service_date: string | null;
+          session_id: string | null;
+          status:
+            | Database["public"]["Enums"]["attendance_session_status"]
+            | null;
+          total_break_seconds: number | null;
+          unclassified_break_seconds: number | null;
+          unpaid_break_seconds: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_sessions_location_tenant_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attendance_sessions_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       inventory_stock_status: {
         Row: {
           backup: number | null;
@@ -6458,19 +6519,22 @@ export type Database = {
         | "shift_manager"
         | "host"
         | "server";
+      attendance_break_pay_classification: "unclassified" | "paid" | "unpaid";
       attendance_event_source: "web" | "kiosk" | "manager" | "system";
       attendance_event_type:
         | "clock_in"
         | "clock_out"
         | "break_start"
         | "break_end"
-        | "manager_edit";
+        | "manager_edit"
+        | "void";
       attendance_mode: "external" | "internal_the_lineup" | "disabled";
       attendance_session_status:
         | "active"
         | "on_break"
         | "completed"
-        | "auto_clocked_out";
+        | "auto_clocked_out"
+        | "voided";
       board_event_type:
         | "assign"
         | "add_column"
@@ -6690,6 +6754,7 @@ export const Constants = {
     Enums: {
       access_request_status: ["pending", "approved", "declined"],
       app_role: ["owner", "general_manager", "shift_manager", "host", "server"],
+      attendance_break_pay_classification: ["unclassified", "paid", "unpaid"],
       attendance_event_source: ["web", "kiosk", "manager", "system"],
       attendance_event_type: [
         "clock_in",
@@ -6697,6 +6762,7 @@ export const Constants = {
         "break_start",
         "break_end",
         "manager_edit",
+        "void",
       ],
       attendance_mode: ["external", "internal_the_lineup", "disabled"],
       attendance_session_status: [
@@ -6704,6 +6770,7 @@ export const Constants = {
         "on_break",
         "completed",
         "auto_clocked_out",
+        "voided",
       ],
       board_event_type: [
         "assign",

@@ -29,8 +29,14 @@ export interface ClockOperationResponse {
   readonly clockInAt?: string | null;
   readonly clockOutAt?: string | null;
   readonly breakStartAt?: string | null;
-  readonly totalWorkedSeconds?: number | null;
+  /** Policy-neutral elapsed time between clock-in and clock-out. */
+  readonly grossElapsedSeconds?: number | null;
   readonly totalBreakSeconds?: number | null;
+  readonly breakDurationSeconds?: number | null;
+  /** Number of breaks on the session that no manager has classified paid/unpaid yet. */
+  readonly unclassifiedBreakCount?: number | null;
+  /** Null whenever any break is unclassified; never a guessed figure. */
+  readonly netPayableSeconds?: number | null;
   readonly serviceDate?: string | null;
 }
 
@@ -60,6 +66,9 @@ export async function nativeClockIn(
       }
       if (error.code === "23505") {
         return { ok: false, error: error.message, code: "already_open" };
+      }
+      if (error.code === "22023" || error.code === "55000") {
+        return { ok: false, error: error.message, code: "invalid_transition" };
       }
       if (error.code === "P0002") {
         return { ok: false, error: error.message, code: "not_found" };
@@ -106,6 +115,9 @@ export async function nativeClockOut(
       console.error("nativeClockOut error", error);
       if (error.code === "42501") {
         return { ok: false, error: error.message, code: "unauthorized" };
+      }
+      if (error.code === "22023" || error.code === "55000") {
+        return { ok: false, error: error.message, code: "invalid_transition" };
       }
       if (error.code === "P0002") {
         return { ok: false, error: error.message, code: "not_found" };
@@ -257,8 +269,8 @@ export async function getActiveAttendanceSession(
         status: data.status,
         clockInAt: data.clock_in_at,
         clockOutAt: data.clock_out_at,
+        grossElapsedSeconds: data.gross_elapsed_seconds,
         totalBreakSeconds: data.total_break_seconds,
-        totalWorkedSeconds: data.total_worked_seconds,
         createdBy: data.created_by,
         updatedBy: data.updated_by,
         createdAt: data.created_at,
