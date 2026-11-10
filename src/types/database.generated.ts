@@ -227,6 +227,27 @@ export type Database = {
           },
         ];
       };
+      attendance_financial_activation: {
+        Row: {
+          enabled: boolean;
+          evidence: string | null;
+          singleton: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          enabled?: boolean;
+          evidence?: string | null;
+          singleton?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          enabled?: boolean;
+          evidence?: string | null;
+          singleton?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       attendance_identity_links: {
         Row: {
           id: number;
@@ -3245,6 +3266,13 @@ export type Database = {
             foreignKeyName: "payroll_adjustments_payroll_period_id_fkey";
             columns: ["payroll_period_id"];
             isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: ["period_id"];
+          },
+          {
+            foreignKeyName: "payroll_adjustments_payroll_period_id_fkey";
+            columns: ["payroll_period_id"];
+            isOneToOne: false;
             referencedRelation: "payroll_periods";
             referencedColumns: ["id"];
           },
@@ -3252,8 +3280,273 @@ export type Database = {
             foreignKeyName: "payroll_adjustments_period_org_fk";
             columns: ["payroll_period_id", "organization_id"];
             isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: ["period_id", "organization_id"];
+          },
+          {
+            foreignKeyName: "payroll_adjustments_period_org_fk";
+            columns: ["payroll_period_id", "organization_id"];
+            isOneToOne: false;
             referencedRelation: "payroll_periods";
             referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      payroll_attendance_consumption_reviews: {
+        Row: {
+          baseline_net_seconds: number | null;
+          consumed_version: number;
+          consumption_id: number;
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_note: string | null;
+          delta_net_seconds: number | null;
+          id: number;
+          location_id: string;
+          observed_net_seconds: number | null;
+          observed_version: number;
+          observed_voided: boolean;
+          organization_id: string;
+          payroll_adjustment_id: number | null;
+          period_id: number;
+          profile_id: string;
+          session_id: string;
+          state: string;
+        };
+        Insert: {
+          baseline_net_seconds?: number | null;
+          consumed_version: number;
+          consumption_id: number;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          delta_net_seconds?: number | null;
+          id?: never;
+          location_id: string;
+          observed_net_seconds?: number | null;
+          observed_version: number;
+          observed_voided?: boolean;
+          organization_id: string;
+          payroll_adjustment_id?: number | null;
+          period_id: number;
+          profile_id: string;
+          session_id: string;
+          state?: string;
+        };
+        Update: {
+          baseline_net_seconds?: number | null;
+          consumed_version?: number;
+          consumption_id?: number;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          delta_net_seconds?: number | null;
+          id?: never;
+          location_id?: string;
+          observed_net_seconds?: number | null;
+          observed_version?: number;
+          observed_voided?: boolean;
+          organization_id?: string;
+          payroll_adjustment_id?: number | null;
+          period_id?: number;
+          profile_id?: string;
+          session_id?: string;
+          state?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_attendance_consumption_revie_payroll_adjustment_id_fkey";
+            columns: ["payroll_adjustment_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_adjustments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumption_reviews_consumption_id_fkey";
+            columns: ["consumption_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_attendance_consumption_staleness";
+            referencedColumns: ["consumption_id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumption_reviews_consumption_id_fkey";
+            columns: ["consumption_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_attendance_consumptions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumption_reviews_decided_by_fkey";
+            columns: ["decided_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumption_reviews_period_fk";
+            columns: ["period_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: ["period_id", "organization_id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumption_reviews_period_fk";
+            columns: ["period_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      payroll_attendance_consumptions: {
+        Row: {
+          consumed_at: string;
+          consumed_by: string;
+          consumer_ref: number;
+          consumer_type: string;
+          gross_elapsed_seconds: number;
+          id: number;
+          location_id: string;
+          net_payable_seconds: number;
+          organization_id: string;
+          period_month: string;
+          profile_id: string;
+          service_date: string;
+          session_id: string;
+          source_version: number;
+          status: string;
+          superseded_at: string | null;
+          superseded_by: string | null;
+          superseded_reason: string | null;
+          unpaid_break_seconds: number;
+        };
+        Insert: {
+          consumed_at?: string;
+          consumed_by: string;
+          consumer_ref: number;
+          consumer_type: string;
+          gross_elapsed_seconds: number;
+          id?: never;
+          location_id: string;
+          net_payable_seconds: number;
+          organization_id: string;
+          period_month: string;
+          profile_id: string;
+          service_date: string;
+          session_id: string;
+          source_version: number;
+          status?: string;
+          superseded_at?: string | null;
+          superseded_by?: string | null;
+          superseded_reason?: string | null;
+          unpaid_break_seconds: number;
+        };
+        Update: {
+          consumed_at?: string;
+          consumed_by?: string;
+          consumer_ref?: number;
+          consumer_type?: string;
+          gross_elapsed_seconds?: number;
+          id?: never;
+          location_id?: string;
+          net_payable_seconds?: number;
+          organization_id?: string;
+          period_month?: string;
+          profile_id?: string;
+          service_date?: string;
+          session_id?: string;
+          source_version?: number;
+          status?: string;
+          superseded_at?: string | null;
+          superseded_by?: string | null;
+          superseded_reason?: string | null;
+          unpaid_break_seconds?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_attendance_consumptions_consumed_by_fkey";
+            columns: ["consumed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_period_fk";
+            columns: [
+              "consumer_ref",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+            isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: [
+              "period_id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_period_fk";
+            columns: [
+              "consumer_ref",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_session_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_session_summaries";
+            referencedColumns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_session_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_sessions";
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_superseded_by_fkey";
+            columns: ["superseded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
         ];
       };
@@ -3336,8 +3629,22 @@ export type Database = {
             foreignKeyName: "payroll_payments_payroll_period_id_fkey";
             columns: ["payroll_period_id"];
             isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: ["period_id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_payroll_period_id_fkey";
+            columns: ["payroll_period_id"];
+            isOneToOne: false;
             referencedRelation: "payroll_periods";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_payments_period_org_fk";
+            columns: ["payroll_period_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: ["period_id", "organization_id"];
           },
           {
             foreignKeyName: "payroll_payments_period_org_fk";
@@ -3350,6 +3657,7 @@ export type Database = {
       };
       payroll_periods: {
         Row: {
+          attendance_source: string;
           generated_at: string;
           generated_by: string;
           gross_cents: number;
@@ -3358,15 +3666,17 @@ export type Database = {
           location_id: string | null;
           locked_at: string | null;
           locked_by: string | null;
-          neon_user_id: number;
+          neon_user_id: number | null;
           organization_id: string;
           period_month: string;
+          profile_id: string | null;
           rate_cents_snapshot: number;
           regenerated_at: string | null;
           regenerated_by: string | null;
           status: string;
         };
         Insert: {
+          attendance_source?: string;
           generated_at?: string;
           generated_by: string;
           gross_cents: number;
@@ -3375,15 +3685,17 @@ export type Database = {
           location_id?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
-          neon_user_id: number;
+          neon_user_id?: number | null;
           organization_id: string;
           period_month: string;
+          profile_id?: string | null;
           rate_cents_snapshot: number;
           regenerated_at?: string | null;
           regenerated_by?: string | null;
           status?: string;
         };
         Update: {
+          attendance_source?: string;
           generated_at?: string;
           generated_by?: string;
           gross_cents?: number;
@@ -3392,9 +3704,10 @@ export type Database = {
           location_id?: string | null;
           locked_at?: string | null;
           locked_by?: string | null;
-          neon_user_id?: number;
+          neon_user_id?: number | null;
           organization_id?: string;
           period_month?: string;
+          profile_id?: string | null;
           rate_cents_snapshot?: number;
           regenerated_at?: string | null;
           regenerated_by?: string | null;
@@ -3437,6 +3750,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "payroll_periods_profile_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+          {
             foreignKeyName: "payroll_periods_regenerated_by_fkey";
             columns: ["regenerated_by"];
             isOneToOne: false;
@@ -3447,25 +3767,31 @@ export type Database = {
       };
       payroll_rates: {
         Row: {
+          attendance_source: string;
           id: number;
-          neon_user_id: number;
+          neon_user_id: number | null;
           organization_id: string;
+          profile_id: string | null;
           rate_cents: number;
           updated_at: string;
           updated_by: string;
         };
         Insert: {
+          attendance_source?: string;
           id?: never;
-          neon_user_id: number;
+          neon_user_id?: number | null;
           organization_id: string;
+          profile_id?: string | null;
           rate_cents: number;
           updated_at?: string;
           updated_by: string;
         };
         Update: {
+          attendance_source?: string;
           id?: never;
-          neon_user_id?: number;
+          neon_user_id?: number | null;
           organization_id?: string;
+          profile_id?: string | null;
           rate_cents?: number;
           updated_at?: string;
           updated_by?: string;
@@ -3477,6 +3803,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_rates_profile_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
           },
           {
             foreignKeyName: "payroll_rates_updated_by_fkey";
@@ -5475,6 +5808,122 @@ export type Database = {
           },
         ];
       };
+      payroll_attendance_consumption_staleness: {
+        Row: {
+          consumed_net_seconds: number | null;
+          consumed_version: number | null;
+          consumption_id: number | null;
+          current_version: number | null;
+          location_id: string | null;
+          organization_id: string | null;
+          period_frozen: boolean | null;
+          period_id: number | null;
+          period_month: string | null;
+          profile_id: string | null;
+          session_id: string | null;
+          session_voided: boolean | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_attendance_consumptions_period_fk";
+            columns: [
+              "period_id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+            isOneToOne: false;
+            referencedRelation: "payroll_native_period_reconciliation";
+            referencedColumns: [
+              "period_id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_period_fk";
+            columns: [
+              "period_id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+            isOneToOne: false;
+            referencedRelation: "payroll_periods";
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "profile_id",
+              "period_month",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_session_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_session_summaries";
+            referencedColumns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+          {
+            foreignKeyName: "payroll_attendance_consumptions_session_fk";
+            columns: [
+              "session_id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "attendance_sessions";
+            referencedColumns: [
+              "id",
+              "organization_id",
+              "location_id",
+              "profile_id",
+            ];
+          },
+        ];
+      };
+      payroll_native_period_reconciliation: {
+        Row: {
+          active_rows: number | null;
+          hours_snapshot: number | null;
+          ledger_seconds: number | null;
+          organization_id: string | null;
+          period_id: number | null;
+          period_month: string | null;
+          profile_id: string | null;
+          reconciles: boolean | null;
+          status: string | null;
+          superseded_rows: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payroll_periods_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payroll_periods_profile_membership_fk";
+            columns: ["organization_id", "profile_id"];
+            isOneToOne: false;
+            referencedRelation: "memberships";
+            referencedColumns: ["organization_id", "profile_id"];
+          },
+        ];
+      };
     };
     Functions: {
       apply_location_assignment_changes: {
@@ -6197,9 +6646,37 @@ export type Database = {
           roles: Database["public"]["Enums"]["app_role"][];
         }[];
       };
+      payroll_generate_native_period: {
+        Args: {
+          p_organization_id: string;
+          p_period_month: string;
+          p_profile_id: string;
+        };
+        Returns: Json;
+      };
       payroll_location_authorized: {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: boolean;
+      };
+      payroll_raise_consumption_reviews: {
+        Args: { p_organization_id: string };
+        Returns: number;
+      };
+      payroll_resolve_consumption_review: {
+        Args: {
+          p_decision: string;
+          p_note: string;
+          p_payroll_adjustment_id?: number;
+          p_review_id: number;
+        };
+        Returns: Json;
+      };
+      payroll_source_transition_readiness: {
+        Args: {
+          p_location_id: string;
+          p_target_mode: Database["public"]["Enums"]["attendance_mode"];
+        };
+        Returns: Json;
       };
       provision_location: {
         Args: {

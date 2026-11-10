@@ -78,6 +78,9 @@ const GUARDING_HELPERS: Record<
   "payroll/actions/payroll-actions.ts": [
     { helper: "guardPayrollModule(", module: "payroll" },
   ],
+  "payroll/actions/native-payroll-actions.ts": [
+    { helper: "authorize(", module: "payroll" },
+  ],
 };
 
 function exportedActions(text: string): { name: string; body: string }[] {

@@ -99,10 +99,16 @@ export interface FinancialPolicyApprovals {
 }
 
 /**
- * The recorded owner approvals. As of this batch NO approval record exists (issue #254 has
- * no owner decision; the README lists Q1–Q8 as open), so every value is `not_approved`.
- * Changing a value here is a policy change: it needs the owner's written approval and its
- * own reviewed PR. Tests never flip this constant; they pass synthetic approvals.
+ * The ACTIVATION record for native attendance as a financial source.
+ *
+ * On 2026-11-10 the owner approved the DECISIONS Q1, Q4, Q6, Q9 and Q9b (V2-006 R2) and
+ * authorized local implementation, but expressly did NOT authorize activating native
+ * financial processing, real payments, hosted DEV (Q8), or backend enforcement. This record
+ * is the application-level activation gate, so it intentionally stays `not_approved`; the
+ * database has its own independent switch (`attendance_financial_activation.enabled`,
+ * default off). Opening the gate is the activation step: it needs the owner's written
+ * activation authorization and its own reviewed PR. Tests never flip this constant; they
+ * pass synthetic approvals.
  */
 export const RECORDED_FINANCIAL_POLICY_APPROVALS: FinancialPolicyApprovals = {
   q1BreakClassification: "not_approved",
