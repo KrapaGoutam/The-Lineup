@@ -4,7 +4,7 @@ GitHub Issue: [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 Branch: `feature/v2-006-attendance-v2`  
-Status: `IN PROGRESS — BATCH A VERIFIED + CORRECTED; BATCH B VERIFIED VIA REAL-BROWSER ACCEPTANCE (UNMERGED); BATCH C NOT STARTED`
+Status: `IN PROGRESS — BATCH A VERIFIED; BATCH B VERIFIED; BATCH C IMPLEMENTED LOCALLY (FINANCIAL ACTIVATION POLICY-BLOCKED); INDEPENDENT REVIEW PENDING; HOSTED DEV PENDING OWNER APPROVAL; NO PR`
 
 ---
 
@@ -209,7 +209,7 @@ Full replay from scratch (`supabase db reset`, local disposable stack): 84 migra
     11. Overall organization administrator able to inspect and manage location attendance across organizations without local tenant membership row (`src/lib/current-user.ts` overall role resolution).
     12. Optimistic concurrency control rejecting stale concurrent writes with `P0004` version conflict.
     13. Ledger immutability and financial non-mutation verification: original punch events untouched, zero ledger deletions/updates, and zero payroll/tips table mutations.
-- **Deferred**: Hosted DEV rollout (migrations 83 and 84 pending owner authorization per Q8) and full production E2E suites (deferred to post-Batch C).
+- **Deferred**: Hosted DEV rollout (migrations 83 and 84 pending owner authorization per Q8) and full production E2E suites (deferred to post-Batch C). Batch C receipts: §13.10.
 
 ## 10. Additional Batch A finding discovered during Batch B regression
 
@@ -228,7 +228,7 @@ Full replay from scratch (`supabase db reset`, local disposable stack): 84 migra
 - **Q7 Overall Assistant Manager / Shift Manager**: they inherit management authority via the shipped tier model (≥ 2). Confirm this is wanted for attendance corrections.
 - **Q8 Hosted rollout**: authorization to back up, rehearse and apply the two migrations to hosted DEV, and whether a Preview deployment of this branch is acceptable first (the branch has deliberately **not** been pushed, because the Vercel integration would build a Preview wired to DEV, which lacks these migrations).
 
-## 12. Batch C handoff (V2-006.006 Payroll/Tips, V2-006.007 External compatibility)
+## 12. Batch C handoff (historical; superseded by §13)
 
 Ready: a stable per-session summary (`attendance_session_summaries`) with completeness / correction / policy-resolution flags; an immutable event ledger with attributed corrections; per-location source selection; provenance labels.
 
@@ -239,3 +239,132 @@ Prerequisites / blockers before Batch C:
 3. Define how a correction after a payroll period is confirmed is handled (Q6); the ledger already records `last_corrected_at` and `correction_count` to detect it.
 4. V2-006.007: keep the Neon reader as is; cutover/compatibility is a separate explicit per-location operation (no automatic conversion).
 5. Hosted DEV rollout authorization (Q8) and a single consolidated PR after Batch C.
+
+---
+
+## 13. Batch C — Payroll / Tips integration and External compatibility (V2-006.006, V2-006.007)
+
+Local implementation on the same branch. **No migration was added** (the checksums in §8 are unchanged). Hosted DEV and Production untouched. The branch is still unpushed; there is no PR.
+
+### 13.1 Decision: the code is ready, financial activation is NOT granted
+
+No owner approval record exists for Q1–Q8 (issue #254 has no decision; §11 is unchanged). The recorded approvals are all `not_approved` in code (`RECORDED_FINANCIAL_POLICY_APPROVALS`). Native attendance is therefore built, tested and previewable but **blocked as a financial source**: `evaluateFinancialActivation` returns `BLOCKED_POLICY` naming Q1, Q4 and Q6. External and unconfigured locations keep their unchanged legacy path. Nothing was posted, computed in money, finalized or activated.
+
+### 13.2 Owner policy register (no recommendation is treated as approved)
+
+| #   | Decision                             | Approval record | Implemented behaviour                                                                                                                                                    | Still needed                                                             | Impact                                 |
+| --- | ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------- |
+| Q1  | Break classification                 | **None**        | Breaks stay `unclassified`; payable is NULL until each is classified; a record with an undecided break is ineligible (`UNCLASSIFIED_BREAK`), never zero                  | Who classifies, and whether a rule may pre-classify                      | **Blocks** native financial activation |
+| Q2  | Auto clock-out                       | **None**        | Not implemented. The reserved `auto_clocked_out` status is treated as ineligible (`AUTO_CLOCK_OUT_UNAPPROVED`)                                                           | Policy, if ever wanted                                                   | None today                             |
+| Q3  | Service date                         | **None**        | Location-local calendar date of the clock-in; no cutoff. A stored date that disagrees with the clock-in is ineligible                                                    | Whether a late-night cutoff is wanted                                    | Period grouping only                   |
+| Q4  | Payroll rules                        | **None**        | Existing rules only: `computeGrossCents = round(hours × rate)`, per-person override else organization default. No new rate, rounding, overtime or holiday logic anywhere | Which rules apply to native hours, and how native hours map into Payroll | **Blocks** activation                  |
+| Q5  | Manager self-correction              | **None**        | Unchanged: allowed and flagged `self_correction`                                                                                                                         | Independent-approval policy                                              | None in Batch C                        |
+| Q6  | Corrections after a confirmed period | **None**        | Detection only (`detectCorrectionsAfterSnapshot`, §13.5). Confirmed rows are provably unchanged (pgTAP 0075). No adjustment is created                                   | The handling workflow (candidate adjustment, who reviews)                | **Blocks** activation                  |
+| Q7  | Correction authority                 | **None**        | Unchanged tier model; no new cross-location or Overall privilege                                                                                                         | Confirm Overall Assistant Manager / Shift Manager                        | None                                   |
+| Q8  | Hosted DEV migration / Preview       | **None**        | Nothing applied or pushed                                                                                                                                                | Separate authorization                                                   | Gates hosted acceptance                |
+
+### 13.3 Existing Payroll and Tips contracts (audited, not assumed)
+
+- **Payroll** is keyed by `neon_user_id` (integer, NOT NULL) and a calendar month (`period_month`). Periods are organization-level (`location_id = null`) and need organization-manager authority because Neon hours carry no verified location. Hours come from `getAttendanceRows` then `aggregateHours`, which silently excludes rows with null `hours_worked`. Generation refuses when no rate exists. Regeneration is refused when the period is locked or any payment exists; corrections after payment use the append-only `payroll_adjustments` ledger.
+- **Locked and confirmed protection is database-enforced**, stronger than the application layer: `payroll_periods_actor_guard` refuses a snapshot change on a locked period for any signed-in actor (42501); `forbid_payroll_period_snapshot_edit` refuses it once any payment exists; confirmed payments cannot be edited or deleted (trigger, and RLS lets only drafts be deleted); adjustments have no UPDATE, DELETE or TRUNCATE grant.
+- **Tips has no hours-based formula.** `allocateTipInterval` splits an interval's cents equally among the chosen participants with remainder distribution. The only attendance use is the "Pull clocked-in team" **suggestion** (who is clocked in), which the Allocation board also uses for prioritisation.
+- **Native sessions are keyed by `profile_id`; Payroll by `neon_user_id`.** A native-only employee has no `neon_user_id`, so there is **no schema path to a payroll period for native hours** without a Payroll contract change. This is an activation prerequisite (§13.7) and was deliberately not invented here.
+
+### 13.4 Architecture (what was built)
+
+```text
+Location attendance_mode
+        |
+        v
+resolveFinancialSource(mode)           domain/financial-source.ts
+        |
+        +-- INTERNAL_THE_LINEUP -> readNativeFinancialAttendance        data/native-financial-data.ts
+        |                          authority gate, then a single-statement read of
+        |                          attendance_session_summaries -> evaluateNativeSession
+        |                          -> AttendanceFinancialRecord (audit: append_only_ledger)
+        +-- EXTERNAL / UNCONFIGURED -> existing Neon reader and Payroll/Tips paths, UNCHANGED
+        |                          evaluateExternalRow is a thin translator (contract-tested;
+        |                          no new Neon access path was added)
+        +-- DISABLED -> no attendance hours (NOT_APPLICABLE)
+        |
+        v
+evaluateFinancialActivation(decision, approvals)
+   -> BLOCKED_POLICY (Q1, Q4, Q6) | ACTIVE_LEGACY_UNCHANGED | NO_ATTENDANCE_HOURS | ACTIVE
+```
+
+Files: `domain/financial-source.ts` (contract, adapters, summaries, policy gate, labels), `data/native-financial-data.ts` (reader and open-session roster), `actions/financial-readiness-actions.ts` (read-only, module-guarded), `components/payroll-readiness-panel.tsx` (manager-only, "Preview only"), `data/attendance-actor.ts` (§13.6). Payroll files were not modified. Tips and Allocation changed only in how the roster suggestion chooses its source (§13.5).
+
+### 13.5 Integration state
+
+| Consumer                                                  | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Payroll generation, regeneration, locking                 | **Unchanged** (Neon only). Native attendance is not consumed.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Payroll readiness                                         | New **read-only preview** in the Attendance tab for managers of an internal location: ready vs needs-attention counts, the reason per shift, and a per-person "has a final total" flag. **No hours and no money.** External locations are told their existing behaviour is unchanged (no Neon read).                                                                                                                                                                                                                     |
+| Tips calculation and confirmed distributions              | **Unchanged.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Tips "Pull clocked-in team" and Allocation board priority | **Source-aware** for the verified location: internal reads native open sessions; disabled suggests nobody; external and unconfigured use the unchanged Neon path. A database without the attendance-mode column (PostgREST 42703) is legacy by definition and keeps Neon; any other failure fails closed. This prevents silently mixing Neon rows into an internal location. It is a **suggestion list** (no hours, no amounts) and is live only for a location an owner has set to internal, which no real location is. |
+
+Eligibility (all tested): completed, not voided, breaks resolved, payable non-null and not negative, durations consistent with the absolute instants, service date consistent with the location zone, tenant/location/employee match, not a duplicate, not already consumed. A shift that runs past the period end is flagged `PERIOD_BOUNDARY` and is never split, clipped or duplicated. Failed reads are distinct outcomes (`ACCESS_DENIED`, `SOURCE_ERROR`, `SOURCE_UNAVAILABLE`), never an empty report; a malformed row fails the read instead of being dropped. `detectCorrectionsAfterSnapshot` reports native records corrected after a snapshot time; it creates nothing.
+
+### 13.6 Security finding fixed during Batch C (P1)
+
+Commit `8593684` (Batch B browser acceptance) changed the shared `getCurrentUser(slug)` to accept an Overall role with **no membership**. That helper gates the **service-role** account routes (`/api/auth/passcode/reset`, `/api/team/deactivate`, `/api/team/reactivate`, account recovery) and `guardModuleForSlug`. An Overall owner or manager could therefore pass it for **any** organization slug (`organizations_select_member` lets any Overall role read every organization) and then reset passcodes or deactivate members through the service-role client (`canChangeDesignation` is true for any target when the designation is owner).
+
+Fixed in `a76e00a`: `getCurrentUser` is restored byte-for-byte to the base behaviour, and the native attendance actions use the new `getAttendanceEntryUser` (canonical active-context resolver plus `getEntryUser`, the Payroll-actor pattern). Overall administrators keep attendance access (browser-verified) without widening those routes. Locked by `current-user.test.ts` (an Overall-only user gets null; the Overall role is never consulted). Whether Overall owners should administer accounts across organizations is a separate product decision and must not arrive as a side effect of an attendance change.
+
+### 13.7 Activation prerequisites (before any real financial use of native attendance)
+
+1. Owner approval of Q1, Q4 and Q6, recorded, then reflected in `RECORDED_FINANCIAL_POLICY_APPROVALS` by a reviewed PR.
+2. A Payroll contract for native employees (no `neon_user_id`): how a profile maps to a payroll period, how location-level periods relate to the organization-level model, and how native hours replace Neon hours without changing the rate or rounding rules.
+3. A duplicate-consumption ledger (a unique source-record reference per consumer) so a retry or regeneration cannot double-count. The contract already carries a stable `sourceRecordId` and `correctionVersion` for it. Not built, because nothing consumes yet.
+4. The Q6 workflow for `detectCorrectionsAfterSnapshot` hits (authorised review, then the existing `payroll_adjustments` path); never auto-posted.
+5. A per-location source cutoff contract for periods that span a mode change, using `audit_events` (not implemented).
+6. The hosted DEV migration gate (Q8): project identity check, ledger inspection (82), backup and restore readiness, checksum verification, rehearsal on representative data, authenticated smoke, reconciliation, and a recovery or forward-fix plan.
+
+### 13.8 External (Neon) compatibility: preserved, labelled by what was actually tested
+
+- The reader, SQL, timeout and error handling in `attendance-data.ts` are untouched, and so are the existing Payroll and Tips Neon paths.
+- `evaluateExternalRow` is a pure translator: hours are the source's own `hours_worked`; the Neon `date` decides the period (no boundary logic added); an auto-closed row with hours still counts; a row without hours is excluded **with a reason**; identity uses `attendance_identity_links` (UUID to id, never names) and flags unmapped or ambiguous links only where a profile is required. A parity test shows eligible external hours equal the existing `aggregateHours`.
+- External records never claim internal audit guarantees (`audit: none_provided`; correction and break fields are `null`).
+- No external record is copied into native tables, and no new Neon read path was added (the Neon database has no organization or location scoping).
+- **Deferred, not claimed:** live Neon connectivity. Every external test uses grounded fixtures or the existing mocks; the local environment has no `NEON_DATABASE_URL`.
+
+Source transitions never migrate or rewrite history. Leaving `internal_the_lineup` is refused while any session is open (`55000`, pgTAP 0073). Native history stays native, Neon history stays Neon, and Payroll and Tips history is untouched. Automatic detection of a period that spans a mode change is **not** implemented (§13.7 item 5).
+
+### 13.9 Concurrency and idempotency (real parallel sessions, committed synthetic fixtures)
+
+- **Reads during corrections:** 40 manager corrections were committed through the RPC while 150 concurrent reads ran against the summary view: **0 torn reads**; readers observed all 41 versions (genuine interleaving) and only the two legitimate durations. Final state: version 41, correction_count 40, and 40 ledger events with 40 distinct sequence numbers (no lost update, no skipped version). The reader is one statement, so every row is a single committed snapshot.
+- Stale versions, duplicate or parallel corrections, and idempotent replay were covered in Batch B (6 simultaneous corrections give 1 applied and 5 `P0004`).
+- Duplicate payroll or tip preparation: nothing consumes native attendance yet, so there is nothing to double-count. The contract flags a repeated source id (`DUPLICATE_SOURCE_RECORD`) and a reused one (`ALREADY_CONSUMED`), idempotently.
+- Membership revocation and mode change: covered by pgTAP 0073 and 0075 (a revoked manager fails the gate and reads nothing; a mode change with open sessions is refused).
+
+### 13.10 Test receipts
+
+**Newly executed this session** (local disposable stack, pristine after `db reset --local`):
+
+- Vitest, whole repository: **3,784 passed, 7 pre-existing skips** (276 files).
+- pgTAP, whole repository (`supabase test db --local`): **77 files, 2,929 assertions, PASS**, including the new 0075 (54).
+- `npm run check` (Prettier, ESLint with `--max-warnings=0`, `next typegen` and `tsc --noEmit`): clean. `CI=1 npx next build --webpack`: success.
+- Playwright (`playwright.attendance-local.config.ts`): **39/39** across desktop, tablet and mobile, now including the readiness panel assertions and the Overall-administrator test through the new actor.
+- Mutation checks: 3 mutations of the contract and 1 injected tamper of a confirmed tip allocation were each caught by the suites.
+
+**Reused prior evidence:** the Batch A and B design receipts in §4 and §9 (not re-derived).
+
+**Deferred:** hosted DEV rollout and smoke; live Neon connectivity; Safari/WebKit; the independent security and financial review.
+
+**Environment hygiene finding:** the Playwright harness commits fixtures (organizations, sessions) that cannot be removed because the attendance ledger is deliberately undeletable. Until the local database is reset, three count-based assertions in 0059 and 0062 (global membership, configuration-row and organization counts) fail. This is test pollution, not a regression: they pass on a reset database.
+
+### 13.11 Independent review package (required before the single PR)
+
+The implementing agent does not approve its own security-critical work. Reviewer scope:
+
+1. `financial-source.ts` eligibility and period rules against the Payroll contract in §13.3.
+2. `native-financial-data.ts`: authority before read, error mapping, snapshot consistency.
+3. The `getCurrentUser` revert and `getAttendanceEntryUser` (§13.6) against every caller.
+4. The source-aware roster in Tips and Allocation (fail closed versus the 42703 legacy fallback).
+5. pgTAP 0075 assumptions.
+6. The SECURITY DEFINER attendance RPCs (unchanged since Batch B).
+7. Completeness of the activation prerequisites in §13.7.
+
+### 13.12 Release readiness
+
+Batch A VERIFIED · Batch B VERIFIED · Batch C IMPLEMENTED LOCALLY (code ready; **financial activation policy-blocked**) · Independent review PENDING · Hosted DEV acceptance PENDING APPROVAL (Q8) · Final PR NOT CREATED · Issue #254 OPEN. V2-006 is **not** complete.
