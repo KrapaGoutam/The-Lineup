@@ -137,6 +137,46 @@ describe("identity, location and module gates", () => {
     expect(mocks.readNativeFinancialAttendance).not.toHaveBeenCalled();
   });
 
+  it("R1 stale-tab binding: the preview is for the location on screen, never the other branch", async () => {
+    const SHOWN = "00000000-0000-0000-0000-0000000000b2";
+    const VERIFIED = "00000000-0000-0000-0000-0000000000b1";
+    signedIn({ attendance_mode: "internal_the_lineup", time_zone: "UTC" });
+    mocks.getPrimaryLocation.mockResolvedValue({
+      id: VERIFIED,
+      time_zone: "America/Chicago",
+    });
+    const res = await getAttendanceFinancialReadinessAction({
+      ...INPUT,
+      expectedLocationId: SHOWN,
+    });
+    expect(res).toMatchObject({ ok: false, contextStale: true });
+    expect(mocks.guardModule).not.toHaveBeenCalled();
+    expect(mocks.readNativeFinancialAttendance).not.toHaveBeenCalled();
+
+    mocks.readNativeFinancialAttendance.mockResolvedValue(okRead);
+    const ok = await getAttendanceFinancialReadinessAction({
+      ...INPUT,
+      expectedLocationId: VERIFIED.toUpperCase(),
+    });
+    expect(ok.ok).toBe(true);
+    expect(mocks.readNativeFinancialAttendance).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ locationId: VERIFIED }),
+    );
+  });
+
+  it("R1: a malformed expectedLocationId is rejected before anything is touched", async () => {
+    expect(
+      (
+        await getAttendanceFinancialReadinessAction({
+          ...INPUT,
+          expectedLocationId: "loc-1",
+        })
+      ).ok,
+    ).toBe(false);
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
   it("an unreadable location is an error, not a default mode", async () => {
     signedIn(null);
     expect((await getAttendanceFinancialReadinessAction(INPUT)).ok).toBe(false);

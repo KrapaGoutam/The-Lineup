@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -9,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getAttendanceEntryUser } from "../data/attendance-actor";
 import { readNativeFinancialAttendance } from "../data/native-financial-data";
+import { expectedLocationAgrees } from "../domain/expected-location";
 import {
   evaluateFinancialActivation,
   resolveFinancialSource,
@@ -68,11 +70,18 @@ const slugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const MAX_RANGE_DAYS = 92;
 
+const expectedLocationSchema = z
+  .string()
+  .trim()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
 const inputSchema = z
   .object({
     restaurantSlug: slugSchema,
     startDate: z.iso.date(),
     endDate: z.iso.date(),
+    /** The location the UI is showing; compared with the verified one (R1), never trusted. */
+    expectedLocationId: expectedLocationSchema.optional(),
   })
   .refine(({ startDate, endDate }) => startDate <= endDate)
   .refine(({ startDate, endDate }) => {
@@ -102,6 +111,7 @@ export async function getAttendanceFinancialReadinessAction(input: {
   restaurantSlug: string;
   startDate: string;
   endDate: string;
+  expectedLocationId?: string;
 }): Promise<ActionResult<FinancialReadinessView>> {
   try {
     const parsed = inputSchema.safeParse(input);
@@ -126,6 +136,11 @@ export async function getAttendanceFinancialReadinessAction(input: {
           "Choose a location first. Attendance is shown for one location at a time.",
         contextStale: true,
       };
+    }
+
+    // R1: a second tab may have switched the persisted location since this one rendered.
+    if (!expectedLocationAgrees(parsed.data.expectedLocationId, location.id)) {
+      return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
     }
 
     const blocked = await guardModule({

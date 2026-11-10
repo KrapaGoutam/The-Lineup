@@ -157,6 +157,10 @@ describe("source selection (never mixes sources)", () => {
       await screen.findByText("Ada Lovelace", { selector: "td" }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("legacy-neon-report")).not.toBeInTheDocument();
+    // R1: every native read names the location this screen is showing.
+    expect(mocks.getNativeAttendanceReportAction).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedLocationId: "loc-1" }),
+    );
   });
 
   it.each([

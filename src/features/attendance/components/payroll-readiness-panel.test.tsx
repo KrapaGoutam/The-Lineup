@@ -45,10 +45,13 @@ function native(
   };
 }
 
+const LOC = "00000000-0000-0000-0000-0000000000b1";
+
 function renderPanel() {
   return render(
     <PayrollReadinessPanel
       restaurantSlug="the-monks"
+      locationId={LOC}
       start="2026-05-01"
       end="2026-05-31"
       reloadKey={0}
@@ -60,6 +63,23 @@ function renderPanel() {
 beforeEach(() => vi.clearAllMocks());
 
 describe("PayrollReadinessPanel", () => {
+  it("R1: asks about the location the report on screen belongs to, and shows a stale refusal", async () => {
+    mocks.getAttendanceFinancialReadinessAction.mockResolvedValue({
+      ok: false,
+      error: "Your active location changed. Refresh your workspace.",
+      contextStale: true,
+    });
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /active location changed/,
+      ),
+    );
+    expect(mocks.getAttendanceFinancialReadinessAction).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedLocationId: LOC }),
+    );
+  });
+
   it("is labelled preview-only and names the pending owner decisions", async () => {
     mocks.getAttendanceFinancialReadinessAction.mockResolvedValue(
       native({
@@ -254,6 +274,7 @@ describe("PayrollReadinessPanel", () => {
     rerender(
       <PayrollReadinessPanel
         restaurantSlug="the-monks"
+        locationId={LOC}
         start="2026-06-01"
         end="2026-06-30"
         reloadKey={0}
@@ -267,6 +288,7 @@ describe("PayrollReadinessPanel", () => {
         restaurantSlug: "the-monks",
         startDate: "2026-06-01",
         endDate: "2026-06-30",
+        expectedLocationId: LOC,
       }),
     );
   });

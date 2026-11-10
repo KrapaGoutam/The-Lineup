@@ -20,7 +20,10 @@ import {
   listSessionBreaks,
   type NativeBreakDetail,
 } from "../data/native-report-data";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+
 import { correctionInputSchema } from "../domain/attendance-correction";
+import { expectedLocationAgrees } from "../domain/expected-location";
 import {
   decideReportSource,
   type AttendanceReportSource,
@@ -76,6 +79,7 @@ interface VerifiedContext {
  */
 async function resolveContext(
   restaurantSlug: string,
+  expectedLocationId?: string,
 ): Promise<
   | { ok: true; ctx: VerifiedContext }
   | Extract<ActionResult<never>, { ok: false }>
@@ -89,6 +93,11 @@ async function resolveContext(
 
   const location = await getPrimaryLocation(user.organizationId);
   if (!location) return { ok: false, error: NO_LOCATION, contextStale: true };
+
+  // R1: the browser's on-screen location is only an assertion to compare, never a selector.
+  if (!expectedLocationAgrees(expectedLocationId, location.id)) {
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
+  }
 
   const blocked = await guardModule({
     module: "attendance",
@@ -176,6 +185,8 @@ const reportInputSchema = z
     startDate: dateSchema,
     endDate: dateSchema,
     profileId: uuidSchema.nullable().optional(),
+    /** The location the UI is showing; compared with the verified one (R1), never trusted. */
+    expectedLocationId: uuidSchema.optional(),
   })
   .refine(({ startDate, endDate }) => startDate <= endDate)
   .refine(({ startDate, endDate }) => {
@@ -197,12 +208,16 @@ export async function getNativeAttendanceReportAction(input: {
   startDate: string;
   endDate: string;
   profileId?: string | null;
+  expectedLocationId?: string;
 }): Promise<ActionResult<NativeReportView>> {
   try {
     const parsed = reportInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: INVALID_REQUEST };
 
-    const resolved = await resolveContext(parsed.data.restaurantSlug);
+    const resolved = await resolveContext(
+      parsed.data.restaurantSlug,
+      parsed.data.expectedLocationId,
+    );
     if (!resolved.ok) return resolved;
     const { supabase, location } = resolved.ctx;
 

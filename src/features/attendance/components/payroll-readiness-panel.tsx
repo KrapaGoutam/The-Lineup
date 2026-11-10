@@ -32,12 +32,15 @@ function prettyDate(date: string): string {
  */
 export function PayrollReadinessPanel({
   restaurantSlug,
+  locationId,
   start,
   end,
   reloadKey,
   names,
 }: {
   restaurantSlug: string;
+  /** The location the report on screen belongs to; the server refuses a mismatch (R1). */
+  locationId: string;
   start: string;
   end: string;
   /** Bump to re-check (e.g. after a correction). */
@@ -57,6 +60,7 @@ export function PayrollReadinessPanel({
         restaurantSlug,
         startDate: start,
         endDate: end,
+        expectedLocationId: locationId,
       });
       if (cancelled) return;
       setLoading(false);
@@ -72,7 +76,7 @@ export function PayrollReadinessPanel({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, start, end, reloadKey]);
+  }, [restaurantSlug, locationId, start, end, reloadKey]);
 
   return (
     <Card>

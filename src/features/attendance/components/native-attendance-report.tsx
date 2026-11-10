@@ -88,6 +88,8 @@ export function NativeAttendanceReport({
         startDate: start,
         endDate: end,
         profileId: profileId || null,
+        // R1: the server refuses if the persisted location is no longer the one shown here.
+        expectedLocationId: source.locationId,
       });
       if (cancelled) return;
       setLoading(false);
@@ -108,7 +110,15 @@ export function NativeAttendanceReport({
     return () => {
       cancelled = true;
     };
-  }, [restaurantSlug, start, end, profileId, reloadKey, rangeValid]);
+  }, [
+    restaurantSlug,
+    source.locationId,
+    start,
+    end,
+    profileId,
+    reloadKey,
+    rangeValid,
+  ]);
 
   const selected = useMemo(
     () => view?.rows.find((r) => r.sessionId === selectedId) ?? null,
@@ -277,6 +287,7 @@ export function NativeAttendanceReport({
       {source.canManage && rangeValid ? (
         <PayrollReadinessPanel
           restaurantSlug={restaurantSlug}
+          locationId={source.locationId}
           start={start}
           end={end}
           reloadKey={reloadKey}

@@ -243,6 +243,63 @@ describe("getNativeAttendanceReportAction", () => {
     );
   });
 
+  describe("stale-tab binding (R1): the rows must be for the location on screen", () => {
+    it("refuses to read when the location the UI shows is not the verified one", async () => {
+      signedIn(
+        supabaseDouble({ mode: "internal_the_lineup", canManage: true }),
+      );
+      const res = await getNativeAttendanceReportAction({
+        ...input,
+        expectedLocationId: OTHER_LOC,
+      });
+      expect(res).toMatchObject({ ok: false, contextStale: true });
+      expect(mocks.listNativeAttendance).not.toHaveBeenCalled();
+      // Refused before the module guard and the database are consulted for the wrong branch.
+      expect(mocks.guardModule).not.toHaveBeenCalled();
+    });
+
+    it("proceeds when the expectation matches (case-insensitive)", async () => {
+      signedIn(
+        supabaseDouble({ mode: "internal_the_lineup", canManage: true }),
+      );
+      mocks.listNativeAttendance.mockResolvedValue({
+        ok: true,
+        rows: [],
+        truncated: false,
+      });
+      const res = await getNativeAttendanceReportAction({
+        ...input,
+        expectedLocationId: LOC.toUpperCase(),
+      });
+      expect(res.ok).toBe(true);
+      expect(mocks.listNativeAttendance).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ locationId: LOC }),
+      );
+    });
+
+    it("a malformed expectation is an invalid request, not a silent pass", async () => {
+      signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
+      expect(
+        await getNativeAttendanceReportAction({
+          ...input,
+          expectedLocationId: "not-a-uuid",
+        }),
+      ).toMatchObject({ ok: false });
+      expect(mocks.listNativeAttendance).not.toHaveBeenCalled();
+    });
+
+    it("an omitted expectation keeps the direct/legacy behaviour (verified location)", async () => {
+      signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
+      mocks.listNativeAttendance.mockResolvedValue({
+        ok: true,
+        rows: [],
+        truncated: false,
+      });
+      expect((await getNativeAttendanceReportAction(input)).ok).toBe(true);
+    });
+  });
+
   it("rejects invalid ranges", async () => {
     signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
     for (const bad of [
