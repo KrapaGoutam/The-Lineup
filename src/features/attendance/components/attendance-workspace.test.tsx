@@ -10,6 +10,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/attendance/actions/native-report-actions", () => mocks);
+vi.mock("@/features/attendance/actions/financial-readiness-actions", () => ({
+  getAttendanceFinancialReadinessAction: vi.fn(async () => ({
+    ok: true,
+    data: {
+      kind: "NATIVE",
+      previewOnly: true,
+      state: "INTERNAL_THE_LINEUP",
+      activation: { status: "BLOCKED_POLICY", pending: [] },
+      readiness: {
+        source: "INTERNAL_THE_LINEUP",
+        recordCount: 0,
+        eligibleCount: 0,
+        excludedCount: 0,
+        excludedByReason: {},
+        totalsComplete: true,
+        truncated: false,
+        employees: [],
+      },
+      timeZone: "America/Chicago",
+      period: { startDate: "2026-01-01", endDate: "2026-01-07" },
+    },
+  })),
+}));
 vi.mock("@/features/attendance/components/attendance-report", () => ({
   AttendanceReport: () => <div data-testid="legacy-neon-report">legacy</div>,
 }));

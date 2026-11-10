@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getActiveClockedInRows: vi.fn(),
   listAttendanceIdentityLinks: vi.fn(),
+  listOpenNativeSessionProfileIds: vi.fn(),
 }));
 
 vi.mock("@/features/attendance/data/attendance-data", () => ({
@@ -10,6 +11,9 @@ vi.mock("@/features/attendance/data/attendance-data", () => ({
 }));
 vi.mock("@/features/attendance/data/identity-links", () => ({
   listAttendanceIdentityLinks: mocks.listAttendanceIdentityLinks,
+}));
+vi.mock("@/features/attendance/data/native-financial-data", () => ({
+  listOpenNativeSessionProfileIds: mocks.listOpenNativeSessionProfileIds,
 }));
 
 import { fetchClockedInRoster } from "./fetch-clocked-in-roster";
@@ -145,5 +149,138 @@ describe("fetchClockedInRoster", () => {
       ok: false,
       error: "Unable to reach attendance links right now.",
     });
+  });
+});
+
+describe("fetchClockedInRoster — source selection by verified location (V2-006.006)", () => {
+  const locationId = "00000000-0000-0000-0000-000000029777";
+
+  function client(result: {
+    data: { attendance_mode: string | null } | null;
+    error: { code: string } | null;
+  }) {
+    const builder: Record<string, unknown> = {};
+    builder.select = () => builder;
+    builder.eq = () => builder;
+    builder.maybeSingle = async () => result;
+    return { from: vi.fn(() => builder) } as never;
+  }
+  const modeOf = (attendance_mode: string | null) =>
+    client({ data: { attendance_mode }, error: null });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getActiveClockedInRows.mockResolvedValue({
+      ok: true,
+      data: [activeRow(1)],
+    });
+    mocks.listAttendanceIdentityLinks.mockResolvedValue({
+      ok: true,
+      data: [link("neon-person", 1)],
+    });
+  });
+
+  it("INTERNAL: uses native open sessions and never touches the Neon reader or links", async () => {
+    mocks.listOpenNativeSessionProfileIds.mockResolvedValue({
+      ok: true,
+      profileIds: ["native-a", "native-b"],
+    });
+    await expect(
+      fetchClockedInRoster(modeOf("internal_the_lineup"), {
+        organizationId,
+        serviceDate: "2026-09-10",
+        locationId,
+      }),
+    ).resolves.toEqual({ ok: true, data: ["native-a", "native-b"] });
+    expect(mocks.listOpenNativeSessionProfileIds).toHaveBeenCalledWith(
+      expect.anything(),
+      { organizationId, locationId },
+    );
+    expect(mocks.getActiveClockedInRows).not.toHaveBeenCalled();
+    expect(mocks.listAttendanceIdentityLinks).not.toHaveBeenCalled();
+  });
+
+  it("INTERNAL: a failed native read is an error, never an empty or Neon-derived suggestion", async () => {
+    mocks.listOpenNativeSessionProfileIds.mockResolvedValue({ ok: false });
+    await expect(
+      fetchClockedInRoster(modeOf("internal_the_lineup"), {
+        organizationId,
+        serviceDate: "2026-09-10",
+        locationId,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "Attendance data unavailable. Try again shortly.",
+    });
+    expect(mocks.getActiveClockedInRows).not.toHaveBeenCalled();
+  });
+
+  it("DISABLED: suggests nobody and reads no source", async () => {
+    await expect(
+      fetchClockedInRoster(modeOf("disabled"), {
+        organizationId,
+        serviceDate: "2026-09-10",
+        locationId,
+      }),
+    ).resolves.toEqual({ ok: true, data: [] });
+    expect(mocks.getActiveClockedInRows).not.toHaveBeenCalled();
+    expect(mocks.listOpenNativeSessionProfileIds).not.toHaveBeenCalled();
+  });
+
+  for (const mode of ["external", null]) {
+    it(`${mode ?? "unconfigured"}: keeps the existing Neon path exactly and never reads native`, async () => {
+      await expect(
+        fetchClockedInRoster(modeOf(mode), {
+          organizationId,
+          serviceDate: "2026-09-10",
+          locationId,
+        }),
+      ).resolves.toEqual({ ok: true, data: ["neon-person"] });
+      expect(mocks.getActiveClockedInRows).toHaveBeenCalledWith({
+        serviceDate: "2026-09-10",
+      });
+      expect(mocks.listOpenNativeSessionProfileIds).not.toHaveBeenCalled();
+    });
+  }
+
+  it("a database without the attendance-mode column (42703) is legacy: unchanged Neon path", async () => {
+    await expect(
+      fetchClockedInRoster(client({ data: null, error: { code: "42703" } }), {
+        organizationId,
+        serviceDate: "2026-09-10",
+        locationId,
+      }),
+    ).resolves.toEqual({ ok: true, data: ["neon-person"] });
+  });
+
+  it("any other mode-read failure, or an unreadable location, fails closed (no guessed source)", async () => {
+    for (const result of [
+      { data: null, error: { code: "XX000" } },
+      { data: null, error: null },
+    ]) {
+      mocks.getActiveClockedInRows.mockClear();
+      await expect(
+        fetchClockedInRoster(client(result), {
+          organizationId,
+          serviceDate: "2026-09-10",
+          locationId,
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        error: "Attendance data unavailable. Try again shortly.",
+      });
+      expect(mocks.getActiveClockedInRows).not.toHaveBeenCalled();
+    }
+  });
+
+  it("without a locationId the behaviour is exactly the pre-V2 Neon path (no mode read)", async () => {
+    const spy = vi.fn();
+    await expect(
+      fetchClockedInRoster({ from: spy } as never, {
+        organizationId,
+        serviceDate: "2026-09-10",
+      }),
+    ).resolves.toEqual({ ok: true, data: ["neon-person"] });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

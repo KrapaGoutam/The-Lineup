@@ -14,6 +14,7 @@ import {
   type NativeReportView,
 } from "@/features/attendance/actions/native-report-actions";
 import { AttendanceCorrectionDialog } from "@/features/attendance/components/attendance-correction-dialog";
+import { PayrollReadinessPanel } from "@/features/attendance/components/payroll-readiness-panel";
 import {
   formatWorkedDuration,
   formatWorkedHours,
@@ -113,6 +114,8 @@ export function NativeAttendanceReport({
     () => view?.rows.find((r) => r.sessionId === selectedId) ?? null,
     [view, selectedId],
   );
+
+  const employeeNames = useMemo(() => new Map(employees), [employees]);
 
   const rows = view?.rows ?? [];
   const totals = view?.totals;
@@ -269,6 +272,16 @@ export function NativeAttendanceReport({
             tone={totals.unresolvedSessionCount > 0 ? "warning" : undefined}
           />
         </section>
+      ) : null}
+
+      {source.canManage && rangeValid ? (
+        <PayrollReadinessPanel
+          restaurantSlug={restaurantSlug}
+          start={start}
+          end={end}
+          reloadKey={reloadKey}
+          names={employeeNames}
+        />
       ) : null}
 
       {longOpen.length > 0 ? (
