@@ -4,7 +4,9 @@ GitHub Issue: [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 Branch: `feature/v2-006-attendance-v2`  
-Status: `LOCAL CONSOLIDATED REVIEW, TWO P1 FIXES AND ALL VERIFICATION COMPLETE; FINANCIAL ACTIVATION OFF; HOSTED DEV PENDING Q8; STAGED CLOSURE UNAPPROVED; NO PR`
+Status: `DEV VALIDATED; STAGED SCOPE ACCEPTED; FINANCIAL OFF; ONE PR/CI/MERGE PENDING`
+
+2026-11-10 Q8 update: Owner approved DEV rollout and staged closeout. DEV backup/recovery and populated rehearsal passed; exact four migrations applied, ledger 82 → 86. Authenticated DEV acceptance 26/26 across API and desktop/WebKit tablet/mobile passed. Native financial activation OFF; backend enforcement STAGED; no real payments. Deferred UI and activation tracked in #319/#320. Single PR/CI/Preview/merge gate remains pending; #254 closes only after accepted merge into development. Production/main untouched. [Current rollout evidence](Q8_DEV_ROLLOUT.md).
 
 ---
 

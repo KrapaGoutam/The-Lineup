@@ -1,5 +1,9 @@
 # Feature V2-006: Attendance V2 — Status
 
+2026-11-10 Q8 update: Owner approved DEV rollout and staged closeout. DEV backup/recovery and populated rehearsal passed; exact four migrations applied, ledger 82 → 86. Authenticated DEV acceptance 26/26 across API and desktop/WebKit tablet/mobile passed. Native financial activation OFF; backend enforcement STAGED; no real payments. Deferred UI and activation tracked in #319/#320. Single PR/CI/Preview/merge gate remains pending; #254 closes only after accepted merge into development. Production/main untouched. [Current rollout evidence](Q8_DEV_ROLLOUT.md).
+
+The following batch ledger is historical; current delivery gates above supersede earlier missing-Q8 statements.
+
 ```text
 Status: IN PROGRESS — BATCH A/B/C VERIFIED; R1 REVIEW DONE; R2 FINANCIAL GAP CLOSURE IMPLEMENTED LOCALLY
         (decisions Q1/Q4/Q6/Q9/Q9b approved 2026-11-10; ACTIVATION, payments, hosted DEV NOT authorized);

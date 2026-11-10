@@ -3,7 +3,13 @@
 Date: 2026-11-10. Reviewer: Codex, independently reviewing the prior R2 author’s
 implementation. This is the consolidated closeout, with no new audit phase.
 
-## A. Decision — PARTIAL
+## Current owner-authorized rollout
+
+2026-11-10 Q8 update: Owner approved DEV rollout and staged closeout. DEV backup/recovery and populated rehearsal passed; exact four migrations applied, ledger 82 → 86. Authenticated DEV acceptance 26/26 across API and desktop/WebKit tablet/mobile passed. Native financial activation OFF; backend enforcement STAGED; no real payments. Deferred UI and activation tracked in #319/#320. Single PR/CI/Preview/merge gate remains pending; #254 closes only after accepted merge into development. Production/main untouched. [Current rollout evidence](Q8_DEV_ROLLOUT.md).
+
+The report below preserves the completed independent local review and its pre-approval state; its missing-Q8 gates are superseded by the current rollout evidence.
+
+## A. Historical local decision — PARTIAL
 
 Independent source review, local financial repairs and consolidated verification
 are complete. Hosted DEV and integration remain gated by owner

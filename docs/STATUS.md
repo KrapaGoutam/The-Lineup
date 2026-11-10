@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+2026-11-10 Q8 update: Owner approved DEV rollout and staged closeout. DEV backup/recovery and populated rehearsal passed; exact four migrations applied, ledger 82 → 86. Authenticated DEV acceptance 26/26 across API and desktop/WebKit tablet/mobile passed. Native financial activation OFF; backend enforcement STAGED; no real payments. Deferred UI and activation tracked in #319/#320. Single PR/CI/Preview/merge gate remains pending; #254 closes only after accepted merge into development. Production/main untouched. [Current rollout evidence](v2.0/features/006-attendance-v2/Q8_DEV_ROLLOUT.md).
+
+Historical local checkpoint follows (superseded by the Q8 record above).
+
 Execution checkpoint (2026-11-10): V2-006 independent R2 review found and repaired two P1 native confirmation defects: confirmation during an uncommitted attendance correction, and reopening confirmed native periods through the legacy unlock path. Corrective migration `20261110160147` adds no privilege or historical data rewrite. Clean local replay: 86 migrations; pgTAP 3,079; Vitest 3,837 (7 skips); actual JWT 12/12; concurrency 25/25; check and production webpack build PASS. Real Supabase-backed browser acceptance passed: Attendance 42 cases (39 existing + 3 two-tab), Payroll 15/15. Q1/Q4/Q6/Q9/Q9b decisions are recorded; native financial activation is OFF, Payroll UI remains Neon-oriented, Q8 and staged closure are unapproved. Hosted DEV was not contacted (prior reported ledger 82), no push/PR/merge, #254 remains OPEN, Production/main untouched. [Consolidated closeout](v2.0/features/006-attendance-v2/FINAL_CONSOLIDATED_CLOSEOUT.md) is authoritative over historical batch receipts below.
 
 ## The Lineup V2.0

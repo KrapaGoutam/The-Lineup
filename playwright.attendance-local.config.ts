@@ -99,6 +99,7 @@ export default defineConfig({
     {
       name: "tablet",
       use: {
+        browserName: "webkit",
         viewport: { width: 820, height: 1180 },
         hasTouch: true,
       },

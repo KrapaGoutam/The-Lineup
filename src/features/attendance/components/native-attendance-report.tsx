@@ -337,7 +337,7 @@ export function NativeAttendanceReport({
 
       {rows.length > 0 ? (
         <>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="relative hidden overflow-x-auto md:block">
             <table className="w-full min-w-[56rem] text-left text-sm">
               <caption className="sr-only">
                 Attendance for {source.locationName},{" "}

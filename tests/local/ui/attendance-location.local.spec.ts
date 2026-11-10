@@ -105,6 +105,15 @@ test.describe("Manager corrections workflow (real browser acceptance)", () => {
     await expect(employeeInList(page, "Sam Staff A").first()).toBeVisible();
     await expect(employeeInList(page, "Sara Staff A2").first()).toBeVisible();
     await expect(employeeInList(page, "Maya Manager A").first()).toBeVisible();
+    // The scrollable table must contain its visually hidden column labels,
+    // including in WebKit where absolute labels can escape a static scroller.
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
 
     // 3. Employee selection filter works
     const empSelect = page.getByLabel("Employee");
