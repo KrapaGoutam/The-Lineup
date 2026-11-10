@@ -406,7 +406,7 @@ describe("Payroll Historical Populated-Data Migration Compatibility Rehearsal", 
 
       initialSnapshots[String(pid)] = {
         periodId: pid,
-        neonUserId: p.neon_user_id,
+        neonUserId: p.neon_user_id as number,
         month: p.period_month,
         locationId: p.location_id,
         grossCents: p.gross_cents,

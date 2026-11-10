@@ -30,6 +30,8 @@ function actionFiles(): string[] {
 const EXEMPT_FILES: Record<string, string> = {
   "context/actions/context-actions.ts":
     "organization/location context switching is platform plumbing",
+  "attendance/actions/attendance-mode-actions.ts":
+    "Settings: attendance source configuration is location administration; it must work while the attendance module is off so an owner can turn it on (authority is enforced by set_location_attendance_mode)",
   "locations/actions/location-admin-actions.ts":
     "Settings: location administration (system-required module)",
   "locations/actions/location-lifecycle-actions.ts":
@@ -70,8 +72,14 @@ const GUARDING_HELPERS: Record<
   "recipes/actions/recipe-image-actions.ts": [
     { helper: "context(", module: "recipes" },
   ],
+  "attendance/actions/native-report-actions.ts": [
+    { helper: "resolveContext(", module: "attendance" },
+  ],
   "payroll/actions/payroll-actions.ts": [
     { helper: "guardPayrollModule(", module: "payroll" },
+  ],
+  "payroll/actions/native-payroll-actions.ts": [
+    { helper: "authorize(", module: "payroll" },
   ],
 };
 

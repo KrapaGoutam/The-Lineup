@@ -196,7 +196,10 @@ export async function listPayrollRateOverrides(
   const { data, error } = await supabase
     .from("payroll_rates")
     .select("neon_user_id, rate_cents")
-    .eq("organization_id", input.organizationId);
+    .eq("organization_id", input.organizationId)
+    // V2-006 R2: this screen is Neon-keyed. Native (profile-keyed) overrides carry a
+    // NULL neon_user_id and must never reach a number-typed identity.
+    .eq("attendance_source", "external_neon");
   if (error) {
     console.error("listPayrollRateOverrides failed", error);
     return { ok: false, error: UNAVAILABLE_ERROR };
@@ -278,6 +281,8 @@ export async function getPayrollPeriodById(
     .from("payroll_periods")
     .select(PERIOD_COLUMNS)
     .eq("id", input.periodId)
+    // V2-006 R2: Neon-keyed screens never resolve a native (profile-keyed) period by id.
+    .eq("attendance_source", "external_neon")
     .maybeSingle();
   if (error) {
     console.error("getPayrollPeriodById failed", error);
@@ -298,6 +303,8 @@ export async function listPayrollPeriods(
     .from("payroll_periods")
     .select(PERIOD_COLUMNS)
     .eq("organization_id", input.organizationId)
+    // V2-006 R2: native periods (NULL neon_user_id) are listed by the native data layer only.
+    .eq("attendance_source", "external_neon")
     .order("period_month", { ascending: false });
   if (input.periodMonth) {
     query = query.eq("period_month", input.periodMonth);

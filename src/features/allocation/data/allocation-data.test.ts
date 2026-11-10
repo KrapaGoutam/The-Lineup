@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { DINING_TABLES_SELECT, diningAreaName } from "./allocation-data";
@@ -52,5 +55,21 @@ describe("diningAreaName (bar-seat resourceType regression guard)", () => {
 
   it("returns null for an empty array shape", () => {
     expect(diningAreaName([])).toBeNull();
+  });
+});
+
+// V2-006.006: the board prioritises by "who is clocked in". The attendance source must follow
+// the VERIFIED location's mode, so an internal location is never prioritised from Neon rows.
+// `getAllocationContext` is not unit-testable without a full database double, so this guards
+// the pass-through structurally (same approach as the PGRST201 guard above).
+describe("clocked-in roster is source-aware for the verified location", () => {
+  it("passes the verified location id to fetchClockedInRoster", () => {
+    const src = fs.readFileSync(
+      path.resolve(import.meta.dirname, "allocation-data.ts"),
+      "utf8",
+    );
+    const call = src.match(/fetchClockedInRoster\(supabase, \{[\s\S]*?\}\);/);
+    expect(call, "fetchClockedInRoster call found").not.toBeNull();
+    expect(call![0]).toContain("locationId: location.id");
   });
 });

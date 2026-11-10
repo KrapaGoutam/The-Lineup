@@ -200,7 +200,7 @@ test("4. Complete ledger lifecycle: draft payment, confirm, unconfirm with audit
   context,
 }) => {
   await authenticate(context, fx.orgAGM, fx.locA);
-  await page.goto(`/r/${fx.orgA.slug}`);
+  await page.goto(`/r/${fx.orgA.slug}?tab=payroll&location=${fx.locA}`);
   await openPayroll(page);
 
   // Open ledger for August 2026
@@ -243,7 +243,17 @@ test("4. Complete ledger lifecycle: draft payment, confirm, unconfirm with audit
   const unconfirmBtn = ledgerDialog
     .getByRole("button", { name: "Unconfirm" })
     .first();
-  await expect(unconfirmBtn).toBeVisible({ timeout: 15000 });
+  // Server navigation/revalidation can remount the workspace after a successful
+  // confirmation. Reopen its ledger rather than assuming the dialog survives.
+  await expect
+    .poll(
+      async () => {
+        if (!(await ledgerDialog.isVisible())) await openLedgerBtn.click();
+        return unconfirmBtn.isVisible();
+      },
+      { timeout: 15000 },
+    )
+    .toBe(true);
   await unconfirmBtn.click({ force: true });
 
   const unconfirmDialog = page.getByRole("dialog", {
@@ -259,10 +269,22 @@ test("4. Complete ledger lifecycle: draft payment, confirm, unconfirm with audit
   await submitUnconfirm.click({ force: true });
 
   await expect(unconfirmDialog).not.toBeVisible({ timeout: 15000 });
+  await expect
+    .poll(async () => {
+      const rows = must(
+        await fx.admin
+          .from("payroll_payments")
+          .select("status")
+          .eq("organization_id", fx.orgA.id)
+          .eq("amount_cents", 20000),
+      );
+      return rows.length === 1 && rows[0].status === "draft";
+    })
+    .toBe(true);
 
   // Close ledger dialog
   const closeBtn = ledgerDialog.getByRole("button", { name: "Close dialog" });
-  await closeBtn.click({ force: true });
+  if (await ledgerDialog.isVisible()) await closeBtn.click({ force: true });
   await expect(ledgerDialog).not.toBeVisible({ timeout: 15000 });
 });
 

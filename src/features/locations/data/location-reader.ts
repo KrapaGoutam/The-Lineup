@@ -14,7 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 
 const LOCATION_COLUMNS =
-  "id, organization_id, name, time_zone, address, cover_weight, active, archived_at, opening_local, closing_local, created_at, updated_at" as const;
+  "id, organization_id, name, time_zone, address, cover_weight, active, archived_at, opening_local, closing_local, attendance_mode, created_at, updated_at" as const;
 
 /**
  * Server-authoritative reader for a location by its stable UUID.

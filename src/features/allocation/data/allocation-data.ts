@@ -194,6 +194,9 @@ export async function getAllocationContext(
   const clockedInResult = await fetchClockedInRoster(supabase, {
     organizationId,
     serviceDate,
+    // V2-006.006: the verified location decides the attendance source, so an internal
+    // location is never prioritised from Neon rows (and an external one is unchanged).
+    locationId: location.id,
   });
   // Prioritization only, never a hard dependency -- an attendance-lookup
   // failure shouldn't take down the whole board read.

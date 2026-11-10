@@ -1,0 +1,298 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  createClient: vi.fn(),
+  requireLiveSession: vi.fn(),
+  nativeClockIn: vi.fn(),
+  nativeClockOut: vi.fn(),
+  nativeBreakStart: vi.fn(),
+  nativeBreakEnd: vi.fn(),
+  getActiveAttendanceSession: vi.fn(),
+  guardModuleForSlug: vi.fn(),
+  getAttendanceEntryUser: vi.fn(),
+}));
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
+vi.mock("@/lib/supabase/require-live-session", () => ({
+  requireLiveSession: mocks.requireLiveSession,
+}));
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModuleForSlug: mocks.guardModuleForSlug,
+}));
+vi.mock("@/features/attendance/data/attendance-actor", () => ({
+  getAttendanceEntryUser: mocks.getAttendanceEntryUser,
+}));
+vi.mock("@/features/attendance/data/native-attendance-data", () => ({
+  nativeClockIn: mocks.nativeClockIn,
+  nativeClockOut: mocks.nativeClockOut,
+  nativeBreakStart: mocks.nativeBreakStart,
+  nativeBreakEnd: mocks.nativeBreakEnd,
+  getActiveAttendanceSession: mocks.getActiveAttendanceSession,
+}));
+
+import {
+  getActiveAttendanceSessionAction,
+  nativeBreakEndAction,
+  nativeBreakStartAction,
+  nativeClockInAction,
+  nativeClockOutAction,
+} from "./native-clock-actions";
+
+describe("native-clock-actions", () => {
+  const restaurantSlug = "monks-ale-house";
+  const locationId = "00000000-0000-0000-0000-000000000001";
+  const profileId = "00000000-0000-0000-0000-000000000002";
+  const sessionId = "00000000-0000-0000-0000-000000000003";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.guardModuleForSlug.mockResolvedValue(null);
+  });
+
+  describe("nativeClockInAction", () => {
+    it("fails closed when unauthenticated", async () => {
+      mocks.requireLiveSession.mockResolvedValue({
+        ok: false,
+        error: "Authentication required.",
+        sessionInvalid: true,
+      });
+      const res = await nativeClockInAction({ restaurantSlug, locationId });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toContain("Authentication required");
+      }
+    });
+
+    it("succeeds when authenticated and RPC passes", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockIn.mockResolvedValue({
+        ok: true,
+        data: {
+          success: true,
+          idempotent: false,
+          sessionId,
+          eventId: 1,
+          status: "active",
+        },
+      });
+
+      const res = await nativeClockInAction({
+        restaurantSlug,
+        locationId,
+        idempotencyKey: "test-key-1",
+      });
+
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        expect(res.data.status).toBe("active");
+      }
+    });
+
+    it("returns error message when clock-in is rejected", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockIn.mockResolvedValue({
+        ok: false,
+        error: "Employee already has an open attendance session",
+      });
+
+      const res = await nativeClockInAction({ restaurantSlug, locationId });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toContain("already has an open");
+      }
+    });
+  });
+
+  describe("nativeClockOutAction", () => {
+    it("fails closed when unauthenticated", async () => {
+      mocks.requireLiveSession.mockResolvedValue({
+        ok: false,
+        error: "Authentication required.",
+        sessionInvalid: true,
+      });
+      const res = await nativeClockOutAction({ restaurantSlug, locationId });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toContain("Authentication required");
+      }
+    });
+
+    it("succeeds when authenticated and RPC passes", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockOut.mockResolvedValue({
+        ok: true,
+        data: {
+          success: true,
+          idempotent: false,
+          sessionId,
+          eventId: 2,
+          status: "completed",
+        },
+      });
+
+      const res = await nativeClockOutAction({ restaurantSlug, locationId });
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        expect(res.data.status).toBe("completed");
+      }
+    });
+  });
+
+  describe("nativeBreakStartAction and nativeBreakEndAction", () => {
+    it("handles break start and end successfully", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeBreakStart.mockResolvedValue({
+        ok: true,
+        data: { success: true, status: "on_break" },
+      });
+      mocks.nativeBreakEnd.mockResolvedValue({
+        ok: true,
+        data: { success: true, status: "active" },
+      });
+
+      const startRes = await nativeBreakStartAction({
+        restaurantSlug,
+        locationId,
+      });
+      expect(startRes.ok).toBe(true);
+
+      const endRes = await nativeBreakEndAction({ restaurantSlug, locationId });
+      expect(endRes.ok).toBe(true);
+    });
+  });
+
+  describe("getActiveAttendanceSessionAction", () => {
+    it("queries active session successfully", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.getActiveAttendanceSession.mockResolvedValue({
+        ok: true,
+        data: {
+          id: sessionId,
+          organizationId: "org-1",
+          locationId,
+          profileId,
+          serviceDate: "2026-11-09",
+          status: "active",
+          clockInAt: "2026-11-09T14:00:00Z",
+          clockOutAt: null,
+          grossElapsedSeconds: null,
+          totalBreakSeconds: 0,
+          createdBy: profileId,
+          updatedBy: null,
+          createdAt: "2026-11-09T14:00:00Z",
+          updatedAt: "2026-11-09T14:00:00Z",
+        },
+      });
+
+      const res = await getActiveAttendanceSessionAction({
+        restaurantSlug,
+        locationId,
+        profileId,
+      });
+      expect(res.ok).toBe(true);
+      if (res.ok && res.data) {
+        expect(res.data.status).toBe("active");
+      }
+    });
+  });
+
+  describe("module enforcement", () => {
+    const denial = {
+      ok: false,
+      error: "This module is turned off for this location.",
+      moduleUnavailable: true,
+    };
+
+    it.each([
+      [
+        "clock-in",
+        () => nativeClockInAction({ restaurantSlug, locationId }),
+        "nativeClockIn",
+      ],
+      [
+        "clock-out",
+        () => nativeClockOutAction({ restaurantSlug, locationId }),
+        "nativeClockOut",
+      ],
+      [
+        "break start",
+        () => nativeBreakStartAction({ restaurantSlug, locationId }),
+        "nativeBreakStart",
+      ],
+      [
+        "break end",
+        () => nativeBreakEndAction({ restaurantSlug, locationId }),
+        "nativeBreakEnd",
+      ],
+    ])(
+      "%s makes no database call when the module is off or the tab is stale",
+      async (_n, run, rpc) => {
+        mocks.requireLiveSession.mockResolvedValue(null);
+        mocks.guardModuleForSlug.mockResolvedValue(denial);
+        const res = await run();
+        expect(res).toMatchObject({ ok: false, moduleUnavailable: true });
+        expect(mocks[rpc as keyof typeof mocks]).not.toHaveBeenCalled();
+      },
+    );
+
+    it("passes the request location only as an UNTRUSTED claim", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockIn.mockResolvedValue({
+        ok: true,
+        data: { success: true },
+      });
+      await nativeClockInAction({ restaurantSlug, locationId });
+      expect(mocks.guardModuleForSlug).toHaveBeenCalledWith(
+        "attendance",
+        restaurantSlug,
+        {
+          claimedLocationId: locationId,
+          resolveOrganizationId: expect.any(Function),
+        },
+      );
+    });
+
+    it("resolves the guard's organization from the canonical attendance actor, not getCurrentUser", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockIn.mockResolvedValue({
+        ok: true,
+        data: { success: true },
+      });
+      await nativeClockInAction({ restaurantSlug, locationId });
+      const deps = mocks.guardModuleForSlug.mock.calls[0][2] as {
+        resolveOrganizationId: (slug: string) => Promise<string | null>;
+      };
+      mocks.getAttendanceEntryUser.mockResolvedValueOnce({
+        organizationId: "org-canonical",
+      });
+      await expect(deps.resolveOrganizationId("any-slug")).resolves.toBe(
+        "org-canonical",
+      );
+      mocks.getAttendanceEntryUser.mockResolvedValueOnce(null);
+      await expect(deps.resolveOrganizationId("any-slug")).resolves.toBeNull();
+    });
+
+    it("guards the active-session read too", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.guardModuleForSlug.mockResolvedValue(denial);
+      const res = await getActiveAttendanceSessionAction({
+        restaurantSlug,
+        locationId,
+        profileId,
+      });
+      expect(res).toMatchObject({ ok: false, moduleUnavailable: true });
+      expect(mocks.getActiveAttendanceSession).not.toHaveBeenCalled();
+    });
+
+    it("rejects a missing or malformed slug before touching the module guard", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      const res = await nativeClockInAction({
+        restaurantSlug: "../x",
+        locationId,
+      });
+      expect(res.ok).toBe(false);
+      expect(mocks.guardModuleForSlug).not.toHaveBeenCalled();
+    });
+  });
+});

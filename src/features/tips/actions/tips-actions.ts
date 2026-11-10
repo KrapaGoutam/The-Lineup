@@ -398,6 +398,8 @@ export async function getClockedInRosterAction(input: {
       fetchClockedInRoster(supabase, {
         organizationId: caller.organizationId,
         serviceDate,
+        // The verified location decides the attendance source (V2-006.006).
+        locationId: workspace.location.id,
       }),
       supabase.rpc("tips_location_roster", {
         p_organization_id: caller.organizationId,
