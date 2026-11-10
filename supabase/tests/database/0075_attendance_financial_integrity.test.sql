@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(55);
 
 -- --------------------------------------------------------------------------
 -- V2-006.006/.007 Batch C - financial integrity of native attendance.
@@ -56,7 +56,7 @@ create temp table t75 as select date_trunc('hour', now()) - interval '60 hours' 
 grant select on t75 to authenticated;
 
 insert into public.attendance_sessions (id, organization_id, location_id, profile_id, service_date, status, clock_in_at, clock_out_at, gross_elapsed_seconds, total_break_seconds, created_by)
-select s.id, s.org, s.loc, s.prof, (t.base + s.i)::date, s.st, t.base + s.i, case when s.o is null then null else t.base + s.o end, s.g, s.tb, s.prof
+select s.id, s.org, s.loc, s.prof, ((t.base + s.i) at time zone 'America/Chicago')::date, s.st, t.base + s.i, case when s.o is null then null else t.base + s.o end, s.g, s.tb, s.prof
 from t75 t, (values
   ('00000000-0000-0000-0000-00000075f001'::uuid, '00000000-0000-0000-0000-0000000750a1'::uuid, '00000000-0000-0000-0000-0000000750b1'::uuid, '00000000-0000-0000-0000-000000075003'::uuid, 'completed'::public.attendance_session_status, interval '0 hours',  interval '8 hours',  28800, 2700),
   ('00000000-0000-0000-0000-00000075f002'::uuid, '00000000-0000-0000-0000-0000000750a1'::uuid, '00000000-0000-0000-0000-0000000750b1'::uuid, '00000000-0000-0000-0000-000000075004'::uuid, 'completed'::public.attendance_session_status, interval '12 hours', interval '18 hours', 21600, 0),
@@ -135,17 +135,32 @@ select is(has_table_privilege('authenticated', 'public.payroll_adjustments', 'UP
 select is(has_table_privilege('authenticated', 'public.payroll_periods', 'DELETE'), false, 'payroll_periods cannot be deleted by authenticated');
 
 -- 2. Attendance and financial structures are independent (no path for a correction to reach money) -
+-- R2 (V2-006): the ONLY sanctioned bridge between the attendance ledger and money is the payroll-side
+-- consumption ledger (payroll_attendance_consumptions). Everything else stays isolated. Matched by relname +
+-- schema (the older regclass::text form drops the schema under the default search_path and matched nothing).
 select is(
   (select count(*)::int from pg_constraint c
-    where c.contype = 'f'
-      and ((c.conrelid::regclass::text like 'public.attendance\_%' and (c.confrelid::regclass::text like 'public.payroll\_%' or c.confrelid::regclass::text like 'public.tip\_%'))
-        or ((c.conrelid::regclass::text like 'public.payroll\_%' or c.conrelid::regclass::text like 'public.tip\_%') and c.confrelid::regclass::text in ('public.attendance_sessions','public.attendance_breaks','public.attendance_events')))),
-  0, 'no foreign key links the attendance ledger and payroll/tip tables in either direction');
+    join pg_class cr on cr.oid = c.conrelid join pg_namespace cn on cn.oid = cr.relnamespace
+    join pg_class fr on fr.oid = c.confrelid join pg_namespace fn on fn.oid = fr.relnamespace
+    where c.contype = 'f' and cn.nspname = 'public' and fn.nspname = 'public'
+      and cr.relname <> 'payroll_attendance_consumptions'
+      and ((cr.relname like 'attendance_%' and cr.relname <> 'attendance_identity_links'
+            and (fr.relname like 'payroll_%' or fr.relname like 'tip_%'))
+        or ((cr.relname like 'payroll_%' or cr.relname like 'tip_%') and fr.relname in ('attendance_sessions','attendance_breaks','attendance_events')))),
+  0, 'no foreign key links the attendance ledger and payroll/tip tables in either direction (except the sanctioned consumption ledger)');
+select is(
+  (select array_agg(distinct fr.relname::text order by fr.relname::text) from pg_constraint c
+    join pg_class cr on cr.oid = c.conrelid join pg_class fr on fr.oid = c.confrelid
+    where c.contype = 'f' and cr.relname = 'payroll_attendance_consumptions'),
+  array['attendance_sessions','payroll_periods','profiles'],
+  'the consumption ledger references exactly the session, the period and the actor profile - nothing else');
 select is(
   (select count(*)::int from pg_trigger t join pg_proc p on p.oid = t.tgfoid
-    where not t.tgisinternal and t.tgrelid::regclass::text like 'public.attendance\_%'
+    join pg_class cr on cr.oid = t.tgrelid join pg_namespace cn on cn.oid = cr.relnamespace
+    where not t.tgisinternal and cn.nspname = 'public'
+      and cr.relname in ('attendance_sessions', 'attendance_breaks', 'attendance_events')
       and p.prosrc ~* '(payroll_|tip_pools|tip_intervals|tip_allocations)'),
-  0, 'no trigger on an attendance table touches payroll or tip tables');
+  0, 'no trigger on an attendance ledger table (sessions, breaks, events) touches payroll or tip tables');
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('public','private') and p.proname like 'attendance\_%'

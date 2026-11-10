@@ -52,7 +52,7 @@ create temp table t74 as select date_trunc('hour', now()) - interval '60 hours' 
 grant select on t74 to authenticated;
 
 insert into public.attendance_sessions (id, organization_id, location_id, profile_id, service_date, status, clock_in_at, clock_out_at, gross_elapsed_seconds, total_break_seconds, created_by)
-select s.id, '00000000-0000-0000-0000-0000000740a1', '00000000-0000-0000-0000-0000000740b1', s.prof, (t.base + s.i)::date, s.st, t.base + s.i, case when s.o is null then null else t.base + s.o end, s.g, s.tb, s.prof
+select s.id, '00000000-0000-0000-0000-0000000740a1', '00000000-0000-0000-0000-0000000740b1', s.prof, ((t.base + s.i) at time zone 'America/Chicago')::date, s.st, t.base + s.i, case when s.o is null then null else t.base + s.o end, s.g, s.tb, s.prof
 from t74 t, (values
   ('00000000-0000-0000-0000-00000074f001'::uuid, '00000000-0000-0000-0000-000000074003'::uuid, 'completed'::public.attendance_session_status, interval '0 hours', interval '8 hours', 28800, 2700),
   ('00000000-0000-0000-0000-00000074f003'::uuid, '00000000-0000-0000-0000-000000074003'::uuid, 'completed'::public.attendance_session_status, interval '-30 hours', interval '-22 hours', 28800, 0),
