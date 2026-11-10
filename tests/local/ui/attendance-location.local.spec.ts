@@ -324,6 +324,25 @@ test.describe("Reporting across all 4 attendance states", () => {
       employeeInList(page, "Sara Staff A2").getByText("Shift open").first(),
     ).toBeVisible();
 
+    // V2-006.006 payroll readiness PREVIEW: visible to the manager, honest and non-monetary.
+    const readiness = page.getByTestId("payroll-readiness");
+    await expect(readiness).toBeVisible();
+    await expect(readiness.getByText("Preview only")).toBeVisible();
+    await expect(
+      readiness.getByText(/Waiting on the owner to decide/),
+    ).toBeVisible();
+    await expect(readiness.getByText(/nobody is paid from it/i)).toBeVisible();
+    // The fixtures contain an open shift and unclassified breaks: they are listed, never hidden.
+    await expect(readiness.getByTestId("readiness-counts")).toContainText(
+      /need(s)? attention/,
+    );
+    await expect(
+      readiness.getByRole("list", { name: "Why shifts need attention" }),
+    ).toBeVisible();
+    const readinessText = (await readiness.textContent()) ?? "";
+    expect(readinessText).not.toMatch(/[$]|USD/);
+    expect(readinessText).not.toMatch(/Every shift in these dates is ready/);
+
     // Date filters: click "Today"
     const todayBtn = page.getByRole("button", { name: "Today", exact: true });
     await expect(todayBtn).toBeVisible();
@@ -405,6 +424,9 @@ test.describe("Browser authorization and role boundaries", () => {
 
     // Employee picker is hidden
     await expect(page.locator("#nat-emp")).toHaveCount(0);
+
+    // The payroll readiness preview is manager-only: staff never see it.
+    await expect(page.getByTestId("payroll-readiness")).toHaveCount(0);
 
     // No "Correct" button is rendered
     await expect(page.getByRole("button", { name: /^Correct / })).toHaveCount(
@@ -498,6 +520,9 @@ test.describe("Browser authorization and role boundaries", () => {
         .getByRole("button", { name: /Correct/i })
         .first(),
     ).toBeVisible();
+    // Overall authority resolves through the canonical attendance actor, so the manager-only
+    // preview renders for them too.
+    await expect(page.getByTestId("payroll-readiness")).toBeVisible();
   });
 });
 
