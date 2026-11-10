@@ -280,10 +280,12 @@ export type Database = {
         Row: {
           clock_in_at: string;
           clock_out_at: string | null;
+          correction_count: number;
           created_at: string;
           created_by: string;
           gross_elapsed_seconds: number | null;
           id: string;
+          last_corrected_at: string | null;
           location_id: string;
           organization_id: string;
           profile_id: string;
@@ -292,14 +294,17 @@ export type Database = {
           total_break_seconds: number;
           updated_at: string;
           updated_by: string | null;
+          version: number;
         };
         Insert: {
           clock_in_at?: string;
           clock_out_at?: string | null;
+          correction_count?: number;
           created_at?: string;
           created_by: string;
           gross_elapsed_seconds?: number | null;
           id?: string;
+          last_corrected_at?: string | null;
           location_id: string;
           organization_id: string;
           profile_id: string;
@@ -308,14 +313,17 @@ export type Database = {
           total_break_seconds?: number;
           updated_at?: string;
           updated_by?: string | null;
+          version?: number;
         };
         Update: {
           clock_in_at?: string;
           clock_out_at?: string | null;
+          correction_count?: number;
           created_at?: string;
           created_by?: string;
           gross_elapsed_seconds?: number | null;
           id?: string;
+          last_corrected_at?: string | null;
           location_id?: string;
           organization_id?: string;
           profile_id?: string;
@@ -324,6 +332,7 @@ export type Database = {
           total_break_seconds?: number;
           updated_at?: string;
           updated_by?: string | null;
+          version?: number;
         };
         Relationships: [
           {
@@ -5370,8 +5379,10 @@ export type Database = {
           break_policy_resolved: boolean | null;
           clock_in_at: string | null;
           clock_out_at: string | null;
+          correction_count: number | null;
           gross_elapsed_seconds: number | null;
           is_closed: boolean | null;
+          last_corrected_at: string | null;
           location_id: string | null;
           net_payable_seconds: number | null;
           open_break_count: number | null;
@@ -5386,6 +5397,7 @@ export type Database = {
           total_break_seconds: number | null;
           unclassified_break_seconds: number | null;
           unpaid_break_seconds: number | null;
+          version: number | null;
         };
         Relationships: [
           {
@@ -5499,6 +5511,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      attendance_can_manage: {
+        Args: { p_location_id: string };
+        Returns: boolean;
+      };
       attendance_clock_in: {
         Args: {
           p_idempotency_key?: string;
@@ -5514,6 +5530,19 @@ export type Database = {
           p_location_id: string;
           p_notes?: string;
           p_profile_id?: string;
+        };
+        Returns: Json;
+      };
+      attendance_correct_session: {
+        Args: {
+          p_breaks?: Json;
+          p_clock_in_at?: string;
+          p_clock_out_at?: string;
+          p_expected_version: number;
+          p_idempotency_key?: string;
+          p_reason: string;
+          p_session_id: string;
+          p_void?: boolean;
         };
         Returns: Json;
       };
