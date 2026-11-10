@@ -4,7 +4,7 @@ GitHub Issue: [#254](https://github.com/KrapaGoutam/The-Lineup/issues/254)
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 Branch: `feature/v2-006-attendance-v2`  
-Status: `IN PROGRESS — BATCH A INDEPENDENTLY VERIFIED AND CORRECTED; BATCH B IN PROGRESS`
+Status: `IN PROGRESS — BATCH A VERIFIED + CORRECTED; BATCH B DELIVERED (UNMERGED); BATCH C NOT STARTED`
 
 ---
 
@@ -112,9 +112,109 @@ The Antigravity Batch A output was found **uncommitted** in `.tmp/v2-006-attenda
 
 ## 4. Batch A Evidence
 
-- Migration `20261110000000_attendance_v2_foundation.sql` (edited in place; never applied to a shared environment). See §7 for the current checksum.
+- Migration `20261110000000_attendance_v2_foundation.sql` (edited in place; never applied to a shared environment). See §8 for the checksums.
 - pgTAP `0073_attendance_v2_foundation.test.sql`: **108/108** behavioural assertions as real `authenticated` JWT subjects (authorization matrix, revoked membership, banned user, revoked session, cross-location manager, cross-user idempotency, break classification, privileges incl. TRUNCATE, immutability incl. owner, tenant FK, DST fixture).
 - Real parallel-session concurrency (separate psql sessions, committed fixtures): 10 simultaneous clock-ins (different keys) ⇒ 1 session + 9 rejections; 10 simultaneous clock-ins (same key) ⇒ 1 real + 9 idempotent replays; 6 simultaneous break starts ⇒ 1 break; 4 clock-out + 4 break-end race ⇒ 1 consistent final state, 0 open breaks, monotonic ledger.
 - Vitest (attendance + locations): 29 files / 348 tests; `tsc --noEmit`, ESLint, Prettier clean.
 
-Batch B and later sections are appended below as they are delivered.
+## 5. Batch B — Manager Corrections (V2-006.004)
+
+Migration `20261110010000_attendance_corrections.sql` (additive on top of Batch A).
+
+### 5.1 Contract
+
+`public.attendance_correct_session(session, expected_version, reason, clock_in_at?, clock_out_at?, breaks?, void?, idempotency_key?)`
+
+- **Authority**: `private.attendance_can_manage_location(session location)` only (live session, active membership, tier ≥ 2 / org owner-GM / Overall Owner-Manager). An unknown session and an unauthorized caller get the identical `42501 Unauthorized`. The module guard (`attendance`) applies. Mode is **not** required to be internal: correcting history stays possible after a mode change.
+- **Mandatory reason**: 3–500 characters after trimming (`22023`). Empty, whitespace-only and too-short reasons are rejected.
+- **Append-only**: original `clock_in` / `clock_out` / `break_*` events are never touched (immutable by trigger). One correction appends exactly one ledger event (`manager_edit`, or `void`) with: actor, reason, `source = manager`, a server-generated `event_time` (the audit timestamp, not the corrected time), the full **before** and **after** session snapshots (times, status, totals, every break), `changed_fields`, per-session sequence `seq`, `version_before/after`, `source_events` (ids of the original clock-in/out events), `reverses_event_id` when a single clock-in/out was edited, and `self_correction`.
+- **Effective values** live on the session row; `version` is bumped by trigger on **every** session change (clock operations and corrections), so a manager acting on a stale view is rejected with `P0004`. `correction_count` / `last_corrected_at` drive the "Corrected ×N" indicator.
+- **Validation (all server-side)**: clock-out ≥ clock-in; no times more than 60 s in the future; every break inside the corrected shift; breaks never overlap; a finished break cannot be reopened; total break ≤ shift; the corrected shift must not overlap another non-voided session of the same employee (`23P01`); a voided session cannot be corrected (`55000`); void cannot be combined with edits; each break id at most once; a break must belong to the session; "nothing changed" is rejected.
+- **Missing clock-out**: supplying `clock_out_at` on an open session closes it (status `completed`); a still-open break ends with the shift.
+- **Break pay classification** is a correction field (`pay_classification`), attributed to the manager with a timestamp; setting it back to `unclassified` clears the attribution.
+- **Concurrency**: per-employee advisory lock (shared with the clock RPCs) + `FOR UPDATE` + version check. Real parallel test: 6 simultaneous corrections at one version ⇒ 1 applied, 5 `P0004`, exactly 1 correction event.
+- **Idempotency**: scoped to (organization, actor), bound to event type + location + employee **and** session.
+- **Self-correction** (a manager editing their own punch) is allowed but flagged `self_correction` in the audit trail and shown as "Own record" in the UI — see open question Q5.
+
+### 5.2 Manager workflow (UI)
+
+Attendance tab → native report → **Correct** on a row → dialog: record summary + immutable history (originals and corrections side by side) → edit shift/break times (typed in the **location's** time zone, DST-safe; only changed fields are sent) and break pay decisions → mandatory reason → **Review changes** (exact before/after, projected gross / breaks / payable) → **Confirm correction** → the new audit record appears in the history. A stale version shows "changed by someone else" with a Reload action. The target session must belong to the caller's **server-verified active location**; a stale tab cannot act on another location (and the database re-checks authority regardless). No kiosk UI.
+
+## 6. Batch B — Unified Attendance Reporting (V2-006.005)
+
+### 6.1 Source selection (one source per location, never merged)
+
+| Location mode         | Shown                                                                    | Notes                                                    |
+| --------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `internal_the_lineup` | Native report (new), badge **Source: TheLineup Internal**                | Reads `attendance_session_summaries` as the caller (RLS) |
+| `external`            | Existing Neon-backed `AttendanceReport`, unchanged, **Source: External** | Neon reader untouched; nothing converted to native       |
+| `disabled`            | "Attendance is turned off" notice                                        | No report, no clock actions                              |
+| unconfigured (NULL)   | Existing Neon report, **Source: External (not configured)**              | Pre-V2 behaviour preserved; internal is never assumed    |
+| no verified location  | Existing Neon report with a note                                         | Native data is never shown without a verified location   |
+| demo mode             | Existing demo report                                                     | No server calls                                          |
+
+The location is always the server-verified persisted context (`getPrimaryLocation`), never a request field. The native action refuses (`not_internal`) for any other mode and never falls back to another source.
+
+### 6.2 Native report content and honesty rules
+
+Employee history and location report with a date range and employee filter (managers). Employees see only themselves (RLS — a tampered filter can only narrow). Each row shows employee, service date, in/out in the **location's zone with zone label** (+1 day marker for overnight), break total and a "pay not decided" flag, gross, payable, status, "Corrected ×N" and provenance. Totals keep gross, break and payable **separate**; payable is the sum over **resolved** sessions only and the number of excluded sessions is stated. Unresolved payable time always reads "Pending break classification", never `0`. Open sessions are never closed automatically; one from an earlier service date is flagged "Open since …" (a display flag, not a policy threshold). Result sets cap at 2000 rows with an explicit notice. No money is computed anywhere.
+
+### 6.3 Payroll / Tips boundary
+
+No Payroll or Tips file, function, snapshot or table was changed (the diff against the base touches none). Batch B produces read-only, provenance-labelled summaries only: each session exposes `is_closed`, `break_policy_resolved`, `net_payable_seconds` (NULL unless resolved), `correction_count`, `last_corrected_at`, source = internal. Batch C must carry that completeness / correction / policy-resolved state forward.
+
+## 7. Permission matrix — corrections and reporting
+
+| Actor                                                                 | Read own | Read location report | Correct / void | Classify breaks |
+| --------------------------------------------------------------------- | :------: | :------------------: | :------------: | :-------------: |
+| Overall Owner / Manager                                               |    ✔    |       any loc        |       ✔       |       ✔        |
+| Overall Assistant Manager (tier 2)                                    |    ✔    |       any loc        |       ✔       |       ✔        |
+| Org Owner / General Manager (active)                                  |    ✔    |       own org        |       ✔       |       ✔        |
+| Location Manager / Asst Mgr (active org membership + assignment)      |    ✔    | that location (live) | that location  |  that location  |
+| Staff (active, assigned)                                              |    ✔    |      self only       |       ✘        |        ✘        |
+| Revoked membership / banned / revoked session / other org or location |    ✘     |          ✘           |       ✘        |        ✘        |
+
+## 8. Migrations and checksums
+
+| File                                          | SHA-256                                                            | Hosted status                |
+| --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------- |
+| `20261110000000_attendance_v2_foundation.sql` | `40bb802beb7ff13a70820d274794d15da2107c3bfdaa78a2439fe0dbd024c63e` | **Not applied** (local only) |
+| `20261110010000_attendance_corrections.sql`   | `a7556ae715e2d34ff712eee7940e38e90e7e6c3a7a1ec8c49f1032f5ca8bdb15` | **Not applied** (local only) |
+
+Full replay from scratch (`supabase db reset`, local disposable stack): 84 migrations, clean. The Batch A file was revised in place only because it had never left the disposable local DB; once either file reaches a shared environment it must be treated as immutable. Hosted DEV rollout (backup → rehearsal → apply) needs separate owner authorization; the DEV ledger is currently 82.
+
+## 9. Test receipts (this session)
+
+- pgTAP `0073` 108/108 and `0074` 66/66 (real `authenticated` JWT subjects). Targeted regression on a freshly reset DB: `0001 0002 0009 0010 0021 0050 0055 0059 0061 0062 0063 0066 0067 0073 0074` — **778 assertions, all pass** (catalog/RLS invariants, module enforcement, identity links, payroll, tips, lifecycle).
+- Parallel real-session concurrency: clock-ins, break races, clock-out vs break-end, and 6-way simultaneous corrections (see §4 and §5.1).
+- Vitest: attendance, locations, modules, payroll, tips, context, schedules, components — 765+ tests, including the repo-wide `enforcement-coverage` invariant. `tsc --noEmit`, ESLint (`--max-warnings=0`) and Prettier clean. `next build --webpack` (CI=1) succeeds. (Turbopack cannot resolve the junctioned `node_modules` of a worktree — an environment trap, not a code issue.)
+- **Not performed**: browser/Playwright verification of the new screens (component-tested in jsdom only), hosted DEV, and full-repository database and E2E regression (deferred to Batch C + final review per plan).
+
+## 10. Additional Batch A finding discovered during Batch B regression
+
+| #   | Severity | Finding                                                                                                                                                                                                                                                                                             | Resolution                                                                                                                                                                                                                                                                                                                       |
+| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 14  | P2       | Batch A Server Actions (`native-clock-actions`, `attendance-mode-actions`) never called the module guard, so the repo-wide invariant `src/features/modules/enforcement-coverage.test.ts` failed (Batch A's reported gates never ran it). The database seams were guarded; the action layer was not. | Clock actions now take `restaurantSlug` and call `guardModuleForSlug` with the location as an **untrusted claim** (stale tab ⇒ denied). `attendance-mode-actions` is registered as a reasoned location-administration exemption (it must work while the attendance module is off). New actions use a registered guarding helper. |
+
+## 11. Open owner policy decisions (none invented)
+
+- **Q1 Break pay**: are breaks paid, unpaid, or length-dependent (e.g. unpaid at 30 minutes or more)? Until decided every break stays `unclassified` and payable time stays pending. Who classifies (a manager per break vs a location rule) and whether a rule may pre-classify at clock-out.
+- **Q2 Auto clock-out**: threshold, who is notified, and what value it writes. The `auto_clocked_out` status exists but nothing writes it; open sessions are only surfaced.
+- **Q3 Business day**: `service_date` is the location-local calendar date of the clock-in. Is a late-night cutoff (e.g. 4 AM) wanted so a 1 AM shift belongs to the previous service day?
+- **Q4 Rounding / overtime / pay rates**: none exist; the owner's rules are required before Batch C feeds Payroll.
+- **Q5 Self-correction**: may a manager correct their own punches (currently allowed and flagged), or must another manager do it?
+- **Q6 Correction window**: should corrections to already-paid periods be blocked or need extra approval (relevant once Payroll consumes native attendance)?
+- **Q7 Overall Assistant Manager / Shift Manager**: they inherit management authority via the shipped tier model (≥ 2). Confirm this is wanted for attendance corrections.
+- **Q8 Hosted rollout**: authorization to back up, rehearse and apply the two migrations to hosted DEV, and whether a Preview deployment of this branch is acceptable first (the branch has deliberately **not** been pushed, because the Vercel integration would build a Preview wired to DEV, which lacks these migrations).
+
+## 12. Batch C handoff (V2-006.006 Payroll/Tips, V2-006.007 External compatibility)
+
+Ready: a stable per-session summary (`attendance_session_summaries`) with completeness / correction / policy-resolution flags; an immutable event ledger with attributed corrections; per-location source selection; provenance labels.
+
+Prerequisites / blockers before Batch C:
+
+1. Owner decisions Q1, Q4 and Q6 (and Q2/Q3 if Payroll needs a closed business day).
+2. Payroll consumption must read `net_payable_seconds` only where `break_policy_resolved`, and must exclude (and surface) unresolved or open sessions. It must never subtract a break whose classification is `unclassified`, and must not recompute confirmed payroll snapshots retroactively.
+3. Define how a correction after a payroll period is confirmed is handled (Q6); the ledger already records `last_corrected_at` and `correction_count` to detect it.
+4. V2-006.007: keep the Neon reader as is; cutover/compatibility is a separate explicit per-location operation (no automatic conversion).
+5. Hosted DEV rollout authorization (Q8) and a single consolidated PR after Batch C.
