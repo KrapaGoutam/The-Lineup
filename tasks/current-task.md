@@ -2,7 +2,7 @@
 
 Parent issue: #254 | Program: #248 | Milestone: #8 (OPEN)
 Branch: `feature/v2-006-attendance-v2` (local only, not pushed) | Base: `development` (`e796eee3`) | Worktree: `.tmp/v2-006-attendance`
-Status: BATCH A VERIFIED — BATCH B VERIFIED — BATCH C IMPLEMENTED LOCALLY (financial activation POLICY-BLOCKED) — INDEPENDENT REVIEW PENDING — HOSTED DEV PENDING OWNER APPROVAL — NO PR
+Status: BATCH A VERIFIED — BATCH B VERIFIED — BATCH C IMPLEMENTED LOCALLY (financial activation POLICY-BLOCKED) — INDEPENDENT REVIEW R1 DONE (PARTIAL; fix b4d056e) — HOSTED DEV PENDING OWNER APPROVAL — NO PR
 
 ## Guardrails
 
@@ -38,7 +38,7 @@ Status: BATCH A VERIFIED — BATCH B VERIFIED — BATCH C IMPLEMENTED LOCALLY (f
 - [x] Concurrency: 150 reads during 40 corrections, 0 torn reads, version 41, 40 events (README §13.9).
 - [x] Consolidated verification: Vitest 3,784; pgTAP 77 files / 2,929; Prettier, ESLint, tsc, `next build --webpack`; Playwright 39/39.
 - [x] Documentation (README §13, STATUS, docs/STATUS.md) and this tracker.
-- [ ] Independent security and financial review (scope: README §13.11) — NOT DONE by design; the implementing agent does not approve its own work.
+- [x] Independent security and financial review R1 (README §14): PARTIAL — no P0/P1; P2 stale-tab read binding fixed (b4d056e, reviewer-authored); native-only Payroll identity + consumption ledger proposed in NATIVE_PAYROLL_IDENTITY_ARCHITECTURE.md (Q9).
 - [ ] Owner decisions Q1, Q4, Q6 (and Q8 for hosted DEV).
 - [ ] Hosted DEV migration gate (Q8): backup, rehearsal, apply 83 and 84, authenticated smoke, reconciliation.
 - [ ] Activation prerequisites (README §13.7): Payroll contract for native employees, duplicate-consumption ledger, Q6 workflow, mode-change cutoff contract.
@@ -46,4 +46,4 @@ Status: BATCH A VERIFIED — BATCH B VERIFIED — BATCH C IMPLEMENTED LOCALLY (f
 
 ## Current State & Next Step
 
-Batch C is fully implemented and verified locally; there is no half-finished file. Stop here. Next, in order: (1) an independent reviewer (a different agent or model) takes README §13.11 as scope, prioritising the `getCurrentUser` revert and `native-financial-data.ts`; (2) the owner answers Q1, Q4, Q6 and Q8 (README §13.2); (3) only then the hosted DEV migration gate and the single PR. Do not start V2-007 or the Inventory UX enhancement.
+R1 independent review is complete (README §14; HEAD b4d056e + docs). There is no half-finished file. Next, in order: (1) owner answers Q1, Q4, Q6, Q8 and the new Q9/Q9b (README §13.2, §14.5; architecture in NATIVE_PAYROLL_IDENTITY_ARCHITECTURE.md); (2) only then the hosted DEV migration gate and the single PR; (3) native financial activation needs Q9 implemented in its own approved, reviewed change. Do not rerun the full suites without new code. Do not push, open a PR, or start V2-007 / Inventory UX.

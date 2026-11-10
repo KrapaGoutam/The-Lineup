@@ -368,3 +368,42 @@ The implementing agent does not approve its own security-critical work. Reviewer
 ### 13.12 Release readiness
 
 Batch A VERIFIED · Batch B VERIFIED · Batch C IMPLEMENTED LOCALLY (code ready; **financial activation policy-blocked**) · Independent review PENDING · Hosted DEV acceptance PENDING APPROVAL (Q8) · Final PR NOT CREATED · Issue #254 OPEN. V2-006 is **not** complete.
+
+## 14. R1 — Independent security and financial review (2026-11-10)
+
+Reviewer: Claude (Sonnet 5.5), a different session from the Batch C implementer. The reviewer **also authored the one fix below (`b4d056e`)**, so that fix has not had a second independent review. Scope was the diff `e796eee..44f6e8a`, prioritising §13.11.
+
+**Decision: PARTIAL.** No P0 and no P1. One P2 defect found and fixed; two P2 design gaps and five P3 notes remain; native financial activation stays policy- and architecture-blocked.
+
+### 14.1 Verified
+
+- **P1 repair VERIFIED.** `src/lib/current-user.ts` is byte-identical to base (`git diff e796eee HEAD` empty): membership-strict, never consults the Overall role, so the service-role passcode-reset, member deactivate/reactivate and account-recovery routes still deny an Overall-only actor. `getAttendanceEntryUser` uses the canonical resolver and grants nothing; the database decides.
+- Real-subject database probes (24/24, scratch, rolled back): an Overall owner without membership can manage and correct (attributed to their profile) but cannot clock themself in; a **revoked Overall role loses authority immediately**; a forged foreign location is denied uniformly; org A cannot read or correct org B; a stale `expected_version` is rejected; `INTERNAL → DISABLED` is refused while a session is open; `anon` is denied everywhere. Grants, RLS, no TRUNCATE and `search_path = ''` re-checked on the live local catalog.
+- Immutability test (`0075`) is real: populated synthetic confirmed rows, whole-row digests, and a **mutation control** (altering a confirmed period and tip allocation made it fail exactly there). It is synthetic local evidence, **not** hosted DEV proof.
+- Payroll, Tips formulas and the Neon reader are untouched (`git diff` of those paths is empty); the Tips diff is two lines passing `locationId`.
+
+### 14.2 Finding fixed
+
+- **R1-F1 (P2).** The native report and the payroll-readiness preview took their location only from the persisted cookie, so a stale tab rendered another branch's rows under the old header (every other V2-005 module already refuses this). Both actions now take an optional `expectedLocationId`, compared with the verified location and refused (`contextStale`) before the module guard or any read; the UI always sends `source.locationId`. Regression tests failed first.
+
+### 14.3 Open (not fixed here — they need a decision or a migration)
+
+- **R1-F2 (P2) native-only Payroll identity** and **R1-F3 (P2) no consumption ledger**: see `NATIVE_PAYROLL_IDENTITY_ARCHITECTURE.md` (Option A recommended; ledger contract; decision **Q9**). `ALREADY_CONSUMED`, `detectCorrectionsAfterSnapshot` and `evaluateExternalRow` have **no production caller**; `PERIOD_BOUNDARY` is enforced only inside the read-only preview (the only consumer).
+- R1-F4 (P3): a new app on a database without the attendance column hard-errors the Attendance tab (Tips/Allocation degrade to Neon instead). Migrations-first rollout makes it unreachable; do not push before Q8.
+- R1-F5 (P3): in internal mode the Allocation Quick-Add "clocked-in first" ordering is RLS-scoped, so a non-manager sees only themself. Ordering only.
+- R1-F6/F7/F8 (P3): readiness payload carries unrendered per-employee sums; module-off strands open sessions and a deactivated employee mid-shift needs the correction RPC; the DST fall-back repeated hour resolves to its first occurrence in the correction form.
+
+### 14.4 Status ladder (truthful)
+
+```text
+Financial source foundation:        IMPLEMENTED
+Read-only readiness preview:        IMPLEMENTED
+Native Payroll financial consumption: BLOCKED (Q1, Q4, Q6, Q9)
+Native-only employee Payroll:       BLOCKED (identity, Q9)
+Confirmed historical Payroll/Tips:  PRESERVED
+```
+
+### 14.5 Added owner decisions
+
+- **Q9** — Native Payroll identity and consumption contract (technical dependency, not an approved policy): recommended Option A + guard + ledger.
+- **Q9b** — Source-switch cutoff: recommended a payroll-month boundary; today only open sessions block leaving internal mode. Unapproved.
