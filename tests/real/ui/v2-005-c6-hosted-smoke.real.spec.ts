@@ -64,7 +64,7 @@ test("C1: Navigation and module availability", async () => {
   });
 });
 
-test("C2: Inventory Table read-only smoke (search, sort, filter, selection)", async () => {
+test("C2: Inventory Table read-only smoke (search, sort, selection)", async () => {
   // Navigate to the Inventory tab within Bar Inventory views
   const inventoryTab = page.getByRole("tab", {
     name: "Inventory",
@@ -90,41 +90,152 @@ test("C2: Inventory Table read-only smoke (search, sort, filter, selection)", as
   await expect(table).toBeVisible();
   const rows = table.locator("tbody tr");
   const initialRowCount = await rows.count();
-  expect(initialRowCount).toBeGreaterThan(0);
+  expect(initialRowCount).toBeGreaterThan(1);
 
-  // Search functionality
-  const searchInput = page
-    .getByPlaceholder(/Search products|Filter products/i)
+  // --- 1. Search Functionality ---
+  const searchInput = page.getByPlaceholder("Search…");
+  await expect(searchInput).toBeVisible();
+
+  // Capture name of first product to test matching
+  const firstProductName = (
+    await rows.first().locator("span.font-medium").innerText()
+  ).trim();
+  expect(firstProductName.length).toBeGreaterThan(0);
+
+  // Filter with matching product name
+  await searchInput.fill(firstProductName);
+  // Matching product remains displayed
+  await expect(
+    table
+      .locator("tbody tr span.font-medium")
+      .filter({ hasText: firstProductName })
+      .first(),
+  ).toBeVisible();
+  const matchingCount = await rows.count();
+  expect(matchingCount).toBeGreaterThanOrEqual(1);
+  expect(matchingCount).toBeLessThanOrEqual(initialRowCount);
+
+  // Nonmatching query excludes all products and renders empty state
+  await searchInput.fill("__NON_EXISTENT_PRODUCT_XYZ__");
+  await expect(page.getByText("No items match these filters.")).toBeVisible();
+  expect(await rows.count()).toBe(0);
+
+  // Clearing search restores expected initial results
+  await searchInput.clear();
+  await expect(rows).toHaveCount(initialRowCount);
+
+  // --- 2. Sorting by Name Column (Header Toggle & Preset) ---
+  const collator = new Intl.Collator("en", {
+    sensitivity: "base",
+    numeric: true,
+  });
+
+  const nameTh = table
+    .getByRole("columnheader")
+    .filter({ hasText: "Name" })
     .first();
-  if (await searchInput.isVisible()) {
-    // Type a common string
-    await searchInput.fill("Vodka");
-    await page.waitForTimeout(300);
-    // Verify search works and either filters or shows matching items
-    await searchInput.clear();
-    await page.waitForTimeout(300);
+  await expect(nameTh).toBeVisible();
+  const nameSortBtn = nameTh.getByRole("button", { name: "Name", exact: true });
+  await expect(nameSortBtn).toBeVisible();
+
+  // Click sort to toggle to descending
+  await nameSortBtn.click();
+  let currentSort = await nameTh.getAttribute("aria-sort");
+  if (currentSort !== "descending") {
+    await nameSortBtn.click();
+    currentSort = await nameTh.getAttribute("aria-sort");
+  }
+  await expect(nameTh).toHaveAttribute("aria-sort", "descending");
+
+  const descNames = await table
+    .locator("tbody tr span.font-medium")
+    .allInnerTexts();
+  expect(descNames.length).toBe(initialRowCount);
+  for (let i = 0; i < descNames.length - 1; i++) {
+    expect(
+      collator.compare(descNames[i], descNames[i + 1]),
+    ).toBeGreaterThanOrEqual(0);
   }
 
-  // Selection tests (read-only, no stock mutations)
-  const firstCheckbox = table
-    .locator("tbody tr input[type='checkbox']")
-    .first();
-  if (await firstCheckbox.isVisible()) {
-    await firstCheckbox.check();
-    await expect(firstCheckbox).toBeChecked();
+  // Sort ascending via Sort order preset ("Name A–Z")
+  const sortOrderSelect = page.getByRole("combobox", { name: "Sort order" });
+  await expect(sortOrderSelect).toBeVisible();
+  await sortOrderSelect.selectOption({ label: "Name A–Z" });
+  await expect(nameTh).toHaveAttribute("aria-sort", "ascending");
 
-    // Verify header or toolbar reflects selection
-    const clearOrSelectBtn = page.getByRole("button", {
-      name: /Clear selection|Deselect/i,
-    });
-    if (await clearOrSelectBtn.isVisible()) {
-      await clearOrSelectBtn.click();
-      await expect(firstCheckbox).not.toBeChecked();
-    } else {
-      await firstCheckbox.uncheck();
-      await expect(firstCheckbox).not.toBeChecked();
-    }
+  const ascNames = await table
+    .locator("tbody tr span.font-medium")
+    .allInnerTexts();
+  expect(ascNames.length).toBe(initialRowCount);
+  for (let i = 0; i < ascNames.length - 1; i++) {
+    expect(collator.compare(ascNames[i], ascNames[i + 1])).toBeLessThanOrEqual(
+      0,
+    );
   }
+
+  // Restore default preset ("Critical first")
+  await sortOrderSelect.selectOption({ label: "Critical first" });
+
+  // --- 3. Selection Functionality (Mandatory Assertions, Non-Mutating) ---
+  const rowCheckboxes = table.locator("tbody tr input[type='checkbox']");
+  const rowCheckboxCount = await rowCheckboxes.count();
+  expect(rowCheckboxCount).toBe(initialRowCount);
+
+  const firstCheckbox = rowCheckboxes.first();
+  await expect(firstCheckbox).toBeVisible();
+  await expect(firstCheckbox).not.toBeChecked();
+
+  // Individual selection
+  await firstCheckbox.check();
+  await expect(firstCheckbox).toBeChecked();
+
+  // Selection state reflects 1 selected
+  const statusSelected = page
+    .getByRole("status")
+    .filter({ hasText: /1 selected/i });
+  await expect(statusSelected).toBeVisible();
+
+  // Header checkbox displays indeterminate state
+  const headerCheckbox = table.locator(
+    "thead input[type='checkbox'][aria-label='Select all visible products']",
+  );
+  await expect(headerCheckbox).toBeVisible();
+  const isIndeterminate = await headerCheckbox.evaluate(
+    (el: HTMLInputElement) => el.indeterminate,
+  );
+  expect(isIndeterminate).toBe(true);
+  await expect(headerCheckbox).not.toBeChecked();
+
+  // Select all shown
+  await headerCheckbox.click();
+  await expect(headerCheckbox).toBeChecked();
+  const isIndeterminateAfterAll = await headerCheckbox.evaluate(
+    (el: HTMLInputElement) => el.indeterminate,
+  );
+  expect(isIndeterminateAfterAll).toBe(false);
+  const checkedRowCount = await table
+    .locator("tbody tr input[type='checkbox']:checked")
+    .count();
+  expect(checkedRowCount).toBe(rowCheckboxCount);
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: new RegExp(`${rowCheckboxCount} selected`, "i") }),
+  ).toBeVisible();
+
+  // Clear selection
+  const clearSelectionBtn = page.getByRole("button", {
+    name: "Clear selection",
+    exact: true,
+  });
+  await expect(clearSelectionBtn).toBeVisible();
+  await clearSelectionBtn.click();
+  await expect(firstCheckbox).not.toBeChecked();
+  await expect(headerCheckbox).not.toBeChecked();
+  await expect(
+    page.getByRole("status").filter({ hasText: /0 selected/i }),
+  ).toBeVisible();
+  await expect(clearSelectionBtn).toBeHidden();
 
   // Ensure no horizontal overflow on standard desktop
   const scrollWidth = await page.evaluate(
@@ -136,11 +247,13 @@ test("C2: Inventory Table read-only smoke (search, sort, filter, selection)", as
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
 });
 
-test("C3: Cooler Layout empty-state, navigation, and item details", async () => {
+test("C3: Cooler Layout empty-state, navigation, and item read-only inspection", async () => {
+  // Toggle to Cooler Layout
   const coolerBtn = page.getByRole("button", {
     name: "Cooler Layout",
     exact: true,
   });
+  await expect(coolerBtn).toBeVisible();
   await coolerBtn.click();
 
   // Verify branch selector displays DEV Location
@@ -153,13 +266,16 @@ test("C3: Cooler Layout empty-state, navigation, and item details", async () => 
     "DEV Location",
   );
 
-  // Verify Storage Areas filter
+  // Verify Storage Areas filter is present with All Storage Areas
   const storageFilter = page.getByRole("combobox", {
     name: "Select storage area",
   });
   await expect(storageFilter).toBeVisible();
+  await expect(storageFilter.locator("option").first()).toHaveText(
+    "All Storage Areas",
+  );
 
-  // Verify Unassigned Storage heading exists
+  // Verify Unassigned Storage section exists
   const unassignedHeading = page.getByRole("heading", {
     name: "Unassigned Storage",
   });
@@ -177,43 +293,60 @@ test("C3: Cooler Layout empty-state, navigation, and item details", async () => 
   // Search filter within Cooler Layout
   const coolerSearch = page.getByPlaceholder("Filter products or slots…");
   await expect(coolerSearch).toBeVisible();
-  await coolerSearch.fill("Tito");
-  await page.waitForTimeout(200);
+  await coolerSearch.fill("NonExistentTermXYZ");
   await coolerSearch.clear();
 
-  // Open "Manage Unassigned" drawer to inspect unassigned items read-only
+  // Open Manage Unassigned view
   const manageUnassignedBtn = page.getByRole("button", {
     name: "Manage Unassigned",
   });
   await expect(manageUnassignedBtn).toBeVisible();
   await manageUnassignedBtn.click();
 
-  // Drawer / modal opens
-  const drawer = page.locator("[role='dialog']").first();
-  if (await drawer.isVisible()) {
-    // Check product items are listed
-    const itemCard = drawer.locator("[role='button']").first();
-    if (await itemCard.isVisible()) {
-      await itemCard.click();
-      // Read-only inspection in Item Sheet
-      await page.waitForTimeout(300);
-    }
-    // Close drawer
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
-  }
+  // Unassigned Storage view heading renders
+  await expect(
+    page.getByRole("heading", { name: "Unassigned Storage", level: 2 }),
+  ).toBeVisible();
+
+  // Read-only item inspection: click the first unassigned product card button
+  const productButton = page
+    .locator(".space-y-6 div.grid .bg-card button")
+    .filter({ hasText: /.+/ })
+    .first();
+  await expect(productButton).toBeVisible();
+  const targetProductName = (await productButton.innerText()).trim();
+  expect(targetProductName.length).toBeGreaterThan(0);
+
+  // Open ItemSheet
+  await productButton.click();
+
+  // Assert item sheet dialog opens with correct product identity
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: targetProductName }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("On hand")).toBeVisible();
+  await expect(dialog.getByLabel("Backup")).toBeVisible();
+  await expect(dialog.getByLabel("Reason")).toBeVisible();
+
+  // Close read-only inspection dialog via Close button without saving data
+  await dialog.getByRole("button", { name: "Close" }).first().click();
+  await expect(dialog).toBeHidden();
 
   // Switch back to table view
-  await page
-    .getByRole("button", { name: "Inventory Table", exact: true })
-    .click();
+  const tableBtn = page.getByRole("button", {
+    name: "Inventory Table",
+    exact: true,
+  });
+  await expect(tableBtn).toBeVisible();
+  await tableBtn.click();
   await expect(page.getByRole("table")).toBeVisible();
 });
 
-test("C4: Responsive checks (tablet and mobile viewports)", async () => {
-  // Tablet viewport (iPad Air 820 x 1180)
+test("C4: Responsive checks (tablet and mobile viewports in test browser)", async () => {
+  // Tablet viewport (820 x 1180, iPad Air dimensions evaluated in test browser)
   await page.setViewportSize({ width: 820, height: 1180 });
-  await page.waitForTimeout(300);
   let scrollWidth = await page.evaluate(
     () => document.documentElement.scrollWidth,
   );
@@ -226,14 +359,12 @@ test("C4: Responsive checks (tablet and mobile viewports)", async () => {
   await page
     .getByRole("button", { name: "Cooler Layout", exact: true })
     .click();
-  await page.waitForTimeout(300);
   scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
 
-  // Mobile viewport (iPhone 14 / 390 x 844)
+  // Mobile viewport (390 x 844, iPhone 14 dimensions evaluated in test browser)
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(300);
   scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
@@ -242,7 +373,6 @@ test("C4: Responsive checks (tablet and mobile viewports)", async () => {
   await page
     .getByRole("button", { name: "Inventory Table", exact: true })
     .click();
-  await page.waitForTimeout(300);
   scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);

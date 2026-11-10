@@ -4,7 +4,7 @@ Date: 2026-11-09
 Agent: Antigravity (Gemini 3.8 Flash High)  
 Environment: Hosted DEV (`opmujepkemwcdxxorhfd`) & Preview Deployment  
 Target Branch: `development` (`1d5bb9869960d721458903ea4185c50aea955d62`)  
-Parent Issue: #253 | Milestone: #8 | Program: #248
+Parent Issue: #253 | Milestone: #8 (OPEN) | Program: #248
 
 ---
 
@@ -12,15 +12,15 @@ Parent Issue: #253 | Milestone: #8 | Program: #248
 
 Under explicit owner authorization (**P-1 — Limited DEV Pilot**), Stage C6 executed the targeted configuration and authenticated hosted smoke acceptance for **Bar Inventory** at The Monk's DEV (`DEV Location`):
 
-1. **Preflight Verified:** Ledger 82, enforcement STAGED, 0 pre-existing module configs, 44 active locations (42 test-harness fixtures), baseline inventory counts verified.
+1. **Preflight Verified:** Ledger 82 (latest `20261109120000_inventory_physical_storage_layout.sql`), backend enforcement STAGED, 0 pre-existing module configs, 44 active locations (42 test-harness fixtures), baseline inventory counts verified.
 2. **Authorized Configuration Applied:** Exactly 1 row inserted into `public.location_module_configs` via authenticated TestOwner session (`b3add6a2-fd5f-45ac-93bc-0fbbd55b9e2f`). Actor attribution verified. All other 8 modules and 43 other locations remain unconfigured.
-3. **Hosted Authenticated Smoke Executed (4/4 PASS):** Playwright automated suite (`tests/real/ui/v2-005-c6-hosted-smoke.real.spec.ts`) executed against the DEV-bound Vercel Preview (`https://the-lineup-git-docs-v2-005-formal-closeout-onepiece11.vercel.app`):
-   - **C1 Navigation:** Bar Inventory visible in branch navigation; active branch DEV Location; unconfigured modules hidden; Settings accessible.
-   - **C2 Inventory Table:** Real products load, search, sort, filter, and non-mutating row selection verified.
-   - **C3 Cooler Layout:** View toggle renders, branch selector confirms DEV Location, All Storage Areas filter present, Unassigned Storage section present, expected empty physical layout rendered, drawer inspection verified.
-   - **C4 Responsive:** Desktop (1280×800), Tablet (820×1180), and Mobile (390×844) verified with zero horizontal overflow.
-4. **Data Reconciliation (100% Preservation):** Pre/post table counts across all 10 inventory and configuration tables verified completely identical (zero stock drift, zero audit drift).
-5. **Closeout State:** Issue #253 is ready for final owner closeout sign-off. Backend enforcement remains STAGED.
+3. **Hosted Authenticated Smoke Executed (4/4 PASS):** Playwright automated suite (`tests/real/ui/v2-005-c6-hosted-smoke.real.spec.ts`) executed against the DEV-bound Vercel Preview (`https://the-lineup-git-docs-v2-005-c6-hosted-pilot-ac-e43ac8-onepiece11.vercel.app`):
+   - **C1 Navigation:** Bar Inventory visible in branch navigation; active branch DEV Location; unconfigured optional modules hidden; Settings accessible.
+   - **C2 Inventory Table:** Real products load; search presence, matching display, exclusion of non-matching queries, and restoration on clear verified; Name column descending (header button toggle) and ascending (Sort order preset) sorting verified against visible table values with `Intl.Collator`; non-mutating row selection (individual, selection status counter, indeterminate header checkbox, select all, clear selection) verified.
+   - **C3 Cooler Layout:** View toggle renders, branch selector confirms DEV Location, All Storage Areas filter present, Unassigned Storage section present, expected empty physical layout rendered ("No storage areas defined"), Manage Unassigned view and read-only ItemSheet inspection verified with zero stock mutations.
+   - **C4 Responsive:** Responsive viewport widths evaluated in test browser (Chromium) at Desktop (1280×800), Tablet (820×1180), and Mobile (390×844) dimensions with zero horizontal overflow. Native iPad WebKit and Android engines were not executed on hosted DEV and are formally DEFERRED.
+4. **Data Reconciliation:** All relevant table counts unchanged across all 10 inventory and configuration tables; no stock-changing actions were performed.
+5. **Closeout State:** Issue #253 is ready for final owner closeout sign-off. Backend enforcement remains STAGED. Milestone #8 remains OPEN (contains V2-006, V2-007, V2-008, and V2-009).
 
 ---
 
@@ -81,12 +81,12 @@ Atomic insert executed through authenticated Supabase client:
 
 Executed via Playwright against the live Vercel Preview with legitimate `TestOwner` session:
 
-| Test Case                         | Scope                                                          | Outcome          | Evidence                                                                                                                                                                                   |
-| :-------------------------------- | :------------------------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **C1: Navigation & Availability** | Secondary navigation, branch indicators, module visibility     | **PASS** (1.4s)  | Bar Inventory appears; active branch DEV Location; Tasks, Tips, Payroll, Schedule hidden; Settings accessible                                                                              |
-| **C2: Inventory Table**           | Products table, search, sort, filter, row selection            | **PASS** (438ms) | Existing products render; search & clear verified; selection checkbox works with zero stock mutations; no overflow                                                                         |
-| **C3: Cooler Layout**             | View toggle, branch selector, area filter, empty state, drawer | **PASS** (691ms) | Toggle works; branch combobox confirms "DEV Location"; storage filter visible; Unassigned Storage heading visible; "No storage areas defined" empty state visible; drawer inspection clean |
-| **C4: Responsive Viewports**      | Desktop (1280×800), Tablet (820×1180), Mobile (390×844)        | **PASS** (1.6s)  | Clean rendering across both table and cooler views; zero horizontal overflow (`scrollWidth <= clientWidth + 1`)                                                                            |
+| Test Case                         | Scope                                                                                                                                   | Outcome          | Evidence                                                                                                                                                                                                                                                  |
+| :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- | :--------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1: Navigation & Availability** | Secondary navigation, branch indicators, module visibility                                                                              | **PASS** (983ms) | Bar Inventory appears; active branch DEV Location; Tasks, Tips, Payroll, Schedule hidden; Settings accessible                                                                                                                                             |
+| **C2: Inventory Table**           | Products table, search presence/match/exclude/clear, column sort (Name desc/asc), row selection (individual, count, indeterminate, all) | **PASS** (1.9s)  | Existing products render; search presence, matching display, exclusion and clearing verified; Name column descending and ascending sorts verified against visible values; row selection verified with zero stock mutations; no overflow                   |
+| **C3: Cooler Layout**             | View toggle, branch selector, area filter, empty state guidance, Manage Unassigned view & read-only item inspection                     | **PASS** (798ms) | Toggle works; branch combobox confirms "DEV Location"; storage filter visible; Unassigned Storage heading visible; "No storage areas defined" empty state visible; Manage Unassigned view and read-only ItemSheet inspection verified without saving data |
+| **C4: Responsive Viewports**      | Desktop (1280×800), Tablet (820×1180), Mobile (390×844) viewports in test browser                                                       | **PASS** (435ms) | Clean rendering across both table and cooler views; zero horizontal overflow (`scrollWidth <= clientWidth + 1`). Native WebKit and Android engines deferred.                                                                                              |
 
 ---
 
@@ -96,13 +96,14 @@ Executed via Playwright against the live Vercel Preview with legitimate `TestOwn
 | :------------------------------------------ | :----------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **All Authorized Branches (Multi-Branch)**  | **LOCAL VERIFIED / HOSTED DEFERRED** | Verified locally in real-JWT suite (distinct branch quantities, unauthorized branch exclusion). Hosted DEV execution deferred because neither non-harness DEV organization has >1 location and no dual-branch test actor was approved under P-1. |
 | **Placement Mutations (Drag/Drop/Reorder)** | **DEFERRED**                         | Hosted DEV currently has 0 storage areas and 0 shelves. Option A invariant verified locally in unit, pgTAP, and component tests. Dedicated test data creation deferred until owner D4 decision.                                                  |
-| **Stock Adjustments & Date Group Imports**  | **DEFERRED**                         | Business stock preservation strictly honored. Tested extensively in local/preview rehearsal suites.                                                                                                                                              |
+| **Stock Adjustments & Date Group Imports**  | **DEFERRED**                         | Business stock preservation strictly honored. Tested extensively in local/preview rehearsal suites. Write tests deferred pending owner decision.                                                                                                 |
+| **Native iPad WebKit & Android Engines**    | **DEFERRED**                         | Responsive layout widths verified in Chromium test browser. Physical/emulated WebKit (iPadOS) and Android browser runs on hosted DEV deferred.                                                                                                   |
 
 ---
 
 ## 6. Pre / Post Data Reconciliation
 
-Full database audit before and after the smoke test:
+All relevant table counts unchanged; no stock-changing actions were performed.
 
 | Table                            | Pre-Smoke | Post-Smoke | Delta |           Status            |
 | :------------------------------- | :-------: | :--------: | :---: | :-------------------------: |
@@ -121,7 +122,17 @@ Full database audit before and after the smoke test:
 
 ---
 
-## 7. Open Owner Decisions Summary
+## 7. Accepted P2 Debt Items
+
+The three accepted P2 items from the implementation phase remain recorded:
+
+- **P2-4:** Storage tables are not in Supabase Realtime publication (peer refresh occurs on navigation/focus; optimistic concurrency protects writes).
+- **P2-5:** `parseImportNumber` accepts fractions ("1/2"); scientific e-notation in spreadsheets remains unparsed.
+- **P2-6:** Item sheet does not explicitly label that Counts/Levels/Dates are branch-scoped while product metadata is org-scoped.
+
+---
+
+## 8. Open Owner Decisions Summary
 
 1. **D1 (Pilot scope):** Resolved (P-1 granted and executed).
 2. **D2 (42 Harness Fixtures):** Decision remains whether to archive throwaway fixtures through the audited lifecycle path or configure them.
@@ -133,7 +144,7 @@ Full database audit before and after the smoke test:
 
 ---
 
-## 8. Safety & Compliance Attestation
+## 9. Safety & Compliance Attestation
 
 - `main`: **UNCHANGED**
 - Production (`ftadewtkjlaotfdvtjcv`): **UNTOUCHED**
