@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   nativeBreakEnd: vi.fn(),
   getActiveAttendanceSession: vi.fn(),
   guardModuleForSlug: vi.fn(),
+  getAttendanceEntryUser: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -18,6 +19,9 @@ vi.mock("@/lib/supabase/require-live-session", () => ({
 }));
 vi.mock("@/features/modules/data/module-enforcement", () => ({
   guardModuleForSlug: mocks.guardModuleForSlug,
+}));
+vi.mock("@/features/attendance/data/attendance-actor", () => ({
+  getAttendanceEntryUser: mocks.getAttendanceEntryUser,
 }));
 vi.mock("@/features/attendance/data/native-attendance-data", () => ({
   nativeClockIn: mocks.nativeClockIn,
@@ -244,8 +248,29 @@ describe("native-clock-actions", () => {
         restaurantSlug,
         {
           claimedLocationId: locationId,
+          resolveOrganizationId: expect.any(Function),
         },
       );
+    });
+
+    it("resolves the guard's organization from the canonical attendance actor, not getCurrentUser", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.nativeClockIn.mockResolvedValue({
+        ok: true,
+        data: { success: true },
+      });
+      await nativeClockInAction({ restaurantSlug, locationId });
+      const deps = mocks.guardModuleForSlug.mock.calls[0][2] as {
+        resolveOrganizationId: (slug: string) => Promise<string | null>;
+      };
+      mocks.getAttendanceEntryUser.mockResolvedValueOnce({
+        organizationId: "org-canonical",
+      });
+      await expect(deps.resolveOrganizationId("any-slug")).resolves.toBe(
+        "org-canonical",
+      );
+      mocks.getAttendanceEntryUser.mockResolvedValueOnce(null);
+      await expect(deps.resolveOrganizationId("any-slug")).resolves.toBeNull();
     });
 
     it("guards the active-session read too", async () => {

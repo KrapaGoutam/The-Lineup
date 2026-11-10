@@ -13,7 +13,15 @@ import {
   getActiveAttendanceSession,
   type ClockOperationResponse,
 } from "../data/native-attendance-data";
+import { getAttendanceEntryUser } from "../data/attendance-actor";
 import type { AttendanceSessionModel } from "../domain/attendance-session";
+
+// The organization for the module guard comes from the canonical active-context resolver,
+// never from `getCurrentUser` (which stays membership-strict for the service-role account
+// routes). This is a non-exported helper: "use server" files may only export async actions.
+async function resolveOrganizationId(slug: string): Promise<string | null> {
+  return (await getAttendanceEntryUser(slug))?.organizationId ?? null;
+}
 
 export type ActionResult<T> =
   | { readonly ok: true; readonly data: T }
@@ -86,7 +94,7 @@ export async function nativeClockInAction(
     const blocked = await guardModuleForSlug(
       "attendance",
       parsed.data.restaurantSlug,
-      { claimedLocationId: parsed.data.locationId },
+      { claimedLocationId: parsed.data.locationId, resolveOrganizationId },
     );
     if (blocked) return blocked;
 
@@ -133,7 +141,7 @@ export async function nativeClockOutAction(
     const blocked = await guardModuleForSlug(
       "attendance",
       parsed.data.restaurantSlug,
-      { claimedLocationId: parsed.data.locationId },
+      { claimedLocationId: parsed.data.locationId, resolveOrganizationId },
     );
     if (blocked) return blocked;
 
@@ -180,7 +188,7 @@ export async function nativeBreakStartAction(
     const blocked = await guardModuleForSlug(
       "attendance",
       parsed.data.restaurantSlug,
-      { claimedLocationId: parsed.data.locationId },
+      { claimedLocationId: parsed.data.locationId, resolveOrganizationId },
     );
     if (blocked) return blocked;
 
@@ -226,7 +234,7 @@ export async function nativeBreakEndAction(
     const blocked = await guardModuleForSlug(
       "attendance",
       parsed.data.restaurantSlug,
-      { claimedLocationId: parsed.data.locationId },
+      { claimedLocationId: parsed.data.locationId, resolveOrganizationId },
     );
     if (blocked) return blocked;
 
@@ -280,6 +288,7 @@ export async function getActiveAttendanceSessionAction(input: {
 
     const blocked = await guardModuleForSlug("attendance", slugParsed.data, {
       claimedLocationId: locationParsed.data,
+      resolveOrganizationId,
     });
     if (blocked) return blocked;
 

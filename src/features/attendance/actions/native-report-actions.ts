@@ -5,10 +5,10 @@ import { z } from "zod";
 
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
+import { getAttendanceEntryUser } from "../data/attendance-actor";
 import {
   getSessionHistory,
   correctNativeAttendanceSession,
@@ -84,7 +84,7 @@ async function resolveContext(
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const user = await getCurrentUser(restaurantSlug);
+  const user = await getAttendanceEntryUser(restaurantSlug);
   if (!user) return { ok: false, error: NOT_SIGNED_IN };
 
   const location = await getPrimaryLocation(user.organizationId);

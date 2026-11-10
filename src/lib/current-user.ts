@@ -6,6 +6,7 @@ import type { OverallRole } from "@/features/auth/domain/overall-role";
 import {
   designationForRoles,
   designationToRole,
+  normalizeDatabaseRole,
 } from "@/features/auth/domain/passcode";
 import type { Designation } from "@/features/auth/domain/passcode";
 import type { ResolvedActiveContext } from "@/features/context/domain/active-context";
@@ -25,33 +26,27 @@ export async function getCurrentUser(
     .maybeSingle();
   if (!organization) return null;
 
-  const [{ data: profile }, { data: membership }, overallRole] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", authData.user.id)
-        .maybeSingle(),
-      supabase
-        .from("memberships")
-        .select("roles")
-        .eq("organization_id", organization.id)
-        .eq("profile_id", authData.user.id)
-        .eq("active", true)
-        .maybeSingle(),
-      getOverallRole(authData.user.id, supabase),
-    ]);
+  const [{ data: profile }, { data: membership }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", authData.user.id)
+      .maybeSingle(),
+    supabase
+      .from("memberships")
+      .select("roles")
+      .eq("organization_id", organization.id)
+      .eq("profile_id", authData.user.id)
+      .eq("active", true)
+      .maybeSingle(),
+  ]);
 
-  if (!profile || (!membership && !overallRole)) return null;
-  const designation = entryDesignation({
-    membershipRoles: membership?.roles ?? null,
-    overallRole,
-  });
+  if (!profile || !membership) return null;
   return {
     profileId: authData.user.id,
     name: profile.display_name,
-    role: designationToRole(designation),
-    designation,
+    role: normalizeDatabaseRole(membership.roles),
+    designation: designationForRoles(membership.roles),
     organizationId: organization.id,
   };
 }

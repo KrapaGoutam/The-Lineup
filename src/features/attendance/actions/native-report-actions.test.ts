@@ -19,7 +19,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.requireLiveSession,
 }));
-vi.mock("@/lib/current-user", () => ({ getCurrentUser: mocks.getCurrentUser }));
+vi.mock("../data/attendance-actor", () => ({
+  getAttendanceEntryUser: mocks.getCurrentUser,
+}));
 vi.mock("@/features/locations/data/primary-location", () => ({
   getPrimaryLocation: mocks.getPrimaryLocation,
 }));
