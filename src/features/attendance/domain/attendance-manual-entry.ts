@@ -14,7 +14,6 @@ import { zonedWallTimeFromInstant } from "@/lib/timezone";
 export const MANUAL_ENTRY_REASON_MIN = 3;
 export const MANUAL_ENTRY_REASON_MAX = 500;
 export const MAX_BULK_ENTRIES = 50;
-export const FUTURE_TOLERANCE_MS = 60_000;
 export const MAX_SHIFT_DURATION_HOURS = 48;
 
 const uuidRegex =
@@ -145,7 +144,7 @@ export type BulkEntryInput = z.infer<typeof bulkEntryInputSchema>;
 /**
  * Validates timezone-dependent constraints for a manual attendance punch:
  * 1. Clock-in local date must equal service date.
- * 2. Punches cannot be in the future (beyond skew tolerance).
+ * 2. Punches cannot be in the future, matching the database RPC.
  * 3. Open entries are permitted ONLY for today's local date.
  */
 export function validateManualEntryLocalTime(params: {
@@ -172,8 +171,8 @@ export function validateManualEntryLocalTime(params: {
     };
   }
 
-  // 2. Future punch check (with skew tolerance).
-  const maxAllowedMs = nowMs + FUTURE_TOLERANCE_MS;
+  // 2. The database rejects every future instant, including small clock skew.
+  const maxAllowedMs = nowMs;
   if (inDate.getTime() > maxAllowedMs) {
     return { ok: false, error: "Clock-in time cannot be in the future." };
   }

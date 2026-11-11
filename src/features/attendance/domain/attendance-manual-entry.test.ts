@@ -107,7 +107,7 @@ describe("validateManualEntryLocalTime", () => {
     }
   });
 
-  it("rejects future clock-in time beyond tolerance", () => {
+  it("rejects future clock-in time", () => {
     const now = Date.parse("2026-11-10T12:00:00.000Z");
     const futureIn = new Date(now + 120_000).toISOString(); // 2m in future
     const res = validateManualEntryLocalTime({
@@ -123,7 +123,7 @@ describe("validateManualEntryLocalTime", () => {
     }
   });
 
-  it("permits clock-in within skew tolerance (e.g. 30 seconds ahead)", () => {
+  it("rejects even a slightly future clock-in, matching SQL", () => {
     const now = Date.parse("2026-11-10T12:00:00.000Z");
     const slightFutureIn = new Date(now + 30_000).toISOString();
     const res = validateManualEntryLocalTime({
@@ -133,7 +133,7 @@ describe("validateManualEntryLocalTime", () => {
       timeZone: "UTC",
       nowMs: now,
     });
-    expect(res.ok).toBe(true);
+    expect(res.ok).toBe(false);
   });
 
   it("rejects open shift for a past date", () => {

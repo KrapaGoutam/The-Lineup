@@ -59,3 +59,7 @@ The independent review moved exact-payload replay ahead of time-dependent valida
 ## Decision and risk
 
 The existing `attendance_sessions` model cannot represent a lone clock-out. It remains unsupported and never creates payable time. Historical incomplete entries are excluded because one open session per employee across the organization can block a current clock flow. This limitation is visible in the UI. Existing correction behavior is preserved except that ambiguous/nonexistent wall time is refused instead of silently resolved.
+
+## Local acceptance checkpoint — 2026-11-11
+
+Normal Auth and real local browser checks passed for the manager/denial, saved shift, correction, bulk partial success, DST and responsive flows. The client future rule was aligned with SQL; bulk headers now match input order. Dedicated keyboard/touch tap remained unproved after an intermittent local JWT issued-at-future error. The private `LOCAL_ACCEPTANCE_2026-11-11.md` has exact evidence. Hosted migration, Preview and PR await new owner approval; activation remains OFF and enforcement STAGED.

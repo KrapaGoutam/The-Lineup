@@ -7,12 +7,14 @@
 - [x] Correct nullable RPC type and add explicit bulk overnight end date and accessible row labels.
 - [x] Run focused local pgTAP 282/282, Attendance Vitest 356/356, `npm run check`, webpack production build and diff check.
 - [x] Commit the scoped review fixes locally as `459ee222c05a39ea13d77e3e35df64817c7fe78a`; no remote feature branch or PR was created.
-- [ ] Run actual local JWT role/tenant/concurrency acceptance and local desktop/WebKit tablet/mobile browser flows. Blocked by Device Guard on the local Supabase CLI and lack of an approved local-only credential path; automatic approval review rejected minting a service-role token from the Auth signing secret. Do not bypass it.
+- [x] Run actual local JWT role/tenant/concurrency, source-mode, frozen-month and direct-forgery acceptance with normal Auth users; see private `LOCAL_ACCEPTANCE_2026-11-11.md`.
+- [x] Run real local desktop Chromium, WebKit tablet/mobile browser flows for saved shifts, correction, bulk partial success, DST, future, wrong location and revocation.
+- [ ] Complete dedicated keyboard Enter/touch tap rerun; intermittent local `PGRST303 JWT issued at future` interrupted this check. Earlier browser navigation worked by click on touch-capable WebKit devices.
 - [ ] Obtain new owner authorization for the exact DEV migration/backup/recovery/acceptance/Preview/PR scope after local acceptance passes. No such record found on 2026-11-11.
 - [ ] Reverify final migration hash, fresh backup and isolated recovery/rehearsal; then migrate DEV and complete hosted authenticated/Preview acceptance and manifest cleanup under the new authorization.
 - [ ] Push existing branch, open one PR to `development`, require exact-head CI/review and normal merge. Keep `main`, Production, Neon, #254 and V2-007 untouched.
 
-Current state: LOCAL PARTIAL. Hosted DEV read-only ledger 86 (function absent), financial activation OFF, enforcement STAGED. The private handoff has the finding table, test receipts and exact rollout decision. No hosted write, push or PR. The prior session's checked items below are historical claims; the independent JWT and browser gates above remain open.
+Current state: LOCAL READY for the exercised flows; hosted integration blocked by absent new owner authorization. The private handoff has actual Auth/browser receipts and the residual keyboard/touch limitation. Hosted DEV last read-only ledger 86, activation OFF, enforcement STAGED. No hosted write, push or PR.
 
 Branch `feature/attendance-manual-entry`; isolated worktree `.tmp/attendance-manual-entry`; base `origin/development` `d09b6c4600e46653710a8e92a507415af78c5d77`. Root checkout and other worktrees are preserved. Source feature: `docs/features/attendance-manual-entry.md`. Private handoff: `.tmp/attendance-manual-entry-handoff/`.
 
@@ -24,7 +26,7 @@ Branch `feature/attendance-manual-entry`; isolated worktree `.tmp/attendance-man
 - [x] Commit reviewed local implementation; prepare hosted DEV recovery/compatibility package. Hosted writes require new owner approval.
 - [ ] Push and open one Attendance PR when binding and gates allow; merge only after exact-head CI and required review.
 
-Native financial activation OFF; backend enforcement STAGED. No Production, main, Neon, Kiosk or V2-007 work. Inventory starts on its own branch from updated development only after Attendance integration.
+Native financial activation OFF; backend enforcement STAGED. No Production, main, Neon, Kiosk or V2-007 work. Inventory Dates-tab local work may start on its own branch from current development while hosted Attendance approval is pending; integration remains separate.
 
 ---
 

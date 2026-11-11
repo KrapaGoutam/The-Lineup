@@ -385,8 +385,8 @@ export function AttendanceBulkEntryDialog({
                   <tr>
                     <th className="p-2.5">Employee</th>
                     <th className="p-2.5">Date</th>
-                    <th className="p-2.5">In</th>
                     <th className="p-2.5">Out date</th>
+                    <th className="p-2.5">In</th>
                     <th className="p-2.5">Out</th>
                     <th className="p-2.5">Reason</th>
                     <th className="p-2.5 text-right">Actions</th>
