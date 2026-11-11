@@ -223,10 +223,10 @@ test("an item's own History shows its changes with the reason and who made them 
   );
 
   const sheet = await openItemSheet(page, TITOS);
-  const toggle = sheet.getByRole("button", { name: "History" });
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const tab = sheet.getByRole("tab", { name: "History" });
+  await expect(tab).toHaveAttribute("aria-selected", "false");
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
   const latest = sheet.getByTestId("item-history-entry").first();
   await expect(latest).toContainText("On hand 2 → 10 (+8)");
   await expect(latest).toContainText("Delivery / Restock");

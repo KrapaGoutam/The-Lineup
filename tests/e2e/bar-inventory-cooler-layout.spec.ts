@@ -193,6 +193,23 @@ test.describe("Cooler Layout (all device projects)", () => {
     await expect(dialog).toContainText("Tito's Handmade Vodka");
     await expect(dialog.getByLabel("On hand")).toBeVisible();
     await expect(dialog.getByLabel("Backup")).toBeVisible();
+    const tabs = dialog.getByRole("tablist", {
+      name: "Tito's Handmade Vodka details",
+    });
+    await expect(tabs.getByRole("tab")).toHaveText([
+      "Counts",
+      "Levels",
+      "Dates",
+      "History",
+    ]);
+    await tabs.getByRole("tab", { name: "Counts" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(tabs.getByRole("tab", { name: "Dates" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(dialog).toContainText("Dated quantity");
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
   });
