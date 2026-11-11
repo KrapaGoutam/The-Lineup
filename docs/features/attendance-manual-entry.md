@@ -5,7 +5,7 @@
 **Base:** V2-006 merged to `development` at `d09b6c4`  
 **Issue/PR:** No dedicated open issue found by GitHub search; one Attendance PR to development.
 
-**Independent review, 2026-11-11:** Local review fixes are in progress on the existing branch. Hosted DEV remains at 86 migrations with this RPC absent; no new owner rollout authorization was found. See the private handoff for exact review and gate receipts.
+**Independent review, 2026-11-11:** Source and focused local test fixes are committed on the existing branch; actual local JWT and browser acceptance remains open. Hosted DEV remains at 86 migrations with this RPC absent; no new owner rollout authorization was found. See the private handoff for exact review and gate receipts.
 
 ## User outcome and scope
 

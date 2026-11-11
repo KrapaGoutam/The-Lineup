@@ -6,6 +6,7 @@
 - [x] Review privileged RPC, app flow, grants/RLS, idempotency, time and financial boundary; reproduce and fix the post-midnight open-entry retry and bulk row-isolation defects.
 - [x] Correct nullable RPC type and add explicit bulk overnight end date and accessible row labels.
 - [x] Run focused local pgTAP 282/282, Attendance Vitest 356/356, `npm run check`, webpack production build and diff check.
+- [x] Commit the scoped review fixes locally as `459ee222c05a39ea13d77e3e35df64817c7fe78a`; no remote feature branch or PR was created.
 - [ ] Run actual local JWT role/tenant/concurrency acceptance and local desktop/WebKit tablet/mobile browser flows. Blocked by Device Guard on the local Supabase CLI and lack of an approved local-only credential path; automatic approval review rejected minting a service-role token from the Auth signing secret. Do not bypass it.
 - [ ] Obtain new owner authorization for the exact DEV migration/backup/recovery/acceptance/Preview/PR scope after local acceptance passes. No such record found on 2026-11-11.
 - [ ] Reverify final migration hash, fresh backup and isolated recovery/rehearsal; then migrate DEV and complete hosted authenticated/Preview acceptance and manifest cleanup under the new authorization.
@@ -20,7 +21,7 @@ Branch `feature/attendance-manual-entry`; isolated worktree `.tmp/attendance-man
 - [x] Implement one vertical Attendance slice: audited explicit-time creation, strict local time, manager action and reviewed single/bulk UI.
 - [x] Run targeted unit, database, real-browser and concurrency checks.
 - [x] Run consolidated `npm run check`, `npm run test`, `npm run build`; inspect security, tenant scope and accessibility diff.
-- [ ] Commit; prepare hosted DEV recovery/compatibility package. Hosted writes require new owner approval.
+- [x] Commit reviewed local implementation; prepare hosted DEV recovery/compatibility package. Hosted writes require new owner approval.
 - [ ] Push and open one Attendance PR when binding and gates allow; merge only after exact-head CI and required review.
 
 Native financial activation OFF; backend enforcement STAGED. No Production, main, Neon, Kiosk or V2-007 work. Inventory starts on its own branch from updated development only after Attendance integration.
