@@ -13,7 +13,9 @@ import {
   type AttendanceSourceView,
   type NativeReportView,
 } from "@/features/attendance/actions/native-report-actions";
+import { AttendanceBulkEntryDialog } from "@/features/attendance/components/attendance-bulk-entry-dialog";
 import { AttendanceCorrectionDialog } from "@/features/attendance/components/attendance-correction-dialog";
+import { AttendanceManualEntryDialog } from "@/features/attendance/components/attendance-manual-entry-dialog";
 import { PayrollReadinessPanel } from "@/features/attendance/components/payroll-readiness-panel";
 import {
   formatWorkedDuration,
@@ -75,6 +77,8 @@ export function NativeAttendanceReport({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [employees, setEmployees] = useState<Array<[string, string]>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [showBulkEntry, setShowBulkEntry] = useState(false);
 
   const rangeValid = start !== "" && end !== "" && start <= end;
 
@@ -179,36 +183,59 @@ export function NativeAttendanceReport({
               </div>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => applyRange(today, today)}
-            >
-              Today
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => applyRange(thisWeek[0], thisWeek[6])}
-            >
-              This week
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                applyRange(
-                  shiftDate(thisWeek[0], -7),
-                  shiftDate(thisWeek[6], -7),
-                )
-              }
-            >
-              Last week
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => applyRange(today, today)}
+              >
+                Today
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => applyRange(thisWeek[0], thisWeek[6])}
+              >
+                This week
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  applyRange(
+                    shiftDate(thisWeek[0], -7),
+                    shiftDate(thisWeek[6], -7),
+                  )
+                }
+              >
+                Last week
+              </Button>
+            </div>
+            {source.canManage ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowBulkEntry(true)}
+                  aria-label="Bulk attendance entry"
+                >
+                  Bulk Entry
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setShowManualEntry(true)}
+                  aria-label="Record manual shift entry"
+                >
+                  + Add Shift
+                </Button>
+              </div>
+            ) : null}
           </div>
           {!rangeValid ? (
             <p role="alert" className="text-destructive text-sm">
@@ -470,6 +497,28 @@ export function NativeAttendanceReport({
           canManage={source.canManage}
           onClose={() => setSelectedId(null)}
           onCorrected={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
+
+      {showManualEntry ? (
+        <AttendanceManualEntryDialog
+          restaurantSlug={restaurantSlug}
+          locationId={source.locationId}
+          locationName={source.locationName}
+          timeZone={timeZone}
+          onClose={() => setShowManualEntry(false)}
+          onCreated={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
+
+      {showBulkEntry ? (
+        <AttendanceBulkEntryDialog
+          restaurantSlug={restaurantSlug}
+          locationId={source.locationId}
+          locationName={source.locationName}
+          timeZone={timeZone}
+          onClose={() => setShowBulkEntry(false)}
+          onCreated={() => setReloadKey((k) => k + 1)}
         />
       ) : null}
     </div>

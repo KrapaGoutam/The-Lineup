@@ -34,10 +34,9 @@ export function instantToLocalInput(
 }
 
 /**
- * "YYYY-MM-DDTHH:mm" in the location's zone → ISO instant, or null when the text is not a
- * complete local date-time. A wall time that occurs twice (fall back) resolves to its first
- * occurrence; one that never happened (spring forward) resolves to the instant just after
- * the gap — see `zonedWallTimeToInstant`.
+ * "YYYY-MM-DDTHH:mm" in the location's zone → ISO instant. Manual attendance
+ * inputs reject DST gaps and repeated local times rather than silently choosing
+ * an occurrence. The lower-level scheduling helper has different policies.
  */
 export function localInputToInstant(
   value: string,
@@ -50,7 +49,21 @@ export function localInputToInstant(
     time: match[2],
     timeZone,
   });
-  return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+  if (Number.isNaN(instant.getTime())) return null;
+  const render = (date: Date) => zonedWallTimeFromInstant(date, timeZone);
+  const same = (date: Date) => {
+    const wall = render(date);
+    return wall.date === match[1] && wall.time === match[2];
+  };
+  if (!same(instant)) return null; // nonexistent spring-forward wall time
+  for (let minutes = 30; minutes <= 180; minutes += 30) {
+    if (
+      same(new Date(instant.getTime() - minutes * 60_000)) ||
+      same(new Date(instant.getTime() + minutes * 60_000))
+    )
+      return null; // repeated fall-back wall time
+  }
+  return instant.toISOString();
 }
 
 export interface BreakFormValue {

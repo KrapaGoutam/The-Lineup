@@ -24,6 +24,7 @@ type Props = {
   existingPlacement: StoragePlacementView | null;
   defaultAreaId?: string | null;
   defaultShelfId?: string | null;
+  defaultSlotNumber?: number | null;
   areas: readonly StorageAreaView[];
   shelves: readonly StorageShelfView[];
   /** Every placement at this branch, to keep a product off a shelf it is already on. */
@@ -40,6 +41,7 @@ export function PlacementMoveDialog({
   existingPlacement,
   defaultAreaId,
   defaultShelfId,
+  defaultSlotNumber,
   areas,
   shelves,
   placements,
@@ -55,11 +57,16 @@ export function PlacementMoveDialog({
     >
       {open ? (
         <PlacementMoveForm
-          key={existingPlacement?.id ?? product?.id ?? "pick"}
+          key={
+            existingPlacement?.id ??
+            product?.id ??
+            `${defaultShelfId ?? ""}-${defaultSlotNumber ?? "pick"}`
+          }
           product={product}
           existingPlacement={existingPlacement}
           defaultAreaId={defaultAreaId}
           defaultShelfId={defaultShelfId}
+          defaultSlotNumber={defaultSlotNumber}
           areas={areas}
           shelves={shelves}
           placements={placements}
@@ -77,6 +84,7 @@ function PlacementMoveForm({
   existingPlacement,
   defaultAreaId,
   defaultShelfId,
+  defaultSlotNumber,
   areas,
   shelves,
   placements,
@@ -88,6 +96,7 @@ function PlacementMoveForm({
   existingPlacement: StoragePlacementView | null;
   defaultAreaId?: string | null;
   defaultShelfId?: string | null;
+  defaultSlotNumber?: number | null;
   areas: readonly StorageAreaView[];
   shelves: readonly StorageShelfView[];
   placements: readonly StoragePlacementView[];
@@ -113,11 +122,17 @@ function PlacementMoveForm({
   const [selectedShelfId, setSelectedShelfId] = useState(initialShelfId);
   const [productId, setProductId] = useState(product?.id ?? "");
 
+  const initialSlotNumber =
+    existingPlacement?.slotNumber ??
+    (defaultSlotNumber !== undefined && defaultSlotNumber !== null
+      ? defaultSlotNumber
+      : "");
+  const [slotNumber, setSlotNumber] = useState<number | "">(initialSlotNumber);
   const [slotLabel, setSlotLabel] = useState(
-    existingPlacement?.slotLabel ?? "",
-  );
-  const [slotNumber, setSlotNumber] = useState<number | "">(
-    existingPlacement?.slotNumber ?? "",
+    existingPlacement?.slotLabel ??
+      (defaultSlotNumber !== undefined && defaultSlotNumber !== null
+        ? `Slot ${defaultSlotNumber}`
+        : ""),
   );
   // The version the editor SAW; a refresh while the dialog is open must not rebase the save.
   const [openedVersion] = useState(existingPlacement?.version ?? null);

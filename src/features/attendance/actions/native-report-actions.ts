@@ -12,15 +12,28 @@ import { getAttendanceEntryUser } from "../data/attendance-actor";
 import {
   getSessionHistory,
   correctNativeAttendanceSession,
+  submitManualAttendanceEntry,
   type CorrectionResponse,
+  type ManualEntryResponse,
   type SessionHistoryEntry,
 } from "../data/native-correction-data";
 import {
+  listLocationEmployees,
   listNativeAttendance,
   listSessionBreaks,
+  type AttendanceEmployeeOption,
   type NativeBreakDetail,
 } from "../data/native-report-data";
+
+export type { AttendanceEmployeeOption };
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+import {
+  MAX_BULK_ENTRIES,
+  bulkRowSchema,
+  detectBatchOverlaps,
+  manualEntryInputSchema,
+  validateManualEntryLocalTime,
+} from "../domain/attendance-manual-entry";
 
 import { correctionInputSchema } from "../domain/attendance-correction";
 import { expectedLocationAgrees } from "../domain/expected-location";
@@ -369,5 +382,314 @@ export async function correctAttendanceSessionAction(
   } catch (err: unknown) {
     console.error("correctAttendanceSessionAction unexpected error", err);
     return { ok: false, error: "The correction could not be saved." };
+  }
+}
+
+/**
+ * Lists active employees assigned to the verified location.
+ * Restricted to managers at the verified location.
+ */
+export async function listLocationEmployeesAction(input: {
+  restaurantSlug: string;
+  expectedLocationId?: string;
+}): Promise<ActionResult<AttendanceEmployeeOption[]>> {
+  try {
+    const parsed = z
+      .object({
+        restaurantSlug: slugSchema,
+        expectedLocationId: uuidSchema.optional(),
+      })
+      .safeParse(input);
+    if (!parsed.success) return { ok: false, error: INVALID_REQUEST };
+
+    const resolved = await resolveContext(
+      parsed.data.restaurantSlug,
+      parsed.data.expectedLocationId,
+    );
+    if (!resolved.ok) return resolved;
+    const { supabase, location } = resolved.ctx;
+
+    const { data: canManage } = await supabase.rpc("attendance_can_manage", {
+      p_location_id: location.id,
+    });
+    if (!canManage) {
+      return {
+        ok: false,
+        error: "Unauthorized: manager authority required.",
+        code: "unauthorized",
+      };
+    }
+
+    const res = await listLocationEmployees(supabase, location.id);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    return { ok: true, data: res.employees };
+  } catch (err: unknown) {
+    console.error("listLocationEmployeesAction unexpected error", err);
+    return { ok: false, error: "Unable to load location employees." };
+  }
+}
+
+const createManualEntryActionSchema = manualEntryInputSchema.extend({
+  restaurantSlug: slugSchema,
+  expectedLocationId: uuidSchema.optional(),
+});
+
+/**
+ * Creates an audited, explicit-time manual attendance entry for an active employee.
+ * Strictly requires manager authority, internal attendance mode, valid local wall time,
+ * non-future timestamps, and no overlapping session for the employee.
+ */
+export async function createManualAttendanceEntryAction(
+  input: z.input<typeof createManualEntryActionSchema>,
+): Promise<ActionResult<ManualEntryResponse>> {
+  try {
+    const parsed = createManualEntryActionSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? INVALID_REQUEST,
+      };
+    }
+
+    const resolved = await resolveContext(
+      parsed.data.restaurantSlug,
+      parsed.data.expectedLocationId,
+    );
+    if (!resolved.ok) return resolved;
+    const { supabase, location } = resolved.ctx;
+
+    const { data: canManage } = await supabase.rpc("attendance_can_manage", {
+      p_location_id: location.id,
+    });
+    if (!canManage) {
+      return {
+        ok: false,
+        error: "Unauthorized: manager authority required.",
+        code: "unauthorized",
+      };
+    }
+
+    const { data: locRow } = await supabase
+      .from("locations")
+      .select("attendance_mode, time_zone")
+      .eq("id", location.id)
+      .maybeSingle();
+
+    if (!locRow || !decideReportSource(locRow.attendance_mode).readsNative) {
+      return {
+        ok: false,
+        error: "This location doesn't use TheLineup Internal attendance.",
+        code: "not_internal",
+      };
+    }
+
+    const localCheck = validateManualEntryLocalTime({
+      serviceDate: parsed.data.serviceDate,
+      clockInAt: parsed.data.clockInAt,
+      clockOutAt: parsed.data.clockOutAt,
+      timeZone: locRow.time_zone,
+    });
+    if (!localCheck.ok) {
+      return { ok: false, error: localCheck.error, code: "invalid" };
+    }
+
+    const result = await submitManualAttendanceEntry(supabase, {
+      locationId: location.id,
+      profileId: parsed.data.profileId,
+      serviceDate: parsed.data.serviceDate,
+      clockInAt: parsed.data.clockInAt,
+      clockOutAt: parsed.data.clockOutAt,
+      reason: parsed.data.reason,
+      idempotencyKey: parsed.data.idempotencyKey,
+    });
+
+    if (!result.ok) {
+      return { ok: false, error: result.error, code: result.code };
+    }
+
+    revalidatePath("/attendance");
+    return { ok: true, data: result.data };
+  } catch (err: unknown) {
+    console.error("createManualAttendanceEntryAction unexpected error", err);
+    return { ok: false, error: "The attendance entry could not be saved." };
+  }
+}
+
+const createBulkEntriesActionSchema = z.object({
+  restaurantSlug: slugSchema,
+  expectedLocationId: uuidSchema.optional(),
+  entries: z
+    .array(z.unknown())
+    .min(1, "Add at least one entry.")
+    .max(MAX_BULK_ENTRIES, `Maximum ${MAX_BULK_ENTRIES} entries per batch.`),
+});
+
+export interface BulkEntryRowResult {
+  readonly rowId: string;
+  readonly ok: boolean;
+  readonly data?: ManualEntryResponse;
+  readonly error?: string;
+  readonly code?: string;
+}
+
+export interface BulkAttendanceEntriesResult {
+  readonly results: readonly BulkEntryRowResult[];
+  readonly succeededCount: number;
+  readonly failedCount: number;
+}
+
+/**
+ * Creates multiple reviewed explicit-time attendance entries in a bounded batch.
+ * Each row is executed independently so that failure on one row does not roll back
+ * or prevent other rows from completing. The client retains stable idempotency keys
+ * to retry failed rows safely.
+ */
+export async function createBulkAttendanceEntriesAction(
+  input: z.input<typeof createBulkEntriesActionSchema>,
+): Promise<ActionResult<BulkAttendanceEntriesResult>> {
+  try {
+    const parsed = createBulkEntriesActionSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? INVALID_REQUEST,
+      };
+    }
+
+    const resolved = await resolveContext(
+      parsed.data.restaurantSlug,
+      parsed.data.expectedLocationId,
+    );
+    if (!resolved.ok) return resolved;
+    const { supabase, location } = resolved.ctx;
+
+    const { data: canManage } = await supabase.rpc("attendance_can_manage", {
+      p_location_id: location.id,
+    });
+    if (!canManage) {
+      return {
+        ok: false,
+        error: "Unauthorized: manager authority required.",
+        code: "unauthorized",
+      };
+    }
+
+    const { data: locRow } = await supabase
+      .from("locations")
+      .select("attendance_mode, time_zone")
+      .eq("id", location.id)
+      .maybeSingle();
+
+    if (!locRow || !decideReportSource(locRow.attendance_mode).readsNative) {
+      return {
+        ok: false,
+        error: "This location doesn't use TheLineup Internal attendance.",
+        code: "not_internal",
+      };
+    }
+
+    const parsedRows = parsed.data.entries.map((raw, index) => ({
+      rowId:
+        typeof raw === "object" &&
+        raw !== null &&
+        "rowId" in raw &&
+        typeof raw.rowId === "string" &&
+        raw.rowId.trim()
+          ? raw.rowId
+          : `row-${index + 1}`,
+      result: bulkRowSchema.safeParse(raw),
+    }));
+    const batchOverlaps = detectBatchOverlaps(
+      parsedRows.flatMap(({ result }) => (result.success ? [result.data] : [])),
+    );
+
+    const results: BulkEntryRowResult[] = [];
+    let succeededCount = 0;
+    let failedCount = 0;
+
+    for (const { rowId, result } of parsedRows) {
+      if (!result.success) {
+        results.push({
+          rowId,
+          ok: false,
+          error: result.error.issues[0]?.message ?? INVALID_REQUEST,
+          code: "invalid",
+        });
+        failedCount++;
+        continue;
+      }
+      const entry = result.data;
+      if (batchOverlaps.has(entry.rowId)) {
+        results.push({
+          rowId: entry.rowId,
+          ok: false,
+          error: batchOverlaps.get(entry.rowId),
+          code: "overlap",
+        });
+        failedCount++;
+        continue;
+      }
+
+      const localCheck = validateManualEntryLocalTime({
+        serviceDate: entry.serviceDate,
+        clockInAt: entry.clockInAt,
+        clockOutAt: entry.clockOutAt,
+        timeZone: locRow.time_zone,
+      });
+      if (!localCheck.ok) {
+        results.push({
+          rowId: entry.rowId,
+          ok: false,
+          error: localCheck.error,
+          code: "invalid",
+        });
+        failedCount++;
+        continue;
+      }
+
+      const rowResult = await submitManualAttendanceEntry(supabase, {
+        locationId: location.id,
+        profileId: entry.profileId,
+        serviceDate: entry.serviceDate,
+        clockInAt: entry.clockInAt,
+        clockOutAt: entry.clockOutAt,
+        reason: entry.reason,
+        idempotencyKey: entry.idempotencyKey,
+      });
+
+      if (rowResult.ok) {
+        results.push({
+          rowId: entry.rowId,
+          ok: true,
+          data: rowResult.data,
+        });
+        succeededCount++;
+      } else {
+        results.push({
+          rowId: entry.rowId,
+          ok: false,
+          error: rowResult.error,
+          code: rowResult.code,
+        });
+        failedCount++;
+      }
+    }
+
+    if (succeededCount > 0) {
+      revalidatePath("/attendance");
+    }
+
+    return {
+      ok: true,
+      data: {
+        results,
+        succeededCount,
+        failedCount,
+      },
+    };
+  } catch (err: unknown) {
+    console.error("createBulkAttendanceEntriesAction unexpected error", err);
+    return { ok: false, error: "The attendance entries could not be saved." };
   }
 }

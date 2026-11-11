@@ -12,6 +12,7 @@ export type CorrectionErrorCode =
   | "invalid"
   | "voided"
   | "overlap"
+  | "period_frozen"
   | "unexpected";
 
 export type CorrectionResult<T> =
@@ -33,6 +34,25 @@ export interface CorrectionResponse {
   readonly changedFields?: readonly string[];
 }
 
+export interface ManualAttendanceInput {
+  readonly locationId: string;
+  readonly profileId: string;
+  readonly serviceDate: string;
+  readonly clockInAt: string;
+  readonly clockOutAt?: string | null;
+  readonly reason: string;
+  readonly idempotencyKey: string;
+}
+
+export interface ManualEntryResponse {
+  readonly success: boolean;
+  readonly idempotent: boolean;
+  readonly sessionId: string;
+  readonly eventId: number;
+  readonly clockOutEventId?: number | null;
+  readonly status: "active" | "completed";
+}
+
 /** Maps a database error to a stable code and a message that is safe to show. */
 export function mapCorrectionError(error: {
   code?: string;
@@ -40,7 +60,6 @@ export function mapCorrectionError(error: {
 }): { code: CorrectionErrorCode; error: string } {
   switch (error.code) {
     case "42501":
-      // Uniform on purpose: never reveal whether the session exists.
       return {
         code: "unauthorized",
         error: "You can't correct this attendance record.",
@@ -52,12 +71,19 @@ export function mapCorrectionError(error: {
           "This record was changed by someone else. Reload it and try again.",
       };
     case "55000":
+      if (error.message?.includes("PERIOD_FROZEN")) {
+        return {
+          code: "period_frozen",
+          error:
+            "Attendance cannot be recorded in an existing or frozen payroll month.",
+        };
+      }
       return { code: "voided", error: "A voided session cannot be corrected." };
     case "23P01":
       return {
         code: "overlap",
         error:
-          "The corrected shift overlaps another attendance session for this employee.",
+          "This correction overlaps another attendance session for the employee.",
       };
     case "22023":
       return {
@@ -71,6 +97,78 @@ export function mapCorrectionError(error: {
       return {
         code: "unexpected",
         error: "The correction could not be saved.",
+      };
+  }
+}
+
+/** Maps a database error for manual attendance entry to a stable code and safe message. */
+export function mapManualEntryError(error: {
+  code?: string;
+  message?: string;
+}): { code: CorrectionErrorCode; error: string } {
+  switch (error.code) {
+    case "42501":
+      if (error.message?.includes("Internal attendance")) {
+        return {
+          code: "unauthorized",
+          error: "Internal attendance is not enabled for this location.",
+        };
+      }
+      if (error.message?.includes("assigned to this location")) {
+        return {
+          code: "unauthorized",
+          error: "Employee is not assigned to this location.",
+        };
+      }
+      if (error.message?.includes("active member")) {
+        return {
+          code: "unauthorized",
+          error: "Employee is not an active member of this organization.",
+        };
+      }
+      return {
+        code: "unauthorized",
+        error: "You can't record or correct attendance for this employee.",
+      };
+    case "P0004":
+      return {
+        code: "stale",
+        error:
+          "This record was changed by someone else. Reload it and try again.",
+      };
+    case "55000":
+      if (error.message?.includes("PERIOD_FROZEN")) {
+        return {
+          code: "period_frozen",
+          error:
+            "Attendance cannot be recorded in an existing or frozen payroll month.",
+        };
+      }
+      if (error.message?.includes("archived or inactive")) {
+        return {
+          code: "invalid",
+          error: "This location is archived or inactive.",
+        };
+      }
+      return { code: "voided", error: "A voided session cannot be corrected." };
+    case "23P01":
+      return {
+        code: "overlap",
+        error:
+          "This entry overlaps another attendance session for the employee.",
+      };
+    case "22023":
+      return {
+        code: "invalid",
+        error: error.message || "That attendance entry isn't valid.",
+      };
+    case "22007":
+    case "22008":
+      return { code: "invalid", error: "Enter valid times." };
+    default:
+      return {
+        code: "unexpected",
+        error: "The attendance entry could not be saved.",
       };
   }
 }
@@ -118,6 +216,45 @@ export async function correctNativeAttendanceSession(
       ok: false,
       code: "unexpected",
       error: "The correction could not be saved.",
+    };
+  }
+}
+
+/**
+ * Creates an explicit-time manual attendance entry via the atomic RPC attendance_manual_entry.
+ * Enforces live session, manager role, active assignment, advisory locks, overlap checks,
+ * frozen period restrictions, and payload-bound idempotency.
+ */
+export async function submitManualAttendanceEntry(
+  supabase: SupabaseClient<Database>,
+  input: ManualAttendanceInput,
+): Promise<CorrectionResult<ManualEntryResponse>> {
+  try {
+    const { data, error } = await supabase.rpc("attendance_manual_entry", {
+      p_location_id: input.locationId,
+      p_profile_id: input.profileId,
+      p_service_date: input.serviceDate,
+      p_clock_in_at: input.clockInAt,
+      p_clock_out_at: input.clockOutAt ?? null,
+      p_reason: input.reason,
+      p_idempotency_key: input.idempotencyKey,
+    });
+
+    if (error) {
+      console.error("submitManualAttendanceEntry error", {
+        code: error.code,
+        message: error.message,
+      });
+      return { ok: false, ...mapManualEntryError(error) };
+    }
+
+    return { ok: true, data: data as unknown as ManualEntryResponse };
+  } catch (err: unknown) {
+    console.error("submitManualAttendanceEntry unexpected error", err);
+    return {
+      ok: false,
+      code: "unexpected",
+      error: "The attendance entry could not be saved.",
     };
   }
 }

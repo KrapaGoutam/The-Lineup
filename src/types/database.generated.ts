@@ -5995,6 +5995,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      attendance_manual_entry: {
+        Args: {
+          p_clock_in_at: string;
+          p_clock_out_at: string | null;
+          p_idempotency_key: string;
+          p_location_id: string;
+          p_profile_id: string;
+          p_reason: string;
+          p_service_date: string;
+        };
+        Returns: Json;
+      };
       bar_recipe_category_reorder: {
         Args: { p_ordered_ids: string[]; p_organization_id: string };
         Returns: Json;

@@ -8,6 +8,8 @@ import {
   getSessionHistory,
   mapCorrectionError,
   mapHistoryRow,
+  mapManualEntryError,
+  submitManualAttendanceEntry,
 } from "./native-correction-data";
 import { correctionInputSchema } from "../domain/attendance-correction";
 
@@ -40,6 +42,139 @@ describe("mapCorrectionError", () => {
     expect(
       mapCorrectionError({ code: "42501", message: "Unauthorized" }).error,
     ).toBe("You can't correct this attendance record.");
+  });
+});
+
+describe("mapManualEntryError", () => {
+  it("maps unauthorized variants accurately", () => {
+    expect(
+      mapManualEntryError({
+        code: "42501",
+        message: "Internal attendance is not enabled",
+      }),
+    ).toEqual({
+      code: "unauthorized",
+      error: "Internal attendance is not enabled for this location.",
+    });
+    expect(
+      mapManualEntryError({
+        code: "42501",
+        message: "Employee is not assigned to this location",
+      }),
+    ).toEqual({
+      code: "unauthorized",
+      error: "Employee is not assigned to this location.",
+    });
+    expect(
+      mapManualEntryError({
+        code: "42501",
+        message: "Employee is not an active member of this organization",
+      }),
+    ).toEqual({
+      code: "unauthorized",
+      error: "Employee is not an active member of this organization.",
+    });
+    expect(mapManualEntryError({ code: "42501" })).toEqual({
+      code: "unauthorized",
+      error: "You can't record or correct attendance for this employee.",
+    });
+  });
+
+  it("maps frozen period and other domain errors", () => {
+    expect(
+      mapManualEntryError({ code: "55000", message: "PERIOD_FROZEN" }),
+    ).toEqual({
+      code: "period_frozen",
+      error:
+        "Attendance cannot be recorded in an existing or frozen payroll month.",
+    });
+    expect(
+      mapManualEntryError({ code: "55000", message: "archived or inactive" }),
+    ).toEqual({
+      code: "invalid",
+      error: "This location is archived or inactive.",
+    });
+    expect(mapManualEntryError({ code: "23P01" })).toEqual({
+      code: "overlap",
+      error: "This entry overlaps another attendance session for the employee.",
+    });
+  });
+});
+
+describe("submitManualAttendanceEntry", () => {
+  it("calls attendance_manual_entry RPC with all parameters", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        success: true,
+        idempotent: false,
+        sessionId: SESSION,
+        eventId: 10,
+        clockOutEventId: 11,
+        status: "completed",
+      },
+      error: null,
+    });
+    const res = await submitManualAttendanceEntry(
+      { rpc } as unknown as SupabaseClient<Database>,
+      {
+        locationId: "loc-1",
+        profileId: "prof-1",
+        serviceDate: "2026-11-10",
+        clockInAt: "2026-11-10T14:00:00Z",
+        clockOutAt: "2026-11-10T22:00:00Z",
+        reason: "Manager entered shift",
+        idempotencyKey: "k-manual-1",
+      },
+    );
+    expect(res.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith("attendance_manual_entry", {
+      p_location_id: "loc-1",
+      p_profile_id: "prof-1",
+      p_service_date: "2026-11-10",
+      p_clock_in_at: "2026-11-10T14:00:00Z",
+      p_clock_out_at: "2026-11-10T22:00:00Z",
+      p_reason: "Manager entered shift",
+      p_idempotency_key: "k-manual-1",
+    });
+  });
+
+  it("handles RPC errors gracefully", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "23P01", message: "overlap" },
+    });
+    const res = await submitManualAttendanceEntry(
+      { rpc } as unknown as SupabaseClient<Database>,
+      {
+        locationId: "loc-1",
+        profileId: "prof-1",
+        serviceDate: "2026-11-10",
+        clockInAt: "2026-11-10T14:00:00Z",
+        reason: "Manager entered shift",
+        idempotencyKey: "k-manual-1",
+      },
+    );
+    expect(res).toMatchObject({ ok: false, code: "overlap" });
+    expect(rpc).toHaveBeenCalledWith(
+      "attendance_manual_entry",
+      expect.objectContaining({ p_clock_out_at: null }),
+    );
+  });
+
+  it("handles thrown exceptions safely", async () => {
+    const rpc = vi.fn().mockRejectedValue(new Error("network failure"));
+    const res = await submitManualAttendanceEntry(
+      { rpc } as unknown as SupabaseClient<Database>,
+      {
+        locationId: "loc-1",
+        profileId: "prof-1",
+        serviceDate: "2026-11-10",
+        clockInAt: "2026-11-10T14:00:00Z",
+        reason: "Manager entered shift",
+        idempotencyKey: "k-manual-1",
+      },
+    );
+    expect(res).toMatchObject({ ok: false, code: "unexpected" });
   });
 });
 
