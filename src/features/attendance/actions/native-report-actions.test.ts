@@ -553,6 +553,41 @@ describe("createBulkAttendanceEntriesAction", () => {
     expect(res.ok).toBe(false);
   });
 
+  it("reports an invalid row while committing a separate valid row", async () => {
+    signedIn(supabaseDouble({ canManage: true, mode: "internal_the_lineup" }));
+    mocks.submitManualAttendanceEntry.mockResolvedValue({
+      ok: true,
+      data: {
+        success: true,
+        idempotent: false,
+        sessionId: "sess-2",
+        eventId: 2,
+        status: "completed",
+      },
+    });
+
+    const res = await createBulkAttendanceEntriesAction({
+      restaurantSlug: SLUG,
+      entries: [{ ...row1, reason: "no" }, row2],
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data).toMatchObject({ succeededCount: 1, failedCount: 1 });
+      expect(res.data.results[0]).toMatchObject({
+        rowId: "row-1",
+        ok: false,
+        code: "invalid",
+      });
+      expect(res.data.results[1]).toMatchObject({ rowId: "row-2", ok: true });
+    }
+    expect(mocks.submitManualAttendanceEntry).toHaveBeenCalledTimes(1);
+    expect(mocks.submitManualAttendanceEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: "bulk-key-2" }),
+    );
+  });
+
   it("catches batch internal overlaps without calling submit for overlapping rows", async () => {
     signedIn(supabaseDouble({ canManage: true, mode: "internal_the_lineup" }));
     const overlappingRow2 = {

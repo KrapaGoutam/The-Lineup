@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -134,5 +134,133 @@ describe("AttendanceBulkEntryDialog", () => {
 
     expect(onCreated).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("reviews and submits an overnight row with its explicit end date", async () => {
+    vi.setSystemTime(new Date("2026-11-12T23:59:00Z"));
+    const user = userEvent.setup();
+    mocks.createBulkAttendanceEntriesAction.mockResolvedValue({
+      ok: true,
+      data: { results: [], succeededCount: 0, failedCount: 1 },
+    });
+
+    render(
+      <AttendanceBulkEntryDialog
+        restaurantSlug={SLUG}
+        locationId={LOC_ID}
+        locationName={LOC_NAME}
+        timeZone={TZ}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    await screen.findByLabelText("Row 1 service date");
+    fireEvent.change(screen.getByLabelText("Row 1 service date"), {
+      target: { value: "2026-11-10" },
+    });
+    fireEvent.change(screen.getByLabelText("Row 1 clock-in time"), {
+      target: { value: "23:00" },
+    });
+    fireEvent.change(screen.getByLabelText("Row 1 clock-out date"), {
+      target: { value: "2026-11-11" },
+    });
+    fireEvent.change(screen.getByLabelText("Row 1 clock-out time"), {
+      target: { value: "01:00" },
+    });
+
+    await user.click(screen.getByRole("button", { name: /review 1 shifts/i }));
+    await user.click(
+      screen.getByRole("button", { name: /confirm & save 1 shifts/i }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.createBulkAttendanceEntriesAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entries: [
+            expect.objectContaining({
+              serviceDate: "2026-11-10",
+              clockInAt: "2026-11-11T05:00:00.000Z",
+              clockOutAt: "2026-11-11T07:00:00.000Z",
+            }),
+          ],
+        }),
+      ),
+    );
+  });
+
+  it("retries only the failed row with its original operation key", async () => {
+    const user = userEvent.setup();
+    mocks.createBulkAttendanceEntriesAction
+      .mockImplementationOnce(
+        async (input: { entries: Array<{ rowId: string }> }) => ({
+          ok: true,
+          data: {
+            results: [
+              {
+                rowId: input.entries[0].rowId,
+                ok: true,
+                data: { status: "completed" },
+              },
+              {
+                rowId: input.entries[1].rowId,
+                ok: false,
+                error: "Temporary error",
+                code: "unexpected",
+              },
+            ],
+            succeededCount: 1,
+            failedCount: 1,
+          },
+        }),
+      )
+      .mockImplementationOnce(
+        async (input: { entries: Array<{ rowId: string }> }) => ({
+          ok: true,
+          data: {
+            results: [
+              {
+                rowId: input.entries[0].rowId,
+                ok: true,
+                data: { status: "completed" },
+              },
+            ],
+            succeededCount: 1,
+            failedCount: 0,
+          },
+        }),
+      );
+
+    render(
+      <AttendanceBulkEntryDialog
+        restaurantSlug={SLUG}
+        locationId={LOC_ID}
+        locationName={LOC_NAME}
+        timeZone={TZ}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    await screen.findByLabelText("Row 1 employee");
+    await user.click(screen.getByRole("button", { name: /\+ add row/i }));
+    await user.selectOptions(screen.getByLabelText("Row 2 employee"), EMP_2);
+    await user.click(screen.getByRole("button", { name: /review 2 shifts/i }));
+    await user.click(
+      screen.getByRole("button", { name: /confirm & save 2 shifts/i }),
+    );
+    await screen.findByText(/1 of 2 shifts saved/i);
+    await user.click(
+      screen.getByRole("button", { name: /retry 1 failed row/i }),
+    );
+    await screen.findByText(/All shifts saved successfully/i);
+
+    const [first, second] = mocks.createBulkAttendanceEntriesAction.mock.calls;
+    expect(first[0].entries).toHaveLength(2);
+    expect(second[0].entries).toHaveLength(1);
+    expect(second[0].entries[0].rowId).toBe(first[0].entries[1].rowId);
+    expect(second[0].entries[0].idempotencyKey).toBe(
+      first[0].entries[1].idempotencyKey,
+    );
   });
 });

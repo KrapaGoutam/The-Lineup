@@ -235,7 +235,7 @@ export async function submitManualAttendanceEntry(
       p_profile_id: input.profileId,
       p_service_date: input.serviceDate,
       p_clock_in_at: input.clockInAt,
-      p_clock_out_at: (input.clockOutAt ?? null) as unknown as string,
+      p_clock_out_at: input.clockOutAt ?? null,
       p_reason: input.reason,
       p_idempotency_key: input.idempotencyKey,
     });

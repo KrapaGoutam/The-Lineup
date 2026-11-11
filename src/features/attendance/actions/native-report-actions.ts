@@ -520,7 +520,7 @@ const createBulkEntriesActionSchema = z.object({
   restaurantSlug: slugSchema,
   expectedLocationId: uuidSchema.optional(),
   entries: z
-    .array(bulkRowSchema)
+    .array(z.unknown())
     .min(1, "Add at least one entry.")
     .max(MAX_BULK_ENTRIES, `Maximum ${MAX_BULK_ENTRIES} entries per batch.`),
 });
@@ -589,13 +589,37 @@ export async function createBulkAttendanceEntriesAction(
       };
     }
 
-    const batchOverlaps = detectBatchOverlaps(parsed.data.entries);
+    const parsedRows = parsed.data.entries.map((raw, index) => ({
+      rowId:
+        typeof raw === "object" &&
+        raw !== null &&
+        "rowId" in raw &&
+        typeof raw.rowId === "string" &&
+        raw.rowId.trim()
+          ? raw.rowId
+          : `row-${index + 1}`,
+      result: bulkRowSchema.safeParse(raw),
+    }));
+    const batchOverlaps = detectBatchOverlaps(
+      parsedRows.flatMap(({ result }) => (result.success ? [result.data] : [])),
+    );
 
     const results: BulkEntryRowResult[] = [];
     let succeededCount = 0;
     let failedCount = 0;
 
-    for (const entry of parsed.data.entries) {
+    for (const { rowId, result } of parsedRows) {
+      if (!result.success) {
+        results.push({
+          rowId,
+          ok: false,
+          error: result.error.issues[0]?.message ?? INVALID_REQUEST,
+          code: "invalid",
+        });
+        failedCount++;
+        continue;
+      }
+      const entry = result.data;
       if (batchOverlaps.has(entry.rowId)) {
         results.push({
           rowId: entry.rowId,

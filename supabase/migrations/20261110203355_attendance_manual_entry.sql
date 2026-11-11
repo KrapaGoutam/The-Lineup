@@ -95,24 +95,6 @@ begin
       using errcode = '22023';
   end if;
 
-  v_now := clock_timestamp();
-  v_start_date := (p_clock_in_at at time zone v_loc.time_zone)::date;
-  v_end_date := (coalesce(p_clock_out_at, p_clock_in_at) at time zone v_loc.time_zone)::date;
-  if p_service_date <> v_start_date then
-    raise exception 'Service date must match the location-local clock-in date' using errcode = '22023';
-  end if;
-  if p_clock_in_at > v_now or p_clock_out_at > v_now then
-    raise exception 'Manual punches cannot be in the future' using errcode = '22023';
-  end if;
-  if p_clock_out_at is not null and (
-    p_clock_out_at <= p_clock_in_at or p_clock_out_at > p_clock_in_at + interval '48 hours'
-  ) then
-    raise exception 'Clock-out must follow clock-in within 48 hours' using errcode = '22023';
-  end if;
-  if p_clock_out_at is null and v_start_date <> (v_now at time zone v_loc.time_zone)::date then
-    raise exception 'Only a current local-date entry may remain open' using errcode = '22023';
-  end if;
-
   v_payload := jsonb_build_object(
     'location_id', p_location_id, 'profile_id', p_profile_id,
     'service_date', p_service_date, 'clock_in_at', p_clock_in_at,
@@ -132,6 +114,27 @@ begin
       'eventId', v_replay.id,
       'status', case when p_clock_out_at is null then 'active' else 'completed' end
     );
+  end if;
+
+  -- A successful open entry may be retried after local midnight when the first
+  -- response was lost. Authorize and compare the exact payload before applying
+  -- time-dependent rules to a new operation.
+  v_now := clock_timestamp();
+  v_start_date := (p_clock_in_at at time zone v_loc.time_zone)::date;
+  v_end_date := (coalesce(p_clock_out_at, p_clock_in_at) at time zone v_loc.time_zone)::date;
+  if p_service_date <> v_start_date then
+    raise exception 'Service date must match the location-local clock-in date' using errcode = '22023';
+  end if;
+  if p_clock_in_at > v_now or p_clock_out_at > v_now then
+    raise exception 'Manual punches cannot be in the future' using errcode = '22023';
+  end if;
+  if p_clock_out_at is not null and (
+    p_clock_out_at <= p_clock_in_at or p_clock_out_at > p_clock_in_at + interval '48 hours'
+  ) then
+    raise exception 'Clock-out must follow clock-in within 48 hours' using errcode = '22023';
+  end if;
+  if p_clock_out_at is null and v_start_date <> (v_now at time zone v_loc.time_zone)::date then
+    raise exception 'Only a current local-date entry may remain open' using errcode = '22023';
   end if;
 
   -- Refuse insertion into a month with any existing native or linked external

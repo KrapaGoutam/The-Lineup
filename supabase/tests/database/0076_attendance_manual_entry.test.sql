@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(52);
+select plan(53);
 
 -- --------------------------------------------------------------------------
 -- V2 Attendance Manual Entry - Comprehensive pgTAP Suite
@@ -444,6 +444,53 @@ select throws_ok(
      ) $$,
   '23P01', 'This entry overlaps another attendance session for the employee', 'second open shift overlaps and is rejected'
 );
+
+-- An uncertain response from just before midnight must remain replayable on
+-- the next local date. Seed the already-committed shape because clock_timestamp()
+-- cannot be advanced inside this transactional pgTAP suite.
+reset role;
+create temp table t76_prior_open as
+select (now() at time zone 'America/Chicago')::date - 1 as service_date,
+       (((now() at time zone 'America/Chicago')::date - 1 + time '10:00')
+         at time zone 'America/Chicago') as clock_in_at;
+grant select on t76_prior_open to authenticated;
+insert into public.attendance_sessions (
+  id, organization_id, location_id, profile_id, service_date, status,
+  clock_in_at, created_by
+)
+select '00000000-0000-0000-0000-0000000760c1',
+       '00000000-0000-0000-0000-0000000760a1',
+       '00000000-0000-0000-0000-0000000760b1',
+       '00000000-0000-0000-0000-000000076003',
+       service_date, 'active', clock_in_at,
+       '00000000-0000-0000-0000-000000076002'
+from t76_prior_open;
+insert into public.attendance_events (
+  session_id, organization_id, location_id, profile_id, event_type,
+  event_time, service_date, source, idempotency_key, actor_profile_id,
+  correction_reason, metadata
+)
+select '00000000-0000-0000-0000-0000000760c1',
+       '00000000-0000-0000-0000-0000000760a1',
+       '00000000-0000-0000-0000-0000000760b1',
+       '00000000-0000-0000-0000-000000076003',
+       'clock_in', clock_in_at, service_date, 'manager', 'k-prior-open',
+       '00000000-0000-0000-0000-000000076002', 'Midnight retry',
+       jsonb_build_object('manual_payload', jsonb_build_object(
+         'location_id', '00000000-0000-0000-0000-0000000760b1'::uuid,
+         'profile_id', '00000000-0000-0000-0000-000000076003'::uuid,
+         'service_date', service_date, 'clock_in_at', clock_in_at,
+         'clock_out_at', null, 'reason', 'Midnight retry'))
+from t76_prior_open;
+set local role authenticated;
+set local "request.jwt.claim.sub" to '00000000-0000-0000-0000-000000076002';
+select is((public.attendance_manual_entry(
+  '00000000-0000-0000-0000-0000000760b1',
+  '00000000-0000-0000-0000-000000076003',
+  (select service_date from t76_prior_open),
+  (select clock_in_at from t76_prior_open), null,
+  'Midnight retry', 'k-prior-open'
+)->>'idempotent')::boolean, true, 'prior-local-date open entry replays after midnight');
 
 -- 11. Frozen payroll month protection (55000) -------------------------------
 reset role;

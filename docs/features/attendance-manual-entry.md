@@ -5,6 +5,8 @@
 **Base:** V2-006 merged to `development` at `d09b6c4`  
 **Issue/PR:** No dedicated open issue found by GitHub search; one Attendance PR to development.
 
+**Independent review, 2026-11-11:** Local review fixes are in progress on the existing branch. Hosted DEV remains at 86 migrations with this RPC absent; no new owner rollout authorization was found. See the private handoff for exact review and gate receipts.
+
 ## User outcome and scope
 
 An authorized manager can record a missed, explicitly timed native shift for an assigned employee, review it before submission, and correct an existing native record on the Attendance page. A reviewed multi-row grid permits independent entries with stable retry identities. Existing correction, audit and financial contracts remain authoritative.
@@ -51,6 +53,8 @@ Routes: existing Attendance management page. Actions: new manager entry action a
 ## Rollout and rollback
 
 Native financial activation remains OFF; backend enforcement stays STAGED. Migration is additive and must reach verified DEV before a Preview using the new RPC. Prepare exact checksum, backup, isolated recovery and compatibility evidence; obtain specific owner authorization before a hosted write. No down migration that discards recorded attendance.
+
+The independent review moved exact-payload replay ahead of time-dependent validation so a successful open entry can be retried after local midnight. The bulk form now accepts an explicit end date for overnight work, and the bulk action validates rows independently so one malformed row cannot cancel valid rows. The RPC type permits a nullable clock-out. Targeted local database and application tests pass. Actual local JWT and browser acceptance remains pending because the local Supabase CLI is blocked by Device Guard and no approved local-only test credential path is available. Do not claim these gates from pgTAP or component tests. The one pending DEV migration is `20261110203355_attendance_manual_entry.sql`, SHA-256 `99C8BCB14A12D46745B2B80F5CBB44183A10C5A340290EC483B4E02D76977854`; verify this hash again before any rehearsal or push.
 
 ## Decision and risk
 

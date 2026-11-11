@@ -155,6 +155,10 @@ describe("submitManualAttendanceEntry", () => {
       },
     );
     expect(res).toMatchObject({ ok: false, code: "overlap" });
+    expect(rpc).toHaveBeenCalledWith(
+      "attendance_manual_entry",
+      expect.objectContaining({ p_clock_out_at: null }),
+    );
   });
 
   it("handles thrown exceptions safely", async () => {

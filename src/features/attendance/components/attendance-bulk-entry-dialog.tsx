@@ -38,6 +38,7 @@ interface BulkGridRow {
   profileId: string;
   serviceDate: string;
   clockInTime: string;
+  clockOutDate: string;
   clockOutTime: string;
   reason: string;
 }
@@ -106,6 +107,7 @@ export function AttendanceBulkEntryDialog({
             profileId: res.data[0].profileId,
             serviceDate: today,
             clockInTime: "09:00",
+            clockOutDate: today,
             clockOutTime: "17:00",
             reason: "Bulk missed punch entry by manager",
           },
@@ -129,6 +131,7 @@ export function AttendanceBulkEntryDialog({
         profileId: defaultEmp,
         serviceDate: defaultDate,
         clockInTime: defaultInTime,
+        clockOutDate: defaultDate,
         clockOutTime: defaultOutTime,
         reason: defaultReason,
       },
@@ -151,6 +154,7 @@ export function AttendanceBulkEntryDialog({
         ...r,
         serviceDate: defaultDate,
         clockInTime: defaultInTime,
+        clockOutDate: defaultDate,
         clockOutTime: defaultOutTime,
         reason: defaultReason,
       })),
@@ -161,7 +165,7 @@ export function AttendanceBulkEntryDialog({
   const rowEvaluations = useMemo(() => {
     return rows.map((r) => {
       const inStr = `${r.serviceDate}T${r.clockInTime}`;
-      const outStr = `${r.serviceDate}T${r.clockOutTime}`;
+      const outStr = `${r.clockOutDate}T${r.clockOutTime}`;
       const inIso = localInputToInstant(inStr, timeZone);
       const outIso = localInputToInstant(outStr, timeZone);
       const errors: string[] = [];
@@ -245,7 +249,7 @@ export function AttendanceBulkEntryDialog({
           timeZone,
         );
         const outIso = localInputToInstant(
-          `${r.serviceDate}T${r.clockOutTime}`,
+          `${r.clockOutDate}T${r.clockOutTime}`,
           timeZone,
         );
         if (!inIso || !outIso) return null;
@@ -382,6 +386,7 @@ export function AttendanceBulkEntryDialog({
                     <th className="p-2.5">Employee</th>
                     <th className="p-2.5">Date</th>
                     <th className="p-2.5">In</th>
+                    <th className="p-2.5">Out date</th>
                     <th className="p-2.5">Out</th>
                     <th className="p-2.5">Reason</th>
                     <th className="p-2.5 text-right">Actions</th>
@@ -400,6 +405,7 @@ export function AttendanceBulkEntryDialog({
                       <tr key={r.rowId} className="align-top">
                         <td className="p-2">
                           <Select
+                            aria-label={`Row ${idx + 1} employee`}
                             value={r.profileId}
                             onChange={(e) =>
                               updateRow(r.rowId, { profileId: e.target.value })
@@ -416,6 +422,7 @@ export function AttendanceBulkEntryDialog({
                         <td className="p-2">
                           <Input
                             type="date"
+                            aria-label={`Row ${idx + 1} service date`}
                             value={r.serviceDate}
                             onChange={(e) =>
                               updateRow(r.rowId, {
@@ -427,7 +434,21 @@ export function AttendanceBulkEntryDialog({
                         </td>
                         <td className="p-2">
                           <Input
+                            type="date"
+                            aria-label={`Row ${idx + 1} clock-out date`}
+                            value={r.clockOutDate}
+                            onChange={(e) =>
+                              updateRow(r.rowId, {
+                                clockOutDate: e.target.value,
+                              })
+                            }
+                            className="text-xs"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <Input
                             type="time"
+                            aria-label={`Row ${idx + 1} clock-in time`}
                             value={r.clockInTime}
                             onChange={(e) =>
                               updateRow(r.rowId, {
@@ -440,6 +461,7 @@ export function AttendanceBulkEntryDialog({
                         <td className="p-2">
                           <Input
                             type="time"
+                            aria-label={`Row ${idx + 1} clock-out time`}
                             value={r.clockOutTime}
                             onChange={(e) =>
                               updateRow(r.rowId, {
@@ -452,6 +474,7 @@ export function AttendanceBulkEntryDialog({
                         <td className="p-2">
                           <Input
                             type="text"
+                            aria-label={`Row ${idx + 1} reason`}
                             value={r.reason}
                             maxLength={MANUAL_ENTRY_REASON_MAX}
                             onChange={(e) =>
@@ -624,7 +647,8 @@ export function AttendanceBulkEntryDialog({
                         <td className="p-2.5 font-medium">{empName}</td>
                         <td className="p-2.5">{r.serviceDate}</td>
                         <td className="p-2.5">
-                          {r.clockInTime} → {r.clockOutTime}
+                          {r.serviceDate} {r.clockInTime} → {r.clockOutDate}{" "}
+                          {r.clockOutTime}
                         </td>
                         <td className="p-2.5">
                           {res?.ok ? (

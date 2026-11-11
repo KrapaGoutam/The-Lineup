@@ -5998,7 +5998,7 @@ export type Database = {
       attendance_manual_entry: {
         Args: {
           p_clock_in_at: string;
-          p_clock_out_at: string;
+          p_clock_out_at: string | null;
           p_idempotency_key: string;
           p_location_id: string;
           p_profile_id: string;

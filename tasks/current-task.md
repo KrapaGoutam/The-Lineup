@@ -1,5 +1,18 @@
 # Attendance manual entry and corrections — IN PROGRESS
 
+## Independent review checkpoint — 2026-11-11
+
+- [x] Verify isolated feature worktree at `ac079488`, base `d09b6c4`, original migration hash and preserved V2-006 task archive; leave unrelated worktrees untouched.
+- [x] Review privileged RPC, app flow, grants/RLS, idempotency, time and financial boundary; reproduce and fix the post-midnight open-entry retry and bulk row-isolation defects.
+- [x] Correct nullable RPC type and add explicit bulk overnight end date and accessible row labels.
+- [x] Run focused local pgTAP 282/282, Attendance Vitest 356/356, `npm run check`, webpack production build and diff check.
+- [ ] Run actual local JWT role/tenant/concurrency acceptance and local desktop/WebKit tablet/mobile browser flows. Blocked by Device Guard on the local Supabase CLI and lack of an approved local-only credential path; automatic approval review rejected minting a service-role token from the Auth signing secret. Do not bypass it.
+- [ ] Obtain new owner authorization for the exact DEV migration/backup/recovery/acceptance/Preview/PR scope after local acceptance passes. No such record found on 2026-11-11.
+- [ ] Reverify final migration hash, fresh backup and isolated recovery/rehearsal; then migrate DEV and complete hosted authenticated/Preview acceptance and manifest cleanup under the new authorization.
+- [ ] Push existing branch, open one PR to `development`, require exact-head CI/review and normal merge. Keep `main`, Production, Neon, #254 and V2-007 untouched.
+
+Current state: LOCAL PARTIAL. Hosted DEV read-only ledger 86 (function absent), financial activation OFF, enforcement STAGED. The private handoff has the finding table, test receipts and exact rollout decision. No hosted write, push or PR. The prior session's checked items below are historical claims; the independent JWT and browser gates above remain open.
+
 Branch `feature/attendance-manual-entry`; isolated worktree `.tmp/attendance-manual-entry`; base `origin/development` `d09b6c4600e46653710a8e92a507415af78c5d77`. Root checkout and other worktrees are preserved. Source feature: `docs/features/attendance-manual-entry.md`. Private handoff: `.tmp/attendance-manual-entry-handoff/`.
 
 - [x] Verify development tip, read project instructions, V2-006 closeout, and inspect Attendance contracts.
