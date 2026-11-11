@@ -66,7 +66,11 @@ import {
   type RunExport,
 } from "./export-control";
 import type { LoadHistory } from "./history-view";
-import { ItemSheet, type ItemSheetActions } from "./item-sheet";
+import {
+  ItemSheet,
+  type ItemSheetActions,
+  type ItemSheetTab,
+} from "./item-sheet";
 import type { RunCatalogCommand } from "./catalog-dialogs";
 import {
   FilterableTable,
@@ -74,7 +78,7 @@ import {
 } from "./table-kit/filterable-table";
 import { StatusBadge } from "./table-kit/status-badge";
 import { BulkCount } from "./bulk-count";
-import { DateAlert, DateTracking } from "./date-tracking";
+import { DateAlert } from "./date-tracking";
 import { DateFilters } from "./date-filters";
 import { businessDate } from "../domain/freshness";
 import { dateCellText } from "../domain/inventory-rows";
@@ -138,7 +142,10 @@ export function InventoryView({
     );
   }, [showArchived, restaurantSlug]);
   const [lastReason, setLastReason] = useState<AdjustmentReason>("stock_count");
-  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [sheetFor, setSheetFor] = useState<{
+    productId: string;
+    tab: ItemSheetTab;
+  } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [prevLocationId, setPrevLocationId] = useState(locationId);
@@ -148,7 +155,6 @@ export function InventoryView({
   }
   const [filtered, setFiltered] = useState<InventoryRow[] | null>(null);
   const [bulkRows, setBulkRows] = useState<InventoryRow[] | null>(null);
-  const [dateFor, setDateFor] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "cooler">("table");
 
   const today = businessDate(new Date(), timeZone);
@@ -178,7 +184,7 @@ export function InventoryView({
   );
 
   const sheetRow = sheetFor
-    ? (allRows.find((row) => row.productId === sheetFor) ?? null)
+    ? (allRows.find((row) => row.productId === sheetFor.productId) ?? null)
     : null;
 
   const saveQuantity =
@@ -408,7 +414,9 @@ export function InventoryView({
         render: (r) => (
           <Button
             variant="ghost"
-            onClick={() => setDateFor(r.productId)}
+            onClick={() =>
+              setSheetFor({ productId: r.productId, tab: "dates" })
+            }
             aria-label={`Manufacture dates for ${r.name}`}
           >
             {dateCellText(r, "manufacture")}
@@ -420,7 +428,9 @@ export function InventoryView({
         render: (r) => (
           <Button
             variant="ghost"
-            onClick={() => setDateFor(r.productId)}
+            onClick={() =>
+              setSheetFor({ productId: r.productId, tab: "dates" })
+            }
             aria-label={`Expiration dates for ${r.name}`}
           >
             {dateCellText(r, "expiration")}
@@ -496,7 +506,9 @@ export function InventoryView({
           loadBranchOverview={loadBranchOverview}
           run={run}
           timeZone={timeZone}
-          onSelectProduct={(productId) => setSheetFor(productId)}
+          onSelectProduct={(productId) =>
+            setSheetFor({ productId, tab: "counts" })
+          }
         />
       ) : (
         <FilterableTable<InventoryRow>
@@ -598,7 +610,9 @@ export function InventoryView({
                 variant="ghost"
                 size="sm"
                 aria-label={`Adjust ${row.name}`}
-                onClick={() => setSheetFor(row.productId)}
+                onClick={() =>
+                  setSheetFor({ productId: row.productId, tab: "counts" })
+                }
               >
                 Adjust
               </Button>
@@ -606,7 +620,9 @@ export function InventoryView({
                 variant="ghost"
                 size="sm"
                 aria-label={`Date tracking for ${row.name}`}
-                onClick={() => setDateFor(row.productId)}
+                onClick={() =>
+                  setSheetFor({ productId: row.productId, tab: "dates" })
+                }
               >
                 Dates
               </Button>
@@ -654,7 +670,9 @@ export function InventoryView({
                 <Button
                   variant="outline"
                   aria-label={`Date tracking for ${row.name}`}
-                  onClick={() => setDateFor(row.productId)}
+                  onClick={() =>
+                    setSheetFor({ productId: row.productId, tab: "dates" })
+                  }
                 >
                   Dates
                 </Button>
@@ -699,7 +717,9 @@ export function InventoryView({
                 <Button
                   variant="outline"
                   aria-label={`Adjust ${row.name}`}
-                  onClick={() => setSheetFor(row.productId)}
+                  onClick={() =>
+                    setSheetFor({ productId: row.productId, tab: "counts" })
+                  }
                 >
                   Adjust…
                 </Button>
@@ -712,7 +732,9 @@ export function InventoryView({
         row={sheetRow}
         defaultReason={lastReason}
         actions={sheetActions}
+        dates={{ snapshot, run, timeZone }}
         history={{ timeZone, load: loadHistory }}
+        initialTab={sheetFor?.tab}
         onClose={() => setSheetFor(null)}
       />
       {bulkRows ? (
@@ -725,16 +747,6 @@ export function InventoryView({
             setBulkRows(null);
             setSelected([]);
           }}
-        />
-      ) : null}
-      {dateFor && allRows.find((r) => r.productId === dateFor) ? (
-        <DateTracking
-          key={dateFor}
-          row={allRows.find((r) => r.productId === dateFor)!}
-          snapshot={snapshot}
-          run={run}
-          timeZone={timeZone}
-          onClose={() => setDateFor(null)}
         />
       ) : null}
     </div>

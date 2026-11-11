@@ -26,10 +26,12 @@ async function dates(page: Page) {
   await page
     .getByRole("button", { name: `Date tracking for ${TITO}`, exact: true })
     .click();
-  return page.getByRole("dialog", {
-    name: `${TITO} — Date Tracking`,
-    exact: true,
-  });
+  const dialog = page.getByRole("dialog", { name: TITO, exact: true });
+  await expect(dialog.getByRole("tab", { name: "Dates" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  return dialog;
 }
 test("bulk count selects filtered rows, reviews blank/zero semantics and writes history", async ({
   page,
@@ -212,7 +214,7 @@ test("multiple date groups, partial precision, archive, export and dashboard dri
   await expect(dialog).toContainText("2 date groups");
   await expect(dialog).toContainText("Expires: 11/26");
   await expect(dialog).toContainText("Dated quantity exceeds inventory by 3");
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByLabel("Close").click();
   const download = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Export date groups", exact: true })
@@ -240,7 +242,7 @@ test("multiple date groups, partial precision, archive, export and dashboard dri
     .first()
     .click();
   await expect(dialog).toContainText("1 date groups");
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByText("Close", { exact: true }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -259,7 +261,7 @@ test("configured manufacture rule produces a freshness-limit dashboard alert", a
   await dialog
     .getByRole("button", { name: "Save date entry", exact: true })
     .click();
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByLabel("Close").click();
   await page.getByRole("tab", { name: "Manage", exact: true }).click();
   await page.getByRole("tab", { name: "Freshness Rules", exact: true }).click();
   await page

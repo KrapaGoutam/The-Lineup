@@ -1,6 +1,6 @@
 "use client";
 import { CalendarClock, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,6 @@ import {
 } from "../domain/freshness";
 import { dateAlertText, type InventoryRow } from "../domain/inventory-rows";
 import type { CatalogSnapshot } from "../domain/inventory-types";
-import { Sheet } from "./table-kit/sheet";
 import type { RunCatalogCommand } from "./catalog-dialogs";
 import { formatQuantity } from "./editable-cell";
 
@@ -40,18 +39,18 @@ export function DateAlert({ row }: { row: InventoryRow }) {
     </span>
   );
 }
-export function DateTracking({
+export function DateTrackingContent({
   row,
   snapshot,
   run,
   timeZone,
-  onClose,
+  onBusyChange,
 }: {
   row: InventoryRow;
   snapshot: CatalogSnapshot;
   run: RunCatalogCommand;
   timeZone: string;
-  onClose: () => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [editing, setEditing] = useState<DateLot | "new" | null>(null);
   const [manufacture, setManufacture] = useState("");
@@ -60,6 +59,8 @@ export function DateTracking({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
+  useEffect(() => () => onBusyChange(false), [onBusyChange]);
   const product = snapshot.products.find((p) => p.id === row.productId)!;
   const rule =
     snapshot.freshnessRules?.find(
@@ -149,16 +150,9 @@ export function DateTracking({
     }
   }
   return (
-    <Sheet
-      open
-      onClose={() => {
-        if (!busy) onClose();
-      }}
-      title={`${row.name} — Date Tracking`}
-      description={`${summary.lots.length} date groups · ${formatQuantity(summary.datedQuantity)} units with recorded quantities`}
-      className="sm:w-[min(94vw,52rem)] sm:max-w-[52rem]"
-    >
+    <div className="flex flex-col gap-4">
       <div className="bg-muted/30 space-y-1 rounded-lg p-3 text-sm">
+        <p>{summary.lots.length} date groups</p>
         <p>Inventory total: {formatQuantity(row.total)}</p>
         <p>Dated quantity: {formatQuantity(summary.datedQuantity)}</p>
         <p>Without date: {formatQuantity(summary.withoutDate)}</p>
@@ -321,6 +315,6 @@ export function DateTracking({
           Add Date Entry
         </Button>
       )}
-    </Sheet>
+    </div>
   );
 }

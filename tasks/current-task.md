@@ -1,3 +1,15 @@
+# Inventory Item Sheet Dates tab — IN PROGRESS
+
+Branch `feature/inventory-item-sheet-dates`; separate worktree `.tmp/inventory-item-sheet-dates`; base `origin/development` `d09b6c4600e46653710a8e92a507415af78c5d77`. Attendance branch remains isolated and hosted authorization gated. Spec: `docs/features/inventory-item-sheet-dates-tab.md`. No database or hosted work.
+
+- [x] Verify PR #316's existing Item Sheet, Dates sheet and Cooler Layout on current development; read project instructions and create the scoped approved spec.
+- [x] Implement one Item Sheet with Counts, Levels, Dates and History tabs, preserving the date command and location contract.
+- [x] Run targeted component and browser checks for list/cooler entry, tab keyboard/touch navigation, Dates save and responsive layouts.
+- [x] Run final check/build, review tenant/accessibility/scope diff and commit one local feature checkpoint.
+- [ ] Push one Inventory PR to development, require exact-head CI/review and normal merge. Keep main, Production, Neon, native financial activation, enforcement and V2-007 unchanged.
+
+---
+
 # The Lineup V2.0 — V2-006 Attendance V2
 
 ## Authorized Q8 DEV rollout — 2026-11-10 (active; supersedes prior approval gates)
