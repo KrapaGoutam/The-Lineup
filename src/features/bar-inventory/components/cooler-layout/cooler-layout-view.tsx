@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   Boxes,
   Edit2,
   FolderPlus,
+  GripVertical,
   Layers,
   MapPin,
   MoveRight,
@@ -27,6 +30,7 @@ import {
   type BranchStorageOverview,
   type CatalogSnapshot,
   type ProductView,
+  type StorageAreaKind,
   type StorageAreaView,
   type StoragePlacementView,
   type StorageShelfView,
@@ -66,6 +70,79 @@ type Props = {
 const ALL_AREAS = "all";
 const UNASSIGNED = "unassigned";
 const ARCHIVED = "archived";
+
+type ShelfSlot =
+  | { kind: "occupied"; slotNumber: number; placement: StoragePlacementView }
+  | { kind: "empty"; slotNumber: number };
+
+function getShelfSlots(placements: StoragePlacementView[]): ShelfSlot[] {
+  const explicitSlotNumbers = placements
+    .map((p) => p.slotNumber)
+    .filter((n): n is number => n !== null && n > 0);
+  const maxExplicit =
+    explicitSlotNumbers.length > 0 ? Math.max(...explicitSlotNumbers) : 0;
+  const slotCount = Math.max(4, maxExplicit + 1, placements.length + 1);
+
+  const bySlot = new Map<number, StoragePlacementView>();
+  const unslotted: StoragePlacementView[] = [];
+  for (const p of placements) {
+    if (
+      p.slotNumber !== null &&
+      p.slotNumber > 0 &&
+      !bySlot.has(p.slotNumber)
+    ) {
+      bySlot.set(p.slotNumber, p);
+    } else {
+      unslotted.push(p);
+    }
+  }
+
+  const slots: ShelfSlot[] = [];
+  let unslottedIdx = 0;
+  for (let s = 1; s <= slotCount; s++) {
+    if (bySlot.has(s)) {
+      slots.push({
+        kind: "occupied",
+        slotNumber: s,
+        placement: bySlot.get(s)!,
+      });
+    } else if (unslottedIdx < unslotted.length) {
+      slots.push({
+        kind: "occupied",
+        slotNumber: s,
+        placement: unslotted[unslottedIdx++],
+      });
+    } else {
+      slots.push({ kind: "empty", slotNumber: s });
+    }
+  }
+
+  while (unslottedIdx < unslotted.length) {
+    const s = slots.length + 1;
+    slots.push({
+      kind: "occupied",
+      slotNumber: s,
+      placement: unslotted[unslottedIdx++],
+    });
+  }
+
+  return slots;
+}
+
+function getAreaClimateBadge(kind: StorageAreaKind): string {
+  switch (kind) {
+    case "cooler":
+      return "36°F · Commercial Cooler";
+    case "freezer":
+      return "0°F · Commercial Freezer";
+    case "back_bar":
+      return "Ambient · Back Bar Display";
+    case "dry_storage":
+      return "Ambient · Dry Storage";
+    default:
+      return "Physical Rack Layout";
+  }
+}
 
 export function CoolerLayoutView({
   snapshot,
@@ -127,6 +204,15 @@ export function CoolerLayoutView({
   const [defaultShelfForMove, setDefaultShelfForMove] = useState<string | null>(
     null,
   );
+  const [defaultSlotForMove, setDefaultSlotForMove] = useState<number | null>(
+    null,
+  );
+  const [draggedPlacement, setDraggedPlacement] =
+    useState<StoragePlacementView | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<{
+    shelfId: string;
+    slotNumber: number;
+  } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const allAreas = useMemo(
@@ -372,6 +458,16 @@ export function CoolerLayoutView({
     setMovingPlacementId(null);
     setMovingProductId(null);
     setDefaultShelfForMove(shelf.id);
+    setDefaultSlotForMove(null);
+    setSelectedAreaId(shelf.storageAreaId);
+    setMoveDialogOpen(true);
+  }
+
+  function handlePlaceAtSlot(shelf: StorageShelfView, slotNumber: number) {
+    setMovingPlacementId(null);
+    setMovingProductId(null);
+    setDefaultShelfForMove(shelf.id);
+    setDefaultSlotForMove(slotNumber);
     setSelectedAreaId(shelf.storageAreaId);
     setMoveDialogOpen(true);
   }
@@ -381,6 +477,7 @@ export function CoolerLayoutView({
     setMovingProductId(placement.productId);
     setMovingPlacementId(placement.id);
     setDefaultShelfForMove(placement.shelfId);
+    setDefaultSlotForMove(placement.slotNumber);
     setMoveDialogOpen(true);
   }
 
@@ -404,7 +501,112 @@ export function CoolerLayoutView({
     setMovingProductId(product.id);
     setMovingPlacementId(null);
     setDefaultShelfForMove(null);
+    setDefaultSlotForMove(null);
     setMoveDialogOpen(true);
+  }
+
+  async function handleMoveShelf(
+    shelf: StorageShelfView,
+    direction: "up" | "down",
+  ) {
+    const areaShelves = shelvesByArea.get(shelf.storageAreaId) ?? [];
+    const currentIndex = areaShelves.findIndex((s) => s.id === shelf.id);
+    if (currentIndex === -1) return;
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= areaShelves.length) return;
+
+    const targetShelf = areaShelves[targetIndex];
+    const tempOrder = targetShelf.displayOrder;
+    const currentOrder = shelf.displayOrder;
+    const newCurrentOrder =
+      tempOrder !== currentOrder
+        ? tempOrder
+        : direction === "up"
+          ? currentOrder - 1
+          : currentOrder + 1;
+    const newTargetOrder =
+      tempOrder !== currentOrder
+        ? currentOrder
+        : direction === "up"
+          ? currentOrder + 1
+          : currentOrder - 1;
+
+    const res1 = await run({
+      type: "storageShelfUpsert",
+      id: shelf.id,
+      storageAreaId: shelf.storageAreaId,
+      name: shelf.name,
+      sectionName: shelf.sectionName,
+      displayOrder: newCurrentOrder,
+      expectedVersion: shelf.version,
+    });
+    if (!res1.ok) {
+      setNotice(res1.error);
+      return;
+    }
+    const res2 = await run({
+      type: "storageShelfUpsert",
+      id: targetShelf.id,
+      storageAreaId: targetShelf.storageAreaId,
+      name: targetShelf.name,
+      sectionName: targetShelf.sectionName,
+      displayOrder: newTargetOrder,
+      expectedVersion: targetShelf.version,
+    });
+    if (!res2.ok) {
+      setNotice(res2.error);
+    } else {
+      setNotice(null);
+    }
+  }
+
+  async function handleDropOnSlot(
+    targetShelf: StorageShelfView,
+    targetSlotNumber: number,
+  ) {
+    if (!draggedPlacement) return;
+    const placement = draggedPlacement;
+    setDraggedPlacement(null);
+    setDragOverSlot(null);
+
+    if (
+      placement.shelfId === targetShelf.id &&
+      placement.slotNumber === targetSlotNumber
+    ) {
+      return;
+    }
+
+    const targetPlacements = allPlacements.filter(
+      (p) => p.shelfId === targetShelf.id,
+    );
+    const occupied = targetPlacements.find(
+      (p) => p.slotNumber === targetSlotNumber && p.id !== placement.id,
+    );
+    if (occupied) {
+      setNotice(
+        `Slot ${targetSlotNumber} is already occupied. Move to an empty slot or use Move Placement.`,
+      );
+      return;
+    }
+
+    const result = await run({
+      type: "storagePlacementSet",
+      id: placement.id,
+      storageAreaId: targetShelf.storageAreaId,
+      shelfId: targetShelf.id,
+      productId: placement.productId,
+      slotNumber: targetSlotNumber,
+      slotLabel: placement.slotLabel ?? `Slot ${targetSlotNumber}`,
+      displayOrder: targetSlotNumber,
+      expectedVersion: placement.version,
+    });
+
+    if (!result.ok) {
+      setNotice(result.error);
+    } else {
+      setNotice(null);
+    }
   }
 
   const activeArea = activeAreas.find((a) => a.id === selectedAreaId);
@@ -684,19 +886,23 @@ export function CoolerLayoutView({
         selectedAreaId !== ARCHIVED &&
         activeArea && (
           <div className="space-y-6">
-            <div className="bg-card flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4">
+            <div className="bg-card border-border flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 p-4 shadow-xs">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-semibold tracking-tight">
                     {activeArea.name}
                   </h2>
                   <Badge tone="neutral">
                     {STORAGE_AREA_KIND_LABELS[activeArea.kind]}
                   </Badge>
+                  <Badge tone="neutral" className="text-xs font-normal">
+                    {getAreaClimateBadge(activeArea.kind)}
+                  </Badge>
                 </div>
-                <p className="text-muted-foreground mt-0.5 text-xs">
-                  Physical rack layout. Placement is for organization only; each
-                  product&apos;s stock is counted once, for the whole branch.
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Physical cooler layout — shelves ordered top to bottom.
+                  Placement is for organization only; each product&apos;s stock
+                  is counted once, for the whole branch.
                 </p>
               </div>
 
@@ -731,155 +937,266 @@ export function CoolerLayoutView({
             </div>
 
             <div className="space-y-6">
-              {(shelvesByArea.get(activeArea.id) ?? []).map((shelf) => {
-                const placements = placementsByShelf.get(shelf.id) ?? [];
-                return (
-                  <div
-                    key={shelf.id}
-                    className="border-muted/80 bg-muted/10 rounded-lg border-2 p-4 shadow-sm"
-                  >
-                    <div className="border-muted flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-foreground text-sm font-semibold">
-                          {shelf.name}
-                        </h3>
-                        {shelf.sectionName && (
-                          <Badge tone="neutral" className="text-xs">
-                            {shelf.sectionName}
-                          </Badge>
-                        )}
-                        <span className="text-muted-foreground text-xs">
-                          ({placements.length}{" "}
-                          {placements.length === 1 ? "slot" : "slots"})
-                        </span>
-                      </div>
+              {(() => {
+                const areaShelves = shelvesByArea.get(activeArea.id) ?? [];
+                return areaShelves.map((shelf, shelfIndex) => {
+                  const placements = placementsByShelf.get(shelf.id) ?? [];
+                  const slots = getShelfSlots(placements);
+                  return (
+                    <div
+                      key={shelf.id}
+                      className="border-muted/80 bg-muted/10 rounded-lg border-2 p-4 shadow-sm"
+                    >
+                      <div className="border-muted flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-foreground text-sm font-semibold">
+                            {shelf.name}
+                          </h3>
+                          {shelf.sectionName && (
+                            <Badge tone="neutral" className="text-xs">
+                              {shelf.sectionName}
+                            </Badge>
+                          )}
+                          <span className="text-muted-foreground text-xs">
+                            ({placements.length}{" "}
+                            {placements.length === 1 ? "placed" : "placed"},{" "}
+                            {slots.length} slots)
+                          </span>
+                        </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handlePlaceProductOnShelf(shelf)}
-                          className="min-h-9 px-2 text-xs"
-                        >
-                          <Plus className="mr-1 size-3" />
-                          Place Item
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenEditShelf(shelf)}
-                          aria-label={`Edit shelf ${shelf.name}`}
-                          className="text-muted-foreground size-9 p-0"
-                        >
-                          <Edit2 className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteShelf(shelf)}
-                          aria-label={`Delete shelf ${shelf.name}`}
-                          className="text-destructive hover:text-destructive size-9 p-0"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                      {placements.map((placement) => {
-                        const product = productMap.get(placement.productId);
-                        if (!product) return null;
-                        const vendor = vendorMap.get(product.vendorId) ?? "—";
-                        const stockInfo = getProductStatus(product.id);
-                        const matches = matchesSearch(
-                          product,
-                          placement.slotLabel,
-                        );
-
-                        return (
-                          <div
-                            key={placement.id}
-                            data-testid="placement-tile"
-                            className={`bg-card hover:border-primary/70 relative flex flex-col justify-between rounded-md border p-3 shadow-xs transition hover:shadow-sm ${
-                              matches ? "" : "opacity-35"
-                            }`}
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleMoveShelf(shelf, "up")}
+                            disabled={shelfIndex === 0}
+                            aria-label={`Move shelf ${shelf.name} up`}
+                            className="text-muted-foreground size-9 p-0"
+                            title="Move shelf up (top-to-bottom reorder)"
                           >
-                            <div className="flex items-center justify-between gap-1 pb-1.5">
-                              <Badge
-                                tone="neutral"
-                                className="font-mono text-[11px] font-bold"
+                            <ArrowUp className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleMoveShelf(shelf, "down")}
+                            disabled={shelfIndex === areaShelves.length - 1}
+                            aria-label={`Move shelf ${shelf.name} down`}
+                            className="text-muted-foreground size-9 p-0"
+                            title="Move shelf down (top-to-bottom reorder)"
+                          >
+                            <ArrowDown className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePlaceProductOnShelf(shelf)}
+                            className="min-h-9 px-2 text-xs"
+                          >
+                            <Plus className="mr-1 size-3" />
+                            Place Item
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEditShelf(shelf)}
+                            aria-label={`Edit shelf ${shelf.name}`}
+                            className="text-muted-foreground size-9 p-0"
+                          >
+                            <Edit2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteShelf(shelf)}
+                            aria-label={`Delete shelf ${shelf.name}`}
+                            className="text-destructive hover:text-destructive size-9 p-0"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                        {slots.map((slot) => {
+                          if (slot.kind === "occupied") {
+                            const placement = slot.placement;
+                            const product = productMap.get(placement.productId);
+                            if (!product) return null;
+                            const vendor =
+                              vendorMap.get(product.vendorId) ?? "—";
+                            const stockInfo = getProductStatus(product.id);
+                            const matches = matchesSearch(
+                              product,
+                              placement.slotLabel,
+                            );
+                            const isDragged =
+                              draggedPlacement?.id === placement.id;
+
+                            return (
+                              <div
+                                key={placement.id}
+                                data-testid="placement-tile"
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData(
+                                    "text/plain",
+                                    placement.id,
+                                  );
+                                  setDraggedPlacement(placement);
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedPlacement(null);
+                                  setDragOverSlot(null);
+                                }}
+                                className={`bg-card hover:border-primary/70 relative flex cursor-grab flex-col justify-between rounded-md border p-3 shadow-xs transition hover:shadow-sm active:cursor-grabbing ${
+                                  matches ? "" : "opacity-35"
+                                } ${isDragged ? "ring-primary/40 border-primary opacity-50 ring-2" : ""}`}
                               >
-                                {placement.slotLabel ||
-                                  (placement.slotNumber !== null
-                                    ? `#${placement.slotNumber}`
-                                    : `Slot ${placement.displayOrder}`)}
-                              </Badge>
-                              <StatusBadge status={stockInfo.status} />
-                            </div>
+                                <div className="flex items-center justify-between gap-1 pb-1.5">
+                                  <div className="flex items-center gap-1">
+                                    <GripVertical
+                                      className="text-muted-foreground/50 size-3 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                    <Badge
+                                      tone="neutral"
+                                      className="font-mono text-[11px] font-bold"
+                                    >
+                                      {placement.slotLabel ||
+                                        (placement.slotNumber !== null
+                                          ? `#${placement.slotNumber}`
+                                          : `Slot ${slot.slotNumber}`)}
+                                    </Badge>
+                                  </div>
+                                  <StatusBadge status={stockInfo.status} />
+                                </div>
 
-                            <button
-                              type="button"
-                              onClick={() => onSelectProduct(product.id)}
-                              className="min-h-11 py-1 text-left hover:underline focus-visible:ring-2 focus-visible:outline-hidden"
-                              title="Open this product to view and edit counts and details"
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectProduct(product.id)}
+                                  className="min-h-11 py-1 text-left hover:underline focus-visible:ring-2 focus-visible:outline-hidden"
+                                  title="Open this product to view and edit counts and details"
+                                >
+                                  <div className="text-foreground line-clamp-2 text-xs font-medium">
+                                    {product.name}
+                                  </div>
+                                  <div className="text-muted-foreground mt-0.5 text-[11px]">
+                                    {product.size ? `${product.size} · ` : ""}
+                                    {vendor}
+                                  </div>
+                                </button>
+
+                                <div className="border-muted/50 mt-2 flex items-center justify-between border-t pt-2 text-[11px]">
+                                  <div className="text-foreground font-semibold">
+                                    {formatQuantity(stockInfo.onHand)} on hand
+                                    {stockInfo.backup > 0
+                                      ? ` · ${formatQuantity(stockInfo.backup)} bkp`
+                                      : ""}
+                                  </div>
+                                  <div className="flex items-center gap-0.5">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleMovePlacement(placement)
+                                      }
+                                      aria-label={`Move ${product.name}`}
+                                      className="text-muted-foreground hover:text-foreground size-9 p-0"
+                                      title="Move / reassign position"
+                                    >
+                                      <Edit2 className="size-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleRemovePlacement(placement)
+                                      }
+                                      aria-label={`Remove ${product.name} from shelf`}
+                                      className="text-destructive/80 hover:text-destructive size-9 p-0"
+                                      title="Remove from shelf"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Empty slot
+                          const isOver =
+                            dragOverSlot?.shelfId === shelf.id &&
+                            dragOverSlot?.slotNumber === slot.slotNumber;
+                          return (
+                            <div
+                              key={`empty-slot-${shelf.id}-${slot.slotNumber}`}
+                              data-testid="empty-slot-tile"
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "move";
+                                setDragOverSlot({
+                                  shelfId: shelf.id,
+                                  slotNumber: slot.slotNumber,
+                                });
+                              }}
+                              onDragLeave={() => {
+                                setDragOverSlot(null);
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                void handleDropOnSlot(shelf, slot.slotNumber);
+                              }}
+                              className={`flex min-h-[140px] flex-col items-center justify-between rounded-md border-2 border-dashed p-3 text-center transition ${
+                                isOver
+                                  ? "border-primary bg-primary/10 ring-primary/30 ring-2"
+                                  : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30 bg-muted/5"
+                              }`}
                             >
-                              <div className="text-foreground line-clamp-2 text-xs font-medium">
-                                {product.name}
+                              <div className="flex w-full items-center justify-between pb-1.5">
+                                <Badge
+                                  tone="neutral"
+                                  className="text-muted-foreground font-mono text-[10px]"
+                                >
+                                  Slot {slot.slotNumber}
+                                </Badge>
+                                <span className="text-muted-foreground/70 text-[10px] font-semibold tracking-wider uppercase">
+                                  Empty
+                                </span>
                               </div>
-                              <div className="text-muted-foreground mt-0.5 text-[11px]">
-                                {product.size ? `${product.size} · ` : ""}
-                                {vendor}
-                              </div>
-                            </button>
 
-                            <div className="border-muted/50 mt-2 flex items-center justify-between border-t pt-2 text-[11px]">
-                              <div className="text-foreground font-semibold">
-                                {formatQuantity(stockInfo.onHand)} on hand
-                                {stockInfo.backup > 0
-                                  ? ` · ${formatQuantity(stockInfo.backup)} bkp`
-                                  : ""}
-                              </div>
-                              <div className="flex items-center gap-0.5">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleMovePlacement(placement)}
-                                  aria-label={`Move ${product.name}`}
-                                  className="text-muted-foreground hover:text-foreground size-9 p-0"
-                                  title="Move / reassign position"
-                                >
-                                  <Edit2 className="size-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleRemovePlacement(placement)
-                                  }
-                                  aria-label={`Remove ${product.name} from shelf`}
-                                  className="text-destructive/80 hover:text-destructive size-9 p-0"
-                                  title="Remove from shelf"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handlePlaceAtSlot(shelf, slot.slotNumber)
+                                }
+                                aria-label={`Place product in ${shelf.name} slot ${slot.slotNumber}`}
+                                className="text-muted-foreground hover:text-primary hover:bg-muted/40 flex min-h-[44px] w-full flex-col items-center justify-center gap-1.5 rounded-md p-2 transition"
+                              >
+                                <Plus className="text-muted-foreground/80 size-5" />
+                                <span className="text-xs font-medium">
+                                  Place Product
+                                </span>
+                              </button>
+
+                              <div className="text-muted-foreground/60 border-muted/30 w-full border-t pt-1.5 text-center text-[10px]">
+                                Drop bottle here
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handlePlaceProductOnShelf(shelf)}
-                        className="border-muted-foreground/20 text-muted-foreground hover:border-primary/60 hover:bg-muted/30 hover:text-primary flex min-h-[120px] flex-col items-center justify-center rounded-md border-2 border-dashed p-4 text-center text-xs transition"
-                      >
-                        <Plus className="mb-1 size-5" />
-                        <span>Place Product</span>
-                      </button>
+                      {/* Physical shelf bottom rail */}
+                      <div
+                        className="mt-4 h-2.5 w-full rounded-sm border-t border-slate-400/30 bg-gradient-to-r from-slate-300 via-slate-100 to-slate-300 shadow-xs dark:border-slate-500/30 dark:from-slate-700 dark:via-slate-600 dark:to-slate-700"
+                        aria-hidden="true"
+                      />
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
 
               {(shelvesByArea.get(activeArea.id) ?? []).length === 0 && (
                 <div className="rounded-lg border border-dashed p-8 text-center">
@@ -1073,6 +1390,7 @@ export function CoolerLayoutView({
             : activeAreas[0]?.id
         }
         defaultShelfId={defaultShelfForMove}
+        defaultSlotNumber={defaultSlotForMove}
         areas={activeAreas}
         shelves={allShelves}
         placements={allPlacements}

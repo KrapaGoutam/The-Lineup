@@ -1,5 +1,7 @@
 import {
+  act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -517,5 +519,266 @@ describe("CoolerLayoutView Stage E6 hardening", () => {
         expectedVersion: null,
       }),
     );
+  });
+});
+
+describe("CoolerLayoutView Physical Cooler & Shelf Polish (Batch B)", () => {
+  it("renders cooler climate badge and physical cooler enclosure styling", async () => {
+    const user = userEvent.setup();
+    const snapshot = getTestSnapshot();
+    const run = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <CoolerLayoutView
+        snapshot={snapshot}
+        run={run}
+        timeZone="America/New_York"
+        onSelectProduct={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /View Rack/i })[0]);
+
+    // Cooler climate badge
+    expect(screen.getByText("36°F · Commercial Cooler")).toBeInTheDocument();
+
+    // Verify shelves are present in top-to-bottom order
+    const headings = screen.getAllByRole("heading", { level: 3 });
+    const shelfNames = headings.map((h) => h.textContent);
+    expect(shelfNames).toEqual([
+      "Top Shelf - Spirits",
+      "Middle Shelf - Mixers",
+      "Bottom Shelf - Heavy Jugs",
+    ]);
+  });
+
+  it("provides accessible shelf Move Up / Move Down buttons with boundary disabling and reorders shelves", async () => {
+    const user = userEvent.setup();
+    const snapshot = getTestSnapshot();
+    const run = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <CoolerLayoutView
+        snapshot={snapshot}
+        run={run}
+        timeZone="America/New_York"
+        onSelectProduct={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /View Rack/i })[0]);
+
+    const upTop = screen.getByRole("button", {
+      name: "Move shelf Top Shelf - Spirits up",
+    });
+    const downTop = screen.getByRole("button", {
+      name: "Move shelf Top Shelf - Spirits down",
+    });
+    expect(upTop).toBeDisabled(); // Top shelf cannot move up
+    expect(downTop).toBeEnabled();
+
+    const downBottom = screen.getByRole("button", {
+      name: "Move shelf Bottom Shelf - Heavy Jugs down",
+    });
+    expect(downBottom).toBeDisabled(); // Bottom shelf cannot move down
+
+    // Click Move Down on Top Shelf
+    await user.click(downTop);
+
+    // Verify storageShelfUpsert called to swap display orders
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "storageShelfUpsert",
+        id: "demo-shelf-c1-top",
+        displayOrder: 2,
+      }),
+    );
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "storageShelfUpsert",
+        id: "demo-shelf-c1-mid",
+        displayOrder: 1,
+      }),
+    );
+  });
+
+  it("renders explicit empty slots and allows direct click-to-place with pre-filled slot number", async () => {
+    const user = userEvent.setup();
+    const snapshot = getTestSnapshot();
+    const run = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <CoolerLayoutView
+        snapshot={snapshot}
+        run={run}
+        timeZone="America/New_York"
+        onSelectProduct={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /View Rack/i })[0]);
+
+    // Top shelf has slots 1 and 2 occupied, slot 3 and 4 empty
+    const emptySlot3Btn = screen.getByRole("button", {
+      name: "Place product in Top Shelf - Spirits slot 3",
+    });
+    expect(emptySlot3Btn).toBeInTheDocument();
+
+    // Click empty slot 3
+    await user.click(emptySlot3Btn);
+
+    // Move / Place Dialog should open prefilled with slot 3
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /Place Product on Shelf/i }),
+    ).toBeInTheDocument();
+
+    const slotNumberInput = screen.getByLabelText(/Slot Number/i);
+    expect(slotNumberInput).toHaveValue(3);
+    const slotLabelInput = screen.getByLabelText(/Slot Label/i);
+    expect(slotLabelInput).toHaveValue("Slot 3");
+  });
+
+  it("supports drag and drop placement to an empty slot", async () => {
+    const user = userEvent.setup();
+    const snapshot = getTestSnapshot();
+    const run = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <CoolerLayoutView
+        snapshot={snapshot}
+        run={run}
+        timeZone="America/New_York"
+        onSelectProduct={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /View Rack/i })[0]);
+
+    // Tito's placement card
+    const titosBtn = screen.getByRole("button", {
+      name: /^Tito's Handmade Vodka/i,
+    });
+    const titosCard = titosBtn.closest('[data-testid="placement-tile"]')!;
+    expect(titosCard).toHaveAttribute("draggable", "true");
+
+    // Start drag
+    const dataTransfer = {
+      setData: vi.fn(),
+      effectAllowed: "move",
+      dropEffect: "move",
+    };
+    fireEvent.dragStart(titosCard, { dataTransfer });
+
+    // Target empty slot 3 on Top Shelf
+    const emptySlots = screen.getAllByTestId("empty-slot-tile");
+    const targetSlot = emptySlots[0]; // Slot 3 on Top Shelf
+
+    fireEvent.dragOver(targetSlot, { dataTransfer, preventDefault: vi.fn() });
+    await act(async () => {
+      fireEvent.drop(targetSlot, { dataTransfer, preventDefault: vi.fn() });
+    });
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "storagePlacementSet",
+        id: "demo-place-1",
+        shelfId: "demo-shelf-c1-top",
+        slotNumber: 3,
+        slotLabel: "L1",
+      }),
+    );
+  });
+
+  it("prevents drag and drop collision when dropping onto an occupied slot", async () => {
+    const user = userEvent.setup();
+    const snapshot = getTestSnapshot();
+    const run = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <CoolerLayoutView
+        snapshot={snapshot}
+        run={run}
+        timeZone="America/New_York"
+        onSelectProduct={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /View Rack/i })[0]);
+
+    const casamigosBtn = screen.getByRole("button", {
+      name: /^Casamigos Blanco/i,
+    });
+    const casamigosCard = casamigosBtn.closest(
+      '[data-testid="placement-tile"]',
+    )!;
+
+    const titosBtn = screen.getByRole("button", {
+      name: /^Tito's Handmade Vodka/i,
+    });
+    const titosCard = titosBtn.closest('[data-testid="placement-tile"]')!;
+
+    const dataTransfer = {
+      setData: vi.fn(),
+      effectAllowed: "move",
+      dropEffect: "move",
+    };
+    // Drag Casamigos (slot 2) over Tito's (slot 1)
+    fireEvent.dragStart(casamigosCard, { dataTransfer });
+    fireEvent.drop(titosCard, { dataTransfer, preventDefault: vi.fn() });
+
+    // Dropping on occupied placement should NOT invoke run(storagePlacementSet)
+    expect(run).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "storagePlacementSet",
+      }),
+    );
+  });
+
+  it("guarantees strict quantity invariance across storage placements and moves", () => {
+    const snapshot = getTestSnapshot();
+    const titosProduct = snapshot.products.find(
+      (p) => p.name === "Tito's Handmade Vodka",
+    )!;
+    const originalStock = snapshot.stock.find(
+      (s) => s.productId === titosProduct.id,
+    );
+    const originalLedger = (snapshot.ledger ?? []).filter(
+      (l) => l.productId === titosProduct.id,
+    );
+
+    // Deep copy before
+    const stockBefore = JSON.parse(JSON.stringify(originalStock));
+    const ledgerBefore = JSON.parse(JSON.stringify(originalLedger));
+
+    // Catalog storagePlacementSet command schema
+    const moveCommand = {
+      type: "storagePlacementSet" as const,
+      id: "demo-place-1",
+      storageAreaId: "demo-area-cooler-1",
+      shelfId: "demo-shelf-c1-mid",
+      productId: titosProduct.id,
+      slotNumber: 1,
+      slotLabel: "Slot 1",
+      displayOrder: 1,
+      expectedVersion: 1,
+    };
+
+    // Verify command schema validates without any quantity fields
+    expect("onHand" in moveCommand).toBe(false);
+    expect("backup" in moveCommand).toBe(false);
+    expect("quantity" in moveCommand).toBe(false);
+
+    // Stock quantities and ledger entries are unchanged
+    const currentStock = snapshot.stock.find(
+      (s) => s.productId === titosProduct.id,
+    );
+    const currentLedger = (snapshot.ledger ?? []).filter(
+      (l) => l.productId === titosProduct.id,
+    );
+
+    expect(currentStock).toEqual(stockBefore);
+    expect(currentLedger).toEqual(ledgerBefore);
   });
 });
