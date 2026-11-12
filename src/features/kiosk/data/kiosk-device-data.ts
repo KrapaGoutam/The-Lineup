@@ -419,6 +419,17 @@ export async function reassignKioskDevice(
           code: "UNAUTHORIZED",
         };
       }
+      // 55000 (object_not_in_prerequisite_state): the device was revoked
+      // (possibly from another tab). Revocation is terminal for the device
+      // row; recovery is a NEW pairing code. Fixed copy, never the raw DB text.
+      if (error.code === "55000") {
+        return {
+          ok: false,
+          error:
+            "This device has been revoked and can’t be reassigned. Pair the tablet again with a new pairing code.",
+          code: "DEVICE_REVOKED",
+        };
+      }
       return {
         ok: false,
         error: error.message || "Failed to reassign device.",

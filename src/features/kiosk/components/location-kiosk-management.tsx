@@ -218,6 +218,11 @@ export function LocationKioskManagement({
         setReassigningDevice(null);
         await fetchDevices();
       } else {
+        // A refused reassignment usually means this list is stale (the device
+        // was revoked elsewhere). Close the dialog, reload the real state, and
+        // only then show the message (fetchDevices clears the error).
+        setReassigningDevice(null);
+        await fetchDevices();
         setError(res.error);
       }
     } catch {

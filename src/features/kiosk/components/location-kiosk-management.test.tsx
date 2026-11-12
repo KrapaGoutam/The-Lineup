@@ -133,6 +133,70 @@ describe("LocationKioskManagement Component", () => {
       expect(screen.getByText("A2B-3C4")).toBeInTheDocument();
     });
   });
+  describe("stale device list: reassigning a device revoked elsewhere (U-1)", () => {
+    const REVOKED_MESSAGE =
+      "This device has been revoked and can’t be reassigned. Pair the tablet again with a new pairing code.";
+
+    it("shows the actionable error, reloads the real (revoked) state, and offers no Reassign for it", async () => {
+      vi.mocked(adminActions.listKioskDevicesAction)
+        .mockResolvedValueOnce({ ok: true, data: [MOCK_DEVICE] })
+        .mockResolvedValueOnce({
+          ok: true,
+          data: [
+            {
+              ...MOCK_DEVICE,
+              status: "revoked",
+              credentialVersion: 2,
+              revokedAt: "2026-11-12T10:00:00Z",
+              revocationReason: "Lost tablet",
+            },
+          ],
+        });
+      vi.mocked(adminActions.reassignKioskDeviceAction).mockResolvedValueOnce({
+        ok: false,
+        error: REVOKED_MESSAGE,
+      });
+
+      const user = userEvent.setup();
+      render(
+        <LocationKioskManagement
+          locationId={MOCK_LOC_ID}
+          locationName={MOCK_LOC_NAME}
+          availableLocations={[
+            { id: MOCK_LOC_ID, name: MOCK_LOC_NAME },
+            { id: "loc-2", name: "Uptown" },
+          ]}
+        />,
+      );
+
+      await user.click(
+        await screen.findByLabelText("Reassign Front Host Stand"),
+      );
+      await user.click(
+        await screen.findByRole("button", { name: /^reassign device$/i }),
+      );
+
+      await waitFor(() => {
+        expect(adminActions.reassignKioskDeviceAction).toHaveBeenCalledWith({
+          deviceId: "dev-1",
+          newLocationId: "loc-2",
+        });
+      });
+      // List was reloaded and the message survived the reload (fetchDevices clears errors).
+      await waitFor(() =>
+        expect(adminActions.listKioskDevicesAction).toHaveBeenCalledTimes(2),
+      );
+      expect(await screen.findByText(REVOKED_MESSAGE)).toBeInTheDocument();
+      expect(screen.getByText("Revoked")).toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Reassign Front Host Stand"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("dialog", { name: /reassign kiosk device/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe("revoke dialog reason (D2: required, min 3 trimmed characters)", () => {
     async function openRevokeDialog() {
       vi.mocked(adminActions.listKioskDevicesAction).mockResolvedValue({

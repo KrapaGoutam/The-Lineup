@@ -1,7 +1,7 @@
 # Feature V2-008: Migration & Compatibility — Status
 
 ```text
-Status: IN PROGRESS — BATCH A COMPLETE (CONDITIONAL PASS); BATCH B1 (D7 + F-1) IMPLEMENTED LOCALLY, HOSTED DEV APPROVAL PENDING
+Status: IN PROGRESS — BATCH A COMPLETE; B1 (D7 + F-1) AND SECURITY GATE S1 (U-1) IMPLEMENTED LOCALLY, HOSTED DEV APPROVAL PENDING; E-1 PLANNED, NOT IMPLEMENTED
 GitHub Issue: #256
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0
@@ -10,6 +10,8 @@ Feature Branch: feature/v2-008-migration-compatibility (base 790fd2db560c41cb27a
 ```
 
 Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local only) then implemented D7 and the F-1 hardening: one forward-only migration (local ledger 88 → 89), the Settings → Kiosks entry, targeted pgTAP/real-Auth/browser tests and a focused security review — see [D7 plan §8](D7_LOCATION_SCOPED_KIOSK_PLAN.md). **No data backfill, Hosted DEV write, Production or Neon contact occurred in either batch; Hosted DEV is still at ledger 88.** Next-step constraints for B2–B4: [B2_B4_NEXT_STEP_PACKAGE.md](B2_B4_NEXT_STEP_PACKAGE.md). Resume from [HANDOFF.md](HANDOFF.md).
+
+**Security Gate S1 (2026-11-12, local only):** U-1 fixed by `20261112220000_kiosk_reassign_revoked_device_guard.sql` (local ledger 89 → 90; reproduced first, 69/69 after, full pgTAP 3363 PASS on a clean 90-migration replay, real-GoTrue 8/8, browser 21/21); E-1 reproduced and bounded with a remediation plan (no cross-tenant write by any tenant-scoped actor; not implemented); D-2/2b/2c packet written with measured evidence; shared `session_id` review found no bypass. See [SECURITY_GATE_S1.md](SECURITY_GATE_S1.md), [U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md](U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md), [E1_RECIPES_INVENTORY_SECURITY_PLAN.md](E1_RECIPES_INVENTORY_SECURITY_PLAN.md).
 
 ## Sub-feature state (kept distinct)
 
@@ -48,4 +50,4 @@ Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local 
 
 ## Invariants held
 
-Hosted DEV ledger 88 (local ledger 89) · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747` · Production, Neon untouched · V2-007 worktree intact.
+Hosted DEV ledger 88 (local ledger 90 after S1) · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747` · Production, Neon untouched · V2-007 worktree intact.

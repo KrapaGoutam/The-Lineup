@@ -415,6 +415,84 @@ test("organization owner keeps Location Administration and also gets Kiosks", as
   ).toBeVisible();
 });
 
+test("S1/U-1: a stale page cannot reassign a tablet that was revoked elsewhere", async ({
+  page,
+  context,
+}) => {
+  const stale = must(
+    await admin
+      .from("kiosk_devices")
+      .insert({
+        organization_id: org.id,
+        location_id: locA1,
+        name: "KUI Stale Tablet",
+        device_token_hash: crypto.randomBytes(32).toString("hex"),
+      })
+      .select("id")
+      .single(),
+  );
+
+  await authenticate(context, actors.mgr2, locA1);
+  await openSettings(page);
+  await page.locator("#settings-kiosks").getByRole("button").click();
+  // The page (and its device list) now shows the tablet as active with Reassign offered.
+  await expect(page.getByText("KUI Stale Tablet")).toBeVisible();
+  const reassign = page.getByRole("button", {
+    name: "Reassign KUI Stale Tablet",
+  });
+  await expect(reassign).toBeVisible();
+
+  // Another manager revokes it out of band (real owner session, real RPC).
+  must(
+    await actors.owner.client.rpc("kiosk_revoke_device", {
+      p_device_id: stale.id,
+      p_reason: "Revoked in another tab",
+    }),
+  );
+
+  // The stale page still offers the button; using it must not revive the device.
+  await reassign.click();
+  await page.getByRole("button", { name: "Reassign Device" }).click();
+
+  await expect(
+    page.getByText(/has been revoked and can.t be reassigned/i),
+  ).toBeVisible();
+  await expect(page.getByText(/pair the tablet again/i)).toBeVisible();
+  // The list reloaded to the real state: revoked, with no management buttons left.
+  // (Scoped to this tablet's card: an earlier test left another revoked device.)
+  const staleCard = page
+    .locator('[class*="border-dashed"]')
+    .filter({ hasText: "KUI Stale Tablet" });
+  await expect(staleCard).toBeVisible();
+  await expect(staleCard.getByText("Revoked", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reassign KUI Stale Tablet" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: /reassign kiosk device/i }),
+  ).toHaveCount(0);
+
+  const row = must(
+    await admin
+      .from("kiosk_devices")
+      .select("status, location_id, credential_version, device_token_hash")
+      .eq("id", stale.id)
+      .single(),
+  );
+  expect(row).toEqual({
+    status: "revoked",
+    location_id: locA1,
+    credential_version: 2,
+    device_token_hash: null,
+  });
+  const moved = await admin
+    .from("audit_events")
+    .select("id", { count: "exact", head: true })
+    .eq("entity_id", stale.id)
+    .eq("action", "kiosk_device_reassigned");
+  expect(moved.count).toBe(0);
+});
+
 test("deactivating the organization membership revokes kiosk authority on an open page", async ({
   page,
   context,

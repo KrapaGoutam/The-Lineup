@@ -24,7 +24,10 @@ Hard rules (each one is a test the tool must carry):
 5. **No privilege escalation.** Approved ladder only (D-2): owner/general_manager → `manager`, shift_manager → `assistant_manager`, host/server → `staff`. Remember E-1: any `manager`/`assistant_manager` row grants org-wide Recipes management and Inventory org-manager today, so every proposed manager/assistant row is a privilege grant that the dry-run must list explicitly with its effective-capability delta.
 6. **Idempotent reconciliation.** Re-running yields zero changes; existing rows are never downgraded, never reactivated if an owner deactivated them, never overwritten.
 7. **Dry-run first.** Output a reviewable manifest (ids only, no PII), counts per org, and the capability delta; **explicit approval before any Hosted DEV write (D-7)**.
-8. Use the audited RPC `apply_location_assignment_changes` where it fits; no direct inserts that bypass audit.
+8. **Write path (corrected in Security Gate S1).** `apply_location_assignment_changes(uuid, jsonb)` is **per target person**, requires a real authorized caller (`auth.uid()` is null for the service role), and its assign/update/reactivate actions **upsert and reactivate** existing rows — so it cannot satisfy rules 1 and 6 and must not be the bulk path. Choose at B2 start between: **(A)** one DB transaction per organization through a trusted connection that inserts the approved rows and writes its own distinct audit rows (no schema change); **(B)** a new `service_role`-only `SECURITY DEFINER` batch function that validates, inserts and audits one organization atomically (one forward-only migration, needs the remaining D-9 approval — preferred for database-enforced atomicity); **(C)** calling the RPC under forged claims — **rejected**. Audit parity must be designed either way.
+9. **Completeness proof before any write** and the seven-step `APPLY`/`SKIP` contract are specified in [OWNER_DECISIONS_REQUIRED.md §4.5](OWNER_DECISIONS_REQUIRED.md). The deployed cliff counts a `location_memberships` row of **any** status at **any** location of the organization.
+
+> **S1 update:** E-1 is now reproduced and bounded in [E1_RECIPES_INVENTORY_SECURITY_PLAN.md](E1_RECIPES_INVENTORY_SECURITY_PLAN.md). Measured: the D-2 ladder adds **no** capability at one location; once an organization has two or more locations the only capability a manager/assistant row adds is for `shift_manager → assistant_manager` (org-wide Inventory catalog read + shared-catalog write). So E-1 gates **N≥2 / D-2c** backfills, not N=1 backfills. The correction still needs its own approval (D-10) and is **not** implemented.
 
 Open dependency inherited from B1: **E-1 privilege spill** is independent of kiosks and is not fixed. Remediation (restrict the org-level Recipes/Inventory predicates to org roles, or scope them to the location) must be decided before any manager row is mass-created.
 
@@ -47,5 +50,7 @@ Open dependency inherited from B1: **E-1 privilege spill** is independent of kio
 A separately authorized Batch C must contain, in order: backup/recovery preflight → isolated populated-data rehearsal → Hosted DEV migration push (including the B1 migration) → **actual** authorization probes with real JWTs (the 0078 matrix and `tests/local/kiosk-authority.local.test.ts` against DEV with synthetic users, then cleanup) → post-migration reconciliation. B1's local approval does not cover any of these.
 
 ## Recommended next step
+
+> **S1 update:** U-1 is fixed locally (local ledger 90). The decision packet for D-2/D-2b/D-2c is ready in [OWNER_DECISIONS_REQUIRED.md §4](OWNER_DECISIONS_REQUIRED.md); decide it together with D-10. The paragraph below is the original B1 recommendation, kept for history.
 
 B1 closes D7 and F-1 locally. The next decision for the owner is **not** engineering: approve D-2/D-2b/D-2c (role ladder and the two multi-value rules) and decide the E-1 remediation path. Until then B2 can only deliver the parameterized validator.
