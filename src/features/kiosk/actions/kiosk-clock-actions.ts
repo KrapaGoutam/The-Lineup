@@ -55,12 +55,12 @@ class KioskAttemptAccountingError extends Error {}
  */
 function createEmployeeClient(accessToken: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !publishableKey) {
     throw new Error("Supabase environment variables are missing.");
   }
 
-  return createSupabaseClient<Database>(url, anonKey, {
+  return createSupabaseClient<Database>(url, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: {
       headers: {
@@ -376,9 +376,9 @@ export async function kioskAuthenticatePinAction(input: {
     }
 
     // Verify credentials via Supabase Auth without writing session cookies
-    const anonUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const isolatedAuthClient = createSupabaseClient(anonUrl, anonKey, {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+    const isolatedAuthClient = createSupabaseClient(url, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 

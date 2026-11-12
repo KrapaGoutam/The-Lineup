@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { createClient } from "@supabase/supabase-js";
 import {
   kioskAuthenticatePinAction,
   kioskBreakEndAction,
@@ -24,7 +25,7 @@ process.env.KIOSK_SESSION_SECRET =
   "test-secret-at-least-32-characters-long-123456";
 process.env.APP_PIN_PEPPER = "test-pepper-at-least-32-characters-long-12345";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kiosk_test";
 
 const mockCookies: Record<string, string> = {};
 
@@ -110,11 +111,16 @@ describe("Kiosk Clock Server Actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", undefined);
     Object.keys(mockCookies).forEach((key) => delete mockCookies[key]);
     Object.keys(mockSessionStorage).forEach(
       (key) => delete mockSessionStorage[key],
     );
     mockAttemptInserts.length = 0;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   function setupDeviceMock() {
@@ -552,6 +558,11 @@ describe("Kiosk Clock Server Actions", () => {
       });
 
       const res = await kioskAuthenticatePinAction({ pin: "1234" });
+      expect(createClient).toHaveBeenCalledWith(
+        "http://localhost:54321",
+        "sb_publishable_kiosk_test",
+        { auth: { persistSession: false, autoRefreshToken: false } },
+      );
       if (attemptWriteFails) {
         expect(res).toMatchObject({
           ok: false,
@@ -607,6 +618,14 @@ describe("Kiosk Clock Server Actions", () => {
     });
 
     const res = await kioskClockInAction({ notes: "Morning shift" });
+    expect(createClient).toHaveBeenCalledWith(
+      "http://localhost:54321",
+      "sb_publishable_kiosk_test",
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: "Bearer jwt-token-alice" } },
+      },
+    );
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data.sessionId).toBe("sess-new");

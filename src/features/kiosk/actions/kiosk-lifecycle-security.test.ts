@@ -28,8 +28,7 @@ process.env.APP_PIN_PEPPER = "test-pepper-at-least-32-characters-long-12345";
 process.env.KIOSK_SESSION_SECRET =
   "test-kiosk-session-secret-at-least-32-characters-12345";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
-process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-anon-key";
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kiosk_test";
 
 const mockCookies: Record<string, string> = {};
 

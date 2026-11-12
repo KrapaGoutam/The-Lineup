@@ -1,5 +1,18 @@
 # THE LINEUP V2.0 — V2-007 CLOCK IN / CLOCK OUT KIOSK
 
+## Preview configuration continuation — November 12, 2026
+
+- [x] Verify existing clean feature worktree, remote PR #324 head `b6cb82a`, preserved local documentation branch `8744924`, authenticated Vercel owner/project and ready Preview.
+- [x] Verify inherited Preview DEV binding equals the expected project, demo disabled, server credential present, Node 24.x, and system environment exposure enabled. No branch-specific variables existed at preflight.
+- [x] Correct both isolated kiosk clients to use the existing publishable key; validate PIN and employee JWT client configuration without the legacy variable (96/96 kiosk tests).
+- [x] Provision a dedicated secret from 48 cryptographically random bytes as Secret, Preview, feature branch only; verify metadata without retrieving its value.
+- [x] Run focused kiosk tests, repository quality checks and production webpack build; review focused diff. Normal local Turbopack cannot resolve this worktree's external dependency junction; exact-head CI/Vercel verify the normal build.
+- [x] Record the configuration receipt, platform ingress contract and remaining owner gates in [PREVIEW_CONFIGURATION.md](../docs/v2.0/features/007-clock-kiosk/PREVIEW_CONFIGURATION.md).
+
+Delivery checkpoint: local correction and checks complete; prepare one focused commit and push to existing PR #324. The PR's external delivery receipt is authoritative for the resulting SHA, full CI/browser gates and replacement feature Preview (these cannot be recorded in their own source commit). Do not declare readiness until those exact-head checks and deployed configuration pass. No further implementation or database work is authorized by this checkpoint.
+
+Data/authorization: no schema or hosted data changes; employee clients retain public credentials plus employee JWTs, and privileged operations remain server-only. UI states and attendance behavior are unchanged. Main risks are wrong environment scope, accidental credential exposure and build-time public-variable substitution. Verification covers isolated PIN/client creation, existing kiosk privacy/lifecycle tests, build and exact-head CI. Do not repeat backup/restore/migration rehearsal/full source security review. Hosted DEV migration and fixtures, development merge, financial activation, enforcement and Production remain separately gated.
+
 ## Codex continuation — active checkpoint (November 11, 2026)
 
 - [x] Recovered the existing worktree at `32809ec`; all seven Antigravity modifications preserved in `.tmp/continuation-recovery/antigravity.patch`.
