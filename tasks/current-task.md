@@ -1,5 +1,60 @@
 # THE LINEUP V2.0 — V2-007 CLOCK IN / CLOCK OUT KIOSK
 
+## Gate 7 Run 2 — service-role synthetic acceptance — November 12, 2026
+
+Run `V2-007-ACCEPTANCE-20261112-d0d772`. Authorization: Q8-style service-role fixtures only; no Overall Owner, no existing account, no sign-out of any kind. This supersedes the blocked Attempt 1 section below (kept as history).
+
+- [x] Preflight: worktree/HEAD `3c314682`, Preview READY and bound to DEV, ledger 88, Finance OFF, enforcement STAGED, kiosk tables empty.
+- [x] PIN pepper compatibility proven non-disclosingly (HMAC request-fingerprint match against the earlier Preview login).
+- [x] Fresh baseline with per-row hashed Auth inventory; write-ahead manifest; guarded cleanup dry run before any write.
+- [x] Provision 2 organizations, 4 locations, 5 identities (manifest-owned); mid-run and final reconciliation 27/27.
+- [x] Execute all 18 canonical scenarios on the real Preview: 17 PASS, 1 PASS under print-media emulation (D3). Supplementary: spoofed headers, stale-credential server replay, WebKit iPad emulation.
+- [x] Retire synthetic fixtures (5 devices revoked, 4 locations archived, 5 memberships/8 location memberships/5 credentials deactivated, 5 users banned); verified denied. Nothing deleted.
+- [x] Update [HOSTED_DEV_ACCEPTANCE.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_ACCEPTANCE.md) (Attempt 1 and the `TestOwner` incident preserved).
+
+Result: **GATE 7 CONDITIONAL PASS — SPECIFIC VERIFICATION OUTSTANDING.**
+
+## Current State & Next Step
+
+- Owner decision needed on **D1** (medium): the pairing-code generator can emit `L`, which the kiosk keypad and keyboard handler cannot enter (about 17% of codes). One-line fix candidate in `src/features/kiosk/data/kiosk-crypto.ts`; re-test pairing afterwards. Lower findings D2 to D8 are in the acceptance receipt.
+- Physical-tablet check (pairing, PIN, clock, print) still outstanding; all tablet evidence is emulation.
+- Gate 8, not started: dedicated `KIOSK_SESSION_SECRET` for the `development` Preview; final exact-head CI and integration checks; explicit owner approval to merge PR #324 into `development` only; post-merge verification; formal V2-007 closure. Do not touch `main`, Production or V2-008.
+- Separate future task: Platform Overall Owner governance (bootstrap, organization provisioning, audit); not part of V2-007.
+
+## Owner-authorized synthetic Hosted DEV acceptance — November 12, 2026
+
+Run: `v2007-20261112-1422-d11871`. Scope: the canonical 18 scenarios from preserved readiness commit `8744924`, DEV `opmujepkemwcdxxorhfd`, exact feature Preview/source `3c314682`. This new authorization supersedes the older migration-only scope below. No application/schema/configuration corrections or merge are authorized.
+
+- [x] Preserve existing migration receipt and locate canonical 18-scenario matrix.
+- [x] Verify worktree/PR exact head, Preview metadata/DEV binding, ledger 88, forced RLS/privileged RPC restrictions, Finance OFF/enforcement STAGED, and empty kiosk fixture tables.
+- [x] Capture pre-fixture baseline: all 122 tables, stable organization/location/profile/membership IDs and fingerprints; all 44 existing location modes unchanged/unconfigured.
+- [x] Check canonical provisioning authority: existing synthetic TestOwner login succeeds, but DEV has zero Overall Owners; first-owner bootstrap refuses the 29 existing owner memberships. Stop before fixture creation.
+- [ ] Provision 2 synthetic organizations, 4 locations, 5 identities using canonical account/PIN and authorized management flows; record manifest before testing.
+- [ ] Execute deployed 18-scenario acceptance and capture database effects and denials.
+- [ ] Clean up safely by verified run/resource IDs, reconcile baseline, and enumerate retained audit/history.
+- [ ] Complete sanitized acceptance documentation, validate and review documentation-only diff, commit/push only if complete and safe.
+
+- [x] Preserve a complete blocked-run receipt in [HOSTED_DEV_ACCEPTANCE.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_ACCEPTANCE.md), including all 18 BLOCKED / NOT EXECUTED scenarios and the Auth-session scope incident.
+- [x] Validate blocked documentation: Prettier and git diff whitespace checks PASS; migration receipt byte-identical; no application/schema change or credentials in public evidence. Full suites intentionally not repeated.
+
+Stopped: **HOSTED DEV ACCEPTANCE BLOCKED — ACTION REQUIRED**. No new organization/location/identity/device/Attendance fixture was created. 117/122 table digests and all original organizations/locations/profiles/memberships match; ledger 88, Finance OFF and enforcement STAGED preserved. The synthetic TestOwner login added one retained success attempt and Auth login state. Agent cleanup incorrectly invoked the app's default GLOBAL sign-out: pre-existing synthetic TestOwner sessions/tokens were invalidated (sessions 79→58, claims 79→58, refresh tokens 114→58). This exceeds temporary-session scope; no restoration or source correction attempted. Auth per-row preflight inventory was not captured, so complete removed-ID reconciliation is unavailable. Zero kiosk sessions/codes/attempts/devices remain. Browser closed. Desktop read-only entry smoke PASS; WebKit certificate failure remains an environment limitation.
+
+Next owner action: designate and separately authorize a supported Overall Owner provisioning/bootstrap path; acknowledge the Auth-session incident and decide any further read-only reconciliation. Restart only with task-only provisioning credentials and a fresh baseline. Gate 7 incomplete; development Preview secret, final CI/integration, explicit PR #324 merge authorization and formal closure remain Gate 8 work. No commit/push because acceptance is incomplete. Existing migration receipt and prior local edits preserved; no broad suite/rehearsal rerun.
+
+## Owner-authorized Hosted DEV migration — November 12, 2026
+
+Authorization: apply only `20261111120000_kiosk_device_registration.sql` (SHA-256 `a83150c1abd5f2b143e5f29da33549dc7ef255727be2384b56ac5b1ddd531f82`) to DEV `opmujepkemwcdxxorhfd` after every preflight passes. Source HEAD remains `3c314682e1b211df3470eab290ac21acb1d3e7b3`; no acceptance fixtures, Attendance-mode activation, Vercel changes or merge authorized.
+
+- [x] Verify exact DEV identity, file hash, 87-entry ledger/latest `20261110203355`, kiosk absence, OFF/STAGED state and expected-commit READY Preview.
+- [x] Locate fresh owner-private encrypted backup and successful isolated restore/exact kiosk rehearsal receipts (339 assertions and concurrency PASS).
+- [x] Revalidate encrypted backup/component integrity and owner-only file ACLs; restore/exact rehearsal remains applicable. All business content and application catalog/security fingerprints match. Auth drift is verified existing-session token rotation/timestamps only (58 column comparisons; no identity/credential/authorization change); no material drift and no refresh needed.
+- [x] Verify exact pending set and pinned 2.76.8 controlled runner dry-run: only the approved kiosk file; all 88 runner files byte-identical to source and explicit DEV link verified.
+- [x] Apply only the approved migration through the guarded runner after every preflight passed (2026-11-12 13:59 UTC); no seed/role/include-all/history-repair options.
+- [x] Verify ledger 88; four empty forced-RLS tables, two policies, 16 valid indexes, 24 validated constraints, seven hardened functions and restricted grants. All 118 pre-existing non-ledger tables and existing catalog/security fingerprints unchanged; original 87 ledger rows unchanged. OFF/STAGED preserved.
+- [x] Record [HOSTED_DEV_MIGRATION.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_MIGRATION.md) and ignored machine-readable/encrypted diagnostics; stop at separate synthetic-acceptance approval gate.
+
+Current state: HOSTED DEV MIGRATION PASSED — READY FOR SYNTHETIC ACCEPTANCE APPROVAL. No fixture creation, hosted acceptance, Attendance-mode activation, Vercel changes, merge or V2-008 work performed. Source HEAD remains the authorized `3c314682`; local execution documentation is uncommitted and not pushed. Earlier approval/pending-migration statements below are historical and superseded by this owner-authorized migration receipt.
+
 ## Preview configuration continuation — November 12, 2026
 
 - [x] Verify existing clean feature worktree, remote PR #324 head `b6cb82a`, preserved local documentation branch `8744924`, authenticated Vercel owner/project and ready Preview.
