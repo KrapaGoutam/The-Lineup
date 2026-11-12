@@ -1,61 +1,49 @@
-# V2-008 Migration & Compatibility — Agent Handoff (after Batch A)
+# V2-008 Migration & Compatibility — Agent Handoff (after Batch B1)
 
-Feature-specific; other V2.0 features keep their own handoffs. A handoff cannot embed its own commit SHA: the Batch A checkpoint SHA is in the chat report and `git log` of `feature/v2-008-migration-compatibility`.
+Feature-specific; other V2.0 features keep their own handoffs. A handoff cannot embed its own commit SHA: the Batch A checkpoint is `874091eb3982b7e1791488643a957342a22ec2a4`; the B1 commit is the next commit on `feature/v2-008-migration-compatibility` (`git log`, and the chat report).
 
 ## 1. Exact current state
 
-- Issue #256 OPEN (V2-008), #257 OPEN (V2-009), #248 OPEN, #255 CLOSED. PR #324 MERGED as `790fd2db560c41cb27affe98a70faeb7bd3f07cd`.
-- Branch `feature/v2-008-migration-compatibility`, worktree `.tmp/v2-008-migration-compatibility`, based on `origin/development` = `790fd2db` (verified; `development` had not advanced). Local checkpoint commit only: **not pushed, no PR, not merged**. `development` and `main` (`5e5b7747`) unchanged.
-- Hosted DEV `opmujepkemwcdxxorhfd` (read-only observation 2026-11-12): ledger **88**, finance **OFF**, enforcement **STAGED**, 0 Overall Owners, 33 orgs, 49 locations (44 active: 42 harness + Monks DEV Location + Manual Preview; 5 archived acceptance), 0 active kiosk sessions.
-- Status: **BATCH A CONDITIONAL PASS — OWNER DECISIONS OUTSTANDING.**
+- Issue #256 OPEN (V2-008), #257 OPEN (V2-009), #248 OPEN, #255 CLOSED. PR #324 MERGED as `790fd2db560c41cb27affe98a70faeb7bd3f07cd`; `origin/development` unchanged at that SHA.
+- Branch `feature/v2-008-migration-compatibility`, worktree `.tmp/v2-008-migration-compatibility`. Two local commits on top of `790fd2db`: Batch A (`874091eb`, docs) and **B1** (D7 + F-1). **Not pushed, no PR, not merged, upstream deliberately unset** (a bare `git push` would hit `origin/development`; push only with an explicit refspec to a feature branch when the owner asks).
+- **Hosted DEV `opmujepkemwcdxxorhfd`: unchanged, ledger 88.** The B1 migration exists only in the repo and on the disposable local stack (local ledger **89**). Production, Neon, `main` (`5e5b7747`) untouched. Finance OFF, enforcement STAGED, 0 Overall Owners.
+- Status: **BATCH B1 — LOCAL IMPLEMENTATION COMPLETE, HOSTED DEV APPROVAL PENDING.**
 
-## 2. Work completed
+## 2. What B1 delivered (details: [D7 plan §8](D7_LOCATION_SCOPED_KIOSK_PLAN.md))
 
-| Gate | Result                         | Deliverable                                                                                                      |
-| ---- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| A0   | PASS                           | New worktree; V2-007 closeout docs preserved and verified; authoritative CURRENT_STATE entry; trackers corrected |
-| A1   | PASS (DEV)                     | [INVENTORY.md](001-existing-data-inventory/INVENTORY.md)                                                         |
-| A2   | PASS (DEV), Prod identity open | [MAPPING_PLAN.md](002-organization-location-backfill/MAPPING_PLAN.md)                                            |
-| A3   | PASS (conditional on D-1/D-2)  | [ROLE_MAPPING_PLAN.md](003-existing-role-migration/ROLE_MAPPING_PLAN.md)                                         |
-| A4   | PASS                           | [BATCH_B_C_DEPENDENCIES.md](BATCH_B_C_DEPENDENCIES.md)                                                           |
-| A5   | PASS                           | [D7_LOCATION_SCOPED_KIOSK_PLAN.md](D7_LOCATION_SCOPED_KIOSK_PLAN.md)                                             |
-| A6   | CONDITIONAL                    | [OWNER_DECISIONS_REQUIRED.md](OWNER_DECISIONS_REQUIRED.md), this handoff, STATUS                                 |
+- **F-1 fixed:** `private.kiosk_can_manage_location` now requires a live session (banned / revoked / expired / foreign-user `session_id` → deny) on every branch, and the location-manager branch requires an ACTIVE membership in the location's own organization. Overall owner/manager stay membership-free; assistant/staff stay denied. New `private.kiosk_live_session()` (repo-standard body).
+- **D7:** `public.kiosk_list_manageable_locations()` (read-only, same predicate), `listManageableKioskLocationsAction`, `KioskManagementPage`, Settings → **Kiosks** card. A location-only manager reaches kiosk pairing/rename/revoke/reassign with none of Location Administration.
+- Migration `supabase/migrations/20261112200000_kiosk_manager_authority_hardening.sql` — forward-only, additive; sha256 recorded in the chat report.
+- Tests: pgTAP `0078` (105) + `0077` (57) + full suite 81 files/3294; real-GoTrue `tests/local/kiosk-authority.local.test.ts` 7/7 (with negative control); real-cookie browser `tests/local/ui/kiosk-location-manager.local.spec.ts` 18/18 over desktop/WebKit tablet/mobile; Vitest focused 430/430; `npm run check` clean.
 
-## 3. Evidence and key conclusions
+## 3. Independent security review (B1-E)
 
-- Deployed schema is authoritative: per-location table is **`location_memberships`** (not `location_assignments`); module keys verified identical to the canonical nine; the old strategy SQL is invalid and superseded.
-- Real DEV tenant (Monks) already has a location row per member matching the V2-D019 ladder (owner/GM→manager, server→staff). No migration is needed for it; DEV proves idempotency only.
-- **Fallback cliff:** DB legacy fallback disappears for the whole org at the first location row; the TypeScript resolver has no fallback. Backfill = all-or-nothing per org, before the V2 app release.
-- **Privilege spill:** any `manager`/`assistant_manager` row grants org-wide Recipes/Inventory management. `coalesce` modules (Tasks/Tips/Schedule) let a location row override the org role; `greatest` modules do not.
-- **Enforcement:** readiness 1/44; Monks DEV has 8 of 9 modules disabled by the owner (intent unknown). Activation remains out of scope.
-- **Attendance:** `NULL` already behaves as external-compatible; the blanket `external` update is rejected; no write planned without D-6.
-- **Production:** 26 V2 migrations on `development` are not on `main`; Production state/identity UNVERIFIED.
-- **D7:** reuse `LocationKioskManagement`; new Settings "Kiosks" card driven by a new read-only RPC over the same `kiosk_can_manage_location` predicate; Location Administration untouched. **F-1 (P2):** that predicate ignores org membership and live session for the manager branch; hardening proposed.
-- Read-only method: Management API `database/query` wrapped in `begin read only … rollback`, SELECT/WITH-only guard (tool kept in the session scratchpad, not committed).
+One independent reviewer (fresh context, read-only, disposable-DB queries only) covered questions A–H. **Verdict: findings, non-blocking only — no P0/P1.** Confirmed sound with evidence: predicate join/aliases and `search_path`; grants (`kiosk_live_session` has no client EXECUTE; listing is `authenticated` only, not anon/PUBLIC); no overloads; listing ⇔ predicate; reassign source/destination/same-org checks; UI imports nothing from Location Administration and passes no unchecked client id; all predicate callers are the two SELECT policies and the five RPCs; **B1 neither widens nor relies on the E-1 privilege spill** (it narrows kiosk authority).
 
-## 4. Decisions pending (see register)
+| Id   | Sev                           | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                 | Disposition                                                                                                                                                                         |
+| ---- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2-1 | P2                            | A JWT with **no `session_id` claim** (or JSON-null) skips the revocation check (ban still checked). Identical to every other `*_live_session` helper; not exploitable (PostgREST accepts only signed tokens; the repo mints no JWTs — grep-verified).                                                                                                                                                                                   | **Not changed** — a shared contract across six modules. Candidate cross-module hardening: require `session_id` when `role = 'authenticated'`. Owner decision.                       |
+| P3-1 | P3                            | Kiosks UI flattens `sessionInvalid` into a retryable error instead of signing out. Fails closed; same as the existing kiosk/Location Administration UI.                                                                                                                                                                                                                                                                                 | Accepted residual.                                                                                                                                                                  |
+| P3-2 | P3                            | A device list already on screen stays until the next action (which the DB denies); the page comment overstated this.                                                                                                                                                                                                                                                                                                                    | **Comment corrected**; behaviour unchanged.                                                                                                                                         |
+| P3-3 | P3                            | Listing silently capped at 200 rows (Overall roles only; DEV has 49 locations).                                                                                                                                                                                                                                                                                                                                                         | Documented; add a `truncated` flag if locations ever approach the cap.                                                                                                              |
+| U-1  | P3 (pre-existing, **not B1**) | `kiosk_reassign_device` sets `status = 'active'` unconditionally: revoking then reassigning a device returns it to `active` (token hash stays null, credential_version +1) and the audit shows only `kiosk_device_reassigned`. Reproduced by the owner-side agent in a rolled-back local transaction (`revoked` → `active`, `token_null = t`). It cannot authenticate (no token) but misrepresents revoked devices and the audit trail. | **Recorded, not fixed** (outside B1; lifecycle semantics were to be preserved). Needs a separate correction decision (e.g. reject reassigning revoked devices, or preserve status). |
 
-D-9 (blocks Batch B) · D-2/2b/2c (blocks B2 and C) · D-1 · D-3 · D-4 · D-5/5b · D-6 · D-7 (blocks any Hosted DEV write) · D-8.
+## 4. Decisions pending
 
-## 5. Protected boundaries
+**D-7** (any Hosted DEV write, including pushing this migration) · **D-2/D-2b/D-2c** (blocks B2 and C) · D-1 · D-3 · D-4 · D-5/5b · D-6 · D-8. **D-9** is discharged for B1 only; B2–B4 tooling scope is still unapproved. Separate decision needed for the **E-1** privilege spill (Recipes/Inventory), which B1 does not touch.
 
-No writes to Hosted DEV, Production, Neon, `main`, or `development`. No real backfill SQL/migration. No fixture archive/delete. No enforcement/finance activation. No attendance-mode, module-config or real-user role change. No Overall Owner. No new Auth identities, no kiosk secrets. Never delete/reuse/unban V2-007 fixtures. Never use `git add -A` (repo is public; `.tmp/`, `docs/testing/` stay untracked). The `.tmp/v2-007-clock-kiosk` worktree must remain intact (its ignored acceptance evidence is `.tmp/hosted-acceptance/v3/`).
+## 5. Protected boundaries (unchanged)
+
+No writes to Hosted DEV, Production, Neon, `main` or `development`. No backfill SQL/migration, fixture archive/delete, enforcement/finance activation, attendance-mode/module-config/real-user role change, Overall Owner, new Auth identities on hosted, or kiosk secrets. Never delete/reuse/unban V2-007 fixtures. Never `git add -A` (public repo; `.tmp/`, `docs/testing/` stay untracked). The `.tmp/v2-007-clock-kiosk` worktree stays intact.
 
 ## 6. Next implementation step (do not start without approval)
 
-Batch B, in order: **B1** D7 (RPC migration + pgTAP on a local Supabase stack, then action/page/UI/tests) → B2 manifest validator + backfill tooling (needs D-2) → B3 module-config reconciliation tooling (needs D-5) → B4 attendance-mode tooling review. Then Batch C (needs D-7): baseline/backup → rehearsal → approved DEV application → reconciliation → independent review → exact-head CI → owner approval → one merge to `development`. Recommended agent: Claude Code Local (Sonnet 5.x, high effort), new session, reading this handoff first. Production execution belongs to V2-009.
+Not B2 yet. Recommended order: (1) owner decides **D-2/2b/2c** and the **E-1** remediation path; (2) B2 parameterized manifest validator/dry-run ([B2_B4_NEXT_STEP_PACKAGE.md](B2_B4_NEXT_STEP_PACKAGE.md)); (3) a separately authorized **Batch C** for Hosted DEV: backup/recovery preflight → isolated populated rehearsal → push of the B1 migration → real-JWT probes (reuse the 0078 matrix and the local real-Auth suite with synthetic users) → reconciliation. Recommended agent: Claude Code Local, Sonnet 5.x, high effort, new session reading this file first.
 
 ## 7. Work not to repeat
 
-Do not re-inventory DEV unless 24 h+ have passed or a migration landed (re-run the read-only checks in INVENTORY §3–6 first); do not redo the V2-007 acceptance/retest; do not re-derive the authorization-function semantics (ROLE_MAPPING §2); do not re-read the V2-007 test history.
+Do not re-inventory DEV unless 24 h+ have passed or a migration landed; do not redo V2-007 acceptance; do not re-derive authorization semantics (ROLE_MAPPING §2); do not rebuild the D7 UI or re-test F-1 locally — only re-run it against Hosted DEV when D-7 allows. Do not restore an upstream on this branch.
 
-## 8. Batch A end report (A–H, condensed record)
+## 8. Local re-validation recipe
 
-- **A Worktree/recovery:** new worktree + branch from `origin/development` `790fd2db`; old V2-007 worktree intact; four documents carried over after verification, `current-task.md` retargeted.
-- **B Discovery:** see §3 and the three plan documents.
-- **C Validation:** read-only DEV queries (ledger, schema, functions, counts, tenant consistency, readiness); source inspection of resolver, kiosk, settings; Prettier + `git diff --check` on edited docs. **Deliberately not run:** Vitest, Playwright, pgTAP, build, CI, migration rehearsal, kiosk acceptance, any DEV write.
-- **D Security/integrity:** escalation register E-1…E-5 (none is performed by Batch A); finance OFF; enforcement STAGED; **zero unauthorized writes** (all database access was `SELECT` inside a read-only transaction; only documentation files and scratchpad helpers were written).
-- **E Git/env:** checkpoint commit local only; issue/PR states as §1.
-- **F Outstanding:** §4.
-- **G Next action:** §6.
-- **H:** this file.
+Start Docker Desktop; from the worktree (no `.env.development.local` present): `npx supabase db reset --local` → `npx supabase test db --local` → `npx vitest run --config vitest.local.config.ts tests/local/kiosk-authority.local.test.ts` → `npx playwright test --config playwright.kiosk-local.config.ts --project=desktop` (one project per run) → `npm run check`.

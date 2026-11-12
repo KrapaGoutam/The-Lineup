@@ -24,6 +24,18 @@ export interface KioskPairingResult {
   readonly expiresAt: string;
 }
 
+/**
+ * A location the signed-in user may manage kiosk devices for, as decided by the
+ * database predicate (`private.kiosk_can_manage_location`). Ids and names only:
+ * it is a visibility aid, never an authorization token.
+ */
+export interface ManageableKioskLocation {
+  readonly locationId: string;
+  readonly locationName: string;
+  readonly organizationId: string;
+  readonly organizationName: string;
+}
+
 export interface KioskActiveContext {
   readonly deviceId: string;
   readonly deviceName: string;

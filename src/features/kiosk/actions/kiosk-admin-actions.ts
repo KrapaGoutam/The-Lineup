@@ -7,11 +7,16 @@ import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import {
   createKioskPairingCode,
   listKioskDevicesForLocation,
+  listManageableKioskLocations,
   reassignKioskDevice,
   renameKioskDevice,
   revokeKioskDevice,
 } from "../data/kiosk-device-data";
-import type { KioskDevice, KioskPairingResult } from "../domain/kiosk-device";
+import type {
+  KioskDevice,
+  KioskPairingResult,
+  ManageableKioskLocation,
+} from "../domain/kiosk-device";
 
 export type ActionResult<T> =
   | { readonly ok: true; readonly data: T }
@@ -33,6 +38,30 @@ const deviceNameSchema = z
   .trim()
   .min(1, "Name required")
   .max(100, "Name too long");
+
+/**
+ * Lists the locations the signed-in user may manage kiosk devices for (D7).
+ * Takes no client-supplied location: the database predicate decides, and every
+ * management action below re-checks authority independently.
+ */
+export async function listManageableKioskLocationsAction(): Promise<
+  ActionResult<readonly ManageableKioskLocation[]>
+> {
+  try {
+    const supabase = await createClient();
+    const invalid = await requireLiveSession(supabase);
+    if (invalid) return invalid;
+
+    const res = await listManageableKioskLocations(supabase);
+    if (!res.ok) {
+      return { ok: false, error: res.error };
+    }
+    return { ok: true, data: res.data };
+  } catch (err: unknown) {
+    console.error("listManageableKioskLocationsAction unexpected error", err);
+    return { ok: false, error: "Failed to load your kiosk locations." };
+  }
+}
 
 /**
  * Lists all kiosk devices for a location (Manager only).

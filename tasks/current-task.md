@@ -1,29 +1,33 @@
-# THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch A)
+# THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch B1)
 
-Issue [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256) · parent #248 · branch `feature/v2-008-migration-compatibility` (base `development` `790fd2db560c41cb27affe98a70faeb7bd3f07cd`).
+Issue [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256) · parent #248 · branch `feature/v2-008-migration-compatibility` (base `development` `790fd2db560c41cb27affe98a70faeb7bd3f07cd`; Batch A checkpoint `874091eb`). Local commits only: not pushed, no PR, upstream deliberately unset.
 
-Previous feature **V2-007 is COMPLETE**: PR #324 merged as `790fd2db`, issue #255 closed. Its closeout evidence (Gate 7, Gate 8E/8F/8H, T5 exception, D7/hardware carry-forwards) lives in [007 STATUS](../docs/v2.0/features/007-clock-kiosk/STATUS.md), [HANDOFF](../docs/v2.0/features/007-clock-kiosk/HANDOFF.md) and [HOSTED_DEV_ACCEPTANCE](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_ACCEPTANCE.md). The earlier Gate 7 task log remains in git history of `development`.
+Previous feature **V2-007 is COMPLETE** (PR #324 → `790fd2db`, #255 closed); its evidence lives under `docs/v2.0/features/007-clock-kiosk/`.
 
-## Batch A — read-only discovery, reconciliation and planning (no writes, no source change)
+## Batch A — read-only discovery (done, `874091eb`)
 
-- [x] A0: verified remotes (`development` = `790fd2db`, `main` = `5e5b7747`), no existing V2-008 branch/worktree; new worktree from `origin/development`.
-- [x] A0: preserved the four uncommitted V2-007 closeout documents (verified against PR #324 `MERGED`, head `1d82adb`, merge `790fd2db`, #255 closed); old worktree and ignored evidence left intact.
-- [x] A0: authoritative `CURRENT_STATE.md` entry; ROADMAP V2-007 closed / V2-008 in progress; `MIGRATION_STRATEGY.md` superseded-SQL pointer.
-- [x] A1: Hosted DEV read-only inventory (ledger 88) → [INVENTORY.md](../docs/v2.0/features/008-migration-compatibility/001-existing-data-inventory/INVENTORY.md).
-- [x] A2: organization/location mapping → [MAPPING_PLAN.md](../docs/v2.0/features/008-migration-compatibility/002-organization-location-backfill/MAPPING_PLAN.md).
-- [x] A3: role mapping and privilege-expansion register → [ROLE_MAPPING_PLAN.md](../docs/v2.0/features/008-migration-compatibility/003-existing-role-migration/ROLE_MAPPING_PLAN.md).
-- [x] A4: module-config / attendance / hosted-DEV / recovery sequencing → [BATCH_B_C_DEPENDENCIES.md](../docs/v2.0/features/008-migration-compatibility/BATCH_B_C_DEPENDENCIES.md).
-- [x] A5: D7 location-scoped Kiosks design (+ finding F-1) → [D7 plan](../docs/v2.0/features/008-migration-compatibility/D7_LOCATION_SCOPED_KIOSK_PLAN.md).
-- [x] A6: [decision register](../docs/v2.0/features/008-migration-compatibility/OWNER_DECISIONS_REQUIRED.md) and [HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md).
-- [x] Documentation checks: Prettier check, `git diff --check`; no application/database test suites run (documentation-only).
-- [x] Local checkpoint commit on the feature branch (not pushed, no PR, no merge).
+- [x] A0–A6: inventory, mapping, role plan, dependencies, D7 plan, decision register, handoff. See [HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md).
 
-Result: **V2-008 BATCH A CONDITIONAL PASS — OWNER DECISIONS OUTSTANDING.**
+## Batch B1 — D7 location-scoped Kiosks + F-1 hardening (owner-authorized, LOCAL ONLY)
+
+- [x] B1.0 Recovery: worktree/branch/HEAD `874091eb`, clean tree, no upstream, `development` unchanged.
+- [x] B1-A Authorization matrix (13 actor classes) and session-check mechanism: repo-standard `*_live_session` pattern adopted.
+- [x] Proof of defect: predicate section of pgTAP `0078` vs the unfixed 88-migration DB → exactly the 11 F-1 assertions fail.
+- [x] B1-B Migration `20261112200000_kiosk_manager_authority_hardening.sql` (live-session gate + org-membership join + listing RPC); local ledger 88 → 89.
+- [x] pgTAP `0078` 105/105, `0077` 57/57, full suite 81 files / 3294 PASS.
+- [x] Real GoTrue suite `tests/local/kiosk-authority.local.test.ts` 7/7 (+ negative control: 4/7 fail on the old predicate).
+- [x] B1-C Action + data + domain + hook + `KioskManagementPage` + Settings Kiosks card; focused Vitest 430/430.
+- [x] Browser (real cookies, local stack) 6/6 × desktop, WebKit tablet, mobile; demo specs `kiosk` + `location-administration` 18/18.
+- [x] `npm run check` (Prettier, ESLint 0 warnings, tsc) clean.
+- [x] B1-E independent security review: non-blocking findings only; comment corrected; U-1 recorded (see HANDOFF §3).
+- [x] Docs: HANDOFF, STATUS, D7 plan §8, decision register D-9 note, B2–B4 package, CURRENT_STATE entry.
+- [x] One local B1 implementation commit.
+
+Result: **V2-008 B1 PASSED — LOCAL IMPLEMENTATION COMPLETE, HOSTED DEV APPROVAL PENDING.**
 
 ## Current State & Next Step
 
-- Resume from [V2-008 HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md). State: Batch A complete; owner decisions D-2/D-2b/D-2c and D-9 gate Batch B; D-7 gates any Hosted DEV write.
-- Next exact action: owner reviews the decision register; on **D-9** approval start Batch B step **B1 (D7 RPC migration + pgTAP on a local stack)**. Do not begin Batch B automatically.
-- Do not: write to Hosted DEV / Production / Neon, create or apply real backfill SQL, archive fixtures, activate enforcement or finance, change attendance modes, create Overall Owners, re-run V2-007 acceptance, delete the V2-007 worktree, merge, or start V2-009.
-- Hard invariants: ledger 88 · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747`.
-- Separate future task: Platform Overall Owner governance; not part of V2-008.
+- Resume from [V2-008 HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md). Hosted DEV is still ledger 88; the B1 migration is local only.
+- Next exact action: **owner decisions**, not engineering — D-2/D-2b/D-2c (role ladder), the E-1 remediation path, whether to fix U-1 (`kiosk_reassign_device` revived revoked devices) and the shared `session_id`-less-JWT contract (P2-1), and **D-7** before any Hosted DEV push. Then B2 parameterized validator ([package](../docs/v2.0/features/008-migration-compatibility/B2_B4_NEXT_STEP_PACKAGE.md)). Do not start B2–B4 or Batch C automatically.
+- Do not: write to Hosted DEV / Production / Neon, apply the B1 migration anywhere hosted, create backfill SQL, archive fixtures, activate enforcement or finance, change attendance modes or module configs, create Overall Owners, push, open a PR, merge, or restore an upstream on this branch.
+- Hard invariants: Hosted DEV ledger 88 · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747`.

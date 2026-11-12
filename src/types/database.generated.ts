@@ -6885,6 +6885,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      kiosk_list_manageable_locations: {
+        Args: never;
+        Returns: {
+          location_id: string;
+          location_name: string;
+          organization_id: string;
+          organization_name: string;
+        }[];
+      };
       kiosk_reassign_device: {
         Args: { p_device_id: string; p_new_location_id: string };
         Returns: Json;

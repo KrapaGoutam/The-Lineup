@@ -105,6 +105,8 @@ Legend — **Blocks B**: blocks Batch B implementation start/scope. **Blocks C**
 
 ### D-9 — Approve Batch B scope, including the D7 RPC migration and predicate hardening
 
+> **Update (B1, 2026-11-12):** the owner authorized **B1 only** — the D7 listing RPC + UI, the F-1 predicate hardening and the additive migration (ledger 88 → 89), for **local** implementation and validation. That portion is implemented locally ([D7 plan §8](D7_LOCATION_SCOPED_KIOSK_PLAN.md)). The remainder of D-9 (B2–B4 tooling) stays **not approved**; Hosted DEV application of the B1 migration remains gated by **D-7**.
+
 1. **Question:** Approve Batch B = {D7 listing RPC + UI, tooling for backfill/config/attendance reports, tests} and the additive migration (ledger 88 → 89), **including** hardening `private.kiosk_can_manage_location` (finding F-1: require active org membership + live session for the location-manager branch)?
 2. **Evidence:** `D7_LOCATION_SCOPED_KIOSK_PLAN.md` §2, §6.1.
 3. **Options:** (a) approve both; (b) approve D7 only and record F-1 as a residual window; (c) hold.

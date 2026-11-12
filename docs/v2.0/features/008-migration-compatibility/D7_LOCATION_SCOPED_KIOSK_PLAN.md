@@ -128,3 +128,45 @@ Real-JWT hosted check (Batch C, synthetic, owner-approved): the same matrix agai
 ## 7. Gate A5
 
 The plan preserves authorization boundaries: no new authority, same predicate, no reuse of Location Administration, DB-enforced, fully tested. **A5: PASS.**
+
+## 8. Implementation record — Batch B1 (local only; Hosted DEV unchanged)
+
+**Status:** implemented and validated on the disposable local stack (ledger 88 → 89). Not pushed, no PR, not applied to Hosted DEV (gated by D-7). Sections 1–7 above are the original Batch A plan and are kept as written.
+
+### 8.1 What was built
+
+- **Migration** `supabase/migrations/20261112200000_kiosk_manager_authority_hardening.sql` (forward-only, additive; applied only to the local stack):
+  - `private.kiosk_live_session()` — the repo's shared live-session contract (`auth.users.banned_until`, JWT `session_id` ↔ `auth.sessions` with `not_after`); same body as `private.{payroll,schedule,attendance,…}_live_session`; no client EXECUTE.
+  - `private.kiosk_can_manage_location` replaced (same signature, so RLS policies and the five RPCs are untouched): requires a **live session for every branch**; the location-manager branch additionally requires an **active `memberships` row in the location's own organization**. Overall owner/manager remain membership-free; `assistant_manager`/`staff`/Overall assistant stay denied; location must be active and not archived.
+  - `public.kiosk_list_manageable_locations()` — read-only `SECURITY DEFINER`, `search_path = ''`, EXECUTE only to `authenticated`, returns `(location_id, location_name, organization_id, organization_name)` for locations passing the same predicate, ordered, capped at 200.
+- **TypeScript:** `ManageableKioskLocation` (domain), `listManageableKioskLocations` (data), `listManageableKioskLocationsAction` (zero client arguments, `requireLiveSession`, fail-closed generic error), `useManageableKioskLocations` hook, `KioskManagementPage` (re-fetches on open; picker only when >1 location; reassign targets restricted to the caller's manageable same-org locations; denied/error/loading states; imports nothing from Location Administration), Settings **Kiosks** quick-link card + `subview === "kiosks"` in `SettingsPage` (visible only when the database lists ≥1 location; independent of `isManager`; focus returns to the card on Back; real mode only).
+- **Types:** the new RPC added to `database.generated.ts` (hand-spliced; the CLI also emits two unrelated pre-existing local/hosted drifts that were deliberately not committed).
+
+### 8.2 Deviations from the plan (and why)
+
+| Plan                                                      | Done                                             | Reason                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| pgTAP file `0078_kiosk_manageable_locations`              | `0078_kiosk_manager_authority`                   | Covers F-1 and the listing together.                                                                  |
+| zod schema for `ManageableKioskLocation`                  | plain typed mapping                              | The RPC return type is generated; a second schema added no safety.                                    |
+| `enforcement-coverage.test.ts` edit if required           | no change                                        | File-level exemption already covers `kiosk-admin-actions.ts`.                                         |
+| Playwright in demo mode, real mode deferred to Batch C    | real-mode local-stack spec added; demo unchanged | Real Auth cookies work against the local stack; demo hides the card by design.                        |
+| Location-manager Kiosks inside the closed-workspace shell | **not done**                                     | `ContextSettings` (lifecycle/`no_access` shell) is out of the §2.5 file list; recorded as a residual. |
+
+### 8.3 Evidence
+
+- pgTAP: `0078` 105/105; `0077` 57/57 unchanged; whole suite 81 files / 3294 assertions PASS on an 89-migration replay.
+- Proof of defect: the predicate section of `0078` run against the **unfixed** 88-migration database failed exactly the 11 F-1 assertions (inactive/absent/cross-org membership, banned user, revoked/expired/foreign session) while all 29 preserved-authority assertions passed.
+- Real GoTrue (local stack, `tests/local/kiosk-authority.local.test.ts`, 7/7): a real global sign-out, a real ban and a real membership deactivation each remove authority on the **old, still-valid access token** replayed straight at PostgREST. Negative control: with the original predicate restored, 4 of 7 fail (sign-out, ban, deactivation, membership-less stale row); restored hardened, 7/7.
+- Browser (real cookies, local stack, `tests/local/ui/kiosk-location-manager.local.spec.ts`): 6/6 on desktop, WebKit tablet and mobile — pair (31-character alphabet), rename, revoke (reason required) verified in the database; picker limited to own locations; assistant/staff see no card; org owner keeps Location Administration → Kiosks; deactivation on an open page yields `Unauthorized`. Existing demo specs (`kiosk`, `location-administration`) 18/18.
+- Vitest (focused): kiosk + settings + locations + enforcement-coverage 430/430. `npm run check` (Prettier, ESLint 0 warnings, `tsc`) clean.
+
+### 8.4 Residual limitations (honest)
+
+1. **Revocation is verified at the DB only through the repo-standard mechanism** (`auth.sessions` row + ban). A JWT **without** a `session_id` claim is checked for the ban only — identical to the other six modules' contract. GoTrue-issued user tokens always carry `session_id`; PostgREST accepts only signed tokens. If a custom minted token without `session_id` ever reaches these RPCs the gate degrades to ban-only.
+2. The live-session gate now also applies to the **Overall** owner/manager branch (previously ungated) — intentional and consistent with the other modules.
+3. Listing is capped at 200 rows; far above the current 49 locations but truncating silently beyond it.
+4. **E-1 privilege spill is unchanged and unfixed.** The independent review confirmed B1 neither widens nor depends on it: the kiosk predicate reads `location_memberships` scoped to the one location and the new card exposes only the five kiosk actions.
+5. `ContextSettings` (closed-workspace Settings) does not offer Kiosks.
+6. The Kiosks UI does not route a `sessionInvalid` result to sign-out (it fails closed with a retryable error), and an already-open device list is not re-authorized until the next action (which the database denies).
+7. **Pre-existing, outside B1 (U-1):** `kiosk_reassign_device` returns a revoked device to `status = 'active'` (null token hash) and audits it only as a reassignment. Needs its own correction decision; B1 deliberately did not change lifecycle semantics.
+8. The `session_id`-less-JWT behaviour (ban-only check) is the shared contract of all `*_live_session` helpers; changing it is a cross-module decision (HANDOFF §3, P2-1).
