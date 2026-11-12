@@ -54,6 +54,11 @@ test.describe("Kiosk Surface and Location Administration (V2-007)", () => {
     await expect(page.getByTestId("key-backspace")).toBeVisible();
     await expect(page.getByTestId("key-clear")).toBeVisible();
 
+    // D1: the generator alphabet omits L, and the keypad must match it.
+    await expect(page.getByTestId("key-L")).toHaveCount(0);
+    await expect(page.getByTestId("key-K")).toBeVisible();
+    await expect(page.getByTestId("key-M")).toBeVisible();
+
     // Tap keys and verify character slot input
     await page.getByTestId("key-A").click();
     await page.getByTestId("key-B").click();
@@ -70,6 +75,15 @@ test.describe("Kiosk Surface and Location Administration (V2-007)", () => {
     await page.getByTestId("key-clear").click();
     await expect(page.getByTestId("code-box-0")).toHaveText("");
     await expect(page.getByTestId("code-box-1")).toHaveText("");
+
+    // Physical keyboard: lowercase normalizes; retired/ambiguous keys ignored.
+    await page.keyboard.press("a");
+    await page.keyboard.press("l");
+    await page.keyboard.press("0");
+    await page.keyboard.press("k");
+    await expect(page.getByTestId("code-box-0")).toHaveText("A");
+    await expect(page.getByTestId("code-box-1")).toHaveText("K");
+    await expect(page.getByTestId("code-box-2")).toHaveText("");
   });
 
   test("manager navigates to Location Administration and views Kiosks management tab", async ({

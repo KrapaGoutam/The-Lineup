@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import {
   isValidPairingCodeFormat,
   normalizePairingCode,
+  PAIRING_CODE_ALPHABET,
   type KioskActiveContext,
 } from "../domain/kiosk-device";
 import { pairKioskDeviceAction } from "../actions/kiosk-pairing-actions";
@@ -21,13 +22,20 @@ export interface KioskPairingScreenProps {
   readonly defaultCode?: string;
 }
 
-// 32-character pairing charset (omits ambiguous 0/O, 1/I, L)
-const KEYPAD_ROWS = [
-  ["2", "3", "4", "5", "6", "7", "8", "9"],
-  ["A", "B", "C", "D", "E", "F", "G", "H"],
-  ["J", "K", "M", "N", "P", "Q", "R", "S"],
-  ["T", "U", "V", "W", "X", "Y", "Z"],
-];
+const KEYPAD_COLUMNS = 8;
+
+/**
+ * Keypad rows are derived from the shared pairing alphabet, so every
+ * character the generator can emit has a key (and vice versa).
+ */
+export const KEYPAD_ROWS: readonly (readonly string[])[] = Array.from(
+  { length: Math.ceil(PAIRING_CODE_ALPHABET.length / KEYPAD_COLUMNS) },
+  (_, row) =>
+    PAIRING_CODE_ALPHABET.slice(
+      row * KEYPAD_COLUMNS,
+      (row + 1) * KEYPAD_COLUMNS,
+    ).split(""),
+);
 
 export function KioskPairingScreen({
   onPaired,
@@ -134,10 +142,12 @@ export function KioskPairingScreen({
         return;
       }
 
+      // Ignore shortcuts (Ctrl/Cmd/Alt + key) and non-single-character keys.
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+
       const key = e.key.toUpperCase();
-      // Only process keys in the keypad
-      const allKeys = KEYPAD_ROWS.flat();
-      if (allKeys.includes(key)) {
+      // Only process keys that exist on the keypad
+      if (PAIRING_CODE_ALPHABET.includes(key)) {
         e.preventDefault();
         handleKeyTap(key);
       }

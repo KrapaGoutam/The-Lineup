@@ -42,6 +42,8 @@ export interface LocationKioskManagementProps {
   readonly demoMode?: boolean;
 }
 
+const MIN_REVOCATION_REASON = 3;
+
 export function LocationKioskManagement({
   locationId,
   locationName,
@@ -77,6 +79,10 @@ export function LocationKioskManagement({
     React.useState<KioskDevice | null>(null);
   const [revocationReason, setRevocationReason] = React.useState("");
   const [revokeLoading, setRevokeLoading] = React.useState(false);
+  const [revokeReasonTouched, setRevokeReasonTouched] = React.useState(false);
+  // Mirrors the server contract (revokeKioskDeviceAction): trimmed, >= 3 chars.
+  const isReasonValid = revocationReason.trim().length >= MIN_REVOCATION_REASON;
+  const showReasonError = revokeReasonTouched && !isReasonValid;
 
   const fetchDevices = React.useCallback(async () => {
     if (demoMode) {
@@ -224,6 +230,10 @@ export function LocationKioskManagement({
   // Handle revoking
   async function handleRevokeSubmit() {
     if (!revokingDevice) return;
+    if (!isReasonValid) {
+      setRevokeReasonTouched(true);
+      return;
+    }
     setRevokeLoading(true);
 
     if (demoMode) {
@@ -233,7 +243,7 @@ export function LocationKioskManagement({
             ? {
                 ...d,
                 status: "revoked",
-                revocationReason: revocationReason.trim() || null,
+                revocationReason: revocationReason.trim(),
               }
             : d,
         ),
@@ -246,7 +256,7 @@ export function LocationKioskManagement({
     try {
       const res = await revokeKioskDeviceAction({
         deviceId: revokingDevice.id,
-        reason: revocationReason.trim() || undefined,
+        reason: revocationReason.trim(),
       });
       if (res.ok) {
         setRevokingDevice(null);
@@ -422,6 +432,7 @@ export function LocationKioskManagement({
                         onClick={() => {
                           setRevokingDevice(device);
                           setRevocationReason("");
+                          setRevokeReasonTouched(false);
                         }}
                         aria-label={`Revoke ${device.name}`}
                       >
@@ -612,15 +623,34 @@ export function LocationKioskManagement({
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <Label htmlFor="revoke-reason">
-              Reason for Revocation (optional)
+              Reason for Revocation (required, at least {MIN_REVOCATION_REASON}{" "}
+              characters)
             </Label>
             <Input
               id="revoke-reason"
               placeholder="e.g. Lost tablet, hardware replacement, retired"
               value={revocationReason}
-              onChange={(e) => setRevocationReason(e.target.value)}
+              onChange={(e) => {
+                setRevocationReason(e.target.value);
+                setRevokeReasonTouched(true);
+              }}
               maxLength={200}
+              required
+              aria-required="true"
+              aria-invalid={showReasonError}
+              aria-describedby={
+                showReasonError ? "revoke-reason-error" : undefined
+              }
             />
+            {showReasonError && (
+              <p
+                id="revoke-reason-error"
+                role="alert"
+                className="text-destructive text-xs"
+              >
+                Enter a reason of at least {MIN_REVOCATION_REASON} characters.
+              </p>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setRevokingDevice(null)}>
@@ -629,7 +659,7 @@ export function LocationKioskManagement({
             <Button
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void handleRevokeSubmit()}
-              disabled={revokeLoading}
+              disabled={revokeLoading || !isReasonValid}
             >
               {revokeLoading ? "Revoking..." : "Revoke Device"}
             </Button>

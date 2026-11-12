@@ -13,6 +13,12 @@ Feature Branch: feature/v2-007-clock-kiosk
 
 ---
 
+## Gate 8 stabilization (November 12, 2026)
+
+Gate 7 is CONDITIONAL PASS (18/18). Gate 8 stabilization fixed pairing-code alphabet D1, revoke-reason UX D2 and timesheet print isolation D3 in one batch on PR #324, classified D7 as an owner policy decision, and confirmed the `development` Preview still lacks a dedicated `KIOSK_SESSION_SECRET`. Authenticated pairing retest, physical-tablet validation, the `development` secret and the merge remain owner-gated. Details: [HANDOFF.md](HANDOFF.md). Gate 8 is not closed.
+
+---
+
 ## Batch Execution Summary
 
 ### Gate 0: Hosted DEV Attendance Readiness — [PASS]

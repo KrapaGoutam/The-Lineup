@@ -159,4 +159,54 @@ describe("KioskAttendanceScreen Component", () => {
       expect(onFinished).toHaveBeenCalled();
     });
   });
+  it("D3: status card, actions and footer are excluded from print; the report dialog is not", async () => {
+    vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValue({
+      ok: true,
+      data: {
+        employee: {
+          profileId: "prof-1",
+          displayName: "Alice Chef",
+          organizationId: "org-1",
+          locationId: "loc-1",
+        },
+        currentSession: null,
+      },
+    });
+    vi.mocked(clockActions.kioskGetEmployeeReportAction).mockResolvedValue({
+      ok: true,
+      data: { rows: [] },
+    });
+
+    const user = userEvent.setup();
+    render(
+      <KioskAttendanceScreen
+        context={MOCK_CONTEXT}
+        employee={MOCK_EMPLOYEE}
+        onFinished={vi.fn()}
+      />,
+    );
+
+    const badge = await screen.findByTestId("current-status-badge");
+    const main = badge.closest("main");
+    expect(main).not.toBeNull();
+    // Current Status card, Clock In/Out + break controls live inside <main>.
+    expect(main).toHaveClass("print:hidden");
+    expect(main).toContainElement(screen.getByTestId("clock-in-button"));
+    expect(
+      screen.getByText(/always press finish/i).closest("footer"),
+    ).toHaveClass("print:hidden");
+    // Root must not paint the dark kiosk surface or reserve screen height on paper.
+    expect(screen.getByTestId("kiosk-attendance-screen")).toHaveClass(
+      "print:bg-white",
+      "print:min-h-0",
+    );
+
+    await user.click(screen.getByTestId("view-timesheet-button"));
+    const dialog = await screen.findByRole("dialog");
+    // The printable report is a sibling of <main>, so main being print:hidden
+    // cannot hide the timesheet.
+    expect(main).not.toContainElement(dialog);
+    expect(dialog).not.toHaveClass("print:hidden");
+    expect(dialog.querySelector('[class~="print:hidden"]')).not.toBeNull();
+  });
 });

@@ -37,6 +37,18 @@ export interface KioskActiveContext {
 }
 
 /**
+ * Characters a newly generated pairing code may contain. This is the single
+ * source of truth shared by the server-side generator and the touch keypad /
+ * physical-keyboard handler, so every generated code is enterable on the
+ * kiosk. It omits the visually ambiguous 0/O, 1/I and L (31 characters).
+ * Kept free of server-only imports so client components can use it.
+ *
+ * Validation (`isValidPairingCodeFormat`) is intentionally broader so codes
+ * issued before this alphabet was tightened still verify server-side.
+ */
+export const PAIRING_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/**
  * Normalizes pairing code by stripping hyphens/whitespace and converting to uppercase.
  */
 export function normalizePairingCode(code: string): string {

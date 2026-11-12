@@ -261,7 +261,10 @@ export function KioskAttendanceScreen({
   const isOnBreak = activeSession?.status === "on_break";
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-between bg-[#0b0b0d] p-4 text-[#f6f3ed] selection:bg-[#f2a65a]/30 sm:p-6 md:p-8">
+    <div
+      data-testid="kiosk-attendance-screen"
+      className="flex min-h-screen w-full flex-col items-center justify-between bg-[#0b0b0d] p-4 text-[#f6f3ed] selection:bg-[#f2a65a]/30 sm:p-6 md:p-8 print:min-h-0 print:bg-white print:p-0"
+    >
       {/* Top Employee Context Header */}
       <header className="relative z-10 flex w-full max-w-2xl items-center justify-between border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
@@ -299,7 +302,9 @@ export function KioskAttendanceScreen({
       </header>
 
       {/* Main Content Area */}
-      <main className="relative z-10 my-auto flex w-full max-w-xl flex-col items-center">
+      {/* print:hidden - the only printable surface is the report dialog (a
+          sibling below); the status card and actions must never print. */}
+      <main className="relative z-10 my-auto flex w-full max-w-xl flex-col items-center print:hidden">
         {/* Error Alert */}
         {error && (
           <div
@@ -490,7 +495,7 @@ export function KioskAttendanceScreen({
       </main>
 
       {/* Footer Info */}
-      <footer className="relative z-10 text-center text-xs text-[#aaa7a1]/70">
+      <footer className="relative z-10 text-center text-xs text-[#aaa7a1]/70 print:hidden">
         <p>
           Always press Finish when done to protect your station account privacy.
         </p>

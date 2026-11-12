@@ -6,12 +6,13 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomInt,
   timingSafeEqual,
 } from "node:crypto";
-import { normalizePairingCode } from "../domain/kiosk-device";
-
-// 32-character unambiguous charset avoiding O/0, I/1, L
-const PAIRING_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+import {
+  normalizePairingCode,
+  PAIRING_CODE_ALPHABET,
+} from "../domain/kiosk-device";
 
 /**
  * Retrieves the dedicated session secret key.
@@ -32,13 +33,18 @@ export function getKioskSessionSecret(): string {
 }
 
 /**
- * Generates a high-entropy, human-friendly 6-character pairing code.
+ * Generates a human-friendly 6-character pairing code from
+ * PAIRING_CODE_ALPHABET (the exact set the kiosk keypad can enter).
+ * `randomInt` is CSPRNG-backed and unbiased for a 31-character alphabet,
+ * unlike `byte % 31`. `randomIndex` exists only so tests can force exact
+ * indices; production callers use the default.
  */
-export function generatePairingCode(): string {
-  const bytes = randomBytes(6);
+export function generatePairingCode(
+  randomIndex: (maxExclusive: number) => number = randomInt,
+): string {
   let code = "";
   for (let i = 0; i < 6; i++) {
-    code += PAIRING_CHARSET[bytes[i] % PAIRING_CHARSET.length];
+    code += PAIRING_CODE_ALPHABET[randomIndex(PAIRING_CODE_ALPHABET.length)];
   }
   return code;
 }

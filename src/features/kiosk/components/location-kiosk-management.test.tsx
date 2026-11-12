@@ -133,4 +133,97 @@ describe("LocationKioskManagement Component", () => {
       expect(screen.getByText("A2B-3C4")).toBeInTheDocument();
     });
   });
+  describe("revoke dialog reason (D2: required, min 3 trimmed characters)", () => {
+    async function openRevokeDialog() {
+      vi.mocked(adminActions.listKioskDevicesAction).mockResolvedValue({
+        ok: true,
+        data: [MOCK_DEVICE],
+      });
+      const user = userEvent.setup();
+      render(
+        <LocationKioskManagement
+          locationId={MOCK_LOC_ID}
+          locationName={MOCK_LOC_NAME}
+        />,
+      );
+      await user.click(await screen.findByLabelText("Revoke Front Host Stand"));
+      const input = await screen.findByLabelText(/reason for revocation/i);
+      const submit = screen.getByRole("button", { name: /^revoke device$/i });
+      return { user, input, submit };
+    }
+
+    it("labels the reason required with the minimum and disables submit while empty", async () => {
+      const { input, submit } = await openRevokeDialog();
+      expect(
+        screen.getByText(/required, at least 3 characters/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/(optional)/i)).not.toBeInTheDocument();
+      expect(input).toBeRequired();
+      expect(input).toHaveAttribute("maxlength", "200");
+      expect(submit).toBeDisabled();
+    });
+
+    it("rejects whitespace-only and too-short reasons with inline feedback and never calls the action", async () => {
+      const { user, input, submit } = await openRevokeDialog();
+
+      await user.type(input, "    ");
+      expect(submit).toBeDisabled();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /at least 3 characters/i,
+      );
+      expect(input).toHaveAttribute("aria-invalid", "true");
+
+      await user.clear(input);
+      await user.type(input, " ab ");
+      expect(submit).toBeDisabled();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+
+      expect(adminActions.revokeKioskDeviceAction).not.toHaveBeenCalled();
+    });
+
+    it("a valid reason (trimmed) reaches the canonical action and refreshes the list", async () => {
+      vi.mocked(adminActions.revokeKioskDeviceAction).mockResolvedValueOnce({
+        ok: true,
+        data: undefined,
+      } as never);
+      const { user, input, submit } = await openRevokeDialog();
+
+      await user.type(input, "  Lost tablet  ");
+      expect(submit).toBeEnabled();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      await user.click(submit);
+
+      await waitFor(() => {
+        expect(adminActions.revokeKioskDeviceAction).toHaveBeenCalledWith({
+          deviceId: "dev-1",
+          reason: "Lost tablet",
+        });
+      });
+      await waitFor(() =>
+        expect(adminActions.listKioskDevicesAction).toHaveBeenCalledTimes(2),
+      );
+    });
+
+    it("exactly three trimmed characters is accepted", async () => {
+      const { user, input, submit } = await openRevokeDialog();
+      await user.type(input, "abc");
+      expect(submit).toBeEnabled();
+    });
+
+    it("Cancel closes without revoking and the next open starts clean", async () => {
+      const { user, input } = await openRevokeDialog();
+      await user.type(input, "x");
+      await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+      expect(adminActions.revokeKioskDeviceAction).not.toHaveBeenCalled();
+      // The native <dialog> stays mounted but closed (inaccessible).
+      expect(
+        screen.queryByRole("dialog", { name: /revoke kiosk device/i }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByLabelText("Revoke Front Host Stand"));
+      const reopened = await screen.findByLabelText(/reason for revocation/i);
+      expect(reopened).toHaveValue("");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+  });
 });

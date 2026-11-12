@@ -14,12 +14,21 @@ Run `V2-007-ACCEPTANCE-20261112-d0d772`. Authorization: Q8-style service-role fi
 
 Result: **GATE 7 CONDITIONAL PASS — SPECIFIC VERIFICATION OUTSTANDING.**
 
+## Gate 8 stabilization — November 12, 2026
+
+- [x] D1 pairing alphabet (no `L`, shared client-safe constant, unbiased CSPRNG) + tests.
+- [x] D2 revoke reason required (min 3 trimmed chars) + tests.
+- [x] D3 timesheet print isolation (attendance `main`/`footer` `print:hidden`) + class-contract tests.
+- [x] D7 investigated: owner policy decision, no code change; current UI policy pinned by a test.
+- [x] Focused Vitest 359/359, `npm run check`, Playwright kiosk spec (desktop + tablet) pass.
+- [x] Read-only: `development` Preview has NO `KIOSK_SESSION_SECRET`; `development` not ahead of the branch point.
+
 ## Current State & Next Step
 
-- Owner decision needed on **D1** (medium): the pairing-code generator can emit `L`, which the kiosk keypad and keyboard handler cannot enter (about 17% of codes). One-line fix candidate in `src/features/kiosk/data/kiosk-crypto.ts`; re-test pairing afterwards. Lower findings D2 to D8 are in the acceptance receipt.
-- Physical-tablet check (pairing, PIN, clock, print) still outstanding; all tablet evidence is emulation.
-- Gate 8, not started: dedicated `KIOSK_SESSION_SECRET` for the `development` Preview; final exact-head CI and integration checks; explicit owner approval to merge PR #324 into `development` only; post-merge verification; formal V2-007 closure. Do not touch `main`, Production or V2-008.
-- Separate future task: Platform Overall Owner governance (bootstrap, organization provisioning, audit); not part of V2-007.
+- Resume from [HANDOFF.md](../docs/v2.0/features/007-clock-kiosk/HANDOFF.md). Gate 8 is not closed.
+- Owner approvals pending: dedicated `development` Preview `KIOSK_SESSION_SECRET`; optional minimal Hosted DEV pairing retest; physical-tablet check; D7 role policy; merge of PR #324 into `development` only.
+- Do not repeat the 18-scenario acceptance, migration, backup or full suites. Do not touch `main`, Production or V2-008.
+- Separate future task: Platform Overall Owner governance; not part of V2-007.
 
 ## Owner-authorized synthetic Hosted DEV acceptance — November 12, 2026
 
