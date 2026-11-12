@@ -205,7 +205,7 @@ select throws_ok(
 select throws_ok(
   $$ select public.attendance_manual_entry(
        '00000000-0000-0000-0000-0000000760b1', '00000000-0000-0000-0000-000000076003',
-       (now() at time zone 'America/Chicago')::date, now() + interval '1 hour', now() + interval '5 hours',
+       ((now() + interval '1 hour') at time zone 'America/Chicago')::date, now() + interval '1 hour', now() + interval '5 hours',
        'Future shift', 'k-val-4'
      ) $$,
   '22023', 'Manual punches cannot be in the future', 'future clock-in is rejected'

@@ -409,6 +409,29 @@ describe("Location Administration Server Actions", () => {
       }
     });
 
+    it("D7 (documents current policy): an org member with no owner/general_manager role is not granted Location Administration, so a location-only manager cannot reach the Kiosks tab", async () => {
+      // Backend private.kiosk_can_manage_location() also accepts an active
+      // location_memberships.role = manager. This UI capability is org-scoped
+      // by design; widening it is an owner policy decision (see HANDOFF.md D7).
+      const client = createMockSupabase({
+        overallRole: null,
+        memberships: [
+          {
+            organization_id: MOCK_ORG_ID_A,
+            roles: ["assistant_manager"],
+            active: true,
+            organizations: { id: MOCK_ORG_ID_A, name: "Monks", slug: "monks" },
+          },
+        ],
+      });
+      const result = await getLocationAdminContextAction(client);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.canAdministerLocations).toBe(false);
+      }
+    });
+
     it("returns canAdministerLocations=false for standard staff", async () => {
       const client = createMockSupabase({
         overallRole: null,
