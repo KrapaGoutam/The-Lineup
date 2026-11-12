@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(47);
+select plan(57);
 
 -- --------------------------------------------------------------------------
 -- V2-007 Kiosk Device Registration & Management — pgTAP Test Suite
@@ -153,8 +153,26 @@ select throws_ok(
 );
 reset role;
 
--- Reject invalid pairing code with structured error response (service_role or authenticated)
-select set_test_user('00000000-0000-0000-0000-000000077002');
+-- Authenticated direct execution is denied (permission restricted to service_role)
+set local role authenticated;
+select throws_ok(
+  $$ select public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'client-a') $$,
+  '42501',
+  'permission denied for function kiosk_consume_pairing_code',
+  'Authenticated direct execute on kiosk_consume_pairing_code is denied'
+);
+
+-- Prove authenticated user cannot bypass rate limits by calling RPC directly with changing client identifier
+select throws_ok(
+  $$ select public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'attacker-spoofed-client-id') $$,
+  '42501',
+  'permission denied for function kiosk_consume_pairing_code',
+  'Authenticated user cannot bypass rate limits by changing client identifier via direct RPC'
+);
+reset role;
+
+-- Reject invalid pairing code with structured error response (service_role)
+set local role service_role;
 select is(
   (public.kiosk_consume_pairing_code('non_existent_code_hash_123456789012', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'client-a'))->>'code',
   'NOT_FOUND',
@@ -167,6 +185,7 @@ select is(
   'true',
   'Consume valid pairing code successfully'
 );
+reset role;
 
 -- Verify device was created in kiosk_devices
 select is(
@@ -432,6 +451,60 @@ select is(
   0,
   'Device revocation purges active kiosk_sessions'
 );
+
+-- Final-boundary regression: inspect every installed privileged overload.
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname in ('kiosk_consume_pairing_code', 'kiosk_record_pairing_failure')),
+  2,
+  'Only the intended two privileged pairing signatures exist; obsolete overloads are absent'
+);
+select is(
+  (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname in ('kiosk_consume_pairing_code', 'kiosk_record_pairing_failure')
+     and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')
+       or exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE'))),
+  0,
+  'No privileged pairing overload inherits PUBLIC, anon, or authenticated execution'
+);
+set local role anon;
+select throws_ok(
+  $$ select public.kiosk_record_pairing_failure('unknown', 'rotating-source') $$,
+  '42501', 'permission denied for function kiosk_record_pairing_failure',
+  'Anonymous callers cannot write pairing failure buckets'
+);
+reset role;
+select is(
+  (select count(*)::int from public.kiosk_pairing_attempts where code_hash = 'non_existent_code_hash_123456789012' and not succeeded),
+  1, 'Unknown-code failure is retained after a structured denial'
+);
+
+insert into public.kiosk_pairing_codes (organization_id, location_id, device_name, code_hash, created_by, expires_at)
+values ('00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', 'Expired tablet', 'expired-77', '00000000-0000-0000-0000-000000077002', now() - interval '1 second');
+set local role service_role;
+select is(
+  public.kiosk_consume_pairing_code('expired-77', repeat('e', 64), 'new-tablet')->>'code',
+  'EXPIRED', 'Service-role backend denies expired code'
+);
+reset role;
+select is(
+  (select attempt_count from public.kiosk_pairing_codes where code_hash = 'expired-77'),
+  1, 'Expired-code attempt counter survives structured rejection'
+);
+select is(
+  public.kiosk_consume_pairing_code('unknown', repeat('f', 64), null)->>'code',
+  'INVALID_PARAMS', 'Missing trusted source fails closed without a shared bucket'
+);
+
+-- A different organization can pair from a new source despite attacker lockout.
+insert into public.kiosk_pairing_codes (organization_id, location_id, device_name, code_hash, created_by)
+values ('00000000-0000-0000-0000-0000000770a2', '00000000-0000-0000-0000-0000000770b3', 'Foreign tablet', 'foreign-valid-77', '00000000-0000-0000-0000-000000077006');
+set local role service_role;
+select is(
+  public.kiosk_consume_pairing_code('foreign-valid-77', repeat('a', 64), 'foreign-new-tablet')->>'success',
+  'true', 'Attacker source failures do not block pairing in another organization'
+);
+reset role;
 
 select * from finish();
 rollback;

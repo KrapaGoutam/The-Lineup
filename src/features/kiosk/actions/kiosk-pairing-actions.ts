@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTrustedClientIdentifier } from "../data/kiosk-pairing-identity";
 import {
   clearKioskDeviceCookie,
   clearKioskSessionCookie,
@@ -47,17 +48,14 @@ export async function pairKioskDeviceAction(input: {
       };
     }
 
-    let clientIdentifier = "kiosk-tablet";
-    try {
-      const headerList = await headers();
-      const ip =
-        headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-        headerList.get("x-real-ip");
-      if (ip) {
-        clientIdentifier = `ip:${ip}`;
-      }
-    } catch {
-      // In tests or non-request contexts
+    const clientIdentifier = getTrustedClientIdentifier(await headers());
+    if (!clientIdentifier) {
+      return {
+        ok: false,
+        error:
+          "Pairing service temporarily unavailable. Please try again later.",
+        code: "PAIRING_UNAVAILABLE",
+      };
     }
 
     const admin = createAdminClient();

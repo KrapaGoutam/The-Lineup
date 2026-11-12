@@ -380,192 +380,216 @@ describe("Kiosk Clock Server Actions", () => {
     expect(mockAttemptInserts[0].succeeded).toBe(false);
   });
 
-  it("authenticates PIN successfully, records succeeded: true, and sets opaque cookie without exposing JWT", async () => {
-    setupDeviceMock();
+  it.each([false, true])(
+    "handles successful PIN authentication with attempt-write failure=%s",
+    async (attemptWriteFails) => {
+      setupDeviceMock();
 
-    mockAdminClient.from.mockImplementation((table: string) => {
-      if (table === "kiosk_devices") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: MOCK_DEVICE_ID,
-                name: "Host Station",
-                organization_id: MOCK_ORG_ID,
-                location_id: MOCK_LOC_ID,
-                status: "active",
-                organizations: {
-                  id: MOCK_ORG_ID,
-                  name: "Grand Bistro",
-                  slug: "grand-bistro",
+      mockAdminClient.from.mockImplementation((table: string) => {
+        if (table === "kiosk_devices") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: MOCK_DEVICE_ID,
+                  name: "Host Station",
+                  organization_id: MOCK_ORG_ID,
+                  location_id: MOCK_LOC_ID,
+                  status: "active",
+                  organizations: {
+                    id: MOCK_ORG_ID,
+                    name: "Grand Bistro",
+                    slug: "grand-bistro",
+                  },
+                  locations: {
+                    id: MOCK_LOC_ID,
+                    name: "Downtown",
+                    time_zone: "America/Chicago",
+                    active: true,
+                    archived_at: null,
+                  },
                 },
-                locations: {
-                  id: MOCK_LOC_ID,
-                  name: "Downtown",
-                  time_zone: "America/Chicago",
+                error: null,
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_login_attempts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            }),
+            insert: vi
+              .fn()
+              .mockImplementation((row: Record<string, unknown>) => {
+                mockAttemptInserts.push(row);
+                return Promise.resolve({
+                  error: attemptWriteFails
+                    ? { message: "Attempt ledger unavailable" }
+                    : null,
+                });
+              }),
+          };
+        }
+        if (table === "passcode_lockout_resets") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: null, error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_credentials") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  profile_id: MOCK_PROFILE_ID,
+                  synthetic_email: "alice@grandbistro.internal",
+                },
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === "locations") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  attendance_mode: "internal_the_lineup",
                   active: true,
                   archived_at: null,
                 },
-              },
-              error: null,
+                error: null,
+              }),
             }),
-          }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        };
-      }
-      if (table === "passcode_login_attempts") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
-          }),
-          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
-            mockAttemptInserts.push(row);
-            return Promise.resolve({ error: null });
-          }),
-        };
-      }
-      if (table === "passcode_lockout_resets") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
-        };
-      }
-      if (table === "passcode_credentials") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                profile_id: MOCK_PROFILE_ID,
-                synthetic_email: "alice@grandbistro.internal",
-              },
-              error: null,
+          };
+        }
+        if (table === "memberships") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { roles: ["server"], active: true },
+                error: null,
+              }),
             }),
-          }),
-        };
-      }
-      if (table === "locations") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockResolvedValue({
-              data: {
-                attendance_mode: "internal_the_lineup",
-                active: true,
-                archived_at: null,
-              },
-              error: null,
+          };
+        }
+        if (table === "location_memberships") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { active: true },
+                error: null,
+              }),
             }),
-          }),
-        };
-      }
-      if (table === "memberships") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { roles: ["server"], active: true },
-              error: null,
+          };
+        }
+        if (table === "profiles") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({
+                data: { display_name: "Alice Chef" },
+                error: null,
+              }),
             }),
-          }),
-        };
-      }
-      if (table === "location_memberships") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { active: true },
-              error: null,
+          };
+        }
+        if (table === "kiosk_sessions") {
+          return {
+            upsert: vi
+              .fn()
+              .mockImplementation((row: Record<string, unknown>) => {
+                mockSessionStorage[String(row.session_token_hash)] = row;
+                return Promise.resolve({ error: null });
+              }),
+            insert: vi
+              .fn()
+              .mockImplementation((row: Record<string, unknown>) => {
+                mockSessionStorage[String(row.session_token_hash)] = row;
+                return Promise.resolve({ error: null });
+              }),
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
             }),
-          }),
-        };
+          };
+        }
+        return {};
+      });
+
+      mockSupabaseAuth.signInWithPassword.mockResolvedValue({
+        data: {
+          session: { access_token: "jwt-token-alice-12345" },
+          user: { id: MOCK_PROFILE_ID },
+        },
+        error: null,
+      });
+
+      mockEmployeeFrom.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          is: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      });
+
+      const res = await kioskAuthenticatePinAction({ pin: "1234" });
+      if (attemptWriteFails) {
+        expect(res).toMatchObject({
+          ok: false,
+          code: "rate_limit_unavailable",
+        });
+        expect(mockCookies["lineup_kiosk_session"]).toBeUndefined();
+        expect(Object.keys(mockSessionStorage)).toHaveLength(0);
+        return;
       }
-      if (table === "profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockResolvedValue({
-              data: { display_name: "Alice Chef" },
-              error: null,
-            }),
-          }),
-        };
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        expect(res.data.employee.displayName).toBe("Alice Chef");
+        expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
+        // Verify Requirement 1: Zero accessToken exposure on return payload
+        expect(
+          (res.data as unknown as Record<string, unknown>).accessToken,
+        ).toBeUndefined();
       }
-      if (table === "kiosk_sessions") {
-        return {
-          upsert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
-            mockSessionStorage[String(row.session_token_hash)] = row;
-            return Promise.resolve({ error: null });
-          }),
-          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
-            mockSessionStorage[String(row.session_token_hash)] = row;
-            return Promise.resolve({ error: null });
-          }),
-          delete: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        };
-      }
-      return {};
-    });
 
-    mockSupabaseAuth.signInWithPassword.mockResolvedValue({
-      data: {
-        session: { access_token: "jwt-token-alice-12345" },
-        user: { id: MOCK_PROFILE_ID },
-      },
-      error: null,
-    });
+      // Verify Requirement 5: Attempt recorded with succeeded: true on completed authentication
+      expect(mockAttemptInserts).toHaveLength(1);
+      expect(mockAttemptInserts[0].succeeded).toBe(true);
 
-    mockEmployeeFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        is: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      }),
-    });
+      // Verify Requirement 2: Cookie is set with opaque token (no JWT inside cookie)
+      const cookieVal = mockCookies["lineup_kiosk_session"];
+      expect(cookieVal).toBeDefined();
+      expect(cookieVal).not.toContain("jwt-token-alice-12345");
+      expect(cookieVal).toMatch(/^kiosk_sess_[a-f0-9]{64}\./);
 
-    const res = await kioskAuthenticatePinAction({ pin: "1234" });
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.employee.displayName).toBe("Alice Chef");
-      expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
-      // Verify Requirement 1: Zero accessToken exposure on return payload
-      expect(
-        (res.data as unknown as Record<string, unknown>).accessToken,
-      ).toBeUndefined();
-    }
-
-    // Verify Requirement 5: Attempt recorded with succeeded: true on completed authentication
-    expect(mockAttemptInserts).toHaveLength(1);
-    expect(mockAttemptInserts[0].succeeded).toBe(true);
-
-    // Verify Requirement 2: Cookie is set with opaque token (no JWT inside cookie)
-    const cookieVal = mockCookies["lineup_kiosk_session"];
-    expect(cookieVal).toBeDefined();
-    expect(cookieVal).not.toContain("jwt-token-alice-12345");
-    expect(cookieVal).toMatch(/^kiosk_sess_[a-f0-9]{64}\./);
-
-    // Verify server-side storage holds encrypted token
-    const storedSession = Object.values(mockSessionStorage)[0];
-    expect(storedSession).toBeDefined();
-    expect(storedSession.encrypted_access_token).toBeDefined();
-    expect(storedSession.encrypted_access_token).not.toContain(
-      "jwt-token-alice-12345",
-    );
-  });
+      // Verify server-side storage holds encrypted token
+      const storedSession = Object.values(mockSessionStorage)[0];
+      expect(storedSession).toBeDefined();
+      expect(storedSession.encrypted_access_token).toBeDefined();
+      expect(storedSession.encrypted_access_token).not.toContain(
+        "jwt-token-alice-12345",
+      );
+    },
+  );
 
   it("kioskClockInAction invokes native clock in for authenticated employee", async () => {
     setupSessionMock();

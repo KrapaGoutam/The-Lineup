@@ -715,88 +715,99 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
   });
 
   describe("Mandatory Remediation 5: Complete PIN Failure Accounting", () => {
-    it("records succeeded: false in passcode_login_attempts when PIN locator is unrecognized", async () => {
-      setupActiveDeviceMock();
+    it.each([false, true])(
+      "denies an unrecognized PIN with attempt-write failure=%s",
+      async (attemptWriteFails) => {
+        setupActiveDeviceMock();
 
-      mockAdminFrom.mockImplementation((table: string) => {
-        if (table === "kiosk_devices") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: {
-                  id: MOCK_DEVICE_ID,
-                  name: "Host Station",
-                  organization_id: MOCK_ORG_A,
-                  location_id: MOCK_LOC_1,
-                  status: "active",
-                  organizations: { id: MOCK_ORG_A, name: "Org", slug: "org" },
-                  locations: {
-                    id: MOCK_LOC_1,
-                    name: "Loc",
-                    time_zone: "America/Chicago",
-                    active: true,
-                    archived_at: null,
+        mockAdminFrom.mockImplementation((table: string) => {
+          if (table === "kiosk_devices") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: MOCK_DEVICE_ID,
+                    name: "Host Station",
+                    organization_id: MOCK_ORG_A,
+                    location_id: MOCK_LOC_1,
+                    status: "active",
+                    organizations: { id: MOCK_ORG_A, name: "Org", slug: "org" },
+                    locations: {
+                      id: MOCK_LOC_1,
+                      name: "Loc",
+                      time_zone: "America/Chicago",
+                      active: true,
+                      archived_at: null,
+                    },
                   },
-                },
-                error: null,
+                  error: null,
+                }),
               }),
-            }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          };
-        }
-        if (table === "passcode_login_attempts") {
-          return {
-            insert: vi
-              .fn()
-              .mockImplementation((row: Record<string, unknown>) => {
-                mockAttemptInserts.push(row);
-                return Promise.resolve({ error: null });
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
               }),
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
-            }),
-          };
-        }
-        if (table === "passcode_credentials") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnThis(),
-              maybeSingle: vi
+            };
+          }
+          if (table === "passcode_login_attempts") {
+            return {
+              insert: vi
                 .fn()
-                .mockResolvedValue({ data: null, error: null }),
-            }),
-          };
-        }
-        if (table === "passcode_lockout_resets") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnThis(),
-              order: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
+                .mockImplementation((row: Record<string, unknown>) => {
+                  mockAttemptInserts.push(row);
+                  return Promise.resolve({
+                    error: attemptWriteFails
+                      ? { message: "Attempt ledger unavailable" }
+                      : null,
+                  });
+                }),
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
               }),
-            }),
-          };
-        }
-        return { select: vi.fn().mockReturnThis() };
-      });
+            };
+          }
+          if (table === "passcode_credentials") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi
+                  .fn()
+                  .mockResolvedValue({ data: null, error: null }),
+              }),
+            };
+          }
+          if (table === "passcode_lockout_resets") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: null,
+                }),
+              }),
+            };
+          }
+          return { select: vi.fn().mockReturnThis() };
+        });
 
-      const res = await kioskAuthenticatePinAction({ pin: "1234" });
-      expect(res.ok).toBe(false);
-      if (!res.ok) {
-        expect(res.code).toBe("invalid_pin");
-      }
-      expect(mockAttemptInserts.length).toBe(1);
-      expect(mockAttemptInserts[0].succeeded).toBe(false);
-      expect(mockAttemptInserts[0].organization_id).toBe(MOCK_ORG_A);
-      expect(mockAttemptInserts[0].fingerprint).toBe(`kiosk:${MOCK_DEVICE_ID}`);
-    });
+        const res = await kioskAuthenticatePinAction({ pin: "1234" });
+        expect(res.ok).toBe(false);
+        if (!res.ok) {
+          expect(res.code).toBe(
+            attemptWriteFails ? "rate_limit_unavailable" : "invalid_pin",
+          );
+        }
+        expect(mockAttemptInserts.length).toBe(1);
+        expect(mockAttemptInserts[0].succeeded).toBe(false);
+        expect(mockAttemptInserts[0].organization_id).toBe(MOCK_ORG_A);
+        expect(mockAttemptInserts[0].fingerprint).toBe(
+          `kiosk:${MOCK_DEVICE_ID}`,
+        );
+      },
+    );
 
     it("records succeeded: false when employee membership is inactive", async () => {
       setupActiveDeviceMock();

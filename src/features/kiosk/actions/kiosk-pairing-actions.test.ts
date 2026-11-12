@@ -5,12 +5,16 @@ import {
   unpairKioskDeviceAction,
 } from "./kiosk-pairing-actions";
 
+import { headers } from "next/headers";
+import { getTrustedClientIdentifier } from "../data/kiosk-pairing-identity";
+
 // Mock server-only
 vi.mock("server-only", () => ({}));
 
 const mockCookies: Record<string, string> = {};
 
 vi.mock("next/headers", () => ({
+  headers: vi.fn(),
   cookies: vi.fn().mockImplementation(() => ({
     get: (name: string) =>
       mockCookies[name] ? { value: mockCookies[name] } : undefined,
@@ -39,6 +43,12 @@ describe("Kiosk Pairing Server Actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("VERCEL", "1");
+    vi.mocked(headers).mockResolvedValue(
+      new Headers({
+        "x-vercel-forwarded-for": "198.51.100.1",
+      }),
+    );
     Object.keys(mockCookies).forEach((key) => delete mockCookies[key]);
   });
 
@@ -184,5 +194,85 @@ describe("Kiosk Pairing Server Actions", () => {
     expect(res.ok).toBe(true);
     expect(mockCookies["lineup_kiosk_device"]).toBeUndefined();
     expect(mockCookies["lineup_kiosk_session"]).toBeUndefined();
+  });
+
+  describe("Trusted source boundary", () => {
+    it("hashes the Vercel source and ignores rotating payload and forwarding headers", async () => {
+      mockAdminClient.rpc.mockResolvedValue({
+        data: { success: false, code: "NOT_FOUND", error: "Unknown code" },
+        error: null,
+      });
+      for (const spoof of ["198.51.100.2", "198.51.100.3"]) {
+        vi.mocked(headers).mockResolvedValue(
+          new Headers({
+            "x-vercel-forwarded-for": "198.51.100.1",
+            "x-real-ip": spoof,
+            "x-forwarded-for": spoof,
+          }),
+        );
+        await pairKioskDeviceAction({
+          pairingCode: "ABC234",
+          clientIdentifier: spoof,
+        } as { pairingCode: string });
+      }
+      const first = mockAdminClient.rpc.mock.calls[0][1].p_client_identifier;
+      const second = mockAdminClient.rpc.mock.calls[1][1].p_client_identifier;
+      expect(first).toMatch(/^kiosk-source:[a-f0-9]{64}$/);
+      expect(first).toBe(second);
+      expect(first).not.toContain("198.51.100.1");
+      expect(
+        getTrustedClientIdentifier(
+          new Headers({ "x-vercel-forwarded-for": "198.51.100.9" }),
+        ),
+      ).not.toBe(first);
+    });
+
+    it.each([undefined, "garbage", "198.51.100.1, 198.51.100.2"])(
+      "fails closed for missing or malformed edge source %s",
+      async (source) => {
+        vi.mocked(headers).mockResolvedValue(
+          new Headers({
+            ...(source ? { "x-vercel-forwarded-for": source } : {}),
+            "x-forwarded-for": "198.51.100.2",
+            "x-real-ip": "198.51.100.3",
+          }),
+        );
+        expect(
+          await pairKioskDeviceAction({ pairingCode: "ABC234" }),
+        ).toMatchObject({ ok: false, code: "PAIRING_UNAVAILABLE" });
+        expect(mockAdminClient.rpc).not.toHaveBeenCalled();
+        expect(mockCookies["lineup_kiosk_device"]).toBeUndefined();
+      },
+    );
+
+    it("does not trust edge-named headers outside the Vercel runtime", async () => {
+      vi.stubEnv("VERCEL", "");
+      expect(
+        await pairKioskDeviceAction({ pairingCode: "ABC234" }),
+      ).toMatchObject({ ok: false, code: "PAIRING_UNAVAILABLE" });
+      expect(mockAdminClient.rpc).not.toHaveBeenCalled();
+    });
+
+    it("normalizes equivalent IPv6 source addresses", () => {
+      const id = (ip: string) =>
+        getTrustedClientIdentifier(
+          new Headers({ "x-vercel-forwarded-for": ip }),
+        );
+      expect(id("2001:db8::1")).toBe(id("2001:0db8:0:0:0:0:0:1"));
+    });
+
+    it("propagates a committed database rate-limit denial", async () => {
+      mockAdminClient.rpc.mockResolvedValueOnce({
+        data: {
+          success: false,
+          code: "RATE_LIMITED",
+          error: "Please wait 15 minutes.",
+        },
+        error: null,
+      });
+      expect(
+        await pairKioskDeviceAction({ pairingCode: "ABC234" }),
+      ).toMatchObject({ ok: false, code: "RATE_LIMITED" });
+    });
   });
 });

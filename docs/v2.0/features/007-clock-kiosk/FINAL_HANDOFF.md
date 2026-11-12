@@ -1,12 +1,14 @@
 # Feature V2-007: Clock In / Clock Out Kiosk — Final Handoff & Release Package
 
+> Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). Independent final-commit security review, owner-approved Hosted DEV kiosk deployment/acceptance, and owner-approved development merge remain pending. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
+
 **Parent Issue:** [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 **Feature Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)  
 **Milestone:** [Milestone #8 — The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
 **Target Branch:** `development`  
 **Feature Branch:** `feature/v2-007-clock-kiosk`  
 **Base Commit:** `c821487cf0344c516cb174a0c77abdde3792a92a` (PR #323 on `origin/development`)  
-**Status:** `READY FOR MERGE`
+**Status:** `SECURITY REVIEW PENDING`
 
 ---
 
@@ -57,7 +59,7 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 
 - `src/features/kiosk/domain/kiosk-device.test.ts` (7 tests)
 - `src/features/kiosk/data/kiosk-cookie.test.ts` (12 tests)
-- `src/features/kiosk/actions/kiosk-pairing-actions.test.ts` (6 tests)
+- `src/features/kiosk/actions/kiosk-pairing-actions.test.ts` (13 tests)
 - `src/features/kiosk/actions/kiosk-admin-actions.test.ts` (8 tests)
 - `src/features/kiosk/actions/kiosk-clock-actions.test.ts` (12 tests)
 - `src/features/kiosk/actions/kiosk-lifecycle-security.test.ts` (22 tests)
@@ -78,8 +80,8 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 | **ESLint**                | `npx eslint`               | **PASS** | 0 warnings, 0 errors. React compiler rules and hooks validated.  |
 | **Type Check**            | `npm run typecheck`        | **PASS** | Strict TypeScript; zero type errors.                             |
 | **Combined Check**        | `npm run check`            | **PASS** | Exit code 0.                                                     |
-| **Vitest Suite**          | `npm test`                 | **PASS** | 294 test files, 3,970 tests passing (84 kiosk tests).            |
-| **pgTAP Migration Suite** | `0077_kiosk_device`        | **PASS** | 47/47 assertions passing on migration `20261111120000`.          |
+| **Vitest Suite**          | `npm test`                 | **PASS** | 294 test files, 3,977 tests passing (91 kiosk tests).            |
+| **pgTAP Migration Suite** | `0077_kiosk_device`        | **PASS** | 49/49 assertions passing on migration `20261111120000`.          |
 | **Playwright E2E**        | `npx playwright test`      | **PASS** | 6/6 tests passing on desktop, tablet, and mobile viewports.      |
 | **Production Build**      | `npx next build --webpack` | **PASS** | Zero build errors. Dynamic route `/kiosk` compiled successfully. |
 
@@ -112,8 +114,8 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
   1. Eliminated raw employee Supabase JWT exposure in all server action responses (`KioskActiveStatusResponse`).
   2. Implemented database-backed server sessions (`public.kiosk_sessions`) with AES-256-GCM encrypted JWTs, opaque HMAC-signed cookie tokens (`kiosk_sess_<hex>.<sig>`), and unique `(device_id)` single-session database invariant.
   3. Enforced fail-closed dedicated session secret validation (`KIOSK_SESSION_SECRET` >= 32 chars) in deployed non-test environments without fallback to `APP_PIN_PEPPER`.
-  4. Scoped pairing rate limiting to `client_identifier` (10 per 15 min), permanent code locking at 5 failures, revoking `anon` execute on `kiosk_consume_pairing_code` and `authenticated` execute on `kiosk_record_pairing_failure`, returning structured error responses without transaction rollback.
+  4. Scoped pairing rate limiting to `client_identifier` (10 per 15 min), permanent code locking at 5 failures, revoking `anon` and `authenticated` execute on `kiosk_consume_pairing_code` (restricted exclusively to `service_role`), returning structured error responses without transaction rollback. Eliminated caller-controlled rate limit identity by deriving abuse identifiers from trusted platform edge headers (Vercel runtime only, validated `x-vercel-forwarded-for`, HMAC-hashed, no fallback). Added negative tests proving authenticated users cannot bypass rate limits by calling the RPC directly with changing identifiers.
   5. Guaranteed complete PIN failure accounting in `passcode_login_attempts` across all failure paths, with fail-closed handling (`rate_limit_unavailable`) if database rate-limit queries or attempt writes encounter errors.
   6. Enforced 3-minute hard TTL in database sessions and immediate session purging on device revocation or reassignment.
   7. Hardened SQL privileges by revoking direct table `INSERT`, `UPDATE`, `DELETE` on all kiosk tables from `authenticated` and `anon`.
-- Delivers complete test coverage across pgTAP (47 assertions), Vitest (294 test files / 3,970 tests), and Playwright E2E (6 multi-viewport tests).
+- Delivers complete test coverage across pgTAP (49 assertions), Vitest (294 test files / 3,977 tests), and Playwright E2E (6 multi-viewport tests).

@@ -1,7 +1,9 @@
 # Feature V2-007: Clock In / Clock Out Kiosk — Status
 
+> Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). Independent final-commit security review, owner-approved Hosted DEV kiosk deployment/acceptance, and owner-approved development merge remain pending. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
+
 ```text
-Status: COMPLETED
+Status: SECURITY REVIEW PENDING
 GitHub Issue: #255
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0

@@ -154,6 +154,10 @@ create index if not exists kiosk_pairing_attempts_attempted_at_idx
   on public.kiosk_pairing_attempts (attempted_at desc)
   where not succeeded;
 
+create index if not exists kiosk_pairing_attempts_source_window_idx
+  on public.kiosk_pairing_attempts (client_identifier, attempted_at desc)
+  where not succeeded;
+
 alter table public.kiosk_pairing_attempts enable row level security;
 alter table public.kiosk_pairing_attempts force row level security;
 
@@ -298,13 +302,13 @@ $$;
 revoke all on function public.kiosk_record_pairing_failure(text, text) from public, anon, authenticated;
 grant execute on function public.kiosk_record_pairing_failure(text, text) to service_role;
 
--- 8. RPC: Consume Pairing Code (Audited Pairing via Server Action or Authenticated Manager)
+-- 8. RPC: Consume Pairing Code (Audited Pairing via Server Action / service_role Only)
 drop function if exists public.kiosk_consume_pairing_code(text, text);
 drop function if exists public.kiosk_consume_pairing_code(text, text, text);
 create or replace function public.kiosk_consume_pairing_code(
   p_code_hash text,
   p_device_token_hash text,
-  p_client_identifier text default 'anonymous'
+  p_client_identifier text default null
 )
 returns jsonb
 language plpgsql
@@ -318,13 +322,21 @@ declare
   v_device_id uuid;
   v_recent_failures integer;
 begin
-  if p_code_hash is null or p_device_token_hash is null or length(trim(p_device_token_hash)) < 32 then
+  if p_code_hash is null or p_device_token_hash is null or length(trim(p_device_token_hash)) < 32
+     or nullif(trim(p_client_identifier), '') is null then
     return jsonb_build_object(
       'success', false,
       'error', 'Invalid parameters',
       'code', 'INVALID_PARAMS'
     );
   end if;
+
+  -- Serialize the count plus attempt write for this backend-derived source.
+  -- Code row locks below independently guarantee one-time consumption even
+  -- when two different sources present the same code concurrently.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('kiosk-pairing:' || p_client_identifier, 0)
+  );
 
   -- 1. Source-scoped rate-limit check: Max 10 failed pairing attempts per client_identifier in 15 minutes
   select count(*) into v_recent_failures
@@ -471,8 +483,8 @@ begin
 end;
 $$;
 
-revoke all on function public.kiosk_consume_pairing_code(text, text, text) from public, anon;
-grant execute on function public.kiosk_consume_pairing_code(text, text, text) to authenticated, service_role;
+revoke all on function public.kiosk_consume_pairing_code(text, text, text) from public, anon, authenticated;
+grant execute on function public.kiosk_consume_pairing_code(text, text, text) to service_role;
 
 -- 9. RPC: Revoke Device (Manager Only)
 create or replace function public.kiosk_revoke_device(

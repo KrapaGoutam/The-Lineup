@@ -6869,19 +6869,14 @@ export type Database = {
         };
         Returns: number;
       };
-      kiosk_consume_pairing_code:
-        | {
-            Args: { p_code_hash: string; p_device_token_hash: string };
-            Returns: Json;
-          }
-        | {
-            Args: {
-              p_client_identifier?: string;
-              p_code_hash: string;
-              p_device_token_hash: string;
-            };
-            Returns: Json;
-          };
+      kiosk_consume_pairing_code: {
+        Args: {
+          p_client_identifier?: string;
+          p_code_hash: string;
+          p_device_token_hash: string;
+        };
+        Returns: Json;
+      };
       kiosk_generate_pairing_code: {
         Args: {
           p_code_hash: string;

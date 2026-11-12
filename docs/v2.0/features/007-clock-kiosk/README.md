@@ -1,10 +1,12 @@
 # Feature V2-007: Clock In / Clock Out Kiosk — Comprehensive Specification & Architecture
 
-**Parent Issue:** [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
-**Feature Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)  
-**Milestone:** [Milestone #8 — The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-**Status:** `COMPLETED`  
-**Target Branch:** `development`  
+> Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). Independent final-commit security review, owner-approved Hosted DEV kiosk deployment/acceptance, and owner-approved development merge remain pending. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
+
+**Parent Issue:** [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)
+**Feature Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)
+**Milestone:** [Milestone #8 — The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)
+**Status:** `SECURITY REVIEW PENDING`
+**Target Branch:** `development`
 **Feature Branch:** `feature/v2-007-clock-kiosk`
 
 ---
@@ -83,7 +85,7 @@ Stores short-lived pairing codes.
 
 - Both tables have `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;` and `ALTER TABLE ... FORCE ROW LEVEL SECURITY;`.
 - Management operations are guarded by `kiosk_can_manage_location(location_uuid)`.
-- Explicit grants restricted to `authenticated` role (`SELECT, INSERT, UPDATE` on devices/codes); `anon` role has **zero** table permissions.
+- Authenticated managers have RLS-scoped SELECT only on devices/codes; direct writes are revoked. Pairing consumption and failure recording are service-role-only. Anonymous callers have no table access.
 
 ### 3.3 Database Functions & RPCs
 
@@ -91,7 +93,7 @@ Stores short-lived pairing codes.
    Verifies whether the calling user is an Owner, General Manager, or Location Manager for the target location.
 2. `public.kiosk_generate_pairing_code(p_location_id uuid, p_code_hash text) RETURNS uuid`:
    Generates a pairing code record expiring in 15 minutes. Requires manager capability.
-3. `public.kiosk_consume_pairing_code(p_code_hash text, p_device_name text, p_device_token_hash text) RETURNS TABLE(...)`:
+3. `public.kiosk_consume_pairing_code(p_code_hash text, p_device_token_hash text, p_client_identifier text) RETURNS jsonb`:
    Atomically verifies validity, checks attempt count (locks at 5), marks code consumed, and inserts the `kiosk_devices` row in a single atomic transaction.
 4. `public.kiosk_revoke_device(p_device_id uuid, p_reason text) RETURNS boolean`:
    Revokes an active device with reason attribution.
@@ -108,7 +110,7 @@ Stores short-lived pairing codes.
 
 - **Device Credential Token:** 32-byte (256-bit) cryptographically secure random string (`kiosk_dev_...`). Transmitted only over HTTPS. Stored on device in HttpOnly cookie `lineup_kiosk_device`. Stored in DB as SHA-256 hex digest (`device_token_hash`).
 - **Pairing Code:** 6-character uppercase alphanumeric string excluding ambiguous characters (`0, O, 1, I`). Hashed via SHA-256 hex digest (`code_hash`).
-- **HMAC Session Token:** JSON payload signed with HMAC-SHA256 using server secret (`SUPABASE_JWT_SECRET` / `NEXTAUTH_SECRET`). Contains `{ employeeId, organizationId, locationId, employeeName, expiresAt }`. Transmitted via HttpOnly cookie `lineup_kiosk_session` with a 3-minute TTL.
+- **Employee session:** Opaque random token signed with HMAC-SHA256 using required `KIOSK_SESSION_SECRET` (at least 32 characters). JWTs remain AES-256-GCM encrypted in `kiosk_sessions`; the server enforces the 3-minute TTL. The HttpOnly cookie contains no employee JWT or readable session payload.
 
 ### 4.2 Shared-Tablet Protection Model
 

@@ -47,6 +47,8 @@ const pinSchema = z
   .trim()
   .regex(/^\d{4}$/, "PIN must be exactly 4 digits");
 
+class KioskAttemptAccountingError extends Error {}
+
 /**
  * Creates an isolated client for authenticated employee RPC calls.
  * Does not write cookies or persist tokens to localStorage.
@@ -296,6 +298,7 @@ export async function kioskAuthenticatePinAction(input: {
           "kioskAuthenticatePinAction failed to record attempt",
           insertError,
         );
+        throw new KioskAttemptAccountingError();
       }
     };
 
@@ -425,11 +428,16 @@ export async function kioskAuthenticatePinAction(input: {
     }
 
     // Only record success after all verification steps and Supabase sign-in succeed
-    await admin.from("passcode_login_attempts").insert({
-      organization_id: device.organizationId,
-      fingerprint,
-      succeeded: true,
-    });
+    const { error: successAttemptError } = await admin
+      .from("passcode_login_attempts")
+      .insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: true,
+      });
+    if (successAttemptError) {
+      throw new KioskAttemptAccountingError();
+    }
 
     // Get profile display name
     const { data: profile } = await admin
@@ -474,6 +482,14 @@ export async function kioskAuthenticatePinAction(input: {
       },
     };
   } catch (err: unknown) {
+    if (err instanceof KioskAttemptAccountingError) {
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "rate_limit_unavailable",
+      };
+    }
     console.error("kioskAuthenticatePinAction unexpected error", err);
     return {
       ok: false,

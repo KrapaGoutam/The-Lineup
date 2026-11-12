@@ -105,8 +105,10 @@ describe("Kiosk Session & Cookie Security", () => {
       const originalJwt = "secret-supabase-access-token-jwt";
       const encrypted = encryptAccessToken(originalJwt, TEST_SECRET);
       const parts = encrypted.split(":");
-      // Tamper with ciphertext
-      const tampered = `${parts[0]}:${parts[1]}:${parts[2].slice(0, -2)}ff`;
+      // Flip a bit so even ciphertext already ending in ff is changed.
+      const bytes = Buffer.from(parts[2], "hex");
+      bytes[0] ^= 1;
+      const tampered = `${parts[0]}:${parts[1]}:${bytes.toString("hex")}`;
 
       expect(decryptAccessToken(tampered, TEST_SECRET)).toBeNull();
     });
