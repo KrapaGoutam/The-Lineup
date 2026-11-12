@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -46,9 +47,23 @@ export async function pairKioskDeviceAction(input: {
       };
     }
 
+    let clientIdentifier = "kiosk-tablet";
+    try {
+      const headerList = await headers();
+      const ip =
+        headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        headerList.get("x-real-ip");
+      if (ip) {
+        clientIdentifier = `ip:${ip}`;
+      }
+    } catch {
+      // In tests or non-request contexts
+    }
+
     const admin = createAdminClient();
     const res = await consumeKioskPairingCode(admin, {
       pairingCode: normalizePairingCode(parsed.data),
+      clientIdentifier,
     });
 
     if (!res.ok) {

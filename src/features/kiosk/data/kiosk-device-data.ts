@@ -135,7 +135,10 @@ export async function createKioskPairingCode(
  */
 export async function consumeKioskPairingCode(
   supabase: SupabaseClient<Database>,
-  params: { readonly pairingCode: string },
+  params: {
+    readonly pairingCode: string;
+    readonly clientIdentifier?: string;
+  },
 ): Promise<
   KioskResult<{ readonly token: string; readonly context: KioskActiveContext }>
 > {
@@ -144,10 +147,12 @@ export async function consumeKioskPairingCode(
     const codeHash = hashPairingCode(normalized);
     const token = generateDeviceToken();
     const tokenHash = hashDeviceToken(token);
+    const clientIdentifier = params.clientIdentifier ?? "tablet-pairing-client";
 
     const { data, error } = await supabase.rpc("kiosk_consume_pairing_code", {
       p_code_hash: codeHash,
       p_device_token_hash: tokenHash,
+      p_client_identifier: clientIdentifier,
     });
 
     if (error) {
@@ -156,7 +161,7 @@ export async function consumeKioskPairingCode(
       try {
         await supabase.rpc("kiosk_record_pairing_failure", {
           p_code_hash: codeHash,
-          p_client_identifier: "tablet-pairing-client",
+          p_client_identifier: clientIdentifier,
         });
       } catch (recErr: unknown) {
         console.error("kiosk_record_pairing_failure error", recErr);
@@ -176,10 +181,24 @@ export async function consumeKioskPairingCode(
           code: "INVALID_CODE",
         };
       }
-      return { ok: false, error: error.message || "Failed to pair device." };
+      return {
+        ok: false,
+        error: error.message || "Failed to pair device.",
+        code: "PAIRING_FAILED",
+      };
     }
 
     const raw = (data ?? {}) as Record<string, unknown>;
+    if (raw.success === false) {
+      const errorMsg = String(raw.error || "Failed to pair device.");
+      const errorCode = String(raw.code || "PAIRING_FAILED");
+      return {
+        ok: false,
+        error: errorMsg,
+        code: errorCode,
+      };
+    }
+
     const deviceId = String(raw.deviceId ?? raw.device_id ?? raw.id ?? "");
     const deviceName = String(
       raw.deviceName ?? raw.device_name ?? raw.name ?? "",

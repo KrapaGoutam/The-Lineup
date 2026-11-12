@@ -79,23 +79,23 @@ export async function setKioskSessionCookie(
   const expiresAtMs = Date.now() + 3 * 60_000;
   const expiresAtIso = new Date(expiresAtMs).toISOString();
 
-  // Purge any existing sessions for this device
-  await admin.from("kiosk_sessions").delete().eq("device_id", session.deviceId);
-
-  // Persist session server-side with encrypted JWT
-  const { error } = await admin.from("kiosk_sessions").insert({
-    session_token_hash: tokenHash,
-    device_id: session.deviceId,
-    organization_id: session.organizationId,
-    location_id: session.locationId,
-    profile_id: session.profileId,
-    display_name: session.displayName,
-    encrypted_access_token: encryptedToken,
-    expires_at: expiresAtIso,
-  });
+  // Atomically upsert session server-side with encrypted JWT (single active session per device)
+  const { error } = await admin.from("kiosk_sessions").upsert(
+    {
+      session_token_hash: tokenHash,
+      device_id: session.deviceId,
+      organization_id: session.organizationId,
+      location_id: session.locationId,
+      profile_id: session.profileId,
+      display_name: session.displayName,
+      encrypted_access_token: encryptedToken,
+      expires_at: expiresAtIso,
+    },
+    { onConflict: "device_id" },
+  );
 
   if (error) {
-    console.error("setKioskSessionCookie insert error", error);
+    console.error("setKioskSessionCookie upsert error", error);
     throw new Error("Failed to persist server session.");
   }
 

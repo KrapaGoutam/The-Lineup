@@ -160,13 +160,26 @@ export async function kioskAuthenticatePinAction(input: {
       Date.now() - FINGERPRINT_WINDOW_MINUTES * 60_000,
     ).toISOString();
 
-    const { count: fingerprintFailures } = await admin
+    const { count: fingerprintFailures, error: fingerprintError } = await admin
       .from("passcode_login_attempts")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", device.organizationId)
       .eq("fingerprint", fingerprint)
       .eq("succeeded", false)
       .gte("attempted_at", fingerprintWindowStart);
+
+    if (fingerprintError) {
+      console.error(
+        "kioskAuthenticatePinAction fingerprint rate-limit error",
+        fingerprintError,
+      );
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "rate_limit_unavailable",
+      };
+    }
 
     if (shouldLockFingerprint(fingerprintFailures ?? 0)) {
       return {
@@ -185,35 +198,76 @@ export async function kioskAuthenticatePinAction(input: {
       Date.now() - RECENT_SUCCESS_EXEMPTION_HOURS * 60 * 60_000,
     ).toISOString();
 
-    const [{ count: recentSuccessCount }, { data: lastReset }] =
-      await Promise.all([
-        admin
-          .from("passcode_login_attempts")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", device.organizationId)
-          .eq("fingerprint", fingerprint)
-          .eq("succeeded", true)
-          .gte("attempted_at", recentSuccessCutoff),
-        admin
-          .from("passcode_lockout_resets")
-          .select("cleared_at")
-          .eq("organization_id", device.organizationId)
-          .order("cleared_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+    const [recentSuccessRes, lastResetRes] = await Promise.all([
+      admin
+        .from("passcode_login_attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", device.organizationId)
+        .eq("fingerprint", fingerprint)
+        .eq("succeeded", true)
+        .gte("attempted_at", recentSuccessCutoff),
+      admin
+        .from("passcode_lockout_resets")
+        .select("cleared_at")
+        .eq("organization_id", device.organizationId)
+        .order("cleared_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (recentSuccessRes.error) {
+      console.error(
+        "kioskAuthenticatePinAction recentSuccess rate-limit error",
+        recentSuccessRes.error,
+      );
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "rate_limit_unavailable",
+      };
+    }
+
+    if (lastResetRes.error) {
+      console.error(
+        "kioskAuthenticatePinAction lastReset rate-limit error",
+        lastResetRes.error,
+      );
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "rate_limit_unavailable",
+      };
+    }
+
+    const recentSuccessCount = recentSuccessRes.count;
+    const lastReset = lastResetRes.data;
 
     const organizationCountStart = organizationCountWindowStart({
       windowStart: orgWindowStart,
       lastResetAt: lastReset ? new Date(lastReset.cleared_at) : null,
     });
 
-    const { count: organizationFailures } = await admin
+    const { count: organizationFailures, error: orgFailuresError } = await admin
       .from("passcode_login_attempts")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", device.organizationId)
       .eq("succeeded", false)
       .gte("attempted_at", organizationCountStart.toISOString());
+
+    if (orgFailuresError) {
+      console.error(
+        "kioskAuthenticatePinAction orgFailures rate-limit error",
+        orgFailuresError,
+      );
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "rate_limit_unavailable",
+      };
+    }
 
     if (
       shouldLockOrganization({
@@ -229,6 +283,22 @@ export async function kioskAuthenticatePinAction(input: {
       };
     }
 
+    const recordFailureAttempt = async () => {
+      const { error: insertError } = await admin
+        .from("passcode_login_attempts")
+        .insert({
+          organization_id: device.organizationId,
+          fingerprint,
+          succeeded: false,
+        });
+      if (insertError) {
+        console.error(
+          "kioskAuthenticatePinAction failed to record attempt",
+          insertError,
+        );
+      }
+    };
+
     // Resolve PIN locator against passcode_credentials
     const locator = createPasscodeLocator(device.organizationId, pin);
     const { data: credential } = await admin
@@ -241,11 +311,7 @@ export async function kioskAuthenticatePinAction(input: {
 
     if (!credential) {
       // Record failure immediately to enforce rate limiting
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
     }
 
@@ -262,11 +328,7 @@ export async function kioskAuthenticatePinAction(input: {
       locationData.archived_at !== null ||
       locationData.attendance_mode !== "internal_the_lineup"
     ) {
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return {
         ok: false,
         error: "Internal attendance mode is not active for this location.",
@@ -284,11 +346,7 @@ export async function kioskAuthenticatePinAction(input: {
       .maybeSingle();
 
     if (!membership) {
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return {
         ok: false,
         error: "Employee account is not active in this restaurant.",
@@ -306,11 +364,7 @@ export async function kioskAuthenticatePinAction(input: {
       .maybeSingle();
 
     if (!locMembership) {
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return {
         ok: false,
         error: "Employee is not assigned to this location.",
@@ -332,11 +386,7 @@ export async function kioskAuthenticatePinAction(input: {
     });
 
     if (!verification.ok) {
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return {
         ok: false,
         error: "PIN verification failed.",
@@ -366,11 +416,7 @@ export async function kioskAuthenticatePinAction(input: {
       });
 
     if (signInError || !signInData.session) {
-      await admin.from("passcode_login_attempts").insert({
-        organization_id: device.organizationId,
-        fingerprint,
-        succeeded: false,
-      });
+      await recordFailureAttempt();
       return {
         ok: false,
         error: "Failed to establish employee session.",

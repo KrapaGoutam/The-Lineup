@@ -52,12 +52,21 @@ describe("Kiosk Session & Cookie Security", () => {
       );
     });
 
-    it("falls back to APP_PIN_PEPPER if KIOSK_SESSION_SECRET is unset", () => {
+    it("does not fall back to APP_PIN_PEPPER in production environment", () => {
       delete process.env.KIOSK_SESSION_SECRET;
       process.env.APP_PIN_PEPPER = "app-pin-pepper-key-at-least-32-chars-long";
-      expect(getKioskSessionSecret()).toBe(
-        "app-pin-pepper-key-at-least-32-chars-long",
-      );
+      const originalEnv = process.env.NODE_ENV;
+      try {
+        // @ts-expect-error mutating NODE_ENV for test
+        process.env.NODE_ENV = "production";
+        expect(() => getKioskSessionSecret()).toThrow(
+          /KIOSK_SESSION_SECRET must be configured with at least 32 characters/i,
+        );
+      } finally {
+        // @ts-expect-error restoring NODE_ENV
+        process.env.NODE_ENV = originalEnv;
+        process.env.KIOSK_SESSION_SECRET = TEST_SECRET;
+      }
     });
 
     it("fails closed in non-test environment when secret is missing or too short", () => {
@@ -68,7 +77,7 @@ describe("Kiosk Session & Cookie Security", () => {
         // @ts-expect-error mutating NODE_ENV for test
         process.env.NODE_ENV = "production";
         expect(() => getKioskSessionSecret()).toThrow(
-          /KIOSK_SESSION_SECRET \(or APP_PIN_PEPPER\) must be configured/i,
+          /KIOSK_SESSION_SECRET must be configured with at least 32 characters/i,
         );
       } finally {
         // @ts-expect-error restoring NODE_ENV
@@ -146,6 +155,12 @@ describe("Kiosk Session & Cookie Security", () => {
       from: vi.fn().mockImplementation((table: string) => {
         if (table === "kiosk_sessions") {
           return {
+            upsert: vi
+              .fn()
+              .mockImplementation((data: Record<string, unknown>) => {
+                Object.assign(mockSessionRow, data);
+                return Promise.resolve({ error: null });
+              }),
             insert: vi
               .fn()
               .mockImplementation((data: Record<string, unknown>) => {

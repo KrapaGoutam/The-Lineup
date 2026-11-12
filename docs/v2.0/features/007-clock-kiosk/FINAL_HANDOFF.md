@@ -56,33 +56,32 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 ### 2.5 Tests
 
 - `src/features/kiosk/domain/kiosk-device.test.ts` (7 tests)
-- `src/features/kiosk/data/kiosk-cookie.test.ts` (4 tests)
+- `src/features/kiosk/data/kiosk-cookie.test.ts` (12 tests)
 - `src/features/kiosk/actions/kiosk-pairing-actions.test.ts` (6 tests)
 - `src/features/kiosk/actions/kiosk-admin-actions.test.ts` (8 tests)
 - `src/features/kiosk/actions/kiosk-clock-actions.test.ts` (12 tests)
-- `src/features/kiosk/actions/kiosk-lifecycle-security.test.ts` (11 tests)
+- `src/features/kiosk/actions/kiosk-lifecycle-security.test.ts` (22 tests)
 - `src/features/kiosk/components/kiosk-pairing-screen.test.tsx` (5 tests)
 - `src/features/kiosk/components/kiosk-home-screen.test.tsx` (4 tests)
 - `src/features/kiosk/components/kiosk-attendance-screen.test.tsx` (3 tests)
 - `src/features/kiosk/components/kiosk-report-dialog.test.tsx` (2 tests)
 - `src/features/kiosk/components/location-kiosk-management.test.tsx` (3 tests)
-- `src/features/modules/enforcement-coverage.test.ts` (23 tests)
 - `tests/e2e/kiosk.spec.ts` (6 Playwright tests across Chromium, WebKit iPad, and Pixel 7)
 
 ---
 
 ## 3. Verification & Quality Gates Summary
 
-| Check                      | Command                    |  Result  | Notes                                                            |
-| :------------------------- | :------------------------- | :------: | :--------------------------------------------------------------- |
-| **Code Formatting**        | `npx prettier --check`     | **PASS** | Clean formatting across all new and modified files.              |
-| **ESLint**                 | `npx eslint`               | **PASS** | 0 warnings, 0 errors. React compiler rules and hooks validated.  |
-| **Type Check**             | `npm run typecheck`        | **PASS** | Strict TypeScript; zero type errors.                             |
-| **Combined Check**         | `npm run check`            | **PASS** | Exit code 0.                                                     |
-| **Vitest Suite**           | `npm test`                 | **PASS** | 294 test files, 3,969 tests passing (83 kiosk tests).            |
-| **pgTAP Migration Suite**  | `0077_kiosk_device`        | **PASS** | 43/43 assertions passing on migration `20261111120000`.          |
-| **Playwright E2E**         | `npx playwright test`      | **PASS** | 6/6 tests passing on desktop, tablet, and mobile viewports.      |
-| **Production Build**       | `npx next build --webpack` | **PASS** | Zero build errors. Dynamic route `/kiosk` compiled successfully. |
+| Check                     | Command                    |  Result  | Notes                                                            |
+| :------------------------ | :------------------------- | :------: | :--------------------------------------------------------------- |
+| **Code Formatting**       | `npx prettier --check`     | **PASS** | Clean formatting across all new and modified files.              |
+| **ESLint**                | `npx eslint`               | **PASS** | 0 warnings, 0 errors. React compiler rules and hooks validated.  |
+| **Type Check**            | `npm run typecheck`        | **PASS** | Strict TypeScript; zero type errors.                             |
+| **Combined Check**        | `npm run check`            | **PASS** | Exit code 0.                                                     |
+| **Vitest Suite**          | `npm test`                 | **PASS** | 294 test files, 3,970 tests passing (84 kiosk tests).            |
+| **pgTAP Migration Suite** | `0077_kiosk_device`        | **PASS** | 47/47 assertions passing on migration `20261111120000`.          |
+| **Playwright E2E**        | `npx playwright test`      | **PASS** | 6/6 tests passing on desktop, tablet, and mobile viewports.      |
+| **Production Build**      | `npx next build --webpack` | **PASS** | Zero build errors. Dynamic route `/kiosk` compiled successfully. |
 
 ---
 
@@ -103,18 +102,18 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 ### Summary of Changes
 
 - Implements dedicated `/kiosk` touch-first application surface for physical tablets.
-- Implements in-app pairing flow via short-lived 6-character alphanumeric codes with atomic consumption.
+- Implements in-app pairing flow via short-lived 6-character alphanumeric codes with atomic consumption (15-minute TTL).
 - Links kiosk devices strictly to server-stored `(organization_id, location_id)` records with RLS forced.
 - Integrates Manager Kiosk Management into Location Administration.
 - Implements 4-digit PIN authentication with dual rate limiting (5 per kiosk, 30 per organization).
 - Connects clock in, clock out, and meal/rest breaks directly to canonical native attendance RPCs.
 - Adds monthly employee attendance report with clean print isolation.
-- **Mandatory Security Remediation (PR #324):**
+- **Mandatory Security Hardening (PR #324):**
   1. Eliminated raw employee Supabase JWT exposure in all server action responses (`KioskActiveStatusResponse`).
-  2. Implemented database-backed server sessions (`public.kiosk_sessions`) with AES-256-GCM encrypted JWTs and opaque HMAC-signed cookie tokens (`kiosk_sess_<hex>.<sig>`).
-  3. Enforced fail-closed session secret validation (`getKioskSessionSecret`) in deployed non-test environments.
-  4. Added concurrency-safe pairing attempt tracking (`public.kiosk_pairing_attempts`, `kiosk_record_pairing_failure`), 5-failure code lockout, and 10-failure/15min global rate limits.
-  5. Guaranteed complete PIN failure accounting in `passcode_login_attempts` across all 6 failure paths.
-  6. Enforced 3-minute hard TTL in database sessions and immediate session purging on device revocation.
+  2. Implemented database-backed server sessions (`public.kiosk_sessions`) with AES-256-GCM encrypted JWTs, opaque HMAC-signed cookie tokens (`kiosk_sess_<hex>.<sig>`), and unique `(device_id)` single-session database invariant.
+  3. Enforced fail-closed dedicated session secret validation (`KIOSK_SESSION_SECRET` >= 32 chars) in deployed non-test environments without fallback to `APP_PIN_PEPPER`.
+  4. Scoped pairing rate limiting to `client_identifier` (10 per 15 min), permanent code locking at 5 failures, revoking `anon` execute on `kiosk_consume_pairing_code` and `authenticated` execute on `kiosk_record_pairing_failure`, returning structured error responses without transaction rollback.
+  5. Guaranteed complete PIN failure accounting in `passcode_login_attempts` across all failure paths, with fail-closed handling (`rate_limit_unavailable`) if database rate-limit queries or attempt writes encounter errors.
+  6. Enforced 3-minute hard TTL in database sessions and immediate session purging on device revocation or reassignment.
   7. Hardened SQL privileges by revoking direct table `INSERT`, `UPDATE`, `DELETE` on all kiosk tables from `authenticated` and `anon`.
-- Delivers complete test coverage across pgTAP (43 assertions), Vitest (294 test files / 3,969 tests), and Playwright E2E (6 multi-viewport tests).
+- Delivers complete test coverage across pgTAP (47 assertions), Vitest (294 test files / 3,970 tests), and Playwright E2E (6 multi-viewport tests).

@@ -19,13 +19,13 @@ const PAIRING_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
  * insufficient secret (< 32 chars) throws immediately.
  */
 export function getKioskSessionSecret(): string {
-  const secret = process.env.KIOSK_SESSION_SECRET || process.env.APP_PIN_PEPPER;
+  const secret = process.env.KIOSK_SESSION_SECRET;
   if (!secret || secret.trim().length < 32) {
     if (process.env.NODE_ENV === "test") {
       return "test-session-secret-must-be-at-least-32-chars-long";
     }
     throw new Error(
-      "KIOSK_SESSION_SECRET (or APP_PIN_PEPPER) must be configured with at least 32 characters.",
+      "KIOSK_SESSION_SECRET must be configured with at least 32 characters.",
     );
   }
   return secret.trim();

@@ -633,8 +633,8 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
     });
   });
 
-  describe("Mandatory Remediation 3: Fail-Closed Secrets in Deployed Environments", () => {
-    it("fails closed when KIOSK_SESSION_SECRET and APP_PIN_PEPPER are missing in production environment", () => {
+  describe("Mandatory Remediation 3: Fail-Closed Dedicated KIOSK_SESSION_SECRET in Deployed Environments", () => {
+    it("fails closed when KIOSK_SESSION_SECRET is missing in production environment even if APP_PIN_PEPPER is set", () => {
       const originalEnv = process.env.NODE_ENV;
       const originalSecret = process.env.KIOSK_SESSION_SECRET;
       const originalPepper = process.env.APP_PIN_PEPPER;
@@ -642,10 +642,11 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
         // @ts-expect-error force mutating NODE_ENV
         process.env.NODE_ENV = "production";
         delete process.env.KIOSK_SESSION_SECRET;
-        delete process.env.APP_PIN_PEPPER;
+        process.env.APP_PIN_PEPPER =
+          "app-pin-pepper-key-at-least-32-chars-long";
 
         expect(() => getKioskSessionSecret()).toThrow(
-          "KIOSK_SESSION_SECRET (or APP_PIN_PEPPER) must be configured with at least 32 characters.",
+          "KIOSK_SESSION_SECRET must be configured with at least 32 characters.",
         );
       } finally {
         // @ts-expect-error restore NODE_ENV
@@ -662,11 +663,12 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
       try {
         // @ts-expect-error force mutating NODE_ENV
         process.env.NODE_ENV = "production";
-        delete process.env.APP_PIN_PEPPER;
+        process.env.APP_PIN_PEPPER =
+          "app-pin-pepper-key-at-least-32-chars-long";
         process.env.KIOSK_SESSION_SECRET = "short-secret";
 
         expect(() => getKioskSessionSecret()).toThrow(
-          "KIOSK_SESSION_SECRET (or APP_PIN_PEPPER) must be configured with at least 32 characters.",
+          "KIOSK_SESSION_SECRET must be configured with at least 32 characters.",
         );
       } finally {
         // @ts-expect-error restore NODE_ENV
@@ -903,6 +905,62 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
       expect(res.ok).toBe(false);
       expect(mockAttemptInserts.length).toBe(1);
       expect(mockAttemptInserts[0].succeeded).toBe(false);
+    });
+
+    it("fails closed with rate_limit_unavailable when rate limit query returns a database error", async () => {
+      setupActiveDeviceMock();
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "kiosk_devices") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: MOCK_DEVICE_ID,
+                  name: "Host Station",
+                  organization_id: MOCK_ORG_A,
+                  location_id: MOCK_LOC_1,
+                  status: "active",
+                  organizations: { id: MOCK_ORG_A, name: "Org", slug: "org" },
+                  locations: {
+                    id: MOCK_LOC_1,
+                    name: "Loc",
+                    time_zone: "America/Chicago",
+                    active: true,
+                    archived_at: null,
+                  },
+                },
+                error: null,
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_login_attempts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockResolvedValue({
+                count: null,
+                error: { message: "Database connection failed", code: "08006" },
+              }),
+            }),
+          };
+        }
+        return {};
+      });
+
+      const res = await kioskAuthenticatePinAction({ pin: "1234" });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("rate_limit_unavailable");
+        expect(res.error).toBe(
+          "Authentication service temporarily unavailable. Please try again.",
+        );
+      }
     });
   });
 

@@ -168,8 +168,14 @@ create table if not exists public.kiosk_sessions (
   display_name text not null,
   encrypted_access_token text not null,
   expires_at timestamptz not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint kiosk_sessions_device_id_key unique (device_id)
 );
+
+alter table public.kiosk_sessions
+  drop constraint if exists kiosk_sessions_device_id_key;
+alter table public.kiosk_sessions
+  add constraint kiosk_sessions_device_id_key unique (device_id);
 
 create index if not exists kiosk_sessions_token_hash_idx
   on public.kiosk_sessions (session_token_hash, expires_at);
@@ -289,11 +295,12 @@ begin
 end;
 $$;
 
-revoke all on function public.kiosk_record_pairing_failure(text, text) from public, anon;
-grant execute on function public.kiosk_record_pairing_failure(text, text) to authenticated, service_role;
+revoke all on function public.kiosk_record_pairing_failure(text, text) from public, anon, authenticated;
+grant execute on function public.kiosk_record_pairing_failure(text, text) to service_role;
 
--- 8. RPC: Consume Pairing Code (Unauthenticated Tablet or Authenticated Manager)
+-- 8. RPC: Consume Pairing Code (Audited Pairing via Server Action or Authenticated Manager)
 drop function if exists public.kiosk_consume_pairing_code(text, text);
+drop function if exists public.kiosk_consume_pairing_code(text, text, text);
 create or replace function public.kiosk_consume_pairing_code(
   p_code_hash text,
   p_device_token_hash text,
@@ -312,16 +319,29 @@ declare
   v_recent_failures integer;
 begin
   if p_code_hash is null or p_device_token_hash is null or length(trim(p_device_token_hash)) < 32 then
-    raise exception 'Invalid parameters' using errcode = '22023';
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Invalid parameters',
+      'code', 'INVALID_PARAMS'
+    );
   end if;
 
-  -- 1. Concurrency-safe rate-limit check: Max 10 failed pairing attempts across unknown codes in 15 minutes
+  -- 1. Source-scoped rate-limit check: Max 10 failed pairing attempts per client_identifier in 15 minutes
   select count(*) into v_recent_failures
   from public.kiosk_pairing_attempts
-  where not succeeded and attempted_at > now() - interval '15 minutes';
+  where not succeeded
+    and client_identifier = coalesce(p_client_identifier, 'anonymous')
+    and attempted_at > now() - interval '15 minutes';
 
   if v_recent_failures >= 10 then
-    raise exception 'Too many failed pairing attempts. Please wait 15 minutes.' using errcode = '22023';
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (coalesce(p_code_hash, 'unknown'), coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Too many failed pairing attempts. Please wait 15 minutes.',
+      'code', 'RATE_LIMITED'
+    );
   end if;
 
   -- 2. Atomic select for update on pairing code
@@ -331,28 +351,71 @@ begin
   for update;
 
   if not found then
-    raise exception 'Pairing code not recognized' using errcode = 'P0002';
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Pairing code not recognized',
+      'code', 'NOT_FOUND'
+    );
   end if;
 
-  -- 3. Check attempt limits
+  -- 3. Check attempt limits (per-code lockout after max_attempts failures)
   if v_pairing.attempt_count >= v_pairing.max_attempts then
-    raise exception 'Pairing code exceeded maximum attempts' using errcode = '22023';
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Pairing code exceeded maximum attempts',
+      'code', 'MAX_ATTEMPTS'
+    );
   end if;
 
   -- 4. Check expiration
   if v_pairing.expires_at < now() then
-    raise exception 'Pairing code has expired' using errcode = '22023';
+    update public.kiosk_pairing_codes
+    set attempt_count = attempt_count + 1
+    where id = v_pairing.id;
+
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Pairing code has expired',
+      'code', 'EXPIRED'
+    );
   end if;
 
   -- 5. Check if already used
   if v_pairing.used_at is not null then
-    raise exception 'Pairing code already used' using errcode = '22023';
+    update public.kiosk_pairing_codes
+    set attempt_count = attempt_count + 1
+    where id = v_pairing.id;
+
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Pairing code already used',
+      'code', 'ALREADY_USED'
+    );
   end if;
 
   -- 6. Check location status
   select * into v_loc from public.locations where id = v_pairing.location_id;
   if not found or not v_loc.active or v_loc.archived_at is not null then
-    raise exception 'Location is inactive or archived' using errcode = '55000';
+    insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+    values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), false);
+
+    return jsonb_build_object(
+      'success', false,
+      'error', 'Location is inactive or archived',
+      'code', 'LOCATION_INACTIVE'
+    );
   end if;
 
   select * into v_org from public.organizations where id = v_pairing.organization_id;
@@ -408,8 +471,8 @@ begin
 end;
 $$;
 
-revoke all on function public.kiosk_consume_pairing_code(text, text, text) from public;
-grant execute on function public.kiosk_consume_pairing_code(text, text, text) to anon, authenticated, service_role;
+revoke all on function public.kiosk_consume_pairing_code(text, text, text) from public, anon;
+grant execute on function public.kiosk_consume_pairing_code(text, text, text) to authenticated, service_role;
 
 -- 9. RPC: Revoke Device (Manager Only)
 create or replace function public.kiosk_revoke_device(

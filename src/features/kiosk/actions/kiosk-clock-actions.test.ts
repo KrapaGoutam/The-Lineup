@@ -157,6 +157,10 @@ describe("Kiosk Clock Server Actions", () => {
       }
       if (table === "kiosk_sessions") {
         return {
+          upsert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockSessionStorage[String(row.session_token_hash)] = row;
+            return Promise.resolve({ error: null });
+          }),
           insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
             mockSessionStorage[String(row.session_token_hash)] = row;
             return Promise.resolve({ error: null });
@@ -498,6 +502,10 @@ describe("Kiosk Clock Server Actions", () => {
       }
       if (table === "kiosk_sessions") {
         return {
+          upsert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockSessionStorage[String(row.session_token_hash)] = row;
+            return Promise.resolve({ error: null });
+          }),
           insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
             mockSessionStorage[String(row.session_token_hash)] = row;
             return Promise.resolve({ error: null });

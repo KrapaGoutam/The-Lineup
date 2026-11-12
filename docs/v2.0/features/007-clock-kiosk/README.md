@@ -73,7 +73,7 @@ Stores short-lived pairing codes.
 - `location_id` (uuid, FK `locations(id)` ON DELETE CASCADE, NOT NULL)
 - `code_hash` (text, UNIQUE, NOT NULL) — SHA-256 hash of 6-character code
 - `created_by` (uuid, FK `auth.users(id)`, NOT NULL)
-- `expires_at` (timestamptz, NOT NULL) — 10 minutes from creation
+- `expires_at` (timestamptz, NOT NULL) — 15 minutes from creation
 - `consumed_at` (timestamptz, nullable)
 - `consumed_by_device_id` (uuid, FK `kiosk_devices(id)`, nullable)
 - `attempt_count` (int, default 0, check `<= 5`)
@@ -90,7 +90,7 @@ Stores short-lived pairing codes.
 1. `public.kiosk_can_manage_location(p_location_id uuid) RETURNS boolean`:
    Verifies whether the calling user is an Owner, General Manager, or Location Manager for the target location.
 2. `public.kiosk_generate_pairing_code(p_location_id uuid, p_code_hash text) RETURNS uuid`:
-   Generates a pairing code record expiring in 10 minutes. Requires manager capability.
+   Generates a pairing code record expiring in 15 minutes. Requires manager capability.
 3. `public.kiosk_consume_pairing_code(p_code_hash text, p_device_name text, p_device_token_hash text) RETURNS TABLE(...)`:
    Atomically verifies validity, checks attempt count (locks at 5), marks code consumed, and inserts the `kiosk_devices` row in a single atomic transaction.
 4. `public.kiosk_revoke_device(p_device_id uuid, p_reason text) RETURNS boolean`:

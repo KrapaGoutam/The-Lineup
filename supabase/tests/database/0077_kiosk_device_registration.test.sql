@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(43);
+select plan(47);
 
 -- --------------------------------------------------------------------------
 -- V2-007 Kiosk Device Registration & Management — pgTAP Test Suite
@@ -143,18 +143,28 @@ select throws_ok(
 
 -- 4. Pairing Code Consumption & Device Creation -----------------------------
 
--- Reject invalid pairing code
-select set_test_user(null); -- Anonymous tablet
+-- Anonymous direct execution is denied (permission revoked)
+set local role anon;
 select throws_ok(
-  $$ select public.kiosk_consume_pairing_code('non_existent_code_hash_123456789012', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') $$,
-  'P0002',
-  'Pairing code not recognized',
-  'Reject unknown pairing code'
+  $$ select public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') $$,
+  '42501',
+  'permission denied for function kiosk_consume_pairing_code',
+  'Anonymous direct execute on kiosk_consume_pairing_code is denied'
+);
+reset role;
+
+-- Reject invalid pairing code with structured error response (service_role or authenticated)
+select set_test_user('00000000-0000-0000-0000-000000077002');
+select is(
+  (public.kiosk_consume_pairing_code('non_existent_code_hash_123456789012', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'client-a'))->>'code',
+  'NOT_FOUND',
+  'Reject unknown pairing code with structured NOT_FOUND code'
 );
 
 -- Consume valid pairing code successfully
-select lives_ok(
-  $$ select public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') $$,
+select is(
+  (public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'client-a'))->>'success',
+  'true',
   'Consume valid pairing code successfully'
 );
 
@@ -173,11 +183,10 @@ select is(
 );
 
 -- Reject reuse of already consumed pairing code
-select throws_ok(
-  $$ select public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') $$,
-  '22023',
-  'Pairing code already used',
-  'Reject re-consumption of pairing code'
+select is(
+  (public.kiosk_consume_pairing_code('code_hash_11111111111111111111111111111111', 'token_hash_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'client-a'))->>'code',
+  'ALREADY_USED',
+  'Reject re-consumption of pairing code with ALREADY_USED code'
 );
 
 -- 5. Kiosk Devices RLS & Isolation -----------------------------------------
@@ -342,10 +351,20 @@ select lives_ok(
   'Location manager creates brute-force test pairing code'
 );
 
--- Recording pairing failure logs to kiosk_pairing_attempts and increments attempt_count
-select set_test_user(null);
-select lives_ok(
-  $$ select public.kiosk_record_pairing_failure('code_hash_bruteforce_test_12345678', '192.168.1.50') $$,
+-- kiosk_record_pairing_failure is denied to authenticated users
+set local role authenticated;
+select throws_ok(
+  $$ select public.kiosk_record_pairing_failure('code_hash_bruteforce_test_12345678', 'attacker-client') $$,
+  '42501',
+  'permission denied for function kiosk_record_pairing_failure',
+  'kiosk_record_pairing_failure denied to authenticated users'
+);
+reset role;
+
+-- Recording pairing failure logs to kiosk_pairing_attempts and increments attempt_count via service role
+select is(
+  (public.kiosk_record_pairing_failure('code_hash_bruteforce_test_12345678', '192.168.1.50'))->>'recorded',
+  'true',
   'Record pairing failure logs without error'
 );
 
@@ -358,27 +377,31 @@ select is(
 -- Advance attempt_count to max_attempts (5)
 update public.kiosk_pairing_codes set attempt_count = 5 where code_hash = 'code_hash_bruteforce_test_12345678';
 
--- Attempting to consume locked out pairing code raises exception
-select throws_ok(
-  $$ select public.kiosk_consume_pairing_code('code_hash_bruteforce_test_12345678', 'token_hash_bruteforce_lockout_123456789012') $$,
-  '22023',
-  'Pairing code exceeded maximum attempts',
-  'Locked out pairing code is rejected'
+-- Attempting to consume locked out pairing code returns structured MAX_ATTEMPTS code
+select is(
+  (public.kiosk_consume_pairing_code('code_hash_bruteforce_test_12345678', 'token_hash_bruteforce_lockout_123456789012', 'client-x'))->>'code',
+  'MAX_ATTEMPTS',
+  'Locked out pairing code returns MAX_ATTEMPTS code'
 );
 
--- Global rate limit: insert 10 failed attempts within 15 minutes
+-- Scoped rate limit: insert 10 failed attempts for attacker-client within 15 minutes
 insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded, attempted_at)
 select 'unknown_hash_' || n, 'attacker-client', false, now() - interval '1 minute'
 from generate_series(1, 10) n;
 
-select throws_ok(
-  $$ select public.kiosk_consume_pairing_code('any_code_hash_test_12345678', 'token_hash_test_token_min_32_chars_123456') $$,
-  '22023',
-  'Too many failed pairing attempts. Please wait 15 minutes.',
-  'Global rate limit blocks pairing consumption after 10 recent failures'
+select is(
+  (public.kiosk_consume_pairing_code('any_code_hash_test_12345678', 'token_hash_test_token_min_32_chars_123456', 'attacker-client'))->>'code',
+  'RATE_LIMITED',
+  'Attacker client with 10 failures is rate limited'
 );
 
--- 9. Mandatory Remediation 6: Revocation Purges Active Sessions ----------------
+select is(
+  (public.kiosk_consume_pairing_code('any_code_hash_test_12345678', 'token_hash_test_token_min_32_chars_123456', 'legitimate-client'))->>'code',
+  'NOT_FOUND',
+  'Legitimate client is NOT blocked by attacker failures (scoped rate limiting)'
+);
+
+-- 9. Mandatory Remediation 6 & Single Active Session Enforcement ---------------
 
 -- Insert a new active device and a session for it
 insert into public.kiosk_devices (id, organization_id, location_id, name, device_token_hash, status)
@@ -386,6 +409,15 @@ values ('00000000-0000-0000-0000-0000000770d1', '00000000-0000-0000-0000-0000000
 
 insert into public.kiosk_sessions (id, device_id, organization_id, location_id, profile_id, display_name, session_token_hash, encrypted_access_token, expires_at)
 values ('00000000-0000-0000-0000-0000000770e1', '00000000-0000-0000-0000-0000000770d1', '00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', '00000000-0000-0000-0000-000000077002', 'Manager User', 'sess_hash_12345678901234567890123456789012', 'enc_token_12345678901234567890123456789012', now() + interval '3 minutes');
+
+-- Attempting to insert a duplicate active session for the same device_id violates unique constraint
+select throws_ok(
+  $$ insert into public.kiosk_sessions (id, device_id, organization_id, location_id, profile_id, display_name, session_token_hash, encrypted_access_token, expires_at)
+     values ('00000000-0000-0000-0000-0000000770e2', '00000000-0000-0000-0000-0000000770d1', '00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', '00000000-0000-0000-0000-000000077003', 'Second User', 'sess_hash_99999999999999999999999999999999', 'enc_token_99999999999999999999999999999999', now() + interval '3 minutes') $$,
+  '23505',
+  'duplicate key value violates unique constraint "kiosk_sessions_device_id_key"',
+  'At most one active session per physical device enforced by unique constraint'
+);
 
 -- Manager revokes the device
 select set_test_user('00000000-0000-0000-0000-000000077002');
