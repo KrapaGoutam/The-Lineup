@@ -42,6 +42,12 @@ const EXEMPT_FILES: Record<string, string> = {
     "Settings: module configuration management (system-required module)",
   "settings/actions/account-recovery-actions.ts":
     "Settings: authorized account recovery must work with Team disabled",
+  "kiosk/actions/kiosk-admin-actions.ts":
+    "Settings: kiosk device administration is location administration (system-required module)",
+  "kiosk/actions/kiosk-pairing-actions.ts":
+    "Kiosk: tablet device pairing and status checks are hardware registration plumbing",
+  "kiosk/actions/kiosk-clock-actions.ts":
+    "Kiosk: tablet PIN clock actions authenticate via kiosk device token and enforce location internal attendance mode directly",
 };
 
 const EXEMPT_ACTIONS: Record<string, string> = {

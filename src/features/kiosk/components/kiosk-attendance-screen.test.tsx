@@ -1,0 +1,171 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { KioskAttendanceScreen } from "./kiosk-attendance-screen";
+import * as clockActions from "../actions/kiosk-clock-actions";
+import type { KioskActiveContext } from "../domain/kiosk-device";
+import type { KioskEmployeeSessionState } from "./kiosk-app";
+
+vi.mock("../actions/kiosk-clock-actions", () => ({
+  kioskGetActiveStatusAction: vi.fn(),
+  kioskClockInAction: vi.fn(),
+  kioskClockOutAction: vi.fn(),
+  kioskBreakStartAction: vi.fn(),
+  kioskBreakEndAction: vi.fn(),
+  kioskClearSessionAction: vi.fn(),
+  kioskGetEmployeeReportAction: vi
+    .fn()
+    .mockResolvedValue({ ok: true, data: { rows: [] } }),
+}));
+
+describe("KioskAttendanceScreen Component", () => {
+  const MOCK_CONTEXT: KioskActiveContext = {
+    deviceId: "dev-1",
+    deviceName: "Front Host Stand",
+    organizationId: "org-1",
+    organizationName: "The Grand Bistro",
+    organizationSlug: "grand-bistro",
+    locationId: "loc-1",
+    locationName: "Downtown",
+    timeZone: "America/Chicago",
+    status: "active",
+  };
+
+  const MOCK_EMPLOYEE: KioskEmployeeSessionState = {
+    profileId: "prof-1",
+    displayName: "Alice Chef",
+    organizationId: "org-1",
+    locationId: "loc-1",
+    roles: ["server"],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders employee header and not clocked in status", async () => {
+    vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        session: {
+          profileId: "prof-1",
+          displayName: "Alice Chef",
+          deviceId: "dev-1",
+          organizationId: "org-1",
+          locationId: "loc-1",
+          accessToken: "token-1",
+          expiresAt: Date.now() + 60_000,
+        },
+        currentSession: null,
+      },
+    });
+
+    render(
+      <KioskAttendanceScreen
+        context={MOCK_CONTEXT}
+        employee={MOCK_EMPLOYEE}
+        onFinished={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Alice Chef")).toBeInTheDocument();
+    expect(
+      screen.getByText(/the grand bistro • downtown/i),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-status-badge")).toHaveTextContent(
+        "Not Clocked In",
+      );
+      expect(screen.getByTestId("clock-in-button")).toBeInTheDocument();
+    });
+  });
+
+  it("handles clock-in operation and displays success card", async () => {
+    vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValue({
+      ok: true,
+      data: {
+        session: {
+          profileId: "prof-1",
+          displayName: "Alice Chef",
+          deviceId: "dev-1",
+          organizationId: "org-1",
+          locationId: "loc-1",
+          accessToken: "token-1",
+          expiresAt: Date.now() + 60_000,
+        },
+        currentSession: null,
+      },
+    });
+
+    vi.mocked(clockActions.kioskClockInAction).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        success: true,
+        idempotent: false,
+        sessionId: "sess-1",
+        eventId: 101,
+        status: "active",
+        clockInAt: new Date().toISOString(),
+      },
+    });
+
+    const user = userEvent.setup();
+    render(
+      <KioskAttendanceScreen
+        context={MOCK_CONTEXT}
+        employee={MOCK_EMPLOYEE}
+        onFinished={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("clock-in-button")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("clock-in-button"));
+
+    await waitFor(() => {
+      expect(clockActions.kioskClockInAction).toHaveBeenCalled();
+      expect(screen.getByTestId("success-confirmation")).toHaveTextContent(
+        "Successfully Clocked In!",
+      );
+    });
+  });
+
+  it("clears session and returns to keypad on Finish click", async () => {
+    vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        session: {
+          profileId: "prof-1",
+          displayName: "Alice Chef",
+          deviceId: "dev-1",
+          organizationId: "org-1",
+          locationId: "loc-1",
+          accessToken: "token-1",
+          expiresAt: Date.now() + 60_000,
+        },
+        currentSession: null,
+      },
+    });
+
+    const onFinished = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <KioskAttendanceScreen
+        context={MOCK_CONTEXT}
+        employee={MOCK_EMPLOYEE}
+        onFinished={onFinished}
+      />,
+    );
+
+    await user.click(screen.getByTestId("finish-button"));
+
+    await waitFor(() => {
+      expect(clockActions.kioskClearSessionAction).toHaveBeenCalled();
+      expect(onFinished).toHaveBeenCalled();
+    });
+  });
+});

@@ -2719,6 +2719,139 @@ export type Database = {
           },
         ];
       };
+      kiosk_devices: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          credential_version: number;
+          device_token_hash: string | null;
+          id: string;
+          last_seen_at: string | null;
+          location_id: string;
+          name: string;
+          organization_id: string;
+          revocation_reason: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          credential_version?: number;
+          device_token_hash?: string | null;
+          id?: string;
+          last_seen_at?: string | null;
+          location_id: string;
+          name: string;
+          organization_id: string;
+          revocation_reason?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          credential_version?: number;
+          device_token_hash?: string | null;
+          id?: string;
+          last_seen_at?: string | null;
+          location_id?: string;
+          name?: string;
+          organization_id?: string;
+          revocation_reason?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "kiosk_devices_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_devices_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      kiosk_pairing_codes: {
+        Row: {
+          attempt_count: number;
+          code_hash: string;
+          created_at: string;
+          created_by: string;
+          device_id: string | null;
+          device_name: string;
+          expires_at: string;
+          id: string;
+          location_id: string;
+          max_attempts: number;
+          organization_id: string;
+          used_at: string | null;
+        };
+        Insert: {
+          attempt_count?: number;
+          code_hash: string;
+          created_at?: string;
+          created_by: string;
+          device_id?: string | null;
+          device_name: string;
+          expires_at?: string;
+          id?: string;
+          location_id: string;
+          max_attempts?: number;
+          organization_id: string;
+          used_at?: string | null;
+        };
+        Update: {
+          attempt_count?: number;
+          code_hash?: string;
+          created_at?: string;
+          created_by?: string;
+          device_id?: string | null;
+          device_name?: string;
+          expires_at?: string;
+          id?: string;
+          location_id?: string;
+          max_attempts?: number;
+          organization_id?: string;
+          used_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "kiosk_pairing_codes_device_id_fkey";
+            columns: ["device_id"];
+            isOneToOne: false;
+            referencedRelation: "kiosk_devices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_pairing_codes_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_pairing_codes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       location_lifecycle_events: {
         Row: {
           action: string;
@@ -5998,7 +6131,7 @@ export type Database = {
       attendance_manual_entry: {
         Args: {
           p_clock_in_at: string;
-          p_clock_out_at: string | null;
+          p_clock_out_at?: string | null;
           p_idempotency_key: string;
           p_location_id: string;
           p_profile_id: string;
@@ -6643,6 +6776,30 @@ export type Database = {
           p_vendor_id: string;
         };
         Returns: number;
+      };
+      kiosk_consume_pairing_code: {
+        Args: { p_code_hash: string; p_device_token_hash: string };
+        Returns: Json;
+      };
+      kiosk_generate_pairing_code: {
+        Args: {
+          p_code_hash: string;
+          p_device_name: string;
+          p_location_id: string;
+        };
+        Returns: Json;
+      };
+      kiosk_reassign_device: {
+        Args: { p_device_id: string; p_new_location_id: string };
+        Returns: Json;
+      };
+      kiosk_rename_device: {
+        Args: { p_device_id: string; p_name: string };
+        Returns: Json;
+      };
+      kiosk_revoke_device: {
+        Args: { p_device_id: string; p_reason?: string };
+        Returns: Json;
       };
       list_organization_staff: {
         Args: {

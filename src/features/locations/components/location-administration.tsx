@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { LocationList } from "./location-list";
 import { LocationForm } from "./location-form";
+import { LocationKioskManagement } from "@/features/kiosk/components/location-kiosk-management";
 import { LocationOperatingHoursEditor } from "./location-operating-hours-editor";
 import { LocationStaffManagement } from "./location-staff-management";
 import { OrganizationStaffAssignments } from "./organization-staff-assignments";
@@ -170,7 +171,7 @@ export function LocationAdministration({
   const [managingLocation, setManagingLocation] =
     React.useState<Location | null>(null);
   const [manageTab, setManageTab] = React.useState<
-    "details" | "hours" | "staff" | "modules"
+    "details" | "hours" | "staff" | "modules" | "kiosks"
   >("details");
   const [modulesPending, setModulesPending] = React.useState(false);
   const moduleSource = React.useMemo(
@@ -759,6 +760,18 @@ export function LocationAdministration({
               >
                 Modules
               </Button>
+              <button
+                type="button"
+                disabled={modulesPending || !!managingLocation.archivedAt}
+                onClick={() => setManageTab("kiosks")}
+                className={`-mb-px border-b-2 px-4 py-2 text-xs font-semibold transition ${
+                  manageTab === "kiosks"
+                    ? "border-primary text-primary"
+                    : "text-muted-foreground hover:text-foreground border-transparent"
+                }`}
+              >
+                Kiosks
+              </button>
             </div>
             <div hidden={manageTab !== "modules"}>
               <LocationModuleSettings
@@ -770,7 +783,17 @@ export function LocationAdministration({
               />
             </div>
 
-            {manageTab === "modules" ? null : manageTab === "details" ? (
+            {manageTab === "modules" ? null : manageTab === "kiosks" ? (
+              <LocationKioskManagement
+                locationId={managingLocation.id}
+                locationName={managingLocation.name}
+                availableLocations={locations.map((l) => ({
+                  id: l.id,
+                  name: l.name,
+                }))}
+                demoMode={demoMode}
+              />
+            ) : manageTab === "details" ? (
               <LocationForm
                 mode="edit"
                 organizationId={selectedOrgId}
