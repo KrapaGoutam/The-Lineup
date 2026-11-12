@@ -7,8 +7,8 @@
 - [x] Read-only Hosted DEV ledger: 87 migrations, latest `20261110203355`; kiosk not applied.
 - [x] Finish trusted Vercel source boundary and concurrent source throttling; preserve service-role-only grants.
 - [x] Verify focused kiosk, database roles/RLS, committed failure accounting, code/source/session concurrency, browser smoke, checks, full unit suite, and build.
-- [x] Reconcile documentation with actual evidence; independent final-SHA review is PENDING (no Claude reviewer available in this session).
-- [ ] Commit/push and exact-head CI closeout in progress: final-source local gates PASS (93 kiosk, 3,979 full Vitest plus 7 skipped, 339 relevant pgTAP assertions, three concurrency cases, Playwright 6/6, check/build/scans). PR #324 remains the only integration target.
+- [x] Reconcile documentation and record genuine Claude Sonnet 5 High first-round source review at cf4d1a9; no critical/high findings. Recommended M1 corrected and 96 focused kiosk tests PASS. Final-head follow-up receipt is maintained in PR #324.
+- [x] Implementation cf4d1a9 committed/pushed and all exact-head gates green: application, 346 desktop browser tests, Database 80 files / 3,189 assertions, Vercel Preview. Follow-up M1 correction and review receipt are the final continuation commit; final-head follow-up review and CI outcomes are maintained in PR #324 (external closeout receipt).
 - [ ] Owner approval for Hosted DEV kiosk deployment and development merge (separate gates; neither authorized).
 
 Data/auth scope: existing kiosk migration only; no new browser credentials or identity inputs. Pairing UI uses existing error state if trusted source is unavailable. Risks: Vercel-only ingress contract, same-NAT clients share a source allowance, distributed-source abuse remains an infrastructure concern. Tests will exercise direct roles, unknown/expired/reused codes, persisted failures, concurrency, and unrelated-source isolation. Historical completed checklists below are previous-session receipts, not final-source validation or independent acceptance.
@@ -113,7 +113,7 @@ Data/auth scope: existing kiosk migration only; no new browser credentials or id
   - Cross-tenant & cross-location isolation verification.
   - Cross-employee attendance report isolation.
   - No secret leakage, no client-side spoofing.
-- [ ] Independent final-commit Security Review (pending; historical attribution below is unverified):
+- [x] Independent source Security Review (actual Claude Sonnet 5 High receipt in INDEPENDENT_REVIEW.md; final-head follow-up in PR #324):
   - Claude Code Sonnet High independent inspection.
   - P0/P1 verification and fixes.
 - [x] Consolidated Final Quality Gates:

@@ -680,6 +680,22 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
   });
 
   describe("Mandatory Remediation 4: Pairing Code Failure Accounting & Brute-Force Protection", () => {
+    it.each(["", "   ", undefined])(
+      "denies a missing data-layer source (%s) without calling any RPC",
+      async (clientIdentifier) => {
+        const mockAdmin = { rpc: vi.fn() };
+        const result = await consumeKioskPairingCode(mockAdmin as never, {
+          pairingCode: "ABC234",
+          clientIdentifier: clientIdentifier as string,
+        });
+        expect(result).toMatchObject({
+          ok: false,
+          code: "PAIRING_UNAVAILABLE",
+        });
+        expect(mockAdmin.rpc).not.toHaveBeenCalled();
+      },
+    );
+
     it("atomically calls kiosk_record_pairing_failure RPC on invalid pairing code", async () => {
       const mockAdmin = {
         rpc: vi.fn().mockImplementation((fn: string) => {
@@ -701,6 +717,7 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
 
       const res = await consumeKioskPairingCode(mockAdmin as never, {
         pairingCode: "INVALID-CODE-123",
+        clientIdentifier: "explicit-test-source",
       });
 
       expect(res.ok).toBe(false);
@@ -708,7 +725,7 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
       expect(mockAdmin.rpc).toHaveBeenCalledWith(
         "kiosk_record_pairing_failure",
         expect.objectContaining({
-          p_client_identifier: "tablet-pairing-client",
+          p_client_identifier: "explicit-test-source",
         }),
       );
     });

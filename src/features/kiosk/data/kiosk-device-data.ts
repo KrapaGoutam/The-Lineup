@@ -137,17 +137,24 @@ export async function consumeKioskPairingCode(
   supabase: SupabaseClient<Database>,
   params: {
     readonly pairingCode: string;
-    readonly clientIdentifier?: string;
+    readonly clientIdentifier: string;
   },
 ): Promise<
   KioskResult<{ readonly token: string; readonly context: KioskActiveContext }>
 > {
   try {
+    const clientIdentifier = params.clientIdentifier?.trim();
+    if (!clientIdentifier) {
+      return {
+        ok: false,
+        error: "Trusted pairing source is unavailable.",
+        code: "PAIRING_UNAVAILABLE",
+      };
+    }
     const normalized = normalizePairingCode(params.pairingCode);
     const codeHash = hashPairingCode(normalized);
     const token = generateDeviceToken();
     const tokenHash = hashDeviceToken(token);
-    const clientIdentifier = params.clientIdentifier ?? "tablet-pairing-client";
 
     const { data, error } = await supabase.rpc("kiosk_consume_pairing_code", {
       p_code_hash: codeHash,

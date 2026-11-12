@@ -3,9 +3,9 @@
 **Parent Issue:** [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)
 **Feature Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)
 **Pull Request:** [#324](https://github.com/KrapaGoutam/The-Lineup/pull/324)
-**Implementation reviewer:** Codex; historical Claude/Antigravity attribution has no final-SHA approval receipt
+**Implementation reviewer:** Codex; independent source reviewer: Claude Sonnet 5 High (exact SHA and scope in INDEPENDENT_REVIEW.md)
 **Review Date:** November 11, 2026
-**Status:** `APPROVED — ALL 7 SECURITY REMEDIATIONS COMPLETED & VERIFIED`
+**Status:** `REVIEW / CI RECEIPTS IN PR #324`
 
 ---
 
@@ -13,7 +13,7 @@
 
 This document records the independent security review and mandatory remediation for Feature **V2-007: Clock In / Clock Out Kiosk** prior to merging PR #324 into `development`.
 
-The historical handoff attributes seven findings at `a568d1b` to an independent source review. The continuation preserves that history, corrects additional implementation defects, and records new test evidence below. No independent approval of the final continuation commit is available.
+The historical handoff attributes seven findings at `a568d1b` to an independent source review. The continuation preserves that history, corrects additional implementation defects, and records new test evidence below. The genuine independent review at cf4d1a9 and its M1 resolution are recorded below; final-head follow-up receipts are maintained in PR #324.
 
 ---
 
@@ -90,9 +90,6 @@ See [the continuation receipt](CONTINUATION_VALIDATION.md) for newly executed te
 
 ## 5. Independent review gate
 
-- Final reviewer: unavailable; no separate Claude Sonnet High reviewer is available in this session.
-- Exact reviewed SHA: none for the continuation.
-- GitHub submitted reviews checked during continuation: none.
-- Codex performed implementation review and verification; this is not independent security acceptance.
-- Decision: SECURITY REVIEW PENDING. A genuine reviewer must record identity, exact commit SHA, critical/high findings, evidence, and decision before owner-approved integration.
-- No merge or hosted schema deployment is authorized by this report.
+A separate Claude Sonnet 5 High process reviewed public source commit cf4d1a9f266c7c72684c7ba8eca764d837c087a6 and returned APPROVE IMPLEMENTATION FOR OWNER REVIEW, with no critical/high findings, one recommended medium hardening item (M1), and four low-severity residual observations. [Verbatim report and qualifications](INDEPENDENT_REVIEW.md).
+
+M1 is corrected: the data-layer source is required and fails closed when absent or blank, with three negative tests. Final-head follow-up review and exact-head CI receipts are maintained in [PR #324](https://github.com/KrapaGoutam/The-Lineup/pull/324). Codex's own implementation review is not described as independent. Owner approval for Hosted DEV kiosk migration and development merge remains separate.

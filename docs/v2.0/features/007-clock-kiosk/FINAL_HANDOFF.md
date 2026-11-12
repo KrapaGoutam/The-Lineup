@@ -1,6 +1,6 @@
 # Feature V2-007: Clock In / Clock Out Kiosk — Final Handoff & Release Package
 
-> Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). Independent final-commit security review, owner-approved Hosted DEV kiosk deployment/acceptance, and owner-approved development merge remain pending. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
+> Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). The independent first-round review is recorded in [INDEPENDENT_REVIEW.md](INDEPENDENT_REVIEW.md); final-head follow-up review and CI receipts are maintained in PR #324. Hosted DEV kiosk deployment/acceptance and development merge require separate owner approval. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
 
 **Parent Issue:** [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 **Feature Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)  
@@ -8,7 +8,7 @@
 **Target Branch:** `development`  
 **Feature Branch:** `feature/v2-007-clock-kiosk`  
 **Base Commit:** `c821487cf0344c516cb174a0c77abdde3792a92a` (PR #323 on `origin/development`)  
-**Status:** `SECURITY REVIEW PENDING`
+**Status:** `REVIEW / CI RECEIPTS IN PR #324`
 
 ---
 
