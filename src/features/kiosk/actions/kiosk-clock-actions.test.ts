@@ -9,11 +9,19 @@ import {
   kioskGetActiveStatusAction,
   kioskGetEmployeeReportAction,
 } from "./kiosk-clock-actions";
-import { signKioskSession } from "../data/kiosk-cookie";
+import {
+  encryptAccessToken,
+  generateSessionToken,
+  hashSessionToken,
+  signSessionToken,
+} from "../data/kiosk-crypto";
+import type { KioskEmployeeSession } from "../data/kiosk-cookie";
 
 // Mock server-only
 vi.mock("server-only", () => ({}));
 
+process.env.KIOSK_SESSION_SECRET =
+  "test-secret-at-least-32-characters-long-123456";
 process.env.APP_PIN_PEPPER = "test-pepper-at-least-32-characters-long-12345";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
@@ -23,7 +31,7 @@ const mockCookies: Record<string, string> = {};
 vi.mock("next/headers", () => ({
   cookies: vi.fn().mockImplementation(() => ({
     get: (name: string) =>
-      mockCookies[name] ? { value: mockCookies[name] } : undefined,
+      mockCookies[name] ? { name, value: mockCookies[name] } : undefined,
     set: (name: string, value: string) => {
       mockCookies[name] = value;
     },
@@ -50,7 +58,7 @@ const mockEmployeeRpc = vi.fn();
 const mockEmployeeFrom = vi.fn();
 
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn().mockImplementation((url, key, options) => {
+  createClient: vi.fn().mockImplementation((_url, _key, options) => {
     // If called with Authorization header, return employee query client
     if (options?.global?.headers?.Authorization) {
       return {
@@ -97,9 +105,16 @@ describe("Kiosk Clock Server Actions", () => {
   const VALID_DEVICE_TOKEN =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+  const mockSessionStorage: Record<string, Record<string, unknown>> = {};
+  const mockAttemptInserts: Array<Record<string, unknown>> = [];
+
   beforeEach(() => {
     vi.clearAllMocks();
     Object.keys(mockCookies).forEach((key) => delete mockCookies[key]);
+    Object.keys(mockSessionStorage).forEach(
+      (key) => delete mockSessionStorage[key],
+    );
+    mockAttemptInserts.length = 0;
   });
 
   function setupDeviceMock() {
@@ -140,8 +155,74 @@ describe("Kiosk Clock Server Actions", () => {
           }),
         };
       }
+      if (table === "kiosk_sessions") {
+        return {
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockSessionStorage[String(row.session_token_hash)] = row;
+            return Promise.resolve({ error: null });
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((col: string, val: string) => {
+              if (col === "session_token_hash") {
+                delete mockSessionStorage[val];
+              } else if (col === "device_id") {
+                Object.keys(mockSessionStorage).forEach((k) => {
+                  if (mockSessionStorage[k].device_id === val) {
+                    delete mockSessionStorage[k];
+                  }
+                });
+              }
+              return Promise.resolve({ error: null });
+            }),
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((_col: string, val: string) => ({
+              gt: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockImplementation(() => {
+                  const found = mockSessionStorage[val];
+                  return Promise.resolve({
+                    data: found ? { ...found } : null,
+                    error: null,
+                  });
+                }),
+              }),
+            })),
+          }),
+        };
+      }
+      if (table === "passcode_login_attempts") {
+        return {
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockAttemptInserts.push(row);
+            return Promise.resolve({ error: null });
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+          }),
+        };
+      }
       return {};
     });
+  }
+
+  function setupSessionMock(overrides?: Partial<KioskEmployeeSession>) {
+    setupDeviceMock();
+    const rawToken = generateSessionToken();
+    const tokenHash = hashSessionToken(rawToken);
+    const sessionData = {
+      profile_id: overrides?.profileId ?? MOCK_PROFILE_ID,
+      display_name: overrides?.displayName ?? "Alice Chef",
+      device_id: overrides?.deviceId ?? MOCK_DEVICE_ID,
+      organization_id: overrides?.organizationId ?? MOCK_ORG_ID,
+      location_id: overrides?.locationId ?? MOCK_LOC_ID,
+      encrypted_access_token: encryptAccessToken(
+        overrides?.accessToken ?? "jwt-token-alice",
+      ),
+      expires_at: new Date(Date.now() + 180_000).toISOString(),
+    };
+    mockSessionStorage[tokenHash] = sessionData;
+    mockCookies["lineup_kiosk_session"] = signSessionToken(rawToken);
   }
 
   it("fails PIN auth if device is not paired", async () => {
@@ -215,7 +296,7 @@ describe("Kiosk Clock Server Actions", () => {
     }
   });
 
-  it("denies authentication if PIN is not recognized in passcode_credentials", async () => {
+  it("denies authentication and records failure when PIN is not recognized", async () => {
     setupDeviceMock();
 
     mockAdminClient.from.mockImplementation((table: string) => {
@@ -257,7 +338,10 @@ describe("Kiosk Clock Server Actions", () => {
             eq: vi.fn().mockReturnThis(),
             gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
           }),
-          insert: vi.fn().mockResolvedValue({ error: null }),
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockAttemptInserts.push(row);
+            return Promise.resolve({ error: null });
+          }),
         };
       }
       if (table === "passcode_lockout_resets") {
@@ -286,9 +370,13 @@ describe("Kiosk Clock Server Actions", () => {
     if (!res.ok) {
       expect(res.code).toBe("invalid_pin");
     }
+
+    // Verify Requirement 5: Unrecognized PIN recorded succeeded: false
+    expect(mockAttemptInserts).toHaveLength(1);
+    expect(mockAttemptInserts[0].succeeded).toBe(false);
   });
 
-  it("authenticates valid employee PIN and returns active session state", async () => {
+  it("authenticates PIN successfully, records succeeded: true, and sets opaque cookie without exposing JWT", async () => {
     setupDeviceMock();
 
     mockAdminClient.from.mockImplementation((table: string) => {
@@ -306,7 +394,7 @@ describe("Kiosk Clock Server Actions", () => {
                 organizations: {
                   id: MOCK_ORG_ID,
                   name: "Grand Bistro",
-                  slug: "bistro",
+                  slug: "grand-bistro",
                 },
                 locations: {
                   id: MOCK_LOC_ID,
@@ -320,7 +408,7 @@ describe("Kiosk Clock Server Actions", () => {
             }),
           }),
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue(Promise.resolve({})),
+            eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         };
       }
@@ -330,7 +418,10 @@ describe("Kiosk Clock Server Actions", () => {
             eq: vi.fn().mockReturnThis(),
             gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
           }),
-          insert: vi.fn().mockResolvedValue({ error: null }),
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockAttemptInserts.push(row);
+            return Promise.resolve({ error: null });
+          }),
         };
       }
       if (table === "passcode_lockout_resets") {
@@ -350,7 +441,7 @@ describe("Kiosk Clock Server Actions", () => {
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
                 profile_id: MOCK_PROFILE_ID,
-                synthetic_email: "staff@lineup.app",
+                synthetic_email: "alice@grandbistro.internal",
               },
               error: null,
             }),
@@ -360,15 +451,14 @@ describe("Kiosk Clock Server Actions", () => {
       if (table === "locations") {
         return {
           select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  attendance_mode: "internal_the_lineup",
-                  active: true,
-                  archived_at: null,
-                },
-                error: null,
-              }),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: {
+                attendance_mode: "internal_the_lineup",
+                active: true,
+                archived_at: null,
+              },
+              error: null,
             }),
           }),
         };
@@ -398,12 +488,22 @@ describe("Kiosk Clock Server Actions", () => {
       if (table === "profiles") {
         return {
           select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { display_name: "Alice Chef" },
-                error: null,
-              }),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { display_name: "Alice Chef" },
+              error: null,
             }),
+          }),
+        };
+      }
+      if (table === "kiosk_sessions") {
+        return {
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockSessionStorage[String(row.session_token_hash)] = row;
+            return Promise.resolve({ error: null });
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         };
       }
@@ -412,51 +512,55 @@ describe("Kiosk Clock Server Actions", () => {
 
     mockSupabaseAuth.signInWithPassword.mockResolvedValue({
       data: {
-        session: { access_token: "jwt-token-alice" },
+        session: { access_token: "jwt-token-alice-12345" },
         user: { id: MOCK_PROFILE_ID },
       },
       error: null,
     });
 
-    mockEmployeeFrom.mockImplementation((table: string) => {
-      if (table === "attendance_sessions") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnThis(),
-            in: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      return {};
+    mockEmployeeFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
     });
 
     const res = await kioskAuthenticatePinAction({ pin: "1234" });
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
       expect(res.data.employee.displayName).toBe("Alice Chef");
-      expect(mockCookies["lineup_kiosk_session"]).toBeDefined();
+      expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
+      // Verify Requirement 1: Zero accessToken exposure on return payload
+      expect(
+        (res.data as unknown as Record<string, unknown>).accessToken,
+      ).toBeUndefined();
     }
+
+    // Verify Requirement 5: Attempt recorded with succeeded: true on completed authentication
+    expect(mockAttemptInserts).toHaveLength(1);
+    expect(mockAttemptInserts[0].succeeded).toBe(true);
+
+    // Verify Requirement 2: Cookie is set with opaque token (no JWT inside cookie)
+    const cookieVal = mockCookies["lineup_kiosk_session"];
+    expect(cookieVal).toBeDefined();
+    expect(cookieVal).not.toContain("jwt-token-alice-12345");
+    expect(cookieVal).toMatch(/^kiosk_sess_[a-f0-9]{64}\./);
+
+    // Verify server-side storage holds encrypted token
+    const storedSession = Object.values(mockSessionStorage)[0];
+    expect(storedSession).toBeDefined();
+    expect(storedSession.encrypted_access_token).toBeDefined();
+    expect(storedSession.encrypted_access_token).not.toContain(
+      "jwt-token-alice-12345",
+    );
   });
 
   it("kioskClockInAction invokes native clock in for authenticated employee", async () => {
-    setupDeviceMock();
-
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
+    setupSessionMock();
 
     mockEmployeeRpc.mockResolvedValueOnce({
       data: {
@@ -479,18 +583,7 @@ describe("Kiosk Clock Server Actions", () => {
   });
 
   it("kioskClockOutAction invokes native clock out for authenticated employee", async () => {
-    setupDeviceMock();
-
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
+    setupSessionMock();
 
     mockEmployeeRpc.mockResolvedValueOnce({
       data: {
@@ -515,18 +608,7 @@ describe("Kiosk Clock Server Actions", () => {
   });
 
   it("kioskBreakStartAction invokes native break start for authenticated employee", async () => {
-    setupDeviceMock();
-
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
+    setupSessionMock();
 
     mockEmployeeRpc.mockResolvedValueOnce({
       data: {
@@ -548,18 +630,7 @@ describe("Kiosk Clock Server Actions", () => {
   });
 
   it("kioskBreakEndAction invokes native break end for authenticated employee", async () => {
-    setupDeviceMock();
-
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
+    setupSessionMock();
 
     mockEmployeeRpc.mockResolvedValueOnce({
       data: {
@@ -568,6 +639,7 @@ describe("Kiosk Clock Server Actions", () => {
         sessionId: "sess-new",
         eventId: 104,
         status: "active",
+        breakEndAt: new Date().toISOString(),
       },
       error: null,
     });
@@ -579,24 +651,16 @@ describe("Kiosk Clock Server Actions", () => {
     }
   });
 
-  it("kioskGetActiveStatusAction returns active session state", async () => {
-    setupDeviceMock();
+  it("kioskGetActiveStatusAction returns current session without exposing JWT (Requirement 1)", async () => {
+    setupSessionMock();
 
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
-
-    mockEmployeeFrom.mockReturnValueOnce({
+    mockEmployeeFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
           data: {
             id: "sess-active",
@@ -614,37 +678,35 @@ describe("Kiosk Clock Server Actions", () => {
     const res = await kioskGetActiveStatusAction();
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.session.profileId).toBe(MOCK_PROFILE_ID);
+      expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
       expect(res.data.currentSession?.id).toBe("sess-active");
+      // Strict verification of Requirement 1: No accessToken in response
+      expect(
+        (res.data as unknown as Record<string, unknown>).accessToken,
+      ).toBeUndefined();
+      expect(
+        (res.data as unknown as Record<string, unknown>).session,
+      ).toBeUndefined();
     }
   });
 
   it("kioskGetEmployeeReportAction fetches monthly attendance rows for employee", async () => {
-    setupDeviceMock();
-
-    const signedSession = signKioskSession({
-      profileId: MOCK_PROFILE_ID,
-      displayName: "Alice Chef",
-      deviceId: MOCK_DEVICE_ID,
-      organizationId: MOCK_ORG_ID,
-      locationId: MOCK_LOC_ID,
-      accessToken: "jwt-token-alice",
-      expiresAt: Date.now() + 60_000,
-    });
-    mockCookies["lineup_kiosk_session"] = signedSession;
+    setupSessionMock();
 
     const res = await kioskGetEmployeeReportAction({ year: 2026, month: 11 });
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.rows.length).toBe(1);
-      expect(res.data.rows[0].employeeName).toBe("Alice Chef");
+      expect(res.data.rows).toHaveLength(1);
+      expect(res.data.rows[0].profileId).toBe(MOCK_PROFILE_ID);
     }
   });
 
-  it("kioskClearSessionAction deletes session cookie", async () => {
-    mockCookies["lineup_kiosk_session"] = "session-to-clear";
+  it("kioskClearSessionAction purges the server session and cookie", async () => {
+    setupSessionMock();
+
     const res = await kioskClearSessionAction();
     expect(res.ok).toBe(true);
     expect(mockCookies["lineup_kiosk_session"]).toBeUndefined();
+    expect(Object.keys(mockSessionStorage)).toHaveLength(0);
   });
 });

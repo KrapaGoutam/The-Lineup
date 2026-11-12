@@ -58,7 +58,7 @@ export async function pairKioskDeviceAction(input: {
     // Securely persist device bearer token in HttpOnly cookie
     await setKioskDeviceCookie(res.data.token);
     // Clear any leftover employee session
-    await clearKioskSessionCookie();
+    await clearKioskSessionCookie(admin);
 
     return { ok: true, data: res.data.context };
   } catch (err: unknown) {
@@ -87,7 +87,7 @@ export async function getKioskDeviceStatusAction(): Promise<
     if (!res.ok || !res.data) {
       // Device token invalid, revoked, or location archived -> clear stale cookie
       await clearKioskDeviceCookie();
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(admin);
       return { ok: true, data: { paired: false, context: null } };
     }
 
@@ -105,8 +105,9 @@ export async function unpairKioskDeviceAction(): Promise<
   ActionResult<{ readonly success: true }>
 > {
   try {
+    const admin = createAdminClient();
     await clearKioskDeviceCookie();
-    await clearKioskSessionCookie();
+    await clearKioskSessionCookie(admin);
     return { ok: true, data: { success: true } };
   } catch (err: unknown) {
     console.error("unpairKioskDeviceAction unexpected error", err);

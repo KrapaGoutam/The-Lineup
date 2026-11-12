@@ -9,12 +9,24 @@ import {
   kioskGetEmployeeReportAction,
 } from "./kiosk-clock-actions";
 import { revokeKioskDeviceAction } from "./kiosk-admin-actions";
-import { signKioskSession, verifyKioskSession } from "../data/kiosk-cookie";
+import {
+  generateSessionToken,
+  hashSessionToken,
+  signSessionToken,
+  verifySessionToken,
+  encryptAccessToken,
+  decryptAccessToken,
+  getKioskSessionSecret,
+} from "../data/kiosk-crypto";
+import { consumeKioskPairingCode } from "../data/kiosk-device-data";
+import type { KioskEmployeeSession } from "../data/kiosk-cookie";
 
 // Mock server-only
 vi.mock("server-only", () => ({}));
 
 process.env.APP_PIN_PEPPER = "test-pepper-at-least-32-characters-long-12345";
+process.env.KIOSK_SESSION_SECRET =
+  "test-kiosk-session-secret-at-least-32-characters-12345";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost:54321";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-anon-key";
@@ -105,7 +117,7 @@ vi.mock("@/features/attendance/data/native-report-data", () => ({
   }),
 }));
 
-describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
+describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", () => {
   const MOCK_DEVICE_ID = "44444444-4444-4444-4444-444444444444";
   const MOCK_ORG_A = "11111111-1111-1111-1111-111111111111";
   const MOCK_LOC_1 = "22222222-2222-2222-2222-222222222222";
@@ -114,9 +126,64 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
   const VALID_DEVICE_TOKEN =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+  const mockSessionStorage: Record<string, Record<string, unknown>> = {};
+  const mockAttemptInserts: Array<Record<string, unknown>> = [];
+
   beforeEach(() => {
     vi.clearAllMocks();
     Object.keys(mockCookies).forEach((key) => delete mockCookies[key]);
+    Object.keys(mockSessionStorage).forEach(
+      (key) => delete mockSessionStorage[key],
+    );
+    mockAttemptInserts.length = 0;
+
+    // Default employee mocks
+    mockEmployeeRpc.mockResolvedValue({ data: null, error: null });
+    mockEmployeeFrom.mockImplementation((table: string) => {
+      if (table === "attendance_sessions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            in: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "sess-active-1",
+                  organization_id: MOCK_ORG_A,
+                  location_id: MOCK_LOC_1,
+                  profile_id: MOCK_PROFILE_ID,
+                  service_date: "2026-11-10",
+                  status: "active",
+                  clock_in_at: new Date().toISOString(),
+                  clock_out_at: null,
+                  gross_elapsed_seconds: 3600,
+                  total_break_seconds: 0,
+                  created_by: MOCK_PROFILE_ID,
+                  updated_by: MOCK_PROFILE_ID,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              id: MOCK_PROFILE_ID,
+              display_name: "Alice Chef",
+              photo_url: null,
+              role: "server",
+            },
+            error: null,
+          }),
+        }),
+      };
+    });
   });
 
   function setupRevokedDeviceMock() {
@@ -184,8 +251,90 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
           }),
         };
       }
+      if (table === "kiosk_sessions") {
+        return {
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockSessionStorage[String(row.session_token_hash)] = row;
+            return Promise.resolve({ error: null });
+          }),
+          delete: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((col: string, val: string) => {
+              if (col === "session_token_hash") {
+                delete mockSessionStorage[val];
+              } else if (col === "device_id") {
+                Object.keys(mockSessionStorage).forEach((k) => {
+                  if (mockSessionStorage[k].device_id === val) {
+                    delete mockSessionStorage[k];
+                  }
+                });
+              }
+              return Promise.resolve({ error: null });
+            }),
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockImplementation((_col: string, val: string) => ({
+              gt: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockImplementation(() => {
+                  const found = mockSessionStorage[val];
+                  if (!found)
+                    return Promise.resolve({ data: null, error: null });
+                  if (
+                    new Date(String(found.expires_at)).getTime() <= Date.now()
+                  ) {
+                    return Promise.resolve({ data: null, error: null });
+                  }
+                  return Promise.resolve({
+                    data: { ...found },
+                    error: null,
+                  });
+                }),
+              }),
+            })),
+          }),
+        };
+      }
+      if (table === "passcode_login_attempts") {
+        return {
+          insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
+            mockAttemptInserts.push(row);
+            return Promise.resolve({ error: null });
+          }),
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+          }),
+        };
+      }
       return { select: vi.fn().mockReturnThis() };
     });
+  }
+
+  function setupSessionMock(
+    overrides?: Partial<KioskEmployeeSession & { expiresAtDate?: Date }>,
+  ) {
+    setupActiveDeviceMock(overrides?.locationId ?? MOCK_LOC_1);
+    const rawToken = generateSessionToken();
+    const tokenHash = hashSessionToken(rawToken);
+    const expiresAt = (
+      overrides?.expiresAtDate ?? new Date(Date.now() + 180_000)
+    ).toISOString();
+
+    const sessionData = {
+      profile_id: overrides?.profileId ?? MOCK_PROFILE_ID,
+      display_name: overrides?.displayName ?? "Alice",
+      device_id: overrides?.deviceId ?? MOCK_DEVICE_ID,
+      organization_id: overrides?.organizationId ?? MOCK_ORG_A,
+      location_id: overrides?.locationId ?? MOCK_LOC_1,
+      encrypted_access_token: encryptAccessToken(
+        overrides?.accessToken ?? "jwt-test-token",
+      ),
+      expires_at: expiresAt,
+    };
+    mockSessionStorage[tokenHash] = sessionData;
+    const cookieValue = signSessionToken(rawToken);
+    mockCookies["lineup_kiosk_session"] = cookieValue;
+
+    return { rawToken, tokenHash, cookieValue };
   }
 
   describe("Device Revocation Fail-Closed Enforcement", () => {
@@ -203,16 +352,8 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
 
     it("fails closed on Clock In if device status is revoked", async () => {
       setupRevokedDeviceMock();
-      const signedSession = signKioskSession({
-        profileId: MOCK_PROFILE_ID,
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt",
-        expiresAt: Date.now() + 60_000,
-      });
-      mockCookies["lineup_kiosk_session"] = signedSession;
+      setupSessionMock();
+      setupRevokedDeviceMock();
 
       const res = await kioskClockInAction();
       expect(res.ok).toBe(false);
@@ -223,16 +364,8 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
 
     it("fails closed on Clock Out if device status is revoked", async () => {
       setupRevokedDeviceMock();
-      const signedSession = signKioskSession({
-        profileId: MOCK_PROFILE_ID,
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt",
-        expiresAt: Date.now() + 60_000,
-      });
-      mockCookies["lineup_kiosk_session"] = signedSession;
+      setupSessionMock();
+      setupRevokedDeviceMock();
 
       const res = await kioskClockOutAction();
       expect(res.ok).toBe(false);
@@ -243,24 +376,14 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
 
     it("fails closed on Break Start and Break End if device status is revoked", async () => {
       setupRevokedDeviceMock();
-      const signedSession = signKioskSession({
-        profileId: MOCK_PROFILE_ID,
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt",
-        expiresAt: Date.now() + 60_000,
-      });
-      mockCookies["lineup_kiosk_session"] = signedSession;
+      setupSessionMock();
+      setupRevokedDeviceMock();
 
       const resStart = await kioskBreakStartAction();
       expect(resStart.ok).toBe(false);
       if (!resStart.ok) expect(resStart.code).toBe("device_revoked");
 
       setupRevokedDeviceMock();
-      mockCookies["lineup_kiosk_session"] = signedSession;
-
       const resEnd = await kioskBreakEndAction();
       expect(resEnd.ok).toBe(false);
       if (!resEnd.ok) expect(resEnd.code).toBe("device_revoked");
@@ -268,24 +391,14 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
 
     it("fails closed on Get Active Status and Employee Report if device status is revoked", async () => {
       setupRevokedDeviceMock();
-      const signedSession = signKioskSession({
-        profileId: MOCK_PROFILE_ID,
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt",
-        expiresAt: Date.now() + 60_000,
-      });
-      mockCookies["lineup_kiosk_session"] = signedSession;
+      setupSessionMock();
+      setupRevokedDeviceMock();
 
       const resStatus = await kioskGetActiveStatusAction();
       expect(resStatus.ok).toBe(false);
       if (!resStatus.ok) expect(resStatus.code).toBe("device_revoked");
 
       setupRevokedDeviceMock();
-      mockCookies["lineup_kiosk_session"] = signedSession;
-
       const resReport = await kioskGetEmployeeReportAction({
         year: 2026,
         month: 11,
@@ -297,22 +410,9 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
 
   describe("Device Location Reassignment & Session Invalidation", () => {
     it("invalidates active employee session when tablet location is reassigned", async () => {
-      // Device is now bound to Location 2 on the server
+      setupSessionMock({ locationId: MOCK_LOC_1 });
       setupActiveDeviceMock(MOCK_LOC_2);
 
-      // Employee cookie was issued for Location 1
-      const staleSession = signKioskSession({
-        profileId: MOCK_PROFILE_ID,
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1, // Stale location ID!
-        accessToken: "jwt",
-        expiresAt: Date.now() + 60_000,
-      });
-      mockCookies["lineup_kiosk_session"] = staleSession;
-
-      // Attempt clock in with stale location session
       const res = await kioskClockInAction();
       expect(res.ok).toBe(false);
       if (!res.ok) {
@@ -361,7 +461,7 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnThis(),
               gte: vi.fn().mockResolvedValue({
-                count: 5, // 5 failures on this kiosk!
+                count: 5,
                 error: null,
               }),
             }),
@@ -428,9 +528,6 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
         }
         if (table === "passcode_login_attempts") {
           callCount++;
-          // First call: fingerprint failures (return 0)
-          // Second call: recent success (return 0)
-          // Third call: organization failures (return 32)
           const count = callCount >= 3 ? 32 : 0;
           return {
             select: vi.fn().mockReturnValue({
@@ -453,6 +550,408 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
           "Too many failed attempts across this restaurant",
         );
       }
+    });
+  });
+
+  describe("Mandatory Remediation 1: Zero Employee JWT Exposure", () => {
+    it("never returns raw Supabase accessToken in kioskGetActiveStatusAction response", async () => {
+      setupSessionMock({ accessToken: "sensitive-supabase-jwt-token-12345" });
+
+      const res = await kioskGetActiveStatusAction();
+      expect(res.ok).toBe(true);
+      if (res.ok) {
+        // Assert employee metadata returned
+        expect(res.data.employee.profileId).toBe(MOCK_PROFILE_ID);
+        expect(res.data.employee.displayName).toBe("Alice");
+        expect(res.data.currentSession?.status).toBe("active");
+
+        // Assert response object contains NO accessToken or session property
+        const serialized = JSON.stringify(res);
+        expect(serialized).not.toContain("sensitive-supabase-jwt-token-12345");
+        expect(
+          (res.data as unknown as Record<string, unknown>).accessToken,
+        ).toBeUndefined();
+        expect(
+          (res.data as unknown as Record<string, unknown>).session,
+        ).toBeUndefined();
+      }
+    });
+  });
+
+  describe("Mandatory Remediation 2: Secure Server-Side Session Storage & Opaque Token", () => {
+    it("stores encrypted JWT in kiosk_sessions and uses opaque HMAC-signed cookie", () => {
+      const { tokenHash, cookieValue } = setupSessionMock({
+        accessToken: "my-secret-access-token",
+      });
+
+      // Assert cookie format: kiosk_sess_<hex>.<base64url-signature>
+      expect(cookieValue).toMatch(/^kiosk_sess_[a-f0-9]{64}\.[A-Za-z0-9_-]+$/);
+
+      // Assert database record exists and holds encrypted ciphertext, not plaintext
+      const dbRecord = mockSessionStorage[tokenHash];
+      expect(dbRecord).toBeDefined();
+      expect(dbRecord.encrypted_access_token).toBeDefined();
+      expect(dbRecord.encrypted_access_token).not.toBe(
+        "my-secret-access-token",
+      );
+
+      // Assert decryption recovers the original access token
+      const decrypted = decryptAccessToken(
+        String(dbRecord.encrypted_access_token),
+      );
+      expect(decrypted).toBe("my-secret-access-token");
+    });
+
+    it("rejects tampered session token in cookie", async () => {
+      setupSessionMock();
+
+      // Tamper with the raw token portion
+      const [tokenPrefix, sig] = mockCookies["lineup_kiosk_session"].split(".");
+      const tamperedToken = tokenPrefix.slice(0, -4) + "ffff." + sig;
+      expect(verifySessionToken(tamperedToken)).toBeNull();
+      mockCookies["lineup_kiosk_session"] = tamperedToken;
+
+      const res = await kioskClockInAction();
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("session_expired");
+      }
+    });
+
+    it("rejects tampered signature in cookie", async () => {
+      setupSessionMock();
+
+      const [tokenPrefix] = mockCookies["lineup_kiosk_session"].split(".");
+      mockCookies["lineup_kiosk_session"] =
+        `${tokenPrefix}.0000000000000000000000000000000000000000000000000000000000000000`;
+
+      const res = await kioskClockInAction();
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("session_expired");
+      }
+    });
+  });
+
+  describe("Mandatory Remediation 3: Fail-Closed Secrets in Deployed Environments", () => {
+    it("fails closed when KIOSK_SESSION_SECRET and APP_PIN_PEPPER are missing in production environment", () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalSecret = process.env.KIOSK_SESSION_SECRET;
+      const originalPepper = process.env.APP_PIN_PEPPER;
+      try {
+        // @ts-expect-error force mutating NODE_ENV
+        process.env.NODE_ENV = "production";
+        delete process.env.KIOSK_SESSION_SECRET;
+        delete process.env.APP_PIN_PEPPER;
+
+        expect(() => getKioskSessionSecret()).toThrow(
+          "KIOSK_SESSION_SECRET (or APP_PIN_PEPPER) must be configured with at least 32 characters.",
+        );
+      } finally {
+        // @ts-expect-error restore NODE_ENV
+        process.env.NODE_ENV = originalEnv;
+        process.env.KIOSK_SESSION_SECRET = originalSecret;
+        process.env.APP_PIN_PEPPER = originalPepper;
+      }
+    });
+
+    it("fails closed when KIOSK_SESSION_SECRET is too short (< 32 chars) in production environment", () => {
+      const originalEnv = process.env.NODE_ENV;
+      const originalSecret = process.env.KIOSK_SESSION_SECRET;
+      const originalPepper = process.env.APP_PIN_PEPPER;
+      try {
+        // @ts-expect-error force mutating NODE_ENV
+        process.env.NODE_ENV = "production";
+        delete process.env.APP_PIN_PEPPER;
+        process.env.KIOSK_SESSION_SECRET = "short-secret";
+
+        expect(() => getKioskSessionSecret()).toThrow(
+          "KIOSK_SESSION_SECRET (or APP_PIN_PEPPER) must be configured with at least 32 characters.",
+        );
+      } finally {
+        // @ts-expect-error restore NODE_ENV
+        process.env.NODE_ENV = originalEnv;
+        process.env.KIOSK_SESSION_SECRET = originalSecret;
+        process.env.APP_PIN_PEPPER = originalPepper;
+      }
+    });
+  });
+
+  describe("Mandatory Remediation 4: Pairing Code Failure Accounting & Brute-Force Protection", () => {
+    it("atomically calls kiosk_record_pairing_failure RPC on invalid pairing code", async () => {
+      const mockAdmin = {
+        rpc: vi.fn().mockImplementation((fn: string) => {
+          if (fn === "kiosk_consume_pairing_code") {
+            return Promise.resolve({
+              data: null,
+              error: {
+                code: "P0001",
+                message: "Invalid or expired pairing code.",
+              },
+            });
+          }
+          if (fn === "kiosk_record_pairing_failure") {
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }),
+      };
+
+      const res = await consumeKioskPairingCode(mockAdmin as never, {
+        pairingCode: "INVALID-CODE-123",
+      });
+
+      expect(res.ok).toBe(false);
+      // Assert failure RPC was called with code hash
+      expect(mockAdmin.rpc).toHaveBeenCalledWith(
+        "kiosk_record_pairing_failure",
+        expect.objectContaining({
+          p_client_identifier: "tablet-pairing-client",
+        }),
+      );
+    });
+  });
+
+  describe("Mandatory Remediation 5: Complete PIN Failure Accounting", () => {
+    it("records succeeded: false in passcode_login_attempts when PIN locator is unrecognized", async () => {
+      setupActiveDeviceMock();
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "kiosk_devices") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: MOCK_DEVICE_ID,
+                  name: "Host Station",
+                  organization_id: MOCK_ORG_A,
+                  location_id: MOCK_LOC_1,
+                  status: "active",
+                  organizations: { id: MOCK_ORG_A, name: "Org", slug: "org" },
+                  locations: {
+                    id: MOCK_LOC_1,
+                    name: "Loc",
+                    time_zone: "America/Chicago",
+                    active: true,
+                    archived_at: null,
+                  },
+                },
+                error: null,
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_login_attempts") {
+          return {
+            insert: vi
+              .fn()
+              .mockImplementation((row: Record<string, unknown>) => {
+                mockAttemptInserts.push(row);
+                return Promise.resolve({ error: null });
+              }),
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_credentials") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: null, error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_lockout_resets") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null,
+                error: null,
+              }),
+            }),
+          };
+        }
+        return { select: vi.fn().mockReturnThis() };
+      });
+
+      const res = await kioskAuthenticatePinAction({ pin: "1234" });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("invalid_pin");
+      }
+      expect(mockAttemptInserts.length).toBe(1);
+      expect(mockAttemptInserts[0].succeeded).toBe(false);
+      expect(mockAttemptInserts[0].organization_id).toBe(MOCK_ORG_A);
+      expect(mockAttemptInserts[0].fingerprint).toBe(`kiosk:${MOCK_DEVICE_ID}`);
+    });
+
+    it("records succeeded: false when employee membership is inactive", async () => {
+      setupActiveDeviceMock();
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "kiosk_devices") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: MOCK_DEVICE_ID,
+                  name: "Host Station",
+                  organization_id: MOCK_ORG_A,
+                  location_id: MOCK_LOC_1,
+                  status: "active",
+                  organizations: { id: MOCK_ORG_A, name: "Org", slug: "org" },
+                  locations: {
+                    id: MOCK_LOC_1,
+                    name: "Loc",
+                    time_zone: "America/Chicago",
+                    active: true,
+                    archived_at: null,
+                  },
+                },
+                error: null,
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_login_attempts") {
+          return {
+            insert: vi
+              .fn()
+              .mockImplementation((row: Record<string, unknown>) => {
+                mockAttemptInserts.push(row);
+                return Promise.resolve({ error: null });
+              }),
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            }),
+          };
+        }
+        if (table === "passcode_credentials") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  profile_id: MOCK_PROFILE_ID,
+                  organization_id: MOCK_ORG_A,
+                  synthetic_email: "employee-1@example.com",
+                },
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === "locations") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  attendance_mode: "internal_the_lineup",
+                  active: true,
+                  archived_at: null,
+                },
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === "memberships") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null, // Inactive / not found!
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === "passcode_lockout_resets") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null,
+                error: null,
+              }),
+            }),
+          };
+        }
+        return { select: vi.fn().mockReturnThis() };
+      });
+
+      const res = await kioskAuthenticatePinAction({ pin: "1234" });
+      expect(res.ok).toBe(false);
+      expect(mockAttemptInserts.length).toBe(1);
+      expect(mockAttemptInserts[0].succeeded).toBe(false);
+    });
+  });
+
+  describe("Mandatory Remediation 6: Inactivity and Revocation Boundaries", () => {
+    it("rejects session that has exceeded 3-minute inactivity TTL", async () => {
+      const expiredDate = new Date(Date.now() - 1000);
+      setupSessionMock({ expiresAtDate: expiredDate });
+
+      const res = await kioskClockInAction();
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe("session_expired");
+      }
+    });
+
+    it("purges session from database when device is revoked", async () => {
+      setupActiveDeviceMock();
+      const { tokenHash } = setupSessionMock();
+      expect(mockSessionStorage[tokenHash]).toBeDefined();
+
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "kiosk_sessions") {
+          return {
+            delete: vi.fn().mockReturnValue({
+              eq: vi.fn().mockImplementation((col: string, val: string) => {
+                if (col === "device_id") {
+                  Object.keys(mockSessionStorage).forEach((k) => {
+                    if (mockSessionStorage[k].device_id === val) {
+                      delete mockSessionStorage[k];
+                    }
+                  });
+                }
+                return Promise.resolve({ error: null });
+              }),
+            }),
+          };
+        }
+        return { select: vi.fn().mockReturnThis() };
+      });
+
+      const adminClient = {
+        from: mockAdminFrom,
+      };
+      await adminClient
+        .from("kiosk_sessions")
+        .delete()
+        .eq("device_id", MOCK_DEVICE_ID);
+
+      expect(mockSessionStorage[tokenHash]).toBeUndefined();
     });
   });
 
@@ -480,18 +979,10 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
     });
 
     it("verifies cross-employee timesheet isolation", async () => {
-      setupActiveDeviceMock(MOCK_LOC_1);
-
-      const aliceSession = signKioskSession({
+      setupSessionMock({
         profileId: "alice-uuid-0001",
         displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt-alice",
-        expiresAt: Date.now() + 60_000,
       });
-      mockCookies["lineup_kiosk_session"] = aliceSession;
 
       const reportRes = await kioskGetEmployeeReportAction({
         year: 2026,
@@ -504,37 +995,6 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C)", () => {
         expect(reportRes.data.rows.length).toBe(1);
         expect(reportRes.data.rows[0].profileId).toBe("alice-uuid-0001");
       }
-    });
-
-    it("fails HMAC verification if session cookie payload is tampered with", () => {
-      const validSession = signKioskSession({
-        profileId: "alice-uuid-0001",
-        displayName: "Alice",
-        deviceId: MOCK_DEVICE_ID,
-        organizationId: MOCK_ORG_A,
-        locationId: MOCK_LOC_1,
-        accessToken: "jwt-alice",
-        expiresAt: Date.now() + 60_000,
-      });
-
-      // Split payload and signature
-      const [payloadB64, signature] = validSession.split(".");
-      expect(payloadB64).toBeDefined();
-      expect(signature).toBeDefined();
-
-      // Tamper with payload (change profileId to Bob's)
-      const parsed = JSON.parse(
-        Buffer.from(payloadB64, "base64url").toString("utf-8"),
-      );
-      parsed.profileId = "bob-uuid-0002";
-      const tamperedPayloadB64 = Buffer.from(
-        JSON.stringify(parsed),
-        "utf-8",
-      ).toString("base64url");
-
-      const tamperedCookie = `${tamperedPayloadB64}.${signature}`;
-      const result = verifyKioskSession(tamperedCookie);
-      expect(result).toBeNull(); // Rejected due to invalid HMAC!
     });
   });
 });

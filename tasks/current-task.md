@@ -112,3 +112,24 @@
 - [x] Documentation & Pull Request:
   - Update `docs/v2.0/features/007-clock-kiosk/` documentation suite.
   - Single consolidated PR to `development`.
+
+---
+
+## Mandatory Security Remediation (PR #324)
+
+- [x] Defect 1: Eliminate employee JWT exposure in `kioskGetActiveStatusAction` and serialized responses.
+- [x] Defect 2: Secure server-side session storage (`public.kiosk_sessions`, AES-256-GCM encrypted JWTs, opaque HMAC-signed cookie tokens `kiosk_sess_<hex>.<sig>`).
+- [x] Defect 3: Remove predictable session-secret fallback (`getKioskSessionSecret` fails closed in deployed non-test environments).
+- [x] Defect 4: Pairing code brute-force protection & atomicity (`public.kiosk_pairing_attempts`, `kiosk_record_pairing_failure`, 5-attempt lockout, 10-attempt/15min global rate limit).
+- [x] Defect 5: Complete PIN failure accounting integrity (`passcode_login_attempts` records `succeeded: false` on all failure branches).
+- [x] Defect 6: Inactivity and revocation boundaries (server-enforced 3-min TTL in DB, immediate session purging on device revocation).
+- [x] Defect 7: SQL privileges hardening (revoked direct table `INSERT`, `UPDATE`, `DELETE` on all kiosk tables from `authenticated` and `anon`).
+- [x] Quality Gates Verified:
+  - `npm run check` (Prettier, ESLint 0 warnings, TypeScript 0 errors).
+  - Full Vitest suite: 294 test files, 3,969 tests passing (83 kiosk tests).
+  - Database pgTAP: 43/43 assertions passing (`0077_kiosk_device_registration.test.sql`).
+  - Playwright E2E: 6/6 tests passing across Chromium, WebKit iPad, and Mobile viewports.
+  - Production Webpack build: `npx next build --webpack` succeeded with 13 routes.
+- [x] Documentation updated (`SECURITY_REVIEW.md`, `FINAL_HANDOFF.md`, `current-task.md`).
+- [x] PR #324 updated with security remediation findings and verification evidence.
+

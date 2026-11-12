@@ -2785,6 +2785,30 @@ export type Database = {
           },
         ];
       };
+      kiosk_pairing_attempts: {
+        Row: {
+          attempted_at: string;
+          client_identifier: string;
+          code_hash: string;
+          id: number;
+          succeeded: boolean;
+        };
+        Insert: {
+          attempted_at?: string;
+          client_identifier?: string;
+          code_hash: string;
+          id?: never;
+          succeeded?: boolean;
+        };
+        Update: {
+          attempted_at?: string;
+          client_identifier?: string;
+          code_hash?: string;
+          id?: never;
+          succeeded?: boolean;
+        };
+        Relationships: [];
+      };
       kiosk_pairing_codes: {
         Row: {
           attempt_count: number;
@@ -2848,6 +2872,74 @@ export type Database = {
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      kiosk_sessions: {
+        Row: {
+          created_at: string;
+          device_id: string;
+          display_name: string;
+          encrypted_access_token: string;
+          expires_at: string;
+          id: string;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          session_token_hash: string;
+        };
+        Insert: {
+          created_at?: string;
+          device_id: string;
+          display_name: string;
+          encrypted_access_token: string;
+          expires_at: string;
+          id?: string;
+          location_id: string;
+          organization_id: string;
+          profile_id: string;
+          session_token_hash: string;
+        };
+        Update: {
+          created_at?: string;
+          device_id?: string;
+          display_name?: string;
+          encrypted_access_token?: string;
+          expires_at?: string;
+          id?: string;
+          location_id?: string;
+          organization_id?: string;
+          profile_id?: string;
+          session_token_hash?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "kiosk_sessions_device_id_fkey";
+            columns: ["device_id"];
+            isOneToOne: false;
+            referencedRelation: "kiosk_devices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_sessions_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_sessions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "kiosk_sessions_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -6777,10 +6869,19 @@ export type Database = {
         };
         Returns: number;
       };
-      kiosk_consume_pairing_code: {
-        Args: { p_code_hash: string; p_device_token_hash: string };
-        Returns: Json;
-      };
+      kiosk_consume_pairing_code:
+        | {
+            Args: { p_code_hash: string; p_device_token_hash: string };
+            Returns: Json;
+          }
+        | {
+            Args: {
+              p_client_identifier?: string;
+              p_code_hash: string;
+              p_device_token_hash: string;
+            };
+            Returns: Json;
+          };
       kiosk_generate_pairing_code: {
         Args: {
           p_code_hash: string;
@@ -6791,6 +6892,10 @@ export type Database = {
       };
       kiosk_reassign_device: {
         Args: { p_device_id: string; p_new_location_id: string };
+        Returns: Json;
+      };
+      kiosk_record_pairing_failure: {
+        Args: { p_client_identifier?: string; p_code_hash: string };
         Returns: Json;
       };
       kiosk_rename_device: {

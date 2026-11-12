@@ -1,50 +1,69 @@
+-- Feature V2-007: Clock In / Clock Out Kiosk — Device Registration, Pairing, and Session Management
 -- Migration: 20261111120000_kiosk_device_registration.sql
--- V2-007 Clock In / Clock Out Kiosk — Device Registration, Location Binding & Management
 
--- 1. Helper function: Can the current actor manage kiosk devices for this location?
--- Authorized roles:
--- - Overall role 'owner' or 'manager'
--- - Organization role 'owner' or 'general_manager'
--- - Location manager ('manager' in location_memberships)
--- Unauthorized: shift managers, regular staff, foreign tenants, anonymous.
+-- 1. Capability & Role Check Helper
 create or replace function private.kiosk_can_manage_location(p_location_id uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select exists (
+declare
+  v_uid uuid := (select auth.uid());
+  v_loc public.locations%rowtype;
+begin
+  if v_uid is null or p_location_id is null then
+    return false;
+  end if;
+
+  select * into v_loc
+  from public.locations
+  where id = p_location_id and active and archived_at is null;
+
+  if not found then
+    return false;
+  end if;
+
+  -- 1. Overall role check (owner or manager)
+  if exists (
     select 1
-    from public.locations l
-    where l.id = p_location_id
-      and (select auth.uid()) is not null
+    from public.overall_roles r
+    where r.profile_id = v_uid
+      and r.role in ('owner', 'manager')
+  ) then
+    return true;
+  end if;
+
+  -- 2. Organization Owner / General Manager check
+  if exists (
+    select 1
+    from public.memberships m
+    where m.organization_id = v_loc.organization_id
+      and m.profile_id = v_uid
+      and m.active
       and (
-        exists (
-          select 1 from public.overall_roles r
-          where r.profile_id = (select auth.uid())
-            and r.role in ('owner', 'manager')
-        )
-        or exists (
-          select 1 from public.memberships m
-          where m.organization_id = l.organization_id
-            and m.profile_id = (select auth.uid())
-            and m.active
-            and m.roles && array['owner', 'general_manager']::public.app_role[]
-        )
-        or (
-          l.active
-          and l.archived_at is null
-          and exists (
-            select 1 from public.location_memberships lm
-            where lm.location_id = l.id
-              and lm.profile_id = (select auth.uid())
-              and lm.active
-              and lm.role = 'manager'
-          )
-        )
+        'owner'::public.app_role = any(m.roles) or
+        'general_manager'::public.app_role = any(m.roles)
       )
-  );
+  ) then
+    return true;
+  end if;
+
+  -- 3. Location Membership with manager capability
+  if exists (
+    select 1
+    from public.location_memberships lm
+    where lm.location_id = p_location_id
+      and lm.profile_id = v_uid
+      and lm.active
+      and lm.role = 'manager'::public.location_role
+  ) then
+    return true;
+  end if;
+
+  return false;
+end;
 $$;
 
 revoke all on function private.kiosk_can_manage_location(uuid) from public, anon;
@@ -78,21 +97,14 @@ create index if not exists kiosk_devices_token_hash_idx
 alter table public.kiosk_devices enable row level security;
 alter table public.kiosk_devices force row level security;
 
+-- Only SELECT policy for authenticated managers; INSERT/UPDATE/DELETE must go through audited RPCs
 drop policy if exists "kiosk_devices_select_manager" on public.kiosk_devices;
 create policy "kiosk_devices_select_manager" on public.kiosk_devices
   for select to authenticated
   using (private.kiosk_can_manage_location(location_id));
 
 drop policy if exists "kiosk_devices_insert_manager" on public.kiosk_devices;
-create policy "kiosk_devices_insert_manager" on public.kiosk_devices
-  for insert to authenticated
-  with check (private.kiosk_can_manage_location(location_id));
-
 drop policy if exists "kiosk_devices_update_manager" on public.kiosk_devices;
-create policy "kiosk_devices_update_manager" on public.kiosk_devices
-  for update to authenticated
-  using (private.kiosk_can_manage_location(location_id))
-  with check (private.kiosk_can_manage_location(location_id));
 
 -- 3. Kiosk Pairing Codes Table
 create table if not exists public.kiosk_pairing_codes (
@@ -120,29 +132,69 @@ create index if not exists kiosk_pairing_codes_org_loc_idx
 alter table public.kiosk_pairing_codes enable row level security;
 alter table public.kiosk_pairing_codes force row level security;
 
+-- Only SELECT policy for authenticated managers; generation/consumption must go through audited RPCs
 drop policy if exists "kiosk_pairing_codes_select_manager" on public.kiosk_pairing_codes;
 create policy "kiosk_pairing_codes_select_manager" on public.kiosk_pairing_codes
   for select to authenticated
   using (private.kiosk_can_manage_location(location_id));
 
 drop policy if exists "kiosk_pairing_codes_insert_manager" on public.kiosk_pairing_codes;
-create policy "kiosk_pairing_codes_insert_manager" on public.kiosk_pairing_codes
-  for insert to authenticated
-  with check (private.kiosk_can_manage_location(location_id));
-
 drop policy if exists "kiosk_pairing_codes_update_manager" on public.kiosk_pairing_codes;
-create policy "kiosk_pairing_codes_update_manager" on public.kiosk_pairing_codes
-  for update to authenticated
-  using (private.kiosk_can_manage_location(location_id))
-  with check (private.kiosk_can_manage_location(location_id));
 
-revoke all on public.kiosk_devices from public, anon;
-grant select, insert, update on public.kiosk_devices to authenticated;
+-- 4. Kiosk Pairing Attempts Table (Rate Limiting & Brute-Force Defense)
+create table if not exists public.kiosk_pairing_attempts (
+  id bigint generated always as identity primary key,
+  code_hash text not null,
+  client_identifier text not null default 'anonymous',
+  succeeded boolean not null default false,
+  attempted_at timestamptz not null default now()
+);
 
-revoke all on public.kiosk_pairing_codes from public, anon;
-grant select, insert, update, delete on public.kiosk_pairing_codes to authenticated;
+create index if not exists kiosk_pairing_attempts_attempted_at_idx
+  on public.kiosk_pairing_attempts (attempted_at desc)
+  where not succeeded;
 
--- 4. RPC: Generate Pairing Code (Manager Only)
+alter table public.kiosk_pairing_attempts enable row level security;
+alter table public.kiosk_pairing_attempts force row level security;
+
+-- 5. Kiosk Server-Side Ephemeral Sessions Table
+create table if not exists public.kiosk_sessions (
+  id uuid primary key default gen_random_uuid(),
+  session_token_hash text not null unique,
+  device_id uuid not null references public.kiosk_devices(id) on delete cascade,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  location_id uuid not null references public.locations(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  display_name text not null,
+  encrypted_access_token text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists kiosk_sessions_token_hash_idx
+  on public.kiosk_sessions (session_token_hash, expires_at);
+
+create index if not exists kiosk_sessions_device_id_idx
+  on public.kiosk_sessions (device_id);
+
+alter table public.kiosk_sessions enable row level security;
+alter table public.kiosk_sessions force row level security;
+
+revoke all on public.kiosk_devices from public, anon, authenticated;
+grant select on public.kiosk_devices to authenticated;
+grant all on public.kiosk_devices to service_role;
+
+revoke all on public.kiosk_pairing_codes from public, anon, authenticated;
+grant select on public.kiosk_pairing_codes to authenticated;
+grant all on public.kiosk_pairing_codes to service_role;
+
+revoke all on public.kiosk_pairing_attempts from public, anon, authenticated;
+grant all on public.kiosk_pairing_attempts to service_role;
+
+revoke all on public.kiosk_sessions from public, anon, authenticated;
+grant all on public.kiosk_sessions to service_role;
+
+-- 6. RPC: Generate Pairing Code (Manager Only)
 create or replace function public.kiosk_generate_pairing_code(
   p_location_id uuid,
   p_device_name text,
@@ -199,10 +251,53 @@ $$;
 revoke all on function public.kiosk_generate_pairing_code(uuid, text, text) from public, anon;
 grant execute on function public.kiosk_generate_pairing_code(uuid, text, text) to authenticated;
 
--- 5. RPC: Consume Pairing Code (Unauthenticated Tablet or Authenticated Manager)
+-- 7. RPC: Record Pairing Failure (Atomic Attempt Accounting & Lockout Tracking)
+create or replace function public.kiosk_record_pairing_failure(
+  p_code_hash text,
+  p_client_identifier text default 'anonymous'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_pairing public.kiosk_pairing_codes%rowtype;
+  v_updated_attempts integer := 0;
+begin
+  if p_code_hash is not null then
+    select * into v_pairing
+    from public.kiosk_pairing_codes
+    where code_hash = p_code_hash
+    for update;
+
+    if found then
+      update public.kiosk_pairing_codes
+      set attempt_count = attempt_count + 1
+      where id = v_pairing.id
+      returning attempt_count into v_updated_attempts;
+    end if;
+  end if;
+
+  insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+  values (coalesce(p_code_hash, 'unknown'), coalesce(p_client_identifier, 'anonymous'), false);
+
+  return jsonb_build_object(
+    'recorded', true,
+    'attemptCount', v_updated_attempts
+  );
+end;
+$$;
+
+revoke all on function public.kiosk_record_pairing_failure(text, text) from public, anon;
+grant execute on function public.kiosk_record_pairing_failure(text, text) to authenticated, service_role;
+
+-- 8. RPC: Consume Pairing Code (Unauthenticated Tablet or Authenticated Manager)
+drop function if exists public.kiosk_consume_pairing_code(text, text);
 create or replace function public.kiosk_consume_pairing_code(
   p_code_hash text,
-  p_device_token_hash text
+  p_device_token_hash text,
+  p_client_identifier text default 'anonymous'
 )
 returns jsonb
 language plpgsql
@@ -214,12 +309,22 @@ declare
   v_loc public.locations%rowtype;
   v_org public.organizations%rowtype;
   v_device_id uuid;
+  v_recent_failures integer;
 begin
   if p_code_hash is null or p_device_token_hash is null or length(trim(p_device_token_hash)) < 32 then
     raise exception 'Invalid parameters' using errcode = '22023';
   end if;
 
-  -- Atomic select for update on pairing code
+  -- 1. Concurrency-safe rate-limit check: Max 10 failed pairing attempts across unknown codes in 15 minutes
+  select count(*) into v_recent_failures
+  from public.kiosk_pairing_attempts
+  where not succeeded and attempted_at > now() - interval '15 minutes';
+
+  if v_recent_failures >= 10 then
+    raise exception 'Too many failed pairing attempts. Please wait 15 minutes.' using errcode = '22023';
+  end if;
+
+  -- 2. Atomic select for update on pairing code
   select * into v_pairing
   from public.kiosk_pairing_codes
   where code_hash = p_code_hash
@@ -229,21 +334,22 @@ begin
     raise exception 'Pairing code not recognized' using errcode = 'P0002';
   end if;
 
-  -- Check attempt limits
+  -- 3. Check attempt limits
   if v_pairing.attempt_count >= v_pairing.max_attempts then
     raise exception 'Pairing code exceeded maximum attempts' using errcode = '22023';
   end if;
 
-  -- Check expiration
+  -- 4. Check expiration
   if v_pairing.expires_at < now() then
     raise exception 'Pairing code has expired' using errcode = '22023';
   end if;
 
-  -- Check if already used
+  -- 5. Check if already used
   if v_pairing.used_at is not null then
     raise exception 'Pairing code already used' using errcode = '22023';
   end if;
 
+  -- 6. Check location status
   select * into v_loc from public.locations where id = v_pairing.location_id;
   if not found or not v_loc.active or v_loc.archived_at is not null then
     raise exception 'Location is inactive or archived' using errcode = '55000';
@@ -251,19 +357,25 @@ begin
 
   select * into v_org from public.organizations where id = v_pairing.organization_id;
 
-  -- Create device record
+  -- 7. Provision device record
   insert into public.kiosk_devices (
     organization_id, location_id, name, device_token_hash, status, created_by
   ) values (
     v_pairing.organization_id, v_pairing.location_id, v_pairing.device_name, p_device_token_hash, 'active', v_pairing.created_by
   ) returning id into v_device_id;
 
-  -- Mark pairing code as used
+  -- 8. Mark pairing code as used and increment attempt count
   update public.kiosk_pairing_codes
-  set used_at = now(), device_id = v_device_id
+  set used_at = now(),
+      device_id = v_device_id,
+      attempt_count = attempt_count + 1
   where id = v_pairing.id;
 
-  -- Insert audit event
+  -- 9. Record successful pairing attempt
+  insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded)
+  values (p_code_hash, coalesce(p_client_identifier, 'anonymous'), true);
+
+  -- 10. Insert audit event
   insert into public.audit_events (
     organization_id,
     location_id,
@@ -296,10 +408,10 @@ begin
 end;
 $$;
 
-revoke all on function public.kiosk_consume_pairing_code(text, text) from public;
-grant execute on function public.kiosk_consume_pairing_code(text, text) to anon, authenticated;
+revoke all on function public.kiosk_consume_pairing_code(text, text, text) from public;
+grant execute on function public.kiosk_consume_pairing_code(text, text, text) to anon, authenticated, service_role;
 
--- 6. RPC: Revoke Device (Manager Only)
+-- 9. RPC: Revoke Device (Manager Only)
 create or replace function public.kiosk_revoke_device(
   p_device_id uuid,
   p_reason text default null
@@ -327,6 +439,9 @@ begin
     return jsonb_build_object('success', true, 'deviceId', v_device.id, 'status', 'revoked', 'alreadyRevoked', true);
   end if;
 
+  -- Invalidate all active kiosk sessions for this device immediately
+  delete from public.kiosk_sessions where device_id = v_device.id;
+
   update public.kiosk_devices
   set status = 'revoked',
       revoked_at = now(),
@@ -351,7 +466,7 @@ $$;
 revoke all on function public.kiosk_revoke_device(uuid, text) from public, anon;
 grant execute on function public.kiosk_revoke_device(uuid, text) to authenticated;
 
--- 7. RPC: Rename Device (Manager Only)
+-- 10. RPC: Rename Device (Manager Only)
 create or replace function public.kiosk_rename_device(
   p_device_id uuid,
   p_name text
@@ -397,7 +512,7 @@ $$;
 revoke all on function public.kiosk_rename_device(uuid, text) from public, anon;
 grant execute on function public.kiosk_rename_device(uuid, text) to authenticated;
 
--- 8. RPC: Reassign Device (Manager Only)
+-- 11. RPC: Reassign Device (Manager Only)
 create or replace function public.kiosk_reassign_device(
   p_device_id uuid,
   p_new_location_id uuid
@@ -429,6 +544,9 @@ begin
   if not private.kiosk_can_manage_location(p_new_location_id) then
     raise exception 'Unauthorized for new location' using errcode = '42501';
   end if;
+
+  -- Invalidate all active kiosk sessions for this device immediately on location transfer
+  delete from public.kiosk_sessions where device_id = v_device.id;
 
   update public.kiosk_devices
   set location_id = p_new_location_id,

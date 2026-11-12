@@ -1,7 +1,24 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.generated";
+import {
+  decryptAccessToken,
+  encryptAccessToken,
+  generateSessionToken,
+  hashSessionToken,
+  signSessionToken,
+  verifySessionToken,
+} from "./kiosk-crypto";
+
+export {
+  signSessionToken,
+  verifySessionToken,
+  encryptAccessToken,
+  decryptAccessToken,
+  getKioskSessionSecret,
+} from "./kiosk-crypto";
 
 export const KIOSK_DEVICE_COOKIE = "lineup_kiosk_device";
 export const KIOSK_SESSION_COOKIE = "lineup_kiosk_session";
@@ -14,62 +31,6 @@ export interface KioskEmployeeSession {
   readonly locationId: string;
   readonly accessToken: string;
   readonly expiresAt: number; // Unix timestamp in ms
-}
-
-function getSessionSecret(): string {
-  const secret =
-    process.env.APP_PIN_PEPPER ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    "insecure-fallback-secret-for-tests-only-min-32-chars";
-  return secret;
-}
-
-/**
- * Signs a KioskEmployeeSession object into an authenticated token.
- */
-export function signKioskSession(session: KioskEmployeeSession): string {
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
-  const signature = createHmac("sha256", getSessionSecret())
-    .update(`kiosk-session:${payload}`)
-    .digest("base64url");
-  return `${payload}.${signature}`;
-}
-
-/**
- * Verifies and parses an authenticated KioskEmployeeSession token.
- * Returns null if the token is tampered, malformed, or expired.
- */
-export function verifyKioskSession(token: string): KioskEmployeeSession | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 2) return null;
-    const [payload, signature] = parts;
-    const expectedSignature = createHmac("sha256", getSessionSecret())
-      .update(`kiosk-session:${payload}`)
-      .digest("base64url");
-
-    if (
-      signature.length !== expectedSignature.length ||
-      !timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
-    ) {
-      return null;
-    }
-
-    const json = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as KioskEmployeeSession;
-    if (
-      !json ||
-      typeof json.expiresAt !== "number" ||
-      json.expiresAt < Date.now()
-    ) {
-      return null;
-    }
-
-    return json;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -103,24 +64,45 @@ export async function clearKioskDeviceCookie(): Promise<void> {
 }
 
 /**
- * Reads and verifies the current active employee kiosk session.
- */
-export async function getKioskSessionCookie(): Promise<KioskEmployeeSession | null> {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get(KIOSK_SESSION_COOKIE)?.value?.trim();
-  if (!raw) return null;
-  return verifyKioskSession(raw);
-}
-
-/**
- * Sets a short-lived employee kiosk session cookie (3 minutes).
+ * Creates a server-side ephemeral employee session (3-minute TTL).
+ * Stores the encrypted access token in PostgreSQL table `kiosk_sessions`.
+ * Sets an opaque HMAC-signed session cookie in the browser.
+ * Zero JWT/tokens are ever exposed to browser JavaScript or client cookies.
  */
 export async function setKioskSessionCookie(
-  session: KioskEmployeeSession,
+  admin: SupabaseClient<Database>,
+  session: Omit<KioskEmployeeSession, "expiresAt">,
 ): Promise<void> {
+  const sessionToken = generateSessionToken();
+  const tokenHash = hashSessionToken(sessionToken);
+  const encryptedToken = encryptAccessToken(session.accessToken);
+  const expiresAtMs = Date.now() + 3 * 60_000;
+  const expiresAtIso = new Date(expiresAtMs).toISOString();
+
+  // Purge any existing sessions for this device
+  await admin.from("kiosk_sessions").delete().eq("device_id", session.deviceId);
+
+  // Persist session server-side with encrypted JWT
+  const { error } = await admin.from("kiosk_sessions").insert({
+    session_token_hash: tokenHash,
+    device_id: session.deviceId,
+    organization_id: session.organizationId,
+    location_id: session.locationId,
+    profile_id: session.profileId,
+    display_name: session.displayName,
+    encrypted_access_token: encryptedToken,
+    expires_at: expiresAtIso,
+  });
+
+  if (error) {
+    console.error("setKioskSessionCookie insert error", error);
+    throw new Error("Failed to persist server session.");
+  }
+
+  // Set signed opaque cookie in browser
+  const signedCookieValue = signSessionToken(sessionToken);
   const cookieStore = await cookies();
-  const token = signKioskSession(session);
-  cookieStore.set(KIOSK_SESSION_COOKIE, token, {
+  cookieStore.set(KIOSK_SESSION_COOKIE, signedCookieValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -130,9 +112,79 @@ export async function setKioskSessionCookie(
 }
 
 /**
- * Immediately purges the employee kiosk session cookie.
+ * Reads and verifies the current active employee kiosk session.
+ * Looks up the session row in PostgreSQL by token hash, confirms expiration,
+ * and decrypts the in-memory access token.
  */
-export async function clearKioskSessionCookie(): Promise<void> {
+export async function getKioskSessionCookie(
+  admin: SupabaseClient<Database>,
+): Promise<KioskEmployeeSession | null> {
   const cookieStore = await cookies();
-  cookieStore.delete(KIOSK_SESSION_COOKIE);
+  const raw = cookieStore.get(KIOSK_SESSION_COOKIE)?.value?.trim();
+  if (!raw) return null;
+
+  const rawToken = verifySessionToken(raw);
+  if (!rawToken) {
+    // Cookie signature was tampered or invalid -> purge cookie
+    await clearKioskSessionCookie(admin);
+    return null;
+  }
+
+  const tokenHash = hashSessionToken(rawToken);
+
+  const { data, error } = await admin
+    .from("kiosk_sessions")
+    .select(
+      "device_id, organization_id, location_id, profile_id, display_name, encrypted_access_token, expires_at",
+    )
+    .eq("session_token_hash", tokenHash)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error || !data) {
+    await clearKioskSessionCookie(admin);
+    return null;
+  }
+
+  const decryptedToken = decryptAccessToken(data.encrypted_access_token);
+  if (!decryptedToken) {
+    await clearKioskSessionCookie(admin);
+    return null;
+  }
+
+  return {
+    profileId: data.profile_id,
+    displayName: data.display_name,
+    deviceId: data.device_id,
+    organizationId: data.organization_id,
+    locationId: data.location_id,
+    accessToken: decryptedToken,
+    expiresAt: new Date(data.expires_at).getTime(),
+  };
+}
+
+/**
+ * Immediately purges the employee kiosk session both from server database
+ * and browser cookies.
+ */
+export async function clearKioskSessionCookie(
+  admin?: SupabaseClient<Database>,
+): Promise<void> {
+  try {
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(KIOSK_SESSION_COOKIE)?.value?.trim();
+    if (raw && admin) {
+      const rawToken = verifySessionToken(raw);
+      if (rawToken) {
+        const tokenHash = hashSessionToken(rawToken);
+        await admin
+          .from("kiosk_sessions")
+          .delete()
+          .eq("session_token_hash", tokenHash);
+      }
+    }
+    cookieStore.delete(KIOSK_SESSION_COOKIE);
+  } catch {
+    // Ignore errors during cookie deletion
+  }
 }

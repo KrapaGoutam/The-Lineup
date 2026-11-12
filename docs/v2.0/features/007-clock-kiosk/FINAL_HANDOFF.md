@@ -79,9 +79,8 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 | **ESLint**                 | `npx eslint`               | **PASS** | 0 warnings, 0 errors. React compiler rules and hooks validated.  |
 | **Type Check**             | `npm run typecheck`        | **PASS** | Strict TypeScript; zero type errors.                             |
 | **Combined Check**         | `npm run check`            | **PASS** | Exit code 0.                                                     |
-| **Vitest Suite**           | `npm test`                 | **PASS** | 294 test files, 3,951 tests passing.                             |
-| **pgTAP Migration Suite**  | `pg_prove` (Local DB)      | **PASS** | 32/32 assertions passing on migration `20261111120000`.          |
-| **pgTAP Regression Suite** | `pg_prove` (Local DB)      | **PASS** | 53/53 assertions passing on migration `20261110203355`.          |
+| **Vitest Suite**           | `npm test`                 | **PASS** | 294 test files, 3,969 tests passing (83 kiosk tests).            |
+| **pgTAP Migration Suite**  | `0077_kiosk_device`        | **PASS** | 43/43 assertions passing on migration `20261111120000`.          |
 | **Playwright E2E**         | `npx playwright test`      | **PASS** | 6/6 tests passing on desktop, tablet, and mobile viewports.      |
 | **Production Build**       | `npx next build --webpack` | **PASS** | Zero build errors. Dynamic route `/kiosk` compiled successfully. |
 
@@ -92,6 +91,10 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 ### PR Title
 
 `feat(kiosk): implement clock in / clock out kiosk application (V2-007)`
+
+### PR Number
+
+[PR #324](https://github.com/KrapaGoutam/The-Lineup/pull/324)
 
 ### Target Branch
 
@@ -104,7 +107,14 @@ The application delivers a touch-first, 4-digit PIN authentication interface tha
 - Links kiosk devices strictly to server-stored `(organization_id, location_id)` records with RLS forced.
 - Integrates Manager Kiosk Management into Location Administration.
 - Implements 4-digit PIN authentication with dual rate limiting (5 per kiosk, 30 per organization).
-- Implements shared-tablet isolation with 3-minute HMAC session tokens and 45-second inactivity timeout.
 - Connects clock in, clock out, and meal/rest breaks directly to canonical native attendance RPCs.
 - Adds monthly employee attendance report with clean print isolation.
-- Delivers complete test coverage across pgTAP (32 assertions), Vitest (294 test files / 3951 tests), and Playwright E2E (6 multi-viewport tests).
+- **Mandatory Security Remediation (PR #324):**
+  1. Eliminated raw employee Supabase JWT exposure in all server action responses (`KioskActiveStatusResponse`).
+  2. Implemented database-backed server sessions (`public.kiosk_sessions`) with AES-256-GCM encrypted JWTs and opaque HMAC-signed cookie tokens (`kiosk_sess_<hex>.<sig>`).
+  3. Enforced fail-closed session secret validation (`getKioskSessionSecret`) in deployed non-test environments.
+  4. Added concurrency-safe pairing attempt tracking (`public.kiosk_pairing_attempts`, `kiosk_record_pairing_failure`), 5-failure code lockout, and 10-failure/15min global rate limits.
+  5. Guaranteed complete PIN failure accounting in `passcode_login_attempts` across all 6 failure paths.
+  6. Enforced 3-minute hard TTL in database sessions and immediate session purging on device revocation.
+  7. Hardened SQL privileges by revoking direct table `INSERT`, `UPDATE`, `DELETE` on all kiosk tables from `authenticated` and `anon`.
+- Delivers complete test coverage across pgTAP (43 assertions), Vitest (294 test files / 3,969 tests), and Playwright E2E (6 multi-viewport tests).

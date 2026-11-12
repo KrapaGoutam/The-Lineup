@@ -85,7 +85,7 @@ async function verifyKioskDeviceContext() {
   const deviceRes = await getKioskDeviceByToken(admin, token);
   if (!deviceRes.ok || !deviceRes.data) {
     await clearKioskDeviceCookie();
-    await clearKioskSessionCookie();
+    await clearKioskSessionCookie(admin);
     return {
       ok: false as const,
       error: "Device registration is invalid or revoked.",
@@ -95,7 +95,7 @@ async function verifyKioskDeviceContext() {
 
   if (deviceRes.data.status !== "active") {
     await clearKioskDeviceCookie();
-    await clearKioskSessionCookie();
+    await clearKioskSessionCookie(admin);
     return {
       ok: false as const,
       error: "This kiosk device has been revoked.",
@@ -117,8 +117,20 @@ export interface AuthenticatePinResponse {
   readonly currentSession: AttendanceSessionModel | null;
 }
 
+export interface KioskActiveStatusResponse {
+  readonly employee: {
+    readonly profileId: string;
+    readonly displayName: string;
+    readonly organizationId: string;
+    readonly locationId: string;
+  };
+  readonly currentSession: AttendanceSessionModel | null;
+}
+
 /**
  * Authenticates an employee on a paired kiosk tablet using their 4-digit PIN.
+ * Failure accounting guarantees every non-completed authentication records
+ * `succeeded: false` to enforce device and organization rate limits.
  */
 export async function kioskAuthenticatePinAction(input: {
   readonly pin: string;
@@ -217,7 +229,7 @@ export async function kioskAuthenticatePinAction(input: {
       };
     }
 
-    // Resolve PIN against passcode_credentials
+    // Resolve PIN locator against passcode_credentials
     const locator = createPasscodeLocator(device.organizationId, pin);
     const { data: credential } = await admin
       .from("passcode_credentials")
@@ -227,14 +239,13 @@ export async function kioskAuthenticatePinAction(input: {
       .eq("active", true)
       .maybeSingle();
 
-    // Log the attempt
-    await admin.from("passcode_login_attempts").insert({
-      organization_id: device.organizationId,
-      fingerprint,
-      succeeded: Boolean(credential),
-    });
-
     if (!credential) {
+      // Record failure immediately to enforce rate limiting
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
     }
 
@@ -251,6 +262,11 @@ export async function kioskAuthenticatePinAction(input: {
       locationData.archived_at !== null ||
       locationData.attendance_mode !== "internal_the_lineup"
     ) {
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return {
         ok: false,
         error: "Internal attendance mode is not active for this location.",
@@ -268,6 +284,11 @@ export async function kioskAuthenticatePinAction(input: {
       .maybeSingle();
 
     if (!membership) {
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return {
         ok: false,
         error: "Employee account is not active in this restaurant.",
@@ -285,6 +306,11 @@ export async function kioskAuthenticatePinAction(input: {
       .maybeSingle();
 
     if (!locMembership) {
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return {
         ok: false,
         error: "Employee is not assigned to this location.",
@@ -306,6 +332,11 @@ export async function kioskAuthenticatePinAction(input: {
     });
 
     if (!verification.ok) {
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return {
         ok: false,
         error: "PIN verification failed.",
@@ -335,12 +366,24 @@ export async function kioskAuthenticatePinAction(input: {
       });
 
     if (signInError || !signInData.session) {
+      await admin.from("passcode_login_attempts").insert({
+        organization_id: device.organizationId,
+        fingerprint,
+        succeeded: false,
+      });
       return {
         ok: false,
         error: "Failed to establish employee session.",
         code: "auth_failed",
       };
     }
+
+    // Only record success after all verification steps and Supabase sign-in succeed
+    await admin.from("passcode_login_attempts").insert({
+      organization_id: device.organizationId,
+      fingerprint,
+      succeeded: true,
+    });
 
     // Get profile display name
     const { data: profile } = await admin
@@ -351,17 +394,16 @@ export async function kioskAuthenticatePinAction(input: {
 
     const displayName = profile?.display_name || "Employee";
 
-    // Set signed short-lived kiosk session cookie (3-minute TTL)
-    const sessionPayload: KioskEmployeeSession = {
+    // Store server-side session (3-minute TTL) with encrypted access token and opaque cookie
+    const sessionPayload: Omit<KioskEmployeeSession, "expiresAt"> = {
       profileId: credential.profile_id,
       displayName,
       deviceId: device.deviceId,
       organizationId: device.organizationId,
       locationId: device.locationId,
       accessToken: signInData.session.access_token,
-      expiresAt: Date.now() + 3 * 60_000,
     };
-    await setKioskSessionCookie(sessionPayload);
+    await setKioskSessionCookie(admin, sessionPayload);
 
     // Query active attendance session
     const employeeClient = createEmployeeClient(
@@ -396,12 +438,10 @@ export async function kioskAuthenticatePinAction(input: {
 
 /**
  * Returns the current active session state for the employee on the kiosk.
+ * Zero JWT/tokens are ever serialized or returned to the browser.
  */
 export async function kioskGetActiveStatusAction(): Promise<
-  ActionResult<{
-    readonly session: KioskEmployeeSession;
-    readonly currentSession: AttendanceSessionModel | null;
-  }>
+  ActionResult<KioskActiveStatusResponse>
 > {
   try {
     const deviceCheck = await verifyKioskDeviceContext();
@@ -409,13 +449,13 @@ export async function kioskGetActiveStatusAction(): Promise<
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "No active employee session.",
@@ -432,7 +472,12 @@ export async function kioskGetActiveStatusAction(): Promise<
     return {
       ok: true,
       data: {
-        session,
+        employee: {
+          profileId: session.profileId,
+          displayName: session.displayName,
+          organizationId: session.organizationId,
+          locationId: session.locationId,
+        },
         currentSession: sessionRes.ok ? sessionRes.data : null,
       },
     };
@@ -455,13 +500,13 @@ export async function kioskClockInAction(input?: {
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "Session expired. Please re-enter your PIN.",
@@ -501,13 +546,13 @@ export async function kioskClockOutAction(input?: {
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "Session expired. Please re-enter your PIN.",
@@ -546,13 +591,13 @@ export async function kioskBreakStartAction(input?: {
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "Session expired. Please re-enter your PIN.",
@@ -590,13 +635,13 @@ export async function kioskBreakEndAction(input?: {
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "Session expired. Please re-enter your PIN.",
@@ -635,13 +680,13 @@ export async function kioskGetEmployeeReportAction(input: {
       return { ok: false, error: deviceCheck.error, code: deviceCheck.code };
     }
 
-    const session = await getKioskSessionCookie();
+    const session = await getKioskSessionCookie(deviceCheck.admin);
     if (
       !session ||
       session.deviceId !== deviceCheck.device.deviceId ||
       session.locationId !== deviceCheck.device.locationId
     ) {
-      await clearKioskSessionCookie();
+      await clearKioskSessionCookie(deviceCheck.admin);
       return {
         ok: false,
         error: "Session expired. Please re-enter your PIN.",
@@ -693,7 +738,8 @@ export async function kioskClearSessionAction(): Promise<
   ActionResult<{ readonly success: true }>
 > {
   try {
-    await clearKioskSessionCookie();
+    const admin = createAdminClient();
+    await clearKioskSessionCookie(admin);
     return { ok: true, data: { success: true } };
   } catch (err: unknown) {
     console.error("kioskClearSessionAction error", err);

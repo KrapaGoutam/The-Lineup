@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(43);
 
 -- --------------------------------------------------------------------------
 -- V2-007 Kiosk Device Registration & Management — pgTAP Test Suite
@@ -291,6 +291,114 @@ select is(
   (select revocation_reason from public.kiosk_devices where id = (select id from cur_dev)),
   'Decommissioned tablet',
   'Revocation reason recorded'
+);
+
+-- 7. Mandatory Remediation 7: SQL Table Privileges Direct Mutation Revocation ----
+
+-- Direct INSERT on kiosk_devices by authenticated user is denied
+select set_test_user('00000000-0000-0000-0000-000000077001');
+set local role authenticated;
+select throws_ok(
+  $$ insert into public.kiosk_devices (organization_id, location_id, name, device_token_hash)
+     values ('00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', 'Hacked', 'hack_token_hash') $$,
+  '42501',
+  'permission denied for table kiosk_devices',
+  'Direct INSERT on kiosk_devices denied to authenticated'
+);
+
+-- Direct UPDATE on kiosk_devices by authenticated user is denied
+select throws_ok(
+  $$ update public.kiosk_devices set name = 'Hacked Name' where organization_id = '00000000-0000-0000-0000-0000000770a1' $$,
+  '42501',
+  'permission denied for table kiosk_devices',
+  'Direct UPDATE on kiosk_devices denied to authenticated'
+);
+
+-- Direct INSERT on kiosk_pairing_codes by authenticated user is denied
+select throws_ok(
+  $$ insert into public.kiosk_pairing_codes (organization_id, location_id, device_name, code_hash, created_by)
+     values ('00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', 'Hacked Code', 'hack_code_hash', '00000000-0000-0000-0000-000000077001') $$,
+  '42501',
+  'permission denied for table kiosk_pairing_codes',
+  'Direct INSERT on kiosk_pairing_codes denied to authenticated'
+);
+
+-- Direct UPDATE on kiosk_pairing_codes by authenticated user is denied
+select throws_ok(
+  $$ update public.kiosk_pairing_codes set device_name = 'Hacked' where code_hash = 'code_hash_11111111111111111111111111111111' $$,
+  '42501',
+  'permission denied for table kiosk_pairing_codes',
+  'Direct UPDATE on kiosk_pairing_codes denied to authenticated'
+);
+
+reset role;
+
+-- 8. Mandatory Remediation 4: Pairing Attempt Failure Accounting & Lockout -----
+
+-- Location manager generates a fresh pairing code to test failure lockout
+select set_test_user('00000000-0000-0000-0000-000000077002');
+select lives_ok(
+  $$ select public.kiosk_generate_pairing_code('00000000-0000-0000-0000-0000000770b1', 'Test Brute Force Tablet', 'code_hash_bruteforce_test_12345678') $$,
+  'Location manager creates brute-force test pairing code'
+);
+
+-- Recording pairing failure logs to kiosk_pairing_attempts and increments attempt_count
+select set_test_user(null);
+select lives_ok(
+  $$ select public.kiosk_record_pairing_failure('code_hash_bruteforce_test_12345678', '192.168.1.50') $$,
+  'Record pairing failure logs without error'
+);
+
+select is(
+  (select attempt_count from public.kiosk_pairing_codes where code_hash = 'code_hash_bruteforce_test_12345678'),
+  1,
+  'kiosk_record_pairing_failure increments attempt_count to 1'
+);
+
+-- Advance attempt_count to max_attempts (5)
+update public.kiosk_pairing_codes set attempt_count = 5 where code_hash = 'code_hash_bruteforce_test_12345678';
+
+-- Attempting to consume locked out pairing code raises exception
+select throws_ok(
+  $$ select public.kiosk_consume_pairing_code('code_hash_bruteforce_test_12345678', 'token_hash_bruteforce_lockout_123456789012') $$,
+  '22023',
+  'Pairing code exceeded maximum attempts',
+  'Locked out pairing code is rejected'
+);
+
+-- Global rate limit: insert 10 failed attempts within 15 minutes
+insert into public.kiosk_pairing_attempts (code_hash, client_identifier, succeeded, attempted_at)
+select 'unknown_hash_' || n, 'attacker-client', false, now() - interval '1 minute'
+from generate_series(1, 10) n;
+
+select throws_ok(
+  $$ select public.kiosk_consume_pairing_code('any_code_hash_test_12345678', 'token_hash_test_token_min_32_chars_123456') $$,
+  '22023',
+  'Too many failed pairing attempts. Please wait 15 minutes.',
+  'Global rate limit blocks pairing consumption after 10 recent failures'
+);
+
+-- 9. Mandatory Remediation 6: Revocation Purges Active Sessions ----------------
+
+-- Insert a new active device and a session for it
+insert into public.kiosk_devices (id, organization_id, location_id, name, device_token_hash, status)
+values ('00000000-0000-0000-0000-0000000770d1', '00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', 'Session Test Tablet', 'session_test_token_hash_12345678901234567890', 'active');
+
+insert into public.kiosk_sessions (id, device_id, organization_id, location_id, profile_id, display_name, session_token_hash, encrypted_access_token, expires_at)
+values ('00000000-0000-0000-0000-0000000770e1', '00000000-0000-0000-0000-0000000770d1', '00000000-0000-0000-0000-0000000770a1', '00000000-0000-0000-0000-0000000770b1', '00000000-0000-0000-0000-000000077002', 'Manager User', 'sess_hash_12345678901234567890123456789012', 'enc_token_12345678901234567890123456789012', now() + interval '3 minutes');
+
+-- Manager revokes the device
+select set_test_user('00000000-0000-0000-0000-000000077002');
+select lives_ok(
+  $$ select public.kiosk_revoke_device('00000000-0000-0000-0000-0000000770d1', 'Lost device') $$,
+  'Manager revokes device'
+);
+
+-- Verify that active sessions for this device were deleted
+select is(
+  (select count(*)::int from public.kiosk_sessions where device_id = '00000000-0000-0000-0000-0000000770d1'),
+  0,
+  'Device revocation purges active kiosk_sessions'
 );
 
 select * from finish();

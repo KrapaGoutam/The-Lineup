@@ -47,14 +47,11 @@ describe("KioskAttendanceScreen Component", () => {
     vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValueOnce({
       ok: true,
       data: {
-        session: {
+        employee: {
           profileId: "prof-1",
           displayName: "Alice Chef",
-          deviceId: "dev-1",
           organizationId: "org-1",
           locationId: "loc-1",
-          accessToken: "token-1",
-          expiresAt: Date.now() + 60_000,
         },
         currentSession: null,
       },
@@ -85,14 +82,11 @@ describe("KioskAttendanceScreen Component", () => {
     vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValue({
       ok: true,
       data: {
-        session: {
+        employee: {
           profileId: "prof-1",
           displayName: "Alice Chef",
-          deviceId: "dev-1",
           organizationId: "org-1",
           locationId: "loc-1",
-          accessToken: "token-1",
-          expiresAt: Date.now() + 60_000,
         },
         currentSession: null,
       },
@@ -137,14 +131,11 @@ describe("KioskAttendanceScreen Component", () => {
     vi.mocked(clockActions.kioskGetActiveStatusAction).mockResolvedValueOnce({
       ok: true,
       data: {
-        session: {
+        employee: {
           profileId: "prof-1",
           displayName: "Alice Chef",
-          deviceId: "dev-1",
           organizationId: "org-1",
           locationId: "loc-1",
-          accessToken: "token-1",
-          expiresAt: Date.now() + 60_000,
         },
         currentSession: null,
       },

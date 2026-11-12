@@ -152,6 +152,16 @@ export async function consumeKioskPairingCode(
 
     if (error) {
       console.error("consumeKioskPairingCode error", error);
+      // Atomic attempt accounting on failed consumption
+      try {
+        await supabase.rpc("kiosk_record_pairing_failure", {
+          p_code_hash: codeHash,
+          p_client_identifier: "tablet-pairing-client",
+        });
+      } catch (recErr: unknown) {
+        console.error("kiosk_record_pairing_failure error", recErr);
+      }
+
       if (error.code === "P0002") {
         return {
           ok: false,
