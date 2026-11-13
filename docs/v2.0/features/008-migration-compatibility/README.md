@@ -1,5 +1,7 @@
 # Feature V2-008: Migration & Compatibility
 
+> **2026-11-13 amendment:** .004 and .005 below are accepted for the DEV scope by owner-approved amendments (module configuration preserved/unconfigured; `attendance_mode` NULL accepted instead of default `EXTERNAL`). Production mapping and verification move to V2-009. See [DEV_ACCEPTANCE_RECORD.md](DEV_ACCEPTANCE_RECORD.md).
+
 GitHub Issue: [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  

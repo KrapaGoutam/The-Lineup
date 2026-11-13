@@ -82,3 +82,10 @@ Production database, Neon, `main`, `development`; organizations/locations; Staff
 - Migration 91's header comment says imports are untouched; they are gated (location roles in a multi-location org cannot commit an import that creates/updates shared catalog rows; stock-only imports still work). **File not edited** — checksum `9375ae54…a8ad` preserved.
 - Hosted DEV ledger is 91; **the app/Preview must be exercised only after this point** (done: the PR's Preview is created after the apply).
 - Outstanding unchanged: D-1, D-3, D-4, D-5/5b, D-6, D-7C, D-8, D-11 (see [owner decisions §6–7](../OWNER_DECISIONS_REQUIRED.md)).
+
+## 9. Integration closeout (after owner merge authorization)
+
+- **PR #325 merged** into `development` by merge commit `207d088d5bca5d989030870433cf4daa3ecb4c78` at 2026-11-13T04:58:03Z (source `9058a3aadecc245b995295f0e237ab0127a111a2`, `--match-head-commit`); merge tree identical to the source tree; `main` unchanged `5e5b7747`. No merge-triggered workflow exists (push triggers are `main` only); no migration deployed.
+- **Development Preview** deployment `7757555340` (success, Preview, `production_environment: false`, sha `207d088d`): bundle DEV ref ×1, Production ref ×0, no Neon host; unauthenticated GETs of the main, Settings, Recipes, Inventory, Attendance, `/kiosk` and an unknown-slug route return a client shell with no tenant data or error strings. Authenticated role-aware checks were **not** performed; the Kiosks UI is a Settings subview with no URL.
+- **Compatibility (read-only):** 100/100 RPC names called by the merged source exist on Hosted DEV; verifier `--expect 91 --compare` clean (all 91 tables identical to the pre-apply snapshot); Finance OFF, enforcement `staged`, guard rows identical.
+- **Not changed:** the GitHub `production` environment (no required reviewers — see section 6). Next owner decision: [D7C_OWNER_DECISION_PACKET.md](../D7C_OWNER_DECISION_PACKET.md).

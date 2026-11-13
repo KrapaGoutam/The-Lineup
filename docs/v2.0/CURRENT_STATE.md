@@ -1,5 +1,44 @@
 # The Lineup V2.0 — Current Operational State
 
+> 2026-11-13 V2-008 FINAL DEV closeout: **DEV compatibility ACCEPTED; Production release NOT approved.** Owner decisions A1/B1/C1/D1/E1 recorded with two explicit amendments (.004 Manual Preview stays unconfigured, Monks' 9 module rows preserved; .005 `attendance_mode` NULL accepted). Migration 92 SHELVED and excluded. PR #325 is merged (`207d088d`); older entries calling it open are superseded. Documentation only; no database contact. Production/V2-009 gates remain. See [the acceptance record](features/008-migration-compatibility/DEV_ACCEPTANCE_RECORD.md).
+
+> **2026-11-13 (later):** D-3 Option A EXECUTED: Manual Preview GM→manager and server→staff both saved via the app and verified; role planner NOOP (Manual Preview and the-monks); ledger 91, migration 92 absent, enforcement staged, Finance off. Manual Preview still has 0 module rows (D-5/5b) and NULL attendance (D-6). See HANDOFF 00000000.2. Supersedes the 'pending' note above.
+
+
+> **2026-11-13 update:** D-3 Option A and D-7C (shelve migration 92) APPROVED by the owner. Manual Preview's two human-operated Staff Assignments are **PENDING** (none performed). See HANDOFF 00000000.1 and track2/D3_OPTION_A_OPERATOR_PROCEDURE.md. Migration 92 is shelved / not for deployment.
+
+
+**2026-11-13 (V2-008 Track 2 continuation 3, LOCAL DOCS ONLY):** read-only Hosted DEV refresh (ledger 91, all 91 tables hash-identical to the morning snapshot) shows no bulk backfill is needed: `the-monks` is fully mapped; Manual Preview's 2 missing location rows can use the existing Staff Assignments workflow. Recommendation: do not deploy migration 92 (shelve the executor branch). Only D-3 is awaited from the owner. No write, push or PR. See [features/008-migration-compatibility/track2/MINIMAL_COMPLETION_PLAN.md](features/008-migration-compatibility/track2/MINIMAL_COMPLETION_PLAN.md).
+
+**2026-11-13 (authoritative, V2-008 Track 2 owner decision package, LOCAL ONLY):** a fresh
+**read-only** Hosted DEV snapshot confirms ledger **91**, Track 2 functions absent, enforcement
+`staged`, Finance off. The first pilot `the-monks` ("The Monk's DEV", 1 location, 5 members) is
+**already fully mapped — a verified no-op** (role `NOOP`, modules/attendance `REPORT_ONLY`); no
+backfill, no migration 92 deployment and no executor run is needed for it. The local executor's
+new-row concurrency race was reproduced and closed in the not-yet-applied migration 92 (table
+locks; pgTAP `0082` 37/37, two-session regression test). Live execution still needs an owner-signed
+approval and independent target identity (specified, not built). **Hosted DEV unchanged (ledger 91);
+Production and Neon untouched; nothing pushed.** Decision table:
+[track2/D7C_OWNER_DECISION_TABLE.md](features/008-migration-compatibility/track2/D7C_OWNER_DECISION_TABLE.md);
+approval proposal: [track2/HOSTED_DEV_APPROVAL_PACKAGE.md](features/008-migration-compatibility/track2/HOSTED_DEV_APPROVAL_PACKAGE.md).
+**V2-008 is still NOT complete; #256 stays open.**
+
+**2026-11-13 (V2-008 Track 2 executor, LOCAL ONLY):** a new worktree
+`.tmp/v2-008-backfill-executor` (branch `feature/v2-008-backfill-executor`, base `development`
+`207d088d`) built the organization-atomic backfill writer the planning kit always lacked:
+migration `20261113120000_v2008_track2_backfill_executor.sql` (two `service_role`-only functions)
+plus `scripts/migration-compat-executor/executor.mjs`. pgTAP `0082` 34/34, two new/updated Vitest
+suites green, `npm run typecheck`/`eslint` clean. **Applied only to a disposable local Postgres via
+`supabase db reset`; Hosted DEV stays at ledger 91, unchanged; Production and Neon untouched.** No
+real organization, location or user was read or written. D-7C's nine decisions are reorganized
+into [features/008-migration-compatibility/track2/D7C_DECISION_MATRIX.md](features/008-migration-compatibility/track2/D7C_DECISION_MATRIX.md)
+(still unapproved) and an unfilled owner-ready template for a future real backfill is drafted at
+[features/008-migration-compatibility/track2/HOSTED_DEV_APPROVAL_PACKAGE.md](features/008-migration-compatibility/track2/HOSTED_DEV_APPROVAL_PACKAGE.md).
+**V2-008 is still NOT complete and #256 stays open.** _(Local commit only; not pushed, no PR, no
+merge.)_
+
+**2026-11-13 (authoritative, V2-008 Batch C merged):** [PR #325](https://github.com/KrapaGoutam/The-Lineup/pull/325) is **merged into `development`** as `207d088d5bca5d989030870433cf4daa3ecb4c78` (reviewed source `9058a3aa`, merge commit, tree identical to source). Hosted DEV `opmujepkemwcdxxorhfd` ledger **91**, enforcement **STAGED**, Finance **OFF**, all 91 snapshot tables unchanged since the rollout; the development Preview (deployment `7757555340`) is bound to the DEV project (0 Production references) and all 100 RPCs the merged app calls exist on DEV. `main` still `5e5b7747`; Production and Neon untouched. **V2-008 is NOT complete and #256 stays open:** no organization/role/module/attendance backfill has run, no executor exists, enforcement is not activated, V2-009 has not started. Next owner decision: [D7C_OWNER_DECISION_PACKET.md](features/008-migration-compatibility/D7C_OWNER_DECISION_PACKET.md). **Release blocker for the owner:** the GitHub `production` environment has no required reviewers (a push to `main` touching migrations auto-runs `supabase db push`). _(Entry recorded locally after the merge; not in `development` until a documentation PR is authorized.)_
+
 **2026-11-13 (authoritative, V2-008 Batch C Hosted DEV rollout):** with owner approvals D-7A/D-7B/G-1, migrations `20261112200000` (D7 + F-1), `20261112220000` (U-1) and `20261113100000` (E-1) were applied to Hosted DEV `opmujepkemwcdxxorhfd` — **ledger now 91** (was 88). Function/grant-only; all 91 tables (incl. `auth.users/sessions/refresh_tokens`) identical before/after; enforcement still **STAGED**, Finance **OFF**, 0 Overall roles, 6 revoked kiosk fixtures, 14 module-config rows, attendance modes unchanged. Fresh encrypted backup restore-validated first; rollback-only Hosted probes F-1/D7 105/105, U-1 69/69, E-1 105/105. Branch `feature/v2-008-migration-compatibility` is pushed and has one PR into `development` (**not merged**; PR number in the V2-008 handoff). **V2-008 is NOT complete:** the actual data backfills (D-7C) are not authorized and no executor exists; D-1/D-3/D-4/D-5/D-6/D-8/D-11 are outstanding. Production and Neon untouched; `main` `5e5b7747`. GitHub `production` environment has **no required reviewers** — owner must add them before any release merge to `main` (that merge auto-runs `supabase db push`). Details: [features/008-migration-compatibility/batch-c/BATCH_C_ROLLOUT_RECEIPT.md](features/008-migration-compatibility/batch-c/BATCH_C_ROLLOUT_RECEIPT.md).
 
 **2026-11-12 (authoritative, V2-008 Batch A start):** V2-007 Clock In / Out Kiosk is **COMPLETE and merged** — [PR #324](https://github.com/KrapaGoutam/The-Lineup/pull/324) into `development` as `790fd2db560c41cb27affe98a70faeb7bd3f07cd` (reviewed head `1d82adb0`), issue #255 CLOSED. Gate 8F targeted retest 33/33 reconciliation PASS; Gate 8H development Preview verified (no DEV writes); the T5 stale-cookie replay is an owner-accepted exception (not a pass). **D7** (location-scoped Kiosks UI) is carried into V2-008 and **physical-tablet acceptance** into V2-009 (#257). Hosted DEV `opmujepkemwcdxxorhfd`: ledger **88**, financial activation **OFF**, backend enforcement **STAGED**, 0 Overall Owners, 44 active locations (42 are `V2 Harness` fixtures), no active kiosk sessions. `main` = `5e5b7747` and Production untouched (Production has none of the 26 V2 migrations on `development`; unverified). **V2-008 Batch A (#256) is active: read-only discovery, mapping and planning only** — see [features/008-migration-compatibility/](features/008-migration-compatibility/HANDOFF.md). Parent #248 and milestone #8 remain open; V2-005/V2-006 issue-state reconciliation is tracked separately and is not implied by this entry.
