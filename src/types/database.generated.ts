@@ -7212,6 +7212,15 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      team_set_member_active: {
+        Args: {
+          p_active: boolean;
+          p_organization_id: string;
+          p_reason: string;
+          p_target_profile_id: string;
+        };
+        Returns: Json;
+      };
       tips_add_interval: {
         Args: {
           p_amount_cents: number;
