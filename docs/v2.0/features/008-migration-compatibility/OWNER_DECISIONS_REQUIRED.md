@@ -231,8 +231,10 @@ D-7 is four separate decisions. Packet: [batch-c/D7_APPROVAL_PACKET.md](batch-c/
 | D-7B  | Authenticated verification: path 1 rolled-back SQL probes (recommended); path 2 fixtures (not requested)  | **GRANTED (path 1) and EXECUTED** — 0078 105/105, 0079 69/69, 0080 105/105 rolled back. Path 2 (real identities) not used |
 | D-7C  | Actual legacy backfill / configuration                                                                    | **NOT approved, NOT designed** — Track 2 prerequisites; no executor exists                                                |
 | Git   | Push the feature branch by explicit refspec, open one PR to `development`, exact-head CI (no merge)       | **GRANTED (G-1)**; no merge, no auto-merge authorized                                                                     |
-| Merge | Final merge authorization                                                                                 | **OPEN — owner decision** after the PR's exact-head CI is green and this receipt is reviewed                              |
+| Merge | Final merge authorization                                                                                 | **GRANTED and EXECUTED 2026-11-13** — PR #325 merged into `development` as `207d088d` (development only; #256 stays open) |
 
 **New owner action (found 2026-11-13, read-only):** the GitHub `production` environment has **no required reviewers** (`protection_rules: []`, no branch restriction, admins can bypass). A push to `main` that touches `supabase/migrations/**` therefore runs `supabase db push` unattended. Add Required reviewers (GitHub → Settings → Environments → production) before any release merge to `main`. Not changed by this work.
 
 D-1, D-3, D-4, D-5/D-5b, D-6, D-8, D-11 are unchanged and do **not** block D-7A. They block Track 2 / V2-004 enforcement / V2-009 as listed in the receipt.
+
+**D-7C consolidated package (2026-11-13):** [D7C_OWNER_DECISION_PACKET.md](D7C_OWNER_DECISION_PACKET.md) lists the nine decisions that remain (D-1, D-2/2b/2c, D-3, D-4, D-5/5b, D-6, executor design, D-8/D-11, production-environment reviewers). None is approved.
