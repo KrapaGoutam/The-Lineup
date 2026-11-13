@@ -56,3 +56,5 @@ A separately authorized Batch C must contain, in order: backup/recovery prefligh
 > **S1 update:** U-1 is fixed locally (local ledger 90). The decision packet for D-2/D-2b/D-2c is ready in [OWNER_DECISIONS_REQUIRED.md §4](OWNER_DECISIONS_REQUIRED.md); decide it together with D-10. The paragraph below is the original B1 recommendation, kept for history.
 
 B1 closes D7 and F-1 locally. The next decision for the owner is **not** engineering: approve D-2/D-2b/D-2c (role ladder and the two multi-value rules) and decide the E-1 remediation path. Until then B2 can only deliver the parameterized validator.
+
+> **Batch C update (2026-11-13):** the three security migrations are rehearsed and ready for D-7A; the planners above are unchanged and still have **no executor**. Applying migrations 89–91 does not perform any B2–B4 step. See [batch-c/BATCH_C_READINESS_RECEIPT.md](batch-c/BATCH_C_READINESS_RECEIPT.md) (Track 1 vs Track 2).

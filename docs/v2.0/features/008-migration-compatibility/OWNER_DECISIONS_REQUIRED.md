@@ -220,3 +220,17 @@ The owner adopted the following by submitting the "Continue Batch B" prompt unch
 **Still unapproved (not converted into approvals):** D-1 Production read-only preflight · D-3 Manual Preview mappings · D-4 harness fixture disposition · D-5/5b actual module values · D-6 ambiguous Attendance modes · **D-7 Hosted DEV migration and write authorization** · D-8 enforcement activation · D-11 shared `session_id` hardening. For ambiguous multi-role / multi-location records the approved default is **skip and report**.
 
 **New observation for the owner (not a decision yet):** in the V2 UI an organization **owner with only an organization membership and no location assignment** lands on "No restaurant location assigned" (reproduced in the browser while writing the E-1 specs). That is existing, intended V2 behaviour (a workspace needs a location), and it is exactly why the D-2 ladder maps Owner → **Manager at the location** while preserving the organization membership. It means a real organization's owner and general manager need their location rows **before** the V2 app reaches that organization.
+
+## 7. Batch C — D-7 split (added 2026-11-13)
+
+D-7 is now four separate decisions; **none is approved**, and the Batch C prompt is not D-7 authorization. Packet: [batch-c/D7_APPROVAL_PACKET.md](batch-c/D7_APPROVAL_PACKET.md).
+
+| Ref   | Decision                                                                                                  | State                                    |
+| ----- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| D-7A  | Apply exactly migrations 89, 90, 91 to Hosted DEV (+ encrypted backup, real-data rehearsal, verification) | **Ready for owner decision**             |
+| D-7B  | Authenticated verification: path 1 rolled-back SQL probes (recommended); path 2 fixtures (not requested)  | Ready (path 1)                           |
+| D-7C  | Actual legacy backfill / configuration                                                                    | **Not ready** — Track 2 prerequisites    |
+| Git   | Push the feature branch by explicit refspec, open one PR to `development`, exact-head CI (no merge)       | Ready for owner decision                 |
+| Merge | Final merge authorization                                                                                 | Later; needs D-7A/B verified, CI, review |
+
+D-1, D-3, D-4, D-5/D-5b, D-6, D-8, D-11 are unchanged and do **not** block D-7A. They block Track 2 / V2-004 enforcement / V2-009 as listed in the receipt.

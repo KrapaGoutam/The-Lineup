@@ -1,7 +1,7 @@
 # Feature V2-008: Migration & Compatibility — Status
 
 ```text
-Status: IN PROGRESS — BATCH A COMPLETE; B1 (D7 + F-1), SECURITY GATE S1 (U-1), E-1 (D-10 OPTION A) AND THE B2–B4 DRY-RUN PLANNING KIT IMPLEMENTED LOCALLY; HOSTED DEV (D-7) AND ALL REAL BACKFILLS PENDING
+Status: IN PROGRESS — BATCH C READINESS PASSED (HOSTED DEV D-7A REQUIRED); BATCH A COMPLETE; B1 (D7 + F-1), SECURITY GATE S1 (U-1), E-1 (D-10 OPTION A) AND THE B2–B4 DRY-RUN PLANNING KIT IMPLEMENTED LOCALLY; HOSTED DEV (D-7) AND ALL REAL BACKFILLS PENDING
 GitHub Issue: #256
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0
@@ -15,19 +15,21 @@ Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local 
 
 **Batch B continuation (2026-11-13, local only, one cumulative package):** E-1 is implemented by forward-only migration `20261113100000_e1_shared_catalog_authority.sql` (local ledger 90 → 91; Hosted DEV still 88): organization-shared Recipes and Inventory catalog management is organization-level authority, with a single-active-location compatibility exception for location roles. B2 (organization-atomic role-backfill validator), B3 (module-configuration planner) and B4 (Attendance compatibility planner) exist as **read-only dry-run tooling with no executor** ([B2_B4_PLANNING_KIT.md](B2_B4_PLANNING_KIT.md)). Full pgTAP 84 files / 3,488 PASS on a clean 91-migration replay; real-database suites 38/38; planning kit 124/124; browser 8/8 × 3; `npm run check` clean; independent review **no P0/P1** (three P2 and eight P3 findings fixed or mitigated — see [HANDOFF.md](HANDOFF.md)). No real backfill, module change, Attendance-mode change, enforcement/finance activation, push, PR or merge occurred.
 
+**Batch C (2026-11-13, local + read-only Hosted DEV metadata):** readiness for the controlled rollout of migrations 89–91 is established; **no Hosted write, push, PR or merge occurred**. Hosted DEV is exactly ledger 88 and schema-identical to local ledger 88 (16 replaced functions identical; 8 schema categories hash-identical). A populated ledger-88 → 91 rehearsal (9/9) changed 0 rows in 91 tables, kept pre-migration Auth sessions valid and reproduced all three defects before / none after; one independent review, no P0/P1. **Track 1** (three security migrations) awaits **D-7A**; **Track 2** (actual backfills) is untouched and not enabled by Track 1. See [batch-c/BATCH_C_READINESS_RECEIPT.md](batch-c/BATCH_C_READINESS_RECEIPT.md), [rollout/recovery plan](batch-c/ROLLOUT_AND_RECOVERY_PLAN.md) and [approval packet](batch-c/D7_APPROVAL_PACKET.md).
+
 ## Sub-feature state (kept distinct)
 
-| Sub-feature                                            | Discovery |       Mapping approved        |           Implementation            |             Hosted validation              | Closed |
-| ------------------------------------------------------ | :-------: | :---------------------------: | :---------------------------------: | :----------------------------------------: | :----: |
-| V2-008.001 Existing Data Inventory                     |   done    |              n/a              |                 n/a                 | DEV read-only done (Production unverified) |   no   |
-| V2-008.002 Organization / Location Backfill            |   done    |      pending (D-1, D-3)       |               pending               |                  pending                   |   no   |
-| V2-008.003 Existing Role Migration                     |   done    | adopted locally (D-2, 2b, 2c) | **validator done (local, dry-run)** |                  pending                   |   no   |
-| V2-008.004 Module Configuration Backfill               |  planned  |   pending (D-5, 5b, D-3/4)    |  **planner done (local, dry-run)**  |                  pending                   |   no   |
-| V2-008.005 Attendance Compatibility                    |  planned  |         pending (D-6)         |  **planner done (local, dry-run)**  |                  pending                   |   no   |
-| V2-008.006 Hosted DEV Migration Validation             |  planned  |         pending (D-7)         |               pending               |                  pending                   |   no   |
-| V2-008.007 Recovery / Forward-Fix                      |  planned  |              n/a              |               pending               |                  pending                   |   no   |
-| **D7** Location-scoped Kiosks UI (carried from V2-007) |   done    |  policy + B1 scope approved   |          **done (local)**           |         pending (D-7, Hosted DEV)          |   no   |
-| **F-1** Kiosk predicate hardening (found in Batch A)   |   done    |       B1 scope approved       |          **done (local)**           |         pending (D-7, Hosted DEV)          |   no   |
+| Sub-feature                                            | Discovery |       Mapping approved        |             Implementation             |             Hosted validation              | Closed |
+| ------------------------------------------------------ | :-------: | :---------------------------: | :------------------------------------: | :----------------------------------------: | :----: |
+| V2-008.001 Existing Data Inventory                     |   done    |              n/a              |                  n/a                   | DEV read-only done (Production unverified) |   no   |
+| V2-008.002 Organization / Location Backfill            |   done    |      pending (D-1, D-3)       |                pending                 |                  pending                   |   no   |
+| V2-008.003 Existing Role Migration                     |   done    | adopted locally (D-2, 2b, 2c) |  **validator done (local, dry-run)**   |                  pending                   |   no   |
+| V2-008.004 Module Configuration Backfill               |  planned  |   pending (D-5, 5b, D-3/4)    |   **planner done (local, dry-run)**    |                  pending                   |   no   |
+| V2-008.005 Attendance Compatibility                    |  planned  |         pending (D-6)         |   **planner done (local, dry-run)**    |                  pending                   |   no   |
+| V2-008.006 Hosted DEV Migration Validation             |  planned  |         pending (D-7)         | **readiness + rehearsal done (local)** |        pending (D-7A packet ready)         |   no   |
+| V2-008.007 Recovery / Forward-Fix                      |  planned  |              n/a              |    **plan + verifier done (local)**    |                  pending                   |   no   |
+| **D7** Location-scoped Kiosks UI (carried from V2-007) |   done    |  policy + B1 scope approved   |            **done (local)**            |         pending (D-7, Hosted DEV)          |   no   |
+| **F-1** Kiosk predicate hardening (found in Batch A)   |   done    |       B1 scope approved       |            **done (local)**            |         pending (D-7, Hosted DEV)          |   no   |
 
 ## Documents
 
@@ -38,6 +40,7 @@ Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local 
 - [D7 plan](D7_LOCATION_SCOPED_KIOSK_PLAN.md)
 - [Owner decisions](OWNER_DECISIONS_REQUIRED.md)
 - [B2–B4 next-step package](B2_B4_NEXT_STEP_PACKAGE.md)
+- [Batch C receipt](batch-c/BATCH_C_READINESS_RECEIPT.md) · [rollout/recovery](batch-c/ROLLOUT_AND_RECOVERY_PLAN.md) · [D-7 packet](batch-c/D7_APPROVAL_PACKET.md)
 - [Handoff](HANDOFF.md)
 
 ## Headline findings (Batch A)

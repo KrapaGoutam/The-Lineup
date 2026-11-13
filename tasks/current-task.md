@@ -63,3 +63,20 @@ Owner policies adopted by the prompt: D-10 Option A, D-2 ladder, D-2b conservati
 - Next exact action: **owner decisions, not engineering** — D-7 (Hosted DEV write authorization, per step; push B1 → U-1 → E-1 in order and run the real-JWT probes), then D-1/D-3/D-4/D-5/D-5b/D-6/D-8 for real manifests. A separately authorized executor (one transaction per organization) is the only missing piece.
 - Do not: write to Hosted DEV / Production / Neon, apply local migrations anywhere hosted, execute any backfill, archive fixtures, activate enforcement or finance, change Attendance modes or module configs, push, open a PR, merge, or set an upstream on this branch.
 - Hard invariants: Hosted DEV ledger 88 · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747`.
+
+## Batch C — migration rehearsal and Hosted DEV readiness (owner prompt 2026-11-13; LOCAL + read-only metadata)
+
+- [x] C0 Recovery: worktree/branch/HEAD `f2798c6`, clean tree, no upstream, no remote branch/PR; live `ls-remote`: `development` `790fd2db`, `main` `5e5b7747`.
+- [x] C1 Migration integrity: 3 checksums equal handoff values; 91 files, diff vs `origin/development` = 3 added; function/grant-only (statement inventory); Hosted DEV ledger 88 == first 88 local files.
+- [x] C2 Read-only Hosted DEV preflight: 16 replaced functions identical (body/secdef/config/ACL/owner); 8 schema categories hash-identical; guard rows (enforcement staged, Finance off, 0 Overall roles).
+- [x] C3 Staged 88→89→90→91 fingerprints in a rolled-back transaction (partial-rollout detector) + `expected-fingerprints.json`.
+- [x] C4 Populated rehearsal `tests/local/v2-008-batch-c-migration-rehearsal.local.test.ts` 9/9 (0 of 91 tables changed; sessions kept; defects reproduced before; idempotent; upgrade == clean replay); pgTAP 0077–0080 pass on the populated DB.
+- [x] C5 Rollout/recovery plan, read-only verifier `hosted_dev_readonly_check.mjs`, automatic-deployment review (`main` push only).
+- [x] C6 One independent review: no P0/P1; R-1…R-4 handled.
+- [x] C7 Track 1 / Track 2 split and D-7A/B/C + Git packet; HANDOFF, STATUS, CURRENT_STATE, decision register updated.
+- [ ] D-7A owner decision → backup + real-data rehearsal → apply 89–91 → verify (NOT started: no approval).
+- [ ] Remote Git (explicit refspec push, one PR to `development`) — not requested yet.
+
+## Current State & Next Step
+
+Batch C readiness is complete and committed locally only (no push). **Next exact action: owner answers [batch-c/D7_APPROVAL_PACKET.md](../docs/v2.0/features/008-migration-compatibility/batch-c/D7_APPROVAL_PACKET.md).** Do not write to Hosted DEV, push, open a PR or start D-7C before that.

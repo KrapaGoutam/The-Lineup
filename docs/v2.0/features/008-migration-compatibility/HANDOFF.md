@@ -1,4 +1,26 @@
-# V2-008 Migration & Compatibility — Agent Handoff (after Batch B continuation: E-1 + B2–B4 tooling)
+# V2-008 Migration & Compatibility — Agent Handoff (after Batch C readiness)
+
+A handoff cannot embed its own commit SHA: Batch A `874091eb`, B1 `6457c1ae`, S1 `eb8adf2`, Batch B `f2798c6`; the **Batch C readiness checkpoint is the next commit** on `feature/v2-008-migration-compatibility` (`git log`, and the chat report). Nothing is pushed.
+
+## 00. Batch C (2026-11-13) — readiness for the controlled Hosted DEV rollout
+
+**Status: READINESS PASSED — HOSTED DEV APPROVAL (D-7A) REQUIRED.** V2-008 is **not** complete: Track 2 (actual backfills) is untouched.
+
+- **Local state:** HEAD `f2798c6` at start, clean, no upstream, no remote V2-008 branch, no PR. Live `git ls-remote`: `development` still `790fd2db`, `main` `5e5b7747`.
+- **Hosted DEV (read-only only):** ledger **88** (max `20261111120000`, none of the three pending versions). The 16 functions the migrations replace are identical (body, security-definer, config, ACL, owner) to local ledger 88; the whole public+private schema (8 categories) is hash-identical. Enforcement `staged`, Finance OFF, 0 Overall roles, 6 kiosk devices (all revoked V2-007 fixtures). **No Hosted write occurred.**
+- **Track 1 (ready, needs D-7A):** migrations 89/90/91 (function/grant-only; checksums unchanged: `4faa2707…3c2c`, `48036911…ac488`, `9375ae54…a8ad`).
+- **Track 2 (not started; applying Track 1 completes none of it):** org/location backfill, role backfill (atomic per organization; fallback cliff), module configuration, Attendance modes — blocked on D-1/D-2…/D-3/D-4/D-5/D-5b/D-6 and an executor that does not exist.
+- **Rehearsal:** `tests/local/v2-008-batch-c-migration-rehearsal.local.test.ts` **9/9**: seeds a populated ledger-88 database, reproduces the three defects (negative control), applies the three migrations with the Supabase CLI, **0 of 91 tables changed**, same pre-migration tokens keep working, intended behaviour for 89/90/91 (incl. import commit and a revoked Auth session), idempotent re-apply, upgrade == clean-replay schema. pgTAP 0077–0080 pass on the populated upgraded DB.
+- **Review:** one independent reviewer, **no P0/P1**; R-1…R-4 dispositions in [batch-c/BATCH_C_READINESS_RECEIPT.md](batch-c/BATCH_C_READINESS_RECEIPT.md) §5. Erratum: the E-1 migration header says imports are untouched; they are gated (file intentionally not edited).
+- **Automatic deployment verified:** PRs/merges to `development` apply no migration; `database.yml` `deploy-migrations` runs `supabase db push` only on a push to `main` (environment `production`).
+- **Deliverables (all under `batch-c/`):** [receipt](batch-c/BATCH_C_READINESS_RECEIPT.md) · [rollout + recovery plan](batch-c/ROLLOUT_AND_RECOVERY_PLAN.md) · [D-7 approval packet](batch-c/D7_APPROVAL_PACKET.md) · read-only verifier `hosted_dev_readonly_check.mjs` with `expected-fingerprints.json`, `function_fingerprint.sql`, `schema_fingerprint.sql`.
+- **Exact next action:** owner answers the D-7A packet (and, separately, remote Git; D-7B path 1). Then: backup + restore-validated rehearsal → apply → `--expect 91 --compare` → rolled-back probes → receipt. **Do not** begin D-7C.
+- **No-repeat list:** do not re-run the Batch B suites on unchanged source; do not re-inventory DEV; do not re-run V2-007 acceptance or the F-1/U-1 reproductions locally; the staged fingerprints, schema equality and populated rehearsal above are final unless source changes. Re-check the Hosted ledger (`hosted_dev_readonly_check.mjs --target hosted --expect 88`) immediately before any apply.
+- **Resume locally:** `npx supabase db reset --local --version 20261111120000`, export `LOCAL_SUPABASE_*` from `npx supabase status -o env`, `npx vitest run --config vitest.local.config.ts tests/local/v2-008-batch-c-migration-rehearsal.local.test.ts` (needs Docker; refuses to run unless the ledger is exactly 88).
+
+---
+
+# Previous handoff (after Batch B continuation: E-1 + B2–B4 tooling) — preserved
 
 Feature-specific; other V2.0 features keep their own handoffs. A handoff cannot embed its own commit SHA: Batch A is `874091eb3982b7e1791488643a957342a22ec2a4`, B1 is `6457c1ae9f6307d1d9d43045ed87365eee9407af`, S1 is `eb8adf2176e9631873e6fed771d34d9d2f1fe119`, and the **Batch B continuation checkpoint is the next commit** on `feature/v2-008-migration-compatibility` (`git log`, and the chat report).
 
