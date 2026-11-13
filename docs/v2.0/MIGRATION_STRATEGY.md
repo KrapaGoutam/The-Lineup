@@ -28,6 +28,8 @@
 
 ## 2. Backward Compatibility & Backfill Plan (Feature V2-008)
 
+> **Superseded in part (V2-008 Batch A, 2026-11-12).** The SQL examples in §2.1 and §2.2 below are kept as history and **must not be executed**: `location_assignments` does not exist (the deployed table is `public.location_memberships`, roles `manager/assistant_manager/staff`), `m.roles[1]` is not a valid mapping, the join assigns every location of an org, and the blanket `attendance_mode = 'external'` conflicts with the shipped V2-006 contract. The authoritative plans are [002 Mapping Plan](features/008-migration-compatibility/002-organization-location-backfill/MAPPING_PLAN.md) (§3 lists each defect and its modern equivalent), [003 Role Mapping Plan](features/008-migration-compatibility/003-existing-role-migration/ROLE_MAPPING_PLAN.md) and [Batch B/C dependencies](features/008-migration-compatibility/BATCH_B_C_DEPENDENCIES.md).
+
 When V2-008 executes, the migration script will perform the following safe, idempotent backfills:
 
 ### 2.1. Location Assignment Backfill

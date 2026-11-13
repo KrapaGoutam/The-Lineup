@@ -19,7 +19,15 @@ export type Recipe = {
   image_thumb_path?: string | null;
   image_path?: string | null;
 };
-export type RecipeIndex = { categories: Category[]; recipes: Recipe[] };
+export type RecipeIndex = {
+  categories: Category[];
+  recipes: Recipe[];
+  /**
+   * The database decision (public.catalog_authorized) for writing the organization-shared
+   * recipe book. Absent in demo data; the UI treats anything but true as read-only.
+   */
+  canManage?: boolean;
+};
 
 export function groups(index: RecipeIndex) {
   return [...index.categories]

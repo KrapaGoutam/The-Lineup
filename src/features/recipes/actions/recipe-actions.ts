@@ -101,7 +101,14 @@ export async function getRecipeIndexAction(input: {
     recipes.push(...page.data);
     if (page.data.length < 1000) break;
   }
-  return { ok: true, data: { categories: categories.data, recipes } };
+  return {
+    ok: true,
+    data: {
+      categories: categories.data,
+      recipes,
+      canManage: actor.canManageCatalog,
+    },
+  };
 }
 
 export async function getRecipeDetailAction(input: {

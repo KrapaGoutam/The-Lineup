@@ -37,6 +37,7 @@ const makeActor = (designation: "staff" | "manager") => ({
     designation,
   },
   isManager: designation === "manager",
+  canManageCatalog: designation === "manager",
 });
 
 beforeEach(() => {
@@ -66,7 +67,12 @@ describe("recipe index read", () => {
       user.mockResolvedValue(makeActor(designation));
       expect(await getRecipeIndexAction({ restaurantSlug: "test" })).toEqual({
         ok: true,
-        data: { categories: [], recipes: [] },
+        // E-1: the write decision rides along so the UI never offers a refused action.
+        data: {
+          categories: [],
+          recipes: [],
+          canManage: designation === "manager",
+        },
       });
     }
     expect(filters).toContainEqual(["bar_recipes.organization_id", "org-a"]);

@@ -218,6 +218,12 @@ export async function getCatalogSnapshot(
     return null;
   }
 
+  // The database recomputes the organization’s active-location count on every call.
+  const catalogAuth = await supabase.rpc("catalog_authorized", {
+    p_organization_id: organizationId,
+  });
+  const canManageCatalog = !catalogAuth.error && catalogAuth.data === true;
+
   const [
     vendors,
     categories,
@@ -480,5 +486,6 @@ export async function getCatalogSnapshot(
       }),
     ),
     loadedAt: new Date().toISOString(),
+    canManageCatalog,
   };
 }

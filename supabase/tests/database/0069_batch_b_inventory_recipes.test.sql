@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(44);
+select plan(45);
 
 -- ===========================================================================
 -- V2-005 Batch B: Bar Inventory + Recipes Location Scoping & Catalog Sharing
@@ -357,9 +357,25 @@ select throws_ok(
   '42501', null, 'staffA bar_recipe_save rejected with 42501'
 );
 
--- 39: mgrA saves recipe -> succeeds
+-- 39: E-1 / D-10 Option A. The recipe book is organization-shared and this organization has TWO
+-- active locations, so a location manager (mgrA) can no longer write it. Before E-1 this case
+-- asserted the opposite (V2-005 contract). The organization owner writes the book instead; the
+-- single-location exception and the full actor matrix live in 0080_e1_shared_catalog_authority.
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000069001', true);
 select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000069001"}', true);
+select throws_ok(
+  $$ select public.bar_recipe_save(
+       '00000000-0000-4000-8000-000000069010',
+       null, null,
+       jsonb_build_object('recipe_number', 2, 'name', 'Manhattan', 'category_id', '00000000-0000-4000-8000-000000069201'::uuid,
+         'variants', '{"perfect":{"method":"Stir","ingredients":[{"ingredient_name":"Rye"}],"steps":[],"garnishes":[]}}'::jsonb)
+     ) $$,
+  '42501', 'You do not have permission to change recipes',
+  'mgrA (location manager, two-location org) bar_recipe_save denied (E-1)'
+);
+
+select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000069005', true);
+select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000069005"}', true);
 select lives_ok(
   $$ select public.bar_recipe_save(
        '00000000-0000-4000-8000-000000069010',
@@ -367,7 +383,7 @@ select lives_ok(
        jsonb_build_object('recipe_number', 2, 'name', 'Manhattan', 'category_id', '00000000-0000-4000-8000-000000069201'::uuid,
          'variants', '{"perfect":{"method":"Stir","ingredients":[{"ingredient_name":"Rye","amount":"2 oz"}],"steps":[{"instruction":"Stir with ice"}],"garnishes":[{"name":"Cherry"}]},"house":{"tips":"House notes","ingredients":[{"ingredient_name":"Bourbon"}]}}'::jsonb)
      ) $$,
-  'mgrA bar_recipe_save succeeds'
+  'org owner bar_recipe_save succeeds'
 );
 
 -- 40: Recipe created by mgrA is visible org-wide to staffA

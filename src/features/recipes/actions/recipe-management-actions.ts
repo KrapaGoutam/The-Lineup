@@ -29,7 +29,7 @@ async function context(slug: string, expectedContext?: unknown) {
   const invalid = await requireLiveSession(client);
   if (invalid) return { error: invalid };
   const actor = await getRecipesActor(slug);
-  if (!actor || !actor.isManager)
+  if (!actor || !actor.canManageCatalog)
     return {
       error: {
         ok: false as const,

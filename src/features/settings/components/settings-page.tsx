@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -6,6 +6,7 @@ import {
   KeyRound,
   LogOut,
   MapPin,
+  Tablet,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -14,6 +15,8 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LocationAdministration } from "@/features/locations/components/location-administration";
+import { KioskManagementPage } from "@/features/kiosk/components/kiosk-management-page";
+import { useManageableKioskLocations } from "@/features/kiosk/components/use-manageable-kiosk-locations";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
 import type { DayHours } from "@/hooks/use-restaurant-clock";
 import type { AppTab } from "@/lib/app-tab";
@@ -79,7 +82,22 @@ export function SettingsPage({
   }) => Promise<ResetPasscodeResult>;
   onRefreshModules?: () => void;
 }) {
-  const [subview, setSubview] = useState<"main" | "locations">("main");
+  const [subview, setSubview] = useState<"main" | "locations" | "kiosks">(
+    "main",
+  );
+  // D7: the Kiosks entry is driven by the database's answer, never by the
+  // legacy `isManager` role. Real mode only; demo keeps the Locations path.
+  const { locations: kioskLocations } = useManageableKioskLocations(!demoMode);
+  const showKiosks = !demoMode && kioskLocations.length > 0;
+  const returnFocusToKiosks = useRef(false);
+  useEffect(() => {
+    if (subview === "main" && returnFocusToKiosks.current) {
+      returnFocusToKiosks.current = false;
+      document
+        .querySelector<HTMLButtonElement>("#settings-kiosks button")
+        ?.focus();
+    }
+  }, [subview]);
   const showPayRates = isManager && !demoMode;
   const showTeam = isManager && (availableTabs?.includes("team") ?? true);
   const showSchedule =
@@ -98,6 +116,17 @@ export function SettingsPage({
     );
   }
 
+  if (subview === "kiosks") {
+    return (
+      <KioskManagementPage
+        onBack={() => {
+          returnFocusToKiosks.current = true;
+          setSubview("main");
+        }}
+      />
+    );
+  }
+
   const navItems = [
     ...(isManager
       ? [{ href: "#settings-shift-hours", label: "Shift hours" }]
@@ -107,6 +136,7 @@ export function SettingsPage({
     ...(showSchedule
       ? [{ href: "#settings-schedule", label: "Schedule" }]
       : []),
+    ...(showKiosks ? [{ href: "#settings-kiosks", label: "Kiosks" }] : []),
     ...(showTeam ? [{ href: "#settings-team", label: "Team" }] : []),
     ...(recoveryUser && ["owner", "manager"].includes(recoveryUser.designation)
       ? [{ href: "#settings-recovery", label: "Account recovery" }]
@@ -206,15 +236,26 @@ export function SettingsPage({
             </CardContent>
           </Card>
 
-          {isManager ? (
+          {isManager || showKiosks ? (
             <div className="grid gap-5 sm:grid-cols-2">
-              <QuickLinkCard
-                id="settings-locations"
-                icon={MapPin}
-                title="Locations"
-                description="Manage restaurant branches, addresses, time zones and operating hours."
-                onClick={() => setSubview("locations")}
-              />
+              {isManager ? (
+                <QuickLinkCard
+                  id="settings-locations"
+                  icon={MapPin}
+                  title="Locations"
+                  description="Manage restaurant branches, addresses, time zones and operating hours."
+                  onClick={() => setSubview("locations")}
+                />
+              ) : null}
+              {showKiosks ? (
+                <QuickLinkCard
+                  id="settings-kiosks"
+                  icon={Tablet}
+                  title="Kiosks"
+                  description="Pair, rename, revoke and reassign clock-in tablets at your locations."
+                  onClick={() => setSubview("kiosks")}
+                />
+              ) : null}
               {showTeam ? (
                 <QuickLinkCard
                   id="settings-team"

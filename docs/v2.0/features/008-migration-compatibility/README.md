@@ -3,7 +3,7 @@
 GitHub Issue: [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256)  
 Parent Issue: [#248](https://github.com/KrapaGoutam/The-Lineup/issues/248)  
 Milestone: [The Lineup V2.0](https://github.com/KrapaGoutam/The-Lineup/milestone/8)  
-Status: `NOT STARTED`
+Status: `IN PROGRESS` — Batch A (read-only discovery/planning) complete; see [STATUS.md](STATUS.md) and [HANDOFF.md](HANDOFF.md). Note: the sub-feature descriptions below are the original plan; where they conflict with the Batch A plans (e.g. "default `EXTERNAL`", "seed default module enablement"), the Batch A plans and owner decisions prevail.
 
 ---
 

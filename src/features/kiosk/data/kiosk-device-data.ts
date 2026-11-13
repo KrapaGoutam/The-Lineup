@@ -7,6 +7,7 @@ import {
   type KioskActiveContext,
   type KioskDevice,
   type KioskPairingResult,
+  type ManageableKioskLocation,
 } from "../domain/kiosk-device";
 import {
   generateDeviceToken,
@@ -18,6 +19,37 @@ import {
 export type KioskResult<T> =
   | { readonly ok: true; readonly data: T }
   | { readonly ok: false; readonly error: string; readonly code?: string };
+
+/**
+ * Lists the locations the caller may manage kiosk devices for. The database
+ * decides (same predicate as the kiosk RPCs and RLS); this is visibility only.
+ * Fails closed: any error yields `ok: false`, never a guessed list.
+ */
+export async function listManageableKioskLocations(
+  supabase: SupabaseClient<Database>,
+): Promise<KioskResult<readonly ManageableKioskLocation[]>> {
+  try {
+    const { data, error } = await supabase.rpc(
+      "kiosk_list_manageable_locations",
+    );
+    if (error) {
+      console.error("listManageableKioskLocations error", error);
+      return { ok: false, error: "Failed to load your kiosk locations." };
+    }
+    return {
+      ok: true,
+      data: (data ?? []).map((row) => ({
+        locationId: row.location_id,
+        locationName: row.location_name,
+        organizationId: row.organization_id,
+        organizationName: row.organization_name,
+      })),
+    };
+  } catch (err: unknown) {
+    console.error("listManageableKioskLocations unexpected error", err);
+    return { ok: false, error: "Failed to load your kiosk locations." };
+  }
+}
 
 /**
  * Lists all registered kiosk devices for a location (active and revoked).
@@ -385,6 +417,17 @@ export async function reassignKioskDevice(
           ok: false,
           error: "Unauthorized to reassign this device.",
           code: "UNAUTHORIZED",
+        };
+      }
+      // 55000 (object_not_in_prerequisite_state): the device was revoked
+      // (possibly from another tab). Revocation is terminal for the device
+      // row; recovery is a NEW pairing code. Fixed copy, never the raw DB text.
+      if (error.code === "55000") {
+        return {
+          ok: false,
+          error:
+            "This device has been revoked and can’t be reassigned. Pair the tablet again with a new pairing code.",
+          code: "DEVICE_REVOKED",
         };
       }
       return {

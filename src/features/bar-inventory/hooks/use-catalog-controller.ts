@@ -199,8 +199,16 @@ export function useCatalogController({
         sessionInvalid.current?.();
         return { ok: false, error: result.error };
       }
-      // A refused write may mean the screen is stale: show the latest.
-      if (result.conflict?.kind === "stale") await refresh();
+      // A refused write may mean the screen is stale: show the latest. That includes a refusal of
+      // the shared-catalog authority (E-1): the organization may have just gained a second active
+      // location, and the refreshed snapshot carries canManageCatalog = false so the edit controls
+      // disappear instead of staying on screen until the next window focus.
+      if (
+        result.conflict?.kind === "stale" ||
+        /shared Bar Inventory catalog/.test(result.error)
+      ) {
+        await refresh();
+      }
       return { ok: false, error: result.error, conflict: result.conflict };
     },
     [demo, viewer.name, viewer.profileId, restaurantSlug, refresh],

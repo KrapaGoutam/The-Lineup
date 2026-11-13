@@ -99,6 +99,9 @@ function bindRecipes(
       designation,
     },
     isManager: designation !== "staff",
+    // The mocked actor stands in for the app layer; the REAL database decides every write.
+    // E-1: pass the app-layer capability explicitly so a denied case reaches the database.
+    canManageCatalog: designation !== "staff",
   };
   return {
     profileId: user.id,
@@ -121,8 +124,10 @@ describe("V2-005.006: Bar Inventory (HYBRID Scoping)", () => {
   let subcategoryId: string;
   let productId: string;
 
-  it("Organization-wide catalog: Manager A creates vendor, category, subcategory and product", async () => {
-    const expectedContext = bindInventory(fx.managerA, fx.locA, "manager");
+  it("Organization-wide catalog: the organization owner creates vendor, category, subcategory and product", async () => {
+    // E-1 / D-10: this organization has TWO active locations, so the shared catalog is changed by
+    // organization-level authority (the owner), not by a location manager (see the next test).
+    const expectedContext = bindInventory(fx.owner, fx.locA, "owner");
 
     // 1. Create Vendor via runCatalogCommandAction
     const vRes = await runCatalogCommandAction({
@@ -215,6 +220,53 @@ describe("V2-005.006: Bar Inventory (HYBRID Scoping)", () => {
       const stock = snapshotB.data.stock.find((s) => s.productId === productId);
       expect(stock?.onHand ?? 0).toBe(0);
     }
+  });
+
+  it("E-1: a location manager cannot change the shared catalog in a two-location organization, but still reads it", async () => {
+    const ctxA = bindInventory(fx.managerA, fx.locA, "manager");
+    for (const command of [
+      { type: "vendorCreate", name: `Denied-${fx.run}`, notes: null },
+      { type: "categoryCreate", name: `DeniedCat-${fx.run}` },
+      {
+        type: "productSetActive",
+        id: productId,
+        active: false,
+        expectedVersion: 1,
+      },
+    ] as const) {
+      const res = await runCatalogCommandAction({
+        restaurantSlug: fx.org.slug,
+        expectedContext: ctxA,
+        command,
+      });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toMatch(/shared Bar Inventory catalog/);
+      }
+    }
+    // The refused writes changed nothing; the shared rows are still readable.
+    const snap = await getCatalogSnapshotAction({
+      restaurantSlug: fx.org.slug,
+      expectedContext: ctxA,
+    });
+    expect(snap.ok).toBe(true);
+    if (snap.ok) {
+      // The database decision is delivered to the UI so it never offers the refused action.
+      expect(snap.data.canManageCatalog).toBe(false);
+      expect(snap.data.products.find((p) => p.id === productId)?.active).toBe(
+        true,
+      );
+      expect(snap.data.vendors.some((v) => v.name === `Denied-${fx.run}`)).toBe(
+        false,
+      );
+    }
+    const ctxOwner = bindInventory(fx.owner, fx.locA, "owner");
+    const ownerSnap = await getCatalogSnapshotAction({
+      restaurantSlug: fx.org.slug,
+      expectedContext: ctxOwner,
+    });
+    expect(ownerSnap.ok).toBe(true);
+    if (ownerSnap.ok) expect(ownerSnap.data.canManageCatalog).toBe(true);
   });
 
   it("Operational inventory isolation: Stock adjustment at Loc A does NOT bleed to Loc B", async () => {
@@ -375,10 +427,12 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
     // PostgREST type signature guarantees no location_id on bar_recipes
   });
 
-  it("Organization-wide recipe book: Manager A adds category and recipe; Manager B views and edits", async () => {
-    const expectedContextA = bindRecipes(fx.managerA, fx.locA, "manager");
+  it("Organization-wide recipe book: the owner adds category and recipe; location managers read it but cannot edit it (E-1)", async () => {
+    // E-1 / D-10: two active locations => the shared book is written by organization-level
+    // authority. (V2-005 asserted that a location manager could; the contract changed.)
+    const expectedContextA = bindRecipes(fx.owner, fx.locA, "owner");
 
-    // 1. Manager A adds recipe category
+    // 1. The owner adds recipe category
     const catRes = await manageRecipeCategoryAction({
       restaurantSlug: fx.org.slug,
       expectedContext: expectedContextA,
@@ -394,7 +448,7 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
       categoryId = catRes.data.id!;
     }
 
-    // 2. Manager A saves a new recipe with Perfect Variant, ingredients, steps, and garnishes
+    // 2. The owner saves a new recipe with Perfect Variant, ingredients, steps, and garnishes
     const saveRes = await saveRecipeAction({
       restaurantSlug: fx.org.slug,
       expectedContext: expectedContextA,
@@ -469,17 +523,19 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
       expect(found?.name).toBe(`Smoked Old Fashioned ${fx.run}`);
     }
 
-    // 4. Manager B at Location B loads editor and updates recipe description
+    // 4. The owner loads the editor and updates the recipe description
+    // (the mocked actor is global state: bind the owner again after step 3 bound Manager B)
+    bindRecipes(fx.owner, fx.locA, "owner");
     const editorB = await getRecipeEditorAction({
       restaurantSlug: fx.org.slug,
-      expectedContext: expectedContextB,
+      expectedContext: expectedContextA,
       slug: recipeSlug,
     });
     expect(editorB.ok).toBe(true);
     if (editorB.ok && editorB.data.recipe) {
       const updateRes = await saveRecipeAction({
         restaurantSlug: fx.org.slug,
-        expectedContext: expectedContextB,
+        expectedContext: expectedContextA,
         recipeId,
         expectedVersion: editorB.data.recipe.version,
         payload: {
@@ -488,7 +544,7 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
           name: `Smoked Old Fashioned ${fx.run}`,
           alternate_name: "The Classic",
           base_spirit: "Bourbon",
-          description: "Updated description by Manager B at Loc B",
+          description: "Updated description by the owner",
           is_popular: true,
           is_menu_item: true,
           is_alcoholic: true,
@@ -520,6 +576,80 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
         },
       });
       expect(updateRes.ok).toBe(true);
+
+      // 5. Manager B (location manager at Location B) tries the same edit: the DATABASE refuses
+      // (the mocked app-layer actor deliberately lets the call through to prove it).
+      bindRecipes(fx.managerB, fx.locB, "manager");
+      const deniedRes = await saveRecipeAction({
+        restaurantSlug: fx.org.slug,
+        expectedContext: expectedContextB,
+        recipeId,
+        expectedVersion: editorB.data.recipe.version + 1,
+        payload: {
+          category_id: categoryId,
+          recipe_number: 101,
+          name: `Hijacked ${fx.run}`,
+          alternate_name: null,
+          base_spirit: null,
+          description: "Location manager edit must be refused",
+          is_popular: true,
+          is_menu_item: true,
+          is_alcoholic: true,
+          variants: {
+            perfect: {
+              method: "x",
+              rim_type: null,
+              rim_notes: null,
+              glass: null,
+              glass_notes: null,
+              presentation_notes: null,
+              tips: null,
+              batch_notes: null,
+              ingredients: [
+                {
+                  amount: "1",
+                  unit: "oz",
+                  ingredient_name: "x",
+                  preparation: null,
+                },
+              ],
+              steps: [{ instruction: "x" }],
+              garnishes: [],
+            },
+            house: null,
+          },
+        },
+      });
+      expect(deniedRes.ok).toBe(false);
+      if (!deniedRes.ok) {
+        expect(deniedRes.error).toMatch(/permission/i);
+      }
+      const archiveDenied = await setRecipeArchivedAction({
+        restaurantSlug: fx.org.slug,
+        expectedContext: expectedContextB,
+        recipeId,
+        expectedVersion: editorB.data.recipe.version + 1,
+        archived: true,
+      });
+      expect(archiveDenied.ok).toBe(false);
+      if (!archiveDenied.ok) {
+        expect(archiveDenied.error).toMatch(
+          /permission|not authorized|manage/i,
+        );
+      }
+      // Nothing changed.
+      const after = await getRecipeDetailAction({
+        restaurantSlug: fx.org.slug,
+        expectedContext: expectedContextB,
+        slug: recipeSlug,
+      });
+      expect(after.ok).toBe(true);
+      if (after.ok) {
+        expect(after.data?.name).toBe(`Smoked Old Fashioned ${fx.run}`);
+        expect(after.data?.description).toBe(
+          "Updated description by the owner",
+        );
+      }
     }
   });
 
@@ -534,9 +664,7 @@ describe("V2-005.007: Recipes (Organization-wide Book)", () => {
     expect(detail.ok).toBe(true);
     if (detail.ok) {
       expect(detail.data?.name).toBe(`Smoked Old Fashioned ${fx.run}`);
-      expect(detail.data?.description).toBe(
-        "Updated description by Manager B at Loc B",
-      );
+      expect(detail.data?.description).toBe("Updated description by the owner");
     }
 
     // Staff A attempts to archive recipe -> rejected

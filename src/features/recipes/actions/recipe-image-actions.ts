@@ -46,7 +46,7 @@ async function context(
   const invalid = await requireLiveSession(client);
   if (invalid) return { error: invalid };
   const actor = await getRecipesActor(slug);
-  if (!actor || (mutation && !actor.isManager))
+  if (!actor || (mutation && !actor.canManageCatalog))
     return {
       error: {
         ok: false as const,

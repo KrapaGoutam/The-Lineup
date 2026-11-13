@@ -21,7 +21,7 @@ create extension if not exists pgtap with schema extensions;
 --   70011 unassigned  org shift_manager in a multi-location org, NO assignment
 --   70012 singleShift org shift_manager in a SINGLE-location org (org3), NO assignment
 --   70013 ovAsst      Overall Assistant Manager, NO tenant membership
-select plan(78);
+select plan(79);
 
 insert into auth.users (id, email) values
   ('00000000-0000-4000-8000-000000070001', 'rv-mgra@test.invalid'),
@@ -293,10 +293,16 @@ select is(pg_temp.err_of($q$select public.bar_recipe_save('00000000-0000-4000-80
 
 select pg_temp.act('00000000-0000-4000-8000-000000070001');
 select is((select count(*)::int from public.bar_recipes where slug = 'rv-retired-sour'), 1, 'RV-059 a manager sees the archived recipe');
+-- RV-060 (E-1 / D-10 Option A): the book is organization-shared and org1 has TWO active
+-- locations, so a location manager no longer edits it (V2-005 asserted the opposite). The
+-- organization general manager edits it instead; the full matrix is 0080.
+select is(pg_temp.err_of($q$select public.bar_recipe_save('00000000-0000-4000-8000-000000070101',null,null,'{}'::jsonb)$q$), '42501:You do not have permission to change recipes',
+  'RV-060 Manager A (a location manager, two-location org) can no longer edit the shared org book (E-1)');
+select pg_temp.act('00000000-0000-4000-8000-000000070007');
 select lives_ok($q$select public.bar_recipe_save('00000000-0000-4000-8000-000000070101',null,null,
   jsonb_build_object('recipe_number', 3, 'name', 'RV Manhattan', 'category_id', '00000000-0000-4000-8000-000000070501'::uuid,
     'variants', '{"perfect":{"method":"Stir","ingredients":[{"ingredient_name":"Rye","amount":"2 oz"}],"steps":[{"instruction":"Stir"}],"garnishes":[{"name":"Cherry"}]}}'::jsonb))$q$,
-  'RV-060 Manager A (a location manager) edits the shared org book');
+  'RV-060b the organization general manager edits the shared org book');
 
 select pg_temp.act('00000000-0000-4000-8000-000000070010');
 select is((select count(*)::int from public.bar_recipes), 0, 'RV-061 foreign owner sees none of org1''s recipes (nor any other)');
@@ -313,8 +319,8 @@ select lives_ok($q$select public.bar_recipe_save('00000000-0000-4000-8000-000000
   'RV-065 Overall Owner (no membership) edits the book');
 reset role;
 select is((select array_agg(created_by order by recipe_number) from public.bar_recipes where recipe_number in (3,4) and organization_id = '00000000-0000-4000-8000-000000070101'),
-  array['00000000-0000-4000-8000-000000070001','00000000-0000-4000-8000-000000070004']::uuid[],
-  'RV-066 recipe authorship is the real caller (location manager, Overall owner)');
+  array['00000000-0000-4000-8000-000000070007','00000000-0000-4000-8000-000000070004']::uuid[],
+  'RV-066 recipe authorship is the real caller (general manager, Overall owner)');
 select is((select count(*)::int from public.bar_recipes where organization_id = '00000000-0000-4000-8000-000000070101'), 4,
   'RV-067 exactly the four org1 recipes exist: nothing duplicated, nothing added to org2');
 select is((select count(*)::int from public.bar_recipes where organization_id = '00000000-0000-4000-8000-000000070102'), 0, 'RV-068 org2 book untouched');

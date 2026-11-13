@@ -1,224 +1,103 @@
-# THE LINEUP V2.0 — V2-007 CLOCK IN / CLOCK OUT KIOSK
+# THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch C Hosted DEV rollout + PR)
 
-## Gate 7 Run 2 — service-role synthetic acceptance — November 12, 2026
+## Batch C — controlled Hosted DEV rollout (2026-11-13, D-7A/D-7B/G-1 granted)
 
-Run `V2-007-ACCEPTANCE-20261112-d0d772`. Authorization: Q8-style service-role fixtures only; no Overall Owner, no existing account, no sign-out of any kind. This supersedes the blocked Attempt 1 section below (kept as history).
-
-- [x] Preflight: worktree/HEAD `3c314682`, Preview READY and bound to DEV, ledger 88, Finance OFF, enforcement STAGED, kiosk tables empty.
-- [x] PIN pepper compatibility proven non-disclosingly (HMAC request-fingerprint match against the earlier Preview login).
-- [x] Fresh baseline with per-row hashed Auth inventory; write-ahead manifest; guarded cleanup dry run before any write.
-- [x] Provision 2 organizations, 4 locations, 5 identities (manifest-owned); mid-run and final reconciliation 27/27.
-- [x] Execute all 18 canonical scenarios on the real Preview: 17 PASS, 1 PASS under print-media emulation (D3). Supplementary: spoofed headers, stale-credential server replay, WebKit iPad emulation.
-- [x] Retire synthetic fixtures (5 devices revoked, 4 locations archived, 5 memberships/8 location memberships/5 credentials deactivated, 5 users banned); verified denied. Nothing deleted.
-- [x] Update [HOSTED_DEV_ACCEPTANCE.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_ACCEPTANCE.md) (Attempt 1 and the `TestOwner` incident preserved).
-
-Result: **GATE 7 CONDITIONAL PASS — SPECIFIC VERIFICATION OUTSTANDING.**
-
-## Gate 8 stabilization — November 12, 2026
-
-- [x] D1 pairing alphabet (no `L`, shared client-safe constant, unbiased CSPRNG) + tests.
-- [x] D2 revoke reason required (min 3 trimmed chars) + tests.
-- [x] D3 timesheet print isolation (attendance `main`/`footer` `print:hidden`) + class-contract tests.
-- [x] D7 investigated: owner policy decision, no code change; current UI policy pinned by a test.
-- [x] Focused Vitest 359/359, `npm run check`, Playwright kiosk spec (desktop + tablet) pass.
-- [x] Read-only: `development` Preview has NO `KIOSK_SESSION_SECRET`; `development` not ahead of the branch point.
+- [x] Recover state: HEAD `46fe3d97`, clean, no upstream, `development` `790fd2db` / `main` `5e5b7747` unchanged, no remote V2-008 branch or PR; checksums of 89/90/91 verified.
+- [x] Fresh DPAPI-encrypted Hosted DEV backup (`dev-20261113T040959Z`), 121 tables, restore-validated (0 digest mismatches, 198 policies equal).
+- [x] Real-data rehearsal on the restored copy as role `postgres` (ledger 88 → 91): 354/354 pgTAP, all 91 tables unchanged. Harness trap recorded (`supabase_admin` apply breaks ownership).
+- [x] Hosted DEV apply of exactly migrations 89–91 via `supabase db push` (dry run listed exactly three): **ledger 88 → 91**, 04:13:21Z.
+- [x] Postflight: function/schema fingerprints `ledger91`, all 91 tables identical, guard rows identical, PostgREST sees both new RPCs.
+- [x] Rollback-only Hosted probes: 0078 105/105 (F-1+D7), 0079 69/69 (U-1), 0080 105/105 (E-1); nothing persisted.
+- [x] `database.yml` and GitHub `production` environment inspected read-only: NO required reviewers (owner action before any Production release).
+- [x] Receipt: `docs/v2.0/features/008-migration-compatibility/batch-c/BATCH_C_ROLLOUT_RECEIPT.md`.
+- [ ] Push branch (explicit refspec), ONE PR to `development`, exact-head CI + Preview evidence, merge-readiness report. **No merge.**
+- [ ] Owner: merge decision; D-7C backfill approval package (separate); production-environment reviewers.
 
 ## Current State & Next Step
 
-- Resume from [HANDOFF.md](../docs/v2.0/features/007-clock-kiosk/HANDOFF.md). Gate 8 is not closed.
-- Owner approvals pending: dedicated `development` Preview `KIOSK_SESSION_SECRET`; optional minimal Hosted DEV pairing retest; physical-tablet check; D7 role policy; merge of PR #324 into `development` only.
-- Do not repeat the 18-scenario acceptance, migration, backup or full suites. Do not touch `main`, Production or V2-008.
-- Separate future task: Platform Overall Owner governance; not part of V2-007.
-
-## Owner-authorized synthetic Hosted DEV acceptance — November 12, 2026
-
-Run: `v2007-20261112-1422-d11871`. Scope: the canonical 18 scenarios from preserved readiness commit `8744924`, DEV `opmujepkemwcdxxorhfd`, exact feature Preview/source `3c314682`. This new authorization supersedes the older migration-only scope below. No application/schema/configuration corrections or merge are authorized.
-
-- [x] Preserve existing migration receipt and locate canonical 18-scenario matrix.
-- [x] Verify worktree/PR exact head, Preview metadata/DEV binding, ledger 88, forced RLS/privileged RPC restrictions, Finance OFF/enforcement STAGED, and empty kiosk fixture tables.
-- [x] Capture pre-fixture baseline: all 122 tables, stable organization/location/profile/membership IDs and fingerprints; all 44 existing location modes unchanged/unconfigured.
-- [x] Check canonical provisioning authority: existing synthetic TestOwner login succeeds, but DEV has zero Overall Owners; first-owner bootstrap refuses the 29 existing owner memberships. Stop before fixture creation.
-- [ ] Provision 2 synthetic organizations, 4 locations, 5 identities using canonical account/PIN and authorized management flows; record manifest before testing.
-- [ ] Execute deployed 18-scenario acceptance and capture database effects and denials.
-- [ ] Clean up safely by verified run/resource IDs, reconcile baseline, and enumerate retained audit/history.
-- [ ] Complete sanitized acceptance documentation, validate and review documentation-only diff, commit/push only if complete and safe.
-
-- [x] Preserve a complete blocked-run receipt in [HOSTED_DEV_ACCEPTANCE.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_ACCEPTANCE.md), including all 18 BLOCKED / NOT EXECUTED scenarios and the Auth-session scope incident.
-- [x] Validate blocked documentation: Prettier and git diff whitespace checks PASS; migration receipt byte-identical; no application/schema change or credentials in public evidence. Full suites intentionally not repeated.
-
-Stopped: **HOSTED DEV ACCEPTANCE BLOCKED — ACTION REQUIRED**. No new organization/location/identity/device/Attendance fixture was created. 117/122 table digests and all original organizations/locations/profiles/memberships match; ledger 88, Finance OFF and enforcement STAGED preserved. The synthetic TestOwner login added one retained success attempt and Auth login state. Agent cleanup incorrectly invoked the app's default GLOBAL sign-out: pre-existing synthetic TestOwner sessions/tokens were invalidated (sessions 79→58, claims 79→58, refresh tokens 114→58). This exceeds temporary-session scope; no restoration or source correction attempted. Auth per-row preflight inventory was not captured, so complete removed-ID reconciliation is unavailable. Zero kiosk sessions/codes/attempts/devices remain. Browser closed. Desktop read-only entry smoke PASS; WebKit certificate failure remains an environment limitation.
-
-Next owner action: designate and separately authorize a supported Overall Owner provisioning/bootstrap path; acknowledge the Auth-session incident and decide any further read-only reconciliation. Restart only with task-only provisioning credentials and a fresh baseline. Gate 7 incomplete; development Preview secret, final CI/integration, explicit PR #324 merge authorization and formal closure remain Gate 8 work. No commit/push because acceptance is incomplete. Existing migration receipt and prior local edits preserved; no broad suite/rehearsal rerun.
-
-## Owner-authorized Hosted DEV migration — November 12, 2026
-
-Authorization: apply only `20261111120000_kiosk_device_registration.sql` (SHA-256 `a83150c1abd5f2b143e5f29da33549dc7ef255727be2384b56ac5b1ddd531f82`) to DEV `opmujepkemwcdxxorhfd` after every preflight passes. Source HEAD remains `3c314682e1b211df3470eab290ac21acb1d3e7b3`; no acceptance fixtures, Attendance-mode activation, Vercel changes or merge authorized.
-
-- [x] Verify exact DEV identity, file hash, 87-entry ledger/latest `20261110203355`, kiosk absence, OFF/STAGED state and expected-commit READY Preview.
-- [x] Locate fresh owner-private encrypted backup and successful isolated restore/exact kiosk rehearsal receipts (339 assertions and concurrency PASS).
-- [x] Revalidate encrypted backup/component integrity and owner-only file ACLs; restore/exact rehearsal remains applicable. All business content and application catalog/security fingerprints match. Auth drift is verified existing-session token rotation/timestamps only (58 column comparisons; no identity/credential/authorization change); no material drift and no refresh needed.
-- [x] Verify exact pending set and pinned 2.76.8 controlled runner dry-run: only the approved kiosk file; all 88 runner files byte-identical to source and explicit DEV link verified.
-- [x] Apply only the approved migration through the guarded runner after every preflight passed (2026-11-12 13:59 UTC); no seed/role/include-all/history-repair options.
-- [x] Verify ledger 88; four empty forced-RLS tables, two policies, 16 valid indexes, 24 validated constraints, seven hardened functions and restricted grants. All 118 pre-existing non-ledger tables and existing catalog/security fingerprints unchanged; original 87 ledger rows unchanged. OFF/STAGED preserved.
-- [x] Record [HOSTED_DEV_MIGRATION.md](../docs/v2.0/features/007-clock-kiosk/HOSTED_DEV_MIGRATION.md) and ignored machine-readable/encrypted diagnostics; stop at separate synthetic-acceptance approval gate.
-
-Current state: HOSTED DEV MIGRATION PASSED — READY FOR SYNTHETIC ACCEPTANCE APPROVAL. No fixture creation, hosted acceptance, Attendance-mode activation, Vercel changes, merge or V2-008 work performed. Source HEAD remains the authorized `3c314682`; local execution documentation is uncommitted and not pushed. Earlier approval/pending-migration statements below are historical and superseded by this owner-authorized migration receipt.
-
-## Preview configuration continuation — November 12, 2026
-
-- [x] Verify existing clean feature worktree, remote PR #324 head `b6cb82a`, preserved local documentation branch `8744924`, authenticated Vercel owner/project and ready Preview.
-- [x] Verify inherited Preview DEV binding equals the expected project, demo disabled, server credential present, Node 24.x, and system environment exposure enabled. No branch-specific variables existed at preflight.
-- [x] Correct both isolated kiosk clients to use the existing publishable key; validate PIN and employee JWT client configuration without the legacy variable (96/96 kiosk tests).
-- [x] Provision a dedicated secret from 48 cryptographically random bytes as Secret, Preview, feature branch only; verify metadata without retrieving its value.
-- [x] Run focused kiosk tests, repository quality checks and production webpack build; review focused diff. Normal local Turbopack cannot resolve this worktree's external dependency junction; exact-head CI/Vercel verify the normal build.
-- [x] Record the configuration receipt, platform ingress contract and remaining owner gates in [PREVIEW_CONFIGURATION.md](../docs/v2.0/features/007-clock-kiosk/PREVIEW_CONFIGURATION.md).
-
-Delivery checkpoint: local correction and checks complete; prepare one focused commit and push to existing PR #324. The PR's external delivery receipt is authoritative for the resulting SHA, full CI/browser gates and replacement feature Preview (these cannot be recorded in their own source commit). Do not declare readiness until those exact-head checks and deployed configuration pass. No further implementation or database work is authorized by this checkpoint.
-
-Data/authorization: no schema or hosted data changes; employee clients retain public credentials plus employee JWTs, and privileged operations remain server-only. UI states and attendance behavior are unchanged. Main risks are wrong environment scope, accidental credential exposure and build-time public-variable substitution. Verification covers isolated PIN/client creation, existing kiosk privacy/lifecycle tests, build and exact-head CI. Do not repeat backup/restore/migration rehearsal/full source security review. Hosted DEV migration and fixtures, development merge, financial activation, enforcement and Production remain separately gated.
-
-## Codex continuation — active checkpoint (November 11, 2026)
-
-- [x] Recovered the existing worktree at `32809ec`; all seven Antigravity modifications preserved in `.tmp/continuation-recovery/antigravity.patch`.
-- [x] Fetched once; local HEAD, remote feature, and PR #324 match; development remains `c821487`.
-- [x] Read-only Hosted DEV ledger: 87 migrations, latest `20261110203355`; kiosk not applied.
-- [x] Finish trusted Vercel source boundary and concurrent source throttling; preserve service-role-only grants.
-- [x] Verify focused kiosk, database roles/RLS, committed failure accounting, code/source/session concurrency, browser smoke, checks, full unit suite, and build.
-- [x] Reconcile documentation and record genuine Claude Sonnet 5 High first-round source review at cf4d1a9; no critical/high findings. Recommended M1 corrected and 96 focused kiosk tests PASS. Final-head follow-up receipt is maintained in PR #324.
-- [x] Implementation cf4d1a9 committed/pushed and all exact-head gates green: application, 346 desktop browser tests, Database 80 files / 3,189 assertions, Vercel Preview. Follow-up M1 correction and review receipt are the final continuation commit; final-head follow-up review and CI outcomes are maintained in PR #324 (external closeout receipt).
-- [ ] Owner approval for Hosted DEV kiosk deployment and development merge (separate gates; neither authorized).
-
-Data/auth scope: existing kiosk migration only; no new browser credentials or identity inputs. Pairing UI uses existing error state if trusted source is unavailable. Risks: Vercel-only ingress contract, same-NAT clients share a source allowance, distributed-source abuse remains an infrastructure concern. Tests will exercise direct roles, unknown/expired/reused codes, persisted failures, concurrency, and unrelated-source isolation. Historical completed checklists below are previous-session receipts, not final-source validation or independent acceptance.
-
-**Parent Issue:** #248  
-**Feature Issue:** #255  
-**Milestone:** #8 — The Lineup V2.0  
-**Feature Branch:** `feature/v2-007-clock-kiosk`  
-**Worktree:** `.tmp/v2-007-clock-kiosk`  
-**Base Commit:** `c821487cf0344c516cb174a0c77abdde3792a92a` (PR #323 on `origin/development`)  
-**Execution Model:** Batch A → Batch B → Batch C, one final PR targeting `development`.
+Hosted DEV is at ledger 91 with enforcement staged and Finance OFF. Next exact action after the PR is green: owner decides whether to merge the security migrations and planning tooling into `development` (actual backfills stay outstanding), or prepares the separate D-7C approval package. Do not start V2-009 or any backfill.
 
 ---
 
-## Gate 0 — Hosted DEV Attendance Readiness
+# (previous) V2-008 MIGRATION & COMPATIBILITY (Batch B1 + Security Gate S1)
 
-- [x] Check PR #323 merged on origin/development (`c821487`).
-- [x] Verify migration `20261110203355_attendance_manual_entry.sql` hash `99C8BCB14A12D46745B2B80F5CBB44183A10C5A340290EC483B4E02D76977854`.
-- [x] Confirm Hosted DEV deployment receipt (`hosted-dev-deploy-receipt.json`, ledger count 87).
-- [x] Verify 13/13 authenticated DEV acceptance tests passed and database reconciled.
-- [x] Confirm financial activation OFF and backend enforcement STAGED.
-- [x] Worktree `.tmp/v2-007-clock-kiosk` initialized cleanly on `c821487`.
+Issue [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256) · parent #248 · branch `feature/v2-008-migration-compatibility` (base `development` `790fd2db560c41cb27affe98a70faeb7bd3f07cd`; Batch A checkpoint `874091eb`). Local commits only: not pushed, no PR, upstream deliberately unset.
 
----
+Previous feature **V2-007 is COMPLETE** (PR #324 → `790fd2db`, #255 closed); its evidence lives under `docs/v2.0/features/007-clock-kiosk/`.
 
-## Batch A — Kiosk Foundation (V2-007.001 - V2-007.004)
+## Batch A — read-only discovery (done, `874091eb`)
 
-- [x] Schema & Migration: `kiosk_devices`, `kiosk_pairing_codes`, indexes, RLS, functions (`kiosk_generate_pairing_code`, `kiosk_consume_pairing_code`, `kiosk_revoke_device`, `kiosk_rename_device`, `kiosk_reassign_device`).
-- [x] pgTAP Test Suite (`0077_kiosk_device_registration.test.sql`):
-  - Valid pairing code generation by authorized manager.
-  - Rejection of pairing code generation by unauthorized staff / shift manager / foreign org.
-  - Successful atomic code consumption & device creation.
-  - Rejection of expired pairing code.
-  - Rejection of reused pairing code.
-  - Attempt count throttling & lockout.
-  - Device revocation & query isolation.
-- [x] Kiosk Domain & Data Layer:
-  - Device credential token generation & hashing.
-  - Pairing code format (6-char uppercase alphanumeric, secure random).
-  - Cookie management (`lineup_kiosk_device` HttpOnly, SameSite=Lax, Secure).
-  - Server actions for device pairing and management.
-- [x] Manager Kiosk Management UI:
-  - Add Kiosks tab to Location Administration (`LocationAdministration` component).
-  - Device list with status badges, last active, location binding.
-  - "Pair New Tablet" modal with code display & countdown timer.
-  - Device rename, reassign, and revoke controls.
-- [x] Dedicated Kiosk Surface (`/kiosk`):
-  - Kiosk layout (full-screen, touch-first, portrait & landscape responsive).
-  - Tablet pairing screen (enter 6-digit code, touch numeric/alphanumeric keypad).
-  - Device pairing submission & persistence.
-- [x] Batch A Unit, Component, and Security Tests.
+- [x] A0–A6: inventory, mapping, role plan, dependencies, D7 plan, decision register, handoff. See [HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md).
 
----
+## Batch B1 — D7 location-scoped Kiosks + F-1 hardening (owner-authorized, LOCAL ONLY)
 
-## Batch B — Employee PIN Clock In / Clock Out (V2-007.005)
+- [x] B1.0 Recovery: worktree/branch/HEAD `874091eb`, clean tree, no upstream, `development` unchanged.
+- [x] B1-A Authorization matrix (13 actor classes) and session-check mechanism: repo-standard `*_live_session` pattern adopted.
+- [x] Proof of defect: predicate section of pgTAP `0078` vs the unfixed 88-migration DB → exactly the 11 F-1 assertions fail.
+- [x] B1-B Migration `20261112200000_kiosk_manager_authority_hardening.sql` (live-session gate + org-membership join + listing RPC); local ledger 88 → 89.
+- [x] pgTAP `0078` 105/105, `0077` 57/57, full suite 81 files / 3294 PASS.
+- [x] Real GoTrue suite `tests/local/kiosk-authority.local.test.ts` 7/7 (+ negative control: 4/7 fail on the old predicate).
+- [x] B1-C Action + data + domain + hook + `KioskManagementPage` + Settings Kiosks card; focused Vitest 430/430.
+- [x] Browser (real cookies, local stack) 6/6 × desktop, WebKit tablet, mobile; demo specs `kiosk` + `location-administration` 18/18.
+- [x] `npm run check` (Prettier, ESLint 0 warnings, tsc) clean.
+- [x] B1-E independent security review: non-blocking findings only; comment corrected; U-1 recorded (see HANDOFF §3).
+- [x] Docs: HANDOFF, STATUS, D7 plan §8, decision register D-9 note, B2–B4 package, CURRENT_STATE entry.
+- [x] One local B1 implementation commit.
 
-- [x] Kiosk Home Screen UI:
-  - Location header (dynamic org name, location name, formatted date, live clock in location timezone).
-  - 4-digit PIN keypad (1-9, 0, Clear, Backspace, physical keyboard, auto-submit on 4th digit, masked input).
-  - Loading, error shake, and lockout notifications.
-- [x] Canonical PIN Authentication & Resolution:
-  - Validate device credential from cookie/header.
-  - Resolve trusted location binding.
-  - Check device rate limits.
-  - Authenticate 4-digit PIN against `passcode_credentials`.
-  - Verify active membership & location assignment (`location_memberships`).
-  - Verify location internal attendance mode (`internal_the_lineup`).
-  - Establish scoped, short-lived employee kiosk session.
-- [x] Employee Attendance Screen UI:
-  - Welcome banner with employee name & location.
-  - Current status display ("Not Clocked In" vs "Clocked In at HH:MM AM/PM").
-  - Primary Action buttons: [CLOCK IN] or [CLOCK OUT] (+ Break controls if enabled).
-  - [My Attendance] button.
-  - [Finish] / [Back] button with immediate session purge.
-- [x] Clock In / Clock Out Execution:
-  - Monotonic server time via canonical `attendance_clock_in` / `attendance_clock_out`.
-  - Duplicate prevention & idempotency handling.
-  - Success confirmation screen with recorded timestamps and shift duration.
-- [x] Employee Attendance Report & Print Isolation:
-  - Monthly attendance history for current employee only.
-  - Month selector.
-  - Daily worked duration & monthly total hours.
-  - Print button with print-isolated styles (no navigation, tokens, or PINs in print output).
-- [x] Shared-Tablet Privacy & Guardrails:
-  - Auto-timeout on inactivity (45s).
-  - Immediate state purge on Finish/Done.
-  - Cache and bfcache isolation.
-- [x] Batch B Unit, Component, and Playwright Tests.
+Result: **V2-008 B1 PASSED — LOCAL IMPLEMENTATION COMPLETE, HOSTED DEV APPROVAL PENDING.**
 
----
+## Security Gate S1 — U-1 fix, E-1 plan, D-2 packet (owner-authorized, LOCAL ONLY)
 
-## Batch C — Lifecycle, Security, and Final Integration (V2-007.006 - V2-007.007)
+- [x] S1.0 Recovery: worktree/branch/HEAD `6457c1ae`, clean tree, no upstream; B1 migration checksum re-verified; local ledger 89.
+- [x] S1-A U-1 analysis: unintended (no contract requires reactivation; re-pair creates a new row).
+- [x] S1-B Regression first: pgTAP `0079` fails 21/69 on the unfixed schema; migration `20261112220000_kiosk_reassign_revoked_device_guard.sql`; local ledger 89 → 90; 69/69.
+- [x] S1-C Real GoTrue `kiosk-revoked-device-lifecycle` 8/8 (+ negative control), browser stale-tab scenario 21/21, Vitest kiosk 136/136, clean 90-migration replay, full pgTAP 82 files / 3363 PASS.
+- [x] S1-D E-1: reproduced with real RPCs (306-row matrix), classified, plan written — **not implemented** ([plan](../docs/v2.0/features/008-migration-compatibility/E1_RECIPES_INVENTORY_SECURITY_PLAN.md)).
+- [x] S1-E D-2/2b/2c packet with measured equivalence evidence; B2 rule 8 corrected; completeness proof specified.
+- [x] S1-F shared `session_id` review: no bypass; H-S1 tracked; minor UI findings decided.
+- [x] Independent read-only review: no P0/P1; P3 notes recorded.
+- [x] `npm run check` clean; diff and secret scan; one local S1 checkpoint commit.
 
-- [x] Device Revocation & Fail-Closed Enforcement:
-  - Immediate invalidation on server-side revocation.
-  - Revoked device denied on PIN, clocking, and reporting.
-- [x] Device Reassignment & Location Recovery:
-  - Controlled location reassignment with credential rotation.
-  - Stale session denial across location changes.
-- [x] Comprehensive Security Hardening:
-  - Rate limiting (per-device and per-org).
-  - Cross-tenant & cross-location isolation verification.
-  - Cross-employee attendance report isolation.
-  - No secret leakage, no client-side spoofing.
-- [x] Independent source Security Review (actual Claude Sonnet 5 High receipt in INDEPENDENT_REVIEW.md; final-head follow-up in PR #324):
-  - Claude Code Sonnet High independent inspection.
-  - P0/P1 verification and fixes.
-- [x] Consolidated Final Quality Gates:
-  - `npm run check` (Prettier, ESLint, strict TypeScript).
-  - Full Vitest suite.
-  - Complete pgTAP suite.
-  - Playwright E2E across Chromium, WebKit iPad, Mobile viewports.
-  - Production webpack build (`npx next build --webpack`).
-- [x] Documentation & Pull Request:
-  - Update `docs/v2.0/features/007-clock-kiosk/` documentation suite.
-  - Single consolidated PR to `development`.
+Result: see the final line of the S1 chat report and [SECURITY_GATE_S1.md](../docs/v2.0/features/008-migration-compatibility/SECURITY_GATE_S1.md).
 
----
+## Batch B continuation — E-1, B2 validator, B3 module planner, B4 Attendance planner (owner-authorized, LOCAL ONLY, one cumulative package)
 
-## Mandatory Security Remediation (PR #324)
+Owner policies adopted by the prompt: D-10 Option A, D-2 ladder, D-2b conservative multi-role, D-2c conservative multi-location, B2–B4 local tooling only.
 
-- [x] Defect 1: Eliminate employee JWT exposure in `kioskGetActiveStatusAction` and serialized responses.
-- [x] Defect 2: Secure server-side session storage (`public.kiosk_sessions`, AES-256-GCM encrypted JWTs, opaque HMAC-signed cookie tokens `kiosk_sess_<hex>.<sig>`).
-- [x] Defect 3: Dedicated KIOSK_SESSION_SECRET without predictable fallback (`getKioskSessionSecret` fails closed in deployed non-test environments; removed APP_PIN_PEPPER fallback).
-- [x] Defect 4: Pairing code brute-force protection & atomicity (`public.kiosk_pairing_attempts`, scoped rate limiting per client_identifier, 5-attempt lockout, revoked `anon` and `authenticated` execute on `kiosk_consume_pairing_code` and `kiosk_record_pairing_failure` exclusively to `service_role`; eliminated caller-controlled rate limit identity via the server-only Vercel identity helper; added negative tests for direct RPC bypass).
-- [x] Defect 5: Complete PIN failure accounting integrity (`passcode_login_attempts` records `succeeded: false` on all failure branches; fail closed with `rate_limit_unavailable` on database query errors).
-- [x] Defect 6: Inactivity and single active session invariant (server-enforced 3-min TTL in DB, `unique (device_id)` constraint, atomic upsert, session purging on device revocation/reassignment).
-- [x] Defect 7: SQL privileges hardening (revoked direct table `INSERT`, `UPDATE`, `DELETE` on all kiosk tables from `authenticated` and `anon`).
-- [x] Quality Gates Verified:
-  - `npm run check` (Prettier, ESLint 0 warnings, TypeScript 0 errors).
-  - Full Vitest suite: 294 test files, 3,977 tests passing (91 kiosk tests).
-  - Database pgTAP: 49/49 assertions passing (`0077_kiosk_device_registration.test.sql`).
-  - Playwright E2E: 6/6 tests passing across Chromium, WebKit iPad, and Mobile viewports.
-  - Production Webpack build: `npx next build --webpack` succeeded with 13 routes.
-- [x] Documentation reconciled across `README.md`, `SECURITY_REVIEW.md`, `FINAL_HANDOFF.md`, and `tasks/current-task.md` (15-minute pairing code expiry).
-- [x] PR #324 updated with security remediation findings and verification evidence.
+- [x] BB.0 Recovery: HEAD `eb8adf2176e9631873e6fed771d34d9d2f1fe119`, clean tree, no upstream; remote `development` re-verified by `git ls-remote` = `790fd2db` (unchanged); local ledger 90.
+- [x] E-1 migration `20261113100000_e1_shared_catalog_authority.sql` (sha256 `9375ae54540f3c49d5f7d3a3a7ce845b30a54c7e6b0d180a4ef7ec3f8ad5a8ad`): predicate `private.catalog_can_manage_org`, `private.inventory_catalog_begin`, redefined `recipes_begin` / `recipes_can_write_image`, 12 catalog RPCs, `public.catalog_authorized`. Local ledger 90 → 91.
+- [x] pgTAP `0080_e1_shared_catalog_authority` 103/103 (negative control on ledger 90: 78 fail); `0069`/`0070` re-derived; full suite after a clean 91-migration replay: 83 files, 3468 assertions PASS.
+- [x] App layer: `RecipesActor.canManageCatalog`, `RecipeIndex.canManage`, `CatalogSnapshot.canManageCatalog`, Manage view + Recipes module read-only states; Vitest recipes 298 + bar-inventory 944 pass; real-DB local `inventory-recipes-location` 17/17, `module-enforcement` 15/15; browser `inventory-recipes-location` 8/8 × desktop, host-tablet, server-mobile.
+- [x] B2 organization-atomic backfill validator (dry-run only) — `scripts/migration-compat/role-backfill.mjs`; pgTAP `0081` 18/18 pins the capability model
+- [x] B3 module configuration planner (read-only)
+- [x] B4 Attendance compatibility planner (read-only)
+- [x] Planning kit: Vitest 124/124; real-DB `tests/local/migration-compat.local.test.ts` 6/6 (digest proves no write; GET/HEAD only)
+- [x] Consolidated independent security/migration review: no P0/P1; 3 P2 + 8 P3 fixed or mitigated (HANDOFF)
+- [x] Final evidence: full pgTAP 84 files / 3,488 PASS; local suites 38/38; browser 8/8 × 3; full Vitest 304 files / 4,167; `npm run check` exit 0
+- [x] Docs (HANDOFF, STATUS, CURRENT_STATE, decision register, E-1 plan §13, B2–B4 package + kit)
+- [x] One local commit (see `git log`)
+
+## Current State & Next Step
+
+- Resume from [V2-008 HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md) (section 0 first). Hosted DEV is still ledger 88; the B1, U-1 and E-1 migrations are local only (local ledger 91).
+- Batch B is **locally complete**: E-1 implemented, B2–B4 dry-run planners with no executor, independent review clean of P0/P1.
+- Next exact action: **owner decisions, not engineering** — D-7 (Hosted DEV write authorization, per step; push B1 → U-1 → E-1 in order and run the real-JWT probes), then D-1/D-3/D-4/D-5/D-5b/D-6/D-8 for real manifests. A separately authorized executor (one transaction per organization) is the only missing piece.
+- Do not: write to Hosted DEV / Production / Neon, apply local migrations anywhere hosted, execute any backfill, archive fixtures, activate enforcement or finance, change Attendance modes or module configs, push, open a PR, merge, or set an upstream on this branch.
+- Hard invariants: Hosted DEV ledger 88 · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747`.
+
+## Batch C — migration rehearsal and Hosted DEV readiness (owner prompt 2026-11-13; LOCAL + read-only metadata)
+
+- [x] C0 Recovery: worktree/branch/HEAD `f2798c6`, clean tree, no upstream, no remote branch/PR; live `ls-remote`: `development` `790fd2db`, `main` `5e5b7747`.
+- [x] C1 Migration integrity: 3 checksums equal handoff values; 91 files, diff vs `origin/development` = 3 added; function/grant-only (statement inventory); Hosted DEV ledger 88 == first 88 local files.
+- [x] C2 Read-only Hosted DEV preflight: 16 replaced functions identical (body/secdef/config/ACL/owner); 8 schema categories hash-identical; guard rows (enforcement staged, Finance off, 0 Overall roles).
+- [x] C3 Staged 88→89→90→91 fingerprints in a rolled-back transaction (partial-rollout detector) + `expected-fingerprints.json`.
+- [x] C4 Populated rehearsal `tests/local/v2-008-batch-c-migration-rehearsal.local.test.ts` 9/9 (0 of 91 tables changed; sessions kept; defects reproduced before; idempotent; upgrade == clean replay); pgTAP 0077–0080 pass on the populated DB.
+- [x] C5 Rollout/recovery plan, read-only verifier `hosted_dev_readonly_check.mjs`, automatic-deployment review (`main` push only).
+- [x] C6 One independent review: no P0/P1; R-1…R-4 handled.
+- [x] C7 Track 1 / Track 2 split and D-7A/B/C + Git packet; HANDOFF, STATUS, CURRENT_STATE, decision register updated.
+- [ ] D-7A owner decision → backup + real-data rehearsal → apply 89–91 → verify (NOT started: no approval).
+- [ ] Remote Git (explicit refspec push, one PR to `development`) — not requested yet.
+
+## Current State & Next Step
+
+Batch C readiness is complete and committed locally only (no push). **Next exact action: owner answers [batch-c/D7_APPROVAL_PACKET.md](../docs/v2.0/features/008-migration-compatibility/batch-c/D7_APPROVAL_PACKET.md).** Do not write to Hosted DEV, push, open a PR or start D-7C before that.

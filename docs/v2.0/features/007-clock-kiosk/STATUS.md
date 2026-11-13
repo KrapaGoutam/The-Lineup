@@ -3,13 +3,28 @@
 > Current continuation status: implementation validation is recorded in [CONTINUATION_VALIDATION.md](CONTINUATION_VALIDATION.md). The independent first-round review is recorded in [INDEPENDENT_REVIEW.md](INDEPENDENT_REVIEW.md); final-head follow-up review and CI receipts are maintained in PR #324. Hosted DEV kiosk deployment/acceptance and development merge require separate owner approval. Earlier batch counts below are historical receipts and do not establish final-source acceptance.
 
 ```text
-Status: REVIEW / CI RECEIPTS IN PR #324
+Status: COMPLETE — MERGED INTO development (PR #324, merge 790fd2db560c41cb27affe98a70faeb7bd3f07cd, 2026-11-12T19:25:49Z); issue #255 CLOSED
 GitHub Issue: #255
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0
 Target Branch: development
-Feature Branch: feature/v2-007-clock-kiosk
+Feature Branch: feature/v2-007-clock-kiosk (reviewed head 1d82adb058fc34a20a26e3dd98f74f2df6ef45c3)
 ```
+
+---
+
+## Final closeout record (Gate 8E / 8F / 8H, November 12, 2026)
+
+Recorded in V2-008 Batch A from the previously uncommitted Gate 8 documents; each statement was re-verified against GitHub (PR #324 MERGED, head `1d82adb`, merge `790fd2db`, #255 CLOSED, #256/#257/#248 OPEN).
+
+- **8E:** dedicated `KIOSK_SESSION_SECRET` configured (Preview, Git branch `development` only). See [PREVIEW_CONFIGURATION.md](PREVIEW_CONFIGURATION.md).
+- **8F:** targeted retest `V2-007-RETEST-20261112-0718df`: pairing (D1), PIN, clock in/out, print-media (D3), revocation (D2) PASS; **33/33 reconciliation**. See [HOSTED_DEV_ACCEPTANCE.md](HOSTED_DEV_ACCEPTANCE.md).
+- **8H:** merged to `development` only; development Preview `dpl_6Xhek5v3EpbHWgq6qQJWsgfJon8V` READY and smoked with no DEV writes.
+- **Exception:** the T5 stale-cookie replay of a revoked tablet was not repeated; owner-accepted exception, **not** a pass.
+- **Carried forward:** D7 (location-scoped Kiosks UI) → V2-008 (#256); physical-tablet acceptance → V2-009 (#257). Not production-ready until both are done.
+- Invariants at closeout: ledger 88, finance OFF, enforcement STAGED, 0 Overall Owners, `main` `5e5b7747` and Production untouched.
+
+Next: [V2-008 Migration & Compatibility](../008-migration-compatibility/STATUS.md).
 
 ---
 

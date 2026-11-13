@@ -139,8 +139,15 @@ export function RecipesModule({
   // Keep the mounted editor (and all input) until an in-module exit is confirmed.
   const slug = editorLock ? editorLock.slug : requestedSlug;
   const mode = editorLock ? editorLock.mode : requestedMode;
-  const editing =
-    isManagement && (mode === "new" || (mode === "edit" && !!slug));
+  const [state, setState] = useState<{ data?: RecipeIndex; error?: string }>(
+    demo ? { data: demoIndex } : {},
+  );
+  // E-1 / D-10: writing the organization-shared recipe book is a separate capability from
+  // seeing archived recipes. isManagement (designation) still drives READ affordances; the
+  // write controls follow the database decision (catalog_authorized) delivered with the index
+  // and stay hidden until it is known (fail closed).
+  const canWrite = isManagement && (demo || state.data?.canManage === true);
+  const editing = canWrite && (mode === "new" || (mode === "edit" && !!slug));
   const isDetail = !!slug && !editing;
   useEffect(() => {
     onRecipeDetailActive?.(isDetail);
@@ -155,9 +162,6 @@ export function RecipesModule({
     error?: string;
   } | null>(null);
   const lastOpened = useRef<string | null>(null);
-  const [state, setState] = useState<{ data?: RecipeIndex; error?: string }>(
-    demo ? { data: demoIndex } : {},
-  );
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [viewMode, setViewMode] = useViewPreference();
@@ -653,10 +657,10 @@ export function RecipesModule({
           recipe={current.data}
           backHref={hrefFor(null)}
           onBack={(e) => navigate(e, null)}
-          canEdit={isManagement && current.data.is_active !== false}
+          canEdit={canWrite && current.data.is_active !== false}
           onEdit={() => openEditor("edit")}
           actions={
-            isManagement ? (
+            canWrite ? (
               <RecipeArchiveControl
                 recipe={current.data}
                 restaurantSlug={restaurantSlug}
@@ -680,19 +684,28 @@ export function RecipesModule({
       <h1 className="text-2xl font-semibold">Bar Recipes</h1>
       {isManagement ? (
         <div className="flex flex-wrap items-center gap-3">
-          <Button className="self-start" onClick={() => openEditor("new")}>
-            Add Recipe
-          </Button>
-          <RecipeCategoryDialog
-            restaurantSlug={restaurantSlug}
-            demo={demo}
-            demoCategories={demoCategories}
-            occupiedCategoryIds={state.data?.recipes
-              .filter((r) => r.is_active !== false)
-              .map((r) => r.category_id)}
-            onSessionInvalid={onSessionInvalid}
-            onChanged={categoriesChanged}
-          />
+          {canWrite ? (
+            <>
+              <Button className="self-start" onClick={() => openEditor("new")}>
+                Add Recipe
+              </Button>
+              <RecipeCategoryDialog
+                restaurantSlug={restaurantSlug}
+                demo={demo}
+                demoCategories={demoCategories}
+                occupiedCategoryIds={state.data?.recipes
+                  .filter((r) => r.is_active !== false)
+                  .map((r) => r.category_id)}
+                onSessionInvalid={onSessionInvalid}
+                onChanged={categoriesChanged}
+              />
+            </>
+          ) : state.data ? (
+            <p role="status" className="text-muted-foreground text-sm">
+              The shared recipe book is edited by organization managers while
+              your organization has more than one active location.
+            </p>
+          ) : null}
           <label className="flex min-h-11 items-center gap-2">
             <input
               type="checkbox"

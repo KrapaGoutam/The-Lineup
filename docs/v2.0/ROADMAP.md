@@ -118,22 +118,22 @@ development → main (Production)
 
 ### V2-007 — Clock In / Clock Out Kiosk
 
-- **GitHub Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255)
-- **Status:** Planned
+- **GitHub Issue:** [#255](https://github.com/KrapaGoutam/The-Lineup/issues/255) (CLOSED)
+- **Status:** Complete — merged into `development` (PR #324, `790fd2db`, 2026-11-12). D7 location-scoped Kiosks UI carried to V2-008; physical-tablet acceptance carried to V2-009.
 - **Directory:** `docs/v2.0/features/007-clock-kiosk/`
 - **Subfeatures:**
-  - [ ] **V2-007.001**: Dedicated Kiosk App Surface (Optimized full-screen touch/tablet interface for fast station clocking)
-  - [ ] **V2-007.002**: Device Registration / Pairing (Secure one-time pairing code flow to register physical tablet)
-  - [ ] **V2-007.003**: Organization / Location Device Binding (Server-stored device record bound to `(org_id, location_id)`)
-  - [ ] **V2-007.004**: Kiosk Management Permissions (Capability checks defining which manager roles can pair/manage devices)
-  - [ ] **V2-007.005**: Employee PIN Clock Flow (Keypad PIN authentication against location-assigned staff roster)
-  - [ ] **V2-007.006**: Reassignment / Revocation / Recovery (Device decommissioning, relocation, and emergency recovery)
-  - [ ] **V2-007.007**: Kiosk Security & Validation (Device token rotation, fail-closed revocation check, tamper resistance)
+  - [x] **V2-007.001**: Dedicated Kiosk App Surface (Optimized full-screen touch/tablet interface for fast station clocking)
+  - [x] **V2-007.002**: Device Registration / Pairing (Secure one-time pairing code flow to register physical tablet)
+  - [x] **V2-007.003**: Organization / Location Device Binding (Server-stored device record bound to `(org_id, location_id)`)
+  - [x] **V2-007.004**: Kiosk Management Permissions (Capability checks defining which manager roles can pair/manage devices) — backend + org-level UI done; location-scoped UI entry (D7) → V2-008
+  - [x] **V2-007.005**: Employee PIN Clock Flow (Keypad PIN authentication against location-assigned staff roster)
+  - [x] **V2-007.006**: Reassignment / Revocation / Recovery (Device decommissioning, relocation, and emergency recovery)
+  - [x] **V2-007.007**: Kiosk Security & Validation (Device token rotation, fail-closed revocation check, tamper resistance) — live post-revoke tablet replay (T5) accepted as an owner exception
 
 ### V2-008 — Migration & Compatibility
 
 - **GitHub Issue:** [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256)
-- **Status:** Planned
+- **Status:** In progress — Batch A (read-only discovery, mapping, D7 design) complete locally; implementation (Batch B), hosted validation (Batch C) and owner decisions pending. See [STATUS.md](features/008-migration-compatibility/STATUS.md). Also carries **D7** (location-scoped Kiosks UI, required before Production).
 - **Directory:** `docs/v2.0/features/008-migration-compatibility/`
 - **Subfeatures:**
   - [ ] **V2-008.001**: Existing Data Inventory (Audit existing organizations, profiles, locations, and operational rows)

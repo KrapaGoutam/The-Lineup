@@ -6443,6 +6443,10 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      catalog_authorized: {
+        Args: { p_organization_id: string };
+        Returns: boolean;
+      };
       checklist_generate_daily: {
         Args: {
           p_kind?: Database["public"]["Enums"]["checklist_kind"];
@@ -6884,6 +6888,15 @@ export type Database = {
           p_location_id: string;
         };
         Returns: Json;
+      };
+      kiosk_list_manageable_locations: {
+        Args: never;
+        Returns: {
+          location_id: string;
+          location_name: string;
+          organization_id: string;
+          organization_name: string;
+        }[];
       };
       kiosk_reassign_device: {
         Args: { p_device_id: string; p_new_location_id: string };
