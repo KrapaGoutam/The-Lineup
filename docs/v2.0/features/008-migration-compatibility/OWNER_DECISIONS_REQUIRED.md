@@ -223,14 +223,16 @@ The owner adopted the following by submitting the "Continue Batch B" prompt unch
 
 ## 7. Batch C — D-7 split (added 2026-11-13)
 
-D-7 is now four separate decisions; **none is approved**, and the Batch C prompt is not D-7 authorization. Packet: [batch-c/D7_APPROVAL_PACKET.md](batch-c/D7_APPROVAL_PACKET.md).
+D-7 is four separate decisions. Packet: [batch-c/D7_APPROVAL_PACKET.md](batch-c/D7_APPROVAL_PACKET.md). **Approval register (updated 2026-11-13 after the owner submitted the "Controlled Hosted DEV Rollout" prompt unchanged):**
 
-| Ref   | Decision                                                                                                  | State                                    |
-| ----- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| D-7A  | Apply exactly migrations 89, 90, 91 to Hosted DEV (+ encrypted backup, real-data rehearsal, verification) | **Ready for owner decision**             |
-| D-7B  | Authenticated verification: path 1 rolled-back SQL probes (recommended); path 2 fixtures (not requested)  | Ready (path 1)                           |
-| D-7C  | Actual legacy backfill / configuration                                                                    | **Not ready** — Track 2 prerequisites    |
-| Git   | Push the feature branch by explicit refspec, open one PR to `development`, exact-head CI (no merge)       | Ready for owner decision                 |
-| Merge | Final merge authorization                                                                                 | Later; needs D-7A/B verified, CI, review |
+| Ref   | Decision                                                                                                  | State                                                                                                                     |
+| ----- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| D-7A  | Apply exactly migrations 89, 90, 91 to Hosted DEV (+ encrypted backup, real-data rehearsal, verification) | **GRANTED and EXECUTED 2026-11-13** — ledger 88 → 91, verified ([receipt](batch-c/BATCH_C_ROLLOUT_RECEIPT.md))            |
+| D-7B  | Authenticated verification: path 1 rolled-back SQL probes (recommended); path 2 fixtures (not requested)  | **GRANTED (path 1) and EXECUTED** — 0078 105/105, 0079 69/69, 0080 105/105 rolled back. Path 2 (real identities) not used |
+| D-7C  | Actual legacy backfill / configuration                                                                    | **NOT approved, NOT designed** — Track 2 prerequisites; no executor exists                                                |
+| Git   | Push the feature branch by explicit refspec, open one PR to `development`, exact-head CI (no merge)       | **GRANTED (G-1)**; no merge, no auto-merge authorized                                                                     |
+| Merge | Final merge authorization                                                                                 | **OPEN — owner decision** after the PR's exact-head CI is green and this receipt is reviewed                              |
+
+**New owner action (found 2026-11-13, read-only):** the GitHub `production` environment has **no required reviewers** (`protection_rules: []`, no branch restriction, admins can bypass). A push to `main` that touches `supabase/migrations/**` therefore runs `supabase db push` unattended. Add Required reviewers (GitHub → Settings → Environments → production) before any release merge to `main`. Not changed by this work.
 
 D-1, D-3, D-4, D-5/D-5b, D-6, D-8, D-11 are unchanged and do **not** block D-7A. They block Track 2 / V2-004 enforcement / V2-009 as listed in the receipt.

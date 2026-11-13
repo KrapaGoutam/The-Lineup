@@ -1,4 +1,25 @@
-# THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch B1 + Security Gate S1)
+# THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch C Hosted DEV rollout + PR)
+
+## Batch C — controlled Hosted DEV rollout (2026-11-13, D-7A/D-7B/G-1 granted)
+
+- [x] Recover state: HEAD `46fe3d97`, clean, no upstream, `development` `790fd2db` / `main` `5e5b7747` unchanged, no remote V2-008 branch or PR; checksums of 89/90/91 verified.
+- [x] Fresh DPAPI-encrypted Hosted DEV backup (`dev-20261113T040959Z`), 121 tables, restore-validated (0 digest mismatches, 198 policies equal).
+- [x] Real-data rehearsal on the restored copy as role `postgres` (ledger 88 → 91): 354/354 pgTAP, all 91 tables unchanged. Harness trap recorded (`supabase_admin` apply breaks ownership).
+- [x] Hosted DEV apply of exactly migrations 89–91 via `supabase db push` (dry run listed exactly three): **ledger 88 → 91**, 04:13:21Z.
+- [x] Postflight: function/schema fingerprints `ledger91`, all 91 tables identical, guard rows identical, PostgREST sees both new RPCs.
+- [x] Rollback-only Hosted probes: 0078 105/105 (F-1+D7), 0079 69/69 (U-1), 0080 105/105 (E-1); nothing persisted.
+- [x] `database.yml` and GitHub `production` environment inspected read-only: NO required reviewers (owner action before any Production release).
+- [x] Receipt: `docs/v2.0/features/008-migration-compatibility/batch-c/BATCH_C_ROLLOUT_RECEIPT.md`.
+- [ ] Push branch (explicit refspec), ONE PR to `development`, exact-head CI + Preview evidence, merge-readiness report. **No merge.**
+- [ ] Owner: merge decision; D-7C backfill approval package (separate); production-environment reviewers.
+
+## Current State & Next Step
+
+Hosted DEV is at ledger 91 with enforcement staged and Finance OFF. Next exact action after the PR is green: owner decides whether to merge the security migrations and planning tooling into `development` (actual backfills stay outstanding), or prepares the separate D-7C approval package. Do not start V2-009 or any backfill.
+
+---
+
+# (previous) V2-008 MIGRATION & COMPATIBILITY (Batch B1 + Security Gate S1)
 
 Issue [#256](https://github.com/KrapaGoutam/The-Lineup/issues/256) · parent #248 · branch `feature/v2-008-migration-compatibility` (base `development` `790fd2db560c41cb27affe98a70faeb7bd3f07cd`; Batch A checkpoint `874091eb`). Local commits only: not pushed, no PR, upstream deliberately unset.
 

@@ -1,4 +1,22 @@
-# V2-008 Migration & Compatibility — Agent Handoff (after Batch C readiness)
+# V2-008 Migration & Compatibility — Agent Handoff (after the Batch C Hosted DEV rollout)
+
+## 000. Batch C rollout (2026-11-13) — migrations 89–91 are LIVE on Hosted DEV
+
+**Status: SECURITY ROLLOUT PASSED; PR into `development` open for owner review (not merged). V2-008 is NOT complete.** Full evidence: [batch-c/BATCH_C_ROLLOUT_RECEIPT.md](batch-c/BATCH_C_ROLLOUT_RECEIPT.md). Starting HEAD `46fe3d97cef4fbc3c974c7ad29dd0d9ad52a9eb5`; the rollout checkpoint is the next commit(s) on `feature/v2-008-migration-compatibility` (`git log`; PR number on GitHub and in the chat report — a document cannot embed its own SHA).
+
+- **Hosted DEV `opmujepkemwcdxxorhfd`: ledger 88 → 91** (04:13:21Z). Applied exactly `20261112200000` (D7+F-1), `20261112220000` (U-1), `20261113100000` (E-1) with `supabase db push` after a dry run that listed exactly those three. Function/grant-only; **all 91 tables identical** before/after, `auth.sessions`/`refresh_tokens` intact; enforcement `staged`, Finance OFF, 0 Overall roles, 6 revoked kiosk fixtures, 14 module-config rows, attendance modes `{null:44, external:1, internal_the_lineup:4}` unchanged.
+- **Backup/recovery:** fresh DPAPI-encrypted backup `dev-20261113T040959Z.zip.dpapi` (sha256 `5cf7fa58…be0b92`, local owner profile only, keep ≥ 7 days after acceptance), restore-validated (121 tables identical, 198 policies equal) and rehearsed on the restored real data (354/354 pgTAP; `0081` passes with real 0 Overall roles, confirming the earlier LAD-16 failure was a fixture assumption).
+- **Hosted probes (rollback-only, D-7B path 1):** F-1+D7 `0078` 105/105, U-1 `0079` 69/69, E-1 `0080` 105/105; nothing persisted (full-table diff). **SQL-level only — not real-GoTrue/browser/tablet acceptance.**
+- **Do the app/Preview only after this point** (satisfied: the PR Preview is built after the apply). Both new RPCs are visible to PostgREST (anon → `42501`).
+- **Automation facts (current YAML):** `database.yml` `deploy-migrations` runs only on `push` to `main` in environment `production`. **GitHub `production` has NO required reviewers** (`protection_rules: []`, no branch restriction, `can_admins_bypass: true`): a merge to `main` touching migrations auto-runs `supabase db push`. Owner must add Required reviewers before any release; not modified here.
+- **Still NOT done / not authorized:** D-7C backfills (no executor exists), organization/location/role/module/attendance changes, V2-004 enforcement activation, Production/Neon, merge, V2-009. Outstanding: D-1, D-3, D-4, D-5/5b, D-6, D-7C, D-8, D-11. The fallback cliff (a complete validated mapping per organization before any location-membership backfill) remains a hard constraint.
+- **Exact next action:** owner reviews the PR; if CI is green, decides whether to merge the security migrations and dry-run tooling into `development` (do not close #256; do not begin V2-009), then separately the D-7C approval package; and adds Required reviewers to the GitHub `production` environment before any release.
+- **Do not repeat:** the backup, restore, rehearsal, Hosted apply and probes above; re-run only the read-only verifier (`node batch-c/hosted_dev_readonly_check.mjs --target hosted --expect 91`) to confirm state.
+- **Traps learned:** rehearse/apply as `postgres`, not `supabase_admin`; the restored copy differs from Hosted only in six CHECK parenthesizations + raw policy `search_path`; the Management API returns only the last statement's rows and error bodies escape quotes; Node on Windows prints a harmless `UV_HANDLE_CLOSING` assertion after `process.exit`.
+
+---
+
+# (previous) V2-008 Migration & Compatibility — Agent Handoff (after Batch C readiness)
 
 A handoff cannot embed its own commit SHA: Batch A `874091eb`, B1 `6457c1ae`, S1 `eb8adf2`, Batch B `f2798c6`; the **Batch C readiness checkpoint is the next commit** on `feature/v2-008-migration-compatibility` (`git log`, and the chat report). Nothing is pushed.
 

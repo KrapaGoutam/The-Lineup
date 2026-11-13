@@ -1,7 +1,7 @@
 # Feature V2-008: Migration & Compatibility — Status
 
 ```text
-Status: IN PROGRESS — BATCH C READINESS PASSED (HOSTED DEV D-7A REQUIRED); BATCH A COMPLETE; B1 (D7 + F-1), SECURITY GATE S1 (U-1), E-1 (D-10 OPTION A) AND THE B2–B4 DRY-RUN PLANNING KIT IMPLEMENTED LOCALLY; HOSTED DEV (D-7) AND ALL REAL BACKFILLS PENDING
+Status: IN PROGRESS — BATCH C SECURITY ROLLOUT PASSED (HOSTED DEV LEDGER 88 → 91: D7+F-1, U-1, E-1 APPLIED AND VERIFIED); PR TO development OPEN FOR OWNER REVIEW (NOT MERGED); ALL REAL BACKFILLS (D-7C), V2-004 ENFORCEMENT ACTIVATION AND V2-009 STILL PENDING
 GitHub Issue: #256
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0
@@ -10,6 +10,8 @@ Feature Branch: feature/v2-008-migration-compatibility (base 790fd2db560c41cb27a
 ```
 
 Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local only) then implemented D7 and the F-1 hardening: one forward-only migration (local ledger 88 → 89), the Settings → Kiosks entry, targeted pgTAP/real-Auth/browser tests and a focused security review — see [D7 plan §8](D7_LOCATION_SCOPED_KIOSK_PLAN.md). **No data backfill, Hosted DEV write, Production or Neon contact occurred in either batch; Hosted DEV is still at ledger 88.** Next-step constraints for B2–B4: [B2_B4_NEXT_STEP_PACKAGE.md](B2_B4_NEXT_STEP_PACKAGE.md). Resume from [HANDOFF.md](HANDOFF.md).
+
+**Batch C controlled Hosted DEV rollout (2026-11-13):** owner approvals D-7A, D-7B and G-1 were granted and used exactly as scoped. After a fresh DPAPI-encrypted backup (restore-validated: 121 tables identical, 198 policies equal) and a real-data rehearsal (354/354 pgTAP), migrations 89, 90 and 91 were applied to Hosted DEV `opmujepkemwcdxxorhfd` only — **ledger 88 → 91**, function/grant-only, **all 91 tables identical** before/after (existing Auth sessions intact), enforcement `staged`, Finance OFF, no module/attendance/role change. Rollback-only probes on Hosted DEV: F-1+D7 105/105, U-1 69/69, E-1 105/105. The GitHub `production` environment has **no required reviewers** (a merge to `main` touching migrations auto-runs `supabase db push`) — a Production-release blocker for the owner. Receipt: [batch-c/BATCH_C_ROLLOUT_RECEIPT.md](batch-c/BATCH_C_ROLLOUT_RECEIPT.md). **Not delivered:** actual organization/role/module/attendance backfills (no executor exists), enforcement activation, Production migration; V2-008 is not complete.
 
 **Security Gate S1 (2026-11-12, local only):** U-1 fixed by `20261112220000_kiosk_reassign_revoked_device_guard.sql` (local ledger 89 → 90; reproduced first, 69/69 after, full pgTAP 3363 PASS on a clean 90-migration replay, real-GoTrue 8/8, browser 21/21); E-1 reproduced and bounded with a remediation plan (no cross-tenant write by any tenant-scoped actor; not implemented); D-2/2b/2c packet written with measured evidence; shared `session_id` review found no bypass. See [SECURITY_GATE_S1.md](SECURITY_GATE_S1.md), [U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md](U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md), [E1_RECIPES_INVENTORY_SECURITY_PLAN.md](E1_RECIPES_INVENTORY_SECURITY_PLAN.md).
 

@@ -1,6 +1,8 @@
 # V2-008 Batch C — Hosted DEV Rollout and Recovery Plan (migrations 89–91)
 
-**Not executed. Nothing here is authorized until the owner answers D-7A** ([packet](D7_APPROVAL_PACKET.md)). Prepared 2026-11-13 from read-only preflight and a populated local rehearsal ([receipt](BATCH_C_READINESS_RECEIPT.md)).
+> **EXECUTED 2026-11-13 under owner approvals D-7A/D-7B/G-1 — see [BATCH_C_ROLLOUT_RECEIPT.md](BATCH_C_ROLLOUT_RECEIPT.md).** The plan below held without change (Hosted DEV ledger 88 → 91). Execution addendum for any future rollout using this route: (1) rehearse and apply as role **`postgres`**, never `supabase_admin` (ownership of new `SECURITY DEFINER` helpers drives `42501` between functions); (2) the restored copy differs from Hosted only in six `CHECK` parenthesizations and the raw policy fingerprint, so compare canonical (`search_path=''`) policies and expect only the `constraints` schema category to differ there; (3) the rollback-only Hosted probe is [hosted_rollback_probe.mjs](hosted_rollback_probe.mjs) (final statement always raises; prove nothing persisted by a full-table `--compare`); (4) recovery path remains forward-fix; the retained encrypted backup is `dev-20261113T040959Z.zip.dpapi` (local owner profile only).
+
+**Original status line: not executed; nothing was authorized until the owner answered D-7A** ([packet](D7_APPROVAL_PACKET.md)). Prepared 2026-11-13 from read-only preflight and a populated local rehearsal ([receipt](BATCH_C_READINESS_RECEIPT.md)).
 
 Tools (all read-only): [hosted_dev_readonly_check.mjs](hosted_dev_readonly_check.mjs) · [function_fingerprint.sql](function_fingerprint.sql) · [schema_fingerprint.sql](schema_fingerprint.sql) · [expected-fingerprints.json](expected-fingerprints.json).
 
