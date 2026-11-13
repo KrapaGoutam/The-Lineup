@@ -289,3 +289,53 @@ describe("useCatalogController re-reads (BI-9: notify -> refetch)", () => {
     expect(getSnapshot).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("useCatalogController: shared-catalog refusal (E-1)", () => {
+  it("re-reads the snapshot after a refused shared-catalog write so a stale tab loses its edit controls", async () => {
+    getSnapshot.mockResolvedValueOnce({ ok: true, data: snapshot("first") });
+    const { result } = mount();
+    await act(async () => {});
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+
+    // The organization just gained a second active location: the database refuses the write...
+    runCommand.mockResolvedValueOnce({
+      ok: false,
+      error:
+        "You do not have permission to change the shared Bar Inventory catalog.",
+    });
+    // ...and the refreshed snapshot carries the new decision.
+    getSnapshot.mockResolvedValueOnce({
+      ok: true,
+      data: { ...snapshot("after"), canManageCatalog: false },
+    });
+    let outcome: { ok: boolean } | undefined;
+    await act(async () => {
+      outcome = await result.current.run({
+        type: "vendorCreate",
+        name: "x",
+        notes: null,
+      });
+    });
+    expect(outcome?.ok).toBe(false);
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    expect(result.current.snapshot?.canManageCatalog).toBe(false);
+  });
+
+  it("does not re-read for an unrelated refusal", async () => {
+    getSnapshot.mockResolvedValueOnce({ ok: true, data: snapshot("first") });
+    const { result } = mount();
+    await act(async () => {});
+    runCommand.mockResolvedValueOnce({
+      ok: false,
+      error: "A vendor named X already exists.",
+    });
+    await act(async () => {
+      await result.current.run({
+        type: "vendorCreate",
+        name: "x",
+        notes: null,
+      });
+    });
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+  });
+});

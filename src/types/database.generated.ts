@@ -6443,6 +6443,10 @@ export type Database = {
         Args: { p_organization_id: string; p_service_session_id: number };
         Returns: undefined;
       };
+      catalog_authorized: {
+        Args: { p_organization_id: string };
+        Returns: boolean;
+      };
       checklist_generate_daily: {
         Args: {
           p_kind?: Database["public"]["Enums"]["checklist_kind"];

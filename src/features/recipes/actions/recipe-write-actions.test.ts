@@ -72,6 +72,8 @@ const makeActor = (designation: string | null) => {
       designation,
     },
     isManager,
+    // E-1: the write decision is its own database-backed capability; by default a manager has it.
+    canManageCatalog: isManager,
   };
 };
 
@@ -129,6 +131,23 @@ describe("recipe management actions", () => {
       expect(from).not.toHaveBeenCalled();
     },
   );
+  it("E-1: refuses a manager whose database catalog decision is false, before any write", async () => {
+    // Location-role-only manager in a multi-location organization: isManager (read tier) stays
+    // true, but catalog_authorized is false, so no save / editor read may reach the database.
+    user.mockResolvedValue({
+      ...makeActor("manager")!,
+      canManageCatalog: false,
+    });
+    expect(await saveRecipeAction(input())).toMatchObject({
+      ok: false,
+      kind: "permission",
+    });
+    expect(
+      await getRecipeEditorAction({ restaurantSlug: "test", slug: null }),
+    ).toMatchObject({ ok: false });
+    expect(save).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalled();
+  });
   it("propagates invalid session without writes", async () => {
     session.mockResolvedValue({
       ok: false,

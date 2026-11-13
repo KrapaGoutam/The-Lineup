@@ -1,4 +1,61 @@
-# V2-008 Migration & Compatibility — Agent Handoff (after Security Gate S1)
+# V2-008 Migration & Compatibility — Agent Handoff (after Batch B continuation: E-1 + B2–B4 tooling)
+
+Feature-specific; other V2.0 features keep their own handoffs. A handoff cannot embed its own commit SHA: Batch A is `874091eb3982b7e1791488643a957342a22ec2a4`, B1 is `6457c1ae9f6307d1d9d43045ed87365eee9407af`, S1 is `eb8adf2176e9631873e6fed771d34d9d2f1fe119`, and the **Batch B continuation checkpoint is the next commit** on `feature/v2-008-migration-compatibility` (`git log`, and the chat report).
+
+## 0. Batch B continuation (2026-11-13) — what changed since S1
+
+One cumulative local package; **nothing pushed, no upstream, no PR, Hosted DEV / Production / Neon / `main` / `development` untouched.** Remote `development` was re-checked with `git ls-remote` at the start: still `790fd2db560c41cb27affe98a70faeb7bd3f07cd` (fresh, not just the local ref).
+
+- **E-1 implemented (D-10 Option A).** Migration `20261113100000_e1_shared_catalog_authority.sql` (sha256 `9375ae54540f3c49d5f7d3a3a7ce845b30a54c7e6b0d180a4ef7ec3f8ad5a8ad`); **local ledger 90 → 91, Hosted DEV still 88** (it now lacks THREE local migrations: B1, U-1, E-1 — push them in that order under D-7). In an organization with two or more active locations, location roles can no longer write the shared recipe book or the shared Inventory catalog; one-location organizations see no change. Details and evidence: [E-1 plan §13](E1_RECIPES_INVENTORY_SECURITY_PLAN.md).
+- **B2/B3/B4 built as read-only dry-run planners** (no executor exists): [B2_B4_PLANNING_KIT.md](B2_B4_PLANNING_KIT.md), code in `scripts/migration-compat/`.
+- **Capability ladder measured** (pgTAP `0081`): the D-2 ladder changes no capability at one location (only the owner's Schedule/Tasks/Tips 4 → 3, same band); a **partial** backfill locks out even the general manager's Tasks/Tips — the measured proof for the atomic-organization rule.
+- **Decisions adopted for LOCAL implementation only:** D-10, D-2, D-2b, D-2c, B2–B4 local tooling ([register §6](OWNER_DECISIONS_REQUIRED.md)). **D-10b resolved conservatively:** the Overall assistant manager keeps organization-wide catalog authority (the adopted policy requires existing Overall authority to stay intact).
+- **Observation:** an organization owner with no location assignment lands on "No restaurant location assigned" in the V2 UI (existing behaviour). Real owners/GMs need their location rows before the V2 app reaches their organization.
+
+### Validation evidence (disposable local stack, ledger 91)
+
+| Area                                                                                                         | Result                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean replay of all 91 migrations + full pgTAP                                                               | **84 files, 3,488 assertions PASS** (0080: 105, 0081: 18, 0069/0070 re-derived)                                                                           |
+| Negative control (0080 on the unfixed ledger-90 schema, before the review hardening)                         | 78 of 103 failed, including every spill row and all three location-count transition rows                                                                  |
+| Real-database Vitest (`tests/local`): `inventory-recipes-location`, `module-enforcement`, `migration-compat` | 17 + 15 + 6 = **38/38**                                                                                                                                   |
+| Planning kit Vitest (`scripts/migration-compat`)                                                             | **124/124**                                                                                                                                               |
+| Vitest recipes + bar-inventory                                                                               | 298 + 948 pass; full suite **304 files, 4,167 tests**                                                                                                     |
+| Browser `inventory-recipes-location`                                                                         | **8/8** on desktop, WebKit tablet and mobile                                                                                                              |
+| `npm run check` (Prettier, ESLint 0 warnings, tsc)                                                           | exit 0                                                                                                                                                    |
+| Not run                                                                                                      | hosted-only `tests/real/*` (Hosted DEV is out of scope; static review says unaffected), Hosted DEV acceptance, the V2-007 campaign, S1's unchanged suites |
+
+### Independent consolidated review (one read-only reviewer): **no P0, no P1**
+
+The reviewer re-ran the matrix and bypass enumeration (every schema, ACLs, triggers, storage policies, dynamic SQL), diffed the 12 regenerated bodies against migration history (byte-identical apart from the one call swap), analysed the 1 → 2 location race (serializable-consistent, one RPC statement wide: acceptable, no lock), and attacked the tooling. Findings and disposition (all fixed in this package unless noted):
+
+| Id   | Sev | Finding                                                                                                                | Disposition                                                                                                                                                                                                             |
+| ---- | --- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2-1 | P2  | Snapshot reader followed redirects and would send the custom `apikey` header cross-origin, breaking "loopback only"    | **Fixed:** `redirect: "error"` forced last in `guardedFetch`; responses from another origin refused; tests                                                                                                              |
+| P2-2 | P2  | B2 let a multi-role member be explicitly downgraded without the reduction check                                        | **Fixed:** the check now applies to every role count; an acknowledged reduction is applied but stays a visible warning                                                                                                  |
+| P2-3 | P2  | A profile in both `assignments` and `intentionallyUnassigned` silently resolved to "unassigned"                        | **Fixed:** `manifest_conflicting_entries` → SKIP                                                                                                                                                                        |
+| P3-1 | P3  | Import tab offers a preview whose catalog rows the commit would refuse                                                 | **Mitigated:** the Import tab states the limit up front; the commit already fails all-or-nothing with a clear message (0 rows written, per the reviewer's probe). Gating individual preview rows left as a UX follow-up |
+| P3-2 | P3  | Stale tab keeps edit controls after a refused catalog write                                                            | **Fixed:** the controller re-reads the snapshot on that refusal; tests                                                                                                                                                  |
+| P3-3 | P3  | Manifest validation gaps (unassigned entries, `acknowledgeExpansions` type, `acknowledgeReduction` ineffective at N=1) | **Fixed**                                                                                                                                                                                                               |
+| P3-4 | P3  | No warning for inactive members                                                                                        | **Fixed:** `inactive_members_not_mapped`                                                                                                                                                                                |
+| P3-5 | P3  | B4: unconfigured → internal with Neon links not flagged                                                                | **Fixed:** same acknowledged transition as external → internal                                                                                                                                                          |
+| P3-6 | P3  | B3: unknown location in manifest ignored; `touches.existingRows` always false                                          | **Fixed**                                                                                                                                                                                                               |
+| P3-7 | P3  | Execution flags matched case-sensitively                                                                               | **Fixed:** case-insensitive, single-dash too (cosmetic: no execute path exists)                                                                                                                                         |
+| P3-8 | P3  | 0080 completeness regex brittle                                                                                        | **Fixed:** `public.` prefix optional, `merge` covered, plus a reviewed allow-list (E1-70b) and a dynamic-SQL check (E1-70c)                                                                                             |
+
+**Could not be verified (by design):** the Hosted DEV pre-state of the 18 function bodies (history says identical; a read-only `pg_get_functiondef` comparison needs D-7), and the race under two real concurrent sessions (analysed, not reproduced).
+
+### Exact next action
+
+Owner decisions, not engineering: **D-7** (Hosted DEV write authorization, per step) for pushing the three local migrations in order (B1, U-1, E-1) with real-JWT probes (reuse `0078`/`0079`/`0080` and the local suites with synthetic users); then **D-1** (Production read-only preflight), **D-3/D-4/D-5/D-5b/D-6/D-8** for real manifests. With owner-approved manifests the planners can produce the reviewable changesets; a separately authorized executor (one transaction per organization, never `apply_location_assignment_changes`) is the only missing piece and is **not** built.
+
+### How to resume locally
+
+Local stack up; from the worktree: `npx supabase db reset --local` → `npx supabase test db --local`; `npx vitest run scripts/migration-compat`; with `LOCAL_SUPABASE_URL/ANON_KEY/SERVICE_KEY` from `npx supabase status -o env`: `npx vitest run --config vitest.local.config.ts tests/local/migration-compat.local.test.ts tests/local/inventory-recipes-location.local.test.ts tests/local/module-enforcement.local.test.ts` and `npx playwright test --config playwright.inventory-recipes-local.config.ts --project=desktop|host-tablet|server-mobile`. Probes: `b2_capability_ladder_probe.sql` and the S1 probes in `security-s1/` (self-rolling-back).
+
+---
+
+## Previous handoff (after Security Gate S1) — preserved
 
 Feature-specific; other V2.0 features keep their own handoffs. A handoff cannot embed its own commit SHA: Batch A is `874091eb3982b7e1791488643a957342a22ec2a4`, B1 is `6457c1ae9f6307d1d9d43045ed87365eee9407af`, and the **S1 checkpoint is the next commit** on `feature/v2-008-migration-compatibility` (`git log`, and the chat report).
 

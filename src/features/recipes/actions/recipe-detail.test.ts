@@ -37,6 +37,7 @@ const makeActor = (designation: "staff" | "manager" = "staff") => ({
     designation,
   },
   isManager: designation === "manager",
+  canManageCatalog: designation === "manager",
 });
 
 beforeEach(() => {

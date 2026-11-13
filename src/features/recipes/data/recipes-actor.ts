@@ -19,7 +19,17 @@ export type RecipesActor = {
     name: string;
     designation: string;
   };
+  /**
+   * Reads: may this person see archived/inactive recipes? (Unchanged: sharing the book with
+   * location managers is intended.) Do NOT use this to authorize a write.
+   */
   isManager: boolean;
+  /**
+   * Writes (E-1 / D-10): the database's organization-level decision from
+   * public.catalog_authorized. A location-role-only manager has it only while the
+   * organization has one active location. Fails closed on any error.
+   */
+  canManageCatalog: boolean;
 };
 
 const MANAGER_ROLES = new Set([
@@ -64,7 +74,15 @@ export async function getRecipesActor(
   const authorized = await supabase.rpc("recipes_org_authorized", args);
   if (authorized.error || authorized.data !== true) return null;
 
+  // The database owns the shared-catalog write decision and recomputes the organization's
+  // active-location count on every call; never derive it from the role or a cached flag.
+  const catalogArgs = {
+    p_organization_id: scope.organizationId,
+  } satisfies Database["public"]["Functions"]["catalog_authorized"]["Args"];
+  const catalog = await supabase.rpc("catalog_authorized", catalogArgs);
+
   return {
+    canManageCatalog: !catalog.error && catalog.data === true,
     organizationId: result.context.organizationId,
     scope,
     viewer: {

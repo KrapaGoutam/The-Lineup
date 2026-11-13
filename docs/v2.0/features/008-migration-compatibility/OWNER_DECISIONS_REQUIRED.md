@@ -120,19 +120,19 @@ Legend — **Blocks B**: blocks Batch B implementation start/scope. **Blocks C**
 
 ## 3. Summary
 
-| Decision      | Blocks Batch B |       Blocks Batch C       |     Blocks V2-009      |
-| ------------- | :------------: | :------------------------: | :--------------------: |
-| D-1           |       no       |   Prod-shaped rehearsal    |          yes           |
-| D-2 / 2b / 2c |    yes (B2)    |            yes             |          yes           |
-| D-3           |       no       | enforcement rehearsal only |  yes (Preview tenant)  |
-| D-4           |       no       | enforcement rehearsal only |           no           |
-| D-5 / 5b      |       no       |             no             |        yes (5b)        |
-| D-6           |       no       |             no             |          yes           |
-| D-7           |       no       |            yes             |           —            |
-| D-8           |       no       |             no             |          yes           |
-| D-9           |    **yes**     |            yes             |          yes           |
-| D-10 (E-1)    |  no (B2 N=1)   |    no (N≥2 / D-2c: yes)    | yes before any N≥2 org |
-| D-11 (H-S1)   |       no       |             no             |           no           |
+| Decision      |             Blocks Batch B             |       Blocks Batch C       |     Blocks V2-009      |
+| ------------- | :------------------------------------: | :------------------------: | :--------------------: |
+| D-1           |                   no                   |   Prod-shaped rehearsal    |          yes           |
+| D-2 / 2b / 2c |                yes (B2)                |            yes             |          yes           |
+| D-3           |                   no                   | enforcement rehearsal only |  yes (Preview tenant)  |
+| D-4           |                   no                   | enforcement rehearsal only |           no           |
+| D-5 / 5b      |                   no                   |             no             |        yes (5b)        |
+| D-6           |                   no                   |             no             |          yes           |
+| D-7           |                   no                   |            yes             |           —            |
+| D-8           |                   no                   |             no             |          yes           |
+| D-9           |                **yes**                 |            yes             |          yes           |
+| D-10 (E-1)    | **adopted + implemented locally (§6)** |    no (N≥2 / D-2c: yes)    | yes before any N≥2 org |
+| D-11 (H-S1)   |                   no                   |             no             |           no           |
 
 ## 4. D-2 / D-2b / D-2c — owner-ready decision packet (added in Security Gate S1, 2026-11-12)
 
@@ -203,3 +203,20 @@ No bypass demonstrated; five helpers accept a token with no `session_id`, two (T
 ### U-1 follow-ups (optional)
 
 R-1 (reassigned-active row lingers "Active" with no credential) and R-2 (DB-level invariant: `CHECK` + `BEFORE UPDATE` trigger making `revoked` terminal for every writer) — see the [U-1 document](U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md) §6. Neither blocks anything.
+
+## 6. Batch B continuation (2026-11-13): decisions adopted for LOCAL implementation only
+
+The owner adopted the following by submitting the "Continue Batch B" prompt unchanged. **Scope: local implementation and dry-run tooling. None of it authorizes a real backfill, a Hosted DEV migration (D-7), real staff-role changes, real module-configuration changes, Attendance-mode updates, financial activation, backend enforcement activation, or a push/PR/merge.**
+
+| Ref         | Adopted as                                                                                                                                                                         | Implemented in                                                                                                                                         | Note                                                                                                                                                                                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D-10**    | **Option A**: org-level roles manage the shared catalogs; location roles keep it only while the organization has exactly one active location; location-scoped stock ops unchanged. | Migration `20261113100000_e1_shared_catalog_authority.sql`, pgTAP `0080`, app layer (see [E-1 plan](E1_RECIPES_INVENTORY_SECURITY_PLAN.md) §13).       | **D-10b resolved conservatively:** the prompt requires existing Overall-role authority to stay intact, so the Overall **assistant manager keeps** organization-wide catalog management (the plan had recommended narrowing it). Re-open only if the owner wants it narrowed. |
+| **D-10c/d** | Recipes images follow the same rule as recipes; E-1 is corrected before any multi-location backfill.                                                                               | `recipes_can_write_image` uses the same predicate; B2 refuses N≥2 without a complete manifest and lists every manager/assistant row's E-1 consequence. | —                                                                                                                                                                                                                                                                            |
+| **D-2**     | Ladder: owner/GM → manager, shift_manager → assistant_manager, host/server → staff, as **location** rows only; organization roles and Overall roles untouched.                     | `role-backfill.mjs`; capability preservation demonstrated before any assignment (pgTAP `0081`, `capability-model.test.ts`).                            | Zero capability change at one location, measured. Only owner Schedule/Tasks/Tips 4 → 3 (same band).                                                                                                                                                                          |
+| **D-2b**    | Multi-role arrays are never auto-mapped; the record is marked "explicit mapping required"; the organization is excluded from automatic write execution.                            | `multi_role_requires_explicit_mapping` → organization `SKIP`.                                                                                          | The tool still inventories and reports them.                                                                                                                                                                                                                                 |
+| **D-2c**    | Multi-location organizations need a complete, explicit, per-organization manifest; nothing is inferred.                                                                            | `multi_location_requires_complete_manifest`; state-hash-bound manifest; capability unmeasured at N≥2 needs an explicit acknowledgement.                | No automatic multi-location backfill is authorized by this adoption.                                                                                                                                                                                                         |
+| **B2–B4**   | Local tooling only.                                                                                                                                                                | [B2_B4_PLANNING_KIT.md](B2_B4_PLANNING_KIT.md).                                                                                                        | Dry-run planners; no executor.                                                                                                                                                                                                                                               |
+
+**Still unapproved (not converted into approvals):** D-1 Production read-only preflight · D-3 Manual Preview mappings · D-4 harness fixture disposition · D-5/5b actual module values · D-6 ambiguous Attendance modes · **D-7 Hosted DEV migration and write authorization** · D-8 enforcement activation · D-11 shared `session_id` hardening. For ambiguous multi-role / multi-location records the approved default is **skip and report**.
+
+**New observation for the owner (not a decision yet):** in the V2 UI an organization **owner with only an organization membership and no location assignment** lands on "No restaurant location assigned" (reproduced in the browser while writing the E-1 specs). That is existing, intended V2 behaviour (a workspace needs a location), and it is exactly why the D-2 ladder maps Owner → **Manager at the location** while preserving the organization membership. It means a real organization's owner and general manager need their location rows **before** the V2 app reaches that organization.

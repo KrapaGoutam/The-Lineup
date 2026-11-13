@@ -1,5 +1,7 @@
 # V2-008 — Batch B2–B4 Next-Step Package (preparation only, written after B1)
 
+> **Update 2026-11-13:** B2, B3 and B4 are now **implemented locally as read-only dry-run tooling** — see [B2_B4_PLANNING_KIT.md](B2_B4_PLANNING_KIT.md). E-1 is implemented locally (D-10 Option A). D-2/D-2b/D-2c and D-10 were adopted for LOCAL implementation only. There is still **no executor**; every rule below that mentions a writer remains a requirement for a future, separately authorized step (D-7). The text below is preserved as written.
+
 Nothing here is implemented. It exists so the next session starts with the constraints already decided. Authority: [OWNER_DECISIONS_REQUIRED.md](OWNER_DECISIONS_REQUIRED.md) (D-numbers), [ROLE_MAPPING_PLAN.md](003-existing-role-migration/ROLE_MAPPING_PLAN.md), [MAPPING_PLAN.md](002-organization-location-backfill/MAPPING_PLAN.md), [BATCH_B_C_DEPENDENCIES.md](BATCH_B_C_DEPENDENCIES.md). Deployed schema wins over any historical SQL (`location_memberships`, never `location_assignments`).
 
 ## Gate status after B1

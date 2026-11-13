@@ -86,7 +86,7 @@ export async function saveRecipeAction(input: {
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
   const actor = await getRecipesActor(parsed.data.restaurantSlug);
-  if (!actor || !actor.isManager)
+  if (!actor || !actor.canManageCatalog)
     return {
       ok: false,
       kind: "permission",
@@ -135,7 +135,7 @@ export async function getRecipeEditorAction(input: {
   const invalid = await requireLiveSession(client);
   if (invalid) return invalid;
   const actor = await getRecipesActor(parsed.data.restaurantSlug);
-  if (!actor || !actor.isManager)
+  if (!actor || !actor.canManageCatalog)
     return { ok: false, error: "You don't have permission to edit recipes." };
   const workspace = await checkWorkspace(parsed.data.expectedContext, actor);
   if (!workspace.ok) return workspace;

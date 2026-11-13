@@ -76,6 +76,8 @@ const makeActor = (designation: string, orgId = "server-org") => {
       designation,
     },
     isManager,
+    // E-1: the write decision is its own database-backed capability; by default a manager has it.
+    canManageCatalog: isManager,
   };
 };
 
@@ -104,6 +106,21 @@ describe("image server actions", () => {
     "denies Staff %s before Storage",
     async (operation) => {
       mocks.user.mockResolvedValue(makeActor("staff", "org"));
+      expect(
+        await (operation === "upload"
+          ? uploadRecipeImageAction(form())
+          : removeRecipeImageAction(scope)),
+      ).toMatchObject({ ok: false, kind: "permission" });
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["upload", "remove"])(
+    "E-1: denies a manager whose database catalog decision is false (%s) before Storage",
+    async (operation) => {
+      mocks.user.mockResolvedValue({
+        ...makeActor("manager", "org"),
+        canManageCatalog: false,
+      });
       expect(
         await (operation === "upload"
           ? uploadRecipeImageAction(form())

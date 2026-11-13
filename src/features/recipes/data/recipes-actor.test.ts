@@ -53,10 +53,44 @@ it("hydrates recipes actor for staff member with read access", async () => {
       designation: "server",
     },
     isManager: false,
+    canManageCatalog: true,
   });
   expect(mocks.rpc).toHaveBeenCalledWith("recipes_org_authorized", {
     p_organization_id: "org",
   });
+  expect(mocks.rpc).toHaveBeenCalledWith("catalog_authorized", {
+    p_organization_id: "org",
+  });
+});
+
+it("E-1: canManageCatalog is the database decision, independent of the role (read tier stays)", async () => {
+  mocks.resolve.mockResolvedValueOnce({
+    status: "resolved",
+    context: {
+      profileId: "real-profile",
+      organizationId: "org",
+      locationId: "location",
+      access: { allowed: true, effectiveLevel: "manager" },
+    },
+  });
+  mocks.rpc.mockImplementation(async (name: string) => ({
+    data: name === "recipes_org_authorized",
+    error: null,
+  }));
+  const actor = await getRecipesActor("restaurant");
+  expect(actor?.isManager).toBe(true); // may read archived recipes
+  expect(actor?.canManageCatalog).toBe(false); // may not write the shared book
+});
+
+it("E-1: fails closed when the catalog decision errors", async () => {
+  mocks.rpc.mockImplementation(async (name: string) =>
+    name === "catalog_authorized"
+      ? { data: null, error: { code: "PGRST202", message: "boom" } }
+      : { data: true, error: null },
+  );
+  const actor = await getRecipesActor("restaurant");
+  expect(actor).not.toBeNull();
+  expect(actor?.canManageCatalog).toBe(false);
 });
 
 it("identifies manager roles", async () => {

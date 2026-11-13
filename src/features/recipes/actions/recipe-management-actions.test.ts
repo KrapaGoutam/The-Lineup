@@ -67,6 +67,8 @@ const makeActor = (designation: string | null) => {
       designation,
     },
     isManager,
+    // E-1: the write decision is its own database-backed capability; by default a manager has it.
+    canManageCatalog: isManager,
   };
 };
 
@@ -105,6 +107,20 @@ describe("management action boundaries", () => {
       expect(mocks.from).not.toHaveBeenCalled();
     },
   );
+  it("E-1: refuses a manager whose database catalog decision is false (writes AND the category editor read)", async () => {
+    mocks.user.mockResolvedValue({
+      ...makeActor("manager")!,
+      canManageCatalog: false,
+    });
+    for (const result of [
+      await setRecipeArchivedAction(archive),
+      await manageRecipeCategoryAction(category),
+      await getRecipeCategoriesAction({ restaurantSlug: "test" }),
+    ])
+      expect(result).toMatchObject({ ok: false, kind: "permission" });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
   it("requires live session", async () => {
     mocks.session.mockResolvedValue({
       ok: false,

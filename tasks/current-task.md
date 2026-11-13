@@ -39,9 +39,27 @@ Result: **V2-008 B1 PASSED — LOCAL IMPLEMENTATION COMPLETE, HOSTED DEV APPROVA
 
 Result: see the final line of the S1 chat report and [SECURITY_GATE_S1.md](../docs/v2.0/features/008-migration-compatibility/SECURITY_GATE_S1.md).
 
+## Batch B continuation — E-1, B2 validator, B3 module planner, B4 Attendance planner (owner-authorized, LOCAL ONLY, one cumulative package)
+
+Owner policies adopted by the prompt: D-10 Option A, D-2 ladder, D-2b conservative multi-role, D-2c conservative multi-location, B2–B4 local tooling only.
+
+- [x] BB.0 Recovery: HEAD `eb8adf2176e9631873e6fed771d34d9d2f1fe119`, clean tree, no upstream; remote `development` re-verified by `git ls-remote` = `790fd2db` (unchanged); local ledger 90.
+- [x] E-1 migration `20261113100000_e1_shared_catalog_authority.sql` (sha256 `9375ae54540f3c49d5f7d3a3a7ce845b30a54c7e6b0d180a4ef7ec3f8ad5a8ad`): predicate `private.catalog_can_manage_org`, `private.inventory_catalog_begin`, redefined `recipes_begin` / `recipes_can_write_image`, 12 catalog RPCs, `public.catalog_authorized`. Local ledger 90 → 91.
+- [x] pgTAP `0080_e1_shared_catalog_authority` 103/103 (negative control on ledger 90: 78 fail); `0069`/`0070` re-derived; full suite after a clean 91-migration replay: 83 files, 3468 assertions PASS.
+- [x] App layer: `RecipesActor.canManageCatalog`, `RecipeIndex.canManage`, `CatalogSnapshot.canManageCatalog`, Manage view + Recipes module read-only states; Vitest recipes 298 + bar-inventory 944 pass; real-DB local `inventory-recipes-location` 17/17, `module-enforcement` 15/15; browser `inventory-recipes-location` 8/8 × desktop, host-tablet, server-mobile.
+- [x] B2 organization-atomic backfill validator (dry-run only) — `scripts/migration-compat/role-backfill.mjs`; pgTAP `0081` 18/18 pins the capability model
+- [x] B3 module configuration planner (read-only)
+- [x] B4 Attendance compatibility planner (read-only)
+- [x] Planning kit: Vitest 124/124; real-DB `tests/local/migration-compat.local.test.ts` 6/6 (digest proves no write; GET/HEAD only)
+- [x] Consolidated independent security/migration review: no P0/P1; 3 P2 + 8 P3 fixed or mitigated (HANDOFF)
+- [x] Final evidence: full pgTAP 84 files / 3,488 PASS; local suites 38/38; browser 8/8 × 3; full Vitest 304 files / 4,167; `npm run check` exit 0
+- [x] Docs (HANDOFF, STATUS, CURRENT_STATE, decision register, E-1 plan §13, B2–B4 package + kit)
+- [x] One local commit (see `git log`)
+
 ## Current State & Next Step
 
-- Resume from [V2-008 HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md) (S1 section first). Hosted DEV is still ledger 88; the B1 and U-1 migrations are local only (local ledger 90).
-- Next exact action: **owner decisions, not engineering** — D-10 (E-1 authority model) with D-2/D-2b/D-2c (packet in OWNER_DECISIONS_REQUIRED §4). Then B2 validator/dry-run (N=1 only), the E-1 correction as its own approved package before any N≥2 backfill, then a separately authorized Batch C for Hosted DEV (D-7).
-- Do not: write to Hosted DEV / Production / Neon, apply either local migration anywhere hosted, create backfill SQL, archive fixtures, activate enforcement or finance, change attendance modes or module configs, implement E-1 without approval, or start B2/B3/B4.
+- Resume from [V2-008 HANDOFF.md](../docs/v2.0/features/008-migration-compatibility/HANDOFF.md) (section 0 first). Hosted DEV is still ledger 88; the B1, U-1 and E-1 migrations are local only (local ledger 91).
+- Batch B is **locally complete**: E-1 implemented, B2–B4 dry-run planners with no executor, independent review clean of P0/P1.
+- Next exact action: **owner decisions, not engineering** — D-7 (Hosted DEV write authorization, per step; push B1 → U-1 → E-1 in order and run the real-JWT probes), then D-1/D-3/D-4/D-5/D-5b/D-6/D-8 for real manifests. A separately authorized executor (one transaction per organization) is the only missing piece.
+- Do not: write to Hosted DEV / Production / Neon, apply local migrations anywhere hosted, execute any backfill, archive fixtures, activate enforcement or finance, change Attendance modes or module configs, push, open a PR, merge, or set an upstream on this branch.
 - Hard invariants: Hosted DEV ledger 88 · finance OFF · enforcement STAGED · 0 Overall Owners · `main` `5e5b7747`.

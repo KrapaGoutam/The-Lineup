@@ -1,7 +1,7 @@
 # Feature V2-008: Migration & Compatibility — Status
 
 ```text
-Status: IN PROGRESS — BATCH A COMPLETE; B1 (D7 + F-1) AND SECURITY GATE S1 (U-1) IMPLEMENTED LOCALLY, HOSTED DEV APPROVAL PENDING; E-1 PLANNED, NOT IMPLEMENTED
+Status: IN PROGRESS — BATCH A COMPLETE; B1 (D7 + F-1), SECURITY GATE S1 (U-1), E-1 (D-10 OPTION A) AND THE B2–B4 DRY-RUN PLANNING KIT IMPLEMENTED LOCALLY; HOSTED DEV (D-7) AND ALL REAL BACKFILLS PENDING
 GitHub Issue: #256
 Parent Issue: #248
 Milestone: #8 — The Lineup V2.0
@@ -13,19 +13,21 @@ Batch A produced analysis and plans only. **Batch B1** (owner-authorized, local 
 
 **Security Gate S1 (2026-11-12, local only):** U-1 fixed by `20261112220000_kiosk_reassign_revoked_device_guard.sql` (local ledger 89 → 90; reproduced first, 69/69 after, full pgTAP 3363 PASS on a clean 90-migration replay, real-GoTrue 8/8, browser 21/21); E-1 reproduced and bounded with a remediation plan (no cross-tenant write by any tenant-scoped actor; not implemented); D-2/2b/2c packet written with measured evidence; shared `session_id` review found no bypass. See [SECURITY_GATE_S1.md](SECURITY_GATE_S1.md), [U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md](U1_KIOSK_REVOKED_DEVICE_LIFECYCLE.md), [E1_RECIPES_INVENTORY_SECURITY_PLAN.md](E1_RECIPES_INVENTORY_SECURITY_PLAN.md).
 
+**Batch B continuation (2026-11-13, local only, one cumulative package):** E-1 is implemented by forward-only migration `20261113100000_e1_shared_catalog_authority.sql` (local ledger 90 → 91; Hosted DEV still 88): organization-shared Recipes and Inventory catalog management is organization-level authority, with a single-active-location compatibility exception for location roles. B2 (organization-atomic role-backfill validator), B3 (module-configuration planner) and B4 (Attendance compatibility planner) exist as **read-only dry-run tooling with no executor** ([B2_B4_PLANNING_KIT.md](B2_B4_PLANNING_KIT.md)). Full pgTAP 84 files / 3,488 PASS on a clean 91-migration replay; real-database suites 38/38; planning kit 124/124; browser 8/8 × 3; `npm run check` clean; independent review **no P0/P1** (three P2 and eight P3 findings fixed or mitigated — see [HANDOFF.md](HANDOFF.md)). No real backfill, module change, Attendance-mode change, enforcement/finance activation, push, PR or merge occurred.
+
 ## Sub-feature state (kept distinct)
 
-| Sub-feature                                            | Discovery |      Mapping approved      |  Implementation  |             Hosted validation              | Closed |
-| ------------------------------------------------------ | :-------: | :------------------------: | :--------------: | :----------------------------------------: | :----: |
-| V2-008.001 Existing Data Inventory                     |   done    |            n/a             |       n/a        | DEV read-only done (Production unverified) |   no   |
-| V2-008.002 Organization / Location Backfill            |   done    |     pending (D-1, D-3)     |     pending      |                  pending                   |   no   |
-| V2-008.003 Existing Role Migration                     |   done    |   pending (D-2, 2b, 2c)    |     pending      |                  pending                   |   no   |
-| V2-008.004 Module Configuration Backfill               |  planned  |  pending (D-5, 5b, D-3/4)  |     pending      |                  pending                   |   no   |
-| V2-008.005 Attendance Compatibility                    |  planned  |       pending (D-6)        |     pending      |                  pending                   |   no   |
-| V2-008.006 Hosted DEV Migration Validation             |  planned  |       pending (D-7)        |     pending      |                  pending                   |   no   |
-| V2-008.007 Recovery / Forward-Fix                      |  planned  |            n/a             |     pending      |                  pending                   |   no   |
-| **D7** Location-scoped Kiosks UI (carried from V2-007) |   done    | policy + B1 scope approved | **done (local)** |         pending (D-7, Hosted DEV)          |   no   |
-| **F-1** Kiosk predicate hardening (found in Batch A)   |   done    |     B1 scope approved      | **done (local)** |         pending (D-7, Hosted DEV)          |   no   |
+| Sub-feature                                            | Discovery |       Mapping approved        |           Implementation            |             Hosted validation              | Closed |
+| ------------------------------------------------------ | :-------: | :---------------------------: | :---------------------------------: | :----------------------------------------: | :----: |
+| V2-008.001 Existing Data Inventory                     |   done    |              n/a              |                 n/a                 | DEV read-only done (Production unverified) |   no   |
+| V2-008.002 Organization / Location Backfill            |   done    |      pending (D-1, D-3)       |               pending               |                  pending                   |   no   |
+| V2-008.003 Existing Role Migration                     |   done    | adopted locally (D-2, 2b, 2c) | **validator done (local, dry-run)** |                  pending                   |   no   |
+| V2-008.004 Module Configuration Backfill               |  planned  |   pending (D-5, 5b, D-3/4)    |  **planner done (local, dry-run)**  |                  pending                   |   no   |
+| V2-008.005 Attendance Compatibility                    |  planned  |         pending (D-6)         |  **planner done (local, dry-run)**  |                  pending                   |   no   |
+| V2-008.006 Hosted DEV Migration Validation             |  planned  |         pending (D-7)         |               pending               |                  pending                   |   no   |
+| V2-008.007 Recovery / Forward-Fix                      |  planned  |              n/a              |               pending               |                  pending                   |   no   |
+| **D7** Location-scoped Kiosks UI (carried from V2-007) |   done    |  policy + B1 scope approved   |          **done (local)**           |         pending (D-7, Hosted DEV)          |   no   |
+| **F-1** Kiosk predicate hardening (found in Batch A)   |   done    |       B1 scope approved       |          **done (local)**           |         pending (D-7, Hosted DEV)          |   no   |
 
 ## Documents
 

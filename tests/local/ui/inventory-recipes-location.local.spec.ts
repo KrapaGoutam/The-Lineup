@@ -74,9 +74,23 @@ let seeded: { product: string; recipe: string; run: string };
 
 async function seedModuleData() {
   const { org, locA, locB, run } = fx;
-  const vendorName = `Spec Vendor ${run}`;
+  // V2 gives an organization owner a workspace only through a location assignment (the D-2
+  // ladder shape: Owner -> Manager at the location, organization membership preserved). The
+  // owner’s shared-catalog authority comes from the ORGANIZATION role, not from this row.
   must(
-    await fx.managerA.client.rpc("inventory_vendor_create", {
+    await fx.admin.from("location_memberships").insert({
+      location_id: locA,
+      profile_id: fx.owner.id,
+      role: "manager",
+      active: true,
+    }),
+  );
+  const vendorName = `Spec Vendor ${run}`;
+  // E-1 / D-10: this organization has two active locations, so the SHARED catalog and recipe
+  // book are written by organization-level authority (the owner). Location managers keep
+  // stock and count authority at their own location (seeded below as themselves).
+  must(
+    await fx.owner.client.rpc("inventory_vendor_create", {
       p_organization_id: org.id,
       p_location_id: locA,
       p_name: vendorName,
@@ -93,7 +107,7 @@ async function seedModuleData() {
   )!;
   const product = `Spec Vodka ${run}`;
   must(
-    await fx.managerA.client.rpc("inventory_product_create", {
+    await fx.owner.client.rpc("inventory_product_create", {
       p_organization_id: org.id,
       p_location_id: locA,
       p_vendor_id: vendor.id,
@@ -157,7 +171,7 @@ async function seedModuleData() {
   )!;
   const recipe = `Spec Daiquiri ${run}`;
   must(
-    await fx.managerA.client.rpc("bar_recipe_save", {
+    await fx.owner.client.rpc("bar_recipe_save", {
       p_organization_id: org.id,
       p_recipe_id: null as never,
       p_expected_version: null as never,
@@ -287,8 +301,13 @@ test.describe("Bar Inventory & Recipes Location Scoping Acceptance", () => {
     await expect(page.getByText(seeded.recipe).first()).toBeVisible({
       timeout: 45000,
     });
+    // E-1: a location manager in a two-location organization reads the shared book but is not
+    // offered its edit controls (the database would refuse them), and is told why.
+    await expect(page.getByRole("button", { name: /Add Recipe/ })).toHaveCount(
+      0,
+    );
     await expect(
-      page.getByRole("button", { name: /Add Recipe/ }),
+      page.getByText(/edited by organization managers/i),
     ).toBeVisible();
 
     // Manager A is only Staff at B. The shared navigation still offers the tab (it keys
@@ -328,6 +347,29 @@ test.describe("Bar Inventory & Recipes Location Scoping Acceptance", () => {
     await expect(page.getByText(seeded.recipe).first()).toBeVisible({
       timeout: 45000,
     });
+  });
+
+  test("The organization owner is offered the shared recipe book controls (E-1)", async ({
+    context,
+    page,
+  }) => {
+    await authenticate(context, fx.owner, fx.locA);
+    await page.goto(`/r/${fx.org.slug}`);
+    // One location assignment => no workspace switcher; the header names the location.
+    // (Attached, not visible: the mobile header hides the location label.)
+    await expect(page.getByText("Location A").first()).toBeAttached({
+      timeout: 45000,
+    });
+    await openTab(page, /^Recipes(?:s|$)/);
+    await expect(page.getByText(seeded.recipe).first()).toBeVisible({
+      timeout: 45000,
+    });
+    await expect(
+      page.getByRole("button", { name: /Add Recipe/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/edited by organization managers/i),
+    ).toHaveCount(0);
   });
 
   test("Staff reads the shared recipe book but cannot edit it", async ({

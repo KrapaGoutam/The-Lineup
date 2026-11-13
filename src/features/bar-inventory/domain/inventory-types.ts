@@ -251,6 +251,13 @@ export type StoragePlacementView = {
 export type CatalogSnapshot = CatalogState & {
   /** ISO time the snapshot was read. */
   loadedAt: string;
+  /**
+   * E-1 / D-10: the database decision (public.catalog_authorized) for changing the
+   * ORGANIZATION-shared catalog (vendors, categories, subcategories, products). Stock, counts
+   * and orders are location-scoped and unaffected. Real snapshots always carry an explicit
+   * boolean (false on any error); only demo/test data omits it, which the UI reads as "yes".
+   */
+  canManageCatalog?: boolean;
 };
 
 export type ProductInput = {
