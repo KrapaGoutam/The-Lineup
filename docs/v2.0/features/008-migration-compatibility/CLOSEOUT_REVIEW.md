@@ -1,6 +1,6 @@
 # V2-008 — Final DEV Closeout Review (2026-11-13)
 
-> **Owner decisions received (2026-11-13):** §7 items A–E were approved as A1, B1, C1, D1, E1 and are recorded in [DEV_ACCEPTANCE_RECORD.md](DEV_ACCEPTANCE_RECORD.md). This review is the historical analysis; "CONDITIONALLY READY" below is superseded by *DEV compatibility accepted; Production not approved*.
+> **Owner decisions received (2026-11-13):** §7 items A–E were approved as A1, B1, C1, D1, E1 and are recorded in [DEV_ACCEPTANCE_RECORD.md](DEV_ACCEPTANCE_RECORD.md). This review is the historical analysis; "CONDITIONALLY READY" below is superseded by _DEV compatibility accepted; Production not approved_.
 
 **Result: CONDITIONALLY READY.** Only named owner decisions and scoped exceptions remain. **None of the
 recommendations below is an owner approval.** Issue #256 and its seven checkboxes are untouched.
@@ -19,11 +19,11 @@ sub-feature wording lives in `README.md` §2, and the README itself states that 
 the Batch A plans and owner decisions, **those prevail**. Two README lines are therefore no longer
 literally satisfiable and need an explicit, recorded amendment rather than a quiet reinterpretation:
 
-| README text                                                         | Why it cannot be met literally                                                                                                                                  | Amendment needed                                    |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| .004 "Seed default module enablement for **all** existing locations" | A blanket enable was rejected (D-5: no blanket enable). Monks has 9 explicit rows; Manual Preview has none; 42 harness locations are fixtures                   | **Yes — D-5/5b below**                              |
-| .005 "Backfill default `EXTERNAL` mode for Monks"                    | Both real locations are `NULL`; `NULL` is the documented legacy-compatible state that already renders the Neon report as "External (not configured)" [code]   | **Yes — D-6 below**                                 |
-| .002 "Map Monks pilot to **Webster** location"                      | Webster/Production was never inspected (D-1). On DEV the Monks organization is fully mapped                                                                     | **Yes — scope boundary (DEV closeout vs. V2-009)** |
+| README text                                                          | Why it cannot be met literally                                                                                                                              | Amendment needed                                   |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| .004 "Seed default module enablement for **all** existing locations" | A blanket enable was rejected (D-5: no blanket enable). Monks has 9 explicit rows; Manual Preview has none; 42 harness locations are fixtures               | **Yes — D-5/5b below**                             |
+| .005 "Backfill default `EXTERNAL` mode for Monks"                    | Both real locations are `NULL`; `NULL` is the documented legacy-compatible state that already renders the Neon report as "External (not configured)" [code] | **Yes — D-6 below**                                |
+| .002 "Map Monks pilot to **Webster** location"                       | Webster/Production was never inspected (D-1). On DEV the Monks organization is fully mapped                                                                 | **Yes — scope boundary (DEV closeout vs. V2-009)** |
 
 The README's "default EXTERNAL" and "seed defaults" lines predate D-5/D-6 and were already flagged as
 superseded by the README's own status note, but **the owner has not yet approved the replacement
@@ -31,15 +31,15 @@ behaviour.** That is the whole remaining gap.
 
 ## 2. Seven-subfeature reconciliation
 
-| #   | Original requirement                                         | Verified implementation (DEV)                                                                                                                                                                            | Evidence                                                                               | Owner decision relevant to closure                                  | State                                | Remaining work                                                    | More DB writes? |
-| --- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------- | :-------------: |
-| 001 | Audit orgs, profiles, locations, operational rows            | DEV inventory complete and re-verified read-only several times; Production never inspected                                                                                                               | `001-existing-data-inventory/INVENTORY.md`; Track 2 snapshots [recorded]               | D-1 (Production preflight) — scope                                  | **Complete on DEV**; Production deferred | None for DEV                                                      |       No        |
-| 002 | Map Monks to its location; backfill missing location bindings | `the-monks` 5/5 members mapped; Manual Preview 2/2 assigned via the supported workflow (GM→`manager`, server→`staff`); 44 active locations unchanged                                                       | HANDOFF 00000000.2; D3 procedure; planner NOOP for both orgs [recorded]                | D-3 Option A (**approved and executed**); D-1 scope                  | **Complete on DEV**; Production "Webster" deferred | None for DEV                                                      |       No        |
-| 003 | Translate legacy roles into baseline + location assignments  | Ladder (D-2) applied to real people only for Manual Preview, with owner-named roles; Monks already mapped; role planner `NOOP`, 0 exceptions on both orgs                                                  | HANDOFF 00000000.2; `MINIMAL_COMPLETION_PLAN.md` §2 [recorded]                         | D-2 satisfied for the two named roles                                | **Complete on DEV**                  | None                                                              |       No        |
-| 004 | Seed default module enablement for all existing locations    | Monks: 9 explicit rows (`bar_inventory` on, eight off — origin never investigated). Manual Preview: **0 rows**. 42 harness locations: fixtures. Planner: Monks `REPORT_ONLY`. Enforcement `staged`      | `D7C_OWNER_DECISION_TABLE.md` #5; `ROLLOUT_READINESS.md` (DB guard) [recorded, code]   | **D-5/5b — outstanding**                                            | **Conditional**                      | Owner accepts the exception (§3). No implementation               |       No        |
-| 005 | Backfill default `EXTERNAL` for Monks                        | Both real locations `attendance_mode = NULL`; 0 native sessions, 0 Neon links; native RPCs refuse `NULL` (`42501`, fails closed); legacy report shows "External (not configured)"; Finance OFF           | `attendance-mode.ts` doc, V2-006 README mode table [code]; HANDOFF [recorded]          | **D-6 — outstanding**                                               | **Conditional**                      | Owner accepts `NULL` (§4). No implementation                      |       No        |
-| 006 | Forward migration rehearsals on hosted DEV                   | Migrations 89–91 rehearsed on a restore-validated real-data copy (354/354 pgTAP), applied to DEV (ledger 88→91), 91 tables identical before/after, rollback-only probes 105/105, 69/69, 105/105; backfill validation = read-only reconciliation (no backfill migration exists) | `batch-c/BATCH_C_ROLLOUT_RECEIPT.md` [recorded]                                         | D-7A/D-7B/G-1 (**approved and used**)                                | **Complete on DEV**                  | None (a full-feature rerun was deliberately not repeated)         |       No        |
-| 007 | Rollback and forward-fix runbooks                            | Rollout/recovery plan, post-apply verifier and rollback-only probe; recovery proven by an actual restore of the encrypted backup (121 tables identical); forward-fix-only policy; assignment rollback = deactivate via the same screen, never delete | `batch-c/ROLLOUT_AND_RECOVERY_PLAN.md`; receipt §3; D3 procedure [recorded]            | none                                                                | **Complete**                         | None                                                              |       No        |
+| #   | Original requirement                                          | Verified implementation (DEV)                                                                                                                                                                                                                                                  | Evidence                                                                             | Owner decision relevant to closure                  | State                                              | Remaining work                                            | More DB writes? |
+| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- | :-------------: |
+| 001 | Audit orgs, profiles, locations, operational rows             | DEV inventory complete and re-verified read-only several times; Production never inspected                                                                                                                                                                                     | `001-existing-data-inventory/INVENTORY.md`; Track 2 snapshots [recorded]             | D-1 (Production preflight) — scope                  | **Complete on DEV**; Production deferred           | None for DEV                                              |       No        |
+| 002 | Map Monks to its location; backfill missing location bindings | `the-monks` 5/5 members mapped; Manual Preview 2/2 assigned via the supported workflow (GM→`manager`, server→`staff`); 44 active locations unchanged                                                                                                                           | HANDOFF 00000000.2; D3 procedure; planner NOOP for both orgs [recorded]              | D-3 Option A (**approved and executed**); D-1 scope | **Complete on DEV**; Production "Webster" deferred | None for DEV                                              |       No        |
+| 003 | Translate legacy roles into baseline + location assignments   | Ladder (D-2) applied to real people only for Manual Preview, with owner-named roles; Monks already mapped; role planner `NOOP`, 0 exceptions on both orgs                                                                                                                      | HANDOFF 00000000.2; `MINIMAL_COMPLETION_PLAN.md` §2 [recorded]                       | D-2 satisfied for the two named roles               | **Complete on DEV**                                | None                                                      |       No        |
+| 004 | Seed default module enablement for all existing locations     | Monks: 9 explicit rows (`bar_inventory` on, eight off — origin never investigated). Manual Preview: **0 rows**. 42 harness locations: fixtures. Planner: Monks `REPORT_ONLY`. Enforcement `staged`                                                                             | `D7C_OWNER_DECISION_TABLE.md` #5; `ROLLOUT_READINESS.md` (DB guard) [recorded, code] | **D-5/5b — outstanding**                            | **Conditional**                                    | Owner accepts the exception (§3). No implementation       |       No        |
+| 005 | Backfill default `EXTERNAL` for Monks                         | Both real locations `attendance_mode = NULL`; 0 native sessions, 0 Neon links; native RPCs refuse `NULL` (`42501`, fails closed); legacy report shows "External (not configured)"; Finance OFF                                                                                 | `attendance-mode.ts` doc, V2-006 README mode table [code]; HANDOFF [recorded]        | **D-6 — outstanding**                               | **Conditional**                                    | Owner accepts `NULL` (§4). No implementation              |       No        |
+| 006 | Forward migration rehearsals on hosted DEV                    | Migrations 89–91 rehearsed on a restore-validated real-data copy (354/354 pgTAP), applied to DEV (ledger 88→91), 91 tables identical before/after, rollback-only probes 105/105, 69/69, 105/105; backfill validation = read-only reconciliation (no backfill migration exists) | `batch-c/BATCH_C_ROLLOUT_RECEIPT.md` [recorded]                                      | D-7A/D-7B/G-1 (**approved and used**)               | **Complete on DEV**                                | None (a full-feature rerun was deliberately not repeated) |       No        |
+| 007 | Rollback and forward-fix runbooks                             | Rollout/recovery plan, post-apply verifier and rollback-only probe; recovery proven by an actual restore of the encrypted backup (121 tables identical); forward-fix-only policy; assignment rollback = deactivate via the same screen, never delete                           | `batch-c/ROLLOUT_AND_RECOVERY_PLAN.md`; receipt §3; D3 procedure [recorded]          | none                                                | **Complete**                                       | None                                                      |       No        |
 
 No checkbox is proposed as ticked by this document. 004 and 005 depend on named owner decisions; 001/002
 are complete only under the DEV-scope boundary (§7, item C).
@@ -52,7 +52,7 @@ Enforcement is `staged`, so the database allows every module everywhere today.
 
 **Does Option A legitimately satisfy amended .004?** Yes, **but only as a scoped DEV acceptance
 exception, and only if the owner approves the amendment.** .004 is then "audited and reconciled with
-an explicit decision" — *not* "backfilled". The record must never say Manual Preview has module rows or
+an explicit decision" — _not_ "backfilled". The record must never say Manual Preview has module rows or
 that modules were backfilled. Option B (require rows) adds a write with no consumer; Option C (keep open)
 has no further work attached to it, so it would only wait for a decision, which Option A is.
 
@@ -60,10 +60,11 @@ has no further work attached to it, so it would only wait for a decision, which 
 behaviour. Nothing in the data or code forces that.
 
 **Is Manual Preview safe as an intentionally unconfigured QA workspace?** Safe, with a stated limit.
+
 - Safe: login, active-context resolution, Settings, Staff Assignments, location administration — all
   verified in the post-assignment smoke [recorded].
-- Limit: the UI treats "no rows" as "no operational modules" (Settings says *"No operational modules are
-  enabled for this location"*), so operational-module screens cannot be QA'd there. Tasks UI is hidden for
+- Limit: the UI treats "no rows" as "no operational modules" (Settings says _"No operational modules are
+  enabled for this location"_), so operational-module screens cannot be QA'd there. Tasks UI is hidden for
   every DEV location without rows (V2-005.002 recorded). Use `the-monks` (where only `bar_inventory` is
   enabled) or a harness location for module UI QA; do not configure Manual Preview just to get screens.
 - The UI says "none enabled" while the database (staged) allows everything. That asymmetry is documented
@@ -78,7 +79,7 @@ location also starts with no rows (Q1, provisioning defaults), which is unrelate
 
 **Is there a genuine immediate need for new rows?** No. No code path, test or acceptance criterion needs
 them on DEV today. Do not blanket-enable; preserve Monks' matrix exactly as it stands. (Whether the Monks
-matrix itself — eight disabled modules of unknown origin — is *intended* is the one factual confirmation
+matrix itself — eight disabled modules of unknown origin — is _intended_ is the one factual confirmation
 the owner should give, because activation would hide those eight at that location.)
 
 **Recommendation: A**, as the explicit statement in §7.
@@ -86,9 +87,9 @@ the owner should give, because activation would hide those eight at that locatio
 ## 4. D-6 — Attendance compatibility
 
 Both real active DEV locations are `NULL`; no native sessions; no legacy identity links; Finance OFF.
-`NULL` is the documented *unconfigured / legacy-compatible* state: native Attendance functions refuse it
+`NULL` is the documented _unconfigured / legacy-compatible_ state: native Attendance functions refuse it
 (fails closed, never assumed internal) and the existing Neon-backed report is shown unchanged, labelled
-"External (not configured)". So the *behaviour* the original .005 intended — "preserve the Neon workflow
+"External (not configured)". So the _behaviour_ the original .005 intended — "preserve the Neon workflow
 for Monks" — is already what `NULL` does; setting `external` would add an explicit label, not new
 behaviour.
 
@@ -121,14 +122,14 @@ enforcement `staged`; Overall roles 0; 44 active locations.
 
 Limits, assessed:
 
-1. **Playwright report did not bind the authenticated session id to the manager's profile.** *Not
-   blocking.* The assignment is not proven by the session record but by the authority rule: the
+1. **Playwright report did not bind the authenticated session id to the manager's profile.** _Not
+   blocking._ The assignment is not proven by the session record but by the authority rule: the
    `apply_location_assignment_changes` RPC accepts only an Overall owner/manager (0 exist on DEV) or an
-   active owner/general_manager *of Manual Preview itself* (one person: the GM). Monks' owner has no
+   active owner/general*manager \_of Manual Preview itself* (one person: the GM). Monks' owner has no
    authority there. The post-state rows are the evidence; the system records no actor for these rows
    regardless (no audit trigger on `location_memberships`), so session-binding would not have added an
    actor of record. The credential-recovery step is separately audited (`passcode_reset`).
-2. **Preview→DEV target verification was reused.** *Not blocking.* The changes were read back from the DEV
+2. **Preview→DEV target verification was reused.** _Not blocking._ The changes were read back from the DEV
    project by hard-coded project ref after the run, so the rows' presence on `opmujepkemwcdxxorhfd` is
    directly observed rather than inferred from the app target.
 
@@ -145,7 +146,7 @@ proposed as a requirement.
 > (unconfigured, not disabled). No rows are written and nothing is blanket-enabled. V2-008.004 is closed
 > as "audited and reconciled by decision", **not** as "backfilled". The Monks matrix (`bar_inventory`
 > enabled; `table_allocation`, `tasks`, `schedule`, `tips`, `team`, `attendance`, `payroll`, `recipes`
-> disabled) is confirmed as intended and left unchanged *(or: the owner names the corrections)*.
+> disabled) is confirmed as intended and left unchanged _(or: the owner names the corrections)_.
 > Configuring or archiving Manual Preview is a prerequisite of enforcement activation and is tracked there.
 >
 > **B. Attendance (D-6).** `attendance_mode = NULL` (legacy-compatible) is accepted for both real DEV
@@ -153,7 +154,7 @@ proposed as a requirement.
 >
 > **C. Scope.** This closeout is limited to Hosted DEV. The Production preflight and the Monks→Webster
 > Production mapping (D-1) move to V2-009, and V2-009's dependency line "V2-008 Track 2 must be complete
-> before V2-009 starts" is amended to: *V2-008 DEV closeout accepted; Production mapping verified in V2-009.*
+> before V2-009 starts" is amended to: _V2-008 DEV closeout accepted; Production mapping verified in V2-009._
 >
 > **D. Migration 92 (D-7C).** Migration 92 and the Track 2 executor are shelved and will not be deployed
 > or merged (already approved on 2026-11-13; restated for the record).
@@ -180,6 +181,7 @@ git diff --cached --name-only | grep -E '^(supabase|scripts|tests)/' && echo "ST
 ```
 
 **Include (docs only)**
+
 - `docs/STATUS.md`, `docs/v2.0/CURRENT_STATE.md`, `docs/v2.0/features/009-final-gate-release/STATUS.md`
 - under `docs/v2.0/features/008-migration-compatibility/`: `STATUS.md`, `HANDOFF.md`, `OWNER_DECISIONS_REQUIRED.md`,
   `D7C_OWNER_DECISION_PACKET.md`, `CLOSEOUT_REVIEW.md`, `batch-c/BATCH_C_ROLLOUT_RECEIPT.md`, and from `track2/`:
@@ -193,6 +195,7 @@ git diff --cached --name-only | grep -E '^(supabase|scripts|tests)/' && echo "ST
 script, so it falls outside a strictly docs-only change.
 
 **Exclude (never to `development`)**
+
 - `supabase/migrations/20261113120000_v2008_track2_backfill_executor.sql` (migration 92)
 - `scripts/migration-compat-executor/executor.mjs`
 - `supabase/tests/database/0082_v2008_backfill_executor.test.sql`

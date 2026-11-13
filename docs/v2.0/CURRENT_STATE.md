@@ -4,9 +4,7 @@
 
 > **2026-11-13 (later):** D-3 Option A EXECUTED: Manual Preview GM→manager and server→staff both saved via the app and verified; role planner NOOP (Manual Preview and the-monks); ledger 91, migration 92 absent, enforcement staged, Finance off. Manual Preview still has 0 module rows (D-5/5b) and NULL attendance (D-6). See HANDOFF 00000000.2. Supersedes the 'pending' note above.
 
-
 > **2026-11-13 update:** D-3 Option A and D-7C (shelve migration 92) APPROVED by the owner. Manual Preview's two human-operated Staff Assignments are **PENDING** (none performed). See HANDOFF 00000000.1 and track2/D3_OPTION_A_OPERATOR_PROCEDURE.md. Migration 92 is shelved / not for deployment.
-
 
 **2026-11-13 (V2-008 Track 2 continuation 3, LOCAL DOCS ONLY):** read-only Hosted DEV refresh (ledger 91, all 91 tables hash-identical to the morning snapshot) shows no bulk backfill is needed: `the-monks` is fully mapped; Manual Preview's 2 missing location rows can use the existing Staff Assignments workflow. Recommendation: do not deploy migration 92 (shelve the executor branch). Only D-3 is awaited from the owner. No write, push or PR. See [features/008-migration-compatibility/track2/MINIMAL_COMPLETION_PLAN.md](features/008-migration-compatibility/track2/MINIMAL_COMPLETION_PLAN.md).
 

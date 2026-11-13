@@ -2,7 +2,6 @@
 
 > **2026-11-13 (later):** D-3 Option A EXECUTED: Manual Preview GM→manager and server→staff both saved via the app and verified; role planner NOOP (Manual Preview and the-monks); ledger 91, migration 92 absent, enforcement staged, Finance off. Manual Preview still has 0 module rows (D-5/5b) and NULL attendance (D-6). See HANDOFF 00000000.2. Supersedes the 'pending' note above.
 
-
 Approved 2026-11-13. Only these two writes, **performed by Manual Preview's own general manager signed in as themselves**.
 The agent does not sign in, click Save, or write via SQL/RPC/API. Never share the passcode/password in chat.
 

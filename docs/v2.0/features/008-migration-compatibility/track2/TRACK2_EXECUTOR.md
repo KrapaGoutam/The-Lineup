@@ -15,22 +15,22 @@ a concurrent writer is not blocked) rather than accept it, and check the executo
 approval boundaries. **No Hosted DEV write, no push, no PR.** Hosted DEV was read only (see
 `HOSTED_DEV_APPROVAL_PACKAGE.md`).
 
-**Finding (reproduced with two real sessions).** The row locks of §-1.2 cannot stop a *new* row.
+**Finding (reproduced with two real sessions).** The row locks of §-1.2 cannot stop a _new_ row.
 The real writers that create one take no lock at all: the public self-registration route
 (`src/app/api/auth/register/route.ts`) inserts an active `memberships` row with the admin client
 and no `location_memberships` row, and `apply_location_assignment_changes` inserts
 `location_memberships` rows. Session A ran the executor and held its transaction open; session B:
 
-| Concurrent writer (session B) | Before (row locks only) | After (table locks) |
-| --- | --- | --- |
-| new active `memberships` row (registration) | **not blocked (~8 ms); the committed state held an active member with no active location row** | blocks until A commits |
-| new `location_memberships` row, another profile | **not blocked (~75 ms)** | blocks until A commits |
-| activation of an existing inactive membership | blocked ~3.4 s (row lock) | blocks until A commits |
-| same (location, profile) row the executor plans | blocked, then `23505` (safe) | blocks, then `23505` (safe) |
+| Concurrent writer (session B)                   | Before (row locks only)                                                                        | After (table locks)         |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------- |
+| new active `memberships` row (registration)     | **not blocked (~8 ms); the committed state held an active member with no active location row** | blocks until A commits      |
+| new `location_memberships` row, another profile | **not blocked (~75 ms)**                                                                       | blocks until A commits      |
+| activation of an existing inactive membership   | blocked ~3.4 s (row lock)                                                                      | blocks until A commits      |
+| same (location, profile) row the executor plans | blocked, then `23505` (safe)                                                                   | blocks, then `23505` (safe) |
 
 **Reasoning, not just measurement.** Re-reading before commit does not help: under READ COMMITTED
-each statement takes a fresh snapshot, so a row committing *between the last reconciliation read
-and the commit* is invisible to the function and nothing aborts. SERIALIZABLE would not help
+each statement takes a fresh snapshot, so a row committing _between the last reconciliation read
+and the commit_ is invisible to the function and nothing aborts. SERIALIZABLE would not help
 either: the outcome is serializable (as "registration after the backfill"), so SSI has no
 dangerous structure to flag. The only reliable fix is to keep the competing writers out until the
 call has committed.
@@ -42,7 +42,7 @@ itself, but not with reads, RLS evaluation, foreign-key checks or `FOR UPDATE` -
 reads are unaffected; writers queue for the few milliseconds the call runs. The earlier row locks
 became redundant (a table-level write lock subsumes them) and were removed. Bounds: the locks are
 requested first, holding nothing but an advisory lock no other writer takes, in a fixed order, and
-no existing *function or route* writes both tables inside one transaction; **CORRECTION (continuation 3): this does not make a deadlock impossible** - FK `ON DELETE CASCADE` from `profiles` (Auth-user hard delete) or `organizations` writes both tables in one transaction in an order this function does not control, so a cycle with such a delete is possible (Postgres aborts one side after `deadlock_timeout`, possibly the application's delete; see `MINIMAL_COMPLETION_PLAN.md` §4); a transaction-local `lock_timeout = '5s'` makes the call fail
+no existing _function or route_ writes both tables inside one transaction; **CORRECTION (continuation 3): this does not make a deadlock impossible** - FK `ON DELETE CASCADE` from `profiles` (Auth-user hard delete) or `organizations` writes both tables in one transaction in an order this function does not control, so a cycle with such a delete is possible (Postgres aborts one side after `deadlock_timeout`, possibly the application's delete; see `MINIMAL_COMPLETION_PLAN.md` §4); a transaction-local `lock_timeout = '5s'` makes the call fail
 fast (`55P03`, nothing written, safe to retry) instead of stalling the queue behind a long writer,
 and the caller's previous value is restored on success. This is a deliberate table-level lock; it
 is acceptable only because the call is a one-off, owner-approved maintenance operation on two small
@@ -125,12 +125,12 @@ reviewed security boundary and **Track 2 does not touch it**.
 Track 2 adds the missing writer in a new, sibling location so the old package's contract stays
 literally unchanged:
 
-| Layer | File | Purpose |
-| --- | --- | --- |
-| SQL (local only) | `supabase/migrations/20261113120000_v2008_track2_backfill_executor.sql` | Two `security definer`, `service_role`-only Postgres functions: `migration_compat_execute_role_backfill` and `migration_compat_execute_module_config`. |
-| JS wrapper | `scripts/migration-compat-executor/executor.mjs` | `executeRoleBackfillPlan` / `executeModuleConfigPlan`. Loopback-only (reuses `assertLoopback` from `snapshot.mjs`); accepts **only** a plan object with the verdict that means "an owner-approved manifest produced this changeset" (`APPLY` / `READY_FOR_OWNER_APPROVAL`); never a hand-built row list. |
-| pgTAP | `supabase/tests/database/0082_v2008_backfill_executor.test.sql` | 33 assertions against the real functions on the disposable local stack. |
-| Vitest (real DB) | `tests/local/v2-008-backfill-executor.local.test.ts` | 5 assertions: the JS wrapper's own refusals, and a full plan → execute → re-plan round trip for both functions against the disposable stack. |
+| Layer            | File                                                                    | Purpose                                                                                                                                                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQL (local only) | `supabase/migrations/20261113120000_v2008_track2_backfill_executor.sql` | Two `security definer`, `service_role`-only Postgres functions: `migration_compat_execute_role_backfill` and `migration_compat_execute_module_config`.                                                                                                                                                   |
+| JS wrapper       | `scripts/migration-compat-executor/executor.mjs`                        | `executeRoleBackfillPlan` / `executeModuleConfigPlan`. Loopback-only (reuses `assertLoopback` from `snapshot.mjs`); accepts **only** a plan object with the verdict that means "an owner-approved manifest produced this changeset" (`APPLY` / `READY_FOR_OWNER_APPROVAL`); never a hand-built row list. |
+| pgTAP            | `supabase/tests/database/0082_v2008_backfill_executor.test.sql`         | 33 assertions against the real functions on the disposable local stack.                                                                                                                                                                                                                                  |
+| Vitest (real DB) | `tests/local/v2-008-backfill-executor.local.test.ts`                    | 5 assertions: the JS wrapper's own refusals, and a full plan → execute → re-plan round trip for both functions against the disposable stack.                                                                                                                                                             |
 
 This migration is **not** applied to Hosted DEV (ledger stays 91) or Production under this
 authorization. It exists only so the executor core is testable against a real, disposable
@@ -142,7 +142,7 @@ Postgres rather than mocked.
 read-only by having the **test itself** apply a changeset with one multi-row
 `supabase.from(...).insert([...])` call. That is one PostgREST request = one transaction, which is
 enough to prove the planners' math, but it is not a reusable executor: it does not re-verify
-tenant ownership, active status or drift against the *current* row at execution time, it cannot
+tenant ownership, active status or drift against the _current_ row at execution time, it cannot
 lock an organization against a second concurrent attempt, and it has no reconciliation step that
 aborts on an incomplete result.
 
@@ -153,8 +153,8 @@ The new functions do all of that **inside the one transaction a single RPC call 
 - `lock table memberships, location_memberships in share row exclusive mode` (section -2; this
   replaced the original per-organization `for update` row locks) keeps every other writer - new
   rows included - out of both tables until the transaction ends, so nothing can change
-  `active`/`roles` or add a member while the reconciliation check below runs *or between it and
-  the commit*.
+  `active`/`roles` or add a member while the reconciliation check below runs _or between it and
+  the commit_.
 - Every row is re-checked against the **live** `locations` / `memberships` / `location_memberships`
   tables, not against a client-supplied hash: location belongs to this organization and is active;
   profile is an active member of this organization; no existing row, or an existing row that is
@@ -240,7 +240,7 @@ real data; it is proven only against the local harness fixtures created by the t
 - `npx vitest run --config vitest.local.config.ts tests/local/migration-compat.local.test.ts` —
   6/6, unchanged (proves the planners are still read-only against the real schema).
 - `npm run typecheck` — clean. `npx eslint scripts/migration-compat-executor/executor.mjs
-  tests/local/v2-008-backfill-executor.local.test.ts --max-warnings=0` — clean.
+tests/local/v2-008-backfill-executor.local.test.ts --max-warnings=0` — clean.
 
 ## 4a. Real-concurrency test methodology (continuation, not pgTAP)
 
@@ -266,22 +266,22 @@ re-run.)
 
 ## 5. Failure-mode coverage (owner prompt §5)
 
-| Required local failure test | Where proved |
-| --- | --- |
-| Fully mapped single-location organization | pgTAP T1-T4; Vitest round trip |
-| Partially mapped organization | Existing `role-backfill.test.ts` (planner returns `APPLY` for the complete subset, `SKIP` for incomplete — unchanged, reused) |
-| Multi-role ambiguity | Existing `role-backfill.test.ts` (`multi_role_requires_explicit_mapping`) — unchanged, reused |
-| Multi-location ambiguity | Existing `role-backfill.test.ts` / `migration-compat.local.test.ts` (`multi_location_requires_complete_manifest`) — unchanged, reused |
-| Inactive memberships | pgTAP T12-T13 (inactive member refused even if explicitly named) |
-| Existing conflicting assignments | pgTAP T5-T6 (drift on a differing role aborts, row unchanged) |
-| Owner/GM missing location assignment | Existing `role-backfill.test.ts` (`unmapped_member`) — unchanged, reused |
-| Transaction rollback on late failure | pgTAP T14-T15 (one bad row in a multi-row call rolls back the whole call) |
+| Required local failure test                                       | Where proved                                                                                                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fully mapped single-location organization                         | pgTAP T1-T4; Vitest round trip                                                                                                                                |
+| Partially mapped organization                                     | Existing `role-backfill.test.ts` (planner returns `APPLY` for the complete subset, `SKIP` for incomplete — unchanged, reused)                                 |
+| Multi-role ambiguity                                              | Existing `role-backfill.test.ts` (`multi_role_requires_explicit_mapping`) — unchanged, reused                                                                 |
+| Multi-location ambiguity                                          | Existing `role-backfill.test.ts` / `migration-compat.local.test.ts` (`multi_location_requires_complete_manifest`) — unchanged, reused                         |
+| Inactive memberships                                              | pgTAP T12-T13 (inactive member refused even if explicitly named)                                                                                              |
+| Existing conflicting assignments                                  | pgTAP T5-T6 (drift on a differing role aborts, row unchanged)                                                                                                 |
+| Owner/GM missing location assignment                              | Existing `role-backfill.test.ts` (`unmapped_member`) — unchanged, reused                                                                                      |
+| Transaction rollback on late failure                              | pgTAP T14-T15 (one bad row in a multi-row call rolls back the whole call)                                                                                     |
 | Concurrent assignment mutation (update, activation, **new rows**) | Section -2: `tests/local/v2-008-executor-concurrency.local.test.ts` (two real sessions, 4 cases, fails 2/4 against the previous version) + pgTAP `0082` L1-L3 |
-| Repeated execution / idempotency | pgTAP T1-T4; Vitest "re-executing the stale plan is idempotent" |
-| Source fingerprint mismatch | pgTAP T5-T6 / T9 (the executor's row-existence and tenant checks catch exactly the drift that matters; see §1 for why this is stronger than hash comparison) |
-| Unauthorized role escalation | pgTAP T8 (invalid role string refused); ladder/expansion logic itself is unchanged in the JS planner |
-| Partial-fallback cliff | pgTAP T16-T19 (an unmapped, unsigned member blocks the whole organization; signing it unblocks) |
-| Cross-tenant access prevention | pgTAP T9-T10, T14-T15 |
+| Repeated execution / idempotency                                  | pgTAP T1-T4; Vitest "re-executing the stale plan is idempotent"                                                                                               |
+| Source fingerprint mismatch                                       | pgTAP T5-T6 / T9 (the executor's row-existence and tenant checks catch exactly the drift that matters; see §1 for why this is stronger than hash comparison)  |
+| Unauthorized role escalation                                      | pgTAP T8 (invalid role string refused); ladder/expansion logic itself is unchanged in the JS planner                                                          |
+| Partial-fallback cliff                                            | pgTAP T16-T19 (an unmapped, unsigned member blocks the whole organization; signing it unblocks)                                                               |
+| Cross-tenant access prevention                                    | pgTAP T9-T10, T14-T15                                                                                                                                         |
 
 ## 6. Recovery strategy (unchanged from the D-7C proposal)
 
