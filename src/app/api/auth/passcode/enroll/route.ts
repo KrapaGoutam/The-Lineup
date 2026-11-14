@@ -1,3 +1,4 @@
+import { isPinCollision } from "@/features/auth/domain/pin-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -6,7 +7,6 @@ import { verifyPasscode } from "@/features/auth/data/passcode-verify";
 import {
   reservePinAttempt,
   rotateGlobalPersonalPin,
-  PIN_IN_USE,
 } from "@/features/auth/data/global-pin";
 
 const schema = z.object({
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   if (!result.ok)
     return NextResponse.json(
       { error: result.error },
-      { status: result.error === PIN_IN_USE ? 409 : 503 },
+      { status: isPinCollision(result.code) ? 409 : 503 },
     );
   return NextResponse.json({ next: "/" });
 }

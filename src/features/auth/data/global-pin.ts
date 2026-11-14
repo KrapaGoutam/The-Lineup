@@ -13,8 +13,12 @@ import {
 } from "./passcode-rotation";
 
 type Admin = SupabaseClient<Database>;
-export const PIN_IN_USE =
-  "That PIN is already in use. Please choose a different PIN.";
+export { PIN_IN_USE } from "../domain/pin-errors";
+import {
+  PIN_IN_USE,
+  isPinCollision,
+  type PinFailureCode,
+} from "../domain/pin-errors";
 export const PIN_RECOVERY =
   "Your PIN update needs administrator reconciliation. Please contact support.";
 
@@ -89,7 +93,11 @@ export async function beginPersonalPinChange(
     identity.user?.id !== profileId ||
     !identity.user.email
   ) {
-    return { ok: false as const, error: PIN_RECOVERY };
+    return {
+      ok: false as const,
+      error: PIN_RECOVERY,
+      code: "database_error" as PinFailureCode,
+    };
   }
   const { data, error } = await admin.rpc("begin_personal_pin_change", {
     p_profile_id: profileId,
@@ -101,6 +109,11 @@ export async function beginPersonalPinChange(
     return {
       ok: false as const,
       error: error?.code === "23505" ? PIN_IN_USE : PIN_RECOVERY,
+      code: (error?.code === "23505"
+        ? "global_collision"
+        : error?.code === "55000"
+          ? "reconciliation_required"
+          : "database_error") as PinFailureCode,
     };
   return { ok: true as const, operationId: data };
 }
@@ -142,7 +155,8 @@ export async function rotateGlobalPersonalPin(
     return {
       ok: false,
       error: claim.error,
-      severity: claim.error === PIN_IN_USE ? "recoverable" : "locked_out",
+      severity: isPinCollision(claim.code) ? "recoverable" : "locked_out",
+      code: claim.code,
     };
   try {
     const result = await rotatePasscodeCredential(admin, input);
@@ -156,6 +170,11 @@ export async function rotateGlobalPersonalPin(
     }
     return result;
   } catch {
-    return { ok: false, error: PIN_RECOVERY, severity: "locked_out" };
+    return {
+      ok: false,
+      error: PIN_RECOVERY,
+      severity: "locked_out",
+      code: "reconciliation_required",
+    };
   }
 }

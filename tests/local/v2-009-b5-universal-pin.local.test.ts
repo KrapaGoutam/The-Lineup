@@ -218,7 +218,7 @@ describe("B5 universal identity boundary (local Auth + PostgreSQL)", () => {
     ]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
     expect(results.filter((r) => !r.ok)).toEqual([
-      { ok: false, error: PIN_IN_USE },
+      { ok: false, error: PIN_IN_USE, code: "global_collision" },
     ]);
     const client = createClient<Database>(url, pub, {
       auth: { persistSession: false },
@@ -588,5 +588,60 @@ describe("B5 universal identity boundary (local Auth + PostgreSQL)", () => {
     } finally {
       update.mockRestore();
     }
+  });
+  it("organization-local collision routes legacy identity to enrollment; replacement conflicts are 409", async () => {
+    const p = pin();
+    const target = await person(p, orgA);
+    await person(p, orgB); // Unenrolled person's organization-local ownership.
+    must(
+      await admin
+        .from("memberships")
+        .insert({
+          organization_id: orgB,
+          profile_id: target.id,
+          roles: ["server"],
+        })
+        .select()
+        .single(),
+    );
+    must(
+      await admin
+        .from("passcode_credentials")
+        .insert({
+          organization_id: orgB,
+          profile_id: target.id,
+          locator: createPasscodeLocator(orgB, pin()),
+          synthetic_email: target.email!,
+        })
+        .select()
+        .single(),
+    );
+    cookieJar.clear();
+    const response = await login(
+      request("/api/auth/passcode", {
+        restaurantSlug: `b5-a-${run}`,
+        passcode: p,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).next).toBe("/auth/enroll");
+    const conflict = await enroll(
+      request("/api/auth/passcode/enroll", {
+        currentPasscode: p,
+        newPasscode: p,
+      }),
+    );
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).error).toBe(PIN_IN_USE);
+    expect(
+      (
+        await enroll(
+          request("/api/auth/passcode/enroll", {
+            currentPasscode: p,
+            newPasscode: pin(),
+          }),
+        )
+      ).status,
+    ).toBe(200);
   });
 });

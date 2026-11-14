@@ -1,3 +1,4 @@
+import { isPinCollision } from "@/features/auth/domain/pin-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -21,7 +22,6 @@ import {
   markPinAttemptSucceeded,
   readPersonalPinAccount,
   rotateGlobalPersonalPin,
-  PIN_IN_USE,
 } from "@/features/auth/data/global-pin";
 import {
   createPasscodeLocator,
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
       newPasscode: passcode,
     });
     if (!enrollment.ok) {
-      if (enrollment.error === PIN_IN_USE) enrollmentRequired = true;
+      if (isPinCollision(enrollment.code)) enrollmentRequired = true;
       else {
         await supabase.auth.signOut();
         return NextResponse.json(

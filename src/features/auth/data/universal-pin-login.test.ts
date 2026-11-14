@@ -40,9 +40,48 @@ const chain = {
   is: () => chain,
   maybeSingle: mocks.lookup,
 };
-const admin = { from: () => chain } as unknown as SupabaseClient<Database>;
+const eligibility = {
+  role: null as string | null,
+  credentials: ["A"],
+  memberships: ["A"],
+  error: false,
+};
+const admin = {
+  from: (table: string) => {
+    if (table === "personal_pin_accounts") return chain;
+    const q = {
+      select: () => q,
+      eq: () => q,
+      in: (_key: string, ids: string[]) =>
+        Promise.resolve({
+          data: eligibility.memberships
+            .filter((id) => ids.includes(id))
+            .map((organization_id) => ({ organization_id })),
+          error: eligibility.error ? {} : null,
+        }),
+      maybeSingle: async () => ({
+        data: eligibility.role ? { role: eligibility.role } : null,
+        error: eligibility.error ? {} : null,
+      }),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({
+          data: eligibility.credentials.map((organization_id) => ({
+            organization_id,
+          })),
+          error: eligibility.error ? {} : null,
+        }).then(resolve),
+    };
+    return q;
+  },
+} as unknown as SupabaseClient<Database>;
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(eligibility, {
+    role: null,
+    credentials: ["A"],
+    memberships: ["A"],
+    error: false,
+  });
   vi.stubEnv("APP_PIN_PEPPER", "b5-test-only-pepper-at-least-32-characters");
   mocks.lookup.mockResolvedValue({ data: account, error: null });
   mocks.read.mockResolvedValue(account);
@@ -98,5 +137,40 @@ describe("universal PIN Auth binding", () => {
     expect((await universalPinLogin(admin, "0007", "attempt")).status).toBe(
       503,
     );
+  });
+});
+
+describe("universal lifecycle eligibility", () => {
+  it.each([
+    { credentials: [], memberships: [], role: null, expected: 401 },
+    { credentials: ["A"], memberships: ["A"], role: null, expected: 200 },
+    { credentials: ["A"], memberships: ["B"], role: null, expected: 401 },
+    { credentials: ["B"], memberships: ["B"], role: null, expected: 200 },
+    { credentials: [], memberships: [], role: "owner", expected: 200 },
+    {
+      credentials: [],
+      memberships: [],
+      role: "historical_invalid",
+      expected: 401,
+    },
+  ])(
+    "applies matching active rows / canonical Overall role: %j",
+    async (scenario) => {
+      Object.assign(eligibility, scenario);
+      const response = await universalPinLogin(admin, "0007", "attempt");
+      expect(response.status).toBe(scenario.expected);
+      if (scenario.expected === 401) {
+        expect(mocks.signOut).toHaveBeenCalledOnce();
+        expect(mocks.mark).not.toHaveBeenCalled();
+      }
+    },
+  );
+  it("eligibility query failure clears the new session and returns service error", async () => {
+    eligibility.error = true;
+    expect((await universalPinLogin(admin, "0007", "attempt")).status).toBe(
+      503,
+    );
+    expect(mocks.signOut).toHaveBeenCalledOnce();
+    expect(mocks.mark).not.toHaveBeenCalled();
   });
 });

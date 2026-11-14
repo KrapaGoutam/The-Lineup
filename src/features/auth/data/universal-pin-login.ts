@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { normalizeOverallRole } from "@/features/auth/domain/overall-role";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.generated";
 import {
@@ -44,6 +45,38 @@ export async function universalPinLogin(
     return deny();
   }
   try {
+    // Same canonical Overall role normalization as V2-003; no synthetic
+    // membership requirement for legitimate platform-wide role holders.
+    const overall = await admin
+      .from("overall_roles")
+      .select("role")
+      .eq("profile_id", account.profile_id)
+      .maybeSingle();
+    if (overall.error) throw new Error("Eligibility unavailable");
+    if (!normalizeOverallRole(overall.data?.role)) {
+      const credentials = await admin
+        .from("passcode_credentials")
+        .select("organization_id")
+        .eq("profile_id", account.profile_id)
+        .eq("active", true);
+      if (credentials.error) throw new Error("Eligibility unavailable");
+      const organizations = (credentials.data ?? []).map(
+        (row) => row.organization_id,
+      );
+      const memberships = organizations.length
+        ? await admin
+            .from("memberships")
+            .select("organization_id")
+            .eq("profile_id", account.profile_id)
+            .eq("active", true)
+            .in("organization_id", organizations)
+        : { data: [], error: null };
+      if (memberships.error) throw new Error("Eligibility unavailable");
+      if (!memberships.data?.length) {
+        await supabase.auth.signOut();
+        return deny();
+      }
+    }
     // Reject a concurrent reset/enrollment; a lookup alone is never proof.
     const current = await readPersonalPinAccount(admin, account.profile_id);
     if (

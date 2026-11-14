@@ -1,3 +1,4 @@
+import { PIN_IN_USE, type PinFailureCode } from "../domain/pin-errors";
 import "server-only";
 
 import {
@@ -22,6 +23,7 @@ export type RotatePasscodeResult =
       ok: false;
       error: string;
       severity: "recoverable" | "locked_out";
+      code?: PinFailureCode;
     };
 
 /**
@@ -58,6 +60,7 @@ export async function rotatePasscodeCredential(
       ok: false,
       error: "Could not find a passcode credential for that person.",
       severity: "recoverable",
+      code: "database_error",
     };
   }
 
@@ -69,6 +72,7 @@ export async function rotatePasscodeCredential(
       ok: false,
       error: "Could not find a passcode credential for that person.",
       severity: "recoverable",
+      code: "database_error",
     };
   }
 
@@ -78,7 +82,7 @@ export async function rotatePasscodeCredential(
       c.organization_id,
       input.newPasscode,
     );
-    const { data: collision } = await admin
+    const { data: collision, error: collisionError } = await admin
       .from("passcode_credentials")
       .select("id")
       .eq("organization_id", c.organization_id)
@@ -86,11 +90,19 @@ export async function rotatePasscodeCredential(
       .neq("id", c.id)
       .maybeSingle();
 
+    if (collisionError)
+      return {
+        ok: false,
+        error: "PIN service unavailable.",
+        severity: "recoverable",
+        code: "database_error",
+      };
     if (collision) {
       return {
         ok: false,
-        error: "That passcode is already in use — choose a different one.",
+        error: PIN_IN_USE,
         severity: "recoverable",
+        code: "organization_collision",
       };
     }
   }
@@ -149,14 +161,16 @@ export async function rotatePasscodeCredential(
           error:
             "Something went wrong updating this passcode, and it couldn't be fully undone. Please ask an administrator to reset your passcode.",
           severity: "locked_out",
+          code: "reconciliation_required",
         };
       }
 
       if (updateLocatorError?.code === "23505") {
         return {
           ok: false,
-          error: "That passcode is already in use — choose a different one.",
+          error: PIN_IN_USE,
           severity: "recoverable",
+          code: "organization_collision",
         };
       }
 
@@ -164,6 +178,7 @@ export async function rotatePasscodeCredential(
         ok: false,
         error: "Unable to update the passcode right now. Please try again.",
         severity: "recoverable",
+        code: "database_error",
       };
     }
 
@@ -278,6 +293,7 @@ export async function rotatePasscodeCredential(
         ok: false,
         error: "Unable to update the passcode right now. Please try again.",
         severity: "recoverable",
+        code: "database_error",
       };
     }
   }
@@ -289,5 +305,6 @@ export async function rotatePasscodeCredential(
     error:
       "Something went wrong updating this passcode, and it couldn't be fully undone. Neither the old nor the new passcode may work right now — try resetting it again, or contact support if it keeps failing.",
     severity: "locked_out",
+    code: "reconciliation_required",
   };
 }

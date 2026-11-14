@@ -108,3 +108,30 @@ kiosk write removal, step-up and rollout limits. Reuse the supplied B4 evidence:
 67/67 tenant sweep, 64/64 role matrix, 4/4 auth seam; these were not repeated.
 Local browser checks cover PIN → cookie → picker → persisted context → workspace.
 Neon/hosted operational data, deployed ingress and owner step-up remain unverified.
+
+## Post-review corrections and retained observations
+
+Finding A: universal Auth success now requires either a recognized current Overall
+role (using V2-003's canonical normalizer), or an active credential and active
+membership for the same profile and organization. Query failures clear the new
+session and return 503; ordinary deactivation returns generic 401. No location
+assignment is invented and the context resolver remains unchanged.
+
+Finding B: typed global_collision / organization_collision codes drive enrollment
+routing and 409 responses independently of UI text. Unexpected database errors and
+reconciliation_required remain distinct. Organization collisions release only the
+current operation's candidate reservation after verified rollback; uncertain
+operations retain their existing recovery restrictions.
+
+**Deployment order hazard: B5 application code before its migration breaks BOTH
+universal and legacy login: the global admission RPC runs first.** Use separately
+approved migrations-first compatibility, backup and recovery planning. No rollout
+is authorized by this correction. The five previously pending migrations plus B5
+make six pending migrations against the reported Hosted DEV ledger 91.
+
+Independent review nonblocking observations, retained without scope expansion:
+C1 successful enrollment attempts still count toward failure pressure;
+C2 actor deletion cascades audit rows; C3 kiosk ignores global pending operations
+while retaining its credential/Auth proof boundary; C4 late Auth writes can require
+availability recovery; C5 global attempts need retention planning; C6 failed
+registration rollback can leave an orphaned claim requiring privileged recovery.

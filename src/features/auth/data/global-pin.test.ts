@@ -55,7 +55,12 @@ describe("global personal PIN lifecycle", () => {
         profileId: "person",
         newPasscode: "0007",
       }),
-    ).toEqual({ ok: false, error: PIN_IN_USE, severity: "recoverable" });
+    ).toEqual({
+      ok: false,
+      error: PIN_IN_USE,
+      severity: "recoverable",
+      code: "global_collision",
+    });
     expect(rotatePasscodeCredential).not.toHaveBeenCalled();
   });
   it("an interrupted or uncertain reservation is not reported as recoverable", async () => {
@@ -140,4 +145,38 @@ describe("global personal PIN lifecycle", () => {
     expect(result.response?.status).toBe(429);
     expect(result.response?.headers.get("retry-after")).toBe("3600");
   });
+});
+
+it("organization collision remains recoverable after checked ownership rollback", async () => {
+  vi.mocked(rotatePasscodeCredential).mockResolvedValue({
+    ok: false,
+    code: "organization_collision",
+    error: PIN_IN_USE,
+    severity: "recoverable",
+  });
+  expect(
+    await rotateGlobalPersonalPin(admin, {
+      profileId: "person",
+      newPasscode: "0007",
+    }),
+  ).toMatchObject({ code: "organization_collision", severity: "recoverable" });
+  expect(rpc).toHaveBeenLastCalledWith(
+    "finish_personal_pin_change",
+    expect.objectContaining({ p_apply: false }),
+  );
+});
+
+it("unexpected reservation DB error is never a collision or ordinary retry", async () => {
+  rpc.mockResolvedValue({ data: null, error: { code: "XX000" } });
+  expect(
+    await rotateGlobalPersonalPin(admin, {
+      profileId: "person",
+      newPasscode: "0007",
+    }),
+  ).toMatchObject({
+    ok: false,
+    code: "database_error",
+    severity: "locked_out",
+  });
+  expect(rotatePasscodeCredential).not.toHaveBeenCalled();
 });
