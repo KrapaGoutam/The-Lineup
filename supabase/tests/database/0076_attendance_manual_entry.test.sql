@@ -71,7 +71,8 @@ create temp table t76 as select
   (date_trunc('day', now()) - interval '5 days' + interval '26 hours') as base_out,
   ((date_trunc('day', now()) - interval '5 days' + interval '18 hours') at time zone 'America/Chicago')::date as base_date,
   (now() at time zone 'America/Chicago')::date as today_date,
-  date_trunc('hour', now()) - interval '2 hours' as today_in;
+  -- Local midnight stays on today's service date even just after midnight.
+  ((now() at time zone 'America/Chicago')::date::timestamp at time zone 'America/Chicago') as today_in;
 grant select on t76 to authenticated;
 
 -- 2. Direct client write denials --------------------------------------------
@@ -215,7 +216,7 @@ select throws_ok(
 select throws_ok(
   $$ select public.attendance_manual_entry(
        '00000000-0000-0000-0000-0000000760b1', '00000000-0000-0000-0000-000000076003',
-       (now() at time zone 'America/Chicago')::date, now() - interval '1 hour', now() + interval '2 hours',
+       ((now() - interval '1 hour') at time zone 'America/Chicago')::date, now() - interval '1 hour', now() + interval '2 hours',
        'Future end', 'k-val-5'
      ) $$,
   '22023', 'Manual punches cannot be in the future', 'future clock-out is rejected'
@@ -439,7 +440,7 @@ where id = (select (val->>'sessionId')::uuid from res_open);
 select throws_ok(
   $$ select public.attendance_manual_entry(
        '00000000-0000-0000-0000-0000000760b1', '00000000-0000-0000-0000-000000076004',
-       (select today_date from t76), (select today_in + interval '30 minutes' from t76), null,
+       (select today_date from t76), (select least(today_in + interval '30 minutes', now()) from t76), null,
        'Second open shift attempt', 'k-open-second'
      ) $$,
   '23P01', 'This entry overlaps another attendance session for the employee', 'second open shift overlaps and is rejected'
