@@ -85,15 +85,13 @@ export async function POST(request: Request) {
 
   const locator = createPasscodeLocator(organization.id, passcode);
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
-  // V2-009 B3: New accounts start with canonical person-level password
-  // (createPersonAuthPassword) rather than organization-derived password,
-  // supporting multi-organization login.
-  const authPassword = createPersonAuthPassword(passcode);
-
+  // V2-009 B3 / F-5: New accounts start with canonical person-level password
+  // (createPersonAuthPassword(userId, passcode)) bound to profile ID.
+  const tempPassword = randomUUID();
   const { data: created, error: createError } =
     await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password: authPassword,
+      password: tempPassword,
       email_confirm: true,
     });
   if (createError || !created.user) {
@@ -101,6 +99,16 @@ export async function POST(request: Request) {
   }
   const userId = created.user.id;
   const rollback = () => admin.auth.admin.deleteUser(userId);
+
+  const authPassword = createPersonAuthPassword(userId, passcode);
+  const { error: setPassError } = await admin.auth.admin.updateUserById(
+    userId,
+    { password: authPassword },
+  );
+  if (setPassError) {
+    await rollback();
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
+  }
 
   const { error: profileError } = await admin
     .from("profiles")

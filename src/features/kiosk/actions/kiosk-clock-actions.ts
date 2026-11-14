@@ -383,6 +383,7 @@ export async function kioskAuthenticatePinAction(input: {
     });
 
     const verification = await verifyPasscode(isolatedAuthClient, {
+      profileId: credential.profile_id,
       syntheticEmail: credential.synthetic_email,
       organizationId: device.organizationId,
       passcode: pin,
@@ -423,7 +424,7 @@ export async function kioskAuthenticatePinAction(input: {
                     ).createAuthPassword(device.organizationId, pin)
                   : (
                       await import("@/lib/passcode-security")
-                    ).createPersonAuthPassword(pin),
+                    ).createPersonAuthPassword(credential.profile_id, pin),
           })
         ).data;
 
@@ -432,6 +433,20 @@ export async function kioskAuthenticatePinAction(input: {
       return {
         ok: false,
         error: "Failed to establish employee session.",
+        code: "auth_failed",
+      };
+    }
+
+    const authenticatedUserId =
+      signInData.session.user?.id ?? verification.user?.id;
+    if (!authenticatedUserId || authenticatedUserId !== credential.profile_id) {
+      if (typeof isolatedAuthClient.auth?.signOut === "function") {
+        await isolatedAuthClient.auth.signOut().catch(() => {});
+      }
+      await recordFailureAttempt();
+      return {
+        ok: false,
+        error: "Authentication identity mismatch.",
         code: "auth_failed",
       };
     }

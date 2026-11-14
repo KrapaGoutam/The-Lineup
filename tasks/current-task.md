@@ -1,3 +1,46 @@
+# V2-009 B3 — Targeted Security Amendments F-1 Through F-5 (Active)
+
+- [x] **F-5: Person-Specific Password Derivation:**
+  - Exported `createPersonAuthPassword(profileId: string, passcode: string)` in `src/lib/passcode-security.ts`.
+  - Derives `authpw:person:${profileId}:${passcode}` with `APP_PIN_PEPPER`, guaranteeing distinct Auth passwords even when two users share the same 4-digit PIN.
+  - Updated `scripts/bootstrap-owner.mjs`, `src/app/api/auth/register/route.ts`, `src/features/auth/data/passcode-verify.ts`, and `src/features/auth/data/passcode-rotation.ts`.
+  - Regression verified: `src/features/auth/data/passcode-verify.test.ts` (8/8) and `tests/local/v2-009-b3-personal-pin.local.test.ts` (7/7).
+
+- [x] **F-2: Fail-Closed Auth Identity Binding:**
+  - Implemented `isIdentityBound(data, expectedProfileId)` in `src/features/auth/data/passcode-verify.ts`.
+  - Checks `user.id === expectedProfileId` across all sign-in attempts. If mismatched, immediately calls `authClient.auth.signOut()` and returns `ok: false, verifiedVia: null`.
+  - Enforced in `/api/auth/passcode/route.ts`, `/api/auth/passcode/change/route.ts`, and `kioskAuthenticatePinAction`.
+  - Tests verified: `src/features/auth/data/passcode-verify.test.ts`, `src/app/api/auth/passcode/route.test.ts` (3/3), `src/features/kiosk/actions/kiosk-clock-actions.test.ts` (14/14), `tests/local/v2-009-b3-personal-pin.local.test.ts` (7/7).
+
+- [x] **F-1: Locator Rollback Failure Recovery & Concurrency:**
+  - In `src/features/auth/data/passcode-rotation.ts`, tracks updated credentials and verifies each compensating revert result.
+  - If any locator revert fails, returns `severity: "locked_out"`. Only returns `recoverable` when consistent rollback is verified.
+  - Uses optimistic row matching on `.eq("id", id).eq("locator", expectedLocator)` to prevent clobbering concurrent rotations.
+  - Tests verified: `src/features/auth/data/passcode-rotation.test.ts` (10/10).
+
+- [x] **F-3: Ambiguous Auth Update Reconciliation:**
+  - In `src/features/auth/data/passcode-rotation.ts`, probes the new password using an isolated client upon GoTrue password update errors.
+  - If probe confirms password applied, reconciles successfully `{ ok: true }`. If confirmed unapplied, safely reverts locators and returns `recoverable`. If indeterminate, returns `locked_out` without blind locator reverts.
+  - Tests verified: `src/features/auth/data/passcode-rotation.test.ts`.
+
+- [x] **Follow-up: Random Reset PIN Collision Retry:**
+  - In `src/app/api/auth/passcode/reset/route.ts`, retries random passcode generation up to 3 times on recoverable locator collisions.
+  - Tests verified: `src/app/api/auth/passcode/reset/route.test.ts` (3/3).
+
+- [x] **F-4: Documentation & Deployment Contract:**
+  - Updated `docs/v2.0/features/009-final-gate-release/B3_LOCAL_HANDOFF.md` with:
+    - Forward-only authentication transition details and why database rollback cannot undo GoTrue password updates.
+    - Database rollback boundary and deployment ordering (Ledger 96 migration first, then application code).
+    - Failure recovery, optimistic concurrency, and legacy transition.
+    - Explicit notice that local ledger 96 was applied locally, while Hosted DEV state remains unverified (not contacted).
+
+## Current State & Next Step
+
+All targeted security amendments (F-1 through F-5) are implemented and verified green locally.
+Next step: run quality gates (`npm run check`, `git diff --check`), create local commit, and deliver report for targeted independent re-review.
+
+---
+
 # V2-009 F-5 final PR gate — BLOCKED (2026-11-13)
 
 - [x] Recovered clean `fix/v2-009-f5-multi-org-deactivation` at `e1c8fd968966c44607d13ff99ea1ef3d50ad680f`; base `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`; cumulative source `110ae9c7676efa48165b9e72988c5430c9d60be6` untouched.

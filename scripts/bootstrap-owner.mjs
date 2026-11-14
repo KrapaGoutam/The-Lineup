@@ -124,11 +124,11 @@ async function run() {
   }
 
   // Mirrors src/lib/passcode-security.ts's createPersonAuthPassword exactly
-  // (V2-009 B3) -- the owner's Auth account is created with the person-level
-  // password scheme like every other account.
-  function createPersonAuthPassword(code) {
+  // (V2-009 B3 / F-5) -- the owner's Auth account is created with the person-level
+  // password scheme bound to profile ID like every other account.
+  function createPersonAuthPassword(profileId, code) {
     return createHmac("sha256", pepper)
-      .update(`authpw:person:${code}`)
+      .update(`authpw:person:${profileId}:${code}`)
       .digest("hex");
   }
 
@@ -209,7 +209,7 @@ async function run() {
 
   const { error: authPasswordError } = await admin.auth.admin.updateUserById(
     userId,
-    { password: createPersonAuthPassword(passcode) },
+    { password: createPersonAuthPassword(userId, passcode) },
   );
   if (authPasswordError) {
     await rollbackUser();

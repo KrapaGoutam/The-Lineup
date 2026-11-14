@@ -123,13 +123,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const newPasscode = requestedPasscode ?? generateRandomPasscode();
+  let newPasscode = requestedPasscode ?? generateRandomPasscode();
 
-  const result = await rotatePasscodeCredential(admin, {
+  let result = await rotatePasscodeCredential(admin, {
     organizationId: actor.organizationId,
     profileId: targetProfileId,
     newPasscode,
   });
+
+  // If a randomly generated passcode hit a collision, retry up to 3 times
+  if (!requestedPasscode && !result.ok && result.severity === "recoverable") {
+    for (let retry = 0; retry < 3 && !result.ok; retry += 1) {
+      newPasscode = generateRandomPasscode();
+      result = await rotatePasscodeCredential(admin, {
+        organizationId: actor.organizationId,
+        profileId: targetProfileId,
+        newPasscode,
+      });
+    }
+  }
+
   if (!result.ok) {
     return NextResponse.json(
       { error: result.error, severity: result.severity },

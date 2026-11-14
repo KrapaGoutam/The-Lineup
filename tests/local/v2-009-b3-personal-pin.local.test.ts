@@ -145,19 +145,27 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
     useLegacyPassword?: boolean;
   }) {
     const syntheticEmail = `${crypto.randomUUID()}@passcode.internal`;
-    const authPassword = input.useLegacyPassword
-      ? createAuthPassword(input.orgMemberships[0].orgId, input.pin)
-      : createPersonAuthPassword(input.pin);
+    const tempPassword = crypto.randomUUID();
 
     const created = must(
       await admin.auth.admin.createUser({
         email: syntheticEmail,
-        password: authPassword,
+        password: tempPassword,
         email_confirm: true,
       }),
     );
     const userId = created.user!.id;
     users.push(userId);
+
+    const authPassword = input.useLegacyPassword
+      ? createAuthPassword(input.orgMemberships[0].orgId, input.pin)
+      : createPersonAuthPassword(userId, input.pin);
+
+    must(
+      await admin.auth.admin.updateUserById(userId, {
+        password: authPassword,
+      }),
+    );
 
     must(
       await admin
@@ -205,6 +213,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
     });
 
     const verifyA = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgA,
       passcode: "4826",
@@ -215,6 +224,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // 2. Verify against Org B with the exact same personal PIN
     const verifyB = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgB,
       passcode: "4826",
@@ -238,6 +248,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // First login verifies via "derived"
     const verify1 = await verifyPasscode(authClient, {
+      profileId: legacyUser.id,
       syntheticEmail: legacyUser.syntheticEmail,
       organizationId: orgA,
       passcode: "7193",
@@ -254,6 +265,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // Second login verifies directly via "person"
     const verify2 = await verifyPasscode(authClient, {
+      profileId: legacyUser.id,
       syntheticEmail: legacyUser.syntheticEmail,
       organizationId: orgA,
       passcode: "7193",
@@ -285,6 +297,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // Old PIN fails in Org A
     const oldVerifyA = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgA,
       passcode: "3344",
@@ -293,6 +306,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // New PIN succeeds in Org A
     const newVerifyA = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgA,
       passcode: "8899",
@@ -302,6 +316,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
 
     // New PIN succeeds in Org B
     const newVerifyB = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgB,
       passcode: "8899",
@@ -345,6 +360,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const verifyA = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgA,
       passcode: "6666",
@@ -352,6 +368,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
     expect(verifyA.ok).toBe(true);
 
     const verifyB = await verifyPasscode(authClient, {
+      profileId: user.id,
       syntheticEmail: user.syntheticEmail,
       organizationId: orgB,
       passcode: "6666",
@@ -504,6 +521,7 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const verifyA = await verifyPasscode(authClient, {
+      profileId: target.id,
       syntheticEmail: target.syntheticEmail,
       organizationId: orgA,
       passcode: "7654",
@@ -511,10 +529,63 @@ describe("V2-009 B3: Personal PIN & Multi-Organization Authentication", () => {
     expect(verifyA.ok).toBe(true);
 
     const verifyB = await verifyPasscode(authClient, {
+      profileId: target.id,
       syntheticEmail: target.syntheticEmail,
       organizationId: orgB,
       passcode: "7654",
     });
     expect(verifyB.ok).toBe(true);
+  });
+
+  it("F-5 & F-2: two users with the same PIN have distinct Auth passwords and bind strictly to their own identity", async () => {
+    const user1 = await createPasscodeUser({
+      displayName: "Identical Pin User 1",
+      pin: "9988",
+      orgMemberships: [{ orgId: orgA, role: "server" }],
+    });
+
+    const user2 = await createPasscodeUser({
+      displayName: "Identical Pin User 2",
+      pin: "9988",
+      orgMemberships: [{ orgId: orgB, role: "server" }],
+    });
+
+    // F-5: Passwords derived for the same PIN are distinct because profileId is bound
+    const pw1 = createPersonAuthPassword(user1.id, "9988");
+    const pw2 = createPersonAuthPassword(user2.id, "9988");
+    expect(pw1).not.toBe(pw2);
+
+    const authClient = createClient(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // User 1 authenticates to user1 identity
+    const v1 = await verifyPasscode(authClient, {
+      profileId: user1.id,
+      syntheticEmail: user1.syntheticEmail,
+      organizationId: orgA,
+      passcode: "9988",
+    });
+    expect(v1.ok).toBe(true);
+    expect(v1.user?.id).toBe(user1.id);
+
+    // User 2 authenticates to user2 identity
+    const v2 = await verifyPasscode(authClient, {
+      profileId: user2.id,
+      syntheticEmail: user2.syntheticEmail,
+      organizationId: orgB,
+      passcode: "9988",
+    });
+    expect(v2.ok).toBe(true);
+    expect(v2.user?.id).toBe(user2.id);
+
+    // F-2: Attempting to verify User 1's email with User 2's expected profileId fails closed
+    const spoofAttempt = await verifyPasscode(authClient, {
+      profileId: user2.id, // Mismatch!
+      syntheticEmail: user1.syntheticEmail,
+      organizationId: orgA,
+      passcode: "9988",
+    });
+    expect(spoofAttempt.ok).toBe(false);
   });
 });

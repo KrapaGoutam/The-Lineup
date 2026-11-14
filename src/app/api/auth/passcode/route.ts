@@ -167,11 +167,19 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const verification = await verifyPasscode(supabase, {
+    profileId: credential.profile_id,
     syntheticEmail: credential.synthetic_email,
     organizationId: organization.id,
     passcode,
   });
-  if (!verification.ok) {
+  if (
+    !verification.ok ||
+    (verification.session?.user?.id &&
+      verification.session.user.id !== credential.profile_id)
+  ) {
+    if (verification.session) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     return NextResponse.json(
       { error: "Passcode not recognized." },
       { status: 401 },

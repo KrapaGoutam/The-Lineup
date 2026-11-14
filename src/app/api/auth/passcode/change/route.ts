@@ -170,18 +170,27 @@ export async function POST(request: Request) {
   // migrating the current password first would just be overwritten a
   // moment later.
   const verification = await verifyPasscode(supabase, {
+    profileId: currentUser.profileId,
     syntheticEmail: credential.synthetic_email,
     organizationId: currentUser.organizationId,
     passcode: currentPasscode,
   });
 
+  const identityMatches =
+    verification.ok &&
+    (!verification.session?.user?.id ||
+      verification.session.user.id === currentUser.profileId);
+
   await admin.from("passcode_login_attempts").insert({
     organization_id: currentUser.organizationId,
     fingerprint,
-    succeeded: verification.ok,
+    succeeded: identityMatches,
   });
 
-  if (!verification.ok) {
+  if (!identityMatches) {
+    if (verification.session) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     return NextResponse.json(
       { error: "Current passcode not recognized." },
       { status: 401 },
@@ -192,6 +201,7 @@ export async function POST(request: Request) {
     organizationId: currentUser.organizationId,
     profileId: currentUser.profileId,
     newPasscode,
+    currentPasscode,
   });
   if (!result.ok) {
     return NextResponse.json(
