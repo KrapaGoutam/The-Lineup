@@ -4,9 +4,9 @@
 
 - **Branch:** `feature/v2-009-b3-personal-pin-gateway`
 - **Worktree:** `.tmp/v2-009-b3-f6`
-- **Base `development` SHA:** `7865e0c804f4460f9ddc27fd53b3f86eb49d0124` (PR #328 merged)
+- **Base `development` SHA:** `7865e0cb24a7ae605cbece91cd929957497edd2c` (PR #328 merged)
 - **Local Supabase Database:** Started at ledger 95 (`20261114162724`), now at ledger 96 (`20261114173000`).
-- **Hosted DEV State:** Unverified / not contacted. In accordance with strict owner authorization boundaries, no remote or hosted databases were accessed or mutated.
+- **Hosted DEV State:** UNVERIFIED. In accordance with strict owner authorization boundaries, no remote or hosted databases were accessed, queried, or mutated during this task.
 - **Target:** `development`
 - **Authorization boundaries:** Local implementation and validation only. No remote push, no PR creation, no PR merge, no hosted database migrations, no deployments, no production changes, issue #257 remains open.
 
@@ -16,16 +16,29 @@
 
 ### 1. Root Cause Resolution for F-6 Multi-Org PIN Defect
 
-In Supabase Auth (`auth.users`), exactly one password exists per identity. Previously, passwords were synthesized using organization-scoped hashing (`authpw:${orgId}:${pin}`). When a user belonged to multiple organizations, resetting or rotating credentials in Org A corrupted login in Org B. Furthermore, the database enforced a table-wide `UNIQUE (synthetic_email)` constraint on `public.passcode_credentials`, making it impossible for a user with the same canonical Auth identity (`synthetic_email = ${profile_id}@passcode.internal`) to hold active credentials across multiple organizations.
+In Supabase Auth (`auth.users`), exactly one password exists per identity. Previously, passwords were synthesized using organization-scoped hashing (`authpw:${orgId}:${pin}`). When a user belonged to multiple organizations, resetting or rotating credentials in Org A corrupted login in Org B. Furthermore, the database enforced a table-wide `UNIQUE (synthetic_email)` constraint on `public.passcode_credentials`, making it impossible for a user with the same canonical Auth identity (using a random UUID-derived alias such as `${randomUUID()}@passcode.internal`) to hold active credentials across multiple organizations.
 
-### 2. Forward Migration (Ledger 95 → 96)
+### 2. Forward Migration (Ledger 95 → 96) & Local Environment Evidence
 
-- File: `supabase/migrations/20261114173000_v2_009_b3_passcode_credentials_multi_org.sql`
+- **Forward migration file:** `supabase/migrations/20261114173000_v2_009_b3_passcode_credentials_multi_org.sql`
 - **Dropped constraint:** `passcode_credentials_synthetic_email_key` from `public.passcode_credentials`.
 - **Preserved constraints:** `(organization_id, profile_id)` UNIQUE and `(organization_id, locator)` UNIQUE remain strictly enforced per organization.
 - **Added indexes:**
   - `passcode_credentials_synthetic_email_idx` on `public.passcode_credentials (synthetic_email)`.
   - `passcode_credentials_profile_id_idx` on `public.passcode_credentials (profile_id)`.
+- **Local Migration & Ledger Evidence:**
+  - Local Docker database ledger reached 96.
+  - Local ledger entry 96 was inserted manually into `supabase_migrations.schema_migrations`.
+  - Its migration-history `statements` value is `NULL`.
+  - Independent review confirmed the expected local end-state schema (constraint dropped, indexes created, composite unique constraints intact).
+  - The historical `npx supabase db push` outcome could not be conclusively verified from migration history.
+  - Hosted DEV migration state remains **UNVERIFIED**.
+- **Mandatory Read-Only Hosted DEV Preflight (Owner Authorization Required Before Hosted Rollout):**
+  Before any hosted migration rollout, the owner must authorize a narrowly scoped, read-only Hosted DEV preflight that checks:
+  1. The actual migration ledger head on Hosted DEV (previously expected to be 91).
+  2. Whether `passcode_credentials_synthetic_email_key` still exists in Hosted DEV.
+  3. Whether the hosted schema differs in any way from the expected pre-B3 state.
+     _(Note: Hosted DEV must not be assumed unchanged merely because a project link was absent in local tooling; no hosted database was contacted during this local task)._
 
 ### 3. Canonical Person-Level Auth Password & Identity Binding (F-5 & F-2)
 
@@ -71,21 +84,41 @@ In Supabase Auth (`auth.users`), exactly one password exists per identity. Previ
 
 - Integrates with existing V2-003 context resolution and organization/location switcher (`use-context-switch`, `org-location-switcher`).
 
-### 8. Migration, Rollback & Deployment Contract (F-4)
+### 8. Migration, Rollback & Deployment Contract (F-4 / R-1A)
 
-- **Forward-only authentication transition:** Once users authenticate and their Auth passwords are upgraded to `createPersonAuthPassword(profileId, passcode)`, database rollback cannot revert Supabase Auth (`auth.users`) passwords back to legacy hashed forms.
-- **Database rollback boundary:** The database migration `20261114173000_v2_009_b3_passcode_credentials_multi_org.sql` drops `passcode_credentials_synthetic_email_key`. Re-imposing `UNIQUE (synthetic_email)` would immediately fail if any multi-org member holds credentials across multiple restaurants.
-- **Deployment ordering:**
-  1. Apply database migration (Ledger 96: drop table-wide synthetic_email uniqueness, create composite/performance indexes).
-  2. Deploy application code (V2-009 B3 runtime supporting personal PIN, fallback verification, and multi-org synchronization).
-     Running application before migration risks 23505 errors if multi-org sync fires before constraint is dropped; running migration first is non-breaking because legacy code respects `(organization_id, locator)` uniqueness.
-- **Legacy Transition & Opportunistic Upgrade:** Existing users continue authenticating via pre-B3 org-derived passwords or raw passcodes without interruption. On successful authentication, `migrateLegacyAuthPassword` opportunistically upgrades the Auth user password to the canonical person-level password (`createPersonAuthPassword(profileId, passcode)`).
-- **Failure Recovery & Concurrency:**
-  - Optimistic row matching (`.eq("id", id).eq("locator", expectedLocator)`) ensures compensating reverts do not overwrite newer concurrent rotations.
-  - Auth update failures are probed using an isolated client: if the password change was applied before the network dropped, the rotation reconciles successfully; if confirmed unapplied, locators safely revert; if indeterminate, rotation reports `locked_out` to prevent split-brain state.
-- **Hosted DEV State Notice:**
-  - Local ledger 96 was applied and verified locally on the developer machine's Docker Supabase instance.
-  - Hosted DEV database was **not** contacted or modified during this phase in accordance with strict authorization boundaries; its migration ledger remains unverified until an authorized deployment step.
+#### Mandatory Owner Acceptance Item Before Hosted Rollout: One-Way Authentication Transition
+
+- **One-Way Password Transition:** B3 migrates existing Supabase Auth passwords to profile-specific personal PIN-derived passwords (`authpw:person:${profileId}:${passcode}`).
+- **Pre-B3 Application Incompatibility:** Once a user has authenticated and migrated to the person-level password scheme, pre-B3 application code (which attempts authentication via org-derived `authpw:${orgId}:${pin}` or legacy raw passcodes) may no longer authenticate that user.
+- **Redeployment Lockout Risk:** Redeploying pre-B3 application code after users have migrated could lock out migrated users from signing in.
+- **Irreversibility in Auth:** Database rollback cannot reverse Supabase Auth (`auth.users`) password updates. GoTrue passwords exist in an independent auth service store and are not transactional with PostgreSQL schema rollbacks.
+- **Database Rollback Boundary:** Re-imposing the earlier database constraint `passcode_credentials_synthetic_email_key` is **not** a safe general rollback once multi-org credential rows exist, as doing so would violate uniqueness and fail if any user belongs to multiple organizations.
+- **Supported Recovery Strategy:** The supported recovery strategy is a forward fix or a verified compatible-fallback application release that preserves person-level authentication fallback. No automatic credential downgrade, password rewrite, or destructive rollback is authorized.
+
+#### Deployment Ordering
+
+1. **Apply Database Migration First:** Execute `20261114173000_v2_009_b3_passcode_credentials_multi_org.sql` (Ledger 96: drop table-wide `synthetic_email` uniqueness, create composite/performance indexes). Applying the migration first is strictly backward-compatible because existing pre-B3 application code only writes single-org credentials and respects `(organization_id, locator)` uniqueness.
+2. **Deploy Application Code Second:** Deploy V2-009 B3 runtime code supporting personal PINs, fallback verification, and multi-org synchronization. Deploying the application before the migration would risk runtime 23505 errors if multi-org synchronization triggers while the table-wide constraint remains active.
+
+#### Legacy Transition & Opportunistic Upgrade
+
+Existing users continue authenticating via pre-B3 org-derived passwords or raw passcodes without interruption. On successful authentication, `migrateLegacyAuthPassword` opportunistically upgrades the Auth user password to the canonical person-level password (`createPersonAuthPassword(profileId, passcode)`).
+
+#### Failure Recovery & Concurrency
+
+- Optimistic row matching (`.eq("id", id).eq("locator", expectedLocator)`) ensures compensating reverts do not overwrite newer concurrent rotations.
+- Auth update failures are probed using an isolated client: if the password change was applied before the network dropped, the rotation reconciles successfully; if confirmed unapplied, locators safely revert; if indeterminate, rotation reports `locked_out` to prevent split-brain state.
+
+### 9. Non-Blocking Security Follow-ups (Carried Forward for Release Gate)
+
+The following items were identified during independent security review, classified as non-blocking (no confirmed account takeover or unauthorized-action path), and carried forward for prioritization during the later release gate:
+
+- **N-1 (Auth Probe Error Classification):** Refine Auth probe error handling in `passcode-rotation.ts` to distinguish `invalid_credentials` from other HTTP 400 Auth errors.
+- **N-2 (Forward Locator Reconciliation):** Ambiguous forward locator update network errors may benefit from probe-style reconciliation prior to initiating rollback.
+- **N-3 (Extended GoTrue Negative Binding Tests):** Add additional real-GoTrue negative integration tests explicitly targeting cross-profile spoofing scenarios.
+- **N-4 (Concurrent Rotation Lockout Mitigation):** Refine concurrency handling for edge-case near-simultaneous rotations across multiple sessions to minimize recoverable vs locked_out friction.
+- **N-5 (Random PIN Collision Error Differentiation):** Enhance reset route random PIN retry loop to explicitly distinguish 23505 collision codes from other database errors with targeted unit coverage.
+- **Existing Operational Follow-ups:** Address background membership-sync race edge cases and minor error message information-disclosure hygiene.
 
 ---
 
@@ -132,7 +165,7 @@ In Supabase Auth (`auth.users`), exactly one password exists per identity. Previ
 
 ## Independent Security Review Request
 
-Please review the V2-009 B3 implementation read-only from base `7865e0c804f4460f9ddc27fd53b3f86eb49d0124`.
+Please review the V2-009 B3 implementation read-only from base `7865e0cb24a7ae605cbece91cd929957497edd2c`.
 
 Focus areas:
 
@@ -141,4 +174,4 @@ Focus areas:
 3. **Rollback recovery & concurrency (F-1):** Review `rotatePasscodeCredential` for optimistic row matching (`.eq("id", id).eq("locator", expectedLocator)`) and fail-closed `locked_out` reporting if compensating reverts fail.
 4. **Ambiguous Auth update reconciliation (F-3):** Review probe verification for GoTrue network failures to reconcile successfully if applied or revert safely if unapplied.
 5. **Authority preservation:** Confirm that single-organization managers cannot reset the personal PIN of a team member who belongs to multiple organizations or holds an Overall role.
-6. **Constraint safety & deployment contract (F-4):** Verify migration ordering and boundary guarantees.
+6. **Constraint safety & deployment contract (F-4 / R-1A / R-1B):** Verify migration ordering, one-way transition acceptance, and boundary guarantees.
