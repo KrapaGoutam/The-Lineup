@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getOverallRole } from "@/features/auth/data/overall-role";
 import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
 import {
   designationForRoles,
@@ -18,14 +19,12 @@ type ResetBody = {
 };
 
 /**
- * Feature 016. Manager/owner-initiated passcode reset -- no knowledge of
- * the old passcode required. Authorization reuses `canChangeDesignation`
- * directly rather than re-deriving the same `memberships_update_manager`
- * hierarchy a third time: per explicit direction, resetting someone's
- * credential is at least as sensitive as changing their designation, so
- * it uses the identical actor/target rule (owner unrestricted; a Manager
- * can act on anyone whose current designation isn't Owner or Manager; an
- * Assistant Manager can act on no one).
+ * Feature 016 & V2-009 B3: Manager/owner-initiated passcode reset.
+ *
+ * Authority preservation:
+ * - A single-organization manager/owner can ONLY reset strictly single-organization members.
+ * - Multi-organization members (or members holding an Overall role) require an Overall Owner
+ *   (or self-change via /api/auth/passcode/change) to reset their passcode.
  */
 export async function POST(request: Request) {
   let body: ResetBody;
@@ -79,11 +78,44 @@ export async function POST(request: Request) {
     );
   }
 
+  // Check if target is a multi-org member or holds an Overall role
+  const [
+    { data: otherTargetMemberships },
+    targetOverallRole,
+    actorOverallRole,
+  ] = await Promise.all([
+    admin
+      .from("memberships")
+      .select("organization_id")
+      .eq("profile_id", targetProfileId)
+      .neq("organization_id", actor.organizationId),
+    getOverallRole(targetProfileId, admin),
+    getOverallRole(actor.profileId, admin),
+  ]);
+
+  const isMultiOrg = Boolean(
+    otherTargetMemberships && otherTargetMemberships.length > 0,
+  );
+  const hasOverallRole = Boolean(targetOverallRole);
+  const isActorOverallOwner = actorOverallRole === "owner";
+
+  if ((isMultiOrg || hasOverallRole) && !isActorOverallOwner) {
+    return NextResponse.json(
+      {
+        error:
+          "This team member belongs to multiple organizations. Only an Overall administrator can reset their passcode.",
+      },
+      { status: 403 },
+    );
+  }
+
   const targetDesignation = designationForRoles(targetMembership.roles ?? []);
-  const allowed = canChangeDesignation({
-    actorDesignation: actor.designation,
-    targetCurrentDesignation: targetDesignation,
-  });
+  const allowed =
+    isActorOverallOwner ||
+    canChangeDesignation({
+      actorDesignation: actor.designation,
+      targetCurrentDesignation: targetDesignation,
+    });
   if (!allowed) {
     return NextResponse.json(
       { error: "You are not able to reset this person's passcode." },
@@ -113,6 +145,18 @@ export async function POST(request: Request) {
     entity_id: targetProfileId,
     reason,
   });
+
+  if (otherTargetMemberships && otherTargetMemberships.length > 0) {
+    const otherOrgAudits = otherTargetMemberships.map((m) => ({
+      organization_id: m.organization_id,
+      actor_profile_id: actor.profileId,
+      action: "passcode_reset",
+      entity_type: "passcode_credential",
+      entity_id: targetProfileId,
+      reason: `${reason} (Overall administrator reset across organizations)`,
+    }));
+    await admin.from("audit_events").insert(otherOrgAudits);
+  }
 
   return NextResponse.json({ ok: true, passcode: newPasscode });
 }

@@ -56,6 +56,18 @@ export function createAuthPassword(organizationId: string, passcode: string) {
     .digest("hex");
 }
 
+/**
+ * V2-009 B3: Canonical person-level Auth password.
+ * Unlike the legacy organization-derived createAuthPassword, this derives
+ * from the personal passcode alone, allowing a single person to sign in
+ * across multiple organizations without password mismatch or collision.
+ */
+export function createPersonAuthPassword(passcode: string) {
+  return createHmac("sha256", getPepper())
+    .update(`authpw:person:${passcode}`)
+    .digest("hex");
+}
+
 export function createRequestFingerprint(value: string) {
   return createHmac("sha256", getPepper())
     .update(`request:${value}`)

@@ -206,3 +206,26 @@ The new worktree remains local. No push, PR, merge, hosted migration, deployment
 - [x] Generated and applied F-2 forward migration `20261114162724`; new RLS pgTAP 56/56 passed, with no Overall direct-write expansion.
 - [x] Local Auth/PostgREST JWT checks 5/5 new plus 45/45 existing; focused existing pgTAP 433/433; `npm run check` and webpack build passed. Default Turbopack build failed on the known external `node_modules` worktree junction. Local ledger 95, synthetic user/org residue zero, and `git diff --check` passed.
 - [x] Completed changed-file security review and clean diff check. Committed F-1 as `45534f4` and F-2 as `dc990aa`; recorded both in `B2_LOCAL_HANDOFF.md`. This local handoff is the final documentation commit; stop before remote delivery for independent security review.
+
+---
+
+# V2-009 B3 Personal PIN + Multi-Organization Login + Gateway — LOCAL COMPLETE (2026-11-14)
+
+- [x] Recovered clean base `development` at `7865e0c804f4460f9ddc27fd53b3f86eb49d0124` (PR #328 merged) and established isolated worktree `.tmp/v2-009-b3-f6` on branch `feature/v2-009-b3-personal-pin-gateway`.
+- [x] Confirmed root cause for F-6 multi-organization PIN defect: organization-scoped hashing (`authpw:${orgId}:${pin}`) broke Supabase Auth single-password invariant for multi-org users, and table-wide `UNIQUE (synthetic_email)` prevented a user from having valid credentials in multiple organizations.
+- [x] Applied forward migration `supabase/migrations/20261114173000_v2_009_b3_passcode_credentials_multi_org.sql` locally, dropping table-wide `passcode_credentials_synthetic_email_key` while preserving per-org `(organization_id, profile_id)` and `(organization_id, locator)` unique constraints and adding btree indexes; verified ledger 95 → 96.
+- [x] Implemented canonical person-level password hashing (`createPersonAuthPassword(passcode)`) in `src/lib/passcode-security.ts` using peppered HMAC-SHA256 with domain separation `authpw:person:${passcode}`.
+- [x] Updated credential verification in `src/features/auth/data/passcode-verify.ts` and `src/features/kiosk/actions/kiosk-clock-actions.ts` to check person-level password first, legacy org-derived second, and legacy raw third; automatically migrates legacy and derived accounts to person-level password on successful authentication.
+- [x] Updated `src/app/api/auth/register/route.ts` and `scripts/bootstrap-owner.mjs` to set canonical person-level password on user creation.
+- [x] Corrected stale passcode error message in `src/app/api/auth/passcode/route.ts` from "6–8 digits" to "4-digit".
+- [x] Implemented multi-organization credential synchronization on login in `src/app/api/auth/passcode/route.ts` with 23505 collision safety.
+- [x] Implemented multi-organization locator rotation and compensating reverts in `src/features/auth/data/passcode-rotation.ts` with collision pre-checks and severity reporting (`"recoverable"` vs `"locked_out"`).
+- [x] Enforced authority preservation in `src/app/api/auth/passcode/reset/route.ts`: single-organization managers cannot reset multi-org or Overall role members (denied HTTP 403); requires Overall Owner (`overall_roles.role = 'owner'`). Audits across all affected organizations.
+- [x] Validated with negative controls: pgTAP `0087` 13/13 passed (6/13 failed on ledger 95 prior to migration); existing pgTAP `0084`..`0086` passed (108/108).
+- [x] Real Docker PostgreSQL & GoTrue end-to-end suite `tests/local/v2-009-b3-personal-pin.local.test.ts` 6/6 passed; local authority suites passed (12/12).
+- [x] Full quality gates passed: `npm run check` (Prettier, ESLint 0 warnings/errors, TypeScript clean), `npm run test` (307 files, 4,186 passed), `npx next build --webpack` (clean production build), and `git diff --check` (clean).
+- [x] Recorded local handoff in `docs/v2.0/features/009-final-gate-release/B3_LOCAL_HANDOFF.md`.
+
+## Current State & Next Step
+
+The local database is ledger 96 with zero lingering test data. All B3 implementation code, migrations, tests, and documentation are complete and validated locally. Next exact action: commit the local B3 slice on `feature/v2-009-b3-personal-pin-gateway` and halt for independent security review. No remote push, PR creation, PR merge, or hosted database migration is authorized.

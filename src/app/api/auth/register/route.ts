@@ -13,8 +13,8 @@ import {
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
 import {
-  createAuthPassword,
   createPasscodeLocator,
+  createPersonAuthPassword,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
@@ -85,11 +85,10 @@ export async function POST(request: Request) {
 
   const locator = createPasscodeLocator(organization.id, passcode);
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
-  // New accounts start pre-migrated to the derived-password scheme
-  // (createAuthPassword) rather than the raw passcode -- see that
-  // function's comment. There's no legacy weight to carry for a brand
-  // new account.
-  const authPassword = createAuthPassword(organization.id, passcode);
+  // V2-009 B3: New accounts start with canonical person-level password
+  // (createPersonAuthPassword) rather than organization-derived password,
+  // supporting multi-organization login.
+  const authPassword = createPersonAuthPassword(passcode);
 
   const { data: created, error: createError } =
     await admin.auth.admin.createUser({

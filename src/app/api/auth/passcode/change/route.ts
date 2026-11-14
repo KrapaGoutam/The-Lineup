@@ -200,6 +200,13 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: otherMemberOrgs } = await admin
+    .from("memberships")
+    .select("organization_id")
+    .eq("profile_id", currentUser.profileId)
+    .eq("active", true)
+    .neq("organization_id", currentUser.organizationId);
+
   await admin.from("audit_events").insert({
     organization_id: currentUser.organizationId,
     actor_profile_id: currentUser.profileId,
@@ -207,6 +214,17 @@ export async function POST(request: Request) {
     entity_type: "passcode_credential",
     entity_id: currentUser.profileId,
   });
+
+  if (otherMemberOrgs && otherMemberOrgs.length > 0) {
+    const otherAudits = otherMemberOrgs.map((m) => ({
+      organization_id: m.organization_id,
+      actor_profile_id: currentUser.profileId,
+      action: "passcode_changed",
+      entity_type: "passcode_credential",
+      entity_id: currentUser.profileId,
+    }));
+    await admin.from("audit_events").insert(otherAudits);
+  }
 
   return NextResponse.json({ ok: true });
 }

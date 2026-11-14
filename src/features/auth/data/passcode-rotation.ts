@@ -1,8 +1,8 @@
 import "server-only";
 
 import {
-  createAuthPassword,
   createPasscodeLocator,
+  createPersonAuthPassword,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -31,30 +31,27 @@ export type RotatePasscodeResult =
     };
 
 /**
- * The one place `passcode_credentials.locator` and the corresponding
- * Supabase Auth account's password are ever changed together, for both
- * self-service change and manager-initiated reset -- see
- * docs/features/016-passcode-management.md's "How the HMAC locator and
- * the Supabase Auth password stay in sync" for the full reasoning behind
- * this exact ordering. Every caller must already have decided this
- * profile is allowed to have its passcode changed; this function only
- * performs the change, it does not authorize it.
+ * V2-009 B3: Rotate passcode credentials and update the Supabase Auth password
+ * to the canonical person-level password (createPersonAuthPassword).
+ *
+ * For users with memberships in multiple organizations, this rotates the
+ * locators across all of their credentials atomically (with compensating reverts),
+ * ensuring the person's single 4-digit PIN remains synchronized everywhere.
  */
 export async function rotatePasscodeCredential(
   admin: AdminClient,
   input: {
-    organizationId: string;
+    organizationId?: string;
     profileId: string;
     newPasscode: string;
   },
 ): Promise<RotatePasscodeResult> {
-  const { data: credential, error: readError } = await admin
+  const { data: credentials, error: readError } = await admin
     .from("passcode_credentials")
-    .select("id, locator")
-    .eq("organization_id", input.organizationId)
-    .eq("profile_id", input.profileId)
-    .maybeSingle();
-  if (readError || !credential) {
+    .select("id, organization_id, locator")
+    .eq("profile_id", input.profileId);
+
+  if (readError || !credentials || credentials.length === 0) {
     return {
       ok: false,
       error: "Could not find a passcode credential for that person.",
@@ -62,28 +59,127 @@ export async function rotatePasscodeCredential(
     };
   }
 
-  const oldLocator = credential.locator;
-  const newLocator = createPasscodeLocator(
-    input.organizationId,
-    input.newPasscode,
-  );
+  if (
+    input.organizationId &&
+    !credentials.some((c) => c.organization_id === input.organizationId)
+  ) {
+    return {
+      ok: false,
+      error: "Could not find a passcode credential for that person.",
+      severity: "recoverable",
+    };
+  }
 
-  // Locator first. Nothing externally visible changes yet, so a failure
-  // here -- most commonly the new passcode already being claimed by
-  // someone else in this organization -- needs no rollback at all.
-  const { error: updateLocatorError } = await admin
-    .from("passcode_credentials")
-    .update({ locator: newLocator, updated_at: new Date().toISOString() })
-    .eq("id", credential.id);
+  // Pre-check for locator collisions across all organizations before writing
+  for (const c of credentials) {
+    const candidateLocator = createPasscodeLocator(
+      c.organization_id,
+      input.newPasscode,
+    );
+    const { data: collision } = await admin
+      .from("passcode_credentials")
+      .select("id")
+      .eq("organization_id", c.organization_id)
+      .eq("locator", candidateLocator)
+      .neq("id", c.id)
+      .maybeSingle();
 
-  if (updateLocatorError) {
-    if (updateLocatorError.code === "23505") {
+    if (collision) {
       return {
         ok: false,
         error: "That passcode is already in use — choose a different one.",
         severity: "recoverable",
       };
     }
+  }
+
+  // Update locators for all credentials held by this profile
+  const updatedCredentials: Array<{
+    id: string | number;
+    organizationId: string;
+    oldLocator: string;
+    newLocator: string;
+  }> = [];
+
+  for (const c of credentials) {
+    const newLocator = createPasscodeLocator(
+      c.organization_id,
+      input.newPasscode,
+    );
+    const { error: updateLocatorError } = await admin
+      .from("passcode_credentials")
+      .update({ locator: newLocator, updated_at: new Date().toISOString() })
+      .eq("id", c.id);
+
+    if (updateLocatorError) {
+      // Revert any previously updated credentials in this batch
+      for (const updated of updatedCredentials) {
+        await admin
+          .from("passcode_credentials")
+          .update({
+            locator: updated.oldLocator,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", updated.id);
+      }
+      if (updateLocatorError.code === "23505") {
+        return {
+          ok: false,
+          error: "That passcode is already in use — choose a different one.",
+          severity: "recoverable",
+        };
+      }
+      return {
+        ok: false,
+        error: "Unable to update the passcode right now. Please try again.",
+        severity: "recoverable",
+      };
+    }
+
+    updatedCredentials.push({
+      id: c.id,
+      organizationId: c.organization_id,
+      oldLocator: c.locator,
+      newLocator,
+    });
+  }
+
+  // Update the single Auth user's password using the canonical person-level password
+  const { error: authError } = await admin.auth.admin.updateUserById(
+    input.profileId,
+    { password: createPersonAuthPassword(input.newPasscode) },
+  );
+  if (!authError) {
+    return { ok: true };
+  }
+
+  // Auth update failed -- revert all updated locators back to what they were
+  let allReverted = true;
+  for (const item of updatedCredentials) {
+    let itemReverted = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { error: revertError } = await admin
+        .from("passcode_credentials")
+        .update({
+          locator: item.oldLocator,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.id);
+      if (!revertError) {
+        itemReverted = true;
+        break;
+      }
+      console.error(
+        `rotatePasscodeCredential: revert attempt ${attempt + 1} failed for credential ${item.id}`,
+        revertError,
+      );
+    }
+    if (!itemReverted) {
+      allReverted = false;
+    }
+  }
+
+  if (allReverted) {
     return {
       ok: false,
       error: "Unable to update the passcode right now. Please try again.",
@@ -91,55 +187,11 @@ export async function rotatePasscodeCredential(
     };
   }
 
-  // Sent as the derived password (createAuthPassword), never the raw
-  // passcode -- see that function's comment for why: a raw 4-digit value
-  // is flatly rejected by updateUserById's password-strength check
-  // (confirmed against the hosted project), and reusing the locator here
-  // instead would make a leaked locator also a working Auth password.
-  const { error: authError } = await admin.auth.admin.updateUserById(
-    input.profileId,
-    { password: createAuthPassword(input.organizationId, input.newPasscode) },
-  );
-  if (!authError) {
-    return { ok: true };
-  }
-
-  // The Auth password update failed after the locator already changed --
-  // revert the locator back to what it was. Retried once: this is the one
-  // step whose failure leaves the row and the Auth account disagreeing
-  // about the passcode, so it's worth one extra attempt before accepting
-  // the worst case.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { error: revertError } = await admin
-      .from("passcode_credentials")
-      .update({ locator: oldLocator, updated_at: new Date().toISOString() })
-      .eq("id", credential.id);
-    if (!revertError) {
-      return {
-        ok: false,
-        error: "Unable to update the passcode right now. Please try again.",
-        severity: "recoverable",
-      };
-    }
-    console.error(
-      `rotatePasscodeCredential: revert attempt ${attempt + 1} failed`,
-      revertError,
-    );
-  }
-
-  // Both the Auth update and its compensating revert failed. The row now
-  // points at newLocator; the Auth account's password is still the old
-  // passcode. Neither the old passcode (locator lookup fails -- the row
-  // no longer has it) nor the new passcode (Auth's password was never
-  // actually changed) will sign this person in. There is no UI-safe way
-  // to auto-recover from this -- logged loudly since it needs a human to
-  // notice and reset the passcode again once whatever is failing clears.
   console.error(
-    "rotatePasscodeCredential: UNRECOVERED -- locator changed to a new value but the Auth password update and its compensating revert both failed. This profile cannot sign in with either passcode until it is reset again.",
+    "rotatePasscodeCredential: UNRECOVERED -- locator(s) changed to a new value but the Auth password update and compensating revert(s) failed. This profile cannot sign in with either passcode until it is reset again.",
     {
-      organizationId: input.organizationId,
       profileId: input.profileId,
-      credentialId: credential.id,
+      credentials: updatedCredentials.map((u) => u.id),
       authError,
     },
   );
