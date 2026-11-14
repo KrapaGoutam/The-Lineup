@@ -1,10 +1,15 @@
 # Feature V2-009: Final Security & Release Gate — Status
 
 ```text
-Status: NOT STARTED
+Status: IN PROGRESS — B1/B2/B3 MERGED; B4 INTEGRATED GATE ASSESSED (2026-11-14)
+        Gate A (source security): PASS · Gate B (Hosted DEV): CONDITIONAL, hosted preflight pending
+        Gate C (Production): BLOCKED (GitHub governance, D-1 preflight, physical tablet)
+        Gate D (release authorization): NOT GRANTED
 GitHub Issue: #257
 Target Branch: development
 ```
+
+> **Current authority:** [B4_GATE_EVIDENCE.md](B4_GATE_EVIDENCE.md) (assessed at `development` `88f2d5f`; B1 #327, B2 #328, B3 #329 merged). It supersedes the earlier `NOT STARTED` banner and the "BLOCKED"/"CONDITIONAL" wording in the B1/B2/B3 handoffs, which are kept unchanged as history. No owner approval, Hosted DEV contact, Production access or release action is implied by it.
 
 ## Release dependencies recorded by V2-008 (2026-11-13)
 
