@@ -62,7 +62,16 @@ Features may import from `components`, `lib`, and `types`. A feature does not re
 
 ### Passcode sign-in
 
-The route slug identifies the restaurant. The server derives an HMAC locator from the organization ID and numeric passcode, looks up an active credential with the admin client, and then asks Supabase Auth to verify the same passcode against an internal synthetic email. The browser never receives that email, the secret key, or the locator. A request fingerprint limits repeated failures.
+V2-009 B5 makes `/` the universal entry. A domain-separated global HMAC locator
+finds one canonical profile; Auth verifies B3's profile-bound password and exact
+session identity. V2-003 resolves eligible contexts afterward. Fresh document
+navigation replaces the refresh/profile hydration handshake. Restaurant links
+retain legacy verification and secure enrollment, with no new membership grants.
+Global ownership and unsettled operations are service-only, database-serialized
+state. Kiosk verification remains independent and no longer opportunistically
+writes personal Auth passwords during clock-in. See the
+[B5 contract](features/v2-009-b5-universal-pin-login.md) and
+[security/recovery handoff](v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md).
 
 ### Live seating transaction
 

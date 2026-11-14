@@ -34,9 +34,8 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { requestSignOut } from "@/lib/client-sign-out";
 import { ContextScopeBoundary } from "@/features/context/components/context-scope-boundary";
 import { ContextReconcileGate } from "@/features/context/components/context-reconcile-gate";
-import { publishContextEvent } from "@/features/context/components/context-sync-channel";
 import { ContextSyncGuard } from "@/features/context/components/context-sync-guard";
-import { clearPriorWorkspaceUrl } from "@/features/context/components/prior-session";
+import { completePinLogin } from "@/lib/pin-login-navigation";
 import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import type { ContextReconcileTarget } from "@/features/context/components/context-reconcile-gate";
 import { ContextSwitcher } from "@/features/context/components/context-switcher";
@@ -704,12 +703,6 @@ function RestaurantOperationsAppInner({
       }),
     [moduleNavigation, workspaceExpectation, user, demoMode],
   );
-  // Real mode: a successful passcode sign-in is only *pending* until the
-  // Server Component re-renders with the authenticated person's real data.
-  const [pendingAccount, setPendingAccount] = useState<SignedInUser | null>(
-    null,
-  );
-  const [signInStalled, setSignInStalled] = useState(false);
   // Tasks V1.1 / D-1: Tasks is the default landing; an explicit module rides
   // in `?tab=`. The URL is mirrored (not owned) by this state so a tab click
   // is instant, while reload and back/forward still land on the right module.
@@ -954,54 +947,15 @@ function RestaurantOperationsAppInner({
     return { ok: true, account };
   }
 
-  // Production stability hotfix (login stale render): the passcode API
-  // route commits the auth session (Set-Cookie) before this ever runs --
-  // ordering is already correct. What was missing was a re-fetch of the
-  // Server Component data this component was seeded with: `setUser`
-  // alone only flips *local* client state, so every `initial*Context`
-  // prop (schedule/tips/allocation) -- each captured once via a lazy
-  // useState initializer at first (pre-login, unauthenticated) mount --
-  // stayed frozen at its pre-login snapshot (null/empty) until something
-  // else forced a fresh server round-trip, e.g. a manual reload, or any
-  // later board action's own revalidatePath. `router.refresh()` is the
-  // same mechanism this file's own realtime subscription already uses
-  // (allocation-workspace.tsx) to pick up fresh server data without
-  // losing client-side state -- applying it once, right after sign-in,
-  // makes the destination page load with the just-authenticated
-  // session's real data on the very first render, no reload needed. Not
-  // needed in demo mode, which has no server-fetched context to refresh.
+  // Real authentication starts a fresh server request after cookies settle.
+  // The server can render a workspace, picker, denial or recoverable error.
   function handleSignIn(account: SignedInUser) {
     if (demoMode) {
       setUser(account);
       return;
     }
-    // Real mode: do NOT render the workspace from the pre-login snapshot.
-    // Hold on a short "signing you in" state until the server hands back
-    // the authenticated data (see RestaurantOperationsApp's keyed remount).
-    setSignInStalled(false);
-    setPendingAccount(account);
-    // V2-003.005: a session that ended underneath this tab can leave the
-    // previous employee's `?location=` in the address bar; do not let this
-    // sign-in read it as a deliberate deep link.
-    clearPriorWorkspaceUrl(pathname);
-    // V2-003.005: another employee (or the same one) just signed in on this
-    // browser; tabs showing a previous session re-verify against the server.
-    publishContextEvent("session_changed");
-    router.refresh();
+    completePinLogin("/");
   }
-
-  useEffect(() => {
-    if (!pendingAccount) return;
-    if (initialUser?.profileId === pendingAccount.profileId) {
-      // Fresh server data for this exact person has arrived. If the
-      // identity key already changed we were remounted and never get here;
-      // this covers re-signing in as the same person.
-      onAuthBoundary();
-      return;
-    }
-    const timer = window.setTimeout(() => setSignInStalled(true), 10_000);
-    return () => window.clearTimeout(timer);
-  }, [pendingAccount, initialUser, onAuthBoundary]);
 
   // Tasks V1.1 / T-1: back/forward re-select the module straight from the real
   // location. `useSearchParams` commits lazily after a pushState, so a fast
@@ -1055,32 +1009,6 @@ function RestaurantOperationsAppInner({
     workspaceExpectation,
     demoMode,
   ]);
-
-  if (!user && pendingAccount) {
-    return (
-      <main className="mx-auto flex min-h-dvh max-w-md items-center px-4">
-        <Card className="w-full">
-          <CardContent
-            className="space-y-3 py-8 text-center"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="text-lg font-semibold">
-              Signing in as {pendingAccount.name}…
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {signInStalled
-                ? "This is taking longer than expected."
-                : "Loading your restaurant."}
-            </p>
-            {signInStalled ? (
-              <Button onClick={() => window.location.reload()}>Reload</Button>
-            ) : null}
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
 
   if (!user) {
     return (

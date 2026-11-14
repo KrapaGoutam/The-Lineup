@@ -22,10 +22,7 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
-import {
-  migrateLegacyAuthPassword,
-  verifyPasscode,
-} from "@/features/auth/data/passcode-verify";
+import { verifyPasscode } from "@/features/auth/data/passcode-verify";
 import {
   getActiveAttendanceSession,
   nativeBreakEnd,
@@ -398,16 +395,9 @@ export async function kioskAuthenticatePinAction(input: {
       };
     }
 
-    if (
-      verification.verifiedVia === "legacy" ||
-      verification.verifiedVia === "derived"
-    ) {
-      await migrateLegacyAuthPassword(admin, {
-        profileId: credential.profile_id,
-        organizationId: device.organizationId,
-        passcode: pin,
-      });
-    }
+    // Personal enrollment/reset owns Auth password mutations under B5's durable
+    // lock. Kiosk still verifies all supported schemes, but never races that
+    // lifecycle by opportunistically overwriting the person's password.
 
     // Get an authenticated access token in-memory for this employee
     const signInData = verification.session

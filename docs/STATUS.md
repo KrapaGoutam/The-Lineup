@@ -1,5 +1,14 @@
 # Project Status & Milestone Tracker
 
+2026-11-14 V2-009 B5: local universal PIN implementation on isolated
+`feature/v2-009-b5-universal-pin-login`, based on B4 merge `5e142e8`. One forward
+global-ownership migration is applied locally only (96 → 97); hosted migration,
+credential alteration and deployment remain prohibited. Source validation and
+delivery are tracked in `tasks/current-task.md`. Production remains NO-GO pending
+narrow independent review, approved legacy enrollment, DEV recovery/migration
+gates, distributed-abuse controls and privileged-account step-up. See
+[B5 handoff](v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md).
+
 2026-11-13 V2-008 FINAL DEV closeout: **DEV compatibility ACCEPTED; Production release NOT approved.** Owner decisions A1/B1/C1/D1/E1 recorded with two explicit amendments (.004 Manual Preview stays unconfigured, Monks' 9 module rows preserved; .005 `attendance_mode` NULL accepted). Migration 92 SHELVED and excluded. PR #325 is merged (`207d088d`); older entries calling it open are superseded. Documentation only; no database contact. Production/V2-009 gates remain. See [the acceptance record](v2.0/features/008-migration-compatibility/DEV_ACCEPTANCE_RECORD.md).
 
 2026-11-13 V2-008 final DEV closeout review: **CONDITIONALLY READY — owner acceptance required** (D-5/5b Manual Preview unconfigured, D-6 Attendance `NULL`, DEV-scope boundary). Docs only; migration 92 SHELVED, not for deployment or merge; #256 untouched; no Hosted DEV contact. See [the closeout review](v2.0/features/008-migration-compatibility/CLOSEOUT_REVIEW.md).

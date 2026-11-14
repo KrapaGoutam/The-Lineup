@@ -272,3 +272,36 @@ The new worktree remains local. No push, PR, merge, hosted migration, deployment
 ## Current State & Next Step
 
 The local database is ledger 96 with zero lingering test data. All B3 implementation code, migrations, tests, and documentation are complete and validated locally. Next exact action: commit the local B3 slice on `feature/v2-009-b3-personal-pin-gateway` and halt for independent security review. No remote push, PR creation, PR merge, or hosted database migration is authorized.
+
+# V2-009 B5 ? Universal PIN login ? SOURCE VALIDATED
+
+- [x] Read approved owner handoff, source contracts and security/UI guidance.
+- [x] Fetch and verify B4 development/main; create isolated B5 worktree.
+- [x] Verify local ledger 96; record bounded implementation decisions.
+- [x] Implement database-owned global claims, durable lifecycle, quotas and provisioning paths.
+- [x] Implement PIN-only root, legacy enrollment and fresh server navigation; remove pending-profile UI.
+- [x] Verify focused local Auth/Postgres, grants/RLS, browser and required static/build gates.
+- [x] Review changed security/accessibility/tenant surfaces; update local types and recovery handoff.
+- [x] Prepare one reviewable B5 commit and unmerged PR delivery into development.
+
+Validation: npm run check PASS; full Vitest 310 files / 4,210 passed / seven existing
+skips. One additional uncertain-reservation regression was added afterward; final
+changed Auth boundaries 25/25 and binding/lifecycle 16/16 PASS. Local Auth/Postgres
+9/9; pgTAP 22/22; desktop/mobile real local login ? picker ? persisted workspace
+2/2. Final migration replays in a rolled-back local transaction; ledger 97 and
+zero B5 Auth fixtures remain. Production webpack build PASS (shared node_modules
+junction requires webpack, as in B2/B3). Empty-env enrollment prerender was fixed;
+final targeted format/lint and build typecheck pass. Existing Neon absence is
+handled by the app during browser checks; no external operational data was read.
+
+Delivery contract: commit and push only feature/v2-009-b5-universal-pin-login,
+create one PR into development, allow its normal CI, never merge or dispatch CI.
+Exact final commit/PR/check status belongs to GitHub metadata and the final report.
+No hosted operation, credential alteration, migration or deployment was performed.
+Hosted ledger 91 is the supplied baseline, not re-attested live in this session.
+Main baseline remains 5e5b7747693b6e81014eafdf299b87e56c3f033d.
+
+Next owner gates: independent B5 security review, enrollment approval, DEV recovery
+and migration rehearsal/authorization, manual existing-QA login acceptance, then
+Production governance with distributed-abuse controls and Overall Owner step-up.
+See docs/v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md.

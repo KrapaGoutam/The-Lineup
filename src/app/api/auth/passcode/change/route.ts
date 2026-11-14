@@ -9,7 +9,10 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
-import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
+import {
+  rotateGlobalPersonalPin,
+  reservePinAttempt,
+} from "@/features/auth/data/global-pin";
 import { verifyPasscode } from "@/features/auth/data/passcode-verify";
 import { getCurrentUser } from "@/lib/current-user";
 import { createRequestFingerprint } from "@/lib/passcode-security";
@@ -78,6 +81,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const reservation = await reservePinAttempt(admin, request, "enroll");
+  if (reservation.response) return reservation.response;
   const fingerprint = clientFingerprint(request);
 
   const fingerprintWindowStart = new Date(
@@ -197,7 +202,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await rotatePasscodeCredential(admin, {
+  const result = await rotateGlobalPersonalPin(admin, {
     organizationId: currentUser.organizationId,
     profileId: currentUser.profileId,
     newPasscode,

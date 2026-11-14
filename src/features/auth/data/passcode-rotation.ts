@@ -229,7 +229,7 @@ export async function rotatePasscodeCredential(
         (probeError.message
           ?.toLowerCase()
           .includes("invalid login credentials") ||
-          probeError.status === 400)
+          probeError.code === "invalid_credentials")
       ) {
         authPasswordConfirmedNotApplied = true;
       }

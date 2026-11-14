@@ -19,6 +19,13 @@ export function createPasscodeLocator(
     .digest("hex");
 }
 
+/** Universal namespace; deliberately distinct from lookup and Auth domains. */
+export function createGlobalPasscodeLocator(passcode: string) {
+  return createHmac("sha256", getPepper())
+    .update(`global-pin:v1:${passcode}`)
+    .digest("hex");
+}
+
 /**
  * Feature 016 (revised): the string actually sent to Supabase Auth as a
  * person's password, in place of the raw 4-digit passcode. Two things

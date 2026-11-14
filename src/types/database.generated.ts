@@ -1342,6 +1342,30 @@ export type Database = {
           },
         ];
       };
+      global_pin_attempts: {
+        Row: {
+          attempted_at: string;
+          fingerprint: string;
+          id: string;
+          purpose: string;
+          succeeded: boolean;
+        };
+        Insert: {
+          attempted_at?: string;
+          fingerprint: string;
+          id?: string;
+          purpose: string;
+          succeeded?: boolean;
+        };
+        Update: {
+          attempted_at?: string;
+          fingerprint?: string;
+          id?: string;
+          purpose?: string;
+          succeeded?: boolean;
+        };
+        Relationships: [];
+      };
       inventory_adjustments: {
         Row: {
           actor_profile_id: string;
@@ -4081,6 +4105,106 @@ export type Database = {
           },
         ];
       };
+      personal_pin_accounts: {
+        Row: {
+          locator: string | null;
+          operation_id: string | null;
+          pending_locator: string | null;
+          profile_id: string;
+          synthetic_email: string;
+          updated_at: string;
+        };
+        Insert: {
+          locator?: string | null;
+          operation_id?: string | null;
+          pending_locator?: string | null;
+          profile_id: string;
+          synthetic_email: string;
+          updated_at?: string;
+        };
+        Update: {
+          locator?: string | null;
+          operation_id?: string | null;
+          pending_locator?: string | null;
+          profile_id?: string;
+          synthetic_email?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "personal_pin_accounts_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      personal_pin_claims: {
+        Row: {
+          locator: string;
+          profile_id: string;
+        };
+        Insert: {
+          locator: string;
+          profile_id: string;
+        };
+        Update: {
+          locator?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "personal_pin_claims_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "personal_pin_accounts";
+            referencedColumns: ["profile_id"];
+          },
+        ];
+      };
+      personal_pin_events: {
+        Row: {
+          actor_profile_id: string;
+          id: number;
+          occurred_at: string;
+          operation_id: string;
+          outcome: string;
+          profile_id: string;
+        };
+        Insert: {
+          actor_profile_id: string;
+          id?: never;
+          occurred_at?: string;
+          operation_id: string;
+          outcome: string;
+          profile_id: string;
+        };
+        Update: {
+          actor_profile_id?: string;
+          id?: never;
+          occurred_at?: string;
+          operation_id?: string;
+          outcome?: string;
+          profile_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "personal_pin_events_actor_profile_id_fkey";
+            columns: ["actor_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "personal_pin_events_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -6293,6 +6417,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      begin_personal_pin_change: {
+        Args: {
+          p_actor_profile_id: string;
+          p_synthetic_email: string;
+          p_locator: string;
+          p_profile_id: string;
+        };
+        Returns: string;
+      };
       board_add_column: {
         Args: {
           p_location_id: string;
@@ -6471,6 +6604,14 @@ export type Database = {
       };
       checklist_template_set_active: {
         Args: { p_active: boolean; p_template_id: string };
+        Returns: undefined;
+      };
+      finish_personal_pin_change: {
+        Args: {
+          p_apply: boolean;
+          p_operation_id: string;
+          p_profile_id: string;
+        };
         Returns: undefined;
       };
       get_location_lifecycle_readiness: {
@@ -7024,6 +7165,10 @@ export type Database = {
       recipes_org_authorized: {
         Args: { p_organization_id: string };
         Returns: boolean;
+      };
+      reserve_global_pin_attempt: {
+        Args: { p_fingerprint: string; p_purpose: string };
+        Returns: string;
       };
       schedule_location_authorized: {
         Args: { p_location_id: string; p_organization_id: string };

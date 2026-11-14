@@ -197,6 +197,27 @@ async function run() {
     fail(`Could not create the profile: ${profileError.message}`);
   }
 
+  const globalLocator = createHmac("sha256", pepper)
+    .update(`global-pin:v1:${passcode}`)
+    .digest("hex");
+  const { data: pinOperation, error: pinClaimError } = await admin.rpc(
+    "begin_personal_pin_change",
+    {
+      p_profile_id: userId,
+      p_locator: globalLocator,
+      p_actor_profile_id: userId,
+      p_synthetic_email: syntheticEmail,
+    },
+  );
+  if (pinClaimError || !pinOperation) {
+    await rollbackUser();
+    fail(
+      pinClaimError?.code === "23505"
+        ? "That PIN is already in use. Please choose a different PIN."
+        : "Global PIN ownership could not be reserved.",
+    );
+  }
+
   const { data: org, error: orgError } = await admin
     .from("organizations")
     .insert({ name: orgName, slug, created_by: userId })
@@ -255,6 +276,19 @@ async function run() {
       `Could not create the passcode credential: ${credentialError.message}`,
     );
   }
+
+  const { error: finalizeError } = await admin.rpc(
+    "finish_personal_pin_change",
+    {
+      p_profile_id: userId,
+      p_operation_id: pinOperation,
+      p_apply: true,
+    },
+  );
+  if (finalizeError)
+    fail(
+      "PIN provisioning remains blocked; administrator reconciliation required.",
+    );
 
   // The passcode goes to a local, gitignored file instead of stdout --
   // whoever runs this script may not be the same person reading its

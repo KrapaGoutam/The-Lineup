@@ -106,7 +106,7 @@ describe("single-context auto resolution (V2-003.003)", () => {
 
   it("AUTO-01/13/20: a unique eligible pair resolves with no picker and one verified location for every loader", async () => {
     useUser(IDS.jerry);
-    const data = await loadPageData("the-monks", undefined, GLOBAL);
+    const data = await loadPageData("the-monks");
     expect(data.contextStatus).toBe("resolved");
     expect(data.redirectTo).toBeNull();
     expect(data.activeContext).toMatchObject({
@@ -136,10 +136,11 @@ describe("single-context auto resolution (V2-003.003)", () => {
     noLoad();
   });
 
-  it("AUTO-03: several organizations never default to a tenant; `/` stays in the default scope with no redirect", async () => {
+  it("B5: root considers all organizations and never defaults to the configured tenant", async () => {
     useUser(IDS.jack);
     const route = await loadPageData("the-monks", undefined, GLOBAL);
-    expect(route.contextStatus).toBe("resolved"); // explicit default tenant, unique Monks location
+    expect(route.contextStatus).toBe("selection_required");
+    noLoad();
     expect(route.redirectTo).toBeNull();
     // A user with several orgs and NO access in the default tenant is not redirected.
     db.memberships = db.memberships.filter(
@@ -272,8 +273,10 @@ describe("single-context auto resolution (V2-003.003)", () => {
     addAssignment(db, IDS.jack, IDS.locLeagueCity, "staff");
     useUser(IDS.jack);
     const data = await loadPageData("the-monks", undefined, GLOBAL);
-    expect(data.contextStatus).toBe("no_access");
+    expect(data.contextStatus).toBe("selection_required");
+    expect(data.availableContexts).toHaveLength(2);
     expect(data.redirectTo).toBeNull();
+    noLoad();
   });
 
   it("AUTO-15: a signed-out request has no workspace and is never redirected", async () => {
