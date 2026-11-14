@@ -123,13 +123,12 @@ async function run() {
       .digest("hex");
   }
 
-  // Mirrors src/lib/passcode-security.ts's createAuthPassword exactly
-  // (Feature 016, revised) -- the owner's Auth account is created
-  // pre-migrated to the derived-password scheme like every other new
-  // account now is, not with the raw passcode as its Auth password.
-  function createAuthPassword(organizationId, code) {
+  // Mirrors src/lib/passcode-security.ts's createPersonAuthPassword exactly
+  // (V2-009 B3 / F-5) -- the owner's Auth account is created with the person-level
+  // password scheme bound to profile ID like every other account.
+  function createPersonAuthPassword(profileId, code) {
     return createHmac("sha256", pepper)
-      .update(`authpw:${organizationId}:${code}`)
+      .update(`authpw:person:${profileId}:${code}`)
       .digest("hex");
   }
 
@@ -210,7 +209,7 @@ async function run() {
 
   const { error: authPasswordError } = await admin.auth.admin.updateUserById(
     userId,
-    { password: createAuthPassword(org.id, passcode) },
+    { password: createPersonAuthPassword(userId, passcode) },
   );
   if (authPasswordError) {
     await rollbackUser();

@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const passcode = body.passcode?.trim() ?? "";
   if (!slug || !isValidPasscode(passcode)) {
     return NextResponse.json(
-      { error: "Enter a valid 6–8 digit passcode." },
+      { error: "Enter a valid 4-digit passcode." },
       { status: 400 },
     );
   }
@@ -167,26 +167,95 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const verification = await verifyPasscode(supabase, {
+    profileId: credential.profile_id,
     syntheticEmail: credential.synthetic_email,
     organizationId: organization.id,
     passcode,
   });
-  if (!verification.ok) {
+  if (
+    !verification.ok ||
+    (verification.session?.user?.id &&
+      verification.session.user.id !== credential.profile_id)
+  ) {
+    if (verification.session) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     return NextResponse.json(
       { error: "Passcode not recognized." },
       { status: 401 },
     );
   }
-  // The only caller that opportunistically migrates a legacy account:
-  // the passcode isn't changing here, so this sign-in is the only chance
-  // to upgrade it before the next one. Awaited, but never allowed to
-  // turn this successful sign-in into a failure (see its own doc comment).
-  if (verification.verifiedVia === "legacy") {
+  // Opportunistically migrate legacy (raw passcode) or pre-B3 (organization-derived)
+  // accounts to the canonical person-level password scheme.
+  if (
+    verification.verifiedVia === "legacy" ||
+    verification.verifiedVia === "derived"
+  ) {
     await migrateLegacyAuthPassword(admin, {
       profileId: credential.profile_id,
       organizationId: organization.id,
       passcode,
     });
+  }
+
+  // V2-009 B3: Multi-organization credential synchronization.
+  // If this authenticated person holds active memberships in other organizations
+  // where no passcode_credentials row exists yet, sync a credential row using
+  // their personal passcode and existing synthetic_email. If that passcode collides
+  // in another organization (23505), skip that organization safely: the user can
+  // still access it via the post-login gateway / switcher.
+  try {
+    const { data: otherMemberships } = await admin
+      .from("memberships")
+      .select("organization_id")
+      .eq("profile_id", credential.profile_id)
+      .eq("active", true)
+      .neq("organization_id", organization.id);
+
+    if (otherMemberships && otherMemberships.length > 0) {
+      const otherOrgIds = otherMemberships.map((m) => m.organization_id);
+      const { data: existingCreds } = await admin
+        .from("passcode_credentials")
+        .select("organization_id")
+        .eq("profile_id", credential.profile_id)
+        .in("organization_id", otherOrgIds);
+
+      const existingOrgSet = new Set(
+        existingCreds?.map((c) => c.organization_id) ?? [],
+      );
+
+      for (const orgId of otherOrgIds) {
+        if (!existingOrgSet.has(orgId)) {
+          const otherLocator = createPasscodeLocator(orgId, passcode);
+          const { error: syncError } = await admin
+            .from("passcode_credentials")
+            .insert({
+              organization_id: orgId,
+              profile_id: credential.profile_id,
+              synthetic_email: credential.synthetic_email,
+              locator: otherLocator,
+              active: true,
+            });
+          if (syncError) {
+            console.warn(
+              "multi-org sync: skipped credential creation for organization",
+              {
+                organizationId: orgId,
+                profileId: credential.profile_id,
+                code: syncError.code,
+                message: syncError.message,
+              },
+            );
+          }
+        }
+      }
+    }
+  } catch (syncErr) {
+    // Never turn a successful sign-in into a failure.
+    console.error(
+      "multi-org sync: unexpected error during synchronization",
+      syncErr,
+    );
   }
 
   const [{ data: profile }, { data: membership }] = await Promise.all([

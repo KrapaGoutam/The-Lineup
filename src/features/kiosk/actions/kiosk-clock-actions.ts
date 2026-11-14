@@ -383,6 +383,7 @@ export async function kioskAuthenticatePinAction(input: {
     });
 
     const verification = await verifyPasscode(isolatedAuthClient, {
+      profileId: credential.profile_id,
       syntheticEmail: credential.synthetic_email,
       organizationId: device.organizationId,
       passcode: pin,
@@ -397,7 +398,10 @@ export async function kioskAuthenticatePinAction(input: {
       };
     }
 
-    if (verification.verifiedVia === "legacy") {
+    if (
+      verification.verifiedVia === "legacy" ||
+      verification.verifiedVia === "derived"
+    ) {
       await migrateLegacyAuthPassword(admin, {
         profileId: credential.profile_id,
         organizationId: device.organizationId,
@@ -406,23 +410,43 @@ export async function kioskAuthenticatePinAction(input: {
     }
 
     // Get an authenticated access token in-memory for this employee
-    const { data: signInData, error: signInError } =
-      await isolatedAuthClient.auth.signInWithPassword({
-        email: credential.synthetic_email,
-        password:
-          verification.verifiedVia === "legacy"
-            ? pin
-            : (await import("@/lib/passcode-security")).createAuthPassword(
-                device.organizationId,
-                pin,
-              ),
-      });
+    const signInData = verification.session
+      ? { session: verification.session }
+      : (
+          await isolatedAuthClient.auth.signInWithPassword({
+            email: credential.synthetic_email,
+            password:
+              verification.verifiedVia === "legacy"
+                ? pin
+                : verification.verifiedVia === "derived"
+                  ? (
+                      await import("@/lib/passcode-security")
+                    ).createAuthPassword(device.organizationId, pin)
+                  : (
+                      await import("@/lib/passcode-security")
+                    ).createPersonAuthPassword(credential.profile_id, pin),
+          })
+        ).data;
 
-    if (signInError || !signInData.session) {
+    if (!signInData?.session) {
       await recordFailureAttempt();
       return {
         ok: false,
         error: "Failed to establish employee session.",
+        code: "auth_failed",
+      };
+    }
+
+    const authenticatedUserId =
+      signInData.session.user?.id ?? verification.user?.id;
+    if (!authenticatedUserId || authenticatedUserId !== credential.profile_id) {
+      if (typeof isolatedAuthClient.auth?.signOut === "function") {
+        await isolatedAuthClient.auth.signOut().catch(() => {});
+      }
+      await recordFailureAttempt();
+      return {
+        ok: false,
+        error: "Authentication identity mismatch.",
         code: "auth_failed",
       };
     }

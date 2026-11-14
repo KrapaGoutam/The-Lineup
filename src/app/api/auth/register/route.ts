@@ -13,8 +13,8 @@ import {
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
 import {
-  createAuthPassword,
   createPasscodeLocator,
+  createPersonAuthPassword,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
@@ -85,16 +85,13 @@ export async function POST(request: Request) {
 
   const locator = createPasscodeLocator(organization.id, passcode);
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
-  // New accounts start pre-migrated to the derived-password scheme
-  // (createAuthPassword) rather than the raw passcode -- see that
-  // function's comment. There's no legacy weight to carry for a brand
-  // new account.
-  const authPassword = createAuthPassword(organization.id, passcode);
-
+  // V2-009 B3 / F-5: New accounts start with canonical person-level password
+  // (createPersonAuthPassword(userId, passcode)) bound to profile ID.
+  const tempPassword = randomUUID();
   const { data: created, error: createError } =
     await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password: authPassword,
+      password: tempPassword,
       email_confirm: true,
     });
   if (createError || !created.user) {
@@ -102,6 +99,16 @@ export async function POST(request: Request) {
   }
   const userId = created.user.id;
   const rollback = () => admin.auth.admin.deleteUser(userId);
+
+  const authPassword = createPersonAuthPassword(userId, passcode);
+  const { error: setPassError } = await admin.auth.admin.updateUserById(
+    userId,
+    { password: authPassword },
+  );
+  if (setPassError) {
+    await rollback();
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
+  }
 
   const { error: profileError } = await admin
     .from("profiles")
