@@ -187,3 +187,22 @@ F-5 is locally green and committed. The draft PR description is in `docs/v2.0/fe
 ## Current State & Next Step
 
 The corrected local database is ledger 93. The corrective commit is complete; this documentation handoff is the final local follow-up commit. A focused independent review follows; any remote delivery or Hosted DEV application requires separate owner authorization.
+
+# V2-009 B2 local implementation — HALTED AT V9-X1 CONTRACT GATE (2026-11-14)
+
+- [x] Reconfirmed remote `development` at `6570a1994b566a2f33ec7647f63ffe7c180801e0` and created isolated local branch `fix/v2-009-b2-rls-anon-hardening` in `.tmp/v2-009-b2-security`.
+- [x] Recovered B2 investigation evidence: `private.can_operate_board` authorizes an Overall Assistant Manager at an active target location, while the current direct `public.floor_templates` SELECT policy returns no row for the same membership-free actor.
+- [x] Owner resolved the V9-X1 stop condition with a narrowly scoped Overall direct-table SELECT policy following canonical board access. The historical halt below is retained as a checkpoint.
+- [x] After that decision, added regression-first tests and two forward-only migrations, implemented F-1/F-2, and validated locally. See the resumed checklist below for final commits.
+
+The new worktree remains local. No push, PR, merge, hosted migration, deployment, credential change, or `main` modification was performed. The F-5 history below is retained as a prior checkpoint.
+
+## V2-009 B2 resumed under the owner V9-X1 amendment
+
+- [x] Reverified the isolated branch at `6570a1994b566a2f33ec7647f63ffe7c180801e0` and the project-owned local ledger at 93/latest `20261114054945`.
+- [x] Owner approved narrowly scoped Overall direct-table SELECT alignment through the canonical target-location helper; the earlier V9-X1 halt is resolved.
+- [x] Added focused F-1 and F-2 tests and recorded old-schema failures: F-1 13/21 fail as expected; F-2 32/56 fail as expected before correcting two fixture count expectations.
+- [x] Generated and applied F-1 forward migration `20261114162527`; effective-grant and compatibility pgTAP passed. Owner approved leaving platform-owned `supabase_admin` default ACLs for a separate owner-authorized operation; read-only detector added. F-1 is not fully hardened.
+- [x] Generated and applied F-2 forward migration `20261114162724`; new RLS pgTAP 56/56 passed, with no Overall direct-write expansion.
+- [x] Local Auth/PostgREST JWT checks 5/5 new plus 45/45 existing; focused existing pgTAP 433/433; `npm run check` and webpack build passed. Default Turbopack build failed on the known external `node_modules` worktree junction. Local ledger 95, synthetic user/org residue zero, and `git diff --check` passed.
+- [x] Completed changed-file security review and clean diff check. Committed F-1 as `45534f4` and F-2 as `dc990aa`; recorded both in `B2_LOCAL_HANDOFF.md`. This local handoff is the final documentation commit; stop before remote delivery for independent security review.
