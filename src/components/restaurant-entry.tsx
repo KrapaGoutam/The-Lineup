@@ -51,7 +51,11 @@ export async function RestaurantEntry({
   return (
     <RestaurantOperationsApp
       demoMode={data.demoMode}
-      restaurantSlug={restaurantSlug}
+      restaurantSlug={
+        data.demoMode && globalEntry
+          ? (process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "the-monks")
+          : restaurantSlug
+      }
       initialUser={data.initialUser}
       moduleNavigation={data.moduleNavigation}
       initialScheduleContext={data.scheduleContext}

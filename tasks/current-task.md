@@ -305,3 +305,20 @@ Next owner gates: independent B5 security review, enrollment approval, DEV recov
 and migration rehearsal/authorization, manual existing-QA login acceptance, then
 Production governance with distributed-abuse controls and Overall Owner step-up.
 See docs/v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md.
+
+## B5 PR #331 browser regression correction - validated
+
+- [x] Confirm clean existing branch at ec382cf42b397181a3d7b5695a6808febed640e9; read existing CI job 132599214341/run 43644527746.
+- [x] Trace empty root slug through RestaurantEntry into demo inventory export context and payroll statement restaurant slug. No inventory/payroll business-rule defect.
+- [x] Restore configured demo root slug (fallback the-monks) using loadPageData's existing demoMode result. Real root remains empty/universal; scoped links unchanged.
+- [x] Exact four failed desktop browser scenarios pass (4/4), including combined monthly statement and all three CSV exports; assertions unchanged.
+- [x] Entry component tests pass (24/24), including configured demo, fallback, real universal root and scoped deep links. Targeted Prettier/ESLint and npm run typecheck pass; git diff --check clean.
+- [x] Prepare one scoped correction commit/update to existing PR #331; delivery SHA and normal CI status are reported in GitHub metadata and final response.
+
+Only restaurant-entry.tsx, its test and this checklist changed. Prior B5 unit,
+Auth/Postgres, migration and browser evidence is reused; no broad suite/build or
+security campaign repeated. Existing security handoff remains accurate: this
+correction affects only demo presentation context, not authentication/authorization.
+No database access, migrations, credential changes, manual deployments, Production
+or main changes. PR #331 remains unmerged; next gate is independent focused B5
+security review followed by owner approval for any development merge.
