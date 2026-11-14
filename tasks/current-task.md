@@ -171,3 +171,19 @@ Next exact action (earlier B1 text): owner reviews the B1 migration decision in 
 ## Current State & Next Step
 
 F-5 is locally green and committed. The draft PR description is in `docs/v2.0/features/009-final-gate-release/HANDOFF.md`. Independent implementation review and owner approval are needed before pushing or creating a PR; Hosted DEV requires a separate exact-head preflight and migration authorization. No Hosted DEV, Production, Neon, shelved executor, Finance/enforcement activation, or B2/B3/B4 implementation.
+
+---
+
+# V2-009 B1 F-5 membership lifecycle correction — LOCAL COMPLETE (2026-11-14)
+
+- [x] Recovered clean branch `fix/v2-009-f5-multi-org-deactivation` at `c16f2e33d5b74a63a4937dc0dd23c16c0316681d`; Stage B remained untouched.
+- [x] Verified project-owned local Docker database, ledger 92, local volume, no foreign servers or synthetic F-5 users; no reset or hosted connection.
+- [x] Mapped membership writes: service-role self-registration; Overall Owner organization provisioning; authenticated Team role edits; transactional Team deactivation/reactivation. No delivered permanent-removal or existing-user assignment UI.
+- [x] Applied corrective migration `20261114054945_team_membership_lifecycle_boundary.sql` locally, ledger 92 → 93. Authenticated INSERT/DELETE revoked; `team_add_member` checks live session, scope and role hierarchy and audits atomically. Ordinary removal remains deactivation.
+- [x] Local pgTAP `0084` 30/30, `0083` 51/51, related tests 112/112, one broader run 86 files/3,564 assertions; local Auth/PostgREST 5/5; focused Vitest 13/13; `npm run check` passed. Prior concurrency/build evidence reused for unchanged code.
+- [x] Updated handoff, checkpoint and unpublished PR draft. No push, PR, merge or deployment.
+- [x] Final changed-file/security review and `git diff --check`; corrective implementation commit `6e0b72313f32f26e972d478cb815aed150d1ef53` contains five scoped source/test files.
+
+## Current State & Next Step
+
+The corrected local database is ledger 93. The corrective commit is complete; this documentation handoff is the final local follow-up commit. A focused independent review follows; any remote delivery or Hosted DEV application requires separate owner authorization.

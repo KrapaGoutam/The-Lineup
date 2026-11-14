@@ -1,5 +1,15 @@
 # V2-009 F-5 isolation checkpoint — 2026-11-13
 
+## Membership lifecycle correction checkpoint (2026-11-14)
+
+Recovered branch `fix/v2-009-f5-multi-org-deactivation` clean at `c16f2e33d5b74a63a4937dc0dd23c16c0316681d`; corrective implementation commit `6e0b72313f32f26e972d478cb815aed150d1ef53`. Verified the project-owned local Docker volume at ledger 92, then applied only `20261114054945_team_membership_lifecycle_boundary.sql` to ledger 93. The shelved executor was excluded; no reset or hosted connection occurred. The cumulative Stage B worktree stayed untouched.
+
+The confirmed DELETE/INSERT bypass is closed by revoking direct authenticated membership INSERT and DELETE. `team_add_member` gives live-session authorized Overall or organization administrators a hierarchy-checked, audited assignment of an existing profile. Ordinary removal uses F-5 deactivation and preserves membership and credential history. New-account registration remains server-only; role editing retains `UPDATE (roles)`. The new assignment intentionally creates no organization-specific credential for a multi-organization person while F-6 remains open. Global Auth bans are untouched.
+
+Final focused evidence: pgTAP `0084` 30/30, original F-5 `0083` 51/51, related tests 112/112, real local GoTrue/PostgREST 5/5, focused Vitest 13/13 and `npm run check`. One broader pgTAP run passed 86 files/3,564 assertions before the final five `0084` actor/session assertions, which passed in the focused rerun. Prior F-5 concurrency and webpack build results are reused for unchanged code; full Vitest was intentionally not repeated. The first `0084` run caught a null actor-active check, which was corrected. See `HANDOFF.md` for the workflow map and unpublished PR draft. Next action: focused independent review; remote delivery and Hosted DEV rollout require separate owner decisions.
+
+---
+
 ## Implementation recovery update (supersedes the pre-approval state below)
 
 - Worktree `.tmp/v2-009-f5`; branch `fix/v2-009-f5-multi-org-deactivation`; implementation base HEAD `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`. Read the current local commit with `git rev-parse HEAD`; Stage B source HEAD `110ae9c7676efa48165b9e72988c5430c9d60be6` was untouched.
