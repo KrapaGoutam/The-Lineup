@@ -203,4 +203,71 @@ describe("F-5 Team transition with real local GoTrue sessions", () => {
     });
     expect(result.error?.code).toBe("42501");
   });
+
+  it("assigns an existing employee without exposing direct creation or removal", async () => {
+    const added = await makeUser("assigned");
+    must(
+      await admin.from("memberships").insert({
+        organization_id: orgB,
+        profile_id: added.id,
+        roles: ["server"],
+      }),
+    );
+    const before = await admin.auth.admin.getUserById(added.id);
+    const assignment = must(
+      await owner.rpc("team_add_member", {
+        p_organization_id: orgA,
+        p_target_profile_id: added.id,
+        p_roles: ["server"],
+        p_reason: "Local existing employee assignment",
+      }),
+    );
+    expect(assignment).toMatchObject({
+      outcome: "added",
+      credential_present: false,
+    });
+    const directInsert = await owner.from("memberships").insert({
+      organization_id: orgA,
+      profile_id: added.id,
+      roles: ["server"],
+    });
+    expect(directInsert.error?.code).toBe("42501");
+    const removed = must(
+      await owner.rpc("team_set_member_active", {
+        p_organization_id: orgA,
+        p_target_profile_id: added.id,
+        p_active: false,
+        p_reason: "Local employee removal",
+      }),
+    );
+    expect(removed).toMatchObject({ outcome: "changed" });
+    const directDelete = await owner
+      .from("memberships")
+      .delete()
+      .eq("organization_id", orgA)
+      .eq("profile_id", added.id);
+    expect(directDelete.error?.code).toBe("42501");
+    const visible = must(
+      await added.client
+        .from("memberships")
+        .select("organization_id")
+        .eq("profile_id", added.id),
+    );
+    expect(visible.map((row) => row.organization_id)).toEqual([orgB]);
+    const audit = must(
+      await admin
+        .from("audit_events")
+        .select("action")
+        .eq("organization_id", orgA)
+        .eq("entity_id", added.id)
+        .in("action", ["member_added", "member_deactivated"]),
+    );
+    expect(audit.map((row) => row.action).sort()).toEqual([
+      "member_added",
+      "member_deactivated",
+    ]);
+    expect(
+      (await admin.auth.admin.getUserById(added.id)).data.user?.banned_until,
+    ).toBe(before.data.user?.banned_until);
+  });
 });

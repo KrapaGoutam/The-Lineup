@@ -7212,6 +7212,15 @@ export type Database = {
           profile_id: string;
         }[];
       };
+      team_add_member: {
+        Args: {
+          p_organization_id: string;
+          p_reason: string;
+          p_roles: Database["public"]["Enums"]["app_role"][];
+          p_target_profile_id: string;
+        };
+        Returns: Json;
+      };
       team_set_member_active: {
         Args: {
           p_active: boolean;
