@@ -53,6 +53,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 const mockSupabaseAuth = {
   signInWithPassword: vi.fn(),
+  signOut: vi.fn().mockResolvedValue({ error: null }),
 };
 
 const mockEmployeeRpc = vi.fn();
@@ -601,6 +602,129 @@ describe("Kiosk Clock Server Actions", () => {
       );
     },
   );
+
+  it("F-2: fails closed with auth_failed when authenticated identity does not match expected credential profile_id", async () => {
+    setupDeviceMock();
+
+    mockAdminClient.from.mockImplementation((table: string) => {
+      if (table === "kiosk_devices") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: MOCK_DEVICE_ID,
+                name: "Host Station",
+                organization_id: MOCK_ORG_ID,
+                location_id: MOCK_LOC_ID,
+                status: "active",
+                organizations: {
+                  id: MOCK_ORG_ID,
+                  name: "Grand Bistro",
+                  slug: "grand-bistro",
+                },
+                locations: {
+                  id: MOCK_LOC_ID,
+                  name: "Downtown",
+                  time_zone: "America/Chicago",
+                  active: true,
+                  archived_at: null,
+                },
+              },
+              error: null,
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          }),
+        };
+      }
+      if (table === "passcode_credentials") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                profile_id: MOCK_PROFILE_ID,
+                synthetic_email: "alice@grandbistro.internal",
+              },
+              error: null,
+            }),
+          }),
+        };
+      }
+      if (table === "passcode_lockout_resets") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        };
+      }
+      if (table === "passcode_login_attempts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockResolvedValue({ count: 0, error: null }),
+          }),
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      if (table === "locations") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: {
+                attendance_mode: "internal_the_lineup",
+                active: true,
+                archived_at: null,
+              },
+              error: null,
+            }),
+          }),
+        };
+      }
+      if (table === "memberships") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { roles: ["server"], active: true },
+              error: null,
+            }),
+          }),
+        };
+      }
+      if (table === "location_memberships") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { active: true },
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: vi.fn().mockReturnThis() };
+    });
+
+    mockSupabaseAuth.signInWithPassword.mockResolvedValue({
+      data: {
+        session: { access_token: "jwt-token-attacker" },
+        user: { id: "attacker-profile-id" },
+      },
+      error: null,
+    });
+
+    const res = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(res.ok).toBe(false);
+    expect(mockCookies["lineup_kiosk_session"]).toBeUndefined();
+    expect(mockSupabaseAuth.signOut).toHaveBeenCalled();
+  });
 
   it("kioskClockInAction invokes native clock in for authenticated employee", async () => {
     setupSessionMock();
