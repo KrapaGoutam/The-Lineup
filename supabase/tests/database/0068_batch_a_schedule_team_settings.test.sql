@@ -427,10 +427,10 @@ select throws_ok(
   '42501', null, 'local manager cannot insert org membership'
 );
 
--- Local Manager A cannot delete organization memberships
-select lives_ok(
+-- Direct membership removal is now denied to every authenticated caller.
+select throws_ok(
   $$ delete from public.memberships where profile_id = '00000000-0000-4000-8000-000000068002' $$,
-  'local manager delete on memberships affects 0 rows'
+  '42501', null, 'local manager cannot delete organization membership'
 );
 
 select is(

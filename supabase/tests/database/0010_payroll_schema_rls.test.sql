@@ -483,10 +483,14 @@ select is(
 -- blocks their own self-select, even though their attendance_identity_links
 -- row is left physically in place -- inherited from that table's own RLS
 -- (has_org_role requires memberships.active), not re-checked here.
+-- F-5: this fixture toggle uses postgres; authenticated clients may no longer
+-- update memberships.active outside the audited Team transaction.
+reset role;
 update public.memberships
 set active = false
 where organization_id = '00000000-0000-0000-0000-000000020101'
   and profile_id = '00000000-0000-0000-0000-000000020003';
+set local role authenticated;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020003', true);
 select is(
@@ -501,10 +505,12 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000020002', true);
+reset role;
 update public.memberships
 set active = true
 where organization_id = '00000000-0000-0000-0000-000000020101'
   and profile_id = '00000000-0000-0000-0000-000000020003';
+set local role authenticated;
 
 -- Tenant-composite foreign keys reject a cross-organization actor/target -
 

@@ -1,3 +1,16 @@
+# V2-009 F-5 final PR gate — BLOCKED (2026-11-13)
+
+- [x] Recovered clean `fix/v2-009-f5-multi-org-deactivation` at `e1c8fd968966c44607d13ff99ea1ef3d50ad680f`; base `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`; cumulative source `110ae9c7676efa48165b9e72988c5430c9d60be6` untouched.
+- [x] Verified local restaurant database ledger 92 and reproduced authenticated Organization Owner membership DELETE/INSERT lifecycle bypass in one rolled-back synthetic transaction; target regained `private.has_org_role`, credential was cascaded away, and no lifecycle audit was written. Unauthorized nonmember INSERT denied. See F-5 HANDOFF.
+- [x] Corrected confirmed UTF-8 mojibake in this task file, F-5 HANDOFF, and F-5 isolation checkpoint; no code, SQL, types or tests changed.
+- [ ] Owner lifecycle decision and separate authorization for a narrow remediation. F-5 PR description, push and PR creation remain withheld until the security gate is resolved.
+
+## Current State & Next Step
+
+The independent review approval predates the confirmed membership lifecycle bypass. Keep the reviewed implementation intact. Next action: owner decides whether to authorize a narrow membership INSERT/DELETE security change or explicitly narrows the F-5 contract; then implement and reverify that changed boundary before PR preparation. No hosted rollout or remote operation is authorized.
+
+---
+
 # THE LINEUP V2.0 — V2-008 MIGRATION & COMPATIBILITY (Batch C Hosted DEV rollout + PR)
 
 ## Batch C — controlled Hosted DEV rollout (2026-11-13, D-7A/D-7B/G-1 granted)
@@ -101,3 +114,76 @@ Owner policies adopted by the prompt: D-10 Option A, D-2 ladder, D-2b conservati
 ## Current State & Next Step
 
 Batch C readiness is complete and committed locally only (no push). **Next exact action: owner answers [batch-c/D7_APPROVAL_PACKET.md](../docs/v2.0/features/008-migration-compatibility/batch-c/D7_APPROVAL_PACKET.md).** Do not write to Hosted DEV, push, open a PR or start D-7C before that.
+
+# V2-009 F-5 isolation — BLOCKED on ban provenance (2026-11-13)
+
+- [x] Recovered clean Stage B source `feature/v2-009-final-gate` at `110ae9c7676efa48165b9e72988c5430c9d60be6`; verified GitHub `development` and local `origin/development` both at `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`.
+- [x] Created `.tmp/v2-009-f5` on `fix/v2-009-f5-multi-org-deactivation` from that baseline; transferred only `member-deactivation.ts` and its test from `5f036ae`.
+- [x] Reviewed caller authority and the exact Stage B diff. Added focused failing regressions for independent Auth bans: multi-organization reactivation clears a ban, and single-organization deactivation replaces its duration (8 pass, 2 fail).
+- [x] Verified local Docker Postgres `supabase_db_restaurant-roster` has 91 migrations, latest `20261113100000`; no hosted target used.
+- [x] `npm.cmd run check` passed (format, lint, typecheck); webpack production build passed. Default Turbopack build could not resolve Next through the worktree's external `node_modules` junction, matching the Stage B worktree limitation. The focused test remains red by design.
+- [ ] Account-wide ban provenance/ownership decision: without it, reactivation cannot distinguish a ban placed by this organization's prior deactivation from an unrelated administrative or other-organization ban. Do not change the global Auth policy or add a migration without separate approval.
+- [ ] Once the policy is approved, correct the focused regression, cover single-org and multi-org cases, run the focused local HTTP/auth gate, quality checks, review, and commit a clean candidate. Do not push or create a PR before V9-F5 approval.
+
+Checkpoint: `docs/v2.0/features/009-final-gate-release/F5_ISOLATION_CHECKPOINT.md`. The cumulative Stage B branch remains unchanged; this isolated branch is intentionally uncommitted and not PR-ready while the security regression fails.
+
+---
+
+# V2-009 Stage B1 — approved contract and local investigation (2026-11-13)
+
+- [x] Recovered the F-5 branch without resetting or discarding the three dirty files and checkpoint; source Stage B branch stayed clean at `110ae9c7676efa48165b9e72988c5430c9d60be6`.
+- [x] Recorded owner decisions: personal PIN, all canonical role layers, separate organization/global ban authority, and B3 gateway/role alignment. No migration authorization.
+- [x] Inspected current local schema and code for ban origin, authority, reason, timing, expiration and concurrent restrictions: no reliable provenance exists. Audit is written after the current operation; Auth metadata has no marker.
+- [x] Added a focused partial-reactivation regression. F-5 unit result: 8 pass, 3 fail (independent ban overwritten, independent ban cleared, membership reactivated after credential failure).
+- [x] Confirmed F-6 with two disposable local organizations and users using four-digit PINs: globally unique synthetic email and one Auth password break multi-org sign-in/rotation. All synthetic rows removed.
+- [x] Designed a narrowly scoped transactional RPC migration, RLS/grants, legacy-ban handling, concurrency, tests and rollback in `F5_ISOLATION_CHECKPOINT.md`; **did not create or apply it**.
+- [x] `npm.cmd run check` passed after the third test; the focused security test remains intentionally red. No new application code was implemented under the unapproved migration design.
+- [ ] Owner: approve the exact F-5 forward migration and the loss of GoTrue-level session invalidation for organization deactivation, or require a broader account-wide restriction architecture. Until then the three red tests stay red; no F-5 PR candidate or commit.
+- [ ] After approval: implement the one F-5 vertical slice, run focused pgTAP/HTTP/Auth and required quality gates, review and commit locally. Push/open PR only after separate V9-F5 delivery authorization.
+
+## F-5 independent review (2026-11-13) — SAFE WITH SPECIFIC AMENDMENTS
+
+- [x] Verified worktree `.tmp/v2-009-f5`, branch `fix/v2-009-f5-multi-org-deactivation`, HEAD `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`, dirty files unchanged; source `110ae9c7…` clean.
+- [x] Reviewed code, RLS/grants, session helpers and local catalog; wrote `F5_MIGRATION_CONTRACT.md` (amended design, migration spec, tests, owner Q1–Q4, Codex prompt). No SQL, app or test change.
+- [ ] Owner: approve Q1–Q3, name Q4's owner, then separately authorize Codex to write migration `20261113110000_team_set_member_active.sql` + pgTAP `0083`.
+
+## Current State & Next Step
+
+Resume from `docs/v2.0/features/009-final-gate-release/F5_MIGRATION_CONTRACT.md`. Do not write SQL, edit the F-5 code/tests, push or touch hosted systems before owner approval. The three red tests stay red.
+
+Next exact action (earlier B1 text): owner reviews the B1 migration decision in `docs/v2.0/features/009-final-gate-release/F5_ISOLATION_CHECKPOINT.md`. B2 may proceed independently in a separate worktree; B3 takes the confirmed F-6 and role-alignment requirements. No Hosted DEV, Production, Neon, migration 92, Finance, enforcement or GitHub release changes.
+
+---
+
+# V2-009 B1 F-5 — approved transactional implementation (2026-11-13)
+
+- [x] Recovery: isolated worktree/branch and base HEAD `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`; cumulative Stage B source `110ae9c7676efa48165b9e72988c5430c9d60be6` unchanged.
+- [x] Local safety: Docker `supabase_db_restaurant-roster`, local volume and loopback port 54322, database `postgres`, no foreign servers, synthetic fixture state; baseline ledger 91, shelved executor absent.
+- [x] Data, authorization, UI, risks and tests recorded in approved `F5_MIGRATION_CONTRACT.md` and latest owner brief; latest S2 omits `auth_restricted`.
+- [x] Migration `20261113110000_team_set_member_active.sql`: strict session helper, narrow authenticated RPC, deterministic membership locks, atomic membership/credential/audit, direct active update denied; local ledger 92 only.
+- [x] Team routes use the caller's authenticated client and RPC error mapping; account-wide Auth writes and best-effort audit removed; generated RPC type updated.
+- [x] Focused F-5 pgTAP 51/51, local GoTrue/HTTP 4/4, two-connection concurrency 3/3, route/data Vitest 15/15.
+- [x] S1 Payroll direct test: advisory function true under a stale active location row, protected manager predicate false and existing Payroll settings row hidden. Separate remediation review required; no confirmed protected write/read bypass.
+- [x] Required quality: `npm run check` pass, `npm run test` 305 files/4,178 pass (7 skip), `next build --webpack` pass. Full pgTAP 85 files/3,539 assertions pass after correcting a legacy test-only direct-active fixture; focused 0010 54/54 pass.
+- [x] Diff/security/scope reviewed; `git diff --check` pass. No hosted or remote mutation.
+- [x] Created one coherent local commit with explicit F-5 paths; final SHA and clean worktree are recorded in the owner report.
+
+## Current State & Next Step
+
+F-5 is locally green and committed. The draft PR description is in `docs/v2.0/features/009-final-gate-release/HANDOFF.md`. Independent implementation review and owner approval are needed before pushing or creating a PR; Hosted DEV requires a separate exact-head preflight and migration authorization. No Hosted DEV, Production, Neon, shelved executor, Finance/enforcement activation, or B2/B3/B4 implementation.
+
+---
+
+# V2-009 B1 F-5 membership lifecycle correction — LOCAL COMPLETE (2026-11-14)
+
+- [x] Recovered clean branch `fix/v2-009-f5-multi-org-deactivation` at `c16f2e33d5b74a63a4937dc0dd23c16c0316681d`; Stage B remained untouched.
+- [x] Verified project-owned local Docker database, ledger 92, local volume, no foreign servers or synthetic F-5 users; no reset or hosted connection.
+- [x] Mapped membership writes: service-role self-registration; Overall Owner organization provisioning; authenticated Team role edits; transactional Team deactivation/reactivation. No delivered permanent-removal or existing-user assignment UI.
+- [x] Applied corrective migration `20261114054945_team_membership_lifecycle_boundary.sql` locally, ledger 92 → 93. Authenticated INSERT/DELETE revoked; `team_add_member` checks live session, scope and role hierarchy and audits atomically. Ordinary removal remains deactivation.
+- [x] Local pgTAP `0084` 30/30, `0083` 51/51, related tests 112/112, one broader run 86 files/3,564 assertions; local Auth/PostgREST 5/5; focused Vitest 13/13; `npm run check` passed. Prior concurrency/build evidence reused for unchanged code.
+- [x] Updated handoff, checkpoint and unpublished PR draft. No push, PR, merge or deployment.
+- [x] Final changed-file/security review and `git diff --check`; corrective implementation commit `6e0b72313f32f26e972d478cb815aed150d1ef53` contains five scoped source/test files.
+
+## Current State & Next Step
+
+The corrected local database is ledger 93. The corrective commit is complete; this documentation handoff is the final local follow-up commit. A focused independent review follows; any remote delivery or Hosted DEV application requires separate owner authorization.
