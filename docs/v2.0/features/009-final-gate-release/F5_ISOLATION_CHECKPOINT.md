@@ -1,9 +1,9 @@
-# V2-009 F-5 isolation checkpoint â€” 2026-11-13
+# V2-009 F-5 isolation checkpoint — 2026-11-13
 
 ## Implementation recovery update (supersedes the pre-approval state below)
 
 - Worktree `.tmp/v2-009-f5`; branch `fix/v2-009-f5-multi-org-deactivation`; implementation base HEAD `5b32b75c5574a6914b1246e3ec841e6d9005f7e5`. Read the current local commit with `git rev-parse HEAD`; Stage B source HEAD `110ae9c7676efa48165b9e72988c5430c9d60be6` was untouched.
-- Owner-approved Q1â€“Q4 and S1â€“S2 were implemented locally. Migration `20261113110000_team_set_member_active.sql`, pgTAP `0083`. Disposable Docker database `supabase_db_restaurant-roster`, database `postgres`, loopback port 54322, local volume, zero foreign servers; ledger 91 â†’ 92. The shelved executor migration is absent.
+- Owner-approved Q1–Q4 and S1–S2 were implemented locally. Migration `20261113110000_team_set_member_active.sql`, pgTAP `0083`. Disposable Docker database `supabase_db_restaurant-roster`, database `postgres`, loopback port 54322, local volume, zero foreign servers; ledger 91 → 92. The shelved executor migration is absent.
 - Completed files: migration, generated RPC type, Team data and both routes, focused unit/route/pgTAP/HTTP/concurrency tests, legacy 0010 test fixture, and handoff/task documentation. No global Auth write in the Team transition; no `auth_restricted` output.
 - Red-to-green: old F-5 focused baseline 8 pass/3 fail; ported invariants pass through pgTAP 51/51 and real HTTP 4/4. Concurrent two-connection scenarios 3/3. `npm run check` passes; webpack production build passes; full Vitest 305 files/4,178 passed (7 skipped); full pgTAP 85 files/3,539 assertions passes after fixing test-only 0010 fixture (54/54). `git diff --check` passes.
 - R-2: synthetic inactive organization member plus active location assignment makes `payroll_location_authorized` true, but the protected manager predicate false and an existing Payroll settings row invisible. Classify as an advisory inconsistency requiring separate remediation review; no confirmed protected operation bypass.
@@ -30,13 +30,13 @@ The two membership writes are best-effort, not atomic with Auth. A membership cr
 
 ## Evidence and next step
 
-- Baseline focused unit/domain: `npx.cmd vitest run src/features/auth/data/member-deactivation.test.ts src/features/team/domain/designations.test.ts` â†’ 20/20 pass before the new regression.
-- New focused regressions: `npx.cmd vitest run src/features/auth/data/member-deactivation.test.ts` â†’ 8 pass, 3 fail: unexpected unban during reactivation, overwrite of an independent ban during deactivation, and membership activation after a failed credential write.
+- Baseline focused unit/domain: `npx.cmd vitest run src/features/auth/data/member-deactivation.test.ts src/features/team/domain/designations.test.ts` → 20/20 pass before the new regression.
+- New focused regressions: `npx.cmd vitest run src/features/auth/data/member-deactivation.test.ts` → 8 pass, 3 fail: unexpected unban during reactivation, overwrite of an independent ban during deactivation, and membership activation after a failed credential write.
 - Local disposable target: Docker `supabase_db_restaurant-roster`, Postgres image, port 54322; local migration ledger 91, latest `20261113100000`. No integration test ran against it yet.
 - `npm.cmd run check` passed (Prettier, ESLint with zero warnings, TypeScript). `npm.cmd run build` failed because Turbopack cannot resolve Next through this worktree's external `node_modules` junction; `npx.cmd next build --webpack` passed. `git diff --check` passed.
 - Reuse unchanged Stage B evidence: original-code negative control (three F-5 unit failures), local HTTP P-9c/P-9d, and broader 3,555 pgTAP / 4,172 Vitest results. Those results do not cover independent ban provenance and do not make this candidate green.
 
-## Earlier PR draft â€” superseded by B1
+## Earlier PR draft — superseded by B1
 
 **Base:** `development`
 **Title:** `fix(v2-009): preserve multi-org access on member deactivation`
@@ -55,7 +55,7 @@ The smallest reliable model is to **stop using the global Auth ban for organizat
 
 An app-only edit is not sufficient for the approved partial-failure and concurrency invariants. The current reactivation order makes membership active before the credential succeeds (third failing test). Two independent PostgREST updates and a later audit insert cannot be atomic. Concurrent A/B membership transitions can also race a read-then-write global-ban decision. A forward migration is therefore required before a PR candidate can satisfy B1.
 
-### Proposed forward migration â€” **design only; not created or applied**
+### Proposed forward migration — **design only; not created or applied**
 
 1. Add one authenticated, transaction-scoped `public.team_set_member_active(p_organization_id uuid, p_target_profile_id uuid, p_active boolean, p_reason text)` RPC. It must run as `SECURITY DEFINER` with fixed empty `search_path`, qualified object names, immediate `REVOKE ALL` from `PUBLIC` and `anon`, and `GRANT EXECUTE` only to `authenticated`. No new exposed table or table RLS policy is needed; the existing tables keep RLS enabled, and this definer function must enforce its own complete actor/target checks. Revoke the current table-level `UPDATE` on `public.memberships` from `authenticated`, then grant only column-level `UPDATE (roles)` so an authenticated client cannot bypass the transactional active-state path. Preserve the existing role-change RLS policy and other table grants; verify its callers before migration. `passcode_credentials` remains service-role-only outside the definer function. Existing `(organization_id, profile_id)` unique indexes on memberships and credentials and the Auth user primary key serve the lookups. Add indexes only if measured query plans require them.
 2. Inside the RPC, verify `auth.uid()` and a live `auth.sessions` `session_id`; reject a banned actor. Load the actor's **active membership** in the supplied organization and enforce the existing owner/general-manager hierarchy, target-role restriction, self-target ban, reason length, and requested current state. Never authorize through a slug, request metadata, organization creator bypass or user-editable claims. The route retains its present validation and maps explicit RPC outcomes to the existing HTTP statuses.
@@ -67,7 +67,7 @@ This design needs explicit owner approval for a forward migration and for replac
 
 ## Independent review outcome (2026-11-13, Claude, read-only)
 
-Verdict SAFE WITH SPECIFIC AMENDMENTS. The step-3 design above is amended: reactivation no longer reads, rejects on or locks the Auth ban (advisory `auth_restricted` output only); a missing credential row is tolerated (45 credential-less DEV members) while any write failure rolls back; actor and target membership rows are locked together in `profile_id` order; the session gate is strict. The creator-bypass premise is stale (removed in V2-001.007). Full contract, migration specification (`20261113110000_team_set_member_active.sql`, pgTAP `0083`), findings R-1â€¦R-6, tests and owner questions Q1â€“Q4: [F5_MIGRATION_CONTRACT.md](F5_MIGRATION_CONTRACT.md). Nothing was created or applied.
+Verdict SAFE WITH SPECIFIC AMENDMENTS. The step-3 design above is amended: reactivation no longer reads, rejects on or locks the Auth ban (advisory `auth_restricted` output only); a missing credential row is tolerated (45 credential-less DEV members) while any write failure rolls back; actor and target membership rows are locked together in `profile_id` order; the session gate is strict. The creator-bypass premise is stale (removed in V2-001.007). Full contract, migration specification (`20261113110000_team_set_member_active.sql`, pgTAP `0083`), findings R-1…R-6, tests and owner questions Q1–Q4: [F5_MIGRATION_CONTRACT.md](F5_MIGRATION_CONTRACT.md). Nothing was created or applied.
 
 ## B1 F-6 local reproduction and B3 requirement
 
