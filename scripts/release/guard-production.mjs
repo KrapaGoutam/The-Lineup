@@ -43,9 +43,9 @@ export function digestMigrationSet(files) {
 }
 
 export function assertLocalMigrations(files, manifest) {
-  if (files.length !== 98 || manifest.versions?.length !== 98)
-    fail("exactly 98 approved local migration files required");
-  if (manifest.baselineCount !== 62 || manifest.targetCount !== 98)
+  if (files.length !== 97 || manifest.versions?.length !== 97)
+    fail("exactly 97 approved local migration files required");
+  if (manifest.baselineCount !== 62 || manifest.targetCount !== 97)
     fail("approved ledger counts changed");
   if (
     manifest.baselineMainSha !== "5e5b7747693b6e81014eafdf299b87e56c3f033d" ||

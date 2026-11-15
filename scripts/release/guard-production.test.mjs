@@ -45,7 +45,7 @@ test("only owner-pinned main dispatch with matching fence receipt reaches migrat
   }
 });
 
-test("approved migration content and exact 62-to-98 ledger are immutable", () => {
+test("approved migration content and exact 62-to-97 ledger are immutable", () => {
   const directory = new URL("../../supabase/migrations/", import.meta.url);
   const files = readdirSync(directory)
     .filter((name) => name.endsWith(".sql"))

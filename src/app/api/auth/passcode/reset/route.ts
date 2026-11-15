@@ -23,8 +23,8 @@ type ResetBody = {
  *
  * Authority preservation:
  * - A single-organization manager/owner can ONLY reset strictly single-organization members.
- * - Cross-organization, Overall-role, and Organization Owner recovery is held
- *   until a stronger backend step-up exists. Self-change remains available.
+ * - Multi-organization members (or members holding an Overall role) require an Overall Owner
+ *   (or self-change via /api/auth/passcode/change) to reset their passcode.
  */
 export async function POST(request: Request) {
   let body: ResetBody;
@@ -78,10 +78,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Check all protected target scopes before rotating a credential.
+  // Check if target is a multi-org member or holds an Overall role
   const [
-    { data: otherTargetMemberships, error: membershipsError },
-    { data: targetOverallRole, error: overallRoleError },
+    { data: otherTargetMemberships },
+    targetOverallRole,
     actorOverallRole,
   ] = await Promise.all([
     admin
@@ -89,37 +89,27 @@ export async function POST(request: Request) {
       .select("organization_id")
       .eq("profile_id", targetProfileId)
       .neq("organization_id", actor.organizationId),
-    admin
-      .from("overall_roles")
-      .select("role")
-      .eq("profile_id", targetProfileId)
-      .maybeSingle(),
+    getOverallRole(targetProfileId, admin),
     getOverallRole(actor.profileId, admin),
   ]);
-
-  if (membershipsError || overallRoleError) {
-    return NextResponse.json(
-      { error: "Credential recovery is temporarily unavailable." },
-      { status: 503 },
-    );
-  }
 
   const isMultiOrg = Boolean(
     otherTargetMemberships && otherTargetMemberships.length > 0,
   );
-  const hasOverallRole = Boolean(targetOverallRole?.role);
+  const hasOverallRole = Boolean(targetOverallRole);
   const isActorOverallOwner = actorOverallRole === "owner";
-  const targetDesignation = designationForRoles(targetMembership.roles ?? []);
 
-  if (isMultiOrg || hasOverallRole || targetDesignation === "owner") {
+  if ((isMultiOrg || hasOverallRole) && !isActorOverallOwner) {
     return NextResponse.json(
       {
-        error: "Privileged credential recovery is temporarily held.",
+        error:
+          "This team member belongs to multiple organizations. Only an Overall administrator can reset their passcode.",
       },
       { status: 403 },
     );
   }
 
+  const targetDesignation = designationForRoles(targetMembership.roles ?? []);
   const allowed =
     isActorOverallOwner ||
     canChangeDesignation({

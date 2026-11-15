@@ -386,3 +386,13 @@ Conan's narrower Payroll scope is accepted as the V2.0 target; Raj's existing id
 Current state: Production is still at ledger 62; no hosted write, deployment, provider-setting change or new backup was performed in this integrated pass. Migration 98 passed 13/13 focused pgTAP assertions on local and Production-shaped copies. The separate documentation worktree remains untouched; its historical handoff was copied into this candidate for one integrated review.
 
 Final local pass: affected organization-model pgTAP 31/31; changed Auth/attribution Vitest 24/24; release guard 3/3; targeted Prettier, ESLint, TypeScript and `git diff --check` pass. The prior 35-migration and Stage C evidence was reused.
+
+## Final owner policy correction and cutover
+
+- [x] Restore four-digit-PIN Overall Owner behavior and approved 62-to-97 migration target; remove candidate migration 98 and sensitive-action route hold.
+- [x] Revalidate only the changed release guard, 3/3.
+- [ ] Push correction and integrate one reviewed PR into development.
+- [ ] Verify reversible old-app/Data API/Auth/Storage/job/privileged writer isolation and staged Vercel domain assignment.
+- [ ] Capture a fresh coherent encrypted cutover recovery point, apply 62-to-97 once, complete approved exact-ID assignments and production configuration, deploy and smoke.
+
+The owner accepts the residual four-digit-PIN risk. This does not waive tenant authorization, migration compatibility, backup, identity or recovery checks. Production remains unchanged at ledger 62.
