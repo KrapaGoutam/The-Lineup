@@ -20,7 +20,7 @@ export async function RestaurantEntry({
   restaurantSlug: string;
   /** V2-003.002 `?location=` input (only the `/r/[slug]` route supplies it). */
   explicitSelection?: ExplicitLocationSelection;
-  /** V2-003.003: the default-tenant `/` route (may redirect to the user's own org). */
+  /** B5: `/` authenticates/resolves across all eligible organizations. */
   globalEntry?: boolean;
 }) {
   const data = await loadPageData(restaurantSlug, explicitSelection, {
@@ -51,7 +51,11 @@ export async function RestaurantEntry({
   return (
     <RestaurantOperationsApp
       demoMode={data.demoMode}
-      restaurantSlug={restaurantSlug}
+      restaurantSlug={
+        data.demoMode && globalEntry
+          ? (process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "the-monks")
+          : restaurantSlug
+      }
       initialUser={data.initialUser}
       moduleNavigation={data.moduleNavigation}
       initialScheduleContext={data.scheduleContext}

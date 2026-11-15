@@ -26,8 +26,15 @@ vi.mock("@/lib/page-data", () => ({
 }));
 
 vi.mock("@/components/restaurant-operations-app", () => ({
-  RestaurantOperationsApp: (props: { demoMode: boolean }) => (
-    <div data-testid="operations-app" data-demo={String(props.demoMode)} />
+  RestaurantOperationsApp: (props: {
+    demoMode: boolean;
+    restaurantSlug: string;
+  }) => (
+    <div
+      data-testid="operations-app"
+      data-demo={String(props.demoMode)}
+      data-slug={props.restaurantSlug}
+    />
   ),
 }));
 
@@ -53,6 +60,41 @@ async function renderEntry() {
 }
 
 describe("RestaurantEntry (V2-003.001)", () => {
+  it("preserves configured demo identity while real root stays universal", async () => {
+    const previous = process.env.NEXT_PUBLIC_RESTAURANT_SLUG;
+    process.env.NEXT_PUBLIC_RESTAURANT_SLUG = "configured-demo";
+    try {
+      pageData.value = { ...base, demoMode: true, contextStatus: "demo" };
+      const demo = await RestaurantEntry({
+        restaurantSlug: "",
+        globalEntry: true,
+      });
+      expect(demo.props.restaurantSlug).toBe("configured-demo");
+      delete process.env.NEXT_PUBLIC_RESTAURANT_SLUG;
+      expect(
+        (await RestaurantEntry({ restaurantSlug: "", globalEntry: true })).props
+          .restaurantSlug,
+      ).toBe("the-monks");
+      pageData.value = { ...base, contextStatus: "unauthenticated" };
+      expect(
+        (await RestaurantEntry({ restaurantSlug: "", globalEntry: true })).props
+          .restaurantSlug,
+      ).toBe("");
+      pageData.value = { ...base, demoMode: true, contextStatus: "demo" };
+      expect(
+        (
+          await RestaurantEntry({
+            restaurantSlug: "deep-link",
+            globalEntry: false,
+          })
+        ).props.restaurantSlug,
+      ).toBe("deep-link");
+    } finally {
+      if (previous === undefined)
+        delete process.env.NEXT_PUBLIC_RESTAURANT_SLUG;
+      else process.env.NEXT_PUBLIC_RESTAURANT_SLUG = previous;
+    }
+  });
   beforeEach(() => {
     pageData.value = null;
   });

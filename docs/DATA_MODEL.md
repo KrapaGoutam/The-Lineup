@@ -1,5 +1,19 @@
 # Data Model and Domain Rules
 
+## V2-009 B5 personal authentication expansion
+
+`personal_pin_accounts` holds one canonical locator and durable pending operation
+per profile; `personal_pin_claims` reserves global ownership of both old and
+candidate locators during a change. This identity namespace intentionally has no
+`organization_id`; tenant memberships and location authorization remain separate.
+`personal_pin_events` records actor/profile/operation/outcome without credentials;
+`global_pin_attempts` records hashed client fingerprints and admission outcomes.
+All four tables have RLS and service-only grants; clients have no table/RPC access.
+
+Migration `20261114210116_v2_009_b5_global_pin_registry.sql` expands local ledger 96. No backfill from organization HMACs is possible; enrollment requires identity
+proof. See the [B5 contract](features/v2-009-b5-universal-pin-login.md) and
+[recovery procedure](v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md).
+
 ## Entity map
 
 ```mermaid

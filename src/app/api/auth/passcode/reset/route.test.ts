@@ -11,8 +11,8 @@ vi.mock("@/features/auth/data/overall-role", () => ({
   getOverallRole: vi.fn(),
 }));
 
-vi.mock("@/features/auth/data/passcode-rotation", () => ({
-  rotatePasscodeCredential: vi.fn(),
+vi.mock("@/features/auth/data/global-pin", () => ({
+  rotateGlobalPersonalPin: vi.fn(),
 }));
 
 const mockAdmin = {
@@ -112,8 +112,8 @@ describe("POST /api/auth/passcode/reset", () => {
     const { getOverallRole } = await import(
       "@/features/auth/data/overall-role"
     );
-    const { rotatePasscodeCredential } = await import(
-      "@/features/auth/data/passcode-rotation"
+    const { rotateGlobalPersonalPin } = await import(
+      "@/features/auth/data/global-pin"
     );
     const { POST } = await import("./route");
 
@@ -174,7 +174,7 @@ describe("POST /api/auth/passcode/reset", () => {
       return {};
     });
 
-    vi.mocked(rotatePasscodeCredential).mockResolvedValue({ ok: true });
+    vi.mocked(rotateGlobalPersonalPin).mockResolvedValue({ ok: true });
 
     const request = new Request("http://localhost/api/auth/passcode/reset", {
       method: "POST",
@@ -192,7 +192,7 @@ describe("POST /api/auth/passcode/reset", () => {
     const data = await response.json();
     expect(data.ok).toBe(true);
     expect(data.passcode).toBe("9999");
-    expect(rotatePasscodeCredential).toHaveBeenCalledWith(
+    expect(rotateGlobalPersonalPin).toHaveBeenCalledWith(
       mockAdmin,
       expect.objectContaining({
         organizationId: orgA,
@@ -208,8 +208,8 @@ describe("POST /api/auth/passcode/reset", () => {
     const { getOverallRole } = await import(
       "@/features/auth/data/overall-role"
     );
-    const { rotatePasscodeCredential } = await import(
-      "@/features/auth/data/passcode-rotation"
+    const { rotateGlobalPersonalPin } = await import(
+      "@/features/auth/data/global-pin"
     );
     const { POST } = await import("./route");
 
@@ -262,7 +262,7 @@ describe("POST /api/auth/passcode/reset", () => {
       return {};
     });
 
-    vi.mocked(rotatePasscodeCredential).mockResolvedValue({ ok: true });
+    vi.mocked(rotateGlobalPersonalPin).mockResolvedValue({ ok: true });
 
     const request = new Request("http://localhost/api/auth/passcode/reset", {
       method: "POST",

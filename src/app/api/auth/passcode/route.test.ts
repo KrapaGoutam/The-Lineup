@@ -5,6 +5,19 @@ vi.mock("server-only", () => ({}));
 
 const mockSignOut = vi.fn(async () => ({}));
 const mockVerifyPasscode = vi.fn();
+const mockUniversalLogin = vi.fn(
+  async () => new Response(JSON.stringify({ next: "/" }), { status: 200 }),
+);
+vi.mock("@/features/auth/data/universal-pin-login", () => ({
+  universalPinLogin: (...args: unknown[]) =>
+    mockUniversalLogin(...(args as [])),
+}));
+vi.mock("@/features/auth/data/global-pin", () => ({
+  reservePinAttempt: async () => ({ attemptId: "attempt" }),
+  readPersonalPinAccount: async () => null,
+  markPinAttemptSucceeded: vi.fn(),
+  rotateGlobalPersonalPin: async () => ({ ok: true }),
+}));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
@@ -114,7 +127,7 @@ describe("POST /api/auth/passcode", () => {
     expect(data.error).toBe("Enter a valid 4-digit passcode.");
   });
 
-  it("returns 400 when restaurantSlug is missing", async () => {
+  it("accepts PIN-only login and dispatches to the global identity verifier", async () => {
     const { POST } = await import("./route");
 
     const request = new Request("http://localhost/api/auth/passcode", {
@@ -126,9 +139,14 @@ describe("POST /api/auth/passcode", () => {
     });
 
     const response = await POST(request);
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.error).toBe("Enter a valid 4-digit passcode.");
+    expect(data.next).toBe("/");
+    expect(mockUniversalLogin).toHaveBeenCalledWith(
+      expect.anything(),
+      "1234",
+      "attempt",
+    );
   });
 
   it("fails closed with 401 and signs out when authenticated identity does not match expected credential profile_id (F-2)", async () => {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getOverallRole } from "@/features/auth/data/overall-role";
-import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
+import { rotateGlobalPersonalPin } from "@/features/auth/data/global-pin";
 import {
   designationForRoles,
   isValidPasscode,
@@ -125,7 +125,8 @@ export async function POST(request: Request) {
 
   let newPasscode = requestedPasscode ?? generateRandomPasscode();
 
-  let result = await rotatePasscodeCredential(admin, {
+  let result = await rotateGlobalPersonalPin(admin, {
+    actorProfileId: actor.profileId,
     organizationId: actor.organizationId,
     profileId: targetProfileId,
     newPasscode,
@@ -135,7 +136,8 @@ export async function POST(request: Request) {
   if (!requestedPasscode && !result.ok && result.severity === "recoverable") {
     for (let retry = 0; retry < 3 && !result.ok; retry += 1) {
       newPasscode = generateRandomPasscode();
-      result = await rotatePasscodeCredential(admin, {
+      result = await rotateGlobalPersonalPin(admin, {
+        actorProfileId: actor.profileId,
         organizationId: actor.organizationId,
         profileId: targetProfileId,
         newPasscode,

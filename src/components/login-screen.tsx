@@ -25,6 +25,7 @@ import {
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
 import { settleSignOut } from "@/lib/client-sign-out";
+import { completePinLogin } from "@/lib/pin-login-navigation";
 import { demoAccounts as staticDemoAccounts } from "@/lib/demo-data";
 
 export type SignedInUser = {
@@ -147,6 +148,7 @@ export function LoginScreen({
   }) => RegisterDemoResult;
 }) {
   const [mode, setMode] = useState<"login" | "register">("login");
+  const universal = !demoMode && restaurantSlug === "";
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -194,13 +196,21 @@ export function LoginScreen({
       const response = await fetch("/api/auth/passcode", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ restaurantSlug, passcode: candidatePasscode }),
+        body: JSON.stringify({
+          ...(universal ? {} : { restaurantSlug }),
+          passcode: candidatePasscode,
+        }),
       });
       const payload = (await response.json()) as {
         user?: SignedInUser;
         error?: string;
         code?: string;
+        next?: string;
       };
+      if (response.ok && payload.next) {
+        completePinLogin(payload.next);
+        return;
+      }
       if (!response.ok || !payload.user) {
         setError(
           payload.code === "org_lockout"
@@ -296,7 +306,12 @@ export function LoginScreen({
       const payload = (await response.json()) as {
         user?: SignedInUser;
         error?: string;
+        next?: string;
       };
+      if (response.ok && payload.next) {
+        completePinLogin(payload.next);
+        return;
+      }
       if (!response.ok || !payload.user) {
         setError(payload.error ?? "Unable to register right now.");
         return;
@@ -315,25 +330,31 @@ export function LoginScreen({
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="relative w-full max-w-md">
         <div className="mb-7 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-black">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="https://www.monkswebster.com/assets/img/logo-light.png"
-              alt="The Monk's Logo"
-              className="h-10 object-contain"
-            />
-          </div>
+          {!universal && (
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://www.monkswebster.com/assets/img/logo-light.png"
+                alt="The Monk's Logo"
+                className="h-10 object-contain"
+              />
+            </div>
+          )}
           <p className="text-primary mt-5 text-xs font-bold tracking-[0.2em] uppercase">
-            The Monk&apos;s · River Oaks
+            {universal ? "The Lineup" : "Restaurant sign-in"}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
             {mode === "login"
-              ? "Your shift starts here"
+              ? universal
+                ? "Enter your 4-digit PIN"
+                : "Your shift starts here"
               : "Create your account"}
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-6">
             {mode === "login"
-              ? "One private passcode opens your schedule, table rotation, and tip estimate."
+              ? universal
+                ? "One personal PIN for every restaurant where you work."
+                : "Use your existing restaurant PIN to enable universal sign-in. If it is already claimed, you will be asked to choose a different PIN."
               : "Choose a 4-digit passcode. You'll be signed in immediately as a server — a manager can promote you later."}
           </p>
         </div>
@@ -343,7 +364,9 @@ export function LoginScreen({
             {mode === "login" ? (
               <form onSubmit={submitPasscode} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="passcode">Restaurant passcode</Label>
+                  <Label htmlFor="passcode">
+                    {universal ? "Personal PIN" : "Restaurant passcode"}
+                  </Label>
                   <div className="relative">
                     <KeyRound
                       className="text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2"
@@ -377,8 +400,9 @@ export function LoginScreen({
                     id="passcode-help"
                     className="text-muted-foreground text-xs"
                   >
-                    No username is required. Your restaurant link identifies the
-                    location.
+                    {universal
+                      ? "No username or restaurant selection required. Existing users: use your restaurant link once to enable universal sign-in."
+                      : "Your restaurant link is used only to verify your existing identity. Location access is checked after sign-in."}
                   </p>
                   <NumericKeypad
                     onDigit={(digit) =>
@@ -402,16 +426,18 @@ export function LoginScreen({
                 >
                   {pending ? "Opening workspace…" : "Open workspace"}
                 </Button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("register");
-                    setError("");
-                  }}
-                  className="text-muted-foreground hover:text-foreground min-h-11 w-full text-sm font-medium"
-                >
-                  Not registered? Create an account
-                </button>
+                {(!universal || demoMode) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("register");
+                      setError("");
+                    }}
+                    className="text-muted-foreground hover:text-foreground min-h-11 w-full text-sm font-medium"
+                  >
+                    Not registered? Create an account
+                  </button>
+                )}
               </form>
             ) : (
               <form onSubmit={submitRegister} className="space-y-5">

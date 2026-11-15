@@ -19,6 +19,12 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
 import { createClient } from "@/lib/supabase/server";
+import {
+  beginPersonalPinChange,
+  finishPersonalPinChange,
+  reservePinAttempt,
+  markPinAttemptSucceeded,
+} from "@/features/auth/data/global-pin";
 
 const registerSchema = z.object({
   restaurantSlug: z.string().trim().min(1).max(120),
@@ -71,6 +77,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const reservation = await reservePinAttempt(admin, request, "register");
+  if (reservation.response) return reservation.response;
   const { data: organization } = await admin
     .from("organizations")
     .select("id")
@@ -118,6 +126,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
 
+  const claim = await beginPersonalPinChange(admin, userId, passcode);
+  if (!claim.ok) {
+    await rollback();
+    return NextResponse.json({ error: claim.error }, { status: 409 });
+  }
+
   const { error: membershipError } = await admin.from("memberships").insert({
     organization_id: organization.id,
     profile_id: userId,
@@ -158,6 +172,8 @@ export async function POST(request: Request) {
     self_served: true,
   });
 
+  await finishPersonalPinChange(admin, userId, claim.operationId, true);
+
   const supabase = await createClient();
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: syntheticEmail,
@@ -183,7 +199,9 @@ export async function POST(request: Request) {
     console.error("sign-in: could not clear the saved workspace", error);
   }
 
+  await markPinAttemptSucceeded(admin, reservation.attemptId);
   return NextResponse.json({
+    next: "/",
     user: {
       profileId: userId,
       name: displayName,

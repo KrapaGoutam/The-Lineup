@@ -67,7 +67,10 @@ describe("entry-boundary static guards", () => {
     expect(legacy).toMatch(/listCurrentEligibleContexts/);
     const pageData = read("src/lib/page-data.ts");
     // the only redirect target is the canonical builder fed by a resolved context
-    expect(pageData).toMatch(/contextSwitchHref\(global\.context, ""\)/);
+    expect(pageData).toMatch(/contextSwitchHref\(resolution\.context, ""\)/);
+    expect(pageData).toMatch(
+      /routeSlug: options\.globalEntry \? null : restaurantSlug/,
+    );
     expect(pageData).not.toMatch(/searchParams|headers\(|referer/i);
   });
 

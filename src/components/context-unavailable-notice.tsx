@@ -2,7 +2,7 @@
 
 import { RefreshCw, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,8 @@ import { useContextSwitch } from "@/features/context/components/use-context-swit
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { groupContextsByOrganization } from "@/features/context/domain/context-navigation";
 import { ContextSettings } from "@/features/settings/components/context-settings";
+
+const subscribeHydration = () => () => {};
 
 /**
  * V2-003.001/.002: shown when the server could not establish ONE verified
@@ -32,6 +34,12 @@ export function ContextUnavailableNotice({
   availableContextsFailed?: boolean;
   restaurantSlug?: string;
 }) {
+  // SSR choices must not accept clicks before their event handlers hydrate.
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false,
+  );
   const [showSettings, setShowSettings] = useState(false);
   const router = useRouter();
   const [retrying, startRetry] = useTransition();
@@ -112,7 +120,7 @@ export function ContextUnavailableNotice({
                           <Button
                             variant="outline"
                             className="min-h-12 w-full justify-start"
-                            disabled={!!switchingTo}
+                            disabled={!hydrated || !!switchingTo}
                             onClick={() => switchTo(context)}
                             data-location-id={context.locationId}
                           >

@@ -1,4 +1,6 @@
+import { isPinCollision } from "@/features/auth/domain/pin-errors";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import {
   designationForRoles,
@@ -13,19 +15,27 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
+import { verifyPasscode } from "@/features/auth/data/passcode-verify";
+import { universalPinLogin } from "@/features/auth/data/universal-pin-login";
 import {
-  migrateLegacyAuthPassword,
-  verifyPasscode,
-} from "@/features/auth/data/passcode-verify";
+  reservePinAttempt,
+  markPinAttemptSucceeded,
+  readPersonalPinAccount,
+  rotateGlobalPersonalPin,
+} from "@/features/auth/data/global-pin";
 import {
   createPasscodeLocator,
+  createGlobalPasscodeLocator,
   createRequestFingerprint,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
 import { createClient } from "@/lib/supabase/server";
 
-type LoginBody = { restaurantSlug?: string; passcode?: string };
+const loginSchema = z.object({
+  restaurantSlug: z.string().trim().min(1).max(120).optional(),
+  passcode: z.string().trim().refine(isValidPasscode),
+});
 
 function clientFingerprint(request: Request) {
   const forwarded = request.headers
@@ -38,23 +48,20 @@ function clientFingerprint(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let body: LoginBody;
-  try {
-    body = (await request.json()) as LoginBody;
-  } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-  }
-
-  const slug = body.restaurantSlug?.trim().toLowerCase();
-  const passcode = body.passcode?.trim() ?? "";
-  if (!slug || !isValidPasscode(passcode)) {
+  const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
     return NextResponse.json(
       { error: "Enter a valid 4-digit passcode." },
       { status: 400 },
     );
   }
+  const slug = parsed.data.restaurantSlug?.toLowerCase();
+  const passcode = parsed.data.passcode;
 
   const admin = createAdminClient();
+  const reservation = await reservePinAttempt(admin, request, "login");
+  if (reservation.response) return reservation.response;
+  if (!slug) return universalPinLogin(admin, passcode, reservation.attemptId);
   const { data: organization } = await admin
     .from("organizations")
     .select("id")
@@ -165,6 +172,19 @@ export async function POST(request: Request) {
     );
   }
 
+  const priorAccount = await readPersonalPinAccount(
+    admin,
+    credential.profile_id,
+  );
+  // Once enrolled, a stale organization credential cannot revive an old PIN.
+  if (
+    priorAccount?.operation_id ||
+    (priorAccount?.locator &&
+      priorAccount.locator !== createGlobalPasscodeLocator(passcode))
+  ) {
+    return NextResponse.json({ error: "PIN not recognized." }, { status: 401 });
+  }
+
   const supabase = await createClient();
   const verification = await verifyPasscode(supabase, {
     profileId: credential.profile_id,
@@ -185,17 +205,36 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
-  // Opportunistically migrate legacy (raw passcode) or pre-B3 (organization-derived)
-  // accounts to the canonical person-level password scheme.
+  // Verify first, then enroll under the same durable lock used by reset/change.
+  // Never copy organization locators or search the PIN space.
+  let enrollmentRequired = false;
+  const currentAccount = await readPersonalPinAccount(
+    admin,
+    credential.profile_id,
+  );
   if (
-    verification.verifiedVia === "legacy" ||
-    verification.verifiedVia === "derived"
+    currentAccount?.operation_id ||
+    currentAccount?.updated_at !== priorAccount?.updated_at
   ) {
-    await migrateLegacyAuthPassword(admin, {
+    await supabase.auth.signOut();
+    return NextResponse.json({ error: "PIN not recognized." }, { status: 401 });
+  }
+  if (!currentAccount?.locator) {
+    const enrollment = await rotateGlobalPersonalPin(admin, {
       profileId: credential.profile_id,
       organizationId: organization.id,
-      passcode,
+      newPasscode: passcode,
     });
+    if (!enrollment.ok) {
+      if (isPinCollision(enrollment.code)) enrollmentRequired = true;
+      else {
+        await supabase.auth.signOut();
+        return NextResponse.json(
+          { error: "Sign-in service unavailable. Please try again." },
+          { status: 503 },
+        );
+      }
+    }
   }
 
   // V2-009 B3: Multi-organization credential synchronization.
@@ -204,59 +243,60 @@ export async function POST(request: Request) {
   // their personal passcode and existing synthetic_email. If that passcode collides
   // in another organization (23505), skip that organization safely: the user can
   // still access it via the post-login gateway / switcher.
-  try {
-    const { data: otherMemberships } = await admin
-      .from("memberships")
-      .select("organization_id")
-      .eq("profile_id", credential.profile_id)
-      .eq("active", true)
-      .neq("organization_id", organization.id);
-
-    if (otherMemberships && otherMemberships.length > 0) {
-      const otherOrgIds = otherMemberships.map((m) => m.organization_id);
-      const { data: existingCreds } = await admin
-        .from("passcode_credentials")
+  if (!enrollmentRequired)
+    try {
+      const { data: otherMemberships } = await admin
+        .from("memberships")
         .select("organization_id")
         .eq("profile_id", credential.profile_id)
-        .in("organization_id", otherOrgIds);
+        .eq("active", true)
+        .neq("organization_id", organization.id);
 
-      const existingOrgSet = new Set(
-        existingCreds?.map((c) => c.organization_id) ?? [],
-      );
+      if (otherMemberships && otherMemberships.length > 0) {
+        const otherOrgIds = otherMemberships.map((m) => m.organization_id);
+        const { data: existingCreds } = await admin
+          .from("passcode_credentials")
+          .select("organization_id")
+          .eq("profile_id", credential.profile_id)
+          .in("organization_id", otherOrgIds);
 
-      for (const orgId of otherOrgIds) {
-        if (!existingOrgSet.has(orgId)) {
-          const otherLocator = createPasscodeLocator(orgId, passcode);
-          const { error: syncError } = await admin
-            .from("passcode_credentials")
-            .insert({
-              organization_id: orgId,
-              profile_id: credential.profile_id,
-              synthetic_email: credential.synthetic_email,
-              locator: otherLocator,
-              active: true,
-            });
-          if (syncError) {
-            console.warn(
-              "multi-org sync: skipped credential creation for organization",
-              {
-                organizationId: orgId,
-                profileId: credential.profile_id,
-                code: syncError.code,
-                message: syncError.message,
-              },
-            );
+        const existingOrgSet = new Set(
+          existingCreds?.map((c) => c.organization_id) ?? [],
+        );
+
+        for (const orgId of otherOrgIds) {
+          if (!existingOrgSet.has(orgId)) {
+            const otherLocator = createPasscodeLocator(orgId, passcode);
+            const { error: syncError } = await admin
+              .from("passcode_credentials")
+              .insert({
+                organization_id: orgId,
+                profile_id: credential.profile_id,
+                synthetic_email: credential.synthetic_email,
+                locator: otherLocator,
+                active: true,
+              });
+            if (syncError) {
+              console.warn(
+                "multi-org sync: skipped credential creation for organization",
+                {
+                  organizationId: orgId,
+                  profileId: credential.profile_id,
+                  code: syncError.code,
+                  message: syncError.message,
+                },
+              );
+            }
           }
         }
       }
+    } catch (syncErr) {
+      // Never turn a successful sign-in into a failure.
+      console.error(
+        "multi-org sync: unexpected error during synchronization",
+        syncErr,
+      );
     }
-  } catch (syncErr) {
-    // Never turn a successful sign-in into a failure.
-    console.error(
-      "multi-org sync: unexpected error during synchronization",
-      syncErr,
-    );
-  }
 
   const [{ data: profile }, { data: membership }] = await Promise.all([
     admin
@@ -291,7 +331,9 @@ export async function POST(request: Request) {
     console.error("sign-in: could not clear the saved workspace", error);
   }
 
+  await markPinAttemptSucceeded(admin, reservation.attemptId);
   return NextResponse.json({
+    next: enrollmentRequired ? "/auth/enroll" : "/",
     user: {
       profileId: credential.profile_id,
       name: profile.display_name,

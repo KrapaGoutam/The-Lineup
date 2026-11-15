@@ -50,7 +50,7 @@ import type { Database } from "@/types/database.generated";
  */
 
 export interface ResolveActiveContextOptions {
-  /** Route organization slug (`/` supplies the configured default). */
+  /** Route organization slug; universal `/` supplies null. */
   readonly routeSlug?: string | null;
   /**
    * Raw cookie value. `undefined` → read the request's cookie store;
