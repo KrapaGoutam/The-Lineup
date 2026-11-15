@@ -31,6 +31,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
 import { createClient } from "@/lib/supabase/server";
+import { trustedClientAddress } from "@/lib/trusted-client-address";
 
 const loginSchema = z.object({
   restaurantSlug: z.string().trim().min(1).max(120).optional(),
@@ -38,13 +39,7 @@ const loginSchema = z.object({
 });
 
 function clientFingerprint(request: Request) {
-  const forwarded = request.headers
-    .get("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-  return createRequestFingerprint(
-    forwarded || request.headers.get("x-real-ip") || "unknown",
-  );
+  return createRequestFingerprint(trustedClientAddress(request));
 }
 
 export async function POST(request: Request) {

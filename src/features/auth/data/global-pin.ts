@@ -7,6 +7,7 @@ import {
   createGlobalPasscodeLocator,
   createRequestFingerprint,
 } from "@/lib/passcode-security";
+import { trustedClientAddress } from "@/lib/trusted-client-address";
 import {
   rotatePasscodeCredential,
   type RotatePasscodeResult,
@@ -23,13 +24,9 @@ export const PIN_RECOVERY =
   "Your PIN update needs administrator reconciliation. Please contact support.";
 
 export function requestPinFingerprint(request: Request) {
-  // Deployment MUST overwrite these headers at its trusted ingress. A browser
-  // supplied device id would let an attacker reset its own quota.
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-  return createRequestFingerprint(`personal-pin:${ip}`);
+  return createRequestFingerprint(
+    `personal-pin:${trustedClientAddress(request)}`,
+  );
 }
 
 export async function reservePinAttempt(
