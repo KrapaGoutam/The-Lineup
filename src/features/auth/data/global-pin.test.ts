@@ -145,6 +145,25 @@ describe("global personal PIN lifecycle", () => {
     expect(result.response?.status).toBe(429);
     expect(result.response?.headers.get("retry-after")).toBe("3600");
   });
+  it("reserves against the platform-attributed address, not a spoofed header", async () => {
+    vi.stubEnv("VERCEL", "1");
+    await reservePinAttempt(
+      admin,
+      new Request("https://example.test", {
+        headers: {
+          "x-vercel-forwarded-for": "192.0.2.7",
+          "x-forwarded-for": "203.0.113.55",
+        },
+      }),
+      "login",
+    );
+    expect(rpc).toHaveBeenCalledWith("reserve_global_pin_attempt", {
+      p_fingerprint: createHmac("sha256", process.env.APP_PIN_PEPPER!)
+        .update("request:personal-pin:192.0.2.7")
+        .digest("hex"),
+      p_purpose: "login",
+    });
+  });
 });
 
 it("organization collision remains recoverable after checked ownership rollback", async () => {

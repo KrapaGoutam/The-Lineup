@@ -152,16 +152,13 @@ select is(
   'DB-010: Revoked creator with inactive membership cannot select organization (#106)'
 );
 
--- Direct INSERT on organizations:
--- Overall Owner: ALLOWED
+-- Direct INSERT on organizations is temporarily held for PIN-only sessions.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000056000', true);
-insert into public.organizations (id, name, slug, created_by)
-values ('00000000-0000-0000-0000-0000000560a3'::uuid, 'Owner Created Org', 'owner-created-org-56', '00000000-0000-0000-0000-000000056000'::uuid);
-select is(
-  (select count(*)::int from public.organizations where id = '00000000-0000-0000-0000-0000000560a3'::uuid),
-  1,
-  'DB-009a: Overall Owner is allowed direct INSERT on public.organizations'
+select throws_ok(
+  $$ insert into public.organizations (id, name, slug, created_by) values ('00000000-0000-0000-0000-0000000560a3'::uuid, 'Owner Created Org', 'owner-created-org-56', '00000000-0000-0000-0000-000000056000'::uuid) $$,
+  '42501', null,
+  'DB-009a: Overall Owner direct INSERT is temporarily held'
 );
 
 -- Staff Jack: Direct INSERT DENIED by RLS
@@ -269,20 +266,21 @@ select throws_ok(
 -- 4. Atomic Tenant Provisioning RPC Tests (DB-015 to DB-016)
 -- --------------------------------------------------------------------------
 
--- Overall Owner calls provision_organization successfully
+-- Overall Owner provisioning is held until stronger step-up is enforced.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000056000', true);
-select lives_ok(
+select throws_ok(
   $$ select public.provision_organization('New Tavern', 'new-tavern-56', '00000000-0000-0000-0000-000000056003'::uuid, '{"branding":{"primaryColor":"#123456"}}'::jsonb) $$,
-  'DB-015a: Overall Owner can execute public.provision_organization'
+  '42501', null,
+  'DB-015a: Overall Owner cannot execute held public.provision_organization'
 );
 
--- Verify organization and owner membership were created atomically
+-- The held call leaves no organization or owner membership behind.
 reset role;
 select is(
   (select count(*)::int from public.organizations where slug = 'new-tavern-56'),
-  1,
-  'DB-015b: provision_organization created organization row'
+  0,
+  'DB-015b: held provision_organization created no organization row'
 );
 select is(
   (
@@ -293,8 +291,8 @@ select is(
       and m.active = true
       and m.roles = array['owner']::public.app_role[]
   ),
-  1,
-  'DB-015c: provision_organization atomically created active owner membership row'
+  0,
+  'DB-015c: held provision_organization created no owner membership row'
 );
 
 -- Non-Overall Owner (Overall Manager) calling provision_organization throws 42501
@@ -317,14 +315,14 @@ select throws_ok(
   'DB-016b: Staff member calling provision_organization rejected with 42501'
 );
 
--- Overall Owner calling provision_organization with non-existent owner profile throws P0002
+-- The hold applies before validating a nominated owner profile.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000056000', true);
 select throws_ok(
   $$ select public.provision_organization('Ghost Tavern', 'ghost-tavern-56', '00000000-0000-0000-0000-ffffffffffff'::uuid) $$,
-  'P0002',
+  '42501',
   null,
-  'DB-015d: provision_organization with invalid owner profile raises P0002'
+  'DB-015d: held provision_organization cannot inspect owner profile'
 );
 
 -- Verify NO orphaned organization was left after failed owner bootstrap

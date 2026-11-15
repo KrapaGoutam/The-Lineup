@@ -1,29 +1,30 @@
 name: Database
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - "supabase/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/database.yml"
-  push:
-    branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - ".github/workflows/database.yml"
+      - "scripts/release/**"
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Owner-approved main commit SHA (40 lowercase hex characters)"
+        required: true
+        type: string
+      isolation_receipt_sha256:
+        description: "SHA-256 of the owner-reviewed, externally verified isolation receipt"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: database-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   migrations-and-policies:
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -33,38 +34,60 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # Only the services the migrations and pgTAP need (database + auth).
-      # The wrapper pulls images from a mirror registry (ghcr.io first, then
-      # public.ecr.aws, docker.io) and retries ONLY registry/network pull
-      # failures (bounded, logged as warnings). Migration, SQL and pgTAP
-      # failures are never retried. See scripts/ci/supabase-run.mjs. db reset / test db pull
-      # images too (pg_prove), so they go through the same wrapper.
+      # Local ephemeral DB/Auth only; PRs never touch the hosted project.
       - run: node scripts/ci/supabase-run.mjs start
       - run: node scripts/ci/supabase-run.mjs reset
       - run: node scripts/ci/supabase-run.mjs test
       - if: always()
         run: npx supabase stop --no-backup
 
-  # Feature 015 (Phase A): apply new migrations to the real hosted project on
-  # merge to main. PRs never touch this project -- they only get the
-  # ephemeral local instance above. Requires two repository secrets:
-  # SUPABASE_ACCESS_TOKEN (a personal access token, Supabase dashboard ->
-  # Account -> Access Tokens) and SUPABASE_PROJECT_ID (the project ref).
+  # This job is inert until the owner configures the production environment's
+  # approved SHA and isolation receipt, required reviewers, and main-only rule.
+  # Never dispatch it before the external ingress/Data API/Storage/Auth/job fences
+  # have been installed and independently verified under a separate authorization.
   deploy-migrations:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: production
+    concurrency:
+      group: production-database-migration
+      cancel-in-progress: false
+    env:
+      RELEASE_EVENT: ${{ github.event_name }}
+      RELEASE_REF: ${{ github.ref }}
+      RELEASE_HEAD_SHA: ${{ github.sha }}
+      RELEASE_INPUT_SHA: ${{ inputs.release_sha }}
+      RELEASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+      RELEASE_INPUT_RECEIPT: ${{ inputs.isolation_receipt_sha256 }}
+      RELEASE_APPROVED_SHA: ${{ vars.D3B_APPROVED_RELEASE_SHA }}
+      RELEASE_APPROVED_RECEIPT: ${{ vars.D3B_APPROVED_ISOLATION_RECEIPT_SHA256 }}
+      RELEASE_APPROVED_ENVIRONMENT: ${{ vars.D3B_APPROVED_ENVIRONMENT }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      - name: Check immutable release contract before loading secrets
+        run: node scripts/release/guard-production.mjs preflight
+      - name: Check exact remote migration ledger (read-only)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/release/guard-production.mjs ledger-before
       - run: npm ci
-      - env:
+      - name: Link only the approved Production project
+        env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: npx supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}"
-      - env:
+        run: ./node_modules/.bin/supabase link --project-ref "$RELEASE_PROJECT_REF"
+      - name: Apply approved migrations while all external fences remain closed
+        env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: npx supabase db push
+        run: ./node_modules/.bin/supabase db push --linked --yes
+      - name: Verify target ledger; never reopen traffic here
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/release/guard-production.mjs ledger-after

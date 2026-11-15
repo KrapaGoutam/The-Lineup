@@ -306,6 +306,15 @@ and migration rehearsal/authorization, manual existing-QA login acceptance, then
 Production governance with distributed-abuse controls and Overall Owner step-up.
 See docs/v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md.
 
+## V2 Stage D3A — trusted request attribution candidate (2026-11-15)
+
+- [x] Start isolated local branch `feature/v2-d3a-trusted-attribution` at accepted development `ec06ce95`.
+- [x] Route global and legacy PIN fingerprints through the validated Vercel ingress address helper; fail closed to `unknown` without trusted Production ingress.
+- [x] Verify focused tests (17/17), changed-file ESLint and TypeScript typecheck.
+- [ ] Owner review of uncommitted candidate; distributed many-IP protection and Overall Owner step-up remain separate release blockers.
+
+No push, PR, merge, hosted write, Production deployment or broad test campaign.
+
 ## B5 PR #331 browser regression correction - validated
 
 - [x] Confirm clean existing branch at ec382cf42b397181a3d7b5695a6808febed640e9; read existing CI job 132599214341/run 43644527746.
@@ -337,3 +346,43 @@ No hosted access or credential changes. Local test fixtures were newly created
 and removed by the loopback-only harness. Migration and database model unchanged.
 Next: normal new-head CI and owner review; enrollment policy approval, development
 merge authorization and separate Hosted DEV preflight/backup/rehearsal remain gates.
+
+## V2 Stage D3A.1 — local release-control candidate (2026-11-15)
+
+- [x] Verify accepted `development`/`main` refs and preserve uncommitted D3A attribution changes.
+- [x] Identify existing Vercel Hobby/auto-assignment, direct Data API, recipe Storage, Auth and cron writer paths without hosted changes.
+- [x] Replace automatic main-push migration with fail-closed manual SHA/project/receipt/ledger guard and non-cancelling Production concurrency.
+- [x] Pin the exact 97 approved migration versions and file content; reject the shelved executor.
+- [x] Canonicalize trusted IPv6 attribution without changing kiosk behavior.
+- [x] Run local release-control simulation 3/3, focused attribution/auth tests 18/18, changed-file formatting/lint, TypeScript typecheck and diff check.
+- [ ] Prove ingress, Data API, Storage, Auth, cron and privileged-writer fences on the actual provider under owner authorization.
+- [ ] Approve and implement distributed PIN edge admission and Overall Owner step-up; any new DB migration changes target 97 and requires a focused revised rehearsal.
+
+No Production/Hosted DEV write, workflow dispatch, provider setting change, deployment, merge, push, broad CI/test campaign or recovery backup change.
+
+## V2 Stage D3A.2 — lean local release hardening (2026-11-15)
+
+- [x] Reuse D3A.1 worktree and inspect only manual release, writer-boundary and sensitive-operation paths.
+- [x] Require an owner-approved `production` environment value in the manual guard; locally disable automatic Vercel Git deployments from `main`.
+- [x] Confirm a route-only Overall Owner hold is insufficient: direct `provision_organization` and `memberships.roles` writes remain available at ledger 97.
+- [x] Prepare one scoped WAF PIN rule and a minimum writer-fence/compatibility decision in the existing release handoff.
+- [x] Validate the changed release guard and Vercel config: local release tests 3/3 PASS; changed-file ESLint, Prettier and diff checks PASS after one formatting correction. D3A.1 attribution 18/18 is reused unchanged.
+- [ ] Future owner/provider: establish the live writer fence, database-level sensitive-action hold or step-up, and first-merge deployment suppression before release.
+
+Conan's narrower Payroll scope is accepted as the V2.0 target; Raj's existing identity is the intended future Overall Owner; test-account privilege changes and Liquor Tap remain held. No hosted or provider mutation, deployment, merge, push or recovery-artifact change.
+
+## V2.0 integrated release candidate — 2026-11-15
+
+- [x] Reuse D2/D2b, Stage C and D3A evidence; verify accepted development/main refs once.
+- [x] Retain manual, SHA/project/receipt/ledger-pinned Production migration workflow; update exact manifest to 98 after the new forward migration.
+- [x] Add database-level sensitive-action hold and route-level privileged credential-recovery hold; preserve ordinary Team and same-org staff recovery.
+- [x] Validate migration 98 against a disposable Production-shaped schema/data restore and focused pgTAP; verify row-count invariants and destroy the copy.
+- [x] Verify Vercel staged-deployment capability and inspect the actual team/project/firewall read-only.
+- [x] Complete changed-code static/focused checks and security diff review.
+- [ ] Commit and open one integration PR into development; require exact-head CI and review before merge.
+- [ ] Prove a reversible old-writer fence, including Auth credential mutation, Storage and privileged writers; configure staged domain assignment and the single PIN edge rule.
+- [ ] Only then establish a fresh coherent encrypted recovery checkpoint, apply the approved 62-to-98 migration set, perform exact-ID identity/bootstrap work, stage and smoke the app, and reopen.
+
+Current state: Production is still at ledger 62; no hosted write, deployment, provider-setting change or new backup was performed in this integrated pass. Migration 98 passed 13/13 focused pgTAP assertions on local and Production-shaped copies. The separate documentation worktree remains untouched; its historical handoff was copied into this candidate for one integrated review.
+
+Final local pass: affected organization-model pgTAP 31/31; changed Auth/attribution Vitest 24/24; release guard 3/3; targeted Prettier, ESLint, TypeScript and `git diff --check` pass. The prior 35-migration and Stage C evidence was reused.

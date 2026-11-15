@@ -18,6 +18,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { createRequestFingerprint } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { trustedClientAddress } from "@/lib/trusted-client-address";
 
 type ChangeBody = {
   restaurantSlug?: string;
@@ -26,13 +27,7 @@ type ChangeBody = {
 };
 
 function clientFingerprint(request: Request) {
-  const forwarded = request.headers
-    .get("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-  return createRequestFingerprint(
-    forwarded || request.headers.get("x-real-ip") || "unknown",
-  );
+  return createRequestFingerprint(trustedClientAddress(request));
 }
 
 /**

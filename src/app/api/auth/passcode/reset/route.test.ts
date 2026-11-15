@@ -1,284 +1,169 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock server-only
 vi.mock("server-only", () => ({}));
-
-vi.mock("@/lib/current-user", () => ({
-  getCurrentUser: vi.fn(),
-}));
-
+vi.mock("@/lib/current-user", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("@/features/auth/data/overall-role", () => ({
   getOverallRole: vi.fn(),
 }));
-
 vi.mock("@/features/auth/data/global-pin", () => ({
   rotateGlobalPersonalPin: vi.fn(),
 }));
 
-const mockAdmin = {
-  from: vi.fn(),
-};
+const targetMembership = vi.fn();
+const otherMemberships = vi.fn();
+const targetOverallRole = vi.fn();
+const auditInsert = vi.fn();
+const mockAdmin = { from: vi.fn() };
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => mockAdmin }));
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => mockAdmin,
-}));
+const actorProfileId = "00000000-0000-0000-0000-000000000001";
+const targetProfileId = "00000000-0000-0000-0000-000000000002";
+const orgA = "11111111-1111-1111-1111-111111111111";
+const orgB = "22222222-2222-2222-2222-222222222222";
 
-describe("POST /api/auth/passcode/reset", () => {
-  const actorProfileId = "00000000-0000-0000-0000-000000000001";
-  const targetProfileId = "00000000-0000-0000-0000-000000000002";
-  const orgA = "11111111-1111-1111-1111-111111111111";
-  const orgB = "22222222-2222-2222-2222-222222222222";
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+function request() {
+  return new Request("http://localhost/api/auth/passcode/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      restaurantSlug: "org-a",
+      targetProfileId,
+      newPasscode: "4321",
+      reason: "Requested by staff",
+    }),
   });
+}
 
-  it("rejects with 403 when target belongs to multiple organizations and actor is not Overall Owner", async () => {
-    const { getCurrentUser } = await import("@/lib/current-user");
-    const { getOverallRole } = await import(
-      "@/features/auth/data/overall-role"
-    );
-    const { POST } = await import("./route");
+async function actor(overallOwner = false) {
+  const { getCurrentUser } = await import("@/lib/current-user");
+  const { getOverallRole } = await import("@/features/auth/data/overall-role");
+  vi.mocked(getCurrentUser).mockResolvedValue({
+    profileId: actorProfileId,
+    name: overallOwner ? "Overall Owner" : "Manager",
+    role: overallOwner ? "owner" : "manager",
+    designation: overallOwner ? "owner" : "manager",
+    organizationId: orgA,
+  });
+  vi.mocked(getOverallRole).mockResolvedValue(overallOwner ? "owner" : null);
+}
 
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      profileId: actorProfileId,
-      name: "Manager Alice",
-      role: "manager",
-      designation: "manager",
-      organizationId: orgA,
+describe("POST /api/auth/passcode/reset sensitive-action hold", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    targetMembership.mockResolvedValue({
+      data: { roles: ["server"] },
+      error: null,
     });
-
-    // Actor has NO overall role (or is just org manager)
-    vi.mocked(getOverallRole).mockImplementation(async (userId) => {
-      if (userId === actorProfileId) return null;
-      if (userId === targetProfileId) return null;
-      return null;
-    });
-
+    otherMemberships.mockResolvedValue({ data: [], error: null });
+    targetOverallRole.mockResolvedValue({ data: null, error: null });
+    auditInsert.mockResolvedValue({ error: null });
     mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "memberships") {
+      if (table === "memberships")
         return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockImplementation((col: string) => {
-              if (col === "organization_id") {
-                return {
-                  eq: vi.fn().mockReturnValue({
-                    eq: vi.fn().mockReturnValue({
-                      maybeSingle: vi.fn().mockResolvedValue({
-                        data: { roles: ["server"] },
-                        error: null,
-                      }),
+          select: () => ({
+            eq: (column: string) =>
+              column === "organization_id"
+                ? {
+                    eq: () => ({
+                      eq: () => ({ maybeSingle: targetMembership }),
                     }),
-                  }),
-                };
-              }
-              if (col === "profile_id") {
-                return {
-                  neq: vi.fn().mockResolvedValue({
-                    // Target has a membership in Org B as well!
-                    data: [{ organization_id: orgB }],
-                    error: null,
-                  }),
-                };
-              }
-              return {};
-            }),
+                  }
+                : { neq: otherMemberships },
           }),
         };
-      }
+      if (table === "overall_roles")
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: targetOverallRole }) }),
+        };
+      if (table === "audit_events") return { insert: auditInsert };
       return {};
     });
-
-    const request = new Request("http://localhost/api/auth/passcode/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        restaurantSlug: "org-a",
-        targetProfileId,
-        reason: "Reset requested by staff",
-      }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(403);
-    const data = await response.json();
-    expect(data.error).toBe(
-      "This team member belongs to multiple organizations. Only an Overall administrator can reset their passcode.",
-    );
-  });
-
-  it("permits reset of a multi-org member when actor IS an Overall Owner", async () => {
-    const { getCurrentUser } = await import("@/lib/current-user");
-    const { getOverallRole } = await import(
-      "@/features/auth/data/overall-role"
-    );
     const { rotateGlobalPersonalPin } = await import(
       "@/features/auth/data/global-pin"
     );
-    const { POST } = await import("./route");
-
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      profileId: actorProfileId,
-      name: "Overall Owner Boss",
-      role: "owner",
-      designation: "owner",
-      organizationId: orgA,
-    });
-
-    // Actor IS Overall Owner
-    vi.mocked(getOverallRole).mockImplementation(async (userId) => {
-      if (userId === actorProfileId) return "owner";
-      if (userId === targetProfileId) return null;
-      return null;
-    });
-
-    const mockAuditInserts: unknown[] = [];
-    mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "memberships") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockImplementation((col: string) => {
-              if (col === "organization_id") {
-                return {
-                  eq: vi.fn().mockReturnValue({
-                    eq: vi.fn().mockReturnValue({
-                      maybeSingle: vi.fn().mockResolvedValue({
-                        data: { roles: ["server"] },
-                        error: null,
-                      }),
-                    }),
-                  }),
-                };
-              }
-              if (col === "profile_id") {
-                return {
-                  neq: vi.fn().mockResolvedValue({
-                    data: [{ organization_id: orgB }],
-                    error: null,
-                  }),
-                };
-              }
-              return {};
-            }),
-          }),
-        };
-      }
-      if (table === "audit_events") {
-        return {
-          insert: vi.fn().mockImplementation((data) => {
-            mockAuditInserts.push(data);
-            return Promise.resolve({ error: null });
-          }),
-        };
-      }
-      return {};
-    });
-
     vi.mocked(rotateGlobalPersonalPin).mockResolvedValue({ ok: true });
+  });
 
-    const request = new Request("http://localhost/api/auth/passcode/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        restaurantSlug: "org-a",
-        targetProfileId,
-        newPasscode: "9999",
-        reason: "Owner administrative override",
-      }),
+  it("denies multi-organization recovery to a manager", async () => {
+    await actor();
+    otherMemberships.mockResolvedValue({
+      data: [{ organization_id: orgB }],
+      error: null,
     });
+    const { POST } = await import("./route");
+    const { rotateGlobalPersonalPin } = await import(
+      "@/features/auth/data/global-pin"
+    );
+    expect((await POST(request())).status).toBe(403);
+    expect(rotateGlobalPersonalPin).not.toHaveBeenCalled();
+  });
 
-    const response = await POST(request);
+  it("denies multi-organization recovery even to an Overall Owner", async () => {
+    await actor(true);
+    otherMemberships.mockResolvedValue({
+      data: [{ organization_id: orgB }],
+      error: null,
+    });
+    const { POST } = await import("./route");
+    const response = await POST(request());
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toBe(
+      "Privileged credential recovery is temporarily held.",
+    );
+  });
+
+  it("denies recovery of an Overall-role holder in one organization", async () => {
+    await actor(true);
+    targetOverallRole.mockResolvedValue({
+      data: { role: "manager" },
+      error: null,
+    });
+    const { POST } = await import("./route");
+    expect((await POST(request())).status).toBe(403);
+  });
+
+  it("denies recovery of an Organization Owner in one organization", async () => {
+    await actor(true);
+    targetMembership.mockResolvedValue({
+      data: { roles: ["owner"] },
+      error: null,
+    });
+    const { POST } = await import("./route");
+    expect((await POST(request())).status).toBe(403);
+  });
+
+  it("fails closed when a sensitive lookup fails", async () => {
+    await actor(true);
+    const { POST } = await import("./route");
+    targetOverallRole.mockResolvedValueOnce({
+      data: null,
+      error: { message: "unavailable" },
+    });
+    expect((await POST(request())).status).toBe(503);
+    otherMemberships.mockResolvedValueOnce({
+      data: null,
+      error: { message: "unavailable" },
+    });
+    expect((await POST(request())).status).toBe(503);
+  });
+
+  it("preserves authorized same-organization staff recovery", async () => {
+    await actor();
+    const { POST } = await import("./route");
+    const { rotateGlobalPersonalPin } = await import(
+      "@/features/auth/data/global-pin"
+    );
+    const response = await POST(request());
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.passcode).toBe("9999");
+    expect((await response.json()).passcode).toBe("4321");
     expect(rotateGlobalPersonalPin).toHaveBeenCalledWith(
       mockAdmin,
       expect.objectContaining({
         organizationId: orgA,
         profileId: targetProfileId,
-        newPasscode: "9999",
-      }),
-    );
-    expect(mockAuditInserts.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("permits reset of a strictly single-org member by an authorized Org Manager", async () => {
-    const { getCurrentUser } = await import("@/lib/current-user");
-    const { getOverallRole } = await import(
-      "@/features/auth/data/overall-role"
-    );
-    const { rotateGlobalPersonalPin } = await import(
-      "@/features/auth/data/global-pin"
-    );
-    const { POST } = await import("./route");
-
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      profileId: actorProfileId,
-      name: "Manager Bob",
-      role: "manager",
-      designation: "manager",
-      organizationId: orgA,
-    });
-
-    vi.mocked(getOverallRole).mockResolvedValue(null);
-
-    mockAdmin.from.mockImplementation((table: string) => {
-      if (table === "memberships") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockImplementation((col: string) => {
-              if (col === "organization_id") {
-                return {
-                  eq: vi.fn().mockReturnValue({
-                    eq: vi.fn().mockReturnValue({
-                      maybeSingle: vi.fn().mockResolvedValue({
-                        data: { roles: ["server"] },
-                        error: null,
-                      }),
-                    }),
-                  }),
-                };
-              }
-              if (col === "profile_id") {
-                return {
-                  neq: vi.fn().mockResolvedValue({
-                    // Target has NO other memberships
-                    data: [],
-                    error: null,
-                  }),
-                };
-              }
-              return {};
-            }),
-          }),
-        };
-      }
-      if (table === "audit_events") {
-        return {
-          insert: vi.fn().mockResolvedValue({ error: null }),
-        };
-      }
-      return {};
-    });
-
-    vi.mocked(rotateGlobalPersonalPin).mockResolvedValue({ ok: true });
-
-    const request = new Request("http://localhost/api/auth/passcode/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        restaurantSlug: "org-a",
-        targetProfileId,
         newPasscode: "4321",
-        reason: "Forgot passcode on shift",
       }),
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.passcode).toBe("4321");
+    );
+    expect(auditInsert).toHaveBeenCalled();
   });
 });
