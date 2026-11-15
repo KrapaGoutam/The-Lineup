@@ -81,8 +81,18 @@ select is(
 );
 
 -- 2. Permissions and creation -----------------------------------------------
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
 select throws_ok(
   $$select public.task_series_create('00000000-0000-0000-0000-000000028011','00000000-0000-0000-0000-000000028021','Staff series',null,'other','normal','anyone','{}',null,null,'daily',null,null,(now() at time zone 'America/Chicago')::date,'never',null,null)$$,
   '42501', null, 'staff cannot create a series'
@@ -91,6 +101,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
 select throws_ok(
   $$select public.task_series_create('00000000-0000-0000-0000-000000028011','00000000-0000-0000-0000-000000028021','Bad',null,'other','normal','anyone','{}',null,null,'selected_weekdays','{}',null,(now() at time zone 'America/Chicago')::date,'never',null,null)$$,
   '22023', null, 'selected weekdays needs at least one weekday'
@@ -118,6 +130,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028005')::text, true);
 select is(
   public.task_recurrence_generate('00000000-0000-0000-0000-000000028011','00000000-0000-0000-0000-000000028021'),
   0, 'generation is idempotent and any member may run it'
@@ -133,6 +147,8 @@ select set_config('t.day1', (select id::text from public.tasks where recurrence_
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L, 'done today')$$, current_setting('t.day1')),
   'the assignee completes today''s occurrence'
@@ -155,6 +171,8 @@ select ok(
 -- 4. This-and-future edit ----------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028005')::text, true);
 select throws_ok(
   format($$select public.task_series_update(%L,'x',null,'other','normal','anyone','{}',null,null,'daily',null,null,(now() at time zone 'America/Chicago')::date,'never',null,null)$$, current_setting('t.rule')),
   '42501', null, 'staff cannot edit a series'
@@ -167,6 +185,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
 select lives_ok(
   format($$select public.task_series_update(%L,'Descale ice machine',null,'cleaning','high','individual',array['00000000-0000-0000-0000-000000028004']::uuid[],'16:30',null,'daily',null,null,(now() at time zone 'America/Chicago')::date,'never',null,null)$$, current_setting('t.rule')),
   'TASK-045 manager edits this and future occurrences'
@@ -184,6 +204,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
 select lives_ok(
   format($$select public.task_series_update(%L,'Descale ice machine',null,'cleaning','high','individual',array['00000000-0000-0000-0000-000000028004']::uuid[],'16:30',null,'selected_weekdays','{1}',null,(now() at time zone 'America/Chicago')::date,'never',null,null)$$, current_setting('t.rule')),
   'the pattern can change to Mondays only'
@@ -201,6 +223,8 @@ select is(
 -- 5. Stop ---------------------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028002')::text, true);
 select lives_ok(
   format($$select public.task_series_stop(%L)$$, current_setting('t.rule')),
   'manager ends the series'
@@ -221,11 +245,15 @@ select throws_ok(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028004')::text, true);
 select is((select count(*)::int from public.task_recurrence_rules), 0, 'staff cannot read series definitions');
 reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000028008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028008')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000028008')::text, true);
 select throws_ok(
   $$select public.task_recurrence_generate('00000000-0000-0000-0000-000000028011','00000000-0000-0000-0000-000000028021')$$,
   '42501', null, 'TASK-070 another organization cannot run generation here'

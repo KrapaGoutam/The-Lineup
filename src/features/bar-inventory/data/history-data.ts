@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { getOrganizationRoster } from "@/features/team/data/roster";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,17 +38,22 @@ type LedgerRow = {
 export type HistoryPage = { entries: HistoryEntry[]; truncated: boolean };
 
 /**
- * Ledger rows for the caller's organization and primary location, newest
+ * Ledger rows for the caller's organization and verified active location, newest
  * first. RLS (not this function) decides what comes back: staff and other
  * tenants get nothing. `since` bounds the range; `productId` narrows to one
  * item; the read asks for one row more than the limit to know if it was cut.
  */
 export async function getHistoryEntries(
   organizationId: string,
-  options: { since: string | null; productId: string | null; limit: number },
+  options: {
+    since: string | null;
+    productId: string | null;
+    limit: number;
+    // Required: the server-verified active location (no primary-location fallback).
+    locationId: string;
+  },
 ): Promise<HistoryPage | null> {
-  const location = await getPrimaryLocation(organizationId);
-  if (!location) return null;
+  const effectiveLocationId = options.locationId;
   const supabase = await createClient();
 
   // The API caps every response (max_rows), however large a limit is asked
@@ -60,7 +64,7 @@ export async function getHistoryEntries(
       .from("inventory_adjustments")
       .select(COLUMNS)
       .eq("organization_id", organizationId)
-      .eq("location_id", location.id);
+      .eq("location_id", effectiveLocationId);
     if (options.since) query = query.gte("created_at", options.since);
     if (options.productId) query = query.eq("product_id", options.productId);
     if (cursor) query = query.or(olderThan(cursor));

@@ -2,6 +2,7 @@ import {
   acknowledgeOpeningReminderAction,
   getOpeningReminderPromptAction,
 } from "@/features/tasks/actions/tasks-actions";
+import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 import { generateDailyChecklists } from "../domain/checklist-engine";
@@ -24,10 +25,14 @@ import type { OpeningReminderSource } from "../hooks/use-opening-reminder-prompt
  */
 export function createRealOpeningReminderSource(
   restaurantSlug: string,
+  expectedContext: WorkspaceExpectation | null,
 ): OpeningReminderSource {
   return {
     async load() {
-      const result = await getOpeningReminderPromptAction({ restaurantSlug });
+      const result = await getOpeningReminderPromptAction({
+        restaurantSlug,
+        expectedContext,
+      });
       if (result.ok) return { ok: true, data: result.data };
       return { ok: false, sessionInvalid: result.sessionInvalid };
     },

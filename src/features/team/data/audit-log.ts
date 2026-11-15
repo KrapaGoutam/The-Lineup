@@ -33,6 +33,7 @@ type AuditEventsClient = {
 
 export type AuditEventInput = {
   organizationId: string;
+  locationId?: string | null;
   actorProfileId: string;
   action: string;
   entityType: string;
@@ -49,6 +50,7 @@ export async function writeAuditEvent(
   try {
     const { error } = await supabase.from("audit_events").insert({
       organization_id: input.organizationId,
+      location_id: input.locationId ?? null,
       actor_profile_id: input.actorProfileId,
       action: input.action,
       entity_type: input.entityType,

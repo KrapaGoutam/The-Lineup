@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { deactivateMember } from "@/features/auth/data/member-deactivation";
-import { designationForRoles } from "@/features/auth/domain/passcode";
-import { canDeactivateMember } from "@/features/team/domain/designations";
 import { getCurrentUser } from "@/lib/current-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 type DeactivateBody = {
   restaurantSlug?: string;
@@ -13,17 +11,8 @@ type DeactivateBody = {
 };
 
 /**
- * Feature 017. Owner/manager-initiated deactivation -- blocks a member's
- * future sign-ins, blocks every RLS-gated data operation immediately
- * (even from an already-open session, confirmed live: memberships.active
- * is what private.has_org_role actually checks), and invalidates any
- * already-issued Supabase Auth session token for that person. See
- * docs/features/017-member-deactivation.md for the full design.
- *
- * Authorization reuses canDeactivateMember directly (mirrors
- * canChangeDesignation, the same bar Feature 016 already reuses for
- * reset, plus an unconditional self-target refusal this action alone
- * needs) rather than re-deriving it a third time.
+ * Organization-scoped deactivation. The database RPC checks the live caller,
+ * role hierarchy and target before it changes membership, credential and audit.
  */
 export async function POST(request: Request) {
   let body: DeactivateBody;
@@ -62,59 +51,45 @@ export async function POST(request: Request) {
     );
   }
 
-  const admin = createAdminClient();
-  const { data: targetMembership } = await admin
-    .from("memberships")
-    .select("roles, active")
-    .eq("organization_id", actor.organizationId)
-    .eq("profile_id", targetProfileId)
-    .maybeSingle();
-  if (!targetMembership) {
+  const result = await deactivateMember(await createClient(), {
+    organizationId: actor.organizationId,
+    profileId: targetProfileId,
+    reason,
+  });
+  if (!result.ok) {
+    const status =
+      result.code === "28000"
+        ? 401
+        : result.code === "42501"
+          ? 403
+          : result.code === "P0002"
+            ? 404
+            : result.code === "22023"
+              ? 400
+              : 500;
     return NextResponse.json(
-      { error: "That person is not a member of this organization." },
-      { status: 404 },
+      {
+        error:
+          status === 500
+            ? "Unable to deactivate this person."
+            : status === 401
+              ? "Not signed in."
+              : status === 404
+                ? "That person is not a member of this organization."
+                : status === 400
+                  ? "Invalid request."
+                  : "You are not able to deactivate this person.",
+        ...(status === 401 ? { sessionInvalid: true } : {}),
+      },
+      { status },
     );
   }
-  if (!targetMembership.active) {
+  if (result.outcome === "already_in_state") {
     return NextResponse.json(
       { error: "That person is already deactivated." },
       { status: 409 },
     );
   }
-
-  const targetDesignation = designationForRoles(targetMembership.roles ?? []);
-  const allowed = canDeactivateMember({
-    actorProfileId: actor.profileId,
-    actorDesignation: actor.designation,
-    targetProfileId,
-    targetCurrentDesignation: targetDesignation,
-  });
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "You are not able to deactivate this person." },
-      { status: 403 },
-    );
-  }
-
-  const result = await deactivateMember(admin, {
-    organizationId: actor.organizationId,
-    profileId: targetProfileId,
-  });
-  if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, writes: result.writes },
-      { status: 500 },
-    );
-  }
-
-  await admin.from("audit_events").insert({
-    organization_id: actor.organizationId,
-    actor_profile_id: actor.profileId,
-    action: "member_deactivated",
-    entity_type: "membership",
-    entity_id: targetProfileId,
-    reason,
-  });
 
   return NextResponse.json({ ok: true });
 }

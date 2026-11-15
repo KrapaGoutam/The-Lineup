@@ -264,7 +264,11 @@ describe("Recipes browsing: view toggle, filters, and sort", () => {
     ).not.toBeInTheDocument();
     unmount();
 
-    // Management
+    // Management (the database says this person may write the shared book)
+    vi.mocked(getRecipeIndexAction).mockResolvedValue({
+      ok: true,
+      data: { ...testIndex, canManage: true },
+    });
     render(
       <RecipesModule
         restaurantSlug="test-bar"
@@ -285,4 +289,37 @@ describe("Recipes browsing: view toggle, filters, and sort", () => {
       screen.getByRole("button", { name: "Add Recipe" }),
     ).toBeInTheDocument();
   });
+
+  it.each([
+    ["the database says no", false],
+    ["the decision is absent (fail closed)", undefined],
+  ])(
+    "E-1: a management designation without write authority sees the book read-only (%s)",
+    async (_label, canManage) => {
+      vi.mocked(getRecipeIndexAction).mockResolvedValue({
+        ok: true,
+        data: { ...testIndex, canManage },
+      });
+      render(
+        <RecipesModule
+          restaurantSlug="test-bar"
+          demo={false}
+          isManagement={true}
+          onSessionInvalid={vi.fn()}
+        />,
+      );
+      expect(
+        await screen.findByRole("button", { name: "List" }),
+      ).toBeInTheDocument();
+      // Reads are unchanged: the archived toggle is still offered.
+      expect(screen.getByLabelText("Show archived")).toBeInTheDocument();
+      // Writes are not offered, and the person is told why.
+      expect(
+        screen.queryByRole("button", { name: "Add Recipe" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/edited by organization managers/i),
+      ).toBeInTheDocument();
+    },
+  );
 });

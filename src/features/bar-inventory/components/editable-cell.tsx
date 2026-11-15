@@ -11,7 +11,7 @@ import {
   ADJUSTMENT_REASONS,
   ADJUSTMENT_REASON_LABELS,
   formatQuantity,
-  toCents,
+  parseQuantityInput,
   type AdjustmentReason,
 } from "../domain/stock-rules";
 
@@ -91,22 +91,12 @@ export function EditableCell({
   function parse():
     | { ok: true; value: number | null }
     | { ok: false; error: string } {
-    const text = draft.trim();
-    if (text === "") {
-      return mode === "level"
-        ? { ok: true, value: null }
-        : { ok: false, error: `Enter a number for ${label}.` };
-    }
-    const n = Number(text);
-    if (!Number.isFinite(n))
-      return { ok: false, error: `Enter a number for ${label}.` };
-    try {
-      toCents(n);
-    } catch (e) {
-      return { ok: false, error: (e as Error).message };
-    }
-    if (n < 0) return { ok: false, error: `${label} cannot be negative.` };
-    return { ok: true, value: n };
+    const res = parseQuantityInput(draft, {
+      allowBlank: mode === "level",
+      label,
+    });
+    if (res.ok) return { ok: true, value: res.value };
+    return { ok: false, error: res.error };
   }
 
   async function save(
@@ -233,10 +223,8 @@ export function EditableCell({
     >
       <Input
         autoFocus
-        type="number"
+        type="text"
         inputMode="decimal"
-        step="any"
-        min={0}
         aria-label={`${label} for ${itemName}`}
         aria-invalid={error !== null}
         className="min-h-9 w-24 text-right"

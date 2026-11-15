@@ -258,4 +258,37 @@ describe("FilterableTable", () => {
     expect(params.get("keep")).toBe("1");
     expect(params.get("t.f.name")).toBeNull();
   });
+
+  it("renders a custom header via headerRender when provided", () => {
+    const customColumns: TableColumn<Row>[] = [
+      {
+        id: "selection",
+        label: "Select",
+        type: "text",
+        get: () => null,
+        headerRender: () => (
+          <input type="checkbox" aria-label="Select all test" />
+        ),
+        render: (r) => (
+          <input type="checkbox" aria-label={`Select ${r.name}`} />
+        ),
+      },
+      ...columns,
+    ];
+    render(
+      <FilterableTable
+        tableKey="t"
+        restaurantSlug="demo"
+        label="Items"
+        rows={rows}
+        columns={customColumns}
+        getRowId={(r) => r.id}
+        timeZone="America/Chicago"
+        emptyMessage="Empty"
+      />,
+    );
+    expect(
+      screen.getByRole("checkbox", { name: "Select all test" }),
+    ).toBeInTheDocument();
+  });
 });

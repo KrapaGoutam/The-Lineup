@@ -1,28 +1,20 @@
-import { RestaurantOperationsApp } from "@/components/restaurant-operations-app";
-import { loadPageData } from "@/lib/page-data";
+import { RestaurantEntry } from "@/components/restaurant-entry";
+import { parseExplicitLocationSelection } from "@/features/context/domain/active-context";
 
 export default async function RestaurantPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ restaurantSlug: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { restaurantSlug } = await params;
-  const {
-    demoMode,
-    initialUser,
-    scheduleContext,
-    tipsContext,
-    allocationContext,
-  } = await loadPageData(restaurantSlug);
-
+  // V2-003.002: `?location=` is an untrusted preference, validated server-side.
+  const { location } = await searchParams;
   return (
-    <RestaurantOperationsApp
-      demoMode={demoMode}
+    <RestaurantEntry
       restaurantSlug={restaurantSlug}
-      initialUser={initialUser}
-      initialScheduleContext={scheduleContext}
-      initialTipsContext={tipsContext}
-      initialAllocationContext={allocationContext}
+      explicitSelection={parseExplicitLocationSelection(location)}
     />
   );
 }

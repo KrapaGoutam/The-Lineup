@@ -19,6 +19,13 @@ export function createPasscodeLocator(
     .digest("hex");
 }
 
+/** Universal namespace; deliberately distinct from lookup and Auth domains. */
+export function createGlobalPasscodeLocator(passcode: string) {
+  return createHmac("sha256", getPepper())
+    .update(`global-pin:v1:${passcode}`)
+    .digest("hex");
+}
+
 /**
  * Feature 016 (revised): the string actually sent to Supabase Auth as a
  * person's password, in place of the raw 4-digit passcode. Two things
@@ -53,6 +60,20 @@ export function createPasscodeLocator(
 export function createAuthPassword(organizationId: string, passcode: string) {
   return createHmac("sha256", getPepper())
     .update(`authpw:${organizationId}:${passcode}`)
+    .digest("hex");
+}
+
+/**
+ * V2-009 B3 / F-5: Canonical person-level Auth password.
+ * Binds the Auth password derivation to the stable canonical Auth profile ID
+ * and personal passcode with domain separation `authpw:person:${profileId}:${passcode}`.
+ * This guarantees that two people choosing the same 4-digit PIN never share the
+ * same Auth password, while allowing a single person to sign in across multiple
+ * organizations without password mismatch or collision.
+ */
+export function createPersonAuthPassword(profileId: string, passcode: string) {
+  return createHmac("sha256", getPepper())
+    .update(`authpw:person:${profileId}:${passcode}`)
     .digest("hex");
 }
 

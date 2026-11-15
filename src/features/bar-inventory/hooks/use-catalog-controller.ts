@@ -42,11 +42,13 @@ export function useCatalogController({
   restaurantSlug,
   viewer,
   onSessionInvalid,
+  expectedContext,
 }: {
   demo: DemoCatalogBinding | null;
   restaurantSlug: string;
   viewer: InventoryViewer;
   onSessionInvalid?: () => void;
+  expectedContext?: unknown;
 }) {
   const [snapshot, setSnapshot] = useState<CatalogSnapshot | null>(null);
   const [loading, setLoading] = useState(!demo);
@@ -57,8 +59,10 @@ export function useCatalogController({
   // dependency of the loader: as one, every render re-ran the load effect and
   // the snapshot was re-read once a second.
   const sessionInvalid = useRef(onSessionInvalid);
+  const expectedContextRef = useRef(expectedContext);
   useEffect(() => {
     sessionInvalid.current = onSessionInvalid;
+    expectedContextRef.current = expectedContext;
   });
   const reading = useRef<Promise<void> | null>(null);
   const rerun = useRef(false);
@@ -80,7 +84,10 @@ export function useCatalogController({
           rerun.current = false;
           let result: Awaited<ReturnType<typeof getCatalogSnapshotAction>>;
           try {
-            result = await getCatalogSnapshotAction({ restaurantSlug });
+            result = await getCatalogSnapshotAction({
+              restaurantSlug,
+              expectedContext: expectedContextRef.current,
+            });
           } catch {
             // Offline or the server dropped the request: say so, never freeze.
             setLoadError(OFFLINE_READ_MESSAGE);
@@ -175,7 +182,11 @@ export function useCatalogController({
       }
       let result: Awaited<ReturnType<typeof runCatalogCommandAction>>;
       try {
-        result = await runCatalogCommandAction({ restaurantSlug, command });
+        result = await runCatalogCommandAction({
+          restaurantSlug,
+          command,
+          expectedContext: expectedContextRef.current,
+        });
       } catch {
         return { ok: false, error: OFFLINE_WRITE_MESSAGE };
       }
@@ -188,8 +199,16 @@ export function useCatalogController({
         sessionInvalid.current?.();
         return { ok: false, error: result.error };
       }
-      // A refused write may mean the screen is stale: show the latest.
-      if (result.conflict?.kind === "stale") await refresh();
+      // A refused write may mean the screen is stale: show the latest. That includes a refusal of
+      // the shared-catalog authority (E-1): the organization may have just gained a second active
+      // location, and the refreshed snapshot carries canManageCatalog = false so the edit controls
+      // disappear instead of staying on screen until the next window focus.
+      if (
+        result.conflict?.kind === "stale" ||
+        /shared Bar Inventory catalog/.test(result.error)
+      ) {
+        await refresh();
+      }
       return { ok: false, error: result.error, conflict: result.conflict };
     },
     [demo, viewer.name, viewer.profileId, restaurantSlug, refresh],

@@ -17,9 +17,15 @@ import type {
   ColumnStatus,
   RotationBoard,
 } from "@/features/allocation/domain/rotation-board";
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
-import { getOrganizationRoster } from "@/features/team/data/roster";
+import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
+import { locationForLoader } from "@/features/locations/data/primary-location";
+import {
+  designationForRoles,
+  designationToRole,
+} from "@/features/auth/domain/passcode";
+import { boardActorName } from "@/features/allocation/domain/board-activity";
 import { fetchClockedInRoster } from "@/features/tips/data/fetch-clocked-in-roster";
+import type { Database } from "@/types/database.generated";
 import type { TeamMember } from "@/lib/demo-data";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
@@ -153,12 +159,34 @@ export function diningAreaName(
 export async function getAllocationContext(
   organizationId: string,
   requestedServiceDate?: string,
+  verifiedLocation?: VerifiedLocationScope,
 ): Promise<AllocationContext | null> {
   const supabase = await createClient();
-  const location = await getPrimaryLocation(organizationId);
+  const location = await locationForLoader(organizationId, verifiedLocation);
   if (!location) return null;
 
-  const team = await getOrganizationRoster(organizationId);
+  const { data: roster, error: rosterError } = await supabase.rpc(
+    "board_location_roster",
+    {
+      p_organization_id: organizationId,
+      p_location_id: location.id,
+    },
+  );
+  const rosterRows = roster as
+    | Database["public"]["Functions"]["board_location_roster"]["Returns"]
+    | null;
+  const team: TeamMember[] = (rosterRows ?? []).map((row, index) => {
+    const designation = designationForRoles(row.roles);
+    return {
+      id: row.profile_id,
+      name: row.display_name,
+      shortName: row.display_name.split(" ")[0] || row.display_name,
+      role: designationToRole(designation),
+      designation,
+      active: row.active,
+      color: `var(--server-${["one", "two", "three", "four", "five", "six", "seven"][index % 7]})`,
+    };
+  });
   const today = zonedWallTimeFromInstant(new Date(), location.time_zone).date;
   const serviceDate = requestedServiceDate ?? today;
   const isHistorical = serviceDate < today;
@@ -166,6 +194,9 @@ export async function getAllocationContext(
   const clockedInResult = await fetchClockedInRoster(supabase, {
     organizationId,
     serviceDate,
+    // V2-006.006: the verified location decides the attendance source, so an internal
+    // location is never prioritised from Neon rows (and an external one is unchanged).
+    locationId: location.id,
   });
   // Prioritization only, never a hard dependency -- an attendance-lookup
   // failure shouldn't take down the whole board read.
@@ -253,9 +284,10 @@ export async function getAllocationContext(
       physicalTablesQueryFailed,
       claims: [],
       claimDivergences: [],
-      boardLoadError: sessionError
-        ? "We couldn't load today's board. Refresh to try again."
-        : null,
+      boardLoadError:
+        sessionError || rosterError
+          ? "We couldn't load today's board. Refresh to try again."
+          : null,
     };
   }
 
@@ -314,7 +346,12 @@ export async function getAllocationContext(
   if (claimError)
     console.error("getAllocationContext: section_assignments", claimError);
   const boardLoadError =
-    memberError || roundError || entryError || eventError || claimError
+    rosterError ||
+    memberError ||
+    roundError ||
+    entryError ||
+    eventError ||
+    claimError
       ? "Part of today's board couldn't be loaded, so what you see may be incomplete. Refresh to try again."
       : null;
 
@@ -393,7 +430,7 @@ export async function getAllocationContext(
       }
       return {
         at: event.created_at,
-        actorName: nameByProfileId.get(event.actor_profile_id) ?? "Unknown",
+        actorName: boardActorName(event, (id) => nameByProfileId.get(id)),
         columnName: nameByProfileId.get(targetProfileId) ?? "Unknown",
       };
     })

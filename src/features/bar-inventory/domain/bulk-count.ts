@@ -1,4 +1,5 @@
 import type { InventoryRow } from "./inventory-rows";
+import { parseQuantityOrThrow } from "./stock-rules";
 
 export type CountInput = { onHand: string; backup: string };
 export type BulkCountRow = {
@@ -15,14 +16,7 @@ export type CountChange = {
   request: BulkCountRow;
 };
 export function countValue(input: string): number | null {
-  const text = input.trim();
-  if (!text) return null;
-  if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(text))
-    throw new Error("Enter a nonnegative quantity with up to 2 decimals.");
-  const value = Number(text);
-  if (!Number.isFinite(value) || value > 9999999999.99)
-    throw new Error("That quantity is too large.");
-  return value;
+  return parseQuantityOrThrow(input, { allowBlank: true });
 }
 export function reviewCounts(
   rows: readonly InventoryRow[],

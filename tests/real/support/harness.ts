@@ -1,5 +1,5 @@
 /**
- * Real-mode (hosted DEV) test harness for Table Rotation V2.
+ * Real-mode test harness for Table Rotation V2 (hosted DEV or explicit local mode).
  *
  * Unlike the demo-mode Playwright suite and the single-actor pgTAP files,
  * this drives the real Supabase project through each synthetic user's own
@@ -7,8 +7,9 @@
  * exactly as they do for a browser session.
  *
  * Safety:
- *   - hard-aborts unless NEXT_PUBLIC_SUPABASE_URL is the the-lineup-dev ref
- *     and refuses the production ref outright;
+ *   - default mode requires the-lineup-dev and refuses Production;
+ *   - LINEUP_REAL_LOCAL=1 skips hosted env files and requires exactly the
+ *     verified restaurant-roster loopback API on port 54321;
  *   - every run creates its OWN organization / locations / users with random
  *     names and deletes them afterwards -- existing DEV data is never read
  *     or modified;
@@ -26,15 +27,40 @@ const PROD_REF = "ftadewtkjlaotfdvtjcv";
 type Env = { url: string; anonKey: string; serviceKey: string };
 
 function loadDevEnv(): Env {
+  // Explicit local mode never reads a hosted env file or accepts another port.
+  if (process.env.LINEUP_REAL_LOCAL === "1") {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (url !== "http://127.0.0.1:54321") {
+      throw new Error(
+        "Local JWT tests require verified restaurant-roster port 54321.",
+      );
+    }
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    const serviceKey = process.env.SUPABASE_SECRET_KEY;
+    if (!anonKey || !serviceKey)
+      throw new Error("Missing local test credentials.");
+    return { url, anonKey, serviceKey };
+  }
   const file = path.resolve(process.cwd(), ".env.development.local");
   const parsed: Record<string, string> = {};
-  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+  for (const line of (fs.existsSync(file)
+    ? fs.readFileSync(file, "utf8")
+    : ""
+  ).split(/\r?\n/)) {
     const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (match) parsed[match[1]] = match[2].replace(/^"|"$/g, "");
   }
+  // Codespaces provides secrets to the process; never write them to an env file.
+  for (const key of [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+  ]) {
+    if (process.env[key]) parsed[key] = process.env[key]!;
+  }
   const url = parsed.NEXT_PUBLIC_SUPABASE_URL ?? "";
   if (url.includes(PROD_REF)) throw new Error("Refusing to run against PROD.");
-  if (!url.includes(DEV_REF)) {
+  if (url !== `https://${DEV_REF}.supabase.co`) {
     throw new Error("Real-mode tests only run against the-lineup-dev.");
   }
   return {
@@ -262,6 +288,41 @@ export async function createFixture(): Promise<Fixture> {
     "memberships",
   );
 
+  must(
+    await admin
+      .from("location_memberships")
+      .insert([
+        ...[owner, manager].flatMap((user) =>
+          [locA, locB].map((location_id) => ({
+            location_id,
+            profile_id: user.id,
+            role: "manager",
+            active: true,
+          })),
+        ),
+        {
+          location_id: locA,
+          profile_id: server1.id,
+          role: "staff",
+          active: true,
+        },
+        {
+          location_id: locA,
+          profile_id: server2.id,
+          role: "staff",
+          active: true,
+        },
+        {
+          location_id: locA,
+          profile_id: server3.id,
+          role: "staff",
+          active: true,
+        },
+      ])
+      .select("id"),
+    "location_memberships",
+  );
+
   const tablesFor = async (orgId: string, locationId: string) => {
     const area = must(
       await admin
@@ -348,6 +409,10 @@ export async function createFixture(): Promise<Fixture> {
     // clears only by cascade from the organization, and holds actor FKs to
     // memberships, so remove the organizations (cascade) before memberships.
     // Everything above that blocks an organization delete is already gone.
+    await admin
+      .from("location_memberships")
+      .delete()
+      .in("location_id", [locA, locB, otherLoc]);
     await admin.from("organizations").delete().in("id", orgIds);
     await admin.from("memberships").delete().in("organization_id", orgIds);
     await admin.from("locations").delete().in("organization_id", orgIds);

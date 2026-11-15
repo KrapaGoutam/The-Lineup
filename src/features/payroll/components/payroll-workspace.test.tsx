@@ -74,6 +74,9 @@ describe("PayrollWorkspace", () => {
           createdAt: "2026-01-01T00:00:00Z",
           isActive: true,
         },
+        canManage: false,
+        isOrgManager: false,
+        locationId: null,
       },
     });
     mockedGetDashboard.mockResolvedValue({
@@ -100,6 +103,7 @@ describe("PayrollWorkspace", () => {
         {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,
@@ -121,6 +125,7 @@ describe("PayrollWorkspace", () => {
         period: {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,
@@ -176,7 +181,12 @@ describe("PayrollWorkspace", () => {
   it("renders PrivilegedPayrollView with Option 1k layout and 3 KPI cards for managers, without inline RateSettings", async () => {
     mockedGetAccess.mockResolvedValue({
       ok: true,
-      data: { scope: "all" },
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
     });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
@@ -267,7 +277,15 @@ describe("PayrollWorkspace", () => {
   });
 
   it("bulk-generates payroll for a manager-chosen subset, defaults the checklist to not-yet-generated employees, and reports the mixed outcome clearly", async () => {
-    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
+    });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
       data: {
@@ -323,6 +341,7 @@ describe("PayrollWorkspace", () => {
             period: {
               id: 5,
               organizationId: "org-1",
+              locationId: null,
               neonUserId: 102,
               periodMonth: "2026-09-01",
               hoursSnapshot: 80,
@@ -416,7 +435,15 @@ describe("PayrollWorkspace", () => {
   });
 
   it("PeriodLedgerPanel's single-statement print renders the shared letterhead and a dynamic filename", async () => {
-    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
+    });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
       data: {
@@ -465,6 +492,7 @@ describe("PayrollWorkspace", () => {
         period: {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,
@@ -545,7 +573,15 @@ describe("PayrollWorkspace", () => {
   });
 
   it("a manager can unlock a locked period through an explicit, reason-gated confirmation", async () => {
-    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
+    });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
       data: {
@@ -594,6 +630,7 @@ describe("PayrollWorkspace", () => {
         period: {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,
@@ -687,7 +724,15 @@ describe("PayrollWorkspace", () => {
   });
 
   it("a manager can unconfirm a confirmed payment through an explicit, reason-gated confirmation", async () => {
-    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
+    });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
       data: {
@@ -736,6 +781,7 @@ describe("PayrollWorkspace", () => {
         period: {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,
@@ -841,7 +887,15 @@ describe("PayrollWorkspace", () => {
   });
 
   it("a manager can edit a draft payment's amount, date, and comment inline", async () => {
-    mockedGetAccess.mockResolvedValue({ ok: true, data: { scope: "all" } });
+    mockedGetAccess.mockResolvedValue({
+      ok: true,
+      data: {
+        scope: "all",
+        canManage: true,
+        isOrgManager: true,
+        locationId: null,
+      },
+    });
     mockedGetRateOptions.mockResolvedValue({
       ok: true,
       data: {
@@ -890,6 +944,7 @@ describe("PayrollWorkspace", () => {
         period: {
           id: 1,
           organizationId: "org-1",
+          locationId: null,
           neonUserId: 101,
           periodMonth: "2026-08-01",
           hoursSnapshot: 40,

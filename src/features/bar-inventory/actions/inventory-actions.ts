@@ -2,8 +2,7 @@
 
 import { z } from "zod";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
-import { getCurrentUser } from "@/lib/current-user";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import {
   EXPORT_MIME,
   sheetToCsv,
@@ -13,7 +12,15 @@ import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { workbookToBuffer } from "@/lib/xlsx/write-node";
 
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+import {
+  getInventoryActor,
+  type InventoryActor,
+} from "../data/inventory-actor";
+import type { Database } from "@/types/database.generated";
 import { getCatalogSnapshot } from "../data/catalog-data";
+import { getBranchStorageOverview } from "../data/storage-overview-data";
 import { getOrderDraftById } from "../data/order-draft-data";
 import {
   getHistoryEntries,
@@ -38,7 +45,7 @@ import {
   orderDraftExportRequestSchema,
 } from "../domain/order-draft-share";
 import {
-  isInventoryManager,
+  type BranchStorageOverview,
   type CatalogConflict,
   type CatalogSnapshot,
   type HistoryEntry,
@@ -52,6 +59,7 @@ export type InventoryActionResult =
       error: string;
       conflict?: CatalogConflict;
       sessionInvalid?: true;
+      contextStale?: true;
     };
 
 const slugSchema = z
@@ -62,6 +70,16 @@ const slugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
+/**
+ * Every named argument of a generated RPC, nullable. PostgREST resolves RPCs by
+ * argument NAME, so a drifted or omitted name would silently deny every caller
+ * (PGRST202); `satisfies RpcArgs<...>` makes that a compile error.
+ */
+type RpcArgs<N extends keyof Database["public"]["Functions"]> = {
+  [K in keyof Database["public"]["Functions"][N]["Args"]]:
+    | Database["public"]["Functions"][N]["Args"][K]
+    | null;
+};
 type CommandArgs = { p_organization_id: string; p_location_id: string };
 
 async function runCommand(
@@ -281,24 +299,138 @@ async function runCommand(
           p_expected_version: command.expectedVersion,
         })
       ).error;
+    case "storageAreaUpsert":
+      return (
+        await supabase.rpc("inventory_storage_area_upsert", {
+          ...base,
+          p_area_id: command.id,
+          p_name: command.name,
+          p_kind: command.kind,
+          p_display_order: command.displayOrder,
+          p_active: command.active,
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_area_upsert">)
+      ).error;
+    case "storageAreaArchive":
+      return (
+        await supabase.rpc("inventory_storage_area_archive", {
+          ...base,
+          p_area_id: command.id,
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_area_archive">)
+      ).error;
+    case "storageShelfUpsert":
+      return (
+        await supabase.rpc("inventory_storage_shelf_upsert", {
+          ...base,
+          p_shelf_id: command.id,
+          p_storage_area_id: command.storageAreaId,
+          p_name: command.name,
+          p_section_name: command.sectionName,
+          p_display_order: command.displayOrder,
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_shelf_upsert">)
+      ).error;
+    case "storageShelfDelete":
+      return (
+        await supabase.rpc("inventory_storage_shelf_delete", {
+          ...base,
+          p_shelf_id: command.id,
+          p_expected_version: command.expectedVersion,
+          p_remove_placements: command.removePlacements,
+        } satisfies RpcArgs<"inventory_storage_shelf_delete">)
+      ).error;
+    case "storagePlacementSet":
+      return (
+        await supabase.rpc("inventory_storage_placement_set", {
+          ...base,
+          p_placement_id: command.id,
+          p_storage_area_id: command.storageAreaId,
+          p_shelf_id: command.shelfId,
+          p_product_id: command.productId,
+          p_slot_number: command.slotNumber,
+          p_slot_label: command.slotLabel,
+          p_display_order: command.displayOrder,
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_placement_set">)
+      ).error;
+    case "storagePlacementDelete":
+      return (
+        await supabase.rpc("inventory_storage_placement_delete", {
+          ...base,
+          p_placement_id: command.id,
+          p_expected_version: command.expectedVersion,
+        } satisfies RpcArgs<"inventory_storage_placement_delete">)
+      ).error;
+    case "storagePlacementReorder":
+      return (
+        await supabase.rpc("inventory_storage_placement_reorder", {
+          ...base,
+          p_shelf_id: command.shelfId,
+          p_placement_ids: command.placementIds,
+        } satisfies RpcArgs<"inventory_storage_placement_reorder">)
+      ).error;
   }
 }
 
-async function resolveManager(restaurantSlug: string) {
-  const user = await getCurrentUser(restaurantSlug);
-  if (!user) {
+async function checkWorkspace(raw: unknown, actor: InventoryActor) {
+  const expectationRaw = raw ?? {
+    profileId: actor.viewer.profileId,
+    organizationId: actor.organizationId,
+    locationId: actor.scope.locationId,
+  };
+  const outcome = await assertWorkspaceExpectation(
+    expectationRaw,
+    {
+      profileId: actor.viewer.profileId,
+      organizationId: actor.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: actor.scope.locationId,
+        time_zone: actor.scope.timeZone ?? "UTC",
+      }),
+    },
+  );
+  if (!outcome.ok) {
     return {
       ok: false as const,
-      error: "You need to sign in to use Bar Inventory.",
+      error:
+        outcome.code === "invalid"
+          ? "That request is invalid."
+          : STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
     };
   }
-  if (!isInventoryManager(user.designation)) {
+  return { ok: true as const };
+}
+
+async function resolveManager(
+  restaurantSlug: string,
+  expectedContext?: unknown,
+) {
+  const actor = await getInventoryActor(restaurantSlug);
+  if (!actor) {
     return {
       ok: false as const,
-      error: "Bar Inventory is not available for your role.",
+      error: "You are not authorized to manage Bar Inventory at this location.",
     };
   }
-  return { ok: true as const, organizationId: user.organizationId };
+  const workspace = await checkWorkspace(expectedContext, actor);
+  if (!workspace.ok) return workspace;
+
+  const blocked = await guardModule({
+    module: "bar_inventory",
+    organizationId: actor.organizationId,
+    location: { id: actor.scope.locationId },
+  });
+  if (blocked) return blocked;
+  return {
+    ok: true as const,
+    organizationId: actor.organizationId,
+    locationId: actor.scope.locationId,
+    actor,
+  };
 }
 
 /**
@@ -307,21 +439,87 @@ async function resolveManager(restaurantSlug: string) {
  */
 export async function getCatalogSnapshotAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<InventoryActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const caller = await resolveManager(parsed.data.restaurantSlug);
+  const caller = await resolveManager(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!caller.ok) return caller;
 
-  const snapshot = await getCatalogSnapshot(caller.organizationId);
+  const snapshot = await getCatalogSnapshot(
+    caller.organizationId,
+    caller.locationId,
+  );
   if (!snapshot)
     return { ok: false, error: "Bar Inventory could not be loaded." };
   return { ok: true, data: snapshot };
+}
+
+export type BranchOverviewActionResult =
+  | { ok: true; data: BranchStorageOverview }
+  | {
+      ok: false;
+      error: string;
+      sessionInvalid?: true;
+      contextStale?: true;
+    };
+
+/**
+ * READ-ONLY storage layout + per-branch stock for every branch this manager may
+ * manage ("All authorized branches"). The caller must first be a verified
+ * manager at their active branch; each additional branch is then proven by the
+ * database's own authority check inside getBranchStorageOverview. Nothing here
+ * can write, and no branch id is accepted from the client.
+ */
+export async function getBranchStorageOverviewAction(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+}): Promise<BranchOverviewActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return invalid;
+
+  const caller = await resolveManager(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
+  if (!caller.ok) return caller;
+
+  const overview = await getBranchStorageOverview(
+    caller.organizationId,
+    caller.locationId,
+    async (locationId) =>
+      (await guardModule({
+        module: "bar_inventory",
+        organizationId: caller.organizationId,
+        location: { id: locationId },
+      })) === null,
+  );
+  if (!overview) {
+    return { ok: false, error: "Branch layouts could not be loaded." };
+  }
+  return { ok: true, data: overview };
 }
 
 /**
@@ -331,9 +529,14 @@ export async function getCatalogSnapshotAction(input: {
 export async function runCatalogCommandAction(input: {
   restaurantSlug: string;
   command: CatalogCommand;
+  expectedContext?: unknown;
 }): Promise<InventoryActionResult> {
   const parsed = z
-    .object({ restaurantSlug: slugSchema, command: catalogCommandSchema })
+    .object({
+      restaurantSlug: slugSchema,
+      command: catalogCommandSchema,
+      expectedContext: z.unknown().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) {
     return {
@@ -346,16 +549,16 @@ export async function runCatalogCommandAction(input: {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const caller = await resolveManager(parsed.data.restaurantSlug);
+  const caller = await resolveManager(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!caller.ok) return caller;
-
-  const location = await getPrimaryLocation(caller.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
 
   const failure = await runCommand(
     supabase,
     caller.organizationId,
-    location.id,
+    caller.locationId,
     parsed.data.command,
   );
   if (failure) {
@@ -366,7 +569,10 @@ export async function runCatalogCommandAction(input: {
     };
   }
 
-  const snapshot = await getCatalogSnapshot(caller.organizationId);
+  const snapshot = await getCatalogSnapshot(
+    caller.organizationId,
+    caller.locationId,
+  );
   if (!snapshot)
     return { ok: false, error: "Bar Inventory could not be loaded." };
   return { ok: true, data: snapshot };
@@ -390,6 +596,7 @@ export async function getHistoryAction(input: {
   restaurantSlug: string;
   days: number;
   productId: string | null;
+  expectedContext?: unknown;
 }): Promise<HistoryActionResult> {
   const parsed = z
     .object({
@@ -398,6 +605,7 @@ export async function getHistoryAction(input: {
         .number()
         .refine((n) => (HISTORY_RANGES as readonly number[]).includes(n)),
       productId: z.string().uuid().nullable(),
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
@@ -406,7 +614,10 @@ export async function getHistoryAction(input: {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const caller = await resolveManager(parsed.data.restaurantSlug);
+  const caller = await resolveManager(
+    parsed.data.restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!caller.ok) return caller;
 
   const { days, productId } = parsed.data;
@@ -417,6 +628,7 @@ export async function getHistoryAction(input: {
         : new Date(Date.now() - days * MS_PER_DAY).toISOString(),
     productId,
     limit: productId ? ITEM_HISTORY_LIMIT : HISTORY_ROW_LIMIT,
+    locationId: caller.locationId,
   });
   if (!page) return { ok: false, error: "History could not be loaded." };
   return { ok: true, ...page };
@@ -471,12 +683,14 @@ export async function exportDataAction(input: {
   restaurantSlug: string;
   format: ExportFormat;
   request: ExportRequest;
+  expectedContext?: unknown;
 }): Promise<ExportActionResult> {
   const parsed = z
     .object({
       restaurantSlug: slugSchema,
       format: z.enum(["csv", "xlsx"]),
       request: exportRequestSchema,
+      expectedContext: z.unknown().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
@@ -494,12 +708,16 @@ export async function exportDataAction(input: {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const caller = await resolveManager(restaurantSlug);
+  const caller = await resolveManager(
+    restaurantSlug,
+    parsed.data.expectedContext,
+  );
   if (!caller.ok) return caller;
 
-  const location = await getPrimaryLocation(caller.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
-  const snapshot = await getCatalogSnapshot(caller.organizationId);
+  const snapshot = await getCatalogSnapshot(
+    caller.organizationId,
+    caller.locationId,
+  );
   if (!snapshot)
     return { ok: false, error: "Bar Inventory could not be loaded." };
 
@@ -510,7 +728,7 @@ export async function exportDataAction(input: {
     // access: another tenant's draft id finds nothing.
     const found = await getOrderDraftById(
       caller.organizationId,
-      location.id,
+      caller.locationId,
       request.draftId,
     );
     if (found.failed) {
@@ -534,15 +752,17 @@ export async function exportDataAction(input: {
           : new Date(now.getTime() - days * MS_PER_DAY).toISOString(),
       productId: null,
       limit: HISTORY_ROW_LIMIT,
+      locationId: caller.locationId,
     });
     if (!page) return { ok: false, error: "History could not be loaded." };
     entries = page.entries;
   }
 
+  const timeZone = caller.actor.scope.timeZone ?? "America/New_York";
   const file = prepareExport(
     request,
     { catalog: snapshot, entries, orderDraft },
-    { timeZone: location.time_zone, now, slug: restaurantSlug },
+    { timeZone, now, slug: restaurantSlug },
     format,
   );
   return format === "csv"

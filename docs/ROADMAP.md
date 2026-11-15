@@ -2,6 +2,16 @@
 
 Each item is one or more vertical pull requests. Create `docs/features/<slug>.md` before implementation.
 
+## The Lineup V2.0
+
+Status: In progress. V2-001 and V2-002 COMPLETE; PR #282 closed V2-002.005. V2-003.001 Active Organization / Location Context Resolution is next / not started. Main and Production untouched.
+
+Scope:
+Multi-organization, multi-location, scoped roles, location configuration, Attendance V2 and Clock Kiosk.
+
+Canonical roadmap:
+`docs/v2.0/ROADMAP.md`
+
 ## Pending Recipe Detail redesign
 
 - [x] **Recipe Detail Editorial Redesign - Concept E** (#230; implemented on `feature/recipe-detail-editorial-concept-e`, merge to `development` tracked by its PR): implement the [approved reference](design-reference/recipes/recipe-detail-concepts/README.md), including responsive stacked variants, presentation states, centered single-recipe flow, light/dark accessibility and targeted regression tests. Recipes V1 core is complete; the redesign is implemented (single canonical image limitation noted in STATUS).

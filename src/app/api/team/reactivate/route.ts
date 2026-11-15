@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { reactivateMember } from "@/features/auth/data/member-deactivation";
-import { designationForRoles } from "@/features/auth/domain/passcode";
-import { canDeactivateMember } from "@/features/team/domain/designations";
 import { getCurrentUser } from "@/lib/current-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 type ReactivateBody = {
   restaurantSlug?: string;
@@ -13,11 +11,8 @@ type ReactivateBody = {
 };
 
 /**
- * Feature 017. The exact symmetric reverse of deactivate/route.ts --
- * same three writes, opposite direction, same authorization bar. Picks
- * a deactivated member back up under their existing profile and
- * passcode rather than requiring a new registration, so their prior
- * shift/tip/audit history stays attributed to the same person.
+ * Organization-scoped reactivation. The database RPC preserves unrelated
+ * organization access and never changes a global Auth ban.
  */
 export async function POST(request: Request) {
   let body: ReactivateBody;
@@ -56,59 +51,45 @@ export async function POST(request: Request) {
     );
   }
 
-  const admin = createAdminClient();
-  const { data: targetMembership } = await admin
-    .from("memberships")
-    .select("roles, active")
-    .eq("organization_id", actor.organizationId)
-    .eq("profile_id", targetProfileId)
-    .maybeSingle();
-  if (!targetMembership) {
+  const result = await reactivateMember(await createClient(), {
+    organizationId: actor.organizationId,
+    profileId: targetProfileId,
+    reason,
+  });
+  if (!result.ok) {
+    const status =
+      result.code === "28000"
+        ? 401
+        : result.code === "42501"
+          ? 403
+          : result.code === "P0002"
+            ? 404
+            : result.code === "22023"
+              ? 400
+              : 500;
     return NextResponse.json(
-      { error: "That person is not a member of this organization." },
-      { status: 404 },
+      {
+        error:
+          status === 500
+            ? "Unable to reactivate this person."
+            : status === 401
+              ? "Not signed in."
+              : status === 404
+                ? "That person is not a member of this organization."
+                : status === 400
+                  ? "Invalid request."
+                  : "You are not able to reactivate this person.",
+        ...(status === 401 ? { sessionInvalid: true } : {}),
+      },
+      { status },
     );
   }
-  if (targetMembership.active) {
+  if (result.outcome === "already_in_state") {
     return NextResponse.json(
       { error: "That person is already active." },
       { status: 409 },
     );
   }
-
-  const targetDesignation = designationForRoles(targetMembership.roles ?? []);
-  const allowed = canDeactivateMember({
-    actorProfileId: actor.profileId,
-    actorDesignation: actor.designation,
-    targetProfileId,
-    targetCurrentDesignation: targetDesignation,
-  });
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "You are not able to reactivate this person." },
-      { status: 403 },
-    );
-  }
-
-  const result = await reactivateMember(admin, {
-    organizationId: actor.organizationId,
-    profileId: targetProfileId,
-  });
-  if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, writes: result.writes },
-      { status: 500 },
-    );
-  }
-
-  await admin.from("audit_events").insert({
-    organization_id: actor.organizationId,
-    actor_profile_id: actor.profileId,
-    action: "member_reactivated",
-    entity_type: "membership",
-    entity_id: targetProfileId,
-    reason,
-  });
 
   return NextResponse.json({ ok: true });
 }

@@ -71,6 +71,17 @@ function text(payload: Payload, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+/** New events snapshot a verified name; older events keep roster lookup behavior. */
+export function boardActorName(
+  row: Pick<BoardEventRow, "actor_profile_id" | "payload">,
+  lookup: BoardActivityLookup["actorName"],
+): string {
+  const actor = asPayload(asPayload(row.payload).actor);
+  return actor.profile_id === row.actor_profile_id
+    ? (text(actor, "display_name") ?? lookup(row.actor_profile_id) ?? "Someone")
+    : (lookup(row.actor_profile_id) ?? "Someone");
+}
+
 type Describe = (payload: Payload, lookup: BoardActivityLookup) => string;
 
 function server(
@@ -215,7 +226,7 @@ export function presentBoardEvent(
   return {
     id: String(row.id),
     at: row.created_at,
-    actorName: lookup.actorName(row.actor_profile_id) ?? "Someone",
+    actorName: boardActorName(row, lookup.actorName),
     summary,
     undone: row.undone_at !== null,
   };

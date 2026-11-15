@@ -58,6 +58,7 @@ export const TableProfileContext = createContext<string | null>(null);
 
 export type TableColumn<Row> = ColumnSpec<Row> & {
   render: (row: Row) => ReactNode;
+  headerRender?: () => ReactNode;
   align?: "right";
   /** Hidden on tablets (md..lg); its filter stays reachable in the Filters sheet. */
   tabletHidden?: boolean;
@@ -462,6 +463,21 @@ function TableBody<Row>({
     setState((current) => ({ ...current, filters: {}, search: "" }));
 
   const header = (column: TableColumn<Row>) => {
+    if (column.headerRender) {
+      return (
+        <th
+          key={column.id}
+          scope="col"
+          className={cn(
+            "text-muted-foreground px-2 py-1 text-xs font-semibold whitespace-nowrap",
+            column.align === "right" ? "text-right" : "text-left",
+            column.tabletHidden && "hidden lg:table-cell",
+          )}
+        >
+          {column.headerRender()}
+        </th>
+      );
+    }
     const dir = sortKeys.find((key) => key.id === column.id)?.dir;
     return (
       <th

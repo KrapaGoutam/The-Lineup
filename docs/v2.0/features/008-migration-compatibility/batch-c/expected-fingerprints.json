@@ -1,0 +1,115 @@
+{
+  "generatedFrom": "local disposable stack, batch-c rehearsal, source f2798c6 + 3 migrations",
+  "functionFingerprint": {
+    "description": "md5 of the function_fingerprint.sql output lines (signature|body md5|secdef|config|ACL|owner) joined with \n, per ledger state",
+    "states": {
+      "ledger88": {
+        "migrationsApplied": 0,
+        "functionCount": 16,
+        "md5": "6877f513472f6da6784cc81d806652d5"
+      },
+      "ledger89": {
+        "migrationsApplied": 1,
+        "functionCount": 18,
+        "md5": "2ff7498de2e3671d43f384de2b22b361"
+      },
+      "ledger90": {
+        "migrationsApplied": 2,
+        "functionCount": 18,
+        "md5": "2e64e3c4651493016bf26cc95bf4124d"
+      },
+      "ledger91": {
+        "migrationsApplied": 3,
+        "functionCount": 21,
+        "md5": "c121af57c2f71f1418f99d1aeff357cf"
+      }
+    }
+  },
+  "schemaFingerprint": {
+    "description": "schema_fingerprint.sql categories; only functions and function_acl differ between 88 and 91",
+    "ledger88": {
+      "columns": {
+        "n": 993,
+        "h": "06f1e5745e3a8cfce9828e344b9f16db"
+      },
+      "constraints": {
+        "n": 746,
+        "h": "098a2faa128e2fc75af6196811e4d27c"
+      },
+      "function_acl": {
+        "n": 322,
+        "h": "3193bdd3d785f3f8072e1dc0266db0bf"
+      },
+      "functions": {
+        "n": 322,
+        "h": "d145df495c895f271be5d379cd872ea9"
+      },
+      "indexes": {
+        "n": 456,
+        "h": "6e389140b00c9ad297dba976fe049acc"
+      },
+      "policies": {
+        "n": 198,
+        "h": "9b78bc91188675fa9a658c1e47d16893"
+      },
+      "table_acl_rls": {
+        "n": 91,
+        "h": "11e86b6c5a96ee2acaef550f9071168e"
+      },
+      "triggers": {
+        "n": 72,
+        "h": "06b0052812029ed1fd3bff8008ec8803"
+      }
+    },
+    "ledger91": {
+      "columns": {
+        "n": 993,
+        "h": "06f1e5745e3a8cfce9828e344b9f16db"
+      },
+      "constraints": {
+        "n": 746,
+        "h": "098a2faa128e2fc75af6196811e4d27c"
+      },
+      "function_acl": {
+        "n": 327,
+        "h": "250382ca234e4406aa827956bc8e4be9"
+      },
+      "functions": {
+        "n": 327,
+        "h": "c7e05dab29e4dd353ff9df2c5f9c87e1"
+      },
+      "indexes": {
+        "n": 456,
+        "h": "6e389140b00c9ad297dba976fe049acc"
+      },
+      "policies": {
+        "n": 198,
+        "h": "9b78bc91188675fa9a658c1e47d16893"
+      },
+      "table_acl_rls": {
+        "n": 91,
+        "h": "11e86b6c5a96ee2acaef550f9071168e"
+      },
+      "triggers": {
+        "n": 72,
+        "h": "06b0052812029ed1fd3bff8008ec8803"
+      }
+    }
+  },
+  "ledger": {
+    "before": {
+      "count": 88,
+      "max": "20261111120000"
+    },
+    "after": {
+      "count": 91,
+      "max": "20261113100000"
+    },
+    "pending": ["20261112200000", "20261112220000", "20261113100000"]
+  },
+  "migrationSha256": {
+    "20261112200000_kiosk_manager_authority_hardening.sql": "4faa2707319910fb773c82c391875436ec78ab30a279b9054e024cf8123e3c2c",
+    "20261112220000_kiosk_reassign_revoked_device_guard.sql": "48036911dd416d4d09bc18baf4eb5a7afd6c47690f8959471bd256227f6ac488",
+    "20261113100000_e1_shared_catalog_authority.sql": "9375ae54540f3c49d5f7d3a3a7ce845b30a54c7e6b0d180a4ef7ec3f8ad5a8ad"
+  }
+}

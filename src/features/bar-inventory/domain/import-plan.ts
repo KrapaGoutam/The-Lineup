@@ -15,6 +15,7 @@ import { cleanText, nameKey, productIdentityKey, skuKey } from "./keys";
 import {
   evaluateStock,
   fromCents,
+  parseQuantityInput,
   STATUS_LABEL,
   toCents,
   type AdjustmentReason,
@@ -163,7 +164,6 @@ export type ImportPlan = {
 
 const MAX_FIELD = 200;
 const MAX_NOTES = 500;
-const MAX_QUANTITY_CENTS = 999_999_999_999;
 
 export type NumberParse =
   | { kind: "blank" }
@@ -175,29 +175,14 @@ export type NumberParse =
  * separators and decimal commas are refused rather than guessed.
  */
 export function parseImportNumber(text: string): NumberParse {
-  const value = text.trim();
-  if (value === "") return { kind: "blank" };
-  if (/^-/.test(value)) {
-    return { kind: "error", message: "Counts and levels cannot be negative." };
+  const result = parseQuantityInput(text, { allowBlank: true });
+  if (!result.ok) {
+    return { kind: "error", message: result.error };
   }
-  if (/[,\s]/.test(value)) {
-    return {
-      kind: "error",
-      message:
-        "Use a plain number with a period for decimals (no thousand separators or decimal commas).",
-    };
+  if (result.value === null) {
+    return { kind: "blank" };
   }
-  if (!/^(\d+(\.\d+)?|\.\d+)$/.test(value)) {
-    return { kind: "error", message: `“${value}” is not a number.` };
-  }
-  if ((value.split(".")[1] ?? "").length > 2) {
-    return { kind: "error", message: "Use at most two decimal places." };
-  }
-  const cents = Math.round(Number(value) * 100);
-  if (cents > MAX_QUANTITY_CENTS) {
-    return { kind: "error", message: "That number is too large." };
-  }
-  return { kind: "ok", value: fromCents(cents) };
+  return { kind: "ok", value: result.value };
 }
 
 const UNIT_BY_KEY = new Map<string, UnitType>(

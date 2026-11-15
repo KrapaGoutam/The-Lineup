@@ -9,12 +9,16 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
-import { rotatePasscodeCredential } from "@/features/auth/data/passcode-rotation";
+import {
+  rotateGlobalPersonalPin,
+  reservePinAttempt,
+} from "@/features/auth/data/global-pin";
 import { verifyPasscode } from "@/features/auth/data/passcode-verify";
 import { getCurrentUser } from "@/lib/current-user";
 import { createRequestFingerprint } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { trustedClientAddress } from "@/lib/trusted-client-address";
 
 type ChangeBody = {
   restaurantSlug?: string;
@@ -23,13 +27,7 @@ type ChangeBody = {
 };
 
 function clientFingerprint(request: Request) {
-  const forwarded = request.headers
-    .get("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-  return createRequestFingerprint(
-    forwarded || request.headers.get("x-real-ip") || "unknown",
-  );
+  return createRequestFingerprint(trustedClientAddress(request));
 }
 
 /**
@@ -78,6 +76,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const reservation = await reservePinAttempt(admin, request, "enroll");
+  if (reservation.response) return reservation.response;
   const fingerprint = clientFingerprint(request);
 
   const fingerprintWindowStart = new Date(
@@ -170,28 +170,38 @@ export async function POST(request: Request) {
   // migrating the current password first would just be overwritten a
   // moment later.
   const verification = await verifyPasscode(supabase, {
+    profileId: currentUser.profileId,
     syntheticEmail: credential.synthetic_email,
     organizationId: currentUser.organizationId,
     passcode: currentPasscode,
   });
 
+  const identityMatches =
+    verification.ok &&
+    (!verification.session?.user?.id ||
+      verification.session.user.id === currentUser.profileId);
+
   await admin.from("passcode_login_attempts").insert({
     organization_id: currentUser.organizationId,
     fingerprint,
-    succeeded: verification.ok,
+    succeeded: identityMatches,
   });
 
-  if (!verification.ok) {
+  if (!identityMatches) {
+    if (verification.session) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     return NextResponse.json(
       { error: "Current passcode not recognized." },
       { status: 401 },
     );
   }
 
-  const result = await rotatePasscodeCredential(admin, {
+  const result = await rotateGlobalPersonalPin(admin, {
     organizationId: currentUser.organizationId,
     profileId: currentUser.profileId,
     newPasscode,
+    currentPasscode,
   });
   if (!result.ok) {
     return NextResponse.json(
@@ -200,6 +210,13 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: otherMemberOrgs } = await admin
+    .from("memberships")
+    .select("organization_id")
+    .eq("profile_id", currentUser.profileId)
+    .eq("active", true)
+    .neq("organization_id", currentUser.organizationId);
+
   await admin.from("audit_events").insert({
     organization_id: currentUser.organizationId,
     actor_profile_id: currentUser.profileId,
@@ -207,6 +224,17 @@ export async function POST(request: Request) {
     entity_type: "passcode_credential",
     entity_id: currentUser.profileId,
   });
+
+  if (otherMemberOrgs && otherMemberOrgs.length > 0) {
+    const otherAudits = otherMemberOrgs.map((m) => ({
+      organization_id: m.organization_id,
+      actor_profile_id: currentUser.profileId,
+      action: "passcode_changed",
+      entity_type: "passcode_credential",
+      entity_id: currentUser.profileId,
+    }));
+    await admin.from("audit_events").insert(otherAudits);
+  }
 
   return NextResponse.json({ ok: true });
 }

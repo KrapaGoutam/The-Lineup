@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
+
 // Same shape of fake as schedule-actions.publish.test.ts's makeFakeSupabase
 // -- a chainable query builder closely enough matching supabase-js's real
 // one (awaitable without a terminal call) that a regression in which
@@ -45,6 +51,28 @@ function makeFakeSupabase(profiles: ProfileRow[], auditRows: AuditRow[]) {
           return Promise.resolve({ error: null });
         },
       };
+    }
+    if (table === "memberships") {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({
+          data: { roles: ["owner"] },
+          error: null,
+        }),
+      };
+      return builder;
+    }
+    if (table === "overall_roles") {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({
+          data: null,
+          error: null,
+        }),
+      };
+      return builder;
     }
     throw new Error(`unexpected table in test fake: ${table}`);
   }

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(88);
+select plan(93);
 
 -- Vendor Order Drafts V1 / VOD-1 database contract.
 -- Org A: owner Olga, manager Mona, assistant manager Asa, staff Ann,
@@ -16,7 +16,8 @@ values
   ('00000000-0000-0000-0000-000000039003', '039-asa@passcode.internal', 'x', now(), 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-000000039004', '039-ann@passcode.internal', 'x', now(), 'authenticated', 'authenticated'),
   ('00000000-0000-0000-0000-000000039005', '039-ina@passcode.internal', 'x', now(), 'authenticated', 'authenticated'),
-  ('00000000-0000-0000-0000-000000039006', '039-otto@passcode.internal', 'x', now(), 'authenticated', 'authenticated');
+  ('00000000-0000-0000-0000-000000039006', '039-otto@passcode.internal', 'x', now(), 'authenticated', 'authenticated'),
+  ('00000000-0000-0000-0000-000000039007', '039-una@passcode.internal', 'x', now(), 'authenticated', 'authenticated');
 
 insert into public.profiles (id, display_name)
 values
@@ -25,7 +26,8 @@ values
   ('00000000-0000-0000-0000-000000039003', 'VOD Asa'),
   ('00000000-0000-0000-0000-000000039004', 'VOD Ann'),
   ('00000000-0000-0000-0000-000000039005', 'VOD Ina'),
-  ('00000000-0000-0000-0000-000000039006', 'VOD Otto');
+  ('00000000-0000-0000-0000-000000039006', 'VOD Otto'),
+  ('00000000-0000-0000-0000-000000039007', 'VOD Una');
 
 insert into public.organizations (id, name, slug, created_by)
 values
@@ -45,7 +47,14 @@ values
   ('00000000-0000-0000-0000-000000039011', '00000000-0000-0000-0000-000000039003', array['shift_manager']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000039011', '00000000-0000-0000-0000-000000039004', array['server']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000039011', '00000000-0000-0000-0000-000000039005', array['general_manager']::public.app_role[], false),
+  ('00000000-0000-0000-0000-000000039011', '00000000-0000-0000-0000-000000039007', array['shift_manager']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000039012', '00000000-0000-0000-0000-000000039006', array['owner']::public.app_role[], true);
+
+-- V2 access model (ACCESS_MODEL 4.2/5): Org A has two locations, so a Shift Manager has no
+-- implicit location authority. Asa is explicitly assigned Assistant Manager at A1 (the only
+-- location she works at here); Una is the same org role with NO assignment and must stay denied.
+insert into public.location_memberships (location_id, profile_id, role)
+values ('00000000-0000-0000-0000-000000039021', '00000000-0000-0000-0000-000000039003', 'assistant_manager');
 
 insert into public.inventory_vendors
   (id, organization_id, name, is_system, active, created_by)
@@ -280,9 +289,32 @@ select is((public.inventory_order_draft_save('00000000-0000-0000-0000-0000000390
 reset role;
 select is((select version from public.inventory_order_drafts where id = current_setting('t.draft')::uuid), 2, 'VOD-043 no-op does not bump the draft version');
 
+-- Authorization precedes fill-mode validation, and neither an unauthorized nor an
+-- invalid request can mutate the draft. Una is a Shift Manager in a two-location org
+-- with NO assignment: under the V2 access model she has no location authority, so a
+-- NULL or replace_all request is refused as 42501 (never reaches mode validation and is
+-- never read as permission to overwrite quantities).
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000039007', true);
+select throws_ok(
+  format($q$select public.inventory_order_draft_fill('00000000-0000-0000-0000-000000039011','00000000-0000-0000-0000-000000039021',%L,2,null)$q$, current_setting('t.draft')),
+  '42501', 'You do not have access to Bar Inventory for this location.', 'VOD-031 unassigned multi-location Shift Manager is refused before fill-mode validation (NULL mode)'
+);
+select throws_ok(
+  format($q$select public.inventory_order_draft_fill('00000000-0000-0000-0000-000000039011','00000000-0000-0000-0000-000000039021',%L,2,'replace_all')$q$, current_setting('t.draft')),
+  '42501', 'You do not have access to Bar Inventory for this location.', 'VOD-031 unassigned Shift Manager cannot replace-all'
+);
+select is(public.inventory_location_authorized('00000000-0000-0000-0000-000000039011','00000000-0000-0000-0000-000000039021'), false, 'VOD-031 unassigned multi-location Shift Manager has no Bar Inventory location authority');
+reset role;
+select is((select version from public.inventory_order_drafts where id = current_setting('t.draft')::uuid), 2, 'VOD-031 refused unauthorized requests leave the draft version unchanged');
+
 -- Fill and clear use stored snapshots only.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000039003', true);
+select throws_ok(
+  format($q$select public.inventory_order_draft_fill('00000000-0000-0000-0000-000000039011','00000000-0000-0000-0000-000000039021',%L,2,'bogus')$q$, current_setting('t.draft')),
+  '22023', 'Choose fill empty only or replace all.', 'VOD-031 an unknown fill mode is refused for an authorized caller'
+);
 select throws_ok(
   format($q$select public.inventory_order_draft_fill('00000000-0000-0000-0000-000000039011','00000000-0000-0000-0000-000000039021',%L,2,null)$q$, current_setting('t.draft')),
   '22023', 'Choose fill empty only or replace all.', 'VOD-031 NULL is never treated as confirmed replace-all'

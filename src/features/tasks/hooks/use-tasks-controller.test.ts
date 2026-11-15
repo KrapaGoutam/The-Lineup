@@ -67,6 +67,30 @@ describe("useTasksController in real mode (no Realtime)", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("a canceled read settles loading and can be retried after navigation", async () => {
+    actions.getTasksSnapshotAction.mockRejectedValueOnce(
+      new Error("Load failed"),
+    );
+    const { result } = renderHook(() =>
+      useTasksController({ demo: null, restaurantSlug: "the-monks", viewer }),
+    );
+    await waitFor(() =>
+      expect(result.current.loadError).toBe(
+        "Tasks could not be loaded. Please try again.",
+      ),
+    );
+    expect(result.current.loading).toBe(false);
+    actions.getTasksSnapshotAction.mockResolvedValue({
+      ok: true,
+      data: snapshot("recovered"),
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.snapshot?.tasks[0].title).toBe("recovered");
+    expect(result.current.loadError).toBeNull();
+  });
+
   it("TASK-083 a failed mutation reports the error and re-reads server truth", async () => {
     actions.getTasksSnapshotAction.mockResolvedValue({
       ok: true,

@@ -123,13 +123,12 @@ async function run() {
       .digest("hex");
   }
 
-  // Mirrors src/lib/passcode-security.ts's createAuthPassword exactly
-  // (Feature 016, revised) -- the owner's Auth account is created
-  // pre-migrated to the derived-password scheme like every other new
-  // account now is, not with the raw passcode as its Auth password.
-  function createAuthPassword(organizationId, code) {
+  // Mirrors src/lib/passcode-security.ts's createPersonAuthPassword exactly
+  // (V2-009 B3 / F-5) -- the owner's Auth account is created with the person-level
+  // password scheme bound to profile ID like every other account.
+  function createPersonAuthPassword(profileId, code) {
     return createHmac("sha256", pepper)
-      .update(`authpw:${organizationId}:${code}`)
+      .update(`authpw:person:${profileId}:${code}`)
       .digest("hex");
   }
 
@@ -198,6 +197,27 @@ async function run() {
     fail(`Could not create the profile: ${profileError.message}`);
   }
 
+  const globalLocator = createHmac("sha256", pepper)
+    .update(`global-pin:v1:${passcode}`)
+    .digest("hex");
+  const { data: pinOperation, error: pinClaimError } = await admin.rpc(
+    "begin_personal_pin_change",
+    {
+      p_profile_id: userId,
+      p_locator: globalLocator,
+      p_actor_profile_id: userId,
+      p_synthetic_email: syntheticEmail,
+    },
+  );
+  if (pinClaimError || !pinOperation) {
+    await rollbackUser();
+    fail(
+      pinClaimError?.code === "23505"
+        ? "That PIN is already in use. Please choose a different PIN."
+        : "Global PIN ownership could not be reserved.",
+    );
+  }
+
   const { data: org, error: orgError } = await admin
     .from("organizations")
     .insert({ name: orgName, slug, created_by: userId })
@@ -210,7 +230,7 @@ async function run() {
 
   const { error: authPasswordError } = await admin.auth.admin.updateUserById(
     userId,
-    { password: createAuthPassword(org.id, passcode) },
+    { password: createPersonAuthPassword(userId, passcode) },
   );
   if (authPasswordError) {
     await rollbackUser();
@@ -256,6 +276,19 @@ async function run() {
       `Could not create the passcode credential: ${credentialError.message}`,
     );
   }
+
+  const { error: finalizeError } = await admin.rpc(
+    "finish_personal_pin_change",
+    {
+      p_profile_id: userId,
+      p_operation_id: pinOperation,
+      p_apply: true,
+    },
+  );
+  if (finalizeError)
+    fail(
+      "PIN provisioning remains blocked; administrator reconciliation required.",
+    );
 
   // The passcode goes to a local, gitignored file instead of stdout --
   // whoever runs this script may not be the same person reading its

@@ -113,11 +113,13 @@ export function useOrderDrafts({
   restaurantSlug,
   viewer,
   onSessionInvalid,
+  expectedContext,
 }: {
   demo: DemoCatalogBinding | null;
   restaurantSlug: string;
   viewer: InventoryViewer;
   onSessionInvalid?: () => void;
+  expectedContext?: unknown;
 }) {
   const [remote, setRemote] = useState<OrderDraftView[] | null>(null);
   const [loading, setLoading] = useState(!demo);
@@ -125,9 +127,21 @@ export function useOrderDrafts({
 
   // The shell hands over a new `demo` object every second; read the latest
   // through a ref so the API below keeps one identity.
-  const latest = useRef({ demo, restaurantSlug, viewer, onSessionInvalid });
+  const latest = useRef({
+    demo,
+    restaurantSlug,
+    viewer,
+    onSessionInvalid,
+    expectedContext,
+  });
   useLayoutEffect(() => {
-    latest.current = { demo, restaurantSlug, viewer, onSessionInvalid };
+    latest.current = {
+      demo,
+      restaurantSlug,
+      viewer,
+      onSessionInvalid,
+      expectedContext,
+    };
   });
 
   const started = useRef(0);
@@ -156,6 +170,7 @@ export function useOrderDrafts({
     try {
       const result = await listOrderDraftsAction({
         restaurantSlug: latest.current.restaurantSlug,
+        expectedContext: latest.current.expectedContext,
       });
       lastRead.current = Date.now();
       accept(ticket, result);
@@ -245,7 +260,11 @@ export function useOrderDrafts({
         isDemo()
           ? Promise.resolve(runDemo((s, c) => openDraftDemo(s, vendorId, c)))
           : runRemote(() =>
-              openOrderDraftAction({ restaurantSlug: slug(), vendorId }),
+              openOrderDraftAction({
+                restaurantSlug: slug(),
+                vendorId,
+                expectedContext: latest.current.expectedContext,
+              }),
             ),
       save: (input) =>
         isDemo()
@@ -257,6 +276,7 @@ export function useOrderDrafts({
                 expectedVersion: input.expectedVersion,
                 vendorNote: input.vendorNote,
                 lines: input.lines,
+                expectedContext: latest.current.expectedContext,
               }),
             ),
       fill: (draftId, expectedVersion, mode) =>
@@ -272,6 +292,7 @@ export function useOrderDrafts({
                 draftId,
                 expectedVersion,
                 mode,
+                expectedContext: latest.current.expectedContext,
               }),
             ),
       clear: (draftId, expectedVersion) =>
@@ -286,6 +307,7 @@ export function useOrderDrafts({
                 restaurantSlug: slug(),
                 draftId,
                 expectedVersion,
+                expectedContext: latest.current.expectedContext,
               }),
             ),
       sync: (draftId, expectedVersion) =>
@@ -300,6 +322,7 @@ export function useOrderDrafts({
                 restaurantSlug: slug(),
                 draftId,
                 expectedVersion,
+                expectedContext: latest.current.expectedContext,
               }),
             ),
       markSent: (draftId, expectedVersion) =>
@@ -314,6 +337,7 @@ export function useOrderDrafts({
                 restaurantSlug: slug(),
                 draftId,
                 expectedVersion,
+                expectedContext: latest.current.expectedContext,
               }),
             ),
       listSent: async (page) => {
@@ -325,6 +349,7 @@ export function useOrderDrafts({
           const result = await listSentOrderDraftsAction({
             restaurantSlug: slug(),
             page,
+            expectedContext: latest.current.expectedContext,
           });
           if (!result.ok && result.sessionInvalid) {
             latest.current.onSessionInvalid?.();
@@ -350,6 +375,7 @@ export function useOrderDrafts({
           const result = await getSentOrderDraftAction({
             restaurantSlug: slug(),
             draftId,
+            expectedContext: latest.current.expectedContext,
           });
           if (!result.ok && result.sessionInvalid) {
             latest.current.onSessionInvalid?.();

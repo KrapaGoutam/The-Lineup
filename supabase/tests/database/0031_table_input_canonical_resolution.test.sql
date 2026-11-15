@@ -45,6 +45,15 @@ values
   ('00000000-0000-0000-0000-000000031011', '00000000-0000-0000-0000-000000031004', array['server']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000031012', '00000000-0000-0000-0000-000000031005', array['owner']::public.app_role[], true);
 
+-- Location authorization is explicit under V2-005.001. These actors operate
+-- both fixture locations to test label resolution, not implicit owner authority.
+insert into public.location_memberships (location_id, profile_id, role, active)
+select l.id, m.profile_id,
+  case when 'owner' = any(m.roles) then 'manager'::public.location_role else 'staff'::public.location_role end,
+  true
+from public.locations l join public.memberships m on m.organization_id = l.organization_id
+where l.id in ('00000000-0000-0000-0000-000000031021', '00000000-0000-0000-0000-000000031022', '00000000-0000-0000-0000-000000031023');
+
 insert into public.dining_areas (id, organization_id, location_id, name, area_order)
 overriding system value
 values

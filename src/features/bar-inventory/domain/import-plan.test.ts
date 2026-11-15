@@ -170,16 +170,22 @@ describe("parseImportNumber", () => {
     ["3.5", { kind: "ok", value: 3.5 }],
     ["3.25", { kind: "ok", value: 3.25 }],
     [".5", { kind: "ok", value: 0.5 }],
+    ["1/2", { kind: "ok", value: 0.5 }],
+    ["3/4", { kind: "ok", value: 0.75 }],
+    ["1 1/2", { kind: "ok", value: 1.5 }],
+    ["2 1/4", { kind: "ok", value: 2.25 }],
   ])("reads %j", (text, expected) => {
     expect(parseImportNumber(text)).toEqual(expected);
   });
 
   it.each([
     ["-1", "negative"],
+    ["-1/2", "negative"],
     ["1,200", "thousand"],
     ["1.200,5", "thousand"],
     ["1 200", "thousand"],
     ["2.555", "two decimal"],
+    ["1/8", "fraction cannot be represented"],
     ["abc", "not a number"],
     ["5.", "not a number"],
     ["99999999999", "too large"],

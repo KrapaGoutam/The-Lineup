@@ -29,13 +29,13 @@ select ok(
   'the old self-or-manager policies are gone'
 );
 select ok(
-  exists (
+  not exists (
     select 1 from pg_policies
     where schemaname = 'public'
       and tablename = 'tip_pools'
       and policyname = 'tip_pools_reopen_manager'
   ),
-  'the tip_pools reopen (finalized -> draft) policy exists'
+  'the legacy tip_pools_reopen_manager policy has been retired'
 );
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.table_rotation_entries'::regclass),

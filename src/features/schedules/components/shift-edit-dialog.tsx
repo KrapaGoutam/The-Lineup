@@ -143,11 +143,17 @@ export function ShiftEditDialog({
                 name="employeeId"
                 defaultValue={shift.employeeId}
               >
-                {team.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
+                {team
+                  .filter(
+                    (member) =>
+                      (member.active !== false && member.eligible !== false) ||
+                      member.id === shift.employeeId,
+                  )
+                  .map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
               </Select>
             </div>
             <div className="space-y-2">

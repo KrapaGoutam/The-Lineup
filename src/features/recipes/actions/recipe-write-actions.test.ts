@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// V2-004.004: the module guard is covered by its own tests; action tests isolate it.
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  guardModule: vi.fn(async () => null),
+  guardModuleForSlug: vi.fn(async () => null),
+}));
 const { client, user, session, save, from } = vi.hoisted(() => ({
   client: vi.fn(),
   user: vi.fn(),
@@ -7,7 +13,13 @@ const { client, user, session, save, from } = vi.hoisted(() => ({
   from: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: client }));
-vi.mock("@/lib/current-user", () => ({ getCurrentUser: user }));
+vi.mock("../data/recipes-actor", () => ({ getRecipesActor: user }));
+vi.mock("@/features/context/data/workspace-expectation", () => ({
+  assertWorkspaceExpectation: vi.fn(async () => ({
+    ok: true,
+    location: { id: "loc-1", time_zone: "America/New_York" },
+  })),
+}));
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: session,
 }));
@@ -37,14 +49,39 @@ const input = () => {
     },
   };
 };
+
+const makeActor = (designation: string | null) => {
+  if (!designation) return null;
+  const isManager = [
+    "owner",
+    "general_manager",
+    "assistant_manager",
+    "manager",
+    "shift_manager",
+  ].includes(designation);
+  return {
+    organizationId: "server-org",
+    scope: {
+      organizationId: "server-org",
+      locationId: "loc-1",
+      timeZone: "America/New_York",
+    },
+    viewer: {
+      profileId: "p-1",
+      name: "User",
+      designation,
+    },
+    isManager,
+    // E-1: the write decision is its own database-backed capability; by default a manager has it.
+    canManageCatalog: isManager,
+  };
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
   client.mockResolvedValue({ from });
   session.mockResolvedValue(null);
-  user.mockResolvedValue({
-    organizationId: "server-org",
-    designation: "manager",
-  });
+  user.mockResolvedValue(makeActor("manager"));
   save.mockResolvedValue({
     ok: true,
     data: { id: recipe, slug: "test", version: 1, recipe_number: 38 },
@@ -54,7 +91,7 @@ describe("recipe management actions", () => {
   it.each(["owner", "manager", "assistant_manager"])(
     "allows %s with only server-resolved org",
     async (designation) => {
-      user.mockResolvedValue({ organizationId: "server-org", designation });
+      user.mockResolvedValue(makeActor(designation));
       expect(await saveRecipeAction(input())).toMatchObject({ ok: true });
       expect(save).toHaveBeenCalledWith(
         { from },
@@ -79,10 +116,10 @@ describe("recipe management actions", () => {
       input().payload,
     );
   });
-  it.each([null, { organizationId: "org", designation: "staff" }])(
+  it.each([null, "staff"])(
     "rejects non-management before RPC or editor reads",
-    async (viewer) => {
-      user.mockResolvedValue(viewer);
+    async (designation) => {
+      user.mockResolvedValue(makeActor(designation));
       expect(await saveRecipeAction(input())).toMatchObject({
         ok: false,
         kind: "permission",
@@ -94,6 +131,23 @@ describe("recipe management actions", () => {
       expect(from).not.toHaveBeenCalled();
     },
   );
+  it("E-1: refuses a manager whose database catalog decision is false, before any write", async () => {
+    // Location-role-only manager in a multi-location organization: isManager (read tier) stays
+    // true, but catalog_authorized is false, so no save / editor read may reach the database.
+    user.mockResolvedValue({
+      ...makeActor("manager")!,
+      canManageCatalog: false,
+    });
+    expect(await saveRecipeAction(input())).toMatchObject({
+      ok: false,
+      kind: "permission",
+    });
+    expect(
+      await getRecipeEditorAction({ restaurantSlug: "test", slug: null }),
+    ).toMatchObject({ ok: false });
+    expect(save).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalled();
+  });
   it("propagates invalid session without writes", async () => {
     session.mockResolvedValue({
       ok: false,

@@ -142,7 +142,7 @@ select throws_ok(
        values ('00000000-0000-0000-0000-000000021101', %L, -100, 'cross-org actor', '00000000-0000-0000-0000-000000021003') $$,
     :'period_id'
   ),
-  '23503',
+  '42501',
   null,
   'an adjustment cannot be attributed to an actor from a different organization'
 );

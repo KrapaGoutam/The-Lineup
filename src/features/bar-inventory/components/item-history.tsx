@@ -18,13 +18,15 @@ export function ItemHistory({
   productId,
   timeZone,
   load,
+  initialOpen = false,
 }: {
   productId: string;
   timeZone: string;
   load: LoadHistory;
+  initialOpen?: boolean;
 }) {
   const bodyId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [result, setResult] = useState<
     { ok: true; entries: HistoryEntry[] } | { ok: false; error: string } | null
   >(null);

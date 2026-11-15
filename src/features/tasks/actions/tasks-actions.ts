@@ -2,7 +2,12 @@
 
 import { z } from "zod";
 
-import { getPrimaryLocation } from "@/features/locations/data/primary-location";
+import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
+import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+import {
+  guardModule,
+  guardModuleForSlug,
+} from "@/features/modules/data/module-enforcement";
 import { getOpeningReminderPrompt } from "@/features/tasks/data/opening-reminder-prompt-data";
 import { getTaskHistory } from "@/features/tasks/data/task-history-data";
 import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
@@ -14,13 +19,17 @@ import {
 import type { OpeningReminderPromptData } from "@/features/tasks/domain/opening-reminder-popup";
 import type { TaskHistoryData } from "@/features/tasks/domain/task-history";
 import type { TasksSnapshot } from "@/features/tasks/domain/task-types";
-import { getCurrentUser } from "@/lib/current-user";
+import { getTasksActor } from "@/features/tasks/data/tasks-actor";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * `contextStale`: the server refused because the workspace the tab shows is no
+ * longer the one it would operate on (V2-003.005). No mutation was attempted.
+ */
 export type TasksActionResult =
   | { ok: true; data: TasksSnapshot }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 const slugSchema = z
   .string()
@@ -31,15 +40,43 @@ const slugSchema = z
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-async function resolveCaller(restaurantSlug: string) {
-  const user = await getCurrentUser(restaurantSlug);
-  if (!user) return null;
+const resolveCaller = getTasksActor;
+
+type Caller = NonNullable<Awaited<ReturnType<typeof resolveCaller>>>;
+
+/**
+ * V2-003.005: the browser's `expectedContext` (profile, organization,
+ * location it is showing) is an untrusted assertion. It must agree with the
+ * identity and operational location the SERVER verifies itself; otherwise the
+ * request is refused before any read or write, with nothing substituted.
+ */
+async function checkWorkspace(raw: unknown, caller: Caller) {
+  const outcome = await assertWorkspaceExpectation(
+    raw,
+    {
+      profileId: caller.viewer.profileId,
+      organizationId: caller.organizationId,
+    },
+    {
+      resolveLocation: async () => ({
+        id: caller.scope.locationId,
+        time_zone: caller.scope.timeZone,
+      }),
+    },
+  );
+  if (outcome.ok) return { ok: true as const, location: outcome.location };
+  if (outcome.code === "invalid") {
+    return {
+      ok: false as const,
+      result: { ok: false as const, error: "That request is invalid." },
+    };
+  }
   return {
-    organizationId: user.organizationId,
-    viewer: {
-      profileId: user.profileId,
-      name: user.name,
-      designation: user.designation,
+    ok: false as const,
+    result: {
+      ok: false as const,
+      error: STALE_CONTEXT_MESSAGE,
+      contextStale: true as const,
     },
   };
 }
@@ -78,6 +115,30 @@ async function runCommand(
   locationId: string,
   command: TaskCommand,
 ): Promise<string | null> {
+  const target =
+    "taskId" in command
+      ? { table: "tasks" as const, ids: [command.taskId] }
+      : "taskIds" in command
+        ? { table: "tasks" as const, ids: command.taskIds }
+        : "ruleId" in command
+          ? { table: "task_recurrence_rules" as const, ids: [command.ruleId] }
+          : "templateId" in command && command.templateId
+            ? {
+                table: "checklist_templates" as const,
+                ids: [command.templateId],
+              }
+            : null;
+  if (target) {
+    const found = await supabase
+      .from(target.table)
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("location_id", locationId)
+      .in("id", target.ids);
+    if (found.error || found.data?.length !== new Set(target.ids).size) {
+      return "That work is not available in this location.";
+    }
+  }
   switch (command.type) {
     case "create": {
       const i = command.input;
@@ -150,9 +211,14 @@ async function runCommand(
       return error?.message ?? null;
     }
     case "notificationsRead": {
-      const { error } = await supabase.rpc("task_notifications_mark_read", {
-        p_ids: command.ids ?? null,
-      });
+      const { error } = await supabase.rpc(
+        "task_notifications_mark_location_read",
+        {
+          p_organization_id: organizationId,
+          p_location_id: locationId,
+          p_ids: command.ids,
+        },
+      );
       return error?.message ?? null;
     }
     case "seriesCreate": {
@@ -223,8 +289,11 @@ async function runCommand(
  */
 export async function getTasksSnapshotAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<TasksActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
@@ -234,7 +303,22 @@ export async function getTasksSnapshotAction(input: {
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to see tasks." };
 
-  const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
+
+  // V2-004.004: the module must be turned on at the VERIFIED location.
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
+  const snapshot = await getTasksSnapshot(
+    caller.organizationId,
+    caller.viewer,
+    caller.scope,
+  );
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
   return { ok: true, data: snapshot };
 }
@@ -247,9 +331,15 @@ export async function getTasksSnapshotAction(input: {
 export async function runTaskCommandAction(input: {
   restaurantSlug: string;
   command: TaskCommand;
+  /** REQUIRED: the workspace the caller is looking at (see `checkWorkspace`). */
+  expectedContext: unknown;
 }): Promise<TasksActionResult> {
   const parsed = z
-    .object({ restaurantSlug: slugSchema, command: taskCommandSchema })
+    .object({
+      restaurantSlug: slugSchema,
+      command: taskCommandSchema,
+      expectedContext: z.unknown(),
+    })
     .safeParse(input);
   if (!parsed.success) {
     return {
@@ -263,33 +353,52 @@ export async function runTaskCommandAction(input: {
   if (invalid) return invalid;
 
   const caller = await resolveCaller(parsed.data.restaurantSlug);
-  if (!caller) return { ok: false, error: "You need to sign in to do that." };
+  if (!caller)
+    return { ok: false, error: STALE_CONTEXT_MESSAGE, contextStale: true };
 
-  const location = await getPrimaryLocation(caller.organizationId);
-  if (!location) return { ok: false, error: "No location is set up yet." };
+  // Refused here -- before ANY database write -- when what the tab shows is
+  // not what the server authorizes. The location used below is the one the
+  // server verified, never the one the browser asserted.
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
+
+  // V2-004.004: no write when the module is off at the verified location.
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
 
   const failure = await runCommand(
     supabase,
     caller.organizationId,
-    location.id,
+    workspace.location.id,
     parsed.data.command,
   );
   if (failure) return { ok: false, error: friendly(failure) };
 
-  const snapshot = await getTasksSnapshot(caller.organizationId, caller.viewer);
+  const snapshot = await getTasksSnapshot(
+    caller.organizationId,
+    caller.viewer,
+    caller.scope,
+  );
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
   return { ok: true, data: snapshot };
 }
 
 export type TaskHistoryActionResult =
   | { ok: true; data: TaskHistoryData }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 /** Read-only: completed tasks for Tasks → History, scoped by the caller's RLS. */
 export async function getTaskHistoryAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<TaskHistoryActionResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
@@ -301,7 +410,17 @@ export async function getTaskHistoryAction(input: {
     return { ok: false, error: "You need to sign in to see task history." };
   }
 
-  const history = await getTaskHistory(caller.organizationId);
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
+
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
+  const history = await getTaskHistory(caller.organizationId, caller.scope);
   if (!history)
     return { ok: false, error: "Task history could not be loaded." };
   return { ok: true, data: history };
@@ -313,16 +432,31 @@ export async function getTaskHistoryAction(input: {
  */
 export async function getTasksUnreadCountAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<{ ok: true; unread: number } | { ok: false }> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false };
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { ok: false };
+  if (await requireLiveSession(supabase)) return { ok: false };
+  const caller = await resolveCaller(parsed.data.restaurantSlug);
+  if (!caller) return { ok: false };
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return { ok: false };
+  if (
+    await guardModuleForSlug("tasks", parsed.data.restaurantSlug, {
+      resolveOrganizationId: async () => caller.organizationId,
+      resolveLocation: async () => workspace.location,
+    })
+  )
+    return { ok: false };
   const { count, error } = await supabase
     .from("task_notifications")
     .select("id", { count: "exact", head: true })
-    .eq("recipient_profile_id", data.user.id)
+    .eq("recipient_profile_id", caller.viewer.profileId)
+    .eq("organization_id", caller.organizationId)
+    .eq("location_id", workspace.location.id)
     .is("read_at", null);
   if (error) return { ok: false };
   return { ok: true, unread: count ?? 0 };
@@ -330,7 +464,7 @@ export async function getTasksUnreadCountAction(input: {
 
 export type OpeningReminderPromptResult =
   | { ok: true; data: OpeningReminderPromptData }
-  | { ok: false; error: string; sessionInvalid?: true };
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 /**
  * Client wake-up for the Opening reminder popup. Takes the restaurant only:
@@ -340,8 +474,11 @@ export type OpeningReminderPromptResult =
  */
 export async function getOpeningReminderPromptAction(input: {
   restaurantSlug: string;
+  expectedContext?: unknown;
 }): Promise<OpeningReminderPromptResult> {
-  const parsed = z.object({ restaurantSlug: slugSchema }).safeParse(input);
+  const parsed = z
+    .object({ restaurantSlug: slugSchema, expectedContext: z.unknown() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: "That request is invalid." };
 
   const supabase = await createClient();
@@ -351,9 +488,19 @@ export async function getOpeningReminderPromptAction(input: {
   const caller = await resolveCaller(parsed.data.restaurantSlug);
   if (!caller) return { ok: false, error: "You need to sign in to see tasks." };
 
+  const workspace = await checkWorkspace(parsed.data.expectedContext, caller);
+  if (!workspace.ok) return workspace.result;
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: caller.organizationId,
+    location: workspace.location,
+  });
+  if (blocked) return blocked;
+
   const data = await getOpeningReminderPrompt(
     caller.organizationId,
     caller.viewer,
+    caller.scope,
   );
   if (!data) return { ok: false, error: "Reminders could not be loaded." };
   return { ok: true, data };
@@ -382,9 +529,8 @@ export async function acknowledgeOpeningReminderAction(input: {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
 
-  const caller = await resolveCaller(parsed.data.restaurantSlug);
-  if (!caller) return { ok: false, error: "You need to sign in to do that." };
-
+  // Dismissal is an own-recipient recovery operation, even after location
+  // access is revoked or the optional module is disabled. SQL validates identity.
   const { error } = await supabase.rpc("task_notifications_mark_read", {
     p_ids: parsed.data.ids,
   });

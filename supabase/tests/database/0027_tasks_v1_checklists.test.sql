@@ -57,8 +57,18 @@ select set_config('t.closing', $j$[
 ]$j$, true);
 
 -- 1. Templates: manager only -------------------------------------------------
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
+-- V2 Tasks validates live session identity even through direct SQL tests.
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select id, id, now(), now() from auth.users on conflict(id) do nothing;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027004', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027004')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027004')::text, true);
 select throws_ok(
   format($$select public.checklist_template_save('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021',null,'opening','Staff try','{0,1,2,3,4,5,6}',true,%L::jsonb)$$, current_setting('t.items')),
   '42501', null, 'TASK-035 staff cannot create templates'
@@ -67,6 +77,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.checklist_template_save('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021',null,'opening','Weekday Opening','{0,1,2,3,4,5,6}',true,%L::jsonb)$$, current_setting('t.items')),
   'manager saves an opening template with shared, one-person, multi-person and all-team items'
@@ -92,6 +104,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
 select is(
   (select count(*)::int from public.checklist_templates), 0, 'staff cannot read template definitions'
 );
@@ -100,6 +114,8 @@ reset role;
 -- 2. Daily generation ------------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
 select lives_ok(
   $$select public.checklist_generate_daily('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021')$$,
   'TASK-020 any active member can start today''s checklists'
@@ -123,6 +139,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   $$select public.checklist_generate_daily('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021')$$,
   'generation is idempotent'
@@ -142,6 +160,8 @@ select set_config('t.closereg', (select id::text from public.tasks where title =
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027006', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027006')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.unlock')),
   'TASK-021 any eligible member completes a shared item'
@@ -166,6 +186,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027005', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027005')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027005')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L)$$, current_setting('t.register')),
   'TASK-023 one of several assignees completes a multi-person item'
@@ -174,6 +196,8 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.task_complete(%L, 'checked by manager')$$, current_setting('t.closereg')),
   'TASK-033 a manager completes a closing item for the assignee'
@@ -192,6 +216,8 @@ select is(
 -- 4. Day-to-day isolation ---------------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.checklist_generate_daily('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021', %L::date, 'opening')$$, current_setting('t.tomorrow')),
   'TASK-025 tomorrow''s opening checklist can be generated'
@@ -216,6 +242,8 @@ select is(
 -- 5. Templates change; existing days do not ---------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.checklist_template_save('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021',%L::uuid,'opening','Weekday Opening','{0,1,2,3,4,5,6}',true,'[{"title":"Only item","assignment_mode":"anyone"}]'::jsonb)$$,
     (select id::text from public.checklist_templates where name = 'Weekday Opening')),
@@ -235,6 +263,8 @@ select is(
 -- 6. Applicability and activation -------------------------------------------------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.checklist_template_save('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021',null,'opening','Other-day Opening',array[((extract(dow from %L::date)::int + 1) %% 7)]::smallint[],true,'[{"title":"X","assignment_mode":"anyone"}]'::jsonb)$$, current_setting('t.tomorrow')),
   'manager saves a template for a different weekday'
@@ -251,6 +281,8 @@ select is(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027002', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027002')::text, true);
 select lives_ok(
   format($$select public.checklist_template_set_active(%L::uuid, false)$$, (select id::text from public.checklist_templates where name = 'Weekday Closing')),
   'a template can be archived'
@@ -286,6 +318,8 @@ select ok(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000027008', true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027008')::text, true);
+select set_config('request.jwt.claims', json_build_object('session_id', '00000000-0000-0000-0000-000000027008')::text, true);
 select throws_ok(
   $$select public.checklist_generate_daily('00000000-0000-0000-0000-000000027011','00000000-0000-0000-0000-000000027021')$$,
   '42501', null, 'TASK-070 another organization cannot generate this location''s checklists'

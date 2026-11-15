@@ -1,5 +1,19 @@
 # Data Model and Domain Rules
 
+## V2-009 B5 personal authentication expansion
+
+`personal_pin_accounts` holds one canonical locator and durable pending operation
+per profile; `personal_pin_claims` reserves global ownership of both old and
+candidate locators during a change. This identity namespace intentionally has no
+`organization_id`; tenant memberships and location authorization remain separate.
+`personal_pin_events` records actor/profile/operation/outcome without credentials;
+`global_pin_attempts` records hashed client fingerprints and admission outcomes.
+All four tables have RLS and service-only grants; clients have no table/RPC access.
+
+Migration `20261114210116_v2_009_b5_global_pin_registry.sql` expands local ledger 96. No backfill from organization HMACs is possible; enrollment requires identity
+proof. See the [B5 contract](features/v2-009-b5-universal-pin-login.md) and
+[recovery procedure](v2.0/features/009-final-gate-release/B5_SECURITY_HANDOFF.md).
+
 ## Entity map
 
 ```mermaid
@@ -35,6 +49,18 @@ erDiagram
 | Legacy core | `dining_areas`, `dining_tables`, `seatings`, `seating_tables`, `audit_events`, `availability_rules`, `time_off_requests` | Section, party, and staffing expansion foundation  |
 
 ## Important invariants
+
+V2-006 staged native Payroll adds source-discriminated identity to periods/rates:
+exactly one of `neon_user_id` or native `profile_id`, with cross-key duplicate
+protection through manager-set identity links. Organization-level monthly periods
+consume immutable, versioned attendance rows in `payroll_attendance_consumptions`;
+one active consumption per session, composite tenant/location/person/month FKs,
+no client writes. Draft regeneration supersedes history atomically. Native
+confirmation acquires the employee attendance lock without blocking and re-proves
+finality; a confirmed native period cannot reopen. Corrected frozen consumption
+uses append-only reviews linked to existing audited adjustments. Neon unlock and
+historical financial records retain their existing behavior. Activation defaults
+OFF. See [V2-006 closeout](v2.0/features/006-attendance-v2/FINAL_CONSOLIDATED_CLOSEOUT.md).
 
 - A location belongs to exactly one organization.
 - A membership is unique by organization and profile.
@@ -161,3 +187,25 @@ location FKs preserve authorization and cascade teardown. Dates/rules use the
 existing non-quantity audit; Bulk Count uses the unchanged immutable ledger.
 Detailed fields, precision, constraints and defaults are documented in
 [Bar Inventory DATA_MODEL](features/bar-inventory-v1/DATA_MODEL.md#v11-additive-model).
+
+## Tasks V2 location authorization (V2-005.002)
+
+Migration `20261107160548_tasks_location_scoping.sql` preserves the existing
+Tasks tenant/location/resource graph. Nine attribution membership FKs become
+validated profile FKs, with indexes; updated-by fields gain profile FKs too.
+Assignment targets and notification recipients retain composite membership FKs.
+Overall actors use genuine profiles without fabricated workforce membership.
+
+`task_notifications.location_id` is nullable for historical rows whose source
+cannot be resolved. Existing task/checklist/reminder sources are backfilled;
+new scope is derived by a source trigger, tenant-constrained and indexed with
+recipient/id. Location inbox RLS excludes unresolved historical scope, while
+live own-recipient mark-read remains available for recovery. New audit events
+include real actor, effective tier and concrete location facts; historical
+event payloads remain unchanged. Authorization validates actual live Auth
+session, exact active/unarchived location and effective Overall/location role.
+
+Application rollout is fail-closed before old Tasks mutations when the new
+readiness RPC is missing. Hosted deployment requires separate authorization.
+Use a forward fix for rollback; restoring actor-to-membership FKs after Overall
+writes would require reconciling those genuine actor records first.

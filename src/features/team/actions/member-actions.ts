@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isValidDisplayName } from "@/features/auth/domain/registration";
 import { writeAuditEvent } from "@/features/team/data/audit-log";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,9 +46,51 @@ export async function renameTeamMemberAction(input: {
   const sessionCheck = await requireLiveSession(supabase);
   if (sessionCheck) return sessionCheck;
 
+  // V2-004.004: Team is an optional module. Passcode reset, deactivation,
+  // sign-in and the Settings account-recovery path are platform operations
+  // and are intentionally NOT gated here (see ENTRY_POINT_MATRIX.md).
+  const blocked = await guardModule({
+    module: "team",
+    organizationId: input.organizationId,
+  });
+  if (blocked) return blocked;
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "Not signed in." };
+  }
+
+  // V2-005.008: Local managers cannot rename organization members.
+  // Must hold Overall Owner/Manager or Organization Owner/General Manager.
+  const [{ data: orgMembership }, { data: overallRole }] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("roles")
+      .eq("organization_id", input.organizationId)
+      .eq("profile_id", user.id)
+      .eq("active", true)
+      .maybeSingle(),
+    supabase
+      .from("overall_roles")
+      .select("role")
+      .eq("profile_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const isOverallAdmin =
+    overallRole?.role === "owner" || overallRole?.role === "manager";
+  const orgRoles = (orgMembership?.roles ?? []) as string[];
+  const isOrgExecutive =
+    orgRoles.includes("owner") || orgRoles.includes("general_manager");
+
+  if (!isOverallAdmin && !isOrgExecutive) {
+    return {
+      ok: false,
+      error: "Only an owner or general manager can rename team members.",
+    };
+  }
 
   const { error } = await supabase
     .from("profiles")

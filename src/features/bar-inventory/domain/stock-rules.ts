@@ -31,7 +31,142 @@ export const STATUS_LABEL: Record<StockStatus, string> = {
 export const WARNING_FALLBACK_RATIO = 0.25;
 export const WARNING_FALLBACK_MIN_STEP = 1;
 
-const MAX_QUANTITY = 9_999_999_999.99;
+export const MAX_QUANTITY = 9_999_999_999.99;
+export const MAX_QUANTITY_CENTS = 999_999_999_999;
+
+export type QuantityParseResult =
+  | { ok: true; value: number | null; cents: number | null }
+  | { ok: false; error: string };
+
+/**
+ * Pure parser for quantities across The Lineup Bar Inventory.
+ * Supports:
+ *  - Whole numbers: "0", "2", "15"
+ *  - Decimals (up to 2 places): "0.5", "0.75", "2.25", ".5"
+ *  - Simple fractions: "1/2", "3/4", "1/4"
+ *  - Mixed fractions: "1 1/2", "2 1/4"
+ *
+ * Normalizes to exact 2-decimal numbers (and integer cents).
+ * Strictly rejects:
+ *  - Negative values ("-1", "-1/2")
+ *  - Nonrepresentable fractions ("1/8", "1/3") whose exact decimal needs >2 places
+ *  - Malformed values ("1/0", "abc", "5.")
+ *  - Comma / thousand separators ("1,200", "1 200")
+ *  - Values above MAX_QUANTITY
+ */
+export function parseQuantityInput(
+  input: string,
+  options: {
+    allowBlank?: boolean;
+    label?: string;
+  } = {},
+): QuantityParseResult {
+  const { allowBlank = false, label } = options;
+  const text = input.trim();
+  if (text === "") {
+    if (allowBlank) return { ok: true, value: null, cents: null };
+    return {
+      ok: false,
+      error: label ? `Enter a number for ${label}.` : "Enter a number.",
+    };
+  }
+
+  if (text.includes("-")) {
+    return {
+      ok: false,
+      error: label
+        ? `${label} cannot be negative.`
+        : "Counts and levels cannot be negative.",
+    };
+  }
+
+  if (text.includes(",") || /^\d+\s+\d+$/.test(text)) {
+    return {
+      ok: false,
+      error:
+        "Use a plain number with a period for decimals (no thousand separators or decimal commas).",
+    };
+  }
+
+  // Mixed fraction: "1 1/2", "2 3/4"
+  const mixedMatch = text.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixedMatch) {
+    const whole = parseInt(mixedMatch[1], 10);
+    const num = parseInt(mixedMatch[2], 10);
+    const den = parseInt(mixedMatch[3], 10);
+    if (den === 0) {
+      return { ok: false, error: "Division by zero is not allowed." };
+    }
+    if ((100 * num) % den !== 0) {
+      return {
+        ok: false,
+        error:
+          "Fraction cannot be represented with 2 decimal places (such as 1/8). Use 1/2, 1/4, 3/4, etc.",
+      };
+    }
+    const fracCents = (100 * num) / den;
+    const cents = whole * 100 + fracCents;
+    if (cents > MAX_QUANTITY_CENTS) {
+      return { ok: false, error: "That number is too large." };
+    }
+    return { ok: true, value: fromCents(cents), cents };
+  }
+
+  // Simple fraction: "1/2", "3/4"
+  const fracMatch = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fracMatch) {
+    const num = parseInt(fracMatch[1], 10);
+    const den = parseInt(fracMatch[2], 10);
+    if (den === 0) {
+      return { ok: false, error: "Division by zero is not allowed." };
+    }
+    if ((100 * num) % den !== 0) {
+      return {
+        ok: false,
+        error:
+          "Fraction cannot be represented with 2 decimal places (such as 1/8). Use 1/2, 1/4, 3/4, etc.",
+      };
+    }
+    const cents = (100 * num) / den;
+    if (cents > MAX_QUANTITY_CENTS) {
+      return { ok: false, error: "That number is too large." };
+    }
+    return { ok: true, value: fromCents(cents), cents };
+  }
+
+  if (text.endsWith(".")) {
+    return { ok: false, error: `“${text}” is not a number.` };
+  }
+
+  // Decimal / integer: "0", "0.5", "12", ".5"
+  const decMatch = text.match(/^(\d+(\.\d+)?|\.\d+)$/);
+  if (decMatch) {
+    const parts = text.split(".");
+    if (parts.length === 2 && parts[1].length > 2) {
+      return { ok: false, error: "Use at most two decimal places." };
+    }
+    const intPart = parts[0] === "" ? 0 : parseInt(parts[0], 10);
+    const fracPart = parts.length === 2 ? parts[1].padEnd(2, "0") : "00";
+    const cents = intPart * 100 + parseInt(fracPart, 10);
+    if (cents > MAX_QUANTITY_CENTS) {
+      return { ok: false, error: "That number is too large." };
+    }
+    return { ok: true, value: fromCents(cents), cents };
+  }
+
+  return { ok: false, error: `“${text}” is not a number.` };
+}
+
+export function parseQuantityOrThrow(
+  input: string,
+  options: { label?: string; allowBlank?: boolean } = {},
+): number | null {
+  const result = parseQuantityInput(input, options);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return result.value;
+}
 
 /** Exact quantity in cents; throws on more than two decimals or bad input. */
 export function toCents(value: number): number {

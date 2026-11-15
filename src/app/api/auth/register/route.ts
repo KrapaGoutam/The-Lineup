@@ -13,11 +13,18 @@ import {
   isValidDisplayName,
 } from "@/features/auth/domain/registration";
 import {
-  createAuthPassword,
   createPasscodeLocator,
+  createPersonAuthPassword,
 } from "@/lib/passcode-security";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clearActiveContextCookie } from "@/features/context/data/context-cookie-writer";
 import { createClient } from "@/lib/supabase/server";
+import {
+  beginPersonalPinChange,
+  finishPersonalPinChange,
+  reservePinAttempt,
+  markPinAttemptSucceeded,
+} from "@/features/auth/data/global-pin";
 
 const registerSchema = z.object({
   restaurantSlug: z.string().trim().min(1).max(120),
@@ -70,6 +77,8 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  const reservation = await reservePinAttempt(admin, request, "register");
+  if (reservation.response) return reservation.response;
   const { data: organization } = await admin
     .from("organizations")
     .select("id")
@@ -84,16 +93,13 @@ export async function POST(request: Request) {
 
   const locator = createPasscodeLocator(organization.id, passcode);
   const syntheticEmail = `${randomUUID()}@passcode.internal`;
-  // New accounts start pre-migrated to the derived-password scheme
-  // (createAuthPassword) rather than the raw passcode -- see that
-  // function's comment. There's no legacy weight to carry for a brand
-  // new account.
-  const authPassword = createAuthPassword(organization.id, passcode);
-
+  // V2-009 B3 / F-5: New accounts start with canonical person-level password
+  // (createPersonAuthPassword(userId, passcode)) bound to profile ID.
+  const tempPassword = randomUUID();
   const { data: created, error: createError } =
     await admin.auth.admin.createUser({
       email: syntheticEmail,
-      password: authPassword,
+      password: tempPassword,
       email_confirm: true,
     });
   if (createError || !created.user) {
@@ -102,12 +108,28 @@ export async function POST(request: Request) {
   const userId = created.user.id;
   const rollback = () => admin.auth.admin.deleteUser(userId);
 
+  const authPassword = createPersonAuthPassword(userId, passcode);
+  const { error: setPassError } = await admin.auth.admin.updateUserById(
+    userId,
+    { password: authPassword },
+  );
+  if (setPassError) {
+    await rollback();
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
+  }
+
   const { error: profileError } = await admin
     .from("profiles")
     .insert({ id: userId, display_name: displayName });
   if (profileError) {
     await rollback();
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
+  }
+
+  const claim = await beginPersonalPinChange(admin, userId, passcode);
+  if (!claim.ok) {
+    await rollback();
+    return NextResponse.json({ error: claim.error }, { status: 409 });
   }
 
   const { error: membershipError } = await admin.from("memberships").insert({
@@ -150,6 +172,8 @@ export async function POST(request: Request) {
     self_served: true,
   });
 
+  await finishPersonalPinChange(admin, userId, claim.operationId, true);
+
   const supabase = await createClient();
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: syntheticEmail,
@@ -165,7 +189,19 @@ export async function POST(request: Request) {
     );
   }
 
+  // V2-003.004: a fresh sign-in never inherits a previously saved workspace
+  // (shared devices): the person selects, or the single-context rule applies.
+  try {
+    await clearActiveContextCookie();
+  } catch (error) {
+    // Never turn an already-established sign-in into a failure; the cookie is
+    // only a preference and is re-validated on every request.
+    console.error("sign-in: could not clear the saved workspace", error);
+  }
+
+  await markPinAttemptSucceeded(admin, reservation.attemptId);
   return NextResponse.json({
+    next: "/",
     user: {
       profileId: userId,
       name: displayName,

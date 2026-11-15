@@ -23,6 +23,7 @@ import {
   type HoursAggregate,
 } from "@/features/attendance/domain/attendance-report";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import { guardModule } from "@/features/modules/data/module-enforcement";
 import { getCurrentUser } from "@/lib/current-user";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -135,6 +136,11 @@ export async function getAttendanceAccessAction(input: {
 
   const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   const { access } = resolved;
   if (access.scope !== "self") return { ok: true, data: access };
 
@@ -160,6 +166,11 @@ export async function getAttendanceUsersAction(input: {
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
 
   const result = await getActiveNeonUsers();
   if (!result.ok) return { ok: false, error: result.error };
@@ -184,6 +195,11 @@ export async function getAttendanceReportAction(input: {
 
   const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   const { access } = resolved;
 
   // Unlinked: never even build a query. There is no id to run one with,
@@ -244,6 +260,11 @@ export async function getAttendanceDashboardTotalsAction(input: {
 
   const resolved = await resolveAttendanceAccess(parsed.data.restaurantSlug);
   if (!resolved) return { ok: false, error: NOT_SIGNED_IN_ERROR };
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
   const { access } = resolved;
 
   if (access.scope === "unlinked") {
@@ -321,6 +342,11 @@ export async function getAttendanceLinkOptionsAction(input: {
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
 
   const usersResult = await getActiveNeonUsers();
   if (!usersResult.ok) return { ok: false, error: usersResult.error };
@@ -361,6 +387,11 @@ export async function setAttendanceIdentityLinkAction(input: {
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);
@@ -393,6 +424,11 @@ export async function removeAttendanceIdentityLinkAction(input: {
   if (!resolved || resolved.access.scope !== "all") {
     return { ok: false, error: NOT_MANAGER_ERROR };
   }
+  const blocked = await guardModule({
+    module: "attendance",
+    organizationId: resolved.user.organizationId,
+  });
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const sessionCheck = await requireLiveSession(supabase);

@@ -8,12 +8,12 @@ const calls = vi.hoisted(() => ({
   tables: {} as Record<string, unknown[]>,
 }));
 
-vi.mock("@/features/locations/data/primary-location", () => ({
-  getPrimaryLocation: async () => ({
-    id: "loc-1",
-    time_zone: "America/Chicago",
-  }),
-}));
+vi.mock("./tasks-people", () => ({ getTasksPeople: async () => [] }));
+const scope = {
+  organizationId: "org-1",
+  locationId: "loc-1",
+  timeZone: "America/Chicago",
+};
 
 function query(table: string) {
   const builder: Record<string, unknown> = {};
@@ -88,7 +88,7 @@ beforeEach(() => {
 
 describe("getOpeningReminderPrompt", () => {
   it("wakes the sweep with the tenant only: no stage, recipient or time", async () => {
-    await getOpeningReminderPrompt("org-1", viewer("ann"));
+    await getOpeningReminderPrompt("org-1", viewer("ann"), scope);
     const sweep = calls.rpc.find(
       (c) => c.name === "task_opening_reminders_sweep",
     );
@@ -99,7 +99,7 @@ describe("getOpeningReminderPrompt", () => {
   });
 
   it("reads only the caller's own opening_reminder rows", async () => {
-    await getOpeningReminderPrompt("org-1", viewer("ann"));
+    await getOpeningReminderPrompt("org-1", viewer("ann"), scope);
     const reminderFilters = calls.filters.filter(
       (f) => f.table === "task_notifications",
     );
@@ -116,11 +116,19 @@ describe("getOpeningReminderPrompt", () => {
   });
 
   it("counts only the work in the caller's own scope", async () => {
-    const asStaff = await getOpeningReminderPrompt("org-1", viewer("cal"));
+    const asStaff = await getOpeningReminderPrompt(
+      "org-1",
+      viewer("cal"),
+      scope,
+    );
     expect(asStaff?.currentIncomplete).toBe(1);
-    const asAnn = await getOpeningReminderPrompt("org-1", viewer("ann"));
+    const asAnn = await getOpeningReminderPrompt("org-1", viewer("ann"), scope);
     expect(asAnn?.currentIncomplete).toBe(2);
-    const asManager = await getOpeningReminderPrompt("org-1", viewer("mona"));
+    const asManager = await getOpeningReminderPrompt(
+      "org-1",
+      viewer("mona"),
+      scope,
+    );
     expect(asManager?.currentIncomplete).toBe(3);
     // The payload is a number and the caller's own rows: nothing else.
     expect(Object.keys(asStaff ?? {}).sort()).toEqual([
@@ -133,7 +141,7 @@ describe("getOpeningReminderPrompt", () => {
 
   it("reports no incomplete work when today has no Opening checklist", async () => {
     calls.tables.checklist_instances = [];
-    const data = await getOpeningReminderPrompt("org-1", viewer("mona"));
+    const data = await getOpeningReminderPrompt("org-1", viewer("mona"), scope);
     expect(data?.currentIncomplete).toBe(0);
   });
 });

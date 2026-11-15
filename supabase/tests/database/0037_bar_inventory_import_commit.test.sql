@@ -45,6 +45,12 @@ values
   ('00000000-0000-0000-0000-000000037011', '00000000-0000-0000-0000-000000037004', array['server']::public.app_role[], true),
   ('00000000-0000-0000-0000-000000037012', '00000000-0000-0000-0000-000000037007', array['owner']::public.app_role[], true);
 
+-- V2 access model (ACCESS_MODEL 4.2/5): in a multi-location organization a Shift Manager
+-- has no implicit location authority. Asa is explicitly assigned Assistant Manager at A1,
+-- the only location she works at in this suite.
+insert into public.location_memberships (location_id, profile_id, role)
+values ('00000000-0000-0000-0000-000000037021', '00000000-0000-0000-0000-000000037003', 'assistant_manager');
+
 create function pg_temp.sqlstate_of(p_sql text) returns text
 language plpgsql as $$
 begin

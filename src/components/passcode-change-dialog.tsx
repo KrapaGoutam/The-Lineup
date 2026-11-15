@@ -54,6 +54,8 @@ export function PasscodeChangeDialog({
         return;
       }
       setDone(true);
+    } catch {
+      setError("Unable to change your passcode right now. Please try again.");
     } finally {
       setPending(false);
     }

@@ -2,128 +2,93 @@ import { describe, expect, it, vi } from "vitest";
 
 import { deactivateMember, reactivateMember } from "./member-deactivation";
 
-// setMemberActive (the shared implementation behind both exports) calls
-// exactly two chained .eq() filters after .update() on each of two
-// tables, with the second .eq() awaited directly -- matching that exact
-// shape rather than a generic mock keeps this test honest about what
-// the real code actually calls.
-function makeFakeAdmin(config: {
-  membershipError?: { message: string } | null;
-  credentialError?: { message: string } | null;
-  banError?: { message: string } | null;
-}) {
-  function updateChain(resultError: { message: string } | null) {
-    return {
-      eq: () => ({
-        eq: async () => ({ error: resultError }),
-      }),
-    };
-  }
+type UserClient = Parameters<typeof deactivateMember>[0];
 
-  const updateUserById = vi.fn(async () => ({
-    error: config.banError ?? null,
-  }));
+const organizationId = "00000000-0000-4000-8000-000000000001";
+const profileId = "00000000-0000-4000-8000-000000000002";
+const input = { organizationId, profileId, reason: "Team lifecycle change" };
 
-  return {
-    admin: {
-      from(table: string) {
-        if (table === "memberships") {
-          return { update: () => updateChain(config.membershipError ?? null) };
-        }
-        if (table === "passcode_credentials") {
-          return {
-            update: () => updateChain(config.credentialError ?? null),
-          };
-        }
-        throw new Error(`unexpected table in test fake: ${table}`);
-      },
-      auth: { admin: { updateUserById } },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fake, not the real client type
-    } as any,
-    updateUserById,
-  };
+function fakeClient(outcome: "changed" | "already_in_state" = "changed") {
+  const rpc = vi.fn(async () => ({ data: { outcome }, error: null }));
+  const updateUserById = vi.fn();
+  const client = {
+    rpc,
+    auth: { admin: { updateUserById } },
+  } as unknown as UserClient;
+  return { client, rpc, updateUserById };
 }
 
-describe("deactivateMember", () => {
-  const organizationId = "org-1";
-  const profileId = "profile-1";
-
-  it("succeeds and bans with a long, effectively-permanent duration", async () => {
-    const { admin, updateUserById } = makeFakeAdmin({});
-
-    const result = await deactivateMember(admin, { organizationId, profileId });
-
-    expect(result).toEqual({ ok: true });
-    expect(updateUserById).toHaveBeenCalledWith(profileId, {
-      ban_duration: "876000h",
+describe("transactional Team transition", () => {
+  it("deactivates through the caller's RPC with organization scope and reason", async () => {
+    const { client, rpc } = fakeClient();
+    expect(await deactivateMember(client, input)).toEqual({
+      ok: true,
+      outcome: "changed",
+    });
+    expect(rpc).toHaveBeenCalledWith("team_set_member_active", {
+      p_organization_id: organizationId,
+      p_target_profile_id: profileId,
+      p_active: false,
+      p_reason: input.reason,
     });
   });
 
-  it("attempts every write even after an earlier one fails, and reports exactly which succeeded", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    try {
-      const { admin, updateUserById } = makeFakeAdmin({
-        credentialError: { message: "credential update unavailable" },
-      });
-
-      const result = await deactivateMember(admin, {
-        organizationId,
-        profileId,
-      });
-
-      // This is the "best-effort, no revert" decision from the approved
-      // spec: membership and the ban still land even though the
-      // credential write failed in between them.
-      expect(result).toMatchObject({
-        ok: false,
-        writes: { membership: true, credential: false, ban: true },
-      });
-      expect(updateUserById).toHaveBeenCalledTimes(1);
-    } finally {
-      consoleError.mockRestore();
-    }
+  it("reactivates through the same atomic RPC", async () => {
+    const { client, rpc } = fakeClient();
+    expect(await reactivateMember(client, input)).toEqual({
+      ok: true,
+      outcome: "changed",
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "team_set_member_active",
+      expect.objectContaining({ p_active: true }),
+    );
   });
 
-  it("reports all three as failed when every write fails", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    try {
-      const { admin } = makeFakeAdmin({
-        membershipError: { message: "unavailable" },
-        credentialError: { message: "unavailable" },
-        banError: { message: "unavailable" },
-      });
-
-      const result = await deactivateMember(admin, {
-        organizationId,
-        profileId,
-      });
-
-      expect(result).toMatchObject({
-        ok: false,
-        writes: { membership: false, credential: false, ban: false },
-      });
-    } finally {
-      consoleError.mockRestore();
-    }
+  it("never invokes an account-wide Auth write during deactivation", async () => {
+    const { client, updateUserById } = fakeClient();
+    await deactivateMember(client, input);
+    expect(updateUserById).not.toHaveBeenCalled();
   });
-});
 
-describe("reactivateMember", () => {
-  const organizationId = "org-1";
-  const profileId = "profile-1";
+  it("never invokes an account-wide Auth write during reactivation", async () => {
+    const { client, updateUserById } = fakeClient();
+    await reactivateMember(client, input);
+    expect(updateUserById).not.toHaveBeenCalled();
+  });
 
-  it("succeeds and lifts the ban with 'none'", async () => {
-    const { admin, updateUserById } = makeFakeAdmin({});
+  it("does not claim success when the credential transaction fails", async () => {
+    const rpc = vi.fn(async () => ({
+      data: null,
+      error: { code: "P0001", message: "credential write failed" },
+    }));
+    const client = { rpc } as unknown as UserClient;
+    const result = await reactivateMember(client, input);
+    expect(result).toEqual({ ok: false, code: "P0001" });
+  });
 
-    const result = await reactivateMember(admin, { organizationId, profileId });
+  it("returns the database convergence outcome", async () => {
+    const { client } = fakeClient("already_in_state");
+    expect(await deactivateMember(client, input)).toEqual({
+      ok: true,
+      outcome: "already_in_state",
+    });
+  });
 
-    expect(result).toEqual({ ok: true });
-    expect(updateUserById).toHaveBeenCalledWith(profileId, {
-      ban_duration: "none",
+  it("rejects malformed input before invoking the RPC", async () => {
+    const { client, rpc } = fakeClient();
+    expect(
+      await deactivateMember(client, { ...input, profileId: "bad" }),
+    ).toEqual({ ok: false, code: "22023" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("does not fabricate a successful outcome from a malformed response", async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const client = { rpc } as unknown as UserClient;
+    expect(await deactivateMember(client, input)).toEqual({
+      ok: false,
+      code: "P0001",
     });
   });
 });

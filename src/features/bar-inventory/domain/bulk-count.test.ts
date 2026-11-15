@@ -15,10 +15,27 @@ describe("bulk count", () => {
   it.each(["0", "0.00", ".5", "1.25", "9999999999.99"])("accepts %s", (v) =>
     expect(countValue(v)).toBe(Number(v)),
   );
-  it.each(["-1", "1.001", "NaN", "Infinity", "1e2", "1,000", "10000000000"])(
-    "rejects %s",
-    (v) => expect(() => countValue(v)).toThrow(),
+  it.each([
+    ["1/2", 0.5],
+    ["3/4", 0.75],
+    ["1/4", 0.25],
+    ["1 1/2", 1.5],
+    ["2 1/4", 2.25],
+  ])("accepts fraction %j -> %s", (v, expected) =>
+    expect(countValue(v)).toBe(expected),
   );
+  it.each([
+    "-1",
+    "-1/2",
+    "1/8",
+    "1/3",
+    "1.001",
+    "NaN",
+    "Infinity",
+    "1e2",
+    "1,000",
+    "10000000000",
+  ])("rejects %s", (v) => expect(() => countValue(v)).toThrow());
   it("reviews only changes, preserves blanks and explicit zero", () => {
     const rows = buildInventoryRows(buildDemoCatalog());
     const row = rows[0];

@@ -16,6 +16,7 @@ export type ManagementResult<T = { id: string; version: number }> =
       error: string;
       kind?: "validation" | "duplicate" | "stale" | "permission" | "unknown";
       sessionInvalid?: true;
+      contextStale?: true;
     };
 export const categoryCommandSchema = z.discriminatedUnion("operation", [
   z

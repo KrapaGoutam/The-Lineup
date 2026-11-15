@@ -1,0 +1,70 @@
+import { redirect } from "next/navigation";
+
+import { ContextUnavailableNotice } from "@/components/context-unavailable-notice";
+import { RestaurantOperationsApp } from "@/components/restaurant-operations-app";
+import type { ExplicitLocationSelection } from "@/features/context/domain/active-context";
+import { loadPageData } from "@/lib/page-data";
+
+/**
+ * Shared server entry for `/` and `/r/[restaurantSlug]`. Loads the verified
+ * page data and renders either the operations app or -- when an authenticated
+ * request has no single verified (organization, location) -- the
+ * context-unavailable recovery state. Operational data is only ever
+ * present for a `resolved` (or synthetic `demo`) context.
+ */
+export async function RestaurantEntry({
+  restaurantSlug,
+  explicitSelection,
+  globalEntry = false,
+}: {
+  restaurantSlug: string;
+  /** V2-003.002 `?location=` input (only the `/r/[slug]` route supplies it). */
+  explicitSelection?: ExplicitLocationSelection;
+  /** B5: `/` authenticates/resolves across all eligible organizations. */
+  globalEntry?: boolean;
+}) {
+  const data = await loadPageData(restaurantSlug, explicitSelection, {
+    globalEntry,
+  });
+  if (data.redirectTo) redirect(data.redirectTo);
+
+  // `no_access` is an AUTHENTICATED denial (an unauthenticated request is
+  // `unauthenticated` and keeps the passcode screen): the user signed in but
+  // has no authorized location here. Show the denial, never the pending
+  // sign-in state of the operations app.
+  if (
+    data.contextStatus === "no_access" ||
+    data.contextStatus === "selection_required" ||
+    data.contextStatus === "invalid_context" ||
+    data.contextStatus === "error"
+  ) {
+    return (
+      <ContextUnavailableNotice
+        restaurantSlug={restaurantSlug}
+        status={data.contextStatus}
+        availableContexts={data.availableContexts}
+        availableContextsFailed={data.availableContextsFailed}
+      />
+    );
+  }
+
+  return (
+    <RestaurantOperationsApp
+      demoMode={data.demoMode}
+      restaurantSlug={
+        data.demoMode && globalEntry
+          ? (process.env.NEXT_PUBLIC_RESTAURANT_SLUG ?? "the-monks")
+          : restaurantSlug
+      }
+      initialUser={data.initialUser}
+      moduleNavigation={data.moduleNavigation}
+      initialScheduleContext={data.scheduleContext}
+      initialTipsContext={data.tipsContext}
+      initialAllocationContext={data.allocationContext}
+      activeContext={data.activeContext}
+      availableContexts={data.availableContexts}
+      availableContextsFailed={data.availableContextsFailed}
+      contextReconcile={data.contextReconcile}
+    />
+  );
+}

@@ -126,6 +126,10 @@ export function ManageView({
   const [section, setSection] = useState<Section>("products");
   const [showArchived, setShowArchived] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // E-1 / D-10: vendors, categories, subcategories and products are shared by every location of
+  // the organization, so changing them is organization-level authority. The database decision
+  // arrives with the snapshot; stock, counts and orders (other tabs) are unaffected.
+  const canEdit = snapshot.canManageCatalog !== false;
   const [productDialog, setProductDialog] = useState<{
     product: ProductView | null;
   } | null>(null);
@@ -487,13 +491,30 @@ export function ManageView({
         </p>
       ) : null}
 
+      {!canEdit &&
+      (section === "products" ||
+        section === "vendors" ||
+        section === "categories") ? (
+        <p
+          role="status"
+          className="bg-muted text-muted-foreground rounded-lg border px-3 py-2 text-sm"
+        >
+          Products, vendors and categories are shared by every location. While
+          your organization has more than one active location, only organization
+          managers can change them. You can still view them and manage stock at
+          your own location.
+        </p>
+      ) : null}
+
       {section === "products" ? (
         <section aria-label="Products" className="flex min-w-0 flex-col gap-3">
-          <div className="flex justify-end">
-            <Button onClick={() => setProductDialog({ product: null })}>
-              Add product
-            </Button>
-          </div>
+          {canEdit ? (
+            <div className="flex justify-end">
+              <Button onClick={() => setProductDialog({ product: null })}>
+                Add product
+              </Button>
+            </div>
+          ) : null}
           <FilterableTable<ProductRow>
             tableKey="prod"
             restaurantSlug={restaurantSlug}
@@ -509,50 +530,56 @@ export function ManageView({
                 : "No active products yet. Add your first product (a spreadsheet import arrives in a later step)."
             }
             emptyAction={
-              <Button onClick={() => setProductDialog({ product: null })}>
-                Add product
-              </Button>
+              canEdit ? (
+                <Button onClick={() => setProductDialog({ product: null })}>
+                  Add product
+                </Button>
+              ) : undefined
             }
-            rowActions={(row) => (
-              <div className="flex gap-1">
-                {row.product.active ? (
+            rowActions={(row) =>
+              !canEdit ? null : (
+                <div className="flex gap-1">
+                  {row.product.active ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Edit ${row.name}`}
+                      onClick={() => setProductDialog({ product: row.product })}
+                    >
+                      Edit
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label={`Edit ${row.name}`}
-                    onClick={() => setProductDialog({ product: row.product })}
+                    aria-label={`${row.product.active ? "Archive" : "Reactivate"} ${row.name}`}
+                    onClick={() =>
+                      void act({
+                        type: "productSetActive",
+                        id: row.product.id,
+                        active: !row.product.active,
+                        expectedVersion: row.product.version,
+                      })
+                    }
                   >
-                    Edit
+                    {row.product.active ? "Archive" : "Reactivate"}
                   </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`${row.product.active ? "Archive" : "Reactivate"} ${row.name}`}
-                  onClick={() =>
-                    void act({
-                      type: "productSetActive",
-                      id: row.product.id,
-                      active: !row.product.active,
-                      expectedVersion: row.product.version,
-                    })
-                  }
-                >
-                  {row.product.active ? "Archive" : "Reactivate"}
-                </Button>
-              </div>
-            )}
+                </div>
+              )
+            }
           />
         </section>
       ) : null}
 
       {section === "vendors" ? (
         <section aria-label="Vendors" className="flex min-w-0 flex-col gap-3">
-          <div className="flex justify-end">
-            <Button onClick={() => setVendorDialog({ vendor: null })}>
-              Add vendor
-            </Button>
-          </div>
+          {canEdit ? (
+            <div className="flex justify-end">
+              <Button onClick={() => setVendorDialog({ vendor: null })}>
+                Add vendor
+              </Button>
+            </div>
+          ) : null}
           <FilterableTable<VendorRow>
             tableKey="vend"
             restaurantSlug={restaurantSlug}
@@ -564,12 +591,14 @@ export function ManageView({
             defaultSort={[{ id: "name", dir: "asc" }]}
             emptyMessage="No vendors yet."
             emptyAction={
-              <Button onClick={() => setVendorDialog({ vendor: null })}>
-                Add vendor
-              </Button>
+              canEdit ? (
+                <Button onClick={() => setVendorDialog({ vendor: null })}>
+                  Add vendor
+                </Button>
+              ) : undefined
             }
             rowActions={(row) =>
-              row.vendor.isSystem ? (
+              !canEdit ? null : row.vendor.isSystem ? (
                 <span className="text-muted-foreground text-xs">Read-only</span>
               ) : (
                 <div className="flex gap-1">
@@ -603,6 +632,18 @@ export function ManageView({
         </section>
       ) : null}
 
+      {section === "import" && !canEdit ? (
+        <p
+          role="status"
+          className="bg-muted text-muted-foreground rounded-lg border px-3 py-2 text-sm"
+        >
+          Importing a file that creates or changes products, vendors or
+          categories needs an organization manager while your organization has
+          more than one active location; those rows will be refused and nothing
+          is saved. Stock and level updates for your own location are not
+          affected.
+        </p>
+      ) : null}
       {section === "import" ? (
         <ImportView api={imports} timeZone={timeZone} onImported={onImported} />
       ) : null}
@@ -615,11 +656,13 @@ export function ManageView({
           aria-label="Categories"
           className="flex min-w-0 flex-col gap-3"
         >
-          <div className="flex justify-end">
-            <Button onClick={() => setCategoryDialog({ category: null })}>
-              Add category
-            </Button>
-          </div>
+          {canEdit ? (
+            <div className="flex justify-end">
+              <Button onClick={() => setCategoryDialog({ category: null })}>
+                Add category
+              </Button>
+            </div>
+          ) : null}
           <FilterableTable<CategoryRow>
             tableKey="cat"
             restaurantSlug={restaurantSlug}
@@ -630,12 +673,14 @@ export function ManageView({
             timeZone={timeZone}
             emptyMessage="No categories yet. Categories and subcategories are optional; they help you filter products."
             emptyAction={
-              <Button onClick={() => setCategoryDialog({ category: null })}>
-                Add category
-              </Button>
+              canEdit ? (
+                <Button onClick={() => setCategoryDialog({ category: null })}>
+                  Add category
+                </Button>
+              ) : undefined
             }
             rowActions={(row) =>
-              row.subRef ? (
+              !canEdit ? null : row.subRef ? (
                 <div className="flex gap-1">
                   <Button
                     variant="ghost"
