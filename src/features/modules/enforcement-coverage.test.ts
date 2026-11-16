@@ -36,6 +36,8 @@ const EXEMPT_FILES: Record<string, string> = {
     "Settings: location administration (system-required module)",
   "organizations/actions/organization-admin-actions.ts":
     "System Administration: Overall Owner organization provisioning must work before any branch or optional module exists; live session, Overall role, and the provisioning RPC enforce authority",
+  "organizations/actions/cross-organization-staff-actions.ts":
+    "System Administration: Overall Owner membership linking must work before any optional module is enabled; live session, Overall role, and audited Team RPCs enforce authority",
   "locations/actions/location-lifecycle-actions.ts":
     "Settings: location lifecycle (system-required module)",
   "locations/actions/staff-assignment-actions.ts":
