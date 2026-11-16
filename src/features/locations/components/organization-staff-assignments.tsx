@@ -14,6 +14,7 @@ import {
 import { EmployeeAssignmentsDialog } from "./employee-assignments-dialog";
 import type { StaffAssignmentSource } from "./staff-assignment-source";
 import { Badge } from "@/components/ui/badge";
+import { AddExistingEmployeeDialog } from "@/features/organizations/components/add-existing-employee-dialog";
 
 export interface OrganizationStaffAssignmentsProps {
   readonly source: StaffAssignmentSource;
@@ -21,6 +22,7 @@ export interface OrganizationStaffAssignmentsProps {
   readonly organizationName: string;
   readonly locations: readonly AssignableLocation[];
   readonly onClose: () => void;
+  readonly allowCrossOrganizationLink?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export function OrganizationStaffAssignments({
   organizationName,
   locations,
   onClose,
+  allowCrossOrganizationLink = false,
 }: OrganizationStaffAssignmentsProps) {
   const [roster, setRoster] = React.useState<StaffRosterMember[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -43,6 +46,7 @@ export function OrganizationStaffAssignments({
     null,
   );
   const [message, setMessage] = React.useState<string | null>(null);
+  const [addingExisting, setAddingExisting] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -80,6 +84,11 @@ export function OrganizationStaffAssignments({
       className="max-w-[min(94vw,40rem)]"
     >
       <div className="space-y-4" data-testid="organization-staff-assignments">
+        {allowCrossOrganizationLink && (
+          <Button variant="secondary" onClick={() => setAddingExisting(true)}>
+            + Add Existing Employee
+          </Button>
+        )}
         {message && (
           <p
             role="status"
@@ -188,6 +197,27 @@ export function OrganizationStaffAssignments({
           locations={locations}
           onClose={() => setManaging(null)}
           onSaved={setMessage}
+        />
+      )}
+      {addingExisting && (
+        <AddExistingEmployeeDialog
+          destinationOrganizationId={organizationId}
+          destinationOrganizationName={organizationName}
+          nextBranchName={
+            locations.find((location) => location.name === "League City")
+              ?.name ?? locations.find((location) => location.active)?.name
+          }
+          onClose={() => setAddingExisting(false)}
+          onLinked={(member) => {
+            setMessage(
+              `${member.displayName} is now an active member. Assign a branch next.`,
+            );
+            setReloadKey((key) => key + 1);
+          }}
+          onAssign={(member) => {
+            setAddingExisting(false);
+            setManaging(member);
+          }}
         />
       )}
     </Dialog>

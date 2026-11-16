@@ -413,3 +413,23 @@ The owner accepts the residual four-digit-PIN risk. This does not waive tenant a
 Original worktree untracked files remain untouched. No V2.0.2 work is authorized in this task.
 
 ---
+
+# V2.0.1.1 — Cross-organization employee membership (Active)
+
+- [x] Read request, active project guidance, and relevant feature/data/UI contracts.
+- [x] Fetch main and development; verify ancestry; fast-forward local development; create isolated feature branch.
+- [x] State data, authorization, UI states, risks, and tests in the feature spec.
+- [x] Implement Overall Owner roster discovery and audited membership action (focused tests and typecheck pass).
+- [x] Integrate Add Existing Employee in Staff Assignments and hand off to existing branch editor (dialog tests pass).
+- [x] Add focused tests and verify duplicate/inactive/security behavior (11 new tests; related 51/51; focused pgTAP 132/132).
+- [x] Run focused local pgTAP, existing staff-assignment Playwright, check, test, webpack build and diff review.
+- [ ] Run authenticated cross-organization browser acceptance on hosted DEV with a synthetic or approved test employee.
+- [x] Commit one reviewed local feature head.
+- [ ] Push feature head, open PR, and record exact-head CI (remote development synchronization is pending after automatic approval review rejected that push).
+- [ ] Hosted DEV acceptance, reviewed release, Production smoke, and owner-controlled membership acceptance.
+
+Preflight: main `e7a063f38ff76948ff410ffa44677709eada838a`, development `bd86283ec86186a02af0ee6b953d0e37ccd3f120`. Local development fast-forwarded; automatic approval review rejected the remote development push, so remote synchronization is pending. Original root worktree has unrelated untracked files and remains untouched.
+
+Local evidence: focused app tests 51/51; full Vitest 4,252 passed and 7 skipped; focused pgTAP 0054/0058/0083/0084 132/132; existing mocked staff assignment Playwright 10/10 on desktop/mobile; `npm run check` passed; `npm run build -- --webpack` passed. Default Turbopack build cannot resolve Next from this isolated worktree, the same known V2.0.1 worktree limitation. The authenticated cross-organization browser flow and actual PIN/context verification remain pending for hosted DEV.
+
+---
