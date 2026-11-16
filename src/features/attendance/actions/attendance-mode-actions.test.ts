@@ -76,6 +76,45 @@ describe("attendance-mode-actions", () => {
   });
 
   describe("setLocationAttendanceModeAction", () => {
+    it.each([
+      "2026-11-16T12:24:55.899175+00:00",
+      "2026-11-16T12:24:55.899175Z",
+    ])(
+      "passes the original valid timestamp %s to the update",
+      async (timestamp) => {
+        mocks.requireLiveSession.mockResolvedValue(null);
+        mocks.setLocationAttendanceMode.mockResolvedValue({
+          ok: true,
+          data: { locationId, organizationId, mode: "INTERNAL_THE_LINEUP" },
+        });
+
+        const res = await setLocationAttendanceModeAction({
+          locationId,
+          mode: "INTERNAL_THE_LINEUP",
+          expectedUpdatedAt: timestamp,
+          reason: "Use native attendance",
+        });
+
+        expect(res.ok).toBe(true);
+        expect(mocks.setLocationAttendanceMode).toHaveBeenCalledWith(
+          undefined,
+          expect.objectContaining({ expectedUpdatedAt: timestamp }),
+        );
+      },
+    );
+
+    it("rejects malformed timestamps before the update", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      const res = await setLocationAttendanceModeAction({
+        locationId,
+        mode: "INTERNAL_THE_LINEUP",
+        expectedUpdatedAt: "2026-11-16T12:24:55+25:00",
+        reason: "Use native attendance",
+      });
+      expect(res.ok).toBe(false);
+      expect(mocks.setLocationAttendanceMode).not.toHaveBeenCalled();
+    });
+
     it("fails closed when unauthenticated", async () => {
       mocks.requireLiveSession.mockResolvedValue({
         ok: false,

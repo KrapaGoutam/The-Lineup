@@ -14,7 +14,7 @@ const legacy = {
   organizationId: "00000000-0000-0000-0000-000000000002",
   mode: "EXTERNAL" as const,
   isConfigured: false,
-  updatedAt: "2026-11-16T12:00:00Z",
+  updatedAt: "2026-11-16T12:24:55.899175+00:00",
   timeZone: "America/Chicago",
 };
 

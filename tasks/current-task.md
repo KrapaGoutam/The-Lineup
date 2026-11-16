@@ -8,7 +8,11 @@
 - [x] Batch B: branch Attendance settings and targeted action/component tests (6 Vitest files, 94 tests pass).
 - [x] Batch C: source, kiosk, financial and tenant checks (5 additional pgTAP files, 472 assertions pass); full Vitest (4,258 passed, 7 skipped), build, check and focused Playwright (3/3) pass.
 - [x] Commit and push reviewed candidate `39ce8a8`; open feature PR #345 into `development`.
-- [ ] Await exact-head CI and owner approval before merging into development.
+- [x] Exact-head CI on `de3bfa14747c308a8fa64d15e9143c182c70c462`: application, browser-smoke, migrations-and-policies, and Vercel pass.
+- [x] Reproduce the offset-validator defect in code and correct it without changing the RPC or timestamp value; focused action and component tests pass (14/14), targeted lint and typecheck pass.
+- [x] Targeted Prettier, lint, typecheck and `git diff --check` pass.
+- [ ] Commit and push the correction to PR #345, and await new exact-head CI.
+- [ ] Verify permitted browser path and obtain renewed explicit owner approval before merging PR #345 into development.
 - [ ] After approved merge: DEV migration gates, audited existing-branch configuration and acceptance, release PR.
 - [ ] After separate approvals: Production release, configuration and smoke.
 

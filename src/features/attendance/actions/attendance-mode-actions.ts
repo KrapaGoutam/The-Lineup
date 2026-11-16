@@ -30,7 +30,7 @@ const locationIdSchema = z
 const setModeInputSchema = z.object({
   locationId: locationIdSchema,
   mode: attendanceModeSchema,
-  expectedUpdatedAt: z.string().datetime(),
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
   reason: z
     .string()
     .trim()
