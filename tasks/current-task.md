@@ -7,7 +7,8 @@
 - [x] Batch A: database Internal default and focused provisioning/security tests (3 pgTAP files, 154 assertions pass in isolated local stack).
 - [x] Batch B: branch Attendance settings and targeted action/component tests (6 Vitest files, 94 tests pass).
 - [x] Batch C: source, kiosk, financial and tenant checks (5 additional pgTAP files, 472 assertions pass); full Vitest (4,258 passed, 7 skipped), build, check and focused Playwright (3/3) pass.
-- [ ] Commit, push reviewed candidate, open feature PR, await CI and owner merge approval.
+- [x] Commit and push reviewed candidate `39ce8a8`; open feature PR #345 into `development`.
+- [ ] Await exact-head CI and owner approval before merging into development.
 - [ ] After approved merge: DEV migration gates, audited existing-branch configuration and acceptance, release PR.
 - [ ] After separate approvals: Production release, configuration and smoke.
 
