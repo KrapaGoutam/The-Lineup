@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(32);
+select plan(34);
 
 -- --------------------------------------------------------------------------
 -- Test identities and fixtures (0057 namespace)
@@ -315,6 +315,23 @@ select is(
    where l.name = 'Clear Lake'),
   0,
   'DB-015c: provision_location did NOT synthesize any staff membership rows (0 created)'
+);
+
+select is(
+  (select count(*)::int from public.locations
+   where organization_id = '00000000-0000-0000-0000-0000000570a2'::uuid
+     and name = 'Clear Lake'
+     and attendance_mode is null),
+  1,
+  'DB-015d: a new branch has unconfigured attendance, not internal clocking'
+);
+select is(
+  (select count(*)::int from public.location_module_configs c
+   join public.locations l on l.id = c.location_id
+   where l.organization_id = '00000000-0000-0000-0000-0000000570a2'::uuid
+     and l.name = 'Clear Lake'),
+  0,
+  'DB-015e: branch provisioning does not automatically enable modules'
 );
 
 -- John mixed-role regression preserved

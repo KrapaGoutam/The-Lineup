@@ -155,6 +155,88 @@ describe("LocationAdministration", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the new organization's branch empty state and retries branch creation without recreating the organization", async () => {
+    const user = userEvent.setup();
+    vi.mocked(actions.getLocationAdminContextAction).mockResolvedValue({
+      ok: true,
+      data: {
+        canAdministerLocations: true,
+        isOverallAdmin: true,
+        organizations: MOCK_ORGS,
+      },
+    });
+    vi.mocked(actions.listLocationsForAdminAction)
+      .mockResolvedValueOnce({ ok: true, data: [] })
+      .mockResolvedValue({
+        ok: true,
+        data: [
+          {
+            ...MOCK_LOCATIONS[0],
+            name: "League City",
+            organizationId: "org-liquor",
+          },
+        ],
+      });
+    vi.mocked(actions.provisionLocationAction)
+      .mockResolvedValueOnce({ ok: false, error: "Branch could not be saved." })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { ...MOCK_LOCATIONS[0], organizationId: "org-liquor" },
+      });
+
+    render(
+      <LocationAdministration
+        onBack={vi.fn()}
+        initialOrganizationId="org-liquor"
+        backLabel="Back to Organizations"
+      />,
+    );
+    expect(await screen.findByText("No branches yet")).toBeInTheDocument();
+    expect(screen.getByText("Liquor Tap")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Select organization to administer"),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "+ Add Branch" }));
+    await user.type(screen.getByLabelText("Location Name"), "League City");
+    await user.click(screen.getByRole("button", { name: "Create Location" }));
+    expect(
+      await screen.findByText("Branch could not be saved."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Location Name")).toHaveValue("League City");
+    await user.click(screen.getByRole("button", { name: "Create Location" }));
+    await waitFor(() =>
+      expect(actions.provisionLocationAction).toHaveBeenCalledTimes(2),
+    );
+    expect(await screen.findByText("League City")).toBeInTheDocument();
+    expect(actions.provisionLocationAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-liquor",
+        name: "League City",
+      }),
+    );
+  });
+
+  it("does not fall back to a different organization if the requested one is not authorized", async () => {
+    vi.mocked(actions.getLocationAdminContextAction).mockResolvedValue({
+      ok: true,
+      data: {
+        canAdministerLocations: true,
+        isOverallAdmin: false,
+        organizations: [MOCK_ORGS[0]],
+      },
+    });
+    render(
+      <LocationAdministration
+        onBack={vi.fn()}
+        initialOrganizationId="org-liquor"
+      />,
+    );
+    expect(
+      await screen.findByText("Management Authority Required"),
+    ).toBeInTheDocument();
+    expect(actions.listLocationsForAdminAction).not.toHaveBeenCalled();
+  });
+
   it("filters locations in real-time by search query", async () => {
     const user = userEvent.setup();
     vi.mocked(actions.getLocationAdminContextAction).mockResolvedValue({
