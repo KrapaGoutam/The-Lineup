@@ -12,6 +12,7 @@ import { useContextSwitch } from "@/features/context/components/use-context-swit
 import type { AvailableContextSummary } from "@/features/context/domain/active-context";
 import { groupContextsByOrganization } from "@/features/context/domain/context-navigation";
 import { ContextSettings } from "@/features/settings/components/context-settings";
+import { SystemAdministrationEntry } from "@/features/organizations/components/system-administration-entry";
 
 const subscribeHydration = () => () => {};
 
@@ -95,6 +96,7 @@ export function ContextUnavailableNotice({
               <h1 className="text-lg font-semibold">{copy.title}</h1>
             </div>
             <p className="text-muted-foreground text-sm">{copy.body}</p>
+            <SystemAdministrationEntry compact />
             {restaurantSlug ? (
               <Button variant="secondary" onClick={() => setShowSettings(true)}>
                 Settings

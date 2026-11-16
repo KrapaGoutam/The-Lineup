@@ -396,3 +396,20 @@ Final local pass: affected organization-model pgTAP 31/31; changed Auth/attribut
 - [ ] Capture a fresh coherent encrypted cutover recovery point, apply 62-to-97 once, complete approved exact-ID assignments and production configuration, deploy and smoke.
 
 The owner accepts the residual four-digit-PIN risk. This does not waive tenant authorization, migration compatibility, backup, identity or recovery checks. Production remains unchanged at ledger 62.
+
+# V2.0.1 — Organization and branch creation (active)
+
+- [x] Read request, applicable project instructions and V2 docs; inspect the clean feature worktree and existing provisioning, Locations, and context code.
+- [x] Fetch and verify refs: `development` `6c3918c` was strictly six commits behind `main` `cc87e1f`; fast-forwarded remote development to `cc87e1f`. Created one isolated feature worktree because unrelated untracked recipe files blocked checkout in the original worktree.
+- [x] Record approved feature contract, data, authorization, UI states, risks and tests.
+- [x] Implement the System Administration organization list and create form with server authorization; focused action, form, page and Settings tests pass.
+- [x] Connect post-create branch administration and canonical context navigation; focused Locations tests pass, including failure/retry and cross-organization denial.
+- [x] Run focused tests (29), pgTAP (159 assertions), desktop/mobile Playwright (8), `npm run check`, full Vitest (4,241 passed, 7 existing skips), and webpack production build. Default Turbopack build could not resolve Next outside this worktree; webpack build verified both new routes as dynamic.
+- [x] Review security, accessibility, tenant isolation and staged diff: owner gate is server-side and RPC-enforced; branch actions and context switching reverify organization/location; no migration, credentials or unrelated paths are staged.
+- [ ] Commit and open the development PR.
+- [ ] Validate exact-head CI and hosted DEV pilot; merge to development if gates pass.
+- [ ] Review and seek owner approval for development → main; verify Production after approved release.
+
+Original worktree untracked files remain untouched. No V2.0.2 work is authorized in this task.
+
+---

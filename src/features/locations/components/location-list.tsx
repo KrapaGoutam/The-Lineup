@@ -36,6 +36,8 @@ export interface LocationListProps {
   readonly onManageLocation: (location: Location) => void;
   readonly onAddLocation: () => void;
   readonly canManage?: boolean;
+  readonly branchTerminology?: boolean;
+  readonly onOpenWorkspace?: (location: Location) => void;
   /** V2-002.005: request a lifecycle transition (opens the confirmation). */
   readonly onLifecycleAction?: (
     location: Location,
@@ -54,6 +56,7 @@ interface LocationCardProps {
   readonly onManageLocation: (location: Location) => void;
   readonly onLifecycleAction?: LocationListProps["onLifecycleAction"];
   readonly onViewHistory?: LocationListProps["onViewHistory"];
+  readonly onOpenWorkspace?: LocationListProps["onOpenWorkspace"];
 }
 
 function LocationCard({
@@ -63,6 +66,7 @@ function LocationCard({
   onManageLocation,
   onLifecycleAction,
   onViewHistory,
+  onOpenWorkspace,
 }: LocationCardProps) {
   const status = getLocationLifecycleStatus(loc);
   const addressSummary = formatAddressSummary(loc.address);
@@ -128,6 +132,16 @@ function LocationCard({
           ) : null
         ) : (
           <>
+            {status === "active" && onOpenWorkspace ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenWorkspace(loc)}
+                aria-label={`Open ${loc.name} workspace`}
+              >
+                Open workspace
+              </Button>
+            ) : null}
             {onLifecycleAction
               ? lifecycleActions.map((action) => (
                   <Button
@@ -164,6 +178,8 @@ export function LocationList({
   onManageLocation,
   onAddLocation,
   canManage = true,
+  branchTerminology = false,
+  onOpenWorkspace,
   onLifecycleAction,
   onViewHistory,
 }: LocationListProps) {
@@ -207,16 +223,16 @@ export function LocationList({
           <MapPin className="size-6" aria-hidden="true" />
         </div>
         <h3 className="text-foreground mt-4 text-base font-semibold">
-          No locations yet
+          {branchTerminology ? "No branches yet" : "No locations yet"}
         </h3>
         <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-          Add your first restaurant location to configure its address, time zone
-          and operating hours.
+          Add your first restaurant {branchTerminology ? "branch" : "location"}{" "}
+          to configure its address, time zone and operating hours.
         </p>
         {canManage && (
           <div className="mt-5">
             <Button onClick={onAddLocation} size="sm">
-              Add Location
+              {branchTerminology ? "+ Add Branch" : "Add Location"}
             </Button>
           </div>
         )}
@@ -244,7 +260,7 @@ export function LocationList({
 
         {canManage && (
           <Button onClick={onAddLocation} size="sm" className="shrink-0">
-            + Add Location
+            {branchTerminology ? "+ Add Branch" : "+ Add Location"}
           </Button>
         )}
       </div>
@@ -266,6 +282,7 @@ export function LocationList({
                   onManageLocation={onManageLocation}
                   onLifecycleAction={onLifecycleAction}
                   onViewHistory={onViewHistory}
+                  onOpenWorkspace={onOpenWorkspace}
                 />
               ))}
             </div>
@@ -303,6 +320,7 @@ export function LocationList({
                     onManageLocation={onManageLocation}
                     onLifecycleAction={onLifecycleAction}
                     onViewHistory={onViewHistory}
+                    onOpenWorkspace={onOpenWorkspace}
                   />
                 ))}
               </div>

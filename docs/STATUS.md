@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.1 — Organization and branch creation (feature branch, local implementation)
+
+The Overall Owner System Administration organization list and creation flow, zero-branch handoff to existing Locations, and canonical workspace switch are implemented on `feature/v2.0.1-organization-creation`. Local check, Vitest (4,241 passed), focused pgTAP (159 assertions), webpack production build and desktop/mobile Locations browser regression pass. No migration or hosted DEV data write. PR, hosted Liquor Tap acceptance and Production release remain pending; V2.0 issue #257 remains open. See [feature contract and evidence](features/v2-0-1-organization-creation.md).
+
 2026-11-14 V2-009 B5: local universal PIN implementation on isolated
 `feature/v2-009-b5-universal-pin-login`, based on B4 merge `5e142e8`. One forward
 global-ownership migration is applied locally only (96 → 97); hosted migration,

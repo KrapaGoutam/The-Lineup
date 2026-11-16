@@ -51,6 +51,11 @@ export interface LocationAdministrationProps {
   readonly onBack: () => void;
   readonly demoMode?: boolean;
   readonly initialOrganizationId?: string;
+  readonly backLabel?: string;
+  readonly onOpenWorkspace?: (
+    organization: AdministrableOrganization,
+    location: Location,
+  ) => void;
 }
 
 const DEMO_ORGANIZATION: AdministrableOrganization = {
@@ -152,6 +157,8 @@ export function LocationAdministration({
   onBack,
   demoMode = false,
   initialOrganizationId,
+  backLabel = "Back to Settings",
+  onOpenWorkspace,
 }: LocationAdministrationProps) {
   const [loadingContext, setLoadingContext] = React.useState(true);
   const [canAdminister, setCanAdminister] = React.useState(true);
@@ -245,7 +252,15 @@ export function LocationAdministration({
           setCanAdminister(res.data.canAdministerLocations);
           setOrganizations(res.data.organizations);
 
-          if (res.data.organizations.length > 0) {
+          if (
+            initialOrganizationId &&
+            !res.data.organizations.some((o) => o.id === initialOrganizationId)
+          ) {
+            setCanAdminister(false);
+            setLocationsError(
+              "You no longer have access to this organization.",
+            );
+          } else if (res.data.organizations.length > 0) {
             const preferred =
               initialOrganizationId &&
               res.data.organizations.some((o) => o.id === initialOrganizationId)
@@ -511,7 +526,7 @@ export function LocationAdministration({
             size="icon"
             onClick={onBack}
             disabled={modulesPending}
-            aria-label="Back to Settings"
+            aria-label={backLabel}
             className="shrink-0"
           >
             <ArrowLeft aria-hidden="true" />
@@ -528,7 +543,7 @@ export function LocationAdministration({
         </div>
 
         {/* Organization Management Selector */}
-        {organizations.length > 1 ? (
+        {organizations.length > 1 && !initialOrganizationId ? (
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <span className="text-muted-foreground text-xs font-medium whitespace-nowrap">
               Organization:
@@ -595,7 +610,7 @@ export function LocationAdministration({
               onClick={onBack}
               disabled={modulesPending}
             >
-              Return to Settings
+              {backLabel}
             </Button>
           </div>
         </Card>
@@ -636,6 +651,12 @@ export function LocationAdministration({
           }}
           onAddLocation={() => setIsAddingLocation(true)}
           canManage={canAdminister}
+          branchTerminology={Boolean(initialOrganizationId)}
+          onOpenWorkspace={
+            onOpenWorkspace && selectedOrg
+              ? (location) => onOpenWorkspace(selectedOrg, location)
+              : undefined
+          }
           onLifecycleAction={(location, action) => {
             setLifecycleNotice(null);
             setLifecycleRequest({ location, action });

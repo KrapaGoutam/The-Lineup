@@ -15,6 +15,7 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LocationAdministration } from "@/features/locations/components/location-administration";
+import { SystemAdministrationEntry } from "@/features/organizations/components/system-administration-entry";
 import { KioskManagementPage } from "@/features/kiosk/components/kiosk-management-page";
 import { useManageableKioskLocations } from "@/features/kiosk/components/use-manageable-kiosk-locations";
 import type { ShiftDefaults } from "@/features/schedules/domain/shift-planning";
@@ -274,6 +275,12 @@ export function SettingsPage({
                   onClick={() => onGoToTab("schedule")}
                 />
               ) : null}
+            </div>
+          ) : null}
+
+          {!demoMode ? (
+            <div id="settings-system-administration">
+              <SystemAdministrationEntry />
             </div>
           ) : null}
 

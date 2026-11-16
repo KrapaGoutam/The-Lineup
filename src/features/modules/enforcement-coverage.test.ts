@@ -34,6 +34,8 @@ const EXEMPT_FILES: Record<string, string> = {
     "Settings: attendance source configuration is location administration; it must work while the attendance module is off so an owner can turn it on (authority is enforced by set_location_attendance_mode)",
   "locations/actions/location-admin-actions.ts":
     "Settings: location administration (system-required module)",
+  "organizations/actions/organization-admin-actions.ts":
+    "System Administration: Overall Owner organization provisioning must work before any branch or optional module exists; live session, Overall role, and the provisioning RPC enforce authority",
   "locations/actions/location-lifecycle-actions.ts":
     "Settings: location lifecycle (system-required module)",
   "locations/actions/staff-assignment-actions.ts":
