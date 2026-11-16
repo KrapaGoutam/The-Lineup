@@ -244,6 +244,7 @@ describe("Kiosk Clock Server Actions", () => {
     personalProfileId?: string;
     credentialProfileId?: string;
     enrolledProfileId?: string;
+    enrolledLocatorNull?: boolean;
     operationId?: string;
     memberActive?: boolean;
     assigned?: boolean;
@@ -266,9 +267,11 @@ describe("Kiosk Clock Server Actions", () => {
     const enrolledAccount = options.enrolledProfileId
       ? {
           profile_id: options.enrolledProfileId,
-          locator: options.personalProfileId
-            ? createGlobalPasscodeLocator("1234")
-            : "old-locator",
+          locator: options.enrolledLocatorNull
+            ? null
+            : options.personalProfileId
+              ? createGlobalPasscodeLocator("1234")
+              : "old-locator",
           operation_id: options.operationId ?? null,
           updated_at: "2026-11-16T00:00:00Z",
         }
@@ -462,6 +465,43 @@ describe("Kiosk Clock Server Actions", () => {
     expect(result).toMatchObject({ ok: false, code: "invalid_pin" });
     expect(mockSupabaseAuth.signInWithPassword).not.toHaveBeenCalled();
     expect(mockAttemptInserts[0].succeeded).toBe(false);
+  });
+
+  it("keeps a legacy kiosk PIN valid after initial personal enrollment rolls back", async () => {
+    setupPinCase({
+      credentialProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+      enrolledLocatorNull: true,
+    });
+    mockSupabaseAuth.signInWithPassword
+      .mockResolvedValueOnce({
+        data: { session: null, user: null },
+        error: { message: "invalid" },
+      })
+      .mockResolvedValueOnce({
+        data: { session: null, user: null },
+        error: { message: "invalid" },
+      });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result.ok).toBe(true);
+    expect(mockSupabaseAuth.signInWithPassword).toHaveBeenLastCalledWith({
+      email: "legacy@example.internal",
+      password: "1234",
+    });
+    expect(mockAttemptInserts).toHaveLength(1);
+    expect(mockAttemptInserts[0].succeeded).toBe(true);
+  });
+
+  it("rejects an in-progress first enrollment before legacy Auth", async () => {
+    setupPinCase({
+      credentialProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+      enrolledLocatorNull: true,
+      operationId: "enrollment-in-progress",
+    });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result).toMatchObject({ ok: false, code: "invalid_pin" });
+    expect(mockSupabaseAuth.signInWithPassword).not.toHaveBeenCalled();
   });
 
   it("fails PIN auth if device is not paired", async () => {

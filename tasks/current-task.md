@@ -6,7 +6,7 @@
 - [x] Implement canonical kiosk PIN resolution and focused security tests (26 kiosk action tests pass).
 - [x] Run focused tests, repository checks, and production build: kiosk action 26/26, kiosk lifecycle 26/26, full Vitest 4,273 pass/7 skipped, `npm run check` pass, and webpack build pass. `git diff --check` pass. Turbopack cannot resolve the worktree's external dependency junction; exact-head CI will test the standard build.
 - [x] Complete final diff review of source, tests, tenant binding, identity checks, and scope; no unrelated tracked changes found.
-- [ ] Complete independent Antigravity security review; fix blockers. UI automation showed a mismatched window, and fallback reviewer hit a usage limit before reviewing.
+- [x] Complete independent security review; separate read-only Codex reviewer found a failed-enrollment rollback lockout, corrected with focused tests (54/54), then returned PASS on the corrected source and tests.
 - [ ] Commit and push feature candidate; obtain exact-head CI; merge reviewed PR to development.
 - [ ] Complete authorized DEV acceptance; prepare combined development-to-main release PR.
 - [ ] Stop before Production merge pending explicit owner approval.

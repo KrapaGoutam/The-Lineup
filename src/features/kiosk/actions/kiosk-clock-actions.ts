@@ -363,12 +363,13 @@ export async function kioskAuthenticatePinAction(input: {
       .maybeSingle();
     if (
       priorAccountError ||
+      priorAccount?.operation_id ||
       (personalAccount &&
         (!priorAccount ||
           priorAccount.locator !== globalLocator ||
           priorAccount.operation_id ||
           priorAccount.updated_at !== personalAccount.updated_at)) ||
-      (!personalAccount && priorAccount)
+      (!personalAccount && priorAccount && priorAccount.locator !== null)
     ) {
       await recordFailureAttempt();
       return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
