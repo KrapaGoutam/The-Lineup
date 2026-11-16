@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(31);
+select plan(33);
 
 -- --------------------------------------------------------------------------
 -- Test identities and fixtures (0056 namespace)
@@ -295,6 +295,26 @@ select is(
   ),
   1,
   'DB-015c: provision_organization atomically created active owner membership row'
+);
+
+-- V2.0.1 frontend omits the optional initial owner; the authenticated creator
+-- must receive the owner membership through the RPC default.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000056000', true);
+select lives_ok(
+  $$ select public.provision_organization('Creator Owned 56', 'creator-owned-56') $$,
+  'DB-015f: Overall Owner can provision with the default initial owner'
+);
+reset role;
+select is(
+  (select count(*)::int from public.memberships m
+   join public.organizations o on o.id = m.organization_id
+   where o.slug = 'creator-owned-56'
+     and m.profile_id = '00000000-0000-0000-0000-000000056000'::uuid
+     and m.active = true
+     and m.roles = array['owner']::public.app_role[]),
+  1,
+  'DB-015g: default provisioning makes the authenticated creator an active organization owner'
 );
 
 -- Non-Overall Owner (Overall Manager) calling provision_organization throws 42501
