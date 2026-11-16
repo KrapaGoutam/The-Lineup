@@ -1,3 +1,20 @@
+# V2.0.3 cross-organization kiosk access — IN PROGRESS
+
+- [x] Read the request, project instructions, V2.0.2 handoff, and relevant auth/kiosk code.
+- [x] Verify remote development SHA and create an isolated feature branch/worktree.
+- [x] Record the data, authorization, UI, risk, and test contract in the feature handoff.
+- [x] Implement canonical kiosk PIN resolution and focused security tests (26 kiosk action tests pass).
+- [x] Run focused tests, repository checks, and production build: kiosk action 26/26, kiosk lifecycle 26/26, full Vitest 4,273 pass/7 skipped, `npm run check` pass, and webpack build pass. `git diff --check` pass. Turbopack cannot resolve the worktree's external dependency junction; exact-head CI will test the standard build.
+- [x] Complete final diff review of source, tests, tenant binding, identity checks, and scope; no unrelated tracked changes found.
+- [x] Complete independent security review; separate read-only Codex reviewer found a failed-enrollment rollback lockout, corrected with focused tests (54/54), then returned PASS on the corrected source and tests.
+- [ ] Commit and push feature candidate; obtain exact-head CI; merge reviewed PR to development.
+- [ ] Complete authorized DEV acceptance; prepare combined development-to-main release PR.
+- [ ] Stop before Production merge pending explicit owner approval.
+
+Branch: `feature/v2-0-3-cross-org-kiosk-access`; base: `7880756456139effd7c6443b6fe0093135550fc9`; worktree: `.tmp/v2-0-3-worktree`. Recovery: `docs/features/v2-0-3-cross-org-kiosk-access/HANDOFF.md`. Preserve unrelated worktrees and untracked files.
+
+---
+
 # V2.0.2 attendance configuration — IN PROGRESS
 
 - [x] Read approved brief, project state, architecture, attendance and location code.

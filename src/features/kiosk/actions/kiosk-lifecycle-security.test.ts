@@ -793,6 +793,16 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
               }),
             };
           }
+          if (table === "personal_pin_accounts") {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi
+                  .fn()
+                  .mockResolvedValue({ data: null, error: null }),
+              }),
+            };
+          }
           if (table === "passcode_lockout_resets") {
             return {
               select: vi.fn().mockReturnValue({
@@ -883,6 +893,16 @@ describe("Kiosk Lifecycle, Security & Hardening Suite (Batch C Remediation)", ()
                 },
                 error: null,
               }),
+            }),
+          };
+        }
+        if (table === "personal_pin_accounts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: null, error: null }),
             }),
           };
         }
