@@ -13,7 +13,11 @@ import {
   type KioskEmployeeSession,
 } from "../data/kiosk-cookie";
 import { getKioskDeviceByToken } from "../data/kiosk-device-data";
-import { createPasscodeLocator } from "@/lib/passcode-security";
+import {
+  createGlobalPasscodeLocator,
+  createPasscodeLocator,
+  createPersonAuthPassword,
+} from "@/lib/passcode-security";
 import {
   FINGERPRINT_WINDOW_MINUTES,
   ORGANIZATION_WINDOW_MINUTES,
@@ -22,7 +26,10 @@ import {
   shouldLockFingerprint,
   shouldLockOrganization,
 } from "@/features/auth/domain/rate-limit";
-import { verifyPasscode } from "@/features/auth/data/passcode-verify";
+import {
+  verifyPasscode,
+  type VerifyPasscodeResult,
+} from "@/features/auth/data/passcode-verify";
 import {
   getActiveAttendanceSession,
   nativeBreakEnd,
@@ -299,18 +306,70 @@ export async function kioskAuthenticatePinAction(input: {
       }
     };
 
-    // Resolve PIN locator against passcode_credentials
-    const locator = createPasscodeLocator(device.organizationId, pin);
-    const { data: credential } = await admin
+    // Resolve both namespaces before choosing an identity. A personal PIN does
+    // not require a credential row in every organization the person joins.
+    const globalLocator = createGlobalPasscodeLocator(pin);
+    const { data: personalAccount, error: personalError } = await admin
+      .from("personal_pin_accounts")
+      .select("profile_id, synthetic_email, locator, operation_id, updated_at")
+      .eq("locator", globalLocator)
+      .maybeSingle();
+    const { data: organizationCredential, error: credentialError } = await admin
       .from("passcode_credentials")
       .select("profile_id, synthetic_email")
       .eq("organization_id", device.organizationId)
-      .eq("locator", locator)
+      .eq("locator", createPasscodeLocator(device.organizationId, pin))
       .eq("active", true)
       .maybeSingle();
 
-    if (!credential) {
-      // Record failure immediately to enforce rate limiting
+    if (personalError || credentialError) {
+      await recordFailureAttempt();
+      return {
+        ok: false,
+        error:
+          "Authentication service temporarily unavailable. Please try again.",
+        code: "auth_unavailable",
+      };
+    }
+
+    if (
+      personalAccount?.operation_id ||
+      (personalAccount &&
+        organizationCredential &&
+        personalAccount.profile_id !== organizationCredential.profile_id)
+    ) {
+      await recordFailureAttempt();
+      return {
+        ok: false,
+        error: "PIN cannot be used here. Please ask a manager for help.",
+        code: "pin_unavailable",
+      };
+    }
+
+    if (!personalAccount && !organizationCredential) {
+      await recordFailureAttempt();
+      return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
+    }
+
+    const profileId = (personalAccount ?? organizationCredential)!.profile_id;
+    const syntheticEmail = (personalAccount ?? organizationCredential)!
+      .synthetic_email;
+    // A legacy locator may outlive personal enrollment or rotation. It cannot
+    // revive an old PIN, even if its Auth password still happens to verify.
+    const { data: priorAccount, error: priorAccountError } = await admin
+      .from("personal_pin_accounts")
+      .select("locator, operation_id, updated_at")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (
+      priorAccountError ||
+      (personalAccount &&
+        (!priorAccount ||
+          priorAccount.locator !== globalLocator ||
+          priorAccount.operation_id ||
+          priorAccount.updated_at !== personalAccount.updated_at)) ||
+      (!personalAccount && priorAccount)
+    ) {
       await recordFailureAttempt();
       return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
     }
@@ -320,6 +379,7 @@ export async function kioskAuthenticatePinAction(input: {
       .from("locations")
       .select("attendance_mode, active, archived_at")
       .eq("id", device.locationId)
+      .eq("organization_id", device.organizationId)
       .single();
 
     if (
@@ -341,7 +401,7 @@ export async function kioskAuthenticatePinAction(input: {
       .from("memberships")
       .select("roles, active")
       .eq("organization_id", device.organizationId)
-      .eq("profile_id", credential.profile_id)
+      .eq("profile_id", profileId)
       .eq("active", true)
       .maybeSingle();
 
@@ -359,7 +419,7 @@ export async function kioskAuthenticatePinAction(input: {
       .from("location_memberships")
       .select("active")
       .eq("location_id", device.locationId)
-      .eq("profile_id", credential.profile_id)
+      .eq("profile_id", profileId)
       .eq("active", true)
       .maybeSingle();
 
@@ -379,12 +439,28 @@ export async function kioskAuthenticatePinAction(input: {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const verification = await verifyPasscode(isolatedAuthClient, {
-      profileId: credential.profile_id,
-      syntheticEmail: credential.synthetic_email,
-      organizationId: device.organizationId,
-      passcode: pin,
-    });
+    let verification: VerifyPasscodeResult;
+    if (personalAccount) {
+      // Enrolled accounts use only the canonical person password. Falling back
+      // to a legacy password could make a stale credential valid again.
+      const { data, error } = await isolatedAuthClient.auth.signInWithPassword({
+        email: syntheticEmail,
+        password: createPersonAuthPassword(profileId, pin),
+      });
+      verification = {
+        ok: !error && Boolean(data.session),
+        verifiedVia: !error && data.session ? "person" : null,
+        session: data.session,
+        user: data.user,
+      };
+    } else {
+      verification = await verifyPasscode(isolatedAuthClient, {
+        profileId,
+        syntheticEmail,
+        organizationId: device.organizationId,
+        passcode: pin,
+      });
+    }
 
     if (!verification.ok) {
       await recordFailureAttempt();
@@ -393,6 +469,23 @@ export async function kioskAuthenticatePinAction(input: {
         error: "PIN verification failed.",
         code: "invalid_pin",
       };
+    }
+
+    // Reject a concurrent enrollment/reset or a changed account after Auth.
+    const { data: currentAccount, error: currentAccountError } = await admin
+      .from("personal_pin_accounts")
+      .select("locator, operation_id, updated_at")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (
+      currentAccountError ||
+      currentAccount?.operation_id ||
+      currentAccount?.locator !== priorAccount?.locator ||
+      currentAccount?.updated_at !== priorAccount?.updated_at
+    ) {
+      await isolatedAuthClient.auth.signOut().catch(() => {});
+      await recordFailureAttempt();
+      return { ok: false, error: "PIN not recognized.", code: "invalid_pin" };
     }
 
     // Personal enrollment/reset owns Auth password mutations under B5's durable
@@ -404,7 +497,7 @@ export async function kioskAuthenticatePinAction(input: {
       ? { session: verification.session }
       : (
           await isolatedAuthClient.auth.signInWithPassword({
-            email: credential.synthetic_email,
+            email: syntheticEmail,
             password:
               verification.verifiedVia === "legacy"
                 ? pin
@@ -414,7 +507,7 @@ export async function kioskAuthenticatePinAction(input: {
                     ).createAuthPassword(device.organizationId, pin)
                   : (
                       await import("@/lib/passcode-security")
-                    ).createPersonAuthPassword(credential.profile_id, pin),
+                    ).createPersonAuthPassword(profileId, pin),
           })
         ).data;
 
@@ -427,9 +520,11 @@ export async function kioskAuthenticatePinAction(input: {
       };
     }
 
-    const authenticatedUserId =
-      signInData.session.user?.id ?? verification.user?.id;
-    if (!authenticatedUserId || authenticatedUserId !== credential.profile_id) {
+    const authenticatedUserId = signInData.session.user?.id;
+    if (
+      authenticatedUserId !== profileId ||
+      (verification.user && verification.user.id !== profileId)
+    ) {
       if (typeof isolatedAuthClient.auth?.signOut === "function") {
         await isolatedAuthClient.auth.signOut().catch(() => {});
       }
@@ -457,14 +552,14 @@ export async function kioskAuthenticatePinAction(input: {
     const { data: profile } = await admin
       .from("profiles")
       .select("display_name")
-      .eq("id", credential.profile_id)
+      .eq("id", profileId)
       .single();
 
     const displayName = profile?.display_name || "Employee";
 
     // Store server-side session (3-minute TTL) with encrypted access token and opaque cookie
     const sessionPayload: Omit<KioskEmployeeSession, "expiresAt"> = {
-      profileId: credential.profile_id,
+      profileId,
       displayName,
       deviceId: device.deviceId,
       organizationId: device.organizationId,
@@ -479,14 +574,14 @@ export async function kioskAuthenticatePinAction(input: {
     );
     const sessionRes = await getActiveAttendanceSession(employeeClient, {
       locationId: device.locationId,
-      profileId: credential.profile_id,
+      profileId,
     });
 
     return {
       ok: true,
       data: {
         employee: {
-          profileId: credential.profile_id,
+          profileId,
           displayName,
           organizationId: device.organizationId,
           locationId: device.locationId,

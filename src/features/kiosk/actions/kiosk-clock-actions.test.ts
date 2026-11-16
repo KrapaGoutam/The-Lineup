@@ -17,6 +17,10 @@ import {
   signSessionToken,
 } from "../data/kiosk-crypto";
 import type { KioskEmployeeSession } from "../data/kiosk-cookie";
+import {
+  createGlobalPasscodeLocator,
+  createPersonAuthPassword,
+} from "@/lib/passcode-security";
 
 // Mock server-only
 vi.mock("server-only", () => ({}));
@@ -236,6 +240,230 @@ describe("Kiosk Clock Server Actions", () => {
     mockCookies["lineup_kiosk_session"] = signSessionToken(rawToken);
   }
 
+  function setupPinCase(options: {
+    personalProfileId?: string;
+    credentialProfileId?: string;
+    enrolledProfileId?: string;
+    operationId?: string;
+    memberActive?: boolean;
+    assigned?: boolean;
+    attendanceMode?: string | null;
+    authProfileId?: string;
+    authFails?: boolean;
+    accountChangesAfterAuth?: boolean;
+  }) {
+    setupDeviceMock();
+    const deviceFrom = mockAdminClient.from.getMockImplementation()!;
+    const personalAccount = options.personalProfileId
+      ? {
+          profile_id: options.personalProfileId,
+          synthetic_email: "canonical@example.internal",
+          locator: createGlobalPasscodeLocator("1234"),
+          operation_id: options.operationId ?? null,
+          updated_at: "2026-11-16T00:00:00Z",
+        }
+      : null;
+    const enrolledAccount = options.enrolledProfileId
+      ? {
+          profile_id: options.enrolledProfileId,
+          locator: options.personalProfileId
+            ? createGlobalPasscodeLocator("1234")
+            : "old-locator",
+          operation_id: options.operationId ?? null,
+          updated_at: "2026-11-16T00:00:00Z",
+        }
+      : null;
+    let profileReads = 0;
+    mockAdminClient.from.mockImplementation((table: string) => {
+      if (
+        table === "kiosk_devices" ||
+        table === "kiosk_sessions" ||
+        table === "passcode_login_attempts"
+      )
+        return deviceFrom(table);
+      if (table === "passcode_lockout_resets")
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        };
+      if (table === "personal_pin_accounts") {
+        let byProfile = false;
+        const chain = {
+          eq: vi.fn((column: string) => {
+            if (column === "profile_id") byProfile = true;
+            return chain;
+          }),
+          maybeSingle: vi.fn(() => {
+            if (byProfile) profileReads += 1;
+            return Promise.resolve({
+              data:
+                byProfile && options.accountChangesAfterAuth && profileReads > 1
+                  ? { ...enrolledAccount, updated_at: "2026-11-16T00:01:00Z" }
+                  : byProfile
+                    ? enrolledAccount
+                    : personalAccount,
+              error: null,
+            });
+          }),
+        };
+        return { select: vi.fn().mockReturnValue(chain) };
+      }
+      if (table === "passcode_credentials")
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: options.credentialProfileId
+                ? {
+                    profile_id: options.credentialProfileId,
+                    synthetic_email: "legacy@example.internal",
+                  }
+                : null,
+              error: null,
+            }),
+          }),
+        };
+      if (table === "locations")
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: {
+                active: true,
+                archived_at: null,
+                attendance_mode:
+                  options.attendanceMode === undefined
+                    ? "internal_the_lineup"
+                    : options.attendanceMode,
+              },
+              error: null,
+            }),
+          }),
+        };
+      if (table === "memberships" || table === "location_memberships")
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data:
+                (table === "memberships"
+                  ? options.memberActive
+                  : options.assigned) === false
+                  ? null
+                  : { roles: ["server"], active: true },
+              error: null,
+            }),
+          }),
+        };
+      if (table === "profiles")
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({
+              data: { display_name: "Asha QA" },
+              error: null,
+            }),
+          }),
+        };
+      return {};
+    });
+    mockSupabaseAuth.signInWithPassword.mockResolvedValue(
+      options.authFails
+        ? { data: { session: null, user: null }, error: { message: "invalid" } }
+        : {
+            data: {
+              session: {
+                access_token: "synthetic-jwt",
+                user: { id: options.authProfileId ?? MOCK_PROFILE_ID },
+              },
+              user: { id: options.authProfileId ?? MOCK_PROFILE_ID },
+            },
+            error: null,
+          },
+    );
+    mockEmployeeFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        is: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+  }
+
+  it("authenticates the canonical employee at a second organization without a destination credential", async () => {
+    setupPinCase({
+      personalProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+    });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.employee.profileId).toBe(MOCK_PROFILE_ID);
+      expect(result.data.employee.organizationId).toBe(MOCK_ORG_ID);
+      expect(result.data.employee.locationId).toBe(MOCK_LOC_ID);
+    }
+    expect(mockAttemptInserts).toHaveLength(1);
+    expect(mockAttemptInserts[0].succeeded).toBe(true);
+    expect(mockEmployeeRpc).not.toHaveBeenCalled();
+    expect(mockSupabaseAuth.signInWithPassword).toHaveBeenCalledWith({
+      email: "canonical@example.internal",
+      password: createPersonAuthPassword(MOCK_PROFILE_ID, "1234"),
+    });
+  });
+
+  it.each([
+    [{ assigned: false }, "not_assigned_to_location"],
+    [{ memberActive: false }, "inactive_member"],
+    [{ attendanceMode: "external" }, "attendance_mode_disabled"],
+    [{ attendanceMode: "disabled" }, "attendance_mode_disabled"],
+    [{ attendanceMode: null }, "attendance_mode_disabled"],
+    [{ authFails: true }, "invalid_pin"],
+    [{ authProfileId: "different-profile" }, "auth_failed"],
+    [{ operationId: "reset-in-progress" }, "pin_unavailable"],
+    [{ accountChangesAfterAuth: true }, "invalid_pin"],
+  ] as const)("rejects a global PIN when %j", async (change, code) => {
+    setupPinCase({
+      personalProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+      ...change,
+    });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result).toMatchObject({ ok: false, code });
+    expect(mockCookies["lineup_kiosk_session"]).toBeUndefined();
+    expect(mockAttemptInserts).toHaveLength(1);
+    expect(mockAttemptInserts[0].succeeded).toBe(false);
+  });
+
+  it("rejects a global and organization locator that identify different people", async () => {
+    setupPinCase({
+      personalProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+      credentialProfileId: "different-profile",
+    });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result).toMatchObject({ ok: false, code: "pin_unavailable" });
+    expect(mockSupabaseAuth.signInWithPassword).not.toHaveBeenCalled();
+    expect(mockAttemptInserts[0].succeeded).toBe(false);
+  });
+
+  it("does not revive an old organization PIN after personal enrollment", async () => {
+    setupPinCase({
+      credentialProfileId: MOCK_PROFILE_ID,
+      enrolledProfileId: MOCK_PROFILE_ID,
+    });
+    const result = await kioskAuthenticatePinAction({ pin: "1234" });
+    expect(result).toMatchObject({ ok: false, code: "invalid_pin" });
+    expect(mockSupabaseAuth.signInWithPassword).not.toHaveBeenCalled();
+    expect(mockAttemptInserts[0].succeeded).toBe(false);
+  });
+
   it("fails PIN auth if device is not paired", async () => {
     const res = await kioskAuthenticatePinAction({ pin: "1234" });
     expect(res.ok).toBe(false);
@@ -373,6 +601,14 @@ describe("Kiosk Clock Server Actions", () => {
           }),
         };
       }
+      if (table === "personal_pin_accounts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
+        };
+      }
       return {};
     });
 
@@ -469,6 +705,16 @@ describe("Kiosk Clock Server Actions", () => {
             }),
           };
         }
+        if (table === "personal_pin_accounts") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi
+                .fn()
+                .mockResolvedValue({ data: null, error: null }),
+            }),
+          };
+        }
         if (table === "locations") {
           return {
             select: vi.fn().mockReturnValue({
@@ -541,7 +787,10 @@ describe("Kiosk Clock Server Actions", () => {
 
       mockSupabaseAuth.signInWithPassword.mockResolvedValue({
         data: {
-          session: { access_token: "jwt-token-alice-12345" },
+          session: {
+            access_token: "jwt-token-alice-12345",
+            user: { id: MOCK_PROFILE_ID },
+          },
           user: { id: MOCK_PROFILE_ID },
         },
         error: null,
@@ -650,6 +899,14 @@ describe("Kiosk Clock Server Actions", () => {
               },
               error: null,
             }),
+          }),
+        };
+      }
+      if (table === "personal_pin_accounts") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         };
       }
