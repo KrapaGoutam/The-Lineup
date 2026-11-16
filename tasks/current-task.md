@@ -1,3 +1,20 @@
+# V2.0.2 attendance configuration — IN PROGRESS
+
+- [x] Read approved brief, project state, architecture, attendance and location code.
+- [x] Fetch refs once; verify ancestry; obtain approval and fast-forward development exactly from 17d9eb7 to dc2cc8f.
+- [x] Create isolated feature worktree/branch from synchronized development.
+- [x] Record feature contract, data/authorization/UI states, risks, and tests.
+- [x] Batch A: database Internal default and focused provisioning/security tests (3 pgTAP files, 154 assertions pass in isolated local stack).
+- [x] Batch B: branch Attendance settings and targeted action/component tests (6 Vitest files, 94 tests pass).
+- [x] Batch C: source, kiosk, financial and tenant checks (5 additional pgTAP files, 472 assertions pass); full Vitest (4,258 passed, 7 skipped), build, check and focused Playwright (3/3) pass.
+- [ ] Commit, push reviewed candidate, open feature PR, await CI and owner merge approval.
+- [ ] After approved merge: DEV migration gates, audited existing-branch configuration and acceptance, release PR.
+- [ ] After separate approvals: Production release, configuration and smoke.
+
+Worktree: .tmp/v2-0-2-attendance-configuration; branch feature/v2-0-2-attendance-configuration; base dc2cc8f5f1fddbe0d52b6f0a75534f0e8fa9bd62. Unrelated files in the main worktree are untouched. Recovery: docs/features/v2-0-2-attendance-configuration/HANDOFF.md.
+
+---
+
 # V2-009 B3 — Targeted Security Amendments F-1 Through F-5 (Active)
 
 - [x] **F-5: Person-Specific Password Derivation:**

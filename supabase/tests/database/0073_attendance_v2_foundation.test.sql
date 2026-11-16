@@ -93,14 +93,15 @@ insert into public.memberships (organization_id, profile_id, roles, active) valu
   ('00000000-0000-0000-0000-0000000730a1', '00000000-0000-0000-0000-000000073010', array['server']::public.app_role[], false),
   ('00000000-0000-0000-0000-0000000730a2', '00000000-0000-0000-0000-000000073006', array['server']::public.app_role[], true);
 
-insert into public.locations (id, organization_id, name, time_zone, address, active) values
-  ('00000000-0000-0000-0000-0000000730b1', '00000000-0000-0000-0000-0000000730a1', 'Webster 73', 'America/Chicago', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b2', '00000000-0000-0000-0000-0000000730a1', 'Archived 73', 'America/Chicago', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b3', '00000000-0000-0000-0000-0000000730a2', 'Other Org Loc 73', 'America/Chicago', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b4', '00000000-0000-0000-0000-0000000730a1', 'Second Loc 73', 'America/Chicago', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b5', '00000000-0000-0000-0000-0000000730a1', 'External Loc 73', 'America/Chicago', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b6', '00000000-0000-0000-0000-0000000730a1', 'Kiritimati 73', 'Pacific/Kiritimati', '{}', true),
-  ('00000000-0000-0000-0000-0000000730b7', '00000000-0000-0000-0000-0000000730a1', 'Pago Pago 73', 'Pacific/Pago_Pago', '{}', true);
+-- Explicit NULL fixtures represent branches that predate V2.0.2.
+insert into public.locations (id, organization_id, name, time_zone, address, active, attendance_mode) values
+  ('00000000-0000-0000-0000-0000000730b1', '00000000-0000-0000-0000-0000000730a1', 'Webster 73', 'America/Chicago', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b2', '00000000-0000-0000-0000-0000000730a1', 'Archived 73', 'America/Chicago', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b3', '00000000-0000-0000-0000-0000000730a2', 'Other Org Loc 73', 'America/Chicago', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b4', '00000000-0000-0000-0000-0000000730a1', 'Second Loc 73', 'America/Chicago', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b5', '00000000-0000-0000-0000-0000000730a1', 'External Loc 73', 'America/Chicago', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b6', '00000000-0000-0000-0000-0000000730a1', 'Kiritimati 73', 'Pacific/Kiritimati', '{}', true, null),
+  ('00000000-0000-0000-0000-0000000730b7', '00000000-0000-0000-0000-0000000730a1', 'Pago Pago 73', 'Pacific/Pago_Pago', '{}', true, null);
 
 update public.locations set active = false, archived_at = now()
 where id = '00000000-0000-0000-0000-0000000730b2';
@@ -119,7 +120,7 @@ insert into public.location_memberships (location_id, profile_id, role, active) 
 select is(
   (select attendance_mode from public.locations where id = '00000000-0000-0000-0000-0000000730b1'),
   null,
-  'existing/new locations are unconfigured (NULL) - no silent default'
+  'explicitly unconfigured legacy location remains NULL'
 );
 
 -- Unconfigured location fails closed for native clocking (caller is a legitimate assignee)

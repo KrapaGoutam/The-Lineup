@@ -321,9 +321,9 @@ select is(
   (select count(*)::int from public.locations
    where organization_id = '00000000-0000-0000-0000-0000000570a2'::uuid
      and name = 'Clear Lake'
-     and attendance_mode is null),
+     and attendance_mode = 'internal_the_lineup'),
   1,
-  'DB-015d: a new branch has unconfigured attendance, not internal clocking'
+  'DB-015d: a new branch persists internal attendance mode'
 );
 select is(
   (select count(*)::int from public.location_module_configs c
