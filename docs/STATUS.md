@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.2 — Attendance configuration (feature branch)
+
+`development` was owner-approved and fast-forwarded to the exact `main` release commit `dc2cc8f`. An isolated `feature/v2-0-2-attendance-configuration` branch implements the persisted Internal default and branch Attendance settings. Local pgTAP, Vitest, check, build, and focused Playwright pass; feature PR and CI remain pending. No hosted migration or existing-branch mode write has occurred. See [feature contract](features/v2-0-2-attendance-configuration.md) and [handoff](features/v2-0-2-attendance-configuration/HANDOFF.md).
+
 ## V2.0.1.1 — Cross-organization employee membership (feature branch)
 
 Overall Owner source-roster selection, audited membership linking/reactivation, and the existing branch assignment handoff are implemented on `feature/v2-0-1-1-cross-org-staff`. No migration or hosted data change. Local check, full Vitest, focused pgTAP, existing desktop/mobile assignment browser coverage and webpack build pass. The authenticated cross-organization browser flow, PR CI, hosted DEV acceptance and Production owner acceptance remain pending. Remote `development` synchronization was rejected by automatic approval review and is pending. See [feature contract](features/v2-0-1-1-cross-org-staff.md) and `tasks/current-task.md`.

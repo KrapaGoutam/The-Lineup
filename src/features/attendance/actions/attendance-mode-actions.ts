@@ -17,6 +17,7 @@ export type ActionResult<T> =
       readonly ok: false;
       readonly error: string;
       readonly sessionInvalid?: true;
+      readonly code?: string;
     };
 
 const uuidRegex =
@@ -29,14 +30,12 @@ const locationIdSchema = z
 const setModeInputSchema = z.object({
   locationId: locationIdSchema,
   mode: attendanceModeSchema,
-  expectedUpdatedAt: z.string().datetime().nullable().optional(),
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
   reason: z
     .string()
     .trim()
     .min(3, "Reason must be at least 3 characters.")
-    .max(500)
-    .nullable()
-    .optional(),
+    .max(500),
 });
 
 export type SetAttendanceModeInput = z.infer<typeof setModeInputSchema>;
@@ -63,7 +62,7 @@ export async function getLocationAttendanceModeAction(
     const result = await getLocationAttendanceMode(supabase, parsed.data);
 
     if (!result.ok) {
-      return { ok: false, error: result.error };
+      return { ok: false, error: result.error, code: result.code };
     }
 
     return { ok: true, data: result.data };
@@ -104,7 +103,7 @@ export async function setLocationAttendanceModeAction(
     });
 
     if (!result.ok) {
-      return { ok: false, error: result.error };
+      return { ok: false, error: result.error, code: result.code };
     }
 
     revalidatePath("/settings");

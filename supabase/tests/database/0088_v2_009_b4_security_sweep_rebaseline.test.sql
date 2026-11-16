@@ -45,11 +45,13 @@ select id, split_part(email,'@',1) from auth.users where email like 'sw-%@test.i
 insert into public.organizations (id,name,slug,created_by) values
   ('00000000-0000-4000-8000-0000000821a1','Sweep A','sweep-a','00000000-0000-4000-8000-000000082001'),
   ('00000000-0000-4000-8000-0000000821b1','Sweep B','sweep-b','00000000-0000-4000-8000-000000082009');
-insert into public.locations (id, organization_id, name, time_zone) values
-  ('00000000-0000-4000-8000-0000000822a1','00000000-0000-4000-8000-0000000821a1','A1','America/Chicago'),
-  ('00000000-0000-4000-8000-0000000822a2','00000000-0000-4000-8000-0000000821a1','A2','America/Chicago'),
-  ('00000000-0000-4000-8000-0000000822b1','00000000-0000-4000-8000-0000000821b1','B1','America/Chicago'),
-  ('00000000-0000-4000-8000-0000000822b2','00000000-0000-4000-8000-0000000821b1','B2','America/Chicago');
+-- This security sweep pins legacy unconfigured capabilities. V2.0.2 defaults
+-- newly inserted branches to Internal, so keep the historical fixture explicit.
+insert into public.locations (id, organization_id, name, time_zone, attendance_mode) values
+  ('00000000-0000-4000-8000-0000000822a1','00000000-0000-4000-8000-0000000821a1','A1','America/Chicago',null),
+  ('00000000-0000-4000-8000-0000000822a2','00000000-0000-4000-8000-0000000821a1','A2','America/Chicago',null),
+  ('00000000-0000-4000-8000-0000000822b1','00000000-0000-4000-8000-0000000821b1','B1','America/Chicago',null),
+  ('00000000-0000-4000-8000-0000000822b2','00000000-0000-4000-8000-0000000821b1','B2','America/Chicago',null);
 -- Org-level (legacy) role sits on memberships; location role sits on location_memberships.
 --   lm1  = org 'server'        + location manager at A1      (a LOCATION manager, no org-level authority)
 --   am1  = org 'server'        + assistant manager at A1

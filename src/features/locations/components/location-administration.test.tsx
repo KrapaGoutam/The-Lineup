@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LocationAdministration } from "./location-administration";
 import * as actions from "@/features/locations/actions/location-admin-actions";
+import * as attendanceActions from "@/features/attendance/actions/attendance-mode-actions";
 
 vi.mock("@/features/locations/actions/location-admin-actions", () => ({
   getLocationAdminContextAction: vi.fn(),
@@ -11,6 +12,11 @@ vi.mock("@/features/locations/actions/location-admin-actions", () => ({
   updateLocationDetailsAction: vi.fn(),
   getLocationOperatingHoursAction: vi.fn(),
   updateLocationOperatingHoursAction: vi.fn(),
+}));
+
+vi.mock("@/features/attendance/actions/attendance-mode-actions", () => ({
+  getLocationAttendanceModeAction: vi.fn(),
+  setLocationAttendanceModeAction: vi.fn(),
 }));
 
 const MOCK_ORGS = [
@@ -343,5 +349,50 @@ describe("LocationAdministration", () => {
     await user.click(screen.getByRole("button", { name: "Hours" }));
 
     expect(screen.getByText("Weekly Operating Hours")).toBeInTheDocument();
+  });
+
+  it("opens the existing branch dialog's Attendance tab without changing its mode", async () => {
+    const user = userEvent.setup();
+    vi.mocked(actions.getLocationAdminContextAction).mockResolvedValue({
+      ok: true,
+      data: {
+        canAdministerLocations: true,
+        isOverallAdmin: true,
+        organizations: [MOCK_ORGS[0]],
+      },
+    });
+    vi.mocked(actions.listLocationsForAdminAction).mockResolvedValue({
+      ok: true,
+      data: [MOCK_LOCATIONS[0]],
+    });
+    vi.mocked(
+      attendanceActions.getLocationAttendanceModeAction,
+    ).mockResolvedValue({
+      ok: true,
+      data: {
+        locationId: MOCK_LOCATIONS[0].id,
+        organizationId: MOCK_ORGS[0].id,
+        mode: "EXTERNAL",
+        isConfigured: false,
+        updatedAt: MOCK_LOCATIONS[0].updatedAt,
+        timeZone: MOCK_LOCATIONS[0].timeZone,
+      },
+    });
+
+    render(<LocationAdministration onBack={vi.fn()} />);
+    await user.click(
+      await screen.findByRole("button", { name: "Manage Webster Branch" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Attendance" }));
+    expect(await screen.findByText("Attendance Settings")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Unconfigured \(legacy external-compatible reads/),
+    ).toBeInTheDocument();
+    expect(
+      attendanceActions.getLocationAttendanceModeAction,
+    ).toHaveBeenCalledWith("loc-1");
+    expect(
+      attendanceActions.setLocationAttendanceModeAction,
+    ).not.toHaveBeenCalled();
   });
 });
