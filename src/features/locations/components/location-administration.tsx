@@ -855,6 +855,9 @@ export function LocationAdministration({
       {showStaffOverview && selectedOrg && (
         <OrganizationStaffAssignments
           source={staffSource}
+          allowCrossOrganizationLink={
+            Boolean(initialOrganizationId) && !demoMode
+          }
           organizationId={selectedOrgId}
           organizationName={selectedOrg.name}
           locations={locations.map((l) => ({

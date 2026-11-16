@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.1.1 — Cross-organization employee membership (feature branch)
+
+Overall Owner source-roster selection, audited membership linking/reactivation, and the existing branch assignment handoff are implemented on `feature/v2-0-1-1-cross-org-staff`. No migration or hosted data change. Local check, full Vitest, focused pgTAP, existing desktop/mobile assignment browser coverage and webpack build pass. The authenticated cross-organization browser flow, PR CI, hosted DEV acceptance and Production owner acceptance remain pending. Remote `development` synchronization was rejected by automatic approval review and is pending. See [feature contract](features/v2-0-1-1-cross-org-staff.md) and `tasks/current-task.md`.
+
 ## V2.0.1 — Organization and branch creation (feature branch, local implementation)
 
 The Overall Owner System Administration organization list and creation flow, zero-branch handoff to existing Locations, and canonical workspace switch are implemented on `feature/v2.0.1-organization-creation`. Local check, Vitest (4,241 passed), focused pgTAP (159 assertions), webpack production build and desktop/mobile Locations browser regression pass. No migration or hosted DEV data write. PR, hosted Liquor Tap acceptance and Production release remain pending; V2.0 issue #257 remains open. See [feature contract and evidence](features/v2-0-1-organization-creation.md).
