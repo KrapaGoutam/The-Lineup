@@ -409,6 +409,7 @@ export function ServerBoardView({
         <TableMap
           tables={tables}
           loadError={tablesLoadError}
+          hasOffMapTables={offMapTables.length > 0}
           selectedLabel={null}
           disabled={disabled}
           onSelectTable={chooseTable}

@@ -1,4 +1,4 @@
-# Security Upgrade: Next.js & eslint-config-next 16.4.6 — COMPLETED (LOCAL)
+# Security Upgrade: Next.js & eslint-config-next 16.4.6 — MERGING TO DEVELOPMENT
 
 Full plan, decisions and recovery: `docs/features/security-nextjs-16-4-6-upgrade/HANDOFF.md` (single source of truth).
 Branch `security/nextjs-16-4-6-upgrade`, base `2e742f5` (origin/development). Isolated worktree `.tmp/security-nextjs-upgrade`.
@@ -9,31 +9,30 @@ Branch `security/nextjs-16-4-6-upgrade`, base `2e742f5` (origin/development). Is
 - [x] Run focused validation cycle: `npm run check` (Prettier, ESLint 0 warnings, TypeScript clean), `npm test` (320 files, 4,322 passed, 7 skipped), `npm run build` (Turbopack production build, 16/16 routes static generation), `node scripts/check-nonprod-env.mjs --scan .next` PASS, `node scripts/check-tracked-local-paths.mjs` PASS.
 - [x] E2E smoke verification: `tests/e2e/default-landing.spec.ts` 11/11 passed (no security advisory halts).
 - [x] Commit changes (`851d95c`), push to `origin/security/nextjs-16-4-6-upgrade`, open PR #350 targeting `development` (`https://github.com/KrapaGoutam/The-Lineup/pull/350`).
-- [ ] Await CI on security PR #350 head; no merge into `development` or `main` without explicit owner approval.
-- [ ] Preserve PR #349 and all existing worktrees untouched.
+- [x] Merge latest `origin/development` (containing merged PR #349 `ef5959d`) into security branch and resolve shared task documentation cleanly.
+- [ ] Await CI on security PR #350 head; merge PR #350 into `development`.
+- [ ] Open consolidated release PR: `development` -> `main`.
 
 ## Current State & Next Step
 
-PR #350 opened and CI checks in progress. All local validation complete and verified 100% green.
-Next: monitor PR #350 CI checks and report to owner.
+PR #349 merged into `development` (`ef5959d`). Latest `development` merged into PR #350.
+Next: verify PR #350 exact-head CI, merge PR #350 into `development`, and open consolidated release PR.
 
 ---
 
-# V2.0.4 Combined Table Allocation — IN PROGRESS
+# V2.0.4 Combined-Only Workspace & 7-Day Retention — MERGED TO DEVELOPMENT
 
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
-Branch `feature/v2-0-4-combined-table-allocation`, base `1c5373e`. V2.0.3 is released (main `2933d3a`); not repeated.
+Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/development). Merged into `development` at `ef5959d`.
 
-- [x] H0: baseline verified, worktree + branch created, handoff written.
-- [x] Batch A: dine-in metrics + `transferredIn`; Combined shell, modes, header/metrics, plan/grid, viewport fit.
-- [x] Batch B: assign/transfer/end/clear, Rotation Focus NEXT row, Quick Table Picker, + Server picker, skip/pause/reorder, undo/redo (Tools), latest-first history, active records, Expand.
-- [x] Batch C (part): Dashboard Dine-in Today; Playwright tablet/portrait/phone green.
-- [x] Batch C (rest): full test/build/check gate green, independent review dispositioned (handoff).
-- [ ] PR into development + exact-head CI; DEV acceptance and release need owner approval.
-
-## Current State & Next Step
-
-Next: push branch, open the single PR to `development`, wait for exact-head CI. Details in the handoff file.
+- [x] Batch A: Combined-only workspace navigation (removed outer 6-view tablist `Combined | Grid | Floor | Picker | Servers | Dashboard`; renders Combined directly on mount without flashing; preserved internal views for test harnesses/modularity via optional `initialView`; decoupled view tabs with `sr-only` support for headless/test harnesses).
+- [x] Batch B: 7-day operational history window (domain `allocation-history-window.ts` [today - 6 days, today]; server-side enforcement in `getAllocationContextForDateAction`; compact date navigation & "Back to today" in Combined `ToolsMenu`; read-only visual status badge on historical dates).
+- [x] Batch C: Database retention audit & safe forward-only migration `20261117140000_table_allocation_7day_retention.sql` (`private.cleanup_stale_table_allocation_records` cleans disposable child rows `section_assignments`, `table_rotation_entries`, `rotation_rounds`, `rotation_members` for closed sessions older than 7 days; preserves `service_sessions` and `seatings`; pgTAP test `0090` 10/10 assertions pass).
+- [x] Rigorous verification: full Vitest suite (321 files, 4,340 passed, 7 skipped), allocation suite (26 files, 427 passed), Playwright E2E suites (Combined 7/7, Cross-view extras 3/3, Allocation open-editing 3/3, Multi-view 1/1, Dashboard 25/25, Default landing 11/11), `npm run check` (Prettier clean, ESLint 0 warnings, TypeScript clean).
+- [x] Documented in `HANDOFF.md` and updated Playwright test suites.
+- [x] Review diff, commit with `fix(allocation): reconcile e2e test helpers and decoupled views for combined-only workspace` and `fix(allocation): ensure table-rotation-multi-view goToAllocation lands on Grid`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
+- [x] Exact-head CI on PR #349 (commit `e34d301`) 100% green: `application` pass (5m56s), `browser-smoke` pass (14m5s), `migrations-and-policies` pass (3m37s), `Vercel` pass, `Vercel Preview Comments` pass.
+- [x] PR #349 merged into `development` at merge commit `ef5959d`.
 
 ---
 

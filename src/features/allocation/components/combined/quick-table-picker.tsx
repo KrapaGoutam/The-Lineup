@@ -223,6 +223,7 @@ export function QuickTablePicker({
             <TableMap
               tables={fittedTables}
               loadError={tablesLoadError}
+              hasOffMapTables={offMapTables.length > 0}
               selectedLabel={null}
               compact
               disabled={blocked}

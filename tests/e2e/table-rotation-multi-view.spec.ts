@@ -29,22 +29,25 @@ async function goToAllocation(page: Page) {
   });
   if (await direct.isVisible()) {
     await direct.click();
-    return;
+  } else {
+    const moreButton = page.getByRole("button", { name: "More" });
+    if ((await moreButton.getAttribute("aria-expanded")) !== "true") {
+      await moreButton.click();
+    }
+    await page
+      .getByRole("button", { name: /^Table Allocation$|^Allocation$/ })
+      .click();
   }
-  const moreButton = page.getByRole("button", { name: "More" });
-  if ((await moreButton.getAttribute("aria-expanded")) !== "true") {
-    await moreButton.click();
-  }
-  await page
-    .getByRole("button", { name: /^Table Allocation$|^Allocation$/ })
-    .click();
+  const gridTab = page.getByRole("tab", { name: "Grid", exact: true });
+  await gridTab.dispatchEvent("click");
+  await expect(gridTab).toHaveAttribute("aria-selected", "true");
 }
 
 async function switchView(
   page: Page,
   name: "Grid" | "Floor" | "Picker" | "Servers" | "Dashboard",
 ) {
-  await page.getByRole("tab", { name, exact: true }).click();
+  await page.getByRole("tab", { name, exact: true }).dispatchEvent("click");
 }
 
 test("Floor: assigning an available table shows it as occupied and appears on the Grid", async ({
