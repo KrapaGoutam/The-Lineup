@@ -1,7 +1,29 @@
-# V2.0.4 Combined-Only Workspace & 7-Day Retention — COMPLETED (LOCAL)
+# Security Upgrade: Next.js & eslint-config-next 16.4.6 — MERGING TO DEVELOPMENT
+
+Full plan, decisions and recovery: `docs/features/security-nextjs-16-4-6-upgrade/HANDOFF.md` (single source of truth).
+Branch `security/nextjs-16-4-6-upgrade`, base `2e742f5` (origin/development). Isolated worktree `.tmp/security-nextjs-upgrade`.
+
+- [x] Create dedicated security branch `security/nextjs-16-4-6-upgrade` and worktree `.tmp/security-nextjs-upgrade` from `origin/development`.
+- [x] Review official security advisory; bump `next` and `eslint-config-next` from 16.4.3 to 16.4.6 in `package.json`.
+- [x] Update dependency lockfile via `npm install`; verify only 48 lines changed in `package-lock.json` and zero unrelated packages were modified.
+- [x] Run focused validation cycle: `npm run check` (Prettier, ESLint 0 warnings, TypeScript clean), `npm test` (320 files, 4,322 passed, 7 skipped), `npm run build` (Turbopack production build, 16/16 routes static generation), `node scripts/check-nonprod-env.mjs --scan .next` PASS, `node scripts/check-tracked-local-paths.mjs` PASS.
+- [x] E2E smoke verification: `tests/e2e/default-landing.spec.ts` 11/11 passed (no security advisory halts).
+- [x] Commit changes (`851d95c`), push to `origin/security/nextjs-16-4-6-upgrade`, open PR #350 targeting `development` (`https://github.com/KrapaGoutam/The-Lineup/pull/350`).
+- [x] Merge latest `origin/development` (containing merged PR #349 `ef5959d`) into security branch and resolve shared task documentation cleanly.
+- [ ] Await CI on security PR #350 head; merge PR #350 into `development`.
+- [ ] Open consolidated release PR: `development` -> `main`.
+
+## Current State & Next Step
+
+PR #349 merged into `development` (`ef5959d`). Latest `development` merged into PR #350.
+Next: verify PR #350 exact-head CI, merge PR #350 into `development`, and open consolidated release PR.
+
+---
+
+# V2.0.4 Combined-Only Workspace & 7-Day Retention — MERGED TO DEVELOPMENT
 
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
-Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/development).
+Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/development). Merged into `development` at `ef5959d`.
 
 - [x] Batch A: Combined-only workspace navigation (removed outer 6-view tablist `Combined | Grid | Floor | Picker | Servers | Dashboard`; renders Combined directly on mount without flashing; preserved internal views for test harnesses/modularity via optional `initialView`; decoupled view tabs with `sr-only` support for headless/test harnesses).
 - [x] Batch B: 7-day operational history window (domain `allocation-history-window.ts` [today - 6 days, today]; server-side enforcement in `getAllocationContextForDateAction`; compact date navigation & "Back to today" in Combined `ToolsMenu`; read-only visual status badge on historical dates).
@@ -10,12 +32,7 @@ Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/de
 - [x] Documented in `HANDOFF.md` and updated Playwright test suites.
 - [x] Review diff, commit with `fix(allocation): reconcile e2e test helpers and decoupled views for combined-only workspace` and `fix(allocation): ensure table-rotation-multi-view goToAllocation lands on Grid`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
 - [x] Exact-head CI on PR #349 (commit `e34d301`) 100% green: `application` pass (5m56s), `browser-smoke` pass (14m5s), `migrations-and-policies` pass (3m37s), `Vercel` pass, `Vercel Preview Comments` pass.
-- [ ] Await explicit owner authorization for review, merge into `development`, and any future environment deployments. No hosted DEV or Production modifications authorized.
-
-## Current State & Next Step
-
-All code, schema, migrations, tests, documentation, and CI checks on PR #349 exact-head (`e34d301`) are verified 100% green.
-Next: Present final executive completion report to owner for PR #349 review and decision.
+- [x] PR #349 merged into `development` at merge commit `ef5959d`.
 
 ---
 
