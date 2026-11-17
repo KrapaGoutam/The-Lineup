@@ -1,5 +1,6 @@
 import type { OffMapTable } from "@/features/allocation/domain/board-read-model";
 import {
+  adjustMonksAisleCoordinates,
   parseCombinedTableLabel,
   type FloorResourceType,
   type ResolvedFloorTable,
@@ -294,14 +295,17 @@ export function buildPickerTiles(
  * both axes), and the factor is bounded so a layout that already fills the
  * map is left essentially as drawn.
  */
-export function fitFloorTables<T extends { x: number; y: number }>(
+export function fitFloorTables<
+  T extends { label?: string; x: number; y: number },
+>(
   tables: T[],
   options: { padding?: number; minScale?: number; maxScale?: number } = {},
 ): T[] {
   const { padding = 8, minScale = 0.9, maxScale = 1.6 } = options;
   if (tables.length === 0) return tables;
-  const xs = tables.map(({ x }) => x);
-  const ys = tables.map(({ y }) => y);
+  const source = adjustMonksAisleCoordinates(tables);
+  const xs = source.map(({ x }) => x);
+  const ys = source.map(({ y }) => y);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
@@ -319,7 +323,7 @@ export function fitFloorTables<T extends { x: number; y: number }>(
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   const clamp = (value: number) => Math.min(100 - 2, Math.max(2, value));
-  return tables.map((table) => ({
+  return source.map((table) => ({
     ...table,
     x: clamp(50 + (table.x - cx) * scale),
     y: clamp(50 + (table.y - cy) * scale),

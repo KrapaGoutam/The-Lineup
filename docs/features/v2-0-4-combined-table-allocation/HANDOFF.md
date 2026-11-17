@@ -85,4 +85,86 @@ Latest source SHA: see `git log` (first V2.0.4 commit = H1/H2 checkpoint). Base 
 - Local dev server for Playwright: `NEXT_PUBLIC_DEMO_MODE=true npm run dev -- --webpack` then `PLAYWRIGHT_BASE_URL=http://localhost:3000 npx playwright test ... ` (the Playwright-managed webServer start is flaky because `next dev` prints an upgrade nudge and exits on some runs; the Next 16.4.5 bump is a separate follow-up, see V2.0.3 closeout). Remove `nextjs-portal` in the page when driving the mobile nav.
 - node_modules is a Windows junction: create with PowerShell `New-Item -ItemType Junction` (the bash `mklink` form created a wrong target once).
 - Resume: read this file, `git -C <worktree> status`, `git log --oneline origin/development..HEAD`, run only the tests for files listed under the latest checkpoint. Preserve all uncommitted work. Do not read the chat transcript.
-- Blocked items: none.
+- Blocked items: none (hosted DEV acceptance complete; awaiting owner Production release authorization).
+
+## H4 addendum (2026-11-17, local-only note -- not committed on purpose)
+
+- Merge: PR #348 -> `development` `2e742f5` (merge commit). `main` is still `2933d3a`. No migration was in the PR, so no database deployment ran.
+- Owner approval: OPTION A selected (temporarily enable Table Allocation at DEV Location for hosted acceptance, then restore to disabled).
+- Target environment: DEV Supabase `opmujepkemwcdxxorhfd`; organization "The Monk's DEV" (`c5e8ad9c-39be-4344-bbdb-ae84306f0134`); location "DEV Location" (`a5d46f61-cf64-4b96-8d9f-41d6812d561c`). Production (`ftadewtkjlaotfdvtjcv`) strictly untouched and read-only.
+- Pre-change state:
+  - Row: `location_id = 'a5d46f61-cf64-4b96-8d9f-41d6812d561c'`, `module_key = 'table_allocation'`, `is_enabled = false`, `metadata = {}`, `created_at = '2026-11-11T04:54:06.303542+00:00'`, `updated_at = '2026-11-11T04:55:30.718334+00:00'`, `updated_by = 'b3add6a2-fd5f-45ac-93bc-0fbbd55b9e2f'`.
+  - Live preflight check: Authenticated browser login (`TestOwner`) verified Table Allocation was hidden in navigation.
+- Temporary enablement receipt:
+  - Guarded update executed via `manage-dev-module.mjs enable`.
+  - Timestamp: `2026-11-17T11:55:39.310441+00:00`.
+  - Readback verification: Exactly 1 row updated (`is_enabled: true`); total location configs count unchanged at 27; unrelated modules untouched.
+- Hosted DEV Acceptance execution:
+  - Target Preview: `https://the-lineup-fu901c88x-onepiece11.vercel.app` (pinned to DEV `opmujepkemwcdxxorhfd`, SHA `2e742f5`).
+  - Suite: `tests/real/ui/v2-0-4-hosted-acceptance.real.spec.ts` (5/5 PASS, 27.2s).
+  - Acceptance A (Module & Navigation): PASS. Table Allocation visible at DEV Location; all 6 tabs present (`Grid`, `Floor`, `Picker`, `Servers`, `Dashboard`, `Combined`); default tab is `Grid`; reload preserves session and context; 0 permission errors.
+  - Acceptance B & C (Modes & Floor Configuration): PASS. Three Combined modes verified (Split Screen, Floor Focus with Plan/Grid toggling, Rotation Focus); real DEV Location floor layout verified (27 dining tables, saved coordinates honored); table selection synchronized across views.
+  - Acceptance D, E, F (Rotation, Quick Assignment, Table Actions): PASS. Server rotation (+Server, roster search, adding TestServer1 and TestServer2, Pause/Resume controls); Quick Table Assignment (+Table, Quick Grid, busy tables disabled); table actions (assign T15, transfer T15 to TestServer2, end table T15, clear entry from history).
+  - Acceptance G & I (Dashboard Metrics & Live Sync): PASS. Dashboard metrics (Dine-in Today, Active, Completed, Servers, Next) match between Combined view and Dashboard tab; bar seats excluded from dine-in totals; guest-count/party-size controls verified absent; cross-view synchronization with Floor and Servers tabs verified.
+  - Acceptance H (Responsive Tablet): PASS. Tablet landscape (1024x768) verified (zero horizontal or vertical page scroll; overflow <= 1px; history independently scrolls); portrait fallback (768x1024) verified (no horizontal page overflow).
+- Restoration receipt:
+  - Guarded update executed via `manage-dev-module.mjs restore`.
+  - Timestamp: `2026-11-17T12:01:46.702008+00:00`.
+  - Readback verification: Exactly 1 row updated (`is_enabled: false`); total location configs count unchanged at 27; all 8 other modules at DEV Location retain original values (`bar_inventory: true`, others `false`).
+  - UI verification: Live browser preflight check confirmed Table Allocation is no longer exposed in navigation (`Allocation direct button visible: false`).
+  - Database reconciliation: Active table claims (`section_assignments`) = 0; all test allocations cleanly ended; 10 legitimate audit events recorded in `board_events`; 0 database drift.
+- Release-readiness preflight:
+  - Source `development` SHA: `2e742f57bd488c023b4a9e629a082079192d8cef` (PR #348 merged).
+  - Target `main` SHA: `2933d3afc351273f04c89559397f2979e5f0eda9`.
+  - Intervening development commits: 0.
+  - Schema/migration diff: 0 migrations (`git diff origin/main...origin/development -- supabase/migrations` is empty).
+  - Production note: Table Allocation is currently disabled on Production (`ftadewtkjlaotfdvtjcv`); merging the feature code alone will not expose Combined there without an explicit owner module enablement decision.
+  - Release status: READY FOR RELEASE TO MAIN — awaiting separate owner authorization. Stop before `development -> main`.
+- Local uncommitted: this addendum in `HANDOFF.md` only. No unapproved commits or pushes made.
+
+## V2.0.4 Correction Addendum — Floor Data Parity & Aisle Layout Adjustment (2026-11-17)
+
+### 1. Defect & Root Cause Investigation
+- **Reported Issue:** The owner reported seeing *"No tables are configured for this location"* on the floor display despite expecting tables in Table Allocation Rotation views.
+- **Root Cause Analysis:**
+  1. **Branch/Location Discrepancy:** On hosted DEV, the owner navigated to an organization/location where the `table_allocation` module was enabled (specifically `QA Restaurant A` / `QA A - Downtown`, `location_id = '94c63855-88a5-4c3d-bd55-be5e26be5382'`). In DEV Supabase (`opmujepkemwcdxxorhfd`), `QA A - Downtown` has active server columns and rotation session rows, but **0 physical tables registered in `dining_tables`**.
+  2. **Monks Reference Data:** The 27 physical tables (T1-T19, B1-B8) belong exclusively to `The Monk's DEV` / `DEV Location` (`location_id = 'a5d46f61-cf64-4b96-8d9f-41d6812d561c'`), where `table_allocation` was correctly restored to disabled (`is_enabled: false`) following the H4 test campaign.
+  3. **Null InitialContext Query Fallback:** In `src/features/allocation/components/allocation-workspace.tsx`, `physicalTablesLoadError` was defaulted to `false` when `initialContext === null`. In non-demo mode, a missing context indicates a page load/query failure, but resulted in displaying the empty location state instead of the load error banner.
+  4. **Off-Map Table Masking:** In `TableMap`, if a location had registered off-map tables but 0 mapped tables, the map rendered *"No tables are configured for this location."*, obscuring that tables existed in the registry and off-map rail.
+
+### 2. Resolution & Scope
+- **Authoritative Registry Parity:**
+  - Preserved strict tenant and location scoping. No tables are fabricated or hardcoded globally.
+  - Wired `hasOffMapTables` prop to all callers of `TableMap` (`AllocationWorkspace`, `FloorView`, `FloorPanel`, `QuickTablePicker`, `ServerBoardView`).
+  - Genuinely empty locations with 0 tables retain *"No tables are configured for this location."*
+  - Locations with off-map tables only display *"No mapped tables for this location."* with accessible off-map controls.
+  - Failed initialContext loads properly trigger *"Couldn't load the floor layout. Try refreshing the page."*
+- **Aisle Layout Adjustment:**
+  - Created `isMonksReferenceLayout` and `adjustMonksAisleCoordinates` in `src/features/allocation/domain/floor-layout.ts`.
+  - For the canonical Monks reference arrangement (T1-T19, B1-B8), display-only Y-coordinate for lower center tables T6, T7, T8 is adjusted from `y=56` to `y=58.5`.
+  - In `fitFloorTables` (`src/features/allocation/domain/combined-view.ts`), this creates a balanced, open aisle between Middle (T14-T9) and Lower (T6-T8) rows (~25.1% gap), visually comparable to the Top-to-Middle aisle (~24.6% gap).
+  - Added a non-interactive, accessible walkway indicator `[data-testid="floor-walkway-aisle"]` (`top: 43%, height: 6%, left: 18%, width: 74%`, `pointer-events-none`, `aria-hidden="true"`) between rows with zero overlap with any table tiles.
+  - **Zero Data Modification:** Database coordinates in `dining_tables` remain untouched. Non-Monks branches and custom floor plans are completely unaffected.
+  - Fits comfortably within Split Screen mode on 1024×768 tablets without introducing page scrolling or clipping.
+
+### 3. Exact Files Modified
+- `src/features/allocation/domain/floor-layout.ts`: Defined `MONKS_REFERENCE_LABELS`, `isMonksReferenceLayout()`, and `adjustMonksAisleCoordinates()`.
+- `src/features/allocation/domain/floor-layout.test.ts`: Added unit tests for Monks layout detection, coordinate adjustment without input mutation, and non-Monks immunity.
+- `src/features/allocation/domain/combined-view.ts`: Integrated `adjustMonksAisleCoordinates` into `fitFloorTables`.
+- `src/features/allocation/domain/combined-view.test.ts`: Added test verifying balanced, visually comparable aisle gaps for Monks layout.
+- `src/features/allocation/components/table-map.tsx`: Added `hasOffMapTables` support, off-map empty state messaging, and walkway aisle indicator rendering.
+- `src/features/allocation/components/table-map.test.tsx`: Added unit tests for `hasOffMapTables`, empty state distinction, and aisle indicator.
+- `src/features/allocation/components/allocation-workspace.tsx`: Handled null `initialContext` as load error; passed `hasOffMapTables` to Picker dialog.
+- `src/features/allocation/components/floor-view.tsx`: Passed `hasOffMapTables` to `TableMap`.
+- `src/features/allocation/components/server-board-view.tsx`: Passed `hasOffMapTables` to `TableMap`.
+- `src/features/allocation/components/combined/floor-panel.tsx`: Passed `hasOffMapTables` to `TableMap`.
+- `src/features/allocation/components/combined/quick-table-picker.tsx`: Passed `hasOffMapTables` to `TableMap`.
+- `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md`: Recorded H4 addendum and this correction report.
+
+### 4. Verification Evidence
+- `vitest run src/features/allocation`: 25 test files, 416 tests passed (100% green).
+- `npm run typecheck`: Passed with 0 errors (`tsc --noEmit`).
+- `npx eslint --max-warnings=0 src/features/allocation`: 0 warnings, 0 errors.
+- `npx prettier --check src/features/allocation`: 100% compliant.
+- Environment safety: PROD untouched; DEV database untouched; DEV `table_allocation` module remains disabled at DEV Location pending owner authorization.
+

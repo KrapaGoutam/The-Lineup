@@ -4,7 +4,9 @@ import type * as React from "react";
 
 import { otherTablesInAssignment } from "@/features/allocation/domain/assignment-scope";
 import {
+  adjustMonksAisleCoordinates,
   getInitials,
+  isMonksReferenceLayout,
   type ResolvedFloorTable,
 } from "@/features/allocation/domain/floor-layout";
 import { cn } from "@/lib/utils";
@@ -51,6 +53,7 @@ export function TableMap({
   fitRatio,
   isTableDisabled,
   className,
+  hasOffMapTables = false,
 }: {
   tables: ResolvedFloorTable[];
   selectedLabel: string | null;
@@ -76,6 +79,7 @@ export function TableMap({
   // keeping them visible and identifiable).
   isTableDisabled?: (table: ResolvedFloorTable) => boolean;
   className?: string;
+  hasOffMapTables?: boolean;
 }) {
   if (loadError) {
     return (
@@ -104,11 +108,16 @@ export function TableMap({
         role="status"
       >
         <p className="text-muted-foreground text-sm">
-          No tables are configured for this location.
+          {hasOffMapTables
+            ? "No mapped tables for this location."
+            : "No tables are configured for this location."}
         </p>
       </div>
     );
   }
+
+  const isMonks = isMonksReferenceLayout(tables);
+  const displayTables = isMonks ? adjustMonksAisleCoordinates(tables) : tables;
 
   return (
     <div
@@ -129,7 +138,20 @@ export function TableMap({
       role="group"
       aria-label="Floor map"
     >
-      {tables.map((table) => {
+      {isMonks ? (
+        <div
+          data-testid="floor-walkway-aisle"
+          className="border-border/40 bg-muted/10 pointer-events-none absolute rounded border-y border-dashed transition-colors"
+          style={{
+            left: "18%",
+            width: "74%",
+            top: "43%",
+            height: "6%",
+          }}
+          aria-hidden="true"
+        />
+      ) : null}
+      {displayTables.map((table) => {
         const occupied = Boolean(table.occupiedBy);
         const selected = selectedLabel === table.label;
         const isBar = table.resourceType === "bar_seat";

@@ -83,6 +83,7 @@ export function FloorPanel({
             <TableMap
               tables={tables}
               loadError={loadError}
+              hasOffMapTables={offMapTables.length > 0}
               selectedLabel={selectedLabel}
               disabled={disabled}
               compact

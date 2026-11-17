@@ -636,7 +636,9 @@ export function AllocationWorkspace({
   // physicalTablesQueryFailed. Demo mode has no such query to fail.
   const physicalTablesLoadError = demoMode
     ? false
-    : (initialContext?.physicalTablesQueryFailed ?? false);
+    : initialContext === null
+      ? true
+      : (initialContext.physicalTablesQueryFailed ?? false);
 
   // Picker popup: the server/turn context shown in the dialog's title --
   // "Choose a table for {server} · Turn {N}" -- so the operator doesn't
@@ -1813,6 +1815,7 @@ export function AllocationWorkspace({
                   <TableMap
                     tables={resolvedTables}
                     loadError={physicalTablesLoadError}
+                    hasOffMapTables={readModel.offMapTables.length > 0}
                     selectedLabel={null}
                     disabled={!canOperateFloor}
                     onSelectTable={pickTable}

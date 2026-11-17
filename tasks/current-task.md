@@ -1,18 +1,20 @@
-# V2.0.4 Combined Table Allocation — IN PROGRESS
+# V2.0.4 Floor Data Parity & Aisle Layout Fix — IN PROGRESS
 
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
-Branch `feature/v2-0-4-combined-table-allocation`, base `1c5373e`. V2.0.3 is released (main `2933d3a`); not repeated.
+Branch `fix/v2-0-4-floor-data-parity-aisle`, base `2e742f5` (origin/development, PR #348 merged).
 
-- [x] H0: baseline verified, worktree + branch created, handoff written.
-- [x] Batch A: dine-in metrics + `transferredIn`; Combined shell, modes, header/metrics, plan/grid, viewport fit.
-- [x] Batch B: assign/transfer/end/clear, Rotation Focus NEXT row, Quick Table Picker, + Server picker, skip/pause/reorder, undo/redo (Tools), latest-first history, active records, Expand.
-- [x] Batch C (part): Dashboard Dine-in Today; Playwright tablet/portrait/phone green.
-- [x] Batch C (rest): full test/build/check gate green, independent review dispositioned (handoff).
-- [ ] PR into development + exact-head CI; DEV acceptance and release need owner approval.
+- [x] Investigate root cause for "No tables are configured for this location" report (branch difference: `QA A - Downtown` has 0 dining_tables vs `DEV Location` 27 tables; null initialContext loadError fallback; off-map table masking).
+- [x] Display-only Monks reference layout adjustment (`adjustMonksAisleCoordinates` T6-T8 to y=58.5; ~25% balanced aisle gap matching Top-Middle gap; non-interactive walkway indicator `[data-testid="floor-walkway-aisle"]` with zero table overlap).
+- [x] Authoritative registry parity across Combined Plan, Combined Grid, Quick Table Picker, classic Floor, and Picker views via `hasOffMapTables` prop.
+- [x] Targeted unit tests added (`floor-layout.test.ts`, `combined-view.test.ts`, `table-map.test.tsx`): 25 files, 416 tests passing (100% green).
+- [x] Verification gates clean (`tsc --noEmit`, ESLint max-warnings 0, Prettier check).
+- [x] Documented in `HANDOFF.md` (preserved H4 addendum + V2.0.4 correction report).
+- [ ] Commit, push branch `fix/v2-0-4-floor-data-parity-aisle`, open PR targeting `development`.
+- [ ] Await CI on PR head; DEV acceptance and promotion to `main` require explicit owner approval.
 
 ## Current State & Next Step
 
-Next: push branch, open the single PR to `development`, wait for exact-head CI. Details in the handoff file.
+Next: commit changes, push branch, and open PR targeting `development`.
 
 ---
 
