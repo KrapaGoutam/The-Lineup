@@ -380,7 +380,17 @@ export async function getAllocationContext(
   // V2.0.4: the destination entry of every live (not undone) Transfer is a
   // continuation of an existing seating, not a new one -- flagged so the
   // "Dine-in Today" count does not double-count a transferred table.
-  const transferDestinations = transferDestinationKeys(eventRows ?? []);
+  const transferDestinations = transferDestinationKeys(
+    eventRows ?? [],
+    new Set(
+      (entryRows ?? [])
+        .filter((entry) => entry.status === "ended")
+        .map(
+          (entry) =>
+            `${entry.rotation_round_id}|${entry.rotation_member_id}|${entry.table_label ?? ""}`,
+        ),
+    ),
+  );
 
   const rounds = (roundRows ?? []).map((round) => ({
     id: String(round.id),
@@ -505,12 +515,25 @@ export async function getAllocationContext(
   };
 }
 
+/** A bigint id as PostgREST returns it: a JSON number, or (defensively) digits. */
+function eventId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  return null;
+}
+
 /**
  * `"<round_id>|<member_id>|<table_label>"` of the destination entry of every
- * Transfer event that has not been undone. The label is part of the key so an
- * entry later cleared and re-assigned to a DIFFERENT table in the same cell is
- * a fresh seating, not a continuation. A redo clears `undone_at` again, so a redone
- * transfer is included. Malformed payloads are ignored, never thrown on.
+ * Transfer event that has not been undone AND whose source entry is still
+ * there, ended, with the same label (`endedEntryKeys`, same key shape).
+ *
+ *  - The label is part of the key, so an entry later cleared and re-assigned to
+ *    a DIFFERENT table in the same cell is a fresh seating, not a continuation.
+ *  - If the source entry was cleared as a correction (or, for a pre-V2
+ *    transfer, deleted by the transfer itself) the destination is the only
+ *    surviving record of that seating, so it is NOT flagged and counts itself.
+ *  - A redo clears `undone_at` again, so a redone transfer is included.
+ *  - Malformed payloads are ignored, never thrown on.
  */
 export function transferDestinationKeys(
   events: {
@@ -518,24 +541,36 @@ export function transferDestinationKeys(
     payload: unknown;
     undone_at: string | null;
   }[],
+  endedEntryKeys: ReadonlySet<string>,
 ): Set<string> {
   const keys = new Set<string>();
   for (const event of events) {
     if (event.event_type !== "transfer" || event.undone_at !== null) continue;
     const payload = event.payload as {
+      source_round_id?: unknown;
+      source_member_id?: unknown;
       dest_round_id?: unknown;
       dest_member_id?: unknown;
       table_label?: unknown;
     } | null;
+    const sourceRound = eventId(payload?.source_round_id);
+    const sourceMember = eventId(payload?.source_member_id);
+    const destRound = eventId(payload?.dest_round_id);
+    const destMember = eventId(payload?.dest_member_id);
+    const label = payload?.table_label;
     if (
-      typeof payload?.dest_round_id === "number" &&
-      typeof payload?.dest_member_id === "number" &&
-      typeof payload?.table_label === "string"
+      sourceRound === null ||
+      sourceMember === null ||
+      destRound === null ||
+      destMember === null ||
+      typeof label !== "string"
     ) {
-      keys.add(
-        `${payload.dest_round_id}|${payload.dest_member_id}|${payload.table_label}`,
-      );
+      continue;
     }
+    if (!endedEntryKeys.has(`${sourceRound}|${sourceMember}|${label}`)) {
+      continue;
+    }
+    keys.add(`${destRound}|${destMember}|${label}`);
   }
   return keys;
 }

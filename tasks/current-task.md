@@ -7,11 +7,12 @@ Branch `feature/v2-0-4-combined-table-allocation`, base `1c5373e`. V2.0.3 is rel
 - [x] Batch A: dine-in metrics + `transferredIn`; Combined shell, modes, header/metrics, plan/grid, viewport fit.
 - [x] Batch B: assign/transfer/end/clear, Rotation Focus NEXT row, Quick Table Picker, + Server picker, skip/pause/reorder, undo/redo (Tools), latest-first history, active records, Expand.
 - [x] Batch C (part): Dashboard Dine-in Today; Playwright tablet/portrait/phone green.
-- [ ] Batch C (rest): full test/build/check gate, independent review, one PR.
+- [x] Batch C (rest): full test/build/check gate green, independent review dispositioned (handoff).
+- [ ] PR into development + exact-head CI; DEV acceptance and release need owner approval.
 
 ## Current State & Next Step
 
-Next: run `npm run test`, `npm run build`, `npm run check`; review diff; open the single PR to `development`. Details in the handoff file.
+Next: push branch, open the single PR to `development`, wait for exact-head CI. Details in the handoff file.
 
 ---
 

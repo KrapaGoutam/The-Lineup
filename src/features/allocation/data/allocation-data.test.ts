@@ -84,31 +84,56 @@ describe("transferDestinationKeys", () => {
     payload: Record<string, unknown>,
     undone_at: string | null = null,
   ) => ({ event_type: "transfer", payload, undone_at });
+  const full = {
+    source_round_id: 1,
+    source_member_id: 5,
+    dest_round_id: 2,
+    dest_member_id: 6,
+    table_label: "T3",
+  };
+  const intactSource = new Set(["1|5|T3"]);
 
-  it("keys the destination entry of a live transfer by round, member and label", () => {
-    const keys = transferDestinationKeys([
-      transfer({
-        source_round_id: 1,
-        source_member_id: 5,
-        dest_round_id: 2,
-        dest_member_id: 6,
-        table_label: "T3",
-      }),
-    ]);
+  it("keys the destination of a live transfer whose ended source is intact", () => {
+    expect([
+      ...transferDestinationKeys([transfer(full)], intactSource),
+    ]).toEqual(["2|6|T3"]);
+  });
+
+  it("does not flag the destination when the source entry is gone or not ended", () => {
+    // Source cleared as a correction (or a pre-V2 transfer that deleted it).
+    expect(transferDestinationKeys([transfer(full)], new Set()).size).toBe(0);
+    // A different label in that cell is not this transfer's source.
+    expect(
+      transferDestinationKeys([transfer(full)], new Set(["1|5|T9"])).size,
+    ).toBe(0);
+  });
+
+  it("accepts ids that arrive as digit strings", () => {
+    const keys = transferDestinationKeys(
+      [
+        transfer({
+          ...full,
+          source_round_id: "1",
+          dest_round_id: "2",
+          dest_member_id: "6",
+        }),
+      ],
+      intactSource,
+    );
     expect([...keys]).toEqual(["2|6|T3"]);
   });
 
   it("ignores undone transfers, other event types and malformed payloads", () => {
-    const keys = transferDestinationKeys([
-      transfer(
-        { dest_round_id: 2, dest_member_id: 6, table_label: "T3" },
-        "2026-11-17T01:00:00Z",
-      ),
-      { event_type: "assign", payload: { dest_round_id: 9 }, undone_at: null },
-      transfer({ dest_round_id: "2", dest_member_id: 6, table_label: "T3" }),
-      transfer({ dest_round_id: 2, dest_member_id: 6 }),
-      { event_type: "transfer", payload: null, undone_at: null },
-    ]);
+    const keys = transferDestinationKeys(
+      [
+        transfer(full, "2026-11-17T01:00:00Z"),
+        { event_type: "assign", payload: full, undone_at: null },
+        transfer({ ...full, dest_round_id: "two" }),
+        transfer({ ...full, table_label: undefined }),
+        { event_type: "transfer", payload: null, undone_at: null },
+      ],
+      intactSource,
+    );
     expect(keys.size).toBe(0);
   });
 });

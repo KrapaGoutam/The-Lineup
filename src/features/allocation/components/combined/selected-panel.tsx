@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ArrowRightLeft, LogOut, Plus, SkipForward, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -88,13 +88,23 @@ export function SelectedPanel({
       ? nextColumnId
       : (servers[0]?.id ?? "");
 
+  // The target the panel is showing RIGHT NOW (read after an await).
+  const liveKey = useRef(targetKey);
+  useEffect(() => {
+    liveKey.current = targetKey;
+  }, [targetKey]);
+
   async function run(action: () => Promise<ExecResult>, then?: () => void) {
+    const startedOn = targetKey;
     setBusy(true);
     setError(null);
     const result = await action();
     setBusy(false);
-    if (result.ok) then?.();
-    else setError(result.error);
+    // A late result must not touch a selection the host has moved on to,
+    // and a deferred one (a decision dialog opened) wrote nothing yet.
+    if (liveKey.current !== startedOn) return;
+    if (!result.ok) setError(result.error);
+    else if (!result.deferred) then?.();
   }
 
   const shell = (children: React.ReactNode) => (

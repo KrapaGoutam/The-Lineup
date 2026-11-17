@@ -336,6 +336,40 @@ describe("Combined view: rotation controls", () => {
   });
 });
 
+describe("Combined view: correcting a skipped turn", () => {
+  it("offers the same Clear entry in Tools as in the selection panel", async () => {
+    const user = await openCombined();
+    await user.click(
+      screen.getByRole("button", { name: /^Ava Brooks, active/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "Skip turn" }));
+    // Ava's skipped turn is recorded in her own next open turn (turn 2).
+    await user.click(
+      screen.getByRole("button", {
+        name: "Turn 2, Ava Brooks: skipped turn",
+      }),
+    );
+    const panel = within(
+      screen.getByRole("region", { name: "Selected table actions" }),
+    );
+    expect(panel.getByText(/Skipped turn/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Tools" }));
+    const clear = within(dialog()).getByRole("button", {
+      name: /^Clear entry Skipped turn/,
+    });
+    expect(clear).toBeEnabled();
+    await user.click(clear);
+    await user.click(
+      within(dialog()).getByRole("button", { name: "Clear entry" }),
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: "Turn 2, Ava Brooks: skipped turn",
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("Combined view: add server", () => {
   it("searches the branch roster, blocks duplicates and adds an existing employee", async () => {
     const user = await openCombined();

@@ -66,9 +66,22 @@ export function useViewportFill<T extends HTMLElement>(enabled: boolean) {
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);
+    // Content above the workspace (a banner, the date row wrapping, web fonts
+    // settling) can change size without this component re-rendering.
+    let frame = 0;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(measure);
+          });
+    observer?.observe(document.body);
     return () => {
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
     };
   });
 

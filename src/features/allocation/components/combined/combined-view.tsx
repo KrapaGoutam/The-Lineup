@@ -137,6 +137,7 @@ export function CombinedView({
     (QuickPickerTarget & { open: boolean }) | null
   >(null);
   const [addServerOpen, setAddServerOpen] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const colorOf = (columnId: string) =>
     team.find(({ id }) => id === columnId)?.color;
@@ -151,6 +152,10 @@ export function CombinedView({
   const fittedTables = useMemo(
     () => fitFloorTables(readModel.tables),
     [readModel.tables],
+  );
+  const onRotation = useMemo(
+    () => new Set(columns.map(({ id }) => id)),
+    [columns],
   );
   const rows = useMemo(
     () => buildHistoryRows(board, columns),
@@ -209,6 +214,12 @@ export function CombinedView({
   }
 
   const fail = (error: string): ExecResult => ({ ok: false, error });
+  // Toolbar / Tools actions have no inline result slot: show a refusal here
+  // (demo reducers and the database both can refuse) instead of a dead button.
+  async function runAction(action: Promise<ExecResult>) {
+    const result = await action;
+    setActionNotice(result.ok ? null : result.error);
+  }
   async function skipFor(columnId: string): Promise<ExecResult> {
     const roundId = targetRoundFor(board, columnId);
     if (!roundId) return fail("This server has no open turn to skip.");
@@ -268,18 +279,20 @@ export function CombinedView({
       colorOf={colorOf}
       onSelectServer={selectServer}
       onMove={(columnId, direction) =>
-        void execute({ type: "move-column", columnId, direction })
+        void runAction(execute({ type: "move-column", columnId, direction }))
       }
       onTogglePause={(columnId) => {
         const paused =
           columns.find(({ id }) => id === columnId)?.status === "paused";
-        void execute({
-          type: "set-column-status",
-          columnId,
-          status: paused ? "active" : "paused",
-        });
+        void runAction(
+          execute({
+            type: "set-column-status",
+            columnId,
+            status: paused ? "active" : "paused",
+          }),
+        );
       }}
-      onSkip={(columnId) => void skipFor(columnId)}
+      onSkip={(columnId) => void runAction(skipFor(columnId))}
       onAddTable={() => openPicker(serverId ?? nextColumnId)}
       onAddServer={() => setAddServerOpen(true)}
       onExpand={mode === "split" ? () => setMode("rotation") : undefined}
@@ -363,11 +376,10 @@ export function CombinedView({
             canOperate={!disabled}
             onUndo={onUndo}
             onRedo={onRedo}
-            onAddRow={() => void execute({ type: "add-row" })}
+            onAddRow={() => void runAction(execute({ type: "add-row" }))}
             selectedEntry={
-              (target.kind === "active" || target.kind === "history") &&
-              target.label
-                ? `${target.label} (${target.serverName}, turn ${selectedRound?.sequence ?? "?"})`
+              target.kind === "active" || target.kind === "history"
+                ? `${target.label ?? "Skipped turn"} (${target.serverName}, turn ${selectedRound?.sequence ?? "?"})`
                 : null
             }
             selectedTurn={
@@ -378,33 +390,55 @@ export function CombinedView({
             }
             onClearEntry={() => {
               if (target.kind === "active" || target.kind === "history") {
-                void execute({
-                  type: "clear-cell",
-                  roundId: target.roundId,
-                  columnId: target.columnId,
-                });
+                void runAction(
+                  execute({
+                    type: "clear-cell",
+                    roundId: target.roundId,
+                    columnId: target.columnId,
+                  }),
+                );
                 setSelection(null);
               }
             }}
             onClearRow={() => {
               if (selectedRound) {
-                void execute({ type: "clear-row", roundId: selectedRound.id });
+                void runAction(
+                  execute({ type: "clear-row", roundId: selectedRound.id }),
+                );
                 setSelection(null);
               }
             }}
             onClearColumn={() => {
               if (serverId) {
-                void execute({ type: "clear-column", columnId: serverId });
+                void runAction(
+                  execute({ type: "clear-column", columnId: serverId }),
+                );
                 setSelection(null);
               }
             }}
             onClearBoard={() => {
-              void execute({ type: "clear-board" });
+              void runAction(execute({ type: "clear-board" }));
               setSelection(null);
             }}
           />
         </div>
       </header>
+
+      {actionNotice ? (
+        <p
+          role="alert"
+          className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs"
+        >
+          <span>{actionNotice}</span>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setActionNotice(null)}
+          >
+            Dismiss
+          </button>
+        </p>
+      ) : null}
 
       <section
         aria-label="Allocation metrics"
@@ -475,7 +509,7 @@ export function CombinedView({
         open={addServerOpen}
         onClose={() => setAddServerOpen(false)}
         roster={roster}
-        onRotation={new Set(columns.map(({ id }) => id))}
+        onRotation={onRotation}
         clockedInProfileIds={clockedInProfileIds}
         disabled={disabled}
         onAdd={(member) =>

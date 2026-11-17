@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -74,6 +74,12 @@ export function QuickTablePicker({
     ? `${target.columnId ?? ""}|${target.roundId ?? ""}`
     : "";
   const [seededFor, setSeededFor] = useState("");
+  // Bumped whenever the popup closes or is re-aimed, so a write that was in
+  // flight for the previous session cannot touch the next one.
+  const session = useRef(0);
+  useEffect(() => {
+    session.current += 1;
+  }, [seedKey]);
   if (seededFor !== seedKey) {
     setSeededFor(seedKey);
     if (open) {
@@ -100,6 +106,7 @@ export function QuickTablePicker({
 
   async function pick(label: string) {
     if (blocked || busy.has(label)) return;
+    const startedIn = session.current;
     setSubmitting(true);
     setError(null);
     const result = await onAssign({
@@ -107,6 +114,7 @@ export function QuickTablePicker({
       columnId: serverId,
       roundId: target.roundId,
     });
+    if (startedIn !== session.current) return; // dismissed or re-aimed meanwhile
     setSubmitting(false);
     if (result.ok) {
       onClose();

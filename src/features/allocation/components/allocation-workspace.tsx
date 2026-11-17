@@ -1026,7 +1026,8 @@ export function AllocationWorkspace({
       columnId,
       tableLabel: label,
     });
-    if (result.ok) logCrossEdit(columnId);
+    // A deferred result opened the occupied-table dialog: nothing was written.
+    if (result.ok && !result.deferred) logCrossEdit(columnId);
     return result;
   }
 

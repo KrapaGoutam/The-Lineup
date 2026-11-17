@@ -176,11 +176,11 @@ export function TableMap({
               ...(compact
                 ? {
                     width: isBar
-                      ? "clamp(1.25rem, min(7.2cqw, 10.4cqh), 2rem)"
-                      : "clamp(1.5rem, min(9cqw, 13cqh), 2.5rem)",
+                      ? "clamp(1.5rem, min(7.5cqw, 10.8cqh), 2.25rem)"
+                      : "clamp(1.75rem, min(9cqw, 13cqh), 2.75rem)",
                     height: isBar
-                      ? "clamp(1.25rem, min(7.2cqw, 10.4cqh), 2rem)"
-                      : "clamp(1.5rem, min(9cqw, 13cqh), 2.5rem)",
+                      ? "clamp(1.5rem, min(7.5cqw, 10.8cqh), 2.25rem)"
+                      : "clamp(1.75rem, min(9cqw, 13cqh), 2.75rem)",
                   }
                 : undefined),
               ...(occupied
