@@ -29,33 +29,48 @@ export function OffMapTables({
   onSelectTable,
   disabled = false,
   heading = "Off-map tables",
+  compact = false,
 }: {
   tables: OffMapTable[];
   selectedLabel?: string | null;
   onSelectTable: (label: string) => void;
   disabled?: boolean;
   heading?: string;
+  // V2.0.4 (Combined View): a short, internally scrolling rail so a branch with
+  // many unpositioned tables cannot push the floor map out of the viewport.
+  compact?: boolean;
 }) {
   if (tables.length === 0) return null;
   return (
     <section
       aria-label={heading}
-      className="border-border bg-muted/20 flex flex-col gap-2 rounded-xl border p-3"
+      className={cn(
+        "border-border bg-muted/20 flex flex-col gap-2 rounded-xl border p-3",
+        compact && "shrink-0 gap-1 p-2",
+      )}
     >
       <div>
         <h3 className="text-xs font-semibold tracking-[0.1em] uppercase">
           {heading}
         </h3>
-        <p className="text-muted-foreground text-[11px]">
-          No position on the floor map. These are separate from the mapped
-          tables above.
-        </p>
+        {compact ? null : (
+          <p className="text-muted-foreground text-[11px]">
+            No position on the floor map. These are separate from the mapped
+            tables above.
+          </p>
+        )}
       </div>
-      <ul className="grid gap-1.5 sm:grid-cols-2">
+      <ul
+        className={cn(
+          "grid gap-1.5 sm:grid-cols-2",
+          // One horizontally scrolling row: bounded height at any count.
+          compact && "flex gap-1.5 overflow-x-auto pb-0.5 sm:grid-cols-none",
+        )}
+      >
         {tables.map((table) => {
           const occupied = Boolean(table.occupiedBy);
           return (
-            <li key={table.key}>
+            <li key={table.key} className={cn(compact && "shrink-0")}>
               <button
                 type="button"
                 disabled={disabled}
@@ -68,6 +83,8 @@ export function OffMapTables({
                 }
                 className={cn(
                   "border-border bg-card focus-visible:ring-ring flex min-h-11 w-full items-center gap-2.5 rounded-lg border px-3 text-left text-sm focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+                  compact &&
+                    "min-h-9 w-auto gap-1.5 px-2 text-xs whitespace-nowrap",
                   selectedLabel === table.label &&
                     "ring-primary ring-offset-background ring-2 ring-offset-2",
                   !occupied && "border-ok/40 bg-ok/10",

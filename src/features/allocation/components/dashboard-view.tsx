@@ -45,6 +45,7 @@ export function DashboardView({
   columns,
   board,
   readModel,
+  dineInToday,
   recentActivity,
   timeZone,
   onOpenGrid,
@@ -52,6 +53,12 @@ export function DashboardView({
   columns: RotationColumn[];
   board: RotationBoard;
   readModel: BoardReadModel;
+  /**
+   * V2.0.4: dine-in table seatings in this service day (from the one shared
+   * selector in domain/dine-in-metrics.ts, also shown in the Combined View).
+   * Not a guest count.
+   */
+  dineInToday?: number;
   recentActivity: BoardActivityEntry[];
   /** The location's IANA time zone, so times read as the floor's wall clock. */
   timeZone?: string;
@@ -64,7 +71,7 @@ export function DashboardView({
   return (
     <div className="space-y-4">
       <section
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
         aria-label="Floor dashboard"
       >
         <Card>
@@ -111,6 +118,19 @@ export function DashboardView({
             </p>
           </CardContent>
         </Card>
+        {dineInToday === undefined ? null : (
+          <Card>
+            <CardContent>
+              <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
+                Dine-in today
+              </p>
+              <p className="mt-2 text-2xl font-semibold">{dineInToday}</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Table seatings, not guests.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </section>
 
       <div className="grid gap-3 lg:grid-cols-2">
