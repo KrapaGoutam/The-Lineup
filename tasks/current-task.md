@@ -1,3 +1,42 @@
+# V2.0.3 cross-organization kiosk access — IN PROGRESS
+
+- [x] Read the request, project instructions, V2.0.2 handoff, and relevant auth/kiosk code.
+- [x] Verify remote development SHA and create an isolated feature branch/worktree.
+- [x] Record the data, authorization, UI, risk, and test contract in the feature handoff.
+- [x] Implement canonical kiosk PIN resolution and focused security tests (26 kiosk action tests pass).
+- [x] Run focused tests, repository checks, and production build: kiosk action 26/26, kiosk lifecycle 26/26, full Vitest 4,273 pass/7 skipped, `npm run check` pass, and webpack build pass. `git diff --check` pass. Turbopack cannot resolve the worktree's external dependency junction; exact-head CI will test the standard build.
+- [x] Complete final diff review of source, tests, tenant binding, identity checks, and scope; no unrelated tracked changes found.
+- [x] Complete independent security review; separate read-only Codex reviewer found a failed-enrollment rollback lockout, corrected with focused tests (54/54), then returned PASS on the corrected source and tests.
+- [ ] Commit and push feature candidate; obtain exact-head CI; merge reviewed PR to development.
+- [ ] Complete authorized DEV acceptance; prepare combined development-to-main release PR.
+- [ ] Stop before Production merge pending explicit owner approval.
+
+Branch: `feature/v2-0-3-cross-org-kiosk-access`; base: `7880756456139effd7c6443b6fe0093135550fc9`; worktree: `.tmp/v2-0-3-worktree`. Recovery: `docs/features/v2-0-3-cross-org-kiosk-access/HANDOFF.md`. Preserve unrelated worktrees and untracked files.
+
+---
+
+# V2.0.2 attendance configuration — IN PROGRESS
+
+- [x] Read approved brief, project state, architecture, attendance and location code.
+- [x] Fetch refs once; verify ancestry; obtain approval and fast-forward development exactly from 17d9eb7 to dc2cc8f.
+- [x] Create isolated feature worktree/branch from synchronized development.
+- [x] Record feature contract, data/authorization/UI states, risks, and tests.
+- [x] Batch A: database Internal default and focused provisioning/security tests (3 pgTAP files, 154 assertions pass in isolated local stack).
+- [x] Batch B: branch Attendance settings and targeted action/component tests (6 Vitest files, 94 tests pass).
+- [x] Batch C: source, kiosk, financial and tenant checks (5 additional pgTAP files, 472 assertions pass); full Vitest (4,258 passed, 7 skipped), build, check and focused Playwright (3/3) pass.
+- [x] Commit and push reviewed candidate `39ce8a8`; open feature PR #345 into `development`.
+- [x] Exact-head CI on `de3bfa14747c308a8fa64d15e9143c182c70c462`: application, browser-smoke, migrations-and-policies, and Vercel pass.
+- [x] Reproduce the offset-validator defect in code and correct it without changing the RPC or timestamp value; focused action and component tests pass (14/14), targeted lint and typecheck pass.
+- [x] Targeted Prettier, lint, typecheck and `git diff --check` pass.
+- [ ] Commit and push the correction to PR #345, and await new exact-head CI.
+- [ ] Verify permitted browser path and obtain renewed explicit owner approval before merging PR #345 into development.
+- [ ] After approved merge: DEV migration gates, audited existing-branch configuration and acceptance, release PR.
+- [ ] After separate approvals: Production release, configuration and smoke.
+
+Worktree: .tmp/v2-0-2-attendance-configuration; branch feature/v2-0-2-attendance-configuration; base dc2cc8f5f1fddbe0d52b6f0a75534f0e8fa9bd62. Unrelated files in the main worktree are untouched. Recovery: docs/features/v2-0-2-attendance-configuration/HANDOFF.md.
+
+---
+
 # V2-009 B3 — Targeted Security Amendments F-1 Through F-5 (Active)
 
 - [x] **F-5: Person-Specific Password Derivation:**

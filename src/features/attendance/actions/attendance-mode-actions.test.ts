@@ -76,6 +76,45 @@ describe("attendance-mode-actions", () => {
   });
 
   describe("setLocationAttendanceModeAction", () => {
+    it.each([
+      "2026-11-16T12:24:55.899175+00:00",
+      "2026-11-16T12:24:55.899175Z",
+    ])(
+      "passes the original valid timestamp %s to the update",
+      async (timestamp) => {
+        mocks.requireLiveSession.mockResolvedValue(null);
+        mocks.setLocationAttendanceMode.mockResolvedValue({
+          ok: true,
+          data: { locationId, organizationId, mode: "INTERNAL_THE_LINEUP" },
+        });
+
+        const res = await setLocationAttendanceModeAction({
+          locationId,
+          mode: "INTERNAL_THE_LINEUP",
+          expectedUpdatedAt: timestamp,
+          reason: "Use native attendance",
+        });
+
+        expect(res.ok).toBe(true);
+        expect(mocks.setLocationAttendanceMode).toHaveBeenCalledWith(
+          undefined,
+          expect.objectContaining({ expectedUpdatedAt: timestamp }),
+        );
+      },
+    );
+
+    it("rejects malformed timestamps before the update", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      const res = await setLocationAttendanceModeAction({
+        locationId,
+        mode: "INTERNAL_THE_LINEUP",
+        expectedUpdatedAt: "2026-11-16T12:24:55+25:00",
+        reason: "Use native attendance",
+      });
+      expect(res.ok).toBe(false);
+      expect(mocks.setLocationAttendanceMode).not.toHaveBeenCalled();
+    });
+
     it("fails closed when unauthenticated", async () => {
       mocks.requireLiveSession.mockResolvedValue({
         ok: false,
@@ -85,6 +124,8 @@ describe("attendance-mode-actions", () => {
       const res = await setLocationAttendanceModeAction({
         locationId,
         mode: "INTERNAL_THE_LINEUP",
+        expectedUpdatedAt: "2026-11-09T20:00:00Z",
+        reason: "Admin enabling native attendance",
       });
       expect(res.ok).toBe(false);
       if (!res.ok) {
@@ -109,10 +150,18 @@ describe("attendance-mode-actions", () => {
       const res = await setLocationAttendanceModeAction({
         locationId,
         mode: "INTERNAL_THE_LINEUP",
+        expectedUpdatedAt: "2026-11-09T20:00:00Z",
         reason: "Admin enabling native attendance",
       });
 
       expect(res.ok).toBe(true);
+      expect(mocks.setLocationAttendanceMode).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({
+          expectedUpdatedAt: "2026-11-09T20:00:00Z",
+          reason: "Admin enabling native attendance",
+        }),
+      );
     });
 
     it("rejects invalid mode string", async () => {
@@ -120,8 +169,45 @@ describe("attendance-mode-actions", () => {
       const res = await setLocationAttendanceModeAction({
         locationId,
         mode: "INVALID_MODE" as unknown as "EXTERNAL",
+        expectedUpdatedAt: "2026-11-09T20:00:00Z",
+        reason: "Change the source",
       });
       expect(res.ok).toBe(false);
+    });
+
+    it("requires a reason and expected timestamp before invoking the RPC", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      const missingReason = await setLocationAttendanceModeAction({
+        locationId,
+        mode: "EXTERNAL",
+        expectedUpdatedAt: "2026-11-09T20:00:00Z",
+        reason: " ",
+      });
+      const missingTimestamp = await setLocationAttendanceModeAction({
+        locationId,
+        mode: "EXTERNAL",
+        reason: "Switch to external clock",
+      } as never);
+      expect(missingReason.ok).toBe(false);
+      expect(missingTimestamp.ok).toBe(false);
+      expect(mocks.setLocationAttendanceMode).not.toHaveBeenCalled();
+    });
+
+    it("returns conflict information without treating the write as successful", async () => {
+      mocks.requireLiveSession.mockResolvedValue(null);
+      mocks.setLocationAttendanceMode.mockResolvedValue({
+        ok: false,
+        code: "conflict",
+        error:
+          "Configuration conflict: location was modified by another operation.",
+      });
+      const res = await setLocationAttendanceModeAction({
+        locationId,
+        mode: "DISABLED",
+        expectedUpdatedAt: "2026-11-09T20:00:00Z",
+        reason: "Seasonal closure",
+      });
+      expect(res).toMatchObject({ ok: false, code: "conflict" });
     });
   });
 });
