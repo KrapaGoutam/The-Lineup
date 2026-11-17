@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.4 — Combined Table Allocation (feature branch)
+
+`feature/v2-0-4-combined-table-allocation` (base `development` `1c5373e`, after the V2.0.2/V2.0.3 release to `main`) adds a **Combined** view inside the existing Table Allocation module: Split Screen / Floor Focus / Rotation Focus, branch floor plan with a compact grid, a Quick Table Picker, a branch-employee "+ Server" picker, rotation controls, a shared selection panel and a Dine-in Today metric (also on the Dashboard). No migration, server-action or RLS change. Local gates: format/lint/typecheck, full Vitest, webpack build, and demo-mode Playwright (desktop, tablet, phone). PR, DEV acceptance and release are pending owner approval. See [the handoff](features/v2-0-4-combined-table-allocation/HANDOFF.md).
+
 ## V2.0.2 — Attendance configuration (feature branch)
 
 `development` was owner-approved and fast-forwarded to the exact `main` release commit `dc2cc8f`. An isolated `feature/v2-0-2-attendance-configuration` branch implements the persisted Internal default and branch Attendance settings. Local pgTAP, Vitest, check, build, and focused Playwright pass; feature PR and CI remain pending. No hosted migration or existing-branch mode write has occurred. See [feature contract](features/v2-0-2-attendance-configuration.md) and [handoff](features/v2-0-2-attendance-configuration/HANDOFF.md).

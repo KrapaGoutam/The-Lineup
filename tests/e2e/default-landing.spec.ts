@@ -52,7 +52,9 @@ test("TS-002: ?tab=allocation opens Table Allocation, and a reload keeps it", as
 }) => {
   await signInAt(page, "/?tab=allocation", "2468");
   await expect(
-    page.getByRole("heading", { name: "Table allocation rotation" }),
+    page.getByRole("heading", {
+      name: /^Table Allocation$|^Table allocation rotation$/,
+    }),
   ).toBeVisible();
 
   // Demo state lives in memory, so a reload returns to the sign-in screen;
@@ -61,7 +63,9 @@ test("TS-002: ?tab=allocation opens Table Allocation, and a reload keeps it", as
   await page.waitForSelector('body[data-hydrated="true"]');
   await page.getByLabel("Restaurant passcode").fill("2468");
   await expect(
-    page.getByRole("heading", { name: "Table allocation rotation" }),
+    page.getByRole("heading", {
+      name: /^Table Allocation$|^Table allocation rotation$/,
+    }),
   ).toBeVisible();
   await expect(page).toHaveURL(/tab=allocation/);
 });

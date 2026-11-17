@@ -1,8 +1,12 @@
 "use client";
 
+import type * as React from "react";
+
 import { otherTablesInAssignment } from "@/features/allocation/domain/assignment-scope";
 import {
+  adjustMonksAisleCoordinates,
   getInitials,
+  isMonksReferenceLayout,
   type ResolvedFloorTable,
 } from "@/features/allocation/domain/floor-layout";
 import { cn } from "@/lib/utils";
@@ -45,6 +49,11 @@ export function TableMap({
   onSelectTable,
   disabled = false,
   loadError = false,
+  compact = false,
+  fitRatio,
+  isTableDisabled,
+  className,
+  hasOffMapTables = false,
 }: {
   tables: ResolvedFloorTable[];
   selectedLabel: string | null;
@@ -58,6 +67,19 @@ export function TableMap({
   // query failure too, which reads as a data/onboarding problem instead
   // of the transient error it actually is.
   loadError?: boolean;
+  // V2.0.4 (Combined View): smaller tiles so a dense floor still separates
+  // at half-screen width. Same buttons, same accessible names.
+  compact?: boolean;
+  // V2.0.4: on lg+ the map is sized to the largest box of this width/height
+  // ratio that fits its (size-contained) parent, so the whole floor is visible
+  // without page scrolling. Below lg it keeps its natural width-driven shape.
+  // The parent must set `container-type: size` at lg (see CombinedView).
+  fitRatio?: number;
+  // V2.0.4: per-table disable (the quick picker disables occupied tables while
+  // keeping them visible and identifiable).
+  isTableDisabled?: (table: ResolvedFloorTable) => boolean;
+  className?: string;
+  hasOffMapTables?: boolean;
 }) {
   if (loadError) {
     return (
@@ -86,19 +108,50 @@ export function TableMap({
         role="status"
       >
         <p className="text-muted-foreground text-sm">
-          No tables are configured for this location.
+          {hasOffMapTables
+            ? "No mapped tables for this location."
+            : "No tables are configured for this location."}
         </p>
       </div>
     );
   }
 
+  const isMonks = isMonksReferenceLayout(tables);
+  const displayTables = isMonks ? adjustMonksAisleCoordinates(tables) : tables;
+
   return (
     <div
-      className="border-border bg-muted/20 relative aspect-square w-full overflow-hidden rounded-xl border sm:aspect-video"
+      className={cn(
+        "border-border bg-muted/20 relative aspect-square w-full overflow-hidden rounded-xl border sm:aspect-video",
+        fitRatio &&
+          "lg:aspect-[var(--map-ratio)] lg:w-[min(100cqw,calc(100cqh*var(--map-ratio)))]",
+        // Compact maps are their own size container so tiles can scale with
+        // the map (below) instead of overlapping when the map is small.
+        compact && "[container-type:size]",
+        className,
+      )}
+      style={
+        fitRatio
+          ? ({ "--map-ratio": fitRatio } as React.CSSProperties)
+          : undefined
+      }
       role="group"
       aria-label="Floor map"
     >
-      {tables.map((table) => {
+      {isMonks ? (
+        <div
+          data-testid="floor-walkway-aisle"
+          className="border-border/40 bg-muted/10 pointer-events-none absolute rounded border-y border-dashed transition-colors"
+          style={{
+            left: "18%",
+            width: "74%",
+            top: "43%",
+            height: "6%",
+          }}
+          aria-hidden="true"
+        />
+      ) : null}
+      {displayTables.map((table) => {
         const occupied = Boolean(table.occupiedBy);
         const selected = selectedLabel === table.label;
         const isBar = table.resourceType === "bar_seat";
@@ -106,7 +159,7 @@ export function TableMap({
           <button
             key={table.label}
             type="button"
-            disabled={disabled}
+            disabled={disabled || isTableDisabled?.(table) === true}
             onClick={() => onSelectTable(table.label)}
             aria-label={
               occupied
@@ -117,7 +170,13 @@ export function TableMap({
             className={cn(
               "border-border bg-card focus-visible:ring-ring absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center border font-mono font-bold shadow-sm transition-transform focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
               occupied ? "leading-tight" : "text-[11px]",
-              isBar ? "size-9 rounded-full" : "size-11 rounded-lg",
+              isBar
+                ? compact
+                  ? "rounded-full"
+                  : "size-9 rounded-full"
+                : compact
+                  ? "rounded-lg"
+                  : "size-11 rounded-lg",
               // Selected is a separate, temporary state from ownership --
               // a stronger ring plus an offset so it stays visible on top
               // of any server accent color, never confusable with
@@ -133,6 +192,19 @@ export function TableMap({
             style={{
               left: `${table.x}%`,
               top: `${table.y}%`,
+              // Compact: tile edge is a share of the MAP's own width/height
+              // (cq units resolve against the map, the nearest size
+              // container), so adjacent tables keep apart at any map size.
+              ...(compact
+                ? {
+                    width: isBar
+                      ? "clamp(1.5rem, min(7.5cqw, 10.8cqh), 2.25rem)"
+                      : "clamp(1.75rem, min(9cqw, 13cqh), 2.75rem)",
+                    height: isBar
+                      ? "clamp(1.5rem, min(7.5cqw, 10.8cqh), 2.25rem)"
+                      : "clamp(1.75rem, min(9cqw, 13cqh), 2.75rem)",
+                  }
+                : undefined),
               ...(occupied
                 ? {
                     backgroundColor: `color-mix(in srgb, ${table.occupiedBy!.color} 25%, var(--card))`,

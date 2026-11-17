@@ -377,19 +377,43 @@ export async function getAllocationContext(
     }))
     .sort((a, b) => a.position - b.position);
 
+  // V2.0.4: the destination entry of every live (not undone) Transfer is a
+  // continuation of an existing seating, not a new one -- flagged so the
+  // "Dine-in Today" count does not double-count a transferred table.
+  const transferDestinations = transferDestinationKeys(
+    eventRows ?? [],
+    new Set(
+      (entryRows ?? [])
+        .filter((entry) => entry.status === "ended")
+        .map(
+          (entry) =>
+            `${entry.rotation_round_id}|${entry.rotation_member_id}|${entry.table_label ?? ""}`,
+        ),
+    ),
+  );
+
   const rounds = (roundRows ?? []).map((round) => ({
     id: String(round.id),
     sequence: round.sequence,
     cells: (entryRows ?? [])
       .filter((entry) => entry.rotation_round_id === round.id)
-      .map((entry) => ({
-        columnId: memberIdToProfileId.get(entry.rotation_member_id) ?? "",
-        tableLabel: entry.table_label,
-        // A row's mere existence means "active" pre-Upgrade-1.1; the DB
-        // column's values (active/ended/skipped) already match
-        // RotationCellStatus directly, no translation needed.
-        status: (entry.status ?? "active") as "active" | "ended" | "skipped",
-      }))
+      .map((entry) => {
+        const columnId =
+          memberIdToProfileId.get(entry.rotation_member_id) ?? "";
+        return {
+          columnId,
+          tableLabel: entry.table_label,
+          // A row's mere existence means "active" pre-Upgrade-1.1; the DB
+          // column's values (active/ended/skipped) already match
+          // RotationCellStatus directly, no translation needed.
+          status: (entry.status ?? "active") as "active" | "ended" | "skipped",
+          ...(transferDestinations.has(
+            `${round.id}|${entry.rotation_member_id}|${entry.table_label ?? ""}`,
+          )
+            ? { transferredIn: true as const }
+            : {}),
+        };
+      })
       .filter((cell) => cell.columnId !== ""),
   }));
 
@@ -489,6 +513,66 @@ export async function getAllocationContext(
     claimDivergences,
     boardLoadError,
   };
+}
+
+/** A bigint id as PostgREST returns it: a JSON number, or (defensively) digits. */
+function eventId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+  return null;
+}
+
+/**
+ * `"<round_id>|<member_id>|<table_label>"` of the destination entry of every
+ * Transfer event that has not been undone AND whose source entry is still
+ * there, ended, with the same label (`endedEntryKeys`, same key shape).
+ *
+ *  - The label is part of the key, so an entry later cleared and re-assigned to
+ *    a DIFFERENT table in the same cell is a fresh seating, not a continuation.
+ *  - If the source entry was cleared as a correction (or, for a pre-V2
+ *    transfer, deleted by the transfer itself) the destination is the only
+ *    surviving record of that seating, so it is NOT flagged and counts itself.
+ *  - A redo clears `undone_at` again, so a redone transfer is included.
+ *  - Malformed payloads are ignored, never thrown on.
+ */
+export function transferDestinationKeys(
+  events: {
+    event_type: string;
+    payload: unknown;
+    undone_at: string | null;
+  }[],
+  endedEntryKeys: ReadonlySet<string>,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const event of events) {
+    if (event.event_type !== "transfer" || event.undone_at !== null) continue;
+    const payload = event.payload as {
+      source_round_id?: unknown;
+      source_member_id?: unknown;
+      dest_round_id?: unknown;
+      dest_member_id?: unknown;
+      table_label?: unknown;
+    } | null;
+    const sourceRound = eventId(payload?.source_round_id);
+    const sourceMember = eventId(payload?.source_member_id);
+    const destRound = eventId(payload?.dest_round_id);
+    const destMember = eventId(payload?.dest_member_id);
+    const label = payload?.table_label;
+    if (
+      sourceRound === null ||
+      sourceMember === null ||
+      destRound === null ||
+      destMember === null ||
+      typeof label !== "string"
+    ) {
+      continue;
+    }
+    if (!endedEntryKeys.has(`${sourceRound}|${sourceMember}|${label}`)) {
+      continue;
+    }
+    keys.add(`${destRound}|${destMember}|${label}`);
+  }
+  return keys;
 }
 
 // A many-to-one PostgREST embed arrives as an object (see diningAreaName).

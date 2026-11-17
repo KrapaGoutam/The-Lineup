@@ -19,6 +19,12 @@ export type RotationCell = {
   columnId: string;
   tableLabel: string | null;
   status: RotationCellStatus;
+  // V2.0.4: true only on the DESTINATION cell of a Transfer -- the same
+  // seating continuing with another server, not a new seating. Lets the
+  // "Dine-in Today" metric count a transferred table once. Set by the
+  // reducer below (demo / optimistic state) and by the data loader from
+  // non-undone `transfer` board events. Absent (never `false`) otherwise.
+  transferredIn?: true;
 };
 
 export type RotationRound = {
@@ -367,6 +373,8 @@ export function applyBoardAction(
       if (existing) {
         existing.tableLabel = label;
         existing.status = "active";
+        // A typed/assigned table here is a fresh entry, not a continuation.
+        delete existing.transferredIn;
       } else {
         round.cells.push({
           columnId: action.columnId,
@@ -390,6 +398,7 @@ export function applyBoardAction(
       if (cell) {
         cell.tableLabel = null;
         cell.status = "empty";
+        delete cell.transferredIn;
       }
       break;
     }
@@ -431,6 +440,7 @@ export function applyBoardAction(
       sourceCell.status = "ended";
       destCell.tableLabel = label;
       destCell.status = "active";
+      destCell.transferredIn = true;
       break;
     }
     case "end-table": {
@@ -482,6 +492,7 @@ export function applyBoardAction(
       const destCell = ensureCell(destRound, action.columnId);
       destCell.tableLabel = label;
       destCell.status = "active";
+      delete destCell.transferredIn;
       break;
     }
     case "skip-turn": {
@@ -516,10 +527,10 @@ export function applyBoardAction(
     case "clear-row": {
       const round = board.rounds.find(({ id }) => id === action.roundId);
       if (round) {
-        round.cells = round.cells.map((cell) => ({
-          ...cell,
+        round.cells = round.cells.map(({ columnId }) => ({
+          columnId,
           tableLabel: null,
-          status: "empty",
+          status: "empty" as const,
         }));
       }
       break;
@@ -532,6 +543,7 @@ export function applyBoardAction(
         if (cell) {
           cell.tableLabel = null;
           cell.status = "empty";
+          delete cell.transferredIn;
         }
       }
       break;

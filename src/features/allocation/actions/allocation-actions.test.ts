@@ -38,6 +38,8 @@ vi.mock("@/features/allocation/data/allocation-data", () => ({
 }));
 
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
+import { shiftIsoDate } from "@/features/allocation/domain/allocation-history-window";
+import { zonedWallTimeFromInstant } from "@/lib/timezone";
 import {
   executeBoardActionRemote,
   getAllocationContextForDateAction,
@@ -500,10 +502,35 @@ describe("allocation-actions location scoping and consistency", () => {
       expect(mocks.getAllocationContext).not.toHaveBeenCalled();
     });
 
-    it("rejects stale workspace context", async () => {
+    it("rejects dates older than the 7-day window", async () => {
+      const today = zonedWallTimeFromInstant(
+        new Date(),
+        "America/Chicago",
+      ).date;
+      const oldDate = shiftIsoDate(today, -7);
       const res = await getAllocationContextForDateAction({
         restaurantSlug: SLUG,
-        serviceDate: "2026-10-01",
+        serviceDate: oldDate,
+        expectedContext: validCtx(A),
+      });
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toBe(
+          "Table Allocation history is only available for the past 7 days.",
+        );
+      }
+      expect(mocks.getAllocationContext).not.toHaveBeenCalled();
+    });
+
+    it("rejects stale workspace context", async () => {
+      const today = zonedWallTimeFromInstant(
+        new Date(),
+        "America/Chicago",
+      ).date;
+      const validDate = shiftIsoDate(today, -2);
+      const res = await getAllocationContextForDateAction({
+        restaurantSlug: SLUG,
+        serviceDate: validDate,
         expectedContext: validCtx(B),
       });
       expect(res.ok).toBe(false);
@@ -514,7 +541,12 @@ describe("allocation-actions location scoping and consistency", () => {
       expect(mocks.getAllocationContext).not.toHaveBeenCalled();
     });
 
-    it("calls getAllocationContext with verified scope on match", async () => {
+    it("calls getAllocationContext with verified scope on match for date within 7-day window", async () => {
+      const today = zonedWallTimeFromInstant(
+        new Date(),
+        "America/Chicago",
+      ).date;
+      const validDate = shiftIsoDate(today, -2);
       mocks.getAllocationContext.mockResolvedValueOnce({
         locationId: A,
         board: { columns: [], rows: [] },
@@ -522,12 +554,12 @@ describe("allocation-actions location scoping and consistency", () => {
 
       const res = await getAllocationContextForDateAction({
         restaurantSlug: SLUG,
-        serviceDate: "2026-10-01",
+        serviceDate: validDate,
         expectedContext: validCtx(A),
       });
 
       expect(res.ok).toBe(true);
-      expect(mocks.getAllocationContext).toHaveBeenCalledWith(O, "2026-10-01", {
+      expect(mocks.getAllocationContext).toHaveBeenCalledWith(O, validDate, {
         organizationId: O,
         locationId: A,
         timeZone: "America/Chicago",

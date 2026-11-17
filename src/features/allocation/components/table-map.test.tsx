@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TableMap } from "./table-map";
+import { DEMO_FLOOR_LAYOUT } from "../domain/floor-layout";
 
 // Production parity fix: a genuinely unconfigured location (zero
 // dining_tables rows) must show an explicit message, not a silent blank
@@ -16,6 +17,24 @@ describe("TableMap empty state", () => {
     expect(
       screen.getByText("No tables are configured for this location."),
     ).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Floor map" })).toBeNull();
+  });
+
+  it("shows an off-map specific message when off-map tables exist but zero mapped tables", () => {
+    render(
+      <TableMap
+        tables={[]}
+        hasOffMapTables
+        selectedLabel={null}
+        onSelectTable={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText("No mapped tables for this location."),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("No tables are configured for this location."),
+    ).toBeNull();
     expect(screen.queryByRole("group", { name: "Floor map" })).toBeNull();
   });
 
@@ -79,5 +98,47 @@ describe("TableMap load error state", () => {
       ),
     ).toBeVisible();
     expect(screen.queryByRole("group", { name: "Floor map" })).toBeNull();
+  });
+});
+
+describe("TableMap walkway aisle layout", () => {
+  it("renders the walkway aisle indicator for the Monks reference floor plan", () => {
+    const tables = DEMO_FLOOR_LAYOUT.map((t) => ({
+      ...t,
+      occupiedBy: null,
+    }));
+    render(
+      <TableMap tables={tables} selectedLabel={null} onSelectTable={vi.fn()} />,
+    );
+    const walkway = screen.getByTestId("floor-walkway-aisle");
+    expect(walkway).toBeInTheDocument();
+    expect(walkway).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("does not render the walkway aisle indicator for non-Monks layouts", () => {
+    const customTables = [
+      {
+        label: "T1",
+        x: 10,
+        y: 10,
+        resourceType: "table" as const,
+        occupiedBy: null,
+      },
+      {
+        label: "T2",
+        x: 20,
+        y: 20,
+        resourceType: "table" as const,
+        occupiedBy: null,
+      },
+    ];
+    render(
+      <TableMap
+        tables={customTables}
+        selectedLabel={null}
+        onSelectTable={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("floor-walkway-aisle")).toBeNull();
   });
 });

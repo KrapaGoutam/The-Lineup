@@ -233,6 +233,7 @@ export function FloorView({
           <TableMap
             tables={tables}
             loadError={tablesLoadError}
+            hasOffMapTables={offMapTables.length > 0}
             selectedLabel={selectedLabel}
             onSelectTable={selectTable}
             disabled={disabled}
