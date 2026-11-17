@@ -8,13 +8,14 @@ Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/de
 - [x] Batch C: Database retention audit & safe forward-only migration `20261117140000_table_allocation_7day_retention.sql` (`private.cleanup_stale_table_allocation_records` cleans disposable child rows `section_assignments`, `table_rotation_entries`, `rotation_rounds`, `rotation_members` for closed sessions older than 7 days; preserves `service_sessions` and `seatings`; pgTAP test `0090` 10/10 assertions pass).
 - [x] Rigorous verification: full Vitest suite (321 files, 4,340 passed, 7 skipped), allocation suite (26 files, 427 passed), Playwright E2E suites (Combined 7/7, Cross-view extras 3/3, Allocation open-editing 3/3, Multi-view 1/1, Dashboard 25/25, Default landing 11/11), `npm run check` (Prettier clean, ESLint 0 warnings, TypeScript clean).
 - [x] Documented in `HANDOFF.md` and updated Playwright test suites.
-- [ ] Review diff, commit with `fix(allocation): reconcile e2e test helpers and decoupled views for combined-only workspace`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
-- [ ] Await CI on PR #349 head; no hosted DEV or Production modifications authorized.
+- [x] Review diff, commit with `fix(allocation): reconcile e2e test helpers and decoupled views for combined-only workspace` and `fix(allocation): ensure table-rotation-multi-view goToAllocation lands on Grid`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
+- [x] Exact-head CI on PR #349 (commit `e34d301`) 100% green: `application` pass (5m56s), `browser-smoke` pass (14m5s), `migrations-and-policies` pass (3m37s), `Vercel` pass, `Vercel Preview Comments` pass.
+- [ ] Await explicit owner authorization for review, merge into `development`, and any future environment deployments. No hosted DEV or Production modifications authorized.
 
 ## Current State & Next Step
 
-All code, schema, migrations, tests, and documentation are locally complete and verified 100% green.
-Next: commit changes, push to branch `fix/v2-0-4-floor-data-parity-aisle`, and monitor PR #349 CI.
+All code, schema, migrations, tests, documentation, and CI checks on PR #349 exact-head (`e34d301`) are verified 100% green.
+Next: Present final executive completion report to owner for PR #349 review and decision.
 
 ---
 
