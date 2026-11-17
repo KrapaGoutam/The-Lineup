@@ -125,20 +125,22 @@ Latest source SHA: see `git log` (first V2.0.4 commit = H1/H2 checkpoint). Base 
 ## V2.0.4 Correction Addendum — Floor Data Parity & Aisle Layout Adjustment (2026-11-17)
 
 ### 1. Defect & Root Cause Investigation
-- **Reported Issue:** The owner reported seeing *"No tables are configured for this location"* on the floor display despite expecting tables in Table Allocation Rotation views.
+
+- **Reported Issue:** The owner reported seeing _"No tables are configured for this location"_ on the floor display despite expecting tables in Table Allocation Rotation views.
 - **Root Cause Analysis:**
   1. **Branch/Location Discrepancy:** On hosted DEV, the owner navigated to an organization/location where the `table_allocation` module was enabled (specifically `QA Restaurant A` / `QA A - Downtown`, `location_id = '94c63855-88a5-4c3d-bd55-be5e26be5382'`). In DEV Supabase (`opmujepkemwcdxxorhfd`), `QA A - Downtown` has active server columns and rotation session rows, but **0 physical tables registered in `dining_tables`**.
   2. **Monks Reference Data:** The 27 physical tables (T1-T19, B1-B8) belong exclusively to `The Monk's DEV` / `DEV Location` (`location_id = 'a5d46f61-cf64-4b96-8d9f-41d6812d561c'`), where `table_allocation` was correctly restored to disabled (`is_enabled: false`) following the H4 test campaign.
   3. **Null InitialContext Query Fallback:** In `src/features/allocation/components/allocation-workspace.tsx`, `physicalTablesLoadError` was defaulted to `false` when `initialContext === null`. In non-demo mode, a missing context indicates a page load/query failure, but resulted in displaying the empty location state instead of the load error banner.
-  4. **Off-Map Table Masking:** In `TableMap`, if a location had registered off-map tables but 0 mapped tables, the map rendered *"No tables are configured for this location."*, obscuring that tables existed in the registry and off-map rail.
+  4. **Off-Map Table Masking:** In `TableMap`, if a location had registered off-map tables but 0 mapped tables, the map rendered _"No tables are configured for this location."_, obscuring that tables existed in the registry and off-map rail.
 
 ### 2. Resolution & Scope
+
 - **Authoritative Registry Parity:**
   - Preserved strict tenant and location scoping. No tables are fabricated or hardcoded globally.
   - Wired `hasOffMapTables` prop to all callers of `TableMap` (`AllocationWorkspace`, `FloorView`, `FloorPanel`, `QuickTablePicker`, `ServerBoardView`).
-  - Genuinely empty locations with 0 tables retain *"No tables are configured for this location."*
-  - Locations with off-map tables only display *"No mapped tables for this location."* with accessible off-map controls.
-  - Failed initialContext loads properly trigger *"Couldn't load the floor layout. Try refreshing the page."*
+  - Genuinely empty locations with 0 tables retain _"No tables are configured for this location."_
+  - Locations with off-map tables only display _"No mapped tables for this location."_ with accessible off-map controls.
+  - Failed initialContext loads properly trigger _"Couldn't load the floor layout. Try refreshing the page."_
 - **Aisle Layout Adjustment:**
   - Created `isMonksReferenceLayout` and `adjustMonksAisleCoordinates` in `src/features/allocation/domain/floor-layout.ts`.
   - For the canonical Monks reference arrangement (T1-T19, B1-B8), display-only Y-coordinate for lower center tables T6, T7, T8 is adjusted from `y=56` to `y=58.5`.
@@ -148,6 +150,7 @@ Latest source SHA: see `git log` (first V2.0.4 commit = H1/H2 checkpoint). Base 
   - Fits comfortably within Split Screen mode on 1024×768 tablets without introducing page scrolling or clipping.
 
 ### 3. Exact Files Modified
+
 - `src/features/allocation/domain/floor-layout.ts`: Defined `MONKS_REFERENCE_LABELS`, `isMonksReferenceLayout()`, and `adjustMonksAisleCoordinates()`.
 - `src/features/allocation/domain/floor-layout.test.ts`: Added unit tests for Monks layout detection, coordinate adjustment without input mutation, and non-Monks immunity.
 - `src/features/allocation/domain/combined-view.ts`: Integrated `adjustMonksAisleCoordinates` into `fitFloorTables`.
@@ -162,9 +165,9 @@ Latest source SHA: see `git log` (first V2.0.4 commit = H1/H2 checkpoint). Base 
 - `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md`: Recorded H4 addendum and this correction report.
 
 ### 4. Verification Evidence
+
 - `vitest run src/features/allocation`: 25 test files, 416 tests passed (100% green).
 - `npm run typecheck`: Passed with 0 errors (`tsc --noEmit`).
 - `npx eslint --max-warnings=0 src/features/allocation`: 0 warnings, 0 errors.
 - `npx prettier --check src/features/allocation`: 100% compliant.
 - Environment safety: PROD untouched; DEV database untouched; DEV `table_allocation` module remains disabled at DEV Location pending owner authorization.
-
