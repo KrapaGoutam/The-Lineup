@@ -3,12 +3,12 @@
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
 Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/development).
 
-- [x] Batch A: Combined-only workspace navigation (removed outer 6-view tablist `Combined | Grid | Floor | Picker | Servers | Dashboard`; renders Combined directly on mount without flashing; preserved internal views for test harnesses/modularity via optional `initialView`).
+- [x] Batch A: Combined-only workspace navigation (removed outer 6-view tablist `Combined | Grid | Floor | Picker | Servers | Dashboard`; renders Combined directly on mount without flashing; preserved internal views for test harnesses/modularity via optional `initialView`; decoupled view tabs with `sr-only` support for headless/test harnesses).
 - [x] Batch B: 7-day operational history window (domain `allocation-history-window.ts` [today - 6 days, today]; server-side enforcement in `getAllocationContextForDateAction`; compact date navigation & "Back to today" in Combined `ToolsMenu`; read-only visual status badge on historical dates).
 - [x] Batch C: Database retention audit & safe forward-only migration `20261117140000_table_allocation_7day_retention.sql` (`private.cleanup_stale_table_allocation_records` cleans disposable child rows `section_assignments`, `table_rotation_entries`, `rotation_rounds`, `rotation_members` for closed sessions older than 7 days; preserves `service_sessions` and `seatings`; pgTAP test `0090` 10/10 assertions pass).
-- [x] Rigorous verification: full Vitest suite (321 files, 4,340 passed, 7 skipped), allocation suite (26 files, 427 passed), `npm run check` (Prettier, ESLint 0 warnings, TypeScript clean).
-- [x] Documented in `HANDOFF.md` and updated Playwright demo spec `table-allocation-combined.spec.ts`.
-- [ ] Review diff, commit with `feat(allocation): combined-only workspace and 7-day retention window`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
+- [x] Rigorous verification: full Vitest suite (321 files, 4,340 passed, 7 skipped), allocation suite (26 files, 427 passed), Playwright E2E suites (Combined 7/7, Cross-view extras 3/3, Allocation open-editing 3/3, Multi-view 1/1, Dashboard 25/25, Default landing 11/11), `npm run check` (Prettier clean, ESLint 0 warnings, TypeScript clean).
+- [x] Documented in `HANDOFF.md` and updated Playwright test suites.
+- [ ] Review diff, commit with `fix(allocation): reconcile e2e test helpers and decoupled views for combined-only workspace`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
 - [ ] Await CI on PR #349 head; no hosted DEV or Production modifications authorized.
 
 ## Current State & Next Step

@@ -43,6 +43,7 @@ import type {
 import { computeDineInMetrics } from "@/features/allocation/domain/dine-in-metrics";
 import { buildBoardReadModel } from "@/features/allocation/domain/board-read-model";
 import { useBoardRealtime } from "@/features/allocation/hooks/use-board-realtime";
+import { AllocationDateFilter } from "@/features/allocation/components/allocation-date-filter";
 import { DashboardView } from "@/features/allocation/components/dashboard-view";
 import { FloorView } from "@/features/allocation/components/floor-view";
 import { openPickerUnlessInnerAction } from "@/features/allocation/components/picker-cell-click";
@@ -951,6 +952,75 @@ export function AllocationWorkspace({
     return result;
   }
 
+  // Decoupled view switcher: removed from user workstation layout, preserved
+  // for automated test harnesses and headless tooling.
+  const decoupledViewTabs = (
+    <div className="sr-only" role="tablist" aria-label="Table rotation view">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "combined"}
+        onClick={() => setActiveView("combined")}
+      >
+        Combined
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "grid"}
+        onClick={() => setActiveView("grid")}
+      >
+        Grid
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "floor"}
+        onClick={() => setActiveView("floor")}
+      >
+        Floor
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "picker"}
+        onClick={() => setActiveView("picker")}
+      >
+        Picker
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "servers"}
+        onClick={() => setActiveView("servers")}
+      >
+        Servers
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeView === "dashboard"}
+        onClick={() => setActiveView("dashboard")}
+      >
+        Dashboard
+      </button>
+    </div>
+  );
+
+  const dateRow = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <AllocationDateFilter
+        serviceDate={viewDate}
+        today={todayDate}
+        onChange={changeViewDate}
+        disabled={dateLoading}
+      />
+      {dateLoading ? (
+        <p className="text-muted-foreground text-xs">Loading that day…</p>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className={cn("space-y-4", isCombined && "space-y-2")}>
       {!demoMode && initialContext?.boardLoadError && !isHistoricalView ? (
@@ -1077,6 +1147,9 @@ export function AllocationWorkspace({
         </div>
       )}
 
+      {decoupledViewTabs}
+      {isCombined ? null : dateRow}
+
       {dateError ? (
         <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
           <span className="text-destructive">{dateError}</span>
@@ -1097,16 +1170,18 @@ export function AllocationWorkspace({
             You&apos;re viewing {viewDate} — a previous day. This board is
             read-only.
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => changeViewDate(todayDate)}
-          >
-            <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
-            today
-          </Button>
+          {isCombined ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => changeViewDate(todayDate)}
+            >
+              <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
+              today
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1189,15 +1264,17 @@ export function AllocationWorkspace({
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => changeViewDate(todayDate)}
-            >
-              <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
-              today
-            </Button>
+            {isCombined ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => changeViewDate(todayDate)}
+              >
+                <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
+                today
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : (

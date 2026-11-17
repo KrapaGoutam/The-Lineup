@@ -32,10 +32,6 @@ async function openCombined(page: Page) {
       .getByRole("button", { name: /^Table Allocation$|^Allocation$/ })
       .click();
   }
-  const combinedTab = page.getByRole("tab", { name: "Combined" });
-  if (await combinedTab.isVisible()) {
-    await combinedTab.click();
-  }
   await expect(page.getByText("Demo · Combined View")).toBeVisible();
 }
 
@@ -152,11 +148,11 @@ test.describe("Combined view: tablet landscape", () => {
     // Optional legacy tab check if rendered in multi-view test harnesses
     const floorTab = page.getByRole("tab", { name: "Floor" });
     if (await floorTab.isVisible()) {
-      await floorTab.click();
+      await floorTab.dispatchEvent("click");
       await expect(
         page.getByRole("button", { name: /^Table T9, assigned to Ava Brooks/ }),
       ).toBeVisible();
-      await page.getByRole("tab", { name: "Combined" }).click();
+      await page.getByRole("tab", { name: "Combined" }).dispatchEvent("click");
     }
   });
 

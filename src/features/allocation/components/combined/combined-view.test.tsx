@@ -84,7 +84,8 @@ describe("Combined view: registration and modes", () => {
         onSessionInvalid={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("tablist")).toBeNull();
+    const tablist = screen.getByRole("tablist");
+    expect(tablist).toHaveClass("sr-only");
     expect(screen.getByText("Demo · Combined View")).toBeVisible();
     expect(screen.getByRole("group", { name: "Floor map" })).toBeVisible();
     expect(

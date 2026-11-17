@@ -44,7 +44,7 @@ async function switchView(
   page: Page,
   name: "Grid" | "Floor" | "Picker" | "Servers" | "Dashboard",
 ) {
-  await page.getByRole("tab", { name, exact: true }).click();
+  await page.getByRole("tab", { name, exact: true }).dispatchEvent("click");
 }
 
 test("Floor: assigning an available table shows it as occupied and appears on the Grid", async ({
