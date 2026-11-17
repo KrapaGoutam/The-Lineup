@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Eraser,
   MoreHorizontal,
   Redo2,
+  RotateCcw,
   Rows3,
   Trash2,
   Undo2,
@@ -13,6 +16,11 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  getAllocationHistoryWindow,
+  shiftIsoDate,
+} from "@/features/allocation/domain/allocation-history-window";
 
 type Confirmation = {
   title: string;
@@ -44,6 +52,10 @@ export function ToolsMenu({
   onClearRow,
   onClearColumn,
   onClearBoard,
+  serviceDate,
+  todayDate,
+  onDateChange,
+  dateLoading = false,
 }: {
   canUndo: boolean;
   canRedo: boolean;
@@ -62,9 +74,22 @@ export function ToolsMenu({
   onClearRow: () => void;
   onClearColumn: () => void;
   onClearBoard: () => void;
+  /** Current viewed service date (e.g. "2026-11-17"). */
+  serviceDate?: string;
+  /** Location's today service date. */
+  todayDate?: string;
+  /** Handler when user selects a different service date within the 7-day window. */
+  onDateChange?: (nextDate: string) => void;
+  dateLoading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState<Confirmation | null>(null);
+
+  const historyWindow = todayDate
+    ? getAllocationHistoryWindow(todayDate)
+    : null;
+  const minDate = historyWindow?.minDate;
+  const isToday = serviceDate === todayDate;
 
   function act(run: () => void) {
     setOpen(false);
@@ -93,6 +118,76 @@ export function ToolsMenu({
         description="Corrections and less common board actions."
       >
         <div className="flex flex-col gap-1.5">
+          {todayDate && serviceDate && onDateChange && minDate ? (
+            <div className="border-border bg-muted/20 my-1 flex flex-col gap-2 rounded-xl border p-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-xs font-medium">
+                  Service date{" "}
+                  {isToday ? "(Today · Live)" : "(Historical · Read-only)"}
+                </span>
+                {!isToday ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={dateLoading}
+                    onClick={() => act(() => onDateChange(todayDate))}
+                  >
+                    <RotateCcw className="mr-1 size-3" aria-hidden="true" />{" "}
+                    Back to today
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  aria-label="Previous day"
+                  disabled={dateLoading || serviceDate <= minDate}
+                  onClick={() =>
+                    act(() => onDateChange(shiftIsoDate(serviceDate, -1)))
+                  }
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <Input
+                  type="date"
+                  aria-label="Service date"
+                  value={serviceDate}
+                  min={minDate}
+                  max={todayDate}
+                  disabled={dateLoading}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      act(() => onDateChange(e.target.value));
+                    }
+                  }}
+                  className="h-8 flex-1 text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  aria-label="Next day"
+                  disabled={dateLoading || serviceDate >= todayDate}
+                  onClick={() =>
+                    act(() => onDateChange(shiftIsoDate(serviceDate, 1)))
+                  }
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-tight">
+                Past 7 days ({minDate} to {todayDate}). Older dates are retired.
+              </p>
+              {dateLoading ? (
+                <p className="text-muted-foreground text-xs italic">
+                  Loading that day…
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-1.5">
             <Button
               variant="secondary"

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEMO_FLOOR_LAYOUT,
+  adjustMonksAisleCoordinates,
   combinedTableLabel,
   getInitials,
+  isMonksReferenceLayout,
   parseCombinedTableLabel,
   resolveFloorTables,
 } from "./floor-layout";
@@ -161,6 +163,49 @@ describe("floor layout", () => {
 
     it("returns an empty string for an empty name", () => {
       expect(getInitials("")).toBe("");
+    });
+  });
+
+  describe("Monks reference layout aisle adjustments", () => {
+    it("identifies the Monks reference layout by its canonical table set", () => {
+      expect(isMonksReferenceLayout(DEMO_FLOOR_LAYOUT)).toBe(true);
+      expect(isMonksReferenceLayout([])).toBe(false);
+      expect(
+        isMonksReferenceLayout([
+          { label: "1", x: 10, y: 10 },
+          { label: "2", x: 20, y: 20 },
+        ]),
+      ).toBe(false);
+    });
+
+    it("adjusts display coordinates for T6, T7, T8 to y=58.5 without mutating inputs", () => {
+      const adjusted = adjustMonksAisleCoordinates(DEMO_FLOOR_LAYOUT);
+      expect(adjusted).not.toBe(DEMO_FLOOR_LAYOUT);
+
+      const t6 = adjusted.find((t) => t.label === "T6");
+      const t7 = adjusted.find((t) => t.label === "T7");
+      const t8 = adjusted.find((t) => t.label === "T8");
+      expect(t6?.y).toBe(58.5);
+      expect(t7?.y).toBe(58.5);
+      expect(t8?.y).toBe(58.5);
+
+      // Verify other tables (e.g. T10, T15, B1) are unchanged
+      const originalT10 = DEMO_FLOOR_LAYOUT.find((t) => t.label === "T10");
+      const adjustedT10 = adjusted.find((t) => t.label === "T10");
+      expect(adjustedT10?.y).toBe(originalT10?.y);
+
+      // Verify original layout was not mutated
+      const originalT6 = DEMO_FLOOR_LAYOUT.find((t) => t.label === "T6");
+      expect(originalT6?.y).toBe(56);
+    });
+
+    it("leaves non-Monks layout tables untouched", () => {
+      const customLayout = [
+        { label: "T6", x: 50, y: 50 },
+        { label: "T7", x: 60, y: 50 },
+      ];
+      const result = adjustMonksAisleCoordinates(customLayout);
+      expect(result).toEqual(customLayout);
     });
   });
 });

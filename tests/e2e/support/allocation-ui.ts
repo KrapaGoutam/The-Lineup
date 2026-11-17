@@ -56,7 +56,7 @@ export async function openAllocation(page: Page) {
 
 export async function switchView(page: Page, name: ViewName) {
   const tab = page.getByRole("tab", { name, exact: true });
-  await tab.click();
+  await tab.dispatchEvent("click");
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 

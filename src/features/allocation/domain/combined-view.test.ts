@@ -10,7 +10,10 @@ import {
   targetRoundFor,
 } from "@/features/allocation/domain/combined-view";
 import { buildBoardReadModel } from "@/features/allocation/domain/board-read-model";
-import type { FloorLayoutEntry } from "@/features/allocation/domain/floor-layout";
+import {
+  DEMO_FLOOR_LAYOUT,
+  type FloorLayoutEntry,
+} from "@/features/allocation/domain/floor-layout";
 import {
   applyBoardAction,
   createRotationBoard,
@@ -231,5 +234,24 @@ describe("fitFloorTables", () => {
   it("handles one table and an empty layout", () => {
     expect(fitFloorTables([])).toEqual([]);
     expect(fitFloorTables([{ x: 10, y: 10 }])).toEqual([{ x: 50, y: 50 }]);
+  });
+
+  it("produces balanced, visually comparable aisle gaps for Monks reference layout", () => {
+    const fitted = fitFloorTables(DEMO_FLOOR_LAYOUT);
+    const t15 = fitted.find((t) => t.label === "T15");
+    const t10 = fitted.find((t) => t.label === "T10");
+    const t7 = fitted.find((t) => t.label === "T7");
+
+    expect(t15).toBeDefined();
+    expect(t10).toBeDefined();
+    expect(t7).toBeDefined();
+
+    const topToMiddleGap = t10!.y - t15!.y;
+    const middleToLowerGap = t7!.y - t10!.y;
+
+    // Both gaps are around ~25% and balanced within 1% of each other
+    expect(topToMiddleGap).toBeGreaterThan(24);
+    expect(middleToLowerGap).toBeGreaterThan(24);
+    expect(Math.abs(topToMiddleGap - middleToLowerGap)).toBeLessThan(1.0);
   });
 });

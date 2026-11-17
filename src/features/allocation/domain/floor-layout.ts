@@ -205,3 +205,69 @@ export function resolveFloorTables(
     occupiedBy: occupancy.get(entry.label) ?? null,
   }));
 }
+
+export const MONKS_REFERENCE_LABELS: ReadonlySet<string> = new Set([
+  "T1",
+  "T2",
+  "T3",
+  "T4",
+  "T5",
+  "T6",
+  "T7",
+  "T8",
+  "T9",
+  "T10",
+  "T11",
+  "T12",
+  "T13",
+  "T14",
+  "T15",
+  "T16",
+  "T17",
+  "T18",
+  "T19",
+  "B1",
+  "B2",
+  "B3",
+  "B4",
+  "B5",
+  "B6",
+  "B7",
+  "B8",
+]);
+
+/**
+ * Checks whether a table set represents the Monks-style reference floor arrangement.
+ * Preserves the 5 groups: Top (T15-T19), Middle (T14-T9), Lower (T6-T8), Left wall (T5-T1), Bar (B1-B8).
+ */
+export function isMonksReferenceLayout(
+  tables: readonly { label?: string; [key: string]: unknown }[],
+): boolean {
+  if (tables.length < 20) return false;
+  let matches = 0;
+  for (const t of tables) {
+    if (t.label && MONKS_REFERENCE_LABELS.has(t.label)) matches++;
+  }
+  return matches >= 20;
+}
+
+/**
+ * Display-only adjustment for Monks reference layout: reserves clear visual spacing
+ * for the aisle between Middle (T14-T9) and Lower (T6-T8) rows, making it visually
+ * comparable to the aisle separating Top (T15-T19) from Middle (T14-T9).
+ * Preserves authoritative database coordinates by applying display-only positioning.
+ */
+export function adjustMonksAisleCoordinates<
+  T extends { label?: string; y: number },
+>(tables: T[]): T[] {
+  if (!isMonksReferenceLayout(tables)) return tables;
+  return tables.map((table) => {
+    if (
+      (table.label === "T6" || table.label === "T7" || table.label === "T8") &&
+      table.y < 58
+    ) {
+      return { ...table, y: 58.5 };
+    }
+    return table;
+  });
+}

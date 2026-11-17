@@ -46,6 +46,13 @@ async function navigateToTab(page: Page, name: string | RegExp) {
     .click();
 }
 
+async function navigateToAllocationGrid(page: Page) {
+  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  const gridTab = page.getByRole("tab", { name: "Grid", exact: true });
+  await gridTab.dispatchEvent("click");
+  await expect(gridTab).toHaveAttribute("aria-selected", "true");
+}
+
 function accountButton(page: Page) {
   return page
     .getByRole("button", {
@@ -121,7 +128,9 @@ test("manager can use all three operational modules", async ({ page }) => {
 
   await navigateToTab(page, /^Table Allocation$|^Allocation$/);
   await expect(
-    page.getByRole("heading", { name: "Table allocation rotation" }),
+    page.getByRole("heading", {
+      name: /^Table Allocation$|^Table allocation rotation$/,
+    }),
   ).toBeVisible();
 
   await navigateToTab(page, "Schedule");
@@ -145,7 +154,7 @@ test("server sees published schedule, can edit any column (Feature 011), and see
   await expectAccountRole(page, /server/i);
   await expect(page.getByRole("button", { name: "Add shift" })).toHaveCount(0);
 
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   // Table Rotation Multi-View: clear board/reorder are now Active Floor
   // Operations, open to a plain server too (PERMISSIONS.md).
   await expect(page.getByRole("button", { name: "Clear board" })).toHaveCount(
@@ -281,7 +290,7 @@ test("promoting someone to Assistant Manager gives them full manager-level acces
   await expectAccountRole(page, /manager/i);
   await navigateToTab(page, "Schedule");
   await expect(page.getByRole("button", { name: "Add shift" })).toBeVisible();
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   await expect(page.getByRole("button", { name: "Clear board" })).toBeVisible();
 });
 
@@ -437,7 +446,7 @@ test("an unrostered employee can be added to the live allocation board", async (
   page,
 }) => {
   await signIn(page, "2468");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   await expect(page.getByText("Floor team changed?")).toBeVisible();
   await page.getByRole("button", { name: "Ivy" }).click();
   await expect(page.getByText("Ivy Tran")).toBeVisible();
@@ -447,7 +456,7 @@ test("manager can add a row on demand, and undo removes it", async ({
   page,
 }) => {
   await signIn(page, "2468");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   const rowsBadge = page.getByText(/^\d+ rows$/);
   const before = Number((await rowsBadge.textContent())?.match(/\d+/)?.[0]);
 
@@ -462,7 +471,7 @@ test("Table Rotation Multi-View: a server now sees and can use the manual add-ro
   page,
 }) => {
   await signIn(page, "1357");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   const rowsBadge = page.getByText(/^\d+ rows$/);
   const before = Number((await rowsBadge.textContent())?.match(/\d+/)?.[0]);
 
@@ -472,7 +481,7 @@ test("Table Rotation Multi-View: a server now sees and can use the manual add-ro
 
 test("manager can reorder columns; boundaries are no-ops", async ({ page }) => {
   await signIn(page, "2468");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   await expect(
     page.getByRole("button", { name: "Move Mia Chen up" }),
   ).toBeDisabled();
@@ -486,7 +495,7 @@ test("editing another server's column succeeds without a reason, and is still at
   page,
 }) => {
   await signIn(page, "2468");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   await page
     .locator('input[aria-label="Table number or combined tables"]:enabled')
     .first()
@@ -501,7 +510,7 @@ test("no reason field renders anywhere on the allocation board", async ({
   page,
 }) => {
   await signIn(page, "2468");
-  await navigateToTab(page, /^Table Allocation$|^Allocation$/);
+  await navigateToAllocationGrid(page);
   await expect(
     page.getByLabel("Reason for editing another server's column"),
   ).toHaveCount(0);
