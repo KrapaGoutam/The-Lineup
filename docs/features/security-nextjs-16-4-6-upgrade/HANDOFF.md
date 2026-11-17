@@ -8,6 +8,8 @@ Single tracking and handoff document for the Next.js security upgrade.
 - Repository: `KrapaGoutam/The-Lineup`.
 - Worktree: `.tmp/security-nextjs-upgrade` (dedicated isolated worktree).
 - Branch: `security/nextjs-16-4-6-upgrade`.
+- Commit SHA: `851d95c8c5c7d83cb8633e9d89201995cbfffc3b`.
+- PR: #350 (`https://github.com/KrapaGoutam/The-Lineup/pull/350`).
 - Base SHA: `2e742f56930aa24419ad24f9f783637e6da4859a` (`origin/development`).
 - PR #349 status: Preserved untouched on branch `fix/v2-0-4-floor-data-parity-aisle` in worktree `.tmp/v2-0-4-floor-parity-fix`.
 
