@@ -1,3 +1,24 @@
+# Security Upgrade: Next.js & eslint-config-next 16.4.6 — COMPLETED (LOCAL)
+
+Full plan, decisions and recovery: `docs/features/security-nextjs-16-4-6-upgrade/HANDOFF.md` (single source of truth).
+Branch `security/nextjs-16-4-6-upgrade`, base `2e742f5` (origin/development). Isolated worktree `.tmp/security-nextjs-upgrade`.
+
+- [x] Create dedicated security branch `security/nextjs-16-4-6-upgrade` and worktree `.tmp/security-nextjs-upgrade` from `origin/development`.
+- [x] Review official security advisory; bump `next` and `eslint-config-next` from 16.4.3 to 16.4.6 in `package.json`.
+- [x] Update dependency lockfile via `npm install`; verify only 48 lines changed in `package-lock.json` and zero unrelated packages were modified.
+- [x] Run focused validation cycle: `npm run check` (Prettier, ESLint 0 warnings, TypeScript clean), `npm test` (320 files, 4,322 passed, 7 skipped), `npm run build` (Turbopack production build, 16/16 routes static generation), `node scripts/check-nonprod-env.mjs --scan .next` PASS, `node scripts/check-tracked-local-paths.mjs` PASS.
+- [x] E2E smoke verification: `tests/e2e/default-landing.spec.ts` 11/11 passed (no security advisory halts).
+- [ ] Commit changes, push to `origin/security/nextjs-16-4-6-upgrade`, open PR targeting `development`.
+- [ ] Await CI on security PR head; no merge into `development` or `main` without explicit owner approval.
+- [ ] Preserve PR #349 and all existing worktrees untouched.
+
+## Current State & Next Step
+
+All code, lockfiles, tests, build, and documentation are locally complete and verified 100% green.
+Next: commit changes, push to branch `security/nextjs-16-4-6-upgrade`, and open PR into `development`.
+
+---
+
 # V2.0.4 Combined Table Allocation — IN PROGRESS
 
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
