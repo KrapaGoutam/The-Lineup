@@ -5,12 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronUp,
-  Columns2,
-  Crosshair,
   Eraser,
-  LayoutDashboard,
-  LayoutGrid,
-  MapPin,
   Pause,
   Pencil,
   Play,
@@ -39,7 +34,7 @@ import {
   redoBoardAction,
   undoBoardAction,
 } from "@/features/allocation/actions/allocation-actions";
-import { AllocationDateFilter } from "@/features/allocation/components/allocation-date-filter";
+import { getAllocationHistoryWindow } from "@/features/allocation/domain/allocation-history-window";
 import { CombinedView } from "@/features/allocation/components/combined/combined-view";
 import type {
   AssignRequest,
@@ -353,6 +348,7 @@ export function AllocationWorkspace({
   onSessionInvalid,
   expectedContext = null,
   locationName = null,
+  initialView = "combined",
 }: {
   user: SignedInUser;
   team: TeamMember[];
@@ -370,6 +366,14 @@ export function AllocationWorkspace({
   expectedContext?: WorkspaceExpectation | null;
   // V2.0.4: the active branch's display name (Combined View's header).
   locationName?: string | null;
+  /** Internal / test override for active view. Defaults to "combined". */
+  initialView?:
+    | "combined"
+    | "grid"
+    | "floor"
+    | "picker"
+    | "servers"
+    | "dashboard";
 }) {
   const router = useRouter();
   const isManager = user.role !== "server";
@@ -402,11 +406,11 @@ export function AllocationWorkspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [showReopenForm, setShowReopenForm] = useState(false);
   const [reopenError, setReopenError] = useState("");
-  // Table Rotation Multi-View: local UI state, not synced -- Undo/Redo
-  // deliberately excludes "which view is active" (INTERACTIONS.md).
+  // Table Allocation V2.0.4: Combined is the sole user-facing Table Allocation view.
+  // Defaults to "combined" directly without briefly rendering Grid.
   const [activeView, setActiveView] = useState<
     "combined" | "grid" | "floor" | "picker" | "servers" | "dashboard"
-  >("grid");
+  >(initialView ?? "combined");
   const isCombined = activeView === "combined";
   // Picker: which Grid cell the next table tap assigns into. Cleared
   // after each assignment and whenever the view changes away from Picker.
@@ -471,6 +475,16 @@ export function AllocationWorkspace({
   async function changeViewDate(nextDate: string) {
     if (nextDate === viewDate) return;
     setDateError(null);
+
+    const { minDate, maxDate } = getAllocationHistoryWindow(todayDate);
+    if (nextDate < minDate || nextDate > maxDate) {
+      setDateError(
+        nextDate > maxDate
+          ? "You can't browse to a date in the future."
+          : "Table Allocation history is only available for the past 7 days.",
+      );
+      return;
+    }
 
     // Demo mode's board is pure client-side, in-memory, and undated --
     // `history` is its only source of truth, never `initialContext`
@@ -907,102 +921,6 @@ export function AllocationWorkspace({
     });
   }
 
-  const viewTabs = (
-    <div
-      // Table Rotation Multi-View: fixed at 6 tabs, this row is wider
-      // than a narrow phone viewport (measured ~450px vs. a 412px Pixel
-      // 7 viewport). Without overflow-x-auto here, the row instead
-      // widens the whole page (main content, not just this row) past
-      // the viewport -- a real horizontal-page-overflow regression this
-      // exact shape caused, confirmed by comparing main vs. this branch
-      // in two genuinely clean environments. `shrink-0` on each tab
-      // (below) keeps them from being squashed instead of scrolling.
-      className="border-border bg-muted/30 flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:w-fit"
-      role="tablist"
-      aria-label="Table rotation view"
-    >
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "combined"}
-        variant={activeView === "combined" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("combined")}
-      >
-        <Columns2 aria-hidden="true" /> Combined
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "grid"}
-        variant={activeView === "grid" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("grid")}
-      >
-        <LayoutGrid aria-hidden="true" /> Grid
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "floor"}
-        variant={activeView === "floor" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("floor")}
-      >
-        <MapPin aria-hidden="true" /> Floor
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "picker"}
-        variant={activeView === "picker" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("picker")}
-      >
-        <Crosshair aria-hidden="true" /> Picker
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "servers"}
-        variant={activeView === "servers" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("servers")}
-      >
-        <UsersRound aria-hidden="true" /> Servers
-      </Button>
-      <Button
-        type="button"
-        role="tab"
-        aria-selected={activeView === "dashboard"}
-        variant={activeView === "dashboard" ? "secondary" : "ghost"}
-        size="sm"
-        className="shrink-0"
-        onClick={() => setActiveView("dashboard")}
-      >
-        <LayoutDashboard aria-hidden="true" /> Dashboard
-      </Button>
-    </div>
-  );
-  const dateRow = (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <AllocationDateFilter
-        serviceDate={viewDate}
-        today={todayDate}
-        onChange={changeViewDate}
-        disabled={dateLoading}
-      />
-      {dateLoading ? (
-        <p className="text-muted-foreground text-xs">Loading that day…</p>
-      ) : null}
-    </div>
-  );
-
   // V2.0.4: Combined's "assign this table to this server" -- the SAME
   // occupied-table flow and trusted assign every other view uses, targeting the
   // server's own earliest empty turn (or the exact turn a cell asked for).
@@ -1159,18 +1077,6 @@ export function AllocationWorkspace({
         </div>
       )}
 
-      {isCombined ? (
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          {viewTabs}
-          {dateRow}
-        </div>
-      ) : (
-        <>
-          {viewTabs}
-          {dateRow}
-        </>
-      )}
-
       {dateError ? (
         <div className="border-destructive/30 bg-destructive/10 flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
           <span className="text-destructive">{dateError}</span>
@@ -1185,10 +1091,22 @@ export function AllocationWorkspace({
       ) : null}
 
       {isHistoricalView && !showDemoHistoricalNotice ? (
-        <div className="border-border bg-muted/40 text-muted-foreground flex items-center gap-2 rounded-xl border px-4 py-2 text-sm">
-          <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
-          You&apos;re viewing {viewDate} — a previous day. This board is
-          read-only.
+        <div className="border-border bg-muted/40 text-muted-foreground flex items-center justify-between rounded-xl border px-4 py-2 text-sm">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
+            You&apos;re viewing {viewDate} — a previous day. This board is
+            read-only.
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => changeViewDate(todayDate)}
+          >
+            <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
+            today
+          </Button>
         </div>
       ) : null}
 
@@ -1257,17 +1175,29 @@ export function AllocationWorkspace({
 
       {showDemoHistoricalNotice ? (
         <Card>
-          <CardContent className="flex items-center gap-3">
-            <span className="bg-muted text-muted-foreground grid size-10 flex-none place-items-center rounded-xl">
-              <ShieldAlert className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="font-semibold">Demo mode only shows today</p>
-              <p className="text-muted-foreground text-xs">
-                Browsing past service days needs a real, signed-in organization
-                — this demo board has no historical data to show for {viewDate}.
-              </p>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="bg-muted text-muted-foreground grid size-10 flex-none place-items-center rounded-xl">
+                <ShieldAlert className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="font-semibold">Demo mode only shows today</p>
+                <p className="text-muted-foreground text-xs">
+                  Browsing past service days needs a real, signed-in
+                  organization — this demo board has no historical data to show
+                  for {viewDate}.
+                </p>
+              </div>
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => changeViewDate(todayDate)}
+            >
+              <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
+              today
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -1374,12 +1304,24 @@ export function AllocationWorkspace({
               clockedInProfileIds={clockedInProfileIds}
               locationName={locationName}
               scopeKey={initialContext?.locationId ?? "demo"}
-              liveLabel={demoMode ? "Demo board" : "Live board"}
+              liveLabel={
+                demoMode
+                  ? isHistoricalView
+                    ? `${viewDate} (Demo)`
+                    : "Demo board"
+                  : isHistoricalView
+                    ? `${viewDate} (Read-only)`
+                    : "Live board"
+              }
               tablesLoadError={physicalTablesLoadError}
               disabled={!canOperateFloor}
               readOnly={readOnly}
               canUndo={demoMode ? history.past.length > 0 : canUndo}
               canRedo={demoMode ? history.future.length > 0 : canRedo}
+              serviceDate={viewDate}
+              todayDate={todayDate}
+              onDateChange={changeViewDate}
+              dateLoading={dateLoading}
               execute={execute}
               onAssign={assignFromCombined}
               onUndo={undo}

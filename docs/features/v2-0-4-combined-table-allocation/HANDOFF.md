@@ -171,3 +171,65 @@ Latest source SHA: see `git log` (first V2.0.4 commit = H1/H2 checkpoint). Base 
 - `npx eslint --max-warnings=0 src/features/allocation`: 0 warnings, 0 errors.
 - `npx prettier --check src/features/allocation`: 100% compliant.
 - Environment safety: PROD untouched; DEV database untouched; DEV `table_allocation` module remains disabled at DEV Location pending owner authorization.
+
+---
+
+## V2.0.4 Follow-up: Combined-Only Workspace & 7-Day Retention (2026-11-17)
+
+### 1. Batch A — Combined-Only Workspace Navigation
+
+- **Owner Decision:** Combined is now the sole user-facing Table Allocation workspace. The outer six-view navigation bar (`Combined | Grid | Floor | Picker | Servers | Dashboard`) was removed from the live user view.
+- **Immediate Rendering:** Table Allocation directly mounts into Combined view without flashing Grid or any layout shift.
+- **Component Preservation:** Internal view components (`Grid`, `FloorView`, `ServerBoardView`, `DashboardView`, `QuickTablePicker`) are preserved for test harnesses, future reuse, and modularity. An optional `initialView` prop was added to `AllocationWorkspace` allowing test harnesses to directly render specialized views (e.g. Dashboard) without requiring an outer tablist.
+- **E2E & Spec Alignment:** Playwright specs and RTL unit tests were updated to expect direct Combined rendering and to tolerate the absence of the outer tablist.
+
+### 2. Batch B — 7-Day History Operational Window
+
+- **Pure Domain Engine:** Created `src/features/allocation/domain/allocation-history-window.ts` with:
+  - `ALLOCATION_HISTORY_DAYS = 7` (constant).
+  - `getAllocationHistoryWindow(todayIsoDate)`: computes `[today - 6 days, today]` (inclusive 7 business dates).
+  - `isWithinAllocationHistoryWindow(date, todayIsoDate)`: validates whether a given date is within the window.
+  - `shiftIsoDate(isoDate, deltaDays)`: pure date shifting respecting month, leap year, and year boundaries.
+  - 100% test coverage in `src/features/allocation/domain/allocation-history-window.test.ts` (9/9 passed).
+- **Server-Side Enforcement:** In `getAllocationContextForDateAction` (`src/features/allocation/actions/allocation-actions.ts`), requests for dates strictly older than the 7-day lower boundary (`today - 6 days` in the branch's local time zone) fail-closed with:
+  `{ ok: false, error: "Table Allocation history is only available for the past 7 days." }`.
+- **Client & Workspace Controls:**
+  - Removed the bulky date row from the workspace header.
+  - Added a compact, accessible date navigation control inside Combined's `ToolsMenu`:
+    - Previous Day / Next Day buttons clamped to `[minDate, todayDate]`.
+    - Date input restricted to `min={minDate}` and `max={todayDate}`.
+    - Prominent "Back to today" button when viewing a historical date, restoring live view in one tap.
+    - Historical dates clearly indicate read-only status in the workspace badge (`"{viewDate} (Read-only)"` with amber indicator).
+
+### 3. Batch C — Database Retention Audit & Safe Cleanup
+
+- **Retention Audit:**
+  - Existing migration `supabase/migrations/20260919130000_board_events_retention.sql` cleans `board_events` older than 7 days via `pg_cron`.
+  - Audited table relationships for rotation and seating data.
+  - Critical Invariant: `service_sessions` and `seatings` MUST NOT be deleted:
+    - `private.location_lifecycle_retained` audits `closedServiceSessions`. Deleting `service_sessions` would corrupt location lifecycle tracking.
+    - `seatings` records financial, customer party size, and table occupancy audit history.
+    - Active and planned service sessions must never be touched.
+- **Safe Disposable Subset:**
+  - Forward-only migration `supabase/migrations/20261117140000_table_allocation_7day_retention.sql` created.
+  - Implements `private.cleanup_stale_table_allocation_records()`:
+    - Finds closed service sessions (`status = 'closed'`) where `service_date < (today - 6 days)` in the location's configured time zone.
+    - Purges disposable child records: `section_assignments`, `table_rotation_entries`, `rotation_rounds`, `rotation_members`.
+    - Function is `SECURITY DEFINER` with empty `search_path = ''`. Revoked from `public, anon, authenticated`.
+    - Scheduled daily via `pg_cron` at `03:30` (staggered 30 minutes after board_events at 03:00).
+  - Covered by pgTAP test `supabase/tests/database/0090_table_allocation_7day_retention.test.sql` (10/10 assertions pass):
+    - Verifies deletion of disposable child records for stale closed sessions (> 7 days).
+    - Verifies preservation of `service_sessions` and `seatings`.
+    - Verifies non-closed (active) sessions and recent closed sessions (<= 7 days) are untouched.
+- **Destructive Execution Gate:** In compliance with instructions, no destructive bulk cleanup was run against hosted DEV (`opmujepkemwcdxxorhfd`) or Production (`ftadewtkjlaotfdvtjcv`).
+
+### 4. Verification Receipts
+
+- `vitest run src/features/allocation`: 26 files, 427 tests passed (100% green).
+- Full Vitest: 321 test files, 4,340 tests passed, 7 skipped (100% green).
+- `pgTAP` local database tests: `0090_table_allocation_7day_retention.test.sql` 10/10 assertions pass.
+- `npm run check`:
+  - `prettier --check .`: Clean.
+  - `eslint . --max-warnings=0`: 0 warnings, 0 errors.
+  - `next typegen && tsc --noEmit`: Clean.
+- Environment safety: PROD (`ftadewtkjlaotfdvtjcv`) strictly untouched; hosted DEV (`opmujepkemwcdxxorhfd`) untouched.

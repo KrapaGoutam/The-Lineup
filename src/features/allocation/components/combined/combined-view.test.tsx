@@ -59,7 +59,6 @@ async function openCombined() {
       onSessionInvalid={vi.fn()}
     />,
   );
-  await user.click(screen.getByRole("tab", { name: /Combined/ }));
   return user;
 }
 
@@ -72,7 +71,7 @@ const records = () =>
   within(screen.getByRole("region", { name: "Active service records" }));
 
 describe("Combined view: registration and modes", () => {
-  it("adds Combined beside the existing views without changing the default", async () => {
+  it("renders Combined directly on mount as the sole workspace view without outer tablist", async () => {
     render(
       <AllocationWorkspace
         user={owner}
@@ -85,21 +84,12 @@ describe("Combined view: registration and modes", () => {
         onSessionInvalid={vi.fn()}
       />,
     );
-    const tabs = screen
-      .getAllByRole("tab")
-      .map((tab) => tab.textContent?.trim());
-    expect(tabs).toEqual([
-      "Combined",
-      "Grid",
-      "Floor",
-      "Picker",
-      "Servers",
-      "Dashboard",
-    ]);
-    expect(screen.getByRole("tab", { name: "Grid" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getByText("Demo · Combined View")).toBeVisible();
+    expect(screen.getByRole("group", { name: "Floor map" })).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Rotation history" }),
+    ).toBeVisible();
   });
 
   it("shows the compact header, the five metrics and no guest-count control", async () => {
@@ -412,12 +402,36 @@ describe("Combined view: tools", () => {
       records().getByText("No tables are being served right now."),
     ).toBeVisible();
   });
+
+  it("provides 7-day history navigation in ToolsMenu", async () => {
+    const user = await openCombined();
+    await user.click(screen.getByRole("button", { name: "Tools" }));
+    const toolDialog = dialog();
+    expect(within(toolDialog).getByLabelText("Service date")).toBeVisible();
+    expect(
+      within(toolDialog).getByRole("button", { name: "Previous day" }),
+    ).toBeVisible();
+    expect(
+      within(toolDialog).getByRole("button", { name: "Next day" }),
+    ).toBeVisible();
+  });
 });
 
 describe("Dashboard", () => {
   it("shows the same Dine-in today figure as Combined", async () => {
-    const user = await openCombined();
-    await user.click(screen.getByRole("tab", { name: "Dashboard" }));
+    render(
+      <AllocationWorkspace
+        user={owner}
+        team={team}
+        boardLocked={false}
+        onReopenTips={vi.fn()}
+        tipsAuditLog={[]}
+        demoMode
+        restaurantSlug="demo"
+        onSessionInvalid={vi.fn()}
+        initialView="dashboard"
+      />,
+    );
     const section = screen.getByRole("region", { name: "Floor dashboard" });
     const card = within(section).getByText("Dine-in today");
     expect(card.nextElementSibling?.textContent).toBe("7");

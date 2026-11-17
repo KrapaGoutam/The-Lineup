@@ -1,20 +1,20 @@
-# V2.0.4 Floor Data Parity & Aisle Layout Fix — IN PROGRESS
+# V2.0.4 Combined-Only Workspace & 7-Day Retention — COMPLETED (LOCAL)
 
 Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
-Branch `fix/v2-0-4-floor-data-parity-aisle`, base `2e742f5` (origin/development, PR #348 merged).
+Branch `fix/v2-0-4-floor-data-parity-aisle` (PR #349), base `2e742f5` (origin/development).
 
-- [x] Investigate root cause for "No tables are configured for this location" report (branch difference: `QA A - Downtown` has 0 dining_tables vs `DEV Location` 27 tables; null initialContext loadError fallback; off-map table masking).
-- [x] Display-only Monks reference layout adjustment (`adjustMonksAisleCoordinates` T6-T8 to y=58.5; ~25% balanced aisle gap matching Top-Middle gap; non-interactive walkway indicator `[data-testid="floor-walkway-aisle"]` with zero table overlap).
-- [x] Authoritative registry parity across Combined Plan, Combined Grid, Quick Table Picker, classic Floor, and Picker views via `hasOffMapTables` prop.
-- [x] Targeted unit tests added (`floor-layout.test.ts`, `combined-view.test.ts`, `table-map.test.tsx`): 25 files, 416 tests passing (100% green).
-- [x] Verification gates clean (`tsc --noEmit`, ESLint max-warnings 0, Prettier check).
-- [x] Documented in `HANDOFF.md` (preserved H4 addendum + V2.0.4 correction report).
-- [ ] Commit, push branch `fix/v2-0-4-floor-data-parity-aisle`, open PR targeting `development`.
-- [ ] Await CI on PR head; DEV acceptance and promotion to `main` require explicit owner approval.
+- [x] Batch A: Combined-only workspace navigation (removed outer 6-view tablist `Combined | Grid | Floor | Picker | Servers | Dashboard`; renders Combined directly on mount without flashing; preserved internal views for test harnesses/modularity via optional `initialView`).
+- [x] Batch B: 7-day operational history window (domain `allocation-history-window.ts` [today - 6 days, today]; server-side enforcement in `getAllocationContextForDateAction`; compact date navigation & "Back to today" in Combined `ToolsMenu`; read-only visual status badge on historical dates).
+- [x] Batch C: Database retention audit & safe forward-only migration `20261117140000_table_allocation_7day_retention.sql` (`private.cleanup_stale_table_allocation_records` cleans disposable child rows `section_assignments`, `table_rotation_entries`, `rotation_rounds`, `rotation_members` for closed sessions older than 7 days; preserves `service_sessions` and `seatings`; pgTAP test `0090` 10/10 assertions pass).
+- [x] Rigorous verification: full Vitest suite (321 files, 4,340 passed, 7 skipped), allocation suite (26 files, 427 passed), `npm run check` (Prettier, ESLint 0 warnings, TypeScript clean).
+- [x] Documented in `HANDOFF.md` and updated Playwright demo spec `table-allocation-combined.spec.ts`.
+- [ ] Review diff, commit with `feat(allocation): combined-only workspace and 7-day retention window`, push to `origin/fix/v2-0-4-floor-data-parity-aisle` for PR #349.
+- [ ] Await CI on PR #349 head; no hosted DEV or Production modifications authorized.
 
 ## Current State & Next Step
 
-Next: commit changes, push branch, and open PR targeting `development`.
+All code, schema, migrations, tests, and documentation are locally complete and verified 100% green.
+Next: commit changes, push to branch `fix/v2-0-4-floor-data-parity-aisle`, and monitor PR #349 CI.
 
 ---
 

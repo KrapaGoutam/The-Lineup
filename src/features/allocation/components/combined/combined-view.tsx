@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,10 @@ export function CombinedView({
   readOnly,
   canUndo,
   canRedo,
+  serviceDate,
+  todayDate,
+  onDateChange,
+  dateLoading,
   execute,
   onAssign,
   onUndo,
@@ -123,6 +128,10 @@ export function CombinedView({
   readOnly: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  serviceDate?: string;
+  todayDate?: string;
+  onDateChange?: (date: string) => void;
+  dateLoading?: boolean;
   execute: CombinedExecute;
   onAssign: CombinedAssign;
   onUndo: () => void;
@@ -362,9 +371,31 @@ export function CombinedView({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone="success">
+          {serviceDate && todayDate && serviceDate !== todayDate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => onDateChange?.(todayDate)}
+            >
+              <RotateCcw className="mr-1 size-3" aria-hidden="true" /> Back to
+              today
+            </Button>
+          ) : null}
+          <Badge
+            tone={
+              serviceDate && todayDate && serviceDate !== todayDate
+                ? "accent"
+                : "success"
+            }
+          >
             <span
-              className="size-1.5 rounded-full bg-emerald-300"
+              className={cn(
+                "size-1.5 rounded-full",
+                serviceDate && todayDate && serviceDate !== todayDate
+                  ? "bg-amber-400"
+                  : "bg-emerald-300",
+              )}
               aria-hidden="true"
             />
             {liveLabel}
@@ -374,6 +405,10 @@ export function CombinedView({
             canRedo={canRedo}
             readOnly={readOnly}
             canOperate={!disabled}
+            serviceDate={serviceDate}
+            todayDate={todayDate}
+            onDateChange={onDateChange}
+            dateLoading={dateLoading}
             onUndo={onUndo}
             onRedo={onRedo}
             onAddRow={() => void runAction(execute({ type: "add-row" }))}

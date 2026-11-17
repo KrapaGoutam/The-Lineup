@@ -18,6 +18,7 @@ import { getAllocationActor } from "@/features/allocation/data/allocation-actor"
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
+import { getAllocationHistoryWindow } from "@/features/allocation/domain/allocation-history-window";
 
 const restaurantSlugSchema = z
   .string()
@@ -894,6 +895,13 @@ export async function getAllocationContextForDateAction(input: {
   ).date;
   if (parsed.data.serviceDate > today) {
     return { ok: false, error: "You can't browse to a date in the future." };
+  }
+  const { minDate } = getAllocationHistoryWindow(today);
+  if (parsed.data.serviceDate < minDate) {
+    return {
+      ok: false,
+      error: "Table Allocation history is only available for the past 7 days.",
+    };
   }
 
   const scope: VerifiedLocationScope = {
