@@ -3,7 +3,11 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DINING_TABLES_SELECT, diningAreaName } from "./allocation-data";
+import {
+  DINING_TABLES_SELECT,
+  diningAreaName,
+  transferDestinationKeys,
+} from "./allocation-data";
 
 // Production hotfix (PGRST201): dining_tables has two foreign keys to
 // dining_areas (dining_tables_dining_area_id_fkey, a plain FK, and
@@ -71,5 +75,40 @@ describe("clocked-in roster is source-aware for the verified location", () => {
     const call = src.match(/fetchClockedInRoster\(supabase, \{[\s\S]*?\}\);/);
     expect(call, "fetchClockedInRoster call found").not.toBeNull();
     expect(call![0]).toContain("locationId: location.id");
+  });
+});
+
+// V2.0.4: the Dine-in Today count must not double-count a transferred table.
+describe("transferDestinationKeys", () => {
+  const transfer = (
+    payload: Record<string, unknown>,
+    undone_at: string | null = null,
+  ) => ({ event_type: "transfer", payload, undone_at });
+
+  it("keys the destination entry of a live transfer by round, member and label", () => {
+    const keys = transferDestinationKeys([
+      transfer({
+        source_round_id: 1,
+        source_member_id: 5,
+        dest_round_id: 2,
+        dest_member_id: 6,
+        table_label: "T3",
+      }),
+    ]);
+    expect([...keys]).toEqual(["2|6|T3"]);
+  });
+
+  it("ignores undone transfers, other event types and malformed payloads", () => {
+    const keys = transferDestinationKeys([
+      transfer(
+        { dest_round_id: 2, dest_member_id: 6, table_label: "T3" },
+        "2026-11-17T01:00:00Z",
+      ),
+      { event_type: "assign", payload: { dest_round_id: 9 }, undone_at: null },
+      transfer({ dest_round_id: "2", dest_member_id: 6, table_label: "T3" }),
+      transfer({ dest_round_id: 2, dest_member_id: 6 }),
+      { event_type: "transfer", payload: null, undone_at: null },
+    ]);
+    expect(keys.size).toBe(0);
   });
 });

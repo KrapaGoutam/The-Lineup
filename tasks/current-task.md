@@ -1,3 +1,20 @@
+# V2.0.4 Combined Table Allocation — IN PROGRESS
+
+Full plan, decisions and recovery: `docs/features/v2-0-4-combined-table-allocation/HANDOFF.md` (single source of truth).
+Branch `feature/v2-0-4-combined-table-allocation`, base `1c5373e`. V2.0.3 is released (main `2933d3a`); not repeated.
+
+- [x] H0: baseline verified, worktree + branch created, handoff written.
+- [x] Batch A: dine-in metrics + `transferredIn`; Combined shell, modes, header/metrics, plan/grid, viewport fit.
+- [x] Batch B: assign/transfer/end/clear, Rotation Focus NEXT row, Quick Table Picker, + Server picker, skip/pause/reorder, undo/redo (Tools), latest-first history, active records, Expand.
+- [x] Batch C (part): Dashboard Dine-in Today; Playwright tablet/portrait/phone green.
+- [ ] Batch C (rest): full test/build/check gate, independent review, one PR.
+
+## Current State & Next Step
+
+Next: run `npm run test`, `npm run build`, `npm run check`; review diff; open the single PR to `development`. Details in the handoff file.
+
+---
+
 # V2.0.3 cross-organization kiosk access — IN PROGRESS
 
 - [x] Read the request, project instructions, V2.0.2 handoff, and relevant auth/kiosk code.

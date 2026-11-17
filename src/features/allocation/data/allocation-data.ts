@@ -377,19 +377,33 @@ export async function getAllocationContext(
     }))
     .sort((a, b) => a.position - b.position);
 
+  // V2.0.4: the destination entry of every live (not undone) Transfer is a
+  // continuation of an existing seating, not a new one -- flagged so the
+  // "Dine-in Today" count does not double-count a transferred table.
+  const transferDestinations = transferDestinationKeys(eventRows ?? []);
+
   const rounds = (roundRows ?? []).map((round) => ({
     id: String(round.id),
     sequence: round.sequence,
     cells: (entryRows ?? [])
       .filter((entry) => entry.rotation_round_id === round.id)
-      .map((entry) => ({
-        columnId: memberIdToProfileId.get(entry.rotation_member_id) ?? "",
-        tableLabel: entry.table_label,
-        // A row's mere existence means "active" pre-Upgrade-1.1; the DB
-        // column's values (active/ended/skipped) already match
-        // RotationCellStatus directly, no translation needed.
-        status: (entry.status ?? "active") as "active" | "ended" | "skipped",
-      }))
+      .map((entry) => {
+        const columnId =
+          memberIdToProfileId.get(entry.rotation_member_id) ?? "";
+        return {
+          columnId,
+          tableLabel: entry.table_label,
+          // A row's mere existence means "active" pre-Upgrade-1.1; the DB
+          // column's values (active/ended/skipped) already match
+          // RotationCellStatus directly, no translation needed.
+          status: (entry.status ?? "active") as "active" | "ended" | "skipped",
+          ...(transferDestinations.has(
+            `${round.id}|${entry.rotation_member_id}|${entry.table_label ?? ""}`,
+          )
+            ? { transferredIn: true as const }
+            : {}),
+        };
+      })
       .filter((cell) => cell.columnId !== ""),
   }));
 
@@ -489,6 +503,41 @@ export async function getAllocationContext(
     claimDivergences,
     boardLoadError,
   };
+}
+
+/**
+ * `"<round_id>|<member_id>|<table_label>"` of the destination entry of every
+ * Transfer event that has not been undone. The label is part of the key so an
+ * entry later cleared and re-assigned to a DIFFERENT table in the same cell is
+ * a fresh seating, not a continuation. A redo clears `undone_at` again, so a redone
+ * transfer is included. Malformed payloads are ignored, never thrown on.
+ */
+export function transferDestinationKeys(
+  events: {
+    event_type: string;
+    payload: unknown;
+    undone_at: string | null;
+  }[],
+): Set<string> {
+  const keys = new Set<string>();
+  for (const event of events) {
+    if (event.event_type !== "transfer" || event.undone_at !== null) continue;
+    const payload = event.payload as {
+      dest_round_id?: unknown;
+      dest_member_id?: unknown;
+      table_label?: unknown;
+    } | null;
+    if (
+      typeof payload?.dest_round_id === "number" &&
+      typeof payload?.dest_member_id === "number" &&
+      typeof payload?.table_label === "string"
+    ) {
+      keys.add(
+        `${payload.dest_round_id}|${payload.dest_member_id}|${payload.table_label}`,
+      );
+    }
+  }
+  return keys;
 }
 
 // A many-to-one PostgREST embed arrives as an object (see diningAreaName).
