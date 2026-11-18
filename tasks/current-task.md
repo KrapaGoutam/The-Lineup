@@ -1,3 +1,21 @@
+# Release Group 1 — Batch A (V2.0.5) Monks Neon timezone — IN REVIEW
+
+Full plan, root cause, evidence and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md` (single source of truth).
+Branch `fix/v2-005-monks-neon-timezone`, base `39ed0d4` (origin/development). Worktree `.tmp/v2-005-monks-neon-timezone`.
+
+- [x] Stage 0 baseline (development 39ed0d4, V2.0.4 merged via #348).
+- [x] Root cause: Neon clock columns are `timestamp without time zone` (local wall time); driver parsed in process TZ → 4:59 AM on UTC servers.
+- [x] Fix at Neon data boundary (`::text` + `neonWallTimeToInstantIso`, America/Chicago); contract unchanged; internal provider untouched.
+- [x] Tests: 13 new + existing, pass under TZ=UTC / America/Chicago / Asia/Tokyo; live read-only probe OK; typecheck/lint/prettier clean.
+- [ ] Open PR to `development`; exact-head CI; independent review; merge.
+- [ ] Batch B (V2.0.6) — blocked until Batch A merged.
+
+## Current State & Next Step
+
+Batch A code complete and committed on its branch. Next: push, open PR, wait for CI, review, merge; only then start Batch B from the new `development` HEAD.
+
+---
+
 # Security Upgrade: Next.js & eslint-config-next 16.4.6 — MERGING TO DEVELOPMENT
 
 Full plan, decisions and recovery: `docs/features/security-nextjs-16-4-6-upgrade/HANDOFF.md` (single source of truth).

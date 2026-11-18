@@ -2,6 +2,8 @@ import "server-only";
 
 import { neon } from "@neondatabase/serverless";
 
+import { neonWallTimeToInstantIso } from "@/features/attendance/domain/neon-timestamp";
+
 export type NeonUser = {
   id: number;
   fullName: string;
@@ -18,12 +20,13 @@ export type NeonAttendanceRow = {
   // `date::text` cast for why this is forced to a string in the query
   // itself rather than left as a driver-parsed Date object.
   date: string;
-  // Full ISO instant strings (or null) -- clock_in/clock_out are
-  // genuine timezone-aware instants, unlike `date` above, so converting
-  // them client-side (via zonedWallTimeFromInstant, the same helper
-  // every other real-mode display in this app already uses) is correct
-  // and safe. Formatting to the restaurant's local wall-clock time
-  // happens at render time, where the timeZone is in scope, not here.
+  // Full ISO instant strings (or null). V2.0.5: the Neon columns are
+  // `timestamp WITHOUT time zone` holding the restaurant's local wall
+  // time, NOT instants -- so the query returns them as text and
+  // `neonWallTimeToInstantIso` resolves them against an explicit IANA
+  // zone (see domain/neon-timestamp.ts). They are real instants by the
+  // time they reach this type; formatting to local wall-clock time
+  // happens at render time, where the timeZone is in scope.
   clockIn: string | null;
   clockOut: string | null;
   hoursWorked: number | null;
@@ -64,7 +67,8 @@ export const USERS_QUERY_SQL =
 // column (unaffected by the SELECT list's cast), which is what actually
 // needs correct date semantics for the range filter.
 export const ATTENDANCE_QUERY_SQL =
-  "select id, user_id, date::text as date, clock_in, clock_out, hours_worked, auto_clocked_out " +
+  "select id, user_id, date::text as date, clock_in::text as clock_in_local, " +
+  "clock_out::text as clock_out_local, hours_worked, auto_clocked_out " +
   "from attendance where user_id = ANY($1) and date >= $2 and date <= $3 " +
   "order by date asc, clock_in asc nulls last";
 
@@ -76,31 +80,35 @@ export const ATTENDANCE_QUERY_SQL =
 // "today", the same discipline every other real-mode date filter in
 // this app already follows.
 export const ACTIVE_CLOCK_INS_QUERY_SQL =
-  "select id, user_id, date::text as date, clock_in, clock_out, hours_worked, auto_clocked_out " +
+  "select id, user_id, date::text as date, clock_in::text as clock_in_local, " +
+  "clock_out::text as clock_out_local, hours_worked, auto_clocked_out " +
   "from attendance where date = $1 and clock_in is not null " +
   "and clock_out is null and auto_clocked_out = false " +
   "order by clock_in asc";
 
-type RawAttendanceRow = {
+export type RawAttendanceRow = {
   id: number;
   user_id: number;
   date: string; // forced to text by the query -- see ATTENDANCE_QUERY_SQL
-  clock_in: Date | null;
-  clock_out: Date | null;
+  // `timestamp::text` -- the source's zone-less local wall time, e.g.
+  // "2026-11-17 10:59:00". NEVER let the driver parse these into Dates:
+  // it would apply the *process* time zone (see domain/neon-timestamp.ts).
+  clock_in_local: string | null;
+  clock_out_local: string | null;
   hours_worked: string | number | null;
   auto_clocked_out: boolean;
 };
 
 // Shared by every function below that maps a raw Neon row -- the one
 // place the wire shape (snake_case, numeric-as-string hours,
-// driver-parsed Date objects) turns into this app's own NeonAttendanceRow.
-function mapAttendanceRow(row: RawAttendanceRow): NeonAttendanceRow {
+// zone-less wall-time text) turns into this app's own NeonAttendanceRow.
+export function mapAttendanceRow(row: RawAttendanceRow): NeonAttendanceRow {
   return {
     id: row.id,
     userId: row.user_id,
     date: row.date,
-    clockIn: row.clock_in ? row.clock_in.toISOString() : null,
-    clockOut: row.clock_out ? row.clock_out.toISOString() : null,
+    clockIn: neonWallTimeToInstantIso(row.clock_in_local),
+    clockOut: neonWallTimeToInstantIso(row.clock_out_local),
     // Postgres numeric/decimal columns come back as strings over the
     // wire (avoiding float precision loss) -- converted here, once.
     hoursWorked: row.hours_worked === null ? null : Number(row.hours_worked),
