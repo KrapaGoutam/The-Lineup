@@ -23,7 +23,9 @@ describe("ReportLetterhead", () => {
     expect(
       screen.getByText("The Monk's Indian Fusion - Webster"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Webster, New York")).toBeInTheDocument();
+    expect(screen.getByText("1416 FM 528 Rd, Suite D")).toBeInTheDocument();
+    expect(screen.getByText("Webster, TX 77598")).toBeInTheDocument();
+    expect(screen.queryByText(/New York/)).not.toBeInTheDocument();
     expect(screen.getByText("monkswebster.com")).toBeInTheDocument();
     expect(screen.getByText("Employee")).toBeInTheDocument();
     expect(screen.getByText("Mia Chen (Server)")).toBeInTheDocument();
@@ -80,7 +82,9 @@ describe("ReportLetterhead", () => {
       screen.getByRole("heading", { name: "Liquor Tap" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Liquor Tap - League City")).toBeInTheDocument();
-    expect(screen.getByText("League City, Texas")).toBeInTheDocument();
+    // No address on record -> no guessed city line; never inherits Monks' address.
+    expect(screen.queryByText(/League City, T/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Webster/)).not.toBeInTheDocument();
     expect(screen.getByText("Jack Taylor")).toBeInTheDocument();
     expect(screen.getByText("October 2026")).toBeInTheDocument();
     // No unverified logo asset -> uses text mark
@@ -105,7 +109,49 @@ describe("ReportLetterhead", () => {
       screen.getByRole("heading", { name: "Liquor Tap" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Liquor Tap - NASA")).toBeInTheDocument();
-    expect(screen.getByText("Houston, Texas")).toBeInTheDocument();
+    expect(screen.queryByText(/Houston/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Webster/)).not.toBeInTheDocument();
+    expect(screen.queryByText("monkswebster.com")).not.toBeInTheDocument();
+  });
+
+  it("prints the canonical location address when one is on record", () => {
+    render(
+      <ReportLetterhead
+        reportTitle="Monthly Attendance Timesheet"
+        periodName="October 2026"
+        brand={{
+          organizationName: "Liquor Tap",
+          organizationSlug: "liquor-tap",
+          locationName: "League City",
+          locationAddress: {
+            line1: "100 Main St",
+            city: "League City",
+            region: "TX",
+            postalCode: "77573",
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("100 Main St")).toBeInTheDocument();
+    expect(screen.getByText("League City, TX 77573")).toBeInTheDocument();
+  });
+
+  it("ignores caller-supplied logo markup (only trusted constants reach raw HTML)", () => {
+    const { container } = render(
+      <ReportLetterhead
+        reportTitle="X"
+        periodName="Y"
+        brand={
+          {
+            organizationName: "Evil Bistro",
+            logoMarkup: '<script>alert(1)</script><path onload="x()"/>',
+          } as never
+        }
+      />,
+    );
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.innerHTML).not.toContain("alert(1)");
+    expect(container.querySelectorAll("svg")).toHaveLength(0);
   });
 
   it("renders The Lineup platform fallback", () => {

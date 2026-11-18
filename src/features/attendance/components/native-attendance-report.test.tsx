@@ -143,7 +143,9 @@ describe("NativeAttendanceReport V2.0.6 monthly filters and print preview", () =
     expect(
       screen.getByRole("button", { name: "Select all" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear (show all)" }),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Select all" }));
 
@@ -186,5 +188,50 @@ describe("NativeAttendanceReport V2.0.6 monthly filters and print preview", () =
     expect(
       within(dialog).getByRole("button", { name: /^Print$/i }),
     ).toBeInTheDocument();
+  });
+
+  it("makes clear that an empty multi-employee selection means ALL employees", async () => {
+    render(
+      <NativeAttendanceReport restaurantSlug="test-slug" source={mockSource} />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Select multiple..." }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Select all" }));
+    expect(screen.getByText(/2 employees selected/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Clear (show all)" }),
+    );
+    expect(
+      screen.getByText("No one selected — showing ALL employees"),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.getNativeAttendanceReportAction).toHaveBeenLastCalledWith(
+        expect.objectContaining({ profileIds: null, profileId: null }),
+      );
+    });
+  });
+
+  it("blocks statement printing when the loaded range was truncated", async () => {
+    const full = await mocks.getNativeAttendanceReportAction();
+    mocks.getNativeAttendanceReportAction.mockResolvedValue({
+      ok: true,
+      data: { ...full.data, truncated: true },
+    });
+    render(
+      <NativeAttendanceReport restaurantSlug="test-slug" source={mockSource} />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "Print attendance statements",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Attendance Statement Print Preview",
+    });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/incomplete/i);
+    expect(
+      within(dialog).getByRole("button", { name: /^Print$/i }),
+    ).toBeDisabled();
   });
 });

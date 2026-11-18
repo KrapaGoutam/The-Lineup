@@ -129,6 +129,26 @@ describe("listNativeAttendance", () => {
     expect(res.ok && res.truncated).toBe(false);
   });
 
+  it("keeps the location scope when filtering by several employees (IN only narrows)", async () => {
+    const view = chain({ data: [], error: null });
+    const from = vi.fn(() => view.builder);
+    const foreign = "someone-from-another-location-or-org";
+    await listNativeAttendance(
+      { from } as unknown as SupabaseClient<Database>,
+      {
+        locationId: "l1",
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        timeZone: "UTC",
+        profileIds: ["p1", foreign],
+      },
+    );
+    // Location + date scope are always applied; the IN-list is an extra AND condition,
+    // so a foreign id can never add rows (RLS also removes anything not visible).
+    expect(view.calls).toContainEqual(["eq", ["location_id", "l1"]]);
+    expect(view.calls).toContainEqual(["in", ["profile_id", ["p1", foreign]]]);
+  });
+
   it("does not add an employee filter when none is requested", async () => {
     const view = chain({ data: [], error: null });
     const from = vi.fn(() => view.builder);

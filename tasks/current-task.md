@@ -13,24 +13,22 @@ Merged via PR #354 at merge commit `fbf44a1a2cc5158bf372e43967562b88a70bd68f`.
 
 ---
 
-# Release Group 1 — Batch B (V2.0.6) Monthly Attendance Reports & Dynamic Branding — IN PROGRESS
+# Release Group 1 — Batch B (V2.0.6) Monthly Attendance Reports & Dynamic Branding — PR #355 CORRECTED, AWAITING CI + MERGE DECISION
 
-Full plan, decisions and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
-Branch `feature/v2-006-monthly-attendance-reports`, base `fbf44a1` (origin/development). Dedicated worktree `.tmp/v2-006-monthly-attendance-reports`.
+Full plan, review findings, decisions and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
+Branch `feature/v2-006-monthly-attendance-reports` (PR #355 → `development`), base `fbf44a1`. Worktree `.tmp/v2-006-monthly-attendance-reports`.
+Reviewed head `c5cd729`; corrections are in the commit that follows it on the same branch.
 
-- [x] B0: Clean baseline at new development HEAD `fbf44a1`, dedicated branch and worktree, dependencies junction.
-- [x] B1: Monthly attendance filters (This Month, Last Month, Month/Year picker, Custom range, single / multiple / all authorized employees).
-- [x] B2: Unified attendance reporting contract (Neon external & Lineup internal, required fields, local time, missing punches, audit corrections).
-- [x] B3: Professional print and preview (US Letter, no UI bleed, repeating headers, non-clipped rows, pagination, monthly totals).
-- [x] B4: Dynamic organization branding (Monks Webster crest, Liquor Tap League City / NASA name fallback, The Lineup fallback).
-- [x] B5: Permission and financial safeguards (tenant and location scoping, RLS preservation, payroll untouched).
-- [x] B6: Functional validation and targeted test suite.
-- [x] Delivery: Ready to commit and open single PR to `development`.
+- [x] B0–B6 implemented by Antigravity (filters, unified contract, print dialog, dynamic branding, safeguards, tests).
+- [x] Review corrections: Prettier on HANDOFF.md; Monks address (Webster, TX 77598); integer-second aggregation with no gross-hours fallback; voided excluded; "Page X of Y" removed; truncated reports cannot be printed; no caller-supplied logo markup; `profileIds` bounded; clearer empty-multi-select copy.
+- [x] Targeted tests (68 files / 823 tests), tsc, eslint, and a real Chromium Letter PDF check passed locally.
+- [ ] Exact-head GitHub CI green on the corrected head (see PR #355 comment for the run id).
+- [ ] Independent review result and owner approval, then merge commit into `development`.
 
 ## Current State & Next Step
 
-Batch B fully implemented and verified locally (35 attendance/print test files, 403 tests passing; full repository check `npm run check` 100% clean).
-Next step: Commit changes, push branch `feature/v2-006-monthly-attendance-reports`, open PR against `development`, and present completion report.
+Corrections committed and pushed to PR #355. Next: confirm exact-head CI, then owner merge decision.
+Do not start V2.0.7 (`feature/v2-007-combined-reporting`, Combined Attendance & Payroll Reporting) until PR #355 is merged into `development`.
 
 ---
 

@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { UnifiedAttendanceReport } from "../domain/unified-attendance-report";
+import type { NativeReportRow } from "../domain/native-report";
+import {
+  normalizeNativeAttendanceToUnified,
+  type UnifiedAttendanceReport,
+} from "../domain/unified-attendance-report";
 import { UnifiedAttendancePrintDialog } from "./unified-attendance-print-dialog";
 
 vi.mock("@/lib/print-utils", () => ({
@@ -10,89 +14,62 @@ vi.mock("@/lib/print-utils", () => ({
 
 import { triggerPrintWithFilename } from "@/lib/print-utils";
 
-const sampleReport: UnifiedAttendanceReport = {
+function native(over: Partial<NativeReportRow>): NativeReportRow {
+  return {
+    sessionId: "s",
+    profileId: "emp-1",
+    employeeName: "Jack Taylor",
+    locationId: "loc-1",
+    serviceDate: "2026-11-04",
+    status: "completed",
+    clockInAt: "2026-11-04T16:00:00.000Z",
+    clockOutAt: "2026-11-04T23:30:00.000Z",
+    grossElapsedSeconds: 27000,
+    totalBreakSeconds: 0,
+    paidBreakSeconds: 0,
+    unpaidBreakSeconds: 0,
+    unclassifiedBreakSeconds: 0,
+    openBreakCount: 0,
+    breakCount: 0,
+    breakPolicyResolved: true,
+    netPayableSeconds: 27000,
+    version: 1,
+    correctionCount: 0,
+    lastCorrectedAt: null,
+    source: "internal_the_lineup",
+    timeZone: "America/Chicago",
+    ...over,
+  };
+}
+
+const ROWS: NativeReportRow[] = [
+  native({
+    sessionId: "row-1",
+    correctionCount: 1,
+    lastCorrectedAt: "2026-11-05T10:00:00.000Z",
+  }),
+  native({
+    sessionId: "row-2",
+    profileId: "emp-2",
+    employeeName: "Sam Vance",
+    serviceDate: "2026-11-05",
+    status: "active",
+    clockInAt: "2026-11-05T17:00:00.000Z",
+    clockOutAt: null,
+    grossElapsedSeconds: null,
+    netPayableSeconds: null,
+  }),
+];
+
+const OPTIONS = {
   organization: "Liquor Tap",
   branch: "League City",
   reportingPeriod: "November 2026",
-  attendanceSource: "TheLineup Internal",
   timeZone: "America/Chicago",
-  totalEmployees: 2,
-  grandTotalHours: 25.5,
-  grandTotalShifts: 4,
-  totalMissingPunches: 1,
-  totalCorrectedShifts: 1,
-  sections: [
-    {
-      employeeId: "emp-1",
-      employeeName: "Jack Taylor",
-      employeeRole: "Bartender",
-      totalHours: 15.5,
-      totalShifts: 2,
-      missingPunchCount: 0,
-      correctedShiftCount: 1,
-      rows: [
-        {
-          id: "row-1",
-          employeeId: "emp-1",
-          employeeName: "Jack Taylor",
-          employeeRole: "Bartender",
-          organization: "Liquor Tap",
-          branch: "League City",
-          reportingPeriod: "November 2026",
-          attendanceSource: "TheLineup Internal",
-          businessDate: "2026-11-04",
-          weekday: "Wed",
-          clockIn: "10:00 AM",
-          clockOut: "05:30 PM",
-          clockInIso: "2026-11-04T16:00:00.000Z",
-          clockOutIso: "2026-11-04T23:30:00.000Z",
-          workedHours: 7.5,
-          workedHoursDisplay: "7.5h",
-          missingPunches: false,
-          correctionIndicators: {
-            isCorrected: true,
-            count: 1,
-            lastCorrectedAt: "2026-11-05T10:00:00.000Z",
-          },
-          timeZone: "America/Chicago",
-        },
-      ],
-    },
-    {
-      employeeId: "emp-2",
-      employeeName: "Sam Vance",
-      employeeRole: "Server",
-      totalHours: 10.0,
-      totalShifts: 2,
-      missingPunchCount: 1,
-      correctedShiftCount: 0,
-      rows: [
-        {
-          id: "row-2",
-          employeeId: "emp-2",
-          employeeName: "Sam Vance",
-          employeeRole: "Server",
-          organization: "Liquor Tap",
-          branch: "League City",
-          reportingPeriod: "November 2026",
-          attendanceSource: "TheLineup Internal",
-          businessDate: "2026-11-05",
-          weekday: "Thu",
-          clockIn: "11:00 AM",
-          clockOut: null,
-          clockInIso: "2026-11-05T17:00:00.000Z",
-          clockOutIso: null,
-          workedHours: null,
-          workedHoursDisplay: "—",
-          missingPunches: true,
-          missingPunchType: "clock_out",
-          correctionIndicators: { isCorrected: false, count: 0 },
-          timeZone: "America/Chicago",
-        },
-      ],
-    },
-  ],
 };
+
+const sampleReport: UnifiedAttendanceReport =
+  normalizeNativeAttendanceToUnified(ROWS, OPTIONS);
 
 describe("UnifiedAttendancePrintDialog", () => {
   it("renders preview with letterhead, metrics, and timesheet table", () => {
@@ -117,8 +94,11 @@ describe("UnifiedAttendancePrintDialog", () => {
     expect(screen.getAllByRole("heading", { name: "Liquor Tap" })).toHaveLength(
       2,
     );
-    expect(screen.getByText("Jack Taylor (Bartender)")).toBeInTheDocument();
-    expect(screen.getByText("Sam Vance (Server)")).toBeInTheDocument();
+    const area = within(
+      document.getElementById("attendance-statement-print-area")!,
+    );
+    expect(area.getAllByText("Jack Taylor").length).toBeGreaterThan(0);
+    expect(area.getAllByText("Sam Vance").length).toBeGreaterThan(0);
 
     // Badges & metrics
     expect(screen.getByText("Corrected (v1)")).toBeInTheDocument();
@@ -137,8 +117,11 @@ describe("UnifiedAttendancePrintDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Jack Taylor (Bartender)")).toBeInTheDocument();
-    expect(screen.queryByText("Sam Vance (Server)")).not.toBeInTheDocument();
+    const area = within(
+      document.getElementById("attendance-statement-print-area")!,
+    );
+    expect(area.getAllByText("Jack Taylor").length).toBeGreaterThan(0);
+    expect(area.queryByText("Sam Vance")).not.toBeInTheDocument();
   });
 
   it("triggers print with suggested filename and zero UI bleed classes", () => {
@@ -170,5 +153,55 @@ describe("UnifiedAttendancePrintDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not print misleading 'Page X of Y' counts", () => {
+    render(
+      <UnifiedAttendancePrintDialog
+        report={sampleReport}
+        onClose={vi.fn()}
+        initialTarget="all"
+      />,
+    );
+    expect(screen.queryByText(/Page d+ of d+/)).not.toBeInTheDocument();
+  });
+
+  it("shows exact aggregated totals, the hours basis and unresolved-shift notice", () => {
+    render(
+      <UnifiedAttendancePrintDialog
+        report={sampleReport}
+        onClose={vi.fn()}
+        initialTarget="all"
+      />,
+    );
+    // 27000s = 7.5h for Jack; Sam's open shift contributes nothing.
+    expect(screen.getAllByText("7.5h").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Hours basis:/)).toHaveLength(2);
+    expect(
+      screen.getByText(/1 shift has no counted hours/),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses to print a partial (truncated) report and says why", () => {
+    const partial = normalizeNativeAttendanceToUnified(ROWS, {
+      ...OPTIONS,
+      truncated: true,
+    });
+    render(
+      <UnifiedAttendancePrintDialog
+        report={partial}
+        onClose={vi.fn()}
+        initialTarget="all"
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/incomplete/i);
+    expect(screen.getByRole("button", { name: /Print/i })).toBeDisabled();
+    // No statement is rendered at all, so browser print cannot output partial data.
+    expect(
+      document.getElementById("attendance-statement-print-area"),
+    ).toBeNull();
+    expect(screen.queryByText("Employee Signature & Date")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Print/i }));
+    expect(triggerPrintWithFilename).not.toHaveBeenCalled();
   });
 });

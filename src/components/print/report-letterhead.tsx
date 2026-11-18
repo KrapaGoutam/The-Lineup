@@ -97,7 +97,6 @@ export function ReportLetterhead({
           locationAddress: (brand as ResolveBrandInput)?.locationAddress,
           cityState: cityState ?? (brand as ResolveBrandInput)?.cityState,
           website: website ?? (brand as ResolveBrandInput)?.website,
-          logoMarkup: (brand as ResolveBrandInput)?.logoMarkup,
         });
 
   // Canonical branch header display text
@@ -130,6 +129,9 @@ export function ReportLetterhead({
         </div>
         <div className="text-right text-xs text-gray-600">
           <p className="font-semibold text-black">{branchTitle}</p>
+          {resolvedBrand.streetAddress ? (
+            <p>{resolvedBrand.streetAddress}</p>
+          ) : null}
           {resolvedBrand.cityState ? <p>{resolvedBrand.cityState}</p> : null}
           {resolvedBrand.website ? (
             <p className="font-mono">{resolvedBrand.website}</p>

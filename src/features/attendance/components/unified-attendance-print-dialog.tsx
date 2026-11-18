@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileText, Printer, X } from "lucide-react";
+import { AlertTriangle, FileText, Printer, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -63,8 +63,11 @@ export function UnifiedAttendancePrintDialog({
     return report.sections.filter((s) => checkedIds.has(s.employeeId));
   }, [report.sections, targetScope, selectedSingleId, checkedIds]);
 
+  // A truncated read is a partial month. It must never be printed as a statement.
+  const printable = !report.isPartial;
+
   function handlePrint() {
-    if (visibleSections.length === 0) return;
+    if (!printable || visibleSections.length === 0) return;
     const filename =
       visibleSections.length === 1
         ? `${visibleSections[0].employeeName} Attendance Statement ${report.reportingPeriod}`
@@ -106,7 +109,7 @@ export function UnifiedAttendancePrintDialog({
               variant="default"
               size="sm"
               onClick={handlePrint}
-              disabled={visibleSections.length === 0}
+              disabled={!printable || visibleSections.length === 0}
               className="gap-1.5"
             >
               <Printer className="size-4" aria-hidden="true" />
@@ -197,7 +200,20 @@ export function UnifiedAttendancePrintDialog({
           </div>
 
           {/* Printable Document Statements */}
-          {visibleSections.length === 0 ? (
+          {report.isPartial ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 print:hidden"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>
+                This range has more shifts than can be loaded, so these
+                statements would be incomplete and their totals wrong. Printing
+                is disabled. Close this window and narrow the dates or choose
+                specific employees.
+              </p>
+            </div>
+          ) : visibleSections.length === 0 ? (
             <p className="text-muted-foreground py-12 text-center text-sm print:hidden">
               No employees selected to print. Choose at least one employee
               above.
@@ -207,7 +223,7 @@ export function UnifiedAttendancePrintDialog({
               id="attendance-statement-print-area"
               className="space-y-8 print:space-y-0"
             >
-              {visibleSections.map((section, idx) => (
+              {visibleSections.map((section) => (
                 <div
                   key={section.employeeId}
                   className="print-page-break space-y-6 rounded-xl border border-gray-200 bg-white p-6 text-black shadow-sm sm:p-8 print:m-0 print:rounded-none print:border-none print:p-0 print:shadow-none"
@@ -233,7 +249,7 @@ export function UnifiedAttendancePrintDialog({
                         Total Worked
                       </p>
                       <p className="font-mono text-base font-bold text-black">
-                        {section.totalHours}h
+                        {section.totalHoursDisplay}
                       </p>
                     </div>
                     <div>
@@ -302,6 +318,10 @@ export function UnifiedAttendancePrintDialog({
                                 <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 print:border print:border-amber-400">
                                   Missing Punch
                                 </span>
+                              ) : row.hoursStatus === "break_review" ? (
+                                <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 print:border print:border-amber-400">
+                                  Break pay pending
+                                </span>
                               ) : row.correctionIndicators.isCorrected ? (
                                 <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-900 print:border print:border-blue-400">
                                   Corrected (v{row.correctionIndicators.count})
@@ -312,8 +332,29 @@ export function UnifiedAttendancePrintDialog({
                             </td>
                           </tr>
                         ))}
+                        <tr className="border-t-2 border-black font-semibold">
+                          <td className="px-2 py-2" colSpan={4}>
+                            Total counted hours ({section.totalShifts} shift
+                            {section.totalShifts === 1 ? "" : "s"})
+                          </td>
+                          <td className="px-2 py-2 text-right font-mono">
+                            {section.totalHoursDisplay}
+                          </td>
+                          <td className="px-2 py-2" />
+                        </tr>
                       </tbody>
                     </table>
+                    {section.unresolvedShiftCount > 0 ? (
+                      <p className="pt-1 text-[10px] text-amber-900">
+                        {section.unresolvedShiftCount} shift
+                        {section.unresolvedShiftCount === 1 ? "" : "s"} ha
+                        {section.unresolvedShiftCount === 1 ? "s" : "ve"} no
+                        counted hours (still open or break pay not yet
+                        classified) and{" "}
+                        {section.unresolvedShiftCount === 1 ? "is" : "are"} not
+                        included in the total.
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Document Footer & Signatures */}
@@ -321,6 +362,14 @@ export function UnifiedAttendancePrintDialog({
                     <p className="text-[10px] text-gray-500">
                       Attendance Source: {report.attendanceSource} · Times
                       displayed in {report.timeZone} local time.
+                    </p>
+                    <p className="text-[10px] text-gray-500">
+                      Hours basis: {report.hoursBasis}. Totals are calculated
+                      from exact recorded seconds and rounded once for display,
+                      so individual rows may not add to the total by 0.01h.
+                      {report.excludedVoidedCount > 0
+                        ? ` ${report.excludedVoidedCount} voided session${report.excludedVoidedCount === 1 ? "" : "s"} excluded.`
+                        : ""}
                     </p>
                     <div className="grid grid-cols-2 gap-8 pt-4">
                       <div>
@@ -340,11 +389,9 @@ export function UnifiedAttendancePrintDialog({
                         </p>
                       </div>
                     </div>
-                    <div className="flex justify-between pt-2 text-[10px] text-gray-400">
+                    {/* No "Page X of Y": employee sections do not map to physical pages. */}
+                    <div className="pt-2 text-[10px] text-gray-400">
                       <span>The Lineup Attendance System V2.0.6</span>
-                      <span>
-                        Page {idx + 1} of {visibleSections.length}
-                      </span>
                     </div>
                   </div>
                 </div>

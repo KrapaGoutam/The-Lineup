@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import {
+  normalizeLocationAddress,
+  type LocationAddress,
+} from "@/features/locations/domain/location";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -63,6 +67,7 @@ const NO_LOCATION =
   "Choose a location first. Attendance is shown for one location at a time.";
 const INVALID_REQUEST = "That attendance request is invalid.";
 const MAX_RANGE_DAYS = 92;
+const MAX_PROFILE_FILTER = 200;
 
 const slugSchema = z
   .string()
@@ -142,6 +147,8 @@ export interface AttendanceSourceView {
   readonly organizationId?: string;
   readonly organizationName?: string;
   readonly organizationSlug?: string;
+  /** Canonical `locations.address` (normalized) for the printed letterhead. */
+  readonly locationAddress?: LocationAddress;
 }
 
 /** Which attendance source applies to the verified location, and what the caller can do. */
@@ -160,7 +167,7 @@ export async function getAttendanceSourceAction(input: {
       await Promise.all([
         supabase
           .from("locations")
-          .select("name, attendance_mode, time_zone")
+          .select("name, attendance_mode, time_zone, address")
           .eq("id", location.id)
           .maybeSingle(),
         supabase.rpc("attendance_can_manage", { p_location_id: location.id }),
@@ -188,6 +195,9 @@ export async function getAttendanceSourceAction(input: {
         organizationId: orgRow?.id ?? organizationId,
         organizationName: orgRow?.name ?? "The Lineup",
         organizationSlug: orgRow?.slug ?? parsed.data.restaurantSlug,
+        locationAddress: normalizeLocationAddress(
+          (row.address ?? undefined) as LocationAddress | undefined,
+        ),
       },
     };
   } catch (err: unknown) {
@@ -210,7 +220,13 @@ const reportInputSchema = z
     startDate: dateSchema,
     endDate: dateSchema,
     profileId: uuidSchema.nullable().optional(),
-    profileIds: z.array(uuidSchema).nullable().optional(),
+    // Narrowing filter only (RLS decides visibility). Bounded so a crafted request cannot
+    // send an unbounded IN-list.
+    profileIds: z
+      .array(uuidSchema)
+      .max(MAX_PROFILE_FILTER)
+      .nullable()
+      .optional(),
     /** The location the UI is showing; compared with the verified one (R1), never trusted. */
     expectedLocationId: uuidSchema.optional(),
   })

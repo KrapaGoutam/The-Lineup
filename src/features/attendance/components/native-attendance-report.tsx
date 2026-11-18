@@ -193,8 +193,14 @@ export function NativeAttendanceReport({
         organizationName: source.organizationName,
         organizationSlug: source.organizationSlug,
         locationName: source.locationName,
+        locationAddress: source.locationAddress,
       }),
-    [source.organizationName, source.organizationSlug, source.locationName],
+    [
+      source.organizationName,
+      source.organizationSlug,
+      source.locationName,
+      source.locationAddress,
+    ],
   );
 
   const periodLabel = useMemo(() => {
@@ -208,9 +214,11 @@ export function NativeAttendanceReport({
       branch: brand.branchName || source.locationName,
       reportingPeriod: periodLabel,
       timeZone: source.timeZone,
+      truncated: view?.truncated === true,
     });
   }, [
     rows,
+    view?.truncated,
     brand.organizationName,
     brand.branchName,
     source.locationName,
@@ -373,7 +381,7 @@ export function NativeAttendanceReport({
                     <div className="text-muted-foreground flex items-center justify-between">
                       <span>
                         {selectedProfileIds.length === 0
-                          ? "All employees (no filter)"
+                          ? "No one selected — showing ALL employees"
                           : `${selectedProfileIds.length} employee${selectedProfileIds.length === 1 ? "" : "s"} selected`}
                       </span>
                       <div className="flex gap-2">
@@ -392,7 +400,7 @@ export function NativeAttendanceReport({
                           className="text-primary hover:underline"
                           onClick={() => setSelectedProfileIds([])}
                         >
-                          Clear
+                          Clear (show all)
                         </button>
                       </div>
                     </div>
@@ -565,8 +573,10 @@ export function NativeAttendanceReport({
           role="status"
           className="border-warn/30 bg-warn/10 text-warn rounded-xl border p-3 text-sm"
         >
-          Showing the most recent records only. Narrow the dates or pick an
-          employee to see the rest; totals above cover the rows shown.
+          Showing the most recent records only: this range has more shifts than
+          can be loaded at once. Totals cover only the rows shown, and
+          statements cannot be printed until you narrow the dates or pick
+          specific employees.
         </div>
       ) : null}
 
