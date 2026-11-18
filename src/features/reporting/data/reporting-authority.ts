@@ -7,11 +7,6 @@ import {
   normalizeLocationAddress,
   type LocationAddress,
 } from "@/features/locations/domain/location";
-import {
-  checkModuleAccess,
-  readModuleEnforcementMode,
-} from "@/features/modules/data/module-enforcement";
-import { readLocationModuleConfigs } from "@/features/modules/data/module-config-reader";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import type { Database } from "@/types/database.generated";
 
@@ -19,6 +14,16 @@ import {
   resolveLocationAuthority,
   type LocationAuthority,
 } from "../domain/report-authority";
+
+/**
+ * Whether a module is usable at a branch. Injected by the Server Action (the only layer
+ * allowed to use the module-enforcement entry), so this data layer holds no module logic.
+ */
+export type ModuleUsable = (
+  module: "attendance" | "payroll",
+  organizationId: string,
+  locationId: string,
+) => Promise<boolean>;
 
 export type ReportingAuthorityResult =
   | {
@@ -70,6 +75,7 @@ async function mapBounded<T, R>(
  */
 export async function loadReportingAuthorities(
   supabase: SupabaseClient<Database>,
+  moduleUsable: ModuleUsable,
 ): Promise<ReportingAuthorityResult> {
   const invalid = await requireLiveSession(supabase);
   if (invalid) return invalid;
@@ -121,43 +127,13 @@ export async function loadReportingAuthorities(
     }
   }
 
-  const mode = await readModuleEnforcementMode(supabase);
-  const configCache = new Map<
-    string,
-    ReturnType<typeof readLocationModuleConfigs>
-  >();
-  const readConfigs = (locationId: string) => {
-    let pending = configCache.get(locationId);
-    if (!pending) {
-      pending = readLocationModuleConfigs(locationId, supabase);
-      configCache.set(locationId, pending);
-    }
-    return pending;
-  };
-
-  const usable = async (
-    module: "attendance" | "payroll",
-    organizationId: string,
-    locationId: string,
-  ): Promise<boolean> => {
-    try {
-      const verdict = await checkModuleAccess(
-        { module, organizationId, location: { id: locationId } },
-        { client: supabase, readMode: async () => mode, readConfigs },
-      );
-      return verdict.allowed;
-    } catch {
-      return false;
-    }
-  };
-
   const authorities = await mapBounded(contexts, CONCURRENCY, async (ctx) => {
     const row = rows.get(ctx.locationId);
     if (!row) return null;
     const [attendanceModuleUsable, payrollModuleUsable, manage] =
       await Promise.all([
-        usable("attendance", ctx.organizationId, ctx.locationId),
-        usable("payroll", ctx.organizationId, ctx.locationId),
+        moduleUsable("attendance", ctx.organizationId, ctx.locationId),
+        moduleUsable("payroll", ctx.organizationId, ctx.locationId),
         supabase.rpc("attendance_can_manage", {
           p_location_id: ctx.locationId,
         }),

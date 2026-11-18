@@ -9,6 +9,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/features/modules/data/module-enforcement", () => ({
+  checkModuleAccess: vi.fn(async () => ({ allowed: true })),
+  readModuleEnforcementMode: vi.fn(async () => ({
+    status: "ok",
+    mode: "staged",
+    source: "database",
+  })),
+}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("../data/reporting-authority", () => ({
   loadReportingAuthorities: mocks.loadReportingAuthorities,

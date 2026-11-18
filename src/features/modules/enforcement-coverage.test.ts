@@ -51,7 +51,7 @@ const EXEMPT_FILES: Record<string, string> = {
   "kiosk/actions/kiosk-pairing-actions.ts":
     "Kiosk: tablet device pairing and status checks are hardware registration plumbing",
   "reporting/actions/reporting-actions.ts":
-    "Reporting Center: cross-branch, read-only reporting. It has no single location to guard: every branch gets its own Attendance and Payroll module verdict inside loadReportingAuthorities (checkModuleAccess per branch and module), and a branch whose module is off is excluded from that content. No record is written.",
+    "Reporting Center: cross-branch, read-only reporting. It has no single location to guard: every branch gets its own Attendance and Payroll module verdict (checkModuleAccess per branch and module, built by moduleVerdicts in this file and applied in loadReportingAuthorities), and a branch whose module is off is excluded from that content. No record is written.",
   "kiosk/actions/kiosk-clock-actions.ts":
     "Kiosk: tablet PIN clock actions authenticate via kiosk device token and enforce location internal attendance mode directly",
 };

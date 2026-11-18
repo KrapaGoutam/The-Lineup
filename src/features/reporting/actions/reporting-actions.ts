@@ -2,10 +2,17 @@
 
 import { z } from "zod";
 
+import {
+  checkModuleAccess,
+  readModuleEnforcementMode,
+} from "@/features/modules/data/module-enforcement";
 import { createClient } from "@/lib/supabase/server";
 import { monthBounds, shiftMonth } from "@/lib/report-period";
 
-import { loadReportingAuthorities } from "../data/reporting-authority";
+import {
+  loadReportingAuthorities,
+  type ModuleUsable,
+} from "../data/reporting-authority";
 import {
   loadRoster,
   readAttendance,
@@ -69,6 +76,29 @@ export interface ReportingOptions {
   readonly today: string;
 }
 
+/**
+ * Per-branch module verdicts for the report: the enforcement mode is read once, then each
+ * (module, branch) is decided by the canonical `checkModuleAccess`. Any failure = not usable.
+ */
+function moduleVerdicts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): ModuleUsable {
+  let mode: ReturnType<typeof readModuleEnforcementMode> | null = null;
+  return async (module, organizationId, locationId) => {
+    try {
+      mode ??= readModuleEnforcementMode(supabase);
+      const resolved = await mode;
+      const verdict = await checkModuleAccess(
+        { module, organizationId, location: { id: locationId } },
+        { client: supabase, readMode: async () => resolved },
+      );
+      return verdict.allowed;
+    } catch {
+      return false;
+    }
+  };
+}
+
 const NOT_SIGNED_IN = "You need to sign in to see reports.";
 const INVALID = "That report request is invalid.";
 
@@ -122,7 +152,10 @@ export async function getReportingOptionsAction(): Promise<
 > {
   try {
     const supabase = await createClient();
-    const auth = await loadReportingAuthorities(supabase);
+    const auth = await loadReportingAuthorities(
+      supabase,
+      moduleVerdicts(supabase),
+    );
     if (!auth.ok) {
       return {
         ok: false,
@@ -204,7 +237,10 @@ export async function generateCombinedReportAction(
     const filters = parsed.data;
 
     const supabase = await createClient();
-    const auth = await loadReportingAuthorities(supabase);
+    const auth = await loadReportingAuthorities(
+      supabase,
+      moduleVerdicts(supabase),
+    );
     if (!auth.ok) {
       return {
         ok: false,
