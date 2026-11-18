@@ -668,3 +668,91 @@ describe("cross-organization output", () => {
     expect(a.confidentiality).toMatch(/Confidential/);
   });
 });
+
+describe("DST and local business dates (America/Chicago)", () => {
+  it("keeps real elapsed time and local clock times across the spring-forward day", () => {
+    const r = compose({
+      filters: {
+        content: "attendance",
+        output: "combined",
+        startDate: "2026-03-01",
+        endDate: "2026-03-31",
+      },
+      attendance: [
+        nativeSlice(TAP, LEAGUE, [
+          nativeRow({
+            sessionId: "dst-spring",
+            serviceDate: "2026-03-08",
+            clockInAt: "2026-03-08T07:30:00.000Z", // 1:30 AM CST
+            clockOutAt: "2026-03-08T08:30:00.000Z", // 3:30 AM CDT (2:00→3:00 never happened)
+            grossElapsedSeconds: 3600,
+            netPayableSeconds: 3600,
+          }),
+        ]),
+      ],
+      payroll: null,
+    });
+    const row = r.attendanceRows[0]!;
+    expect(row.businessDate).toBe("2026-03-08");
+    expect(row.clockIn).toBe("1:30 AM");
+    expect(row.clockOut).toBe("3:30 AM");
+    expect(row.workedSeconds).toBe(3600); // one real hour, not two wall-clock hours
+  });
+
+  it("keeps real elapsed time across the fall-back day (a 25-hour day)", () => {
+    const r = compose({
+      filters: {
+        content: "attendance",
+        output: "combined",
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+      },
+      attendance: [
+        nativeSlice(TAP, LEAGUE, [
+          nativeRow({
+            sessionId: "dst-fall",
+            serviceDate: "2026-11-01",
+            clockInAt: "2026-11-01T05:30:00.000Z", // 12:30 AM CDT
+            clockOutAt: "2026-11-01T08:30:00.000Z", // 2:30 AM CST (1:00–2:00 happened twice)
+            grossElapsedSeconds: 10800,
+            netPayableSeconds: 10800,
+          }),
+        ]),
+      ],
+      payroll: null,
+    });
+    const row = r.attendanceRows[0]!;
+    expect(row.businessDate).toBe("2026-11-01");
+    expect(row.clockIn).toBe("12:30 AM");
+    expect(row.clockOut).toBe("2:30 AM");
+    expect(row.workedSeconds).toBe(10800); // three real hours across the repeated hour
+  });
+
+  it("an overnight shift stays on its service date, in the right payroll month, at a month end", () => {
+    const r = compose({
+      filters: {
+        content: "both",
+        output: "combined",
+        startDate: "2026-10-01",
+        endDate: "2026-11-30",
+      },
+      attendance: [
+        nativeSlice(TAP, LEAGUE, [
+          nativeRow({
+            sessionId: "late",
+            serviceDate: "2026-10-31",
+            clockInAt: "2026-11-01T01:00:00.000Z", // 8:00 PM CDT on Oct 31
+            clockOutAt: "2026-11-01T08:00:00.000Z",
+            netPayableSeconds: 25200,
+          }),
+        ]),
+      ],
+      payroll: [period({ periodId: 1, periodMonth: "2026-10-01" })],
+    });
+    const oct = r.register.find((x) => x.payrollPeriodMonth === "2026-10-01")!;
+    expect(oct.attendanceSeconds).toBe(25200); // counted in October by SERVICE date, not UTC
+    expect(r.register.some((x) => x.payrollPeriodMonth === "2026-11-01")).toBe(
+      false,
+    );
+  });
+});

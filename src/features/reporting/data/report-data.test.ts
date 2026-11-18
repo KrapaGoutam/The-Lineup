@@ -403,6 +403,21 @@ describe("readPayroll — a second, independent authority check on every row", (
     expect(res.periods.length).toBeLessThanOrEqual(2000);
   });
 
+  it("reads payments and adjustments in bounded IN-lists (never one huge query) for a large report", async () => {
+    const many = Array.from({ length: 450 }, (_, i) =>
+      periodRow({ id: i + 1, profile_id: `p-${i}` }),
+    );
+    const { client, calls } = db({ payroll_periods: many });
+    const res = await readPayroll(ctx({ client }));
+    expect(res.periods).toHaveLength(450); // All employees is never silently cut at 200
+    const lists = calls
+      .filter((c) => c.table === "payroll_payments")
+      .flatMap((c) => c.filters)
+      .filter(([k]) => k === "in:payroll_period_id")
+      .map(([, v]) => (v as number[]).length);
+    expect(lists).toEqual([200, 200, 50]);
+  });
+
   it("covers every month a cross-year range touches", async () => {
     const { client, calls } = db({ payroll_periods: [] });
     await readPayroll(

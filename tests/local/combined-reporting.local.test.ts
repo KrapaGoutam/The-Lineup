@@ -33,7 +33,7 @@ import type { CombinedReport } from "@/features/reporting/domain/report-types";
 const NOV = { startDate: "2026-11-01", endDate: "2026-11-30" };
 
 let fx: PayrollFixture;
-let P: Record<string, number> = {};
+const P: Record<string, number> = {};
 const sessionIds: string[] = [];
 
 function as(user: PayrollTestUser) {
@@ -256,9 +256,6 @@ afterAll(async () => {
   );
   await fx.teardown();
 });
-
-const rowsFor = (r: CombinedReport, name: string) =>
-  r.register.filter((x) => x.employeeName.includes(name));
 
 describe("real authorization — who may report on what", () => {
   const usable = async () => true;
