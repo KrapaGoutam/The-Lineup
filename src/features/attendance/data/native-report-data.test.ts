@@ -81,9 +81,10 @@ describe("mapSummaryRow", () => {
   });
 });
 
-function chain(result: { data: unknown; error: unknown }) {
+function chain(result: { data: unknown; error: unknown; count?: number }) {
   const calls: Array<[string, unknown[]]> = [];
   const builder: Record<string, unknown> = {};
+  let offset = 0;
   for (const m of ["select", "eq", "gte", "lte", "order", "in"]) {
     builder[m] = (...args: unknown[]) => {
       calls.push([m, args]);
@@ -94,7 +95,16 @@ function chain(result: { data: unknown; error: unknown }) {
     calls.push(["limit", args]);
     return builder;
   };
-  builder.then = (resolve: (v: unknown) => void) => resolve(result);
+  // Pagination: the first range returns the canned rows, later ranges are empty.
+  builder.range = (...args: unknown[]) => {
+    calls.push(["range", args]);
+    offset = Number(args[0]);
+    return builder;
+  };
+  builder.then = (resolve: (v: unknown) => void) =>
+    resolve(
+      offset > 0 ? { data: [], error: null, count: result.count } : result,
+    );
   return { builder, calls };
 }
 
@@ -170,7 +180,7 @@ describe("listNativeAttendance", () => {
     const many = Array.from({ length: NATIVE_REPORT_ROW_LIMIT + 1 }, (_, i) =>
       summary({ session_id: `s${i}` }),
     );
-    const view = chain({ data: many, error: null });
+    const view = chain({ data: many, error: null, count: many.length });
     const profiles = chain({ data: [], error: null });
     const from = vi.fn((t: string) =>
       t === "profiles" ? profiles.builder : view.builder,

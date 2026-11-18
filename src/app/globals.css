@@ -213,6 +213,9 @@ a {
     user-select: text !important;
   }
 
+  /* The root element too: under the dark theme `html` keeps the dark app background, which
+     a browser prints behind the page (and in its margins) when "Background graphics" is on. */
+  html,
   body {
     background: white !important;
     color: #111827 !important;
@@ -301,5 +304,78 @@ a {
   .letterhead-banner {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* V2.0.7 Reporting Center document. A NAMED page gives the combined report professional
+   margins (12 mm) without changing the shared `@page` used by the older print surfaces.
+   Browsers without named-page support fall back to the shared `@page` margins. */
+@page report {
+  size: letter portrait;
+  margin: 12mm 12mm 14mm 12mm;
+}
+
+@media print {
+  .report-document {
+    page: report;
+    /* Paper is already white: painting a white rectangle only adds a hairline seam in some
+       PDF viewers. */
+    background: transparent !important;
+    color: #111827 !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Every top-level section starts a new page; the first one does not leave a blank page. */
+  .report-document .report-section {
+    break-before: page;
+    page-break-before: always;
+  }
+  .report-document .report-section:first-child {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  /* A second report in a bundle (split by organization / branch) starts on its own page. */
+  .report-bundle-item + .report-bundle-item {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .report-document .report-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .report-document thead {
+    display: table-header-group;
+  }
+  .report-document tfoot {
+    display: table-row-group;
+  }
+  .report-document tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* A total row stays with the row above it (no orphaned totals). */
+  .report-document .report-total-row {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+  .report-document h2,
+  .report-document h3,
+  .report-document caption {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .report-document .report-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-document .report-no-print,
+  .report-no-print {
+    display: none !important;
   }
 }

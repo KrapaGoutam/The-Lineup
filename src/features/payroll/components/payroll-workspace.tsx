@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { Lock, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { buildReportingHref } from "@/features/reporting/domain/report-links";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,6 +103,16 @@ function Header({
         and printable/downloadable statements — all backed by real Supabase
         tables.
       </p>
+      {canManage ? (
+        <Link
+          href={buildReportingHref({ view: "payroll" })}
+          className={
+            buttonVariants({ variant: "outline", size: "sm" }) + " mt-3"
+          }
+        >
+          Open Payroll in Reporting Center
+        </Link>
+      ) : null}
     </div>
   );
 }

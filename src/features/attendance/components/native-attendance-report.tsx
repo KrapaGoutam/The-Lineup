@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Printer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +39,12 @@ import {
 } from "@/features/attendance/domain/native-report";
 import { normalizeNativeAttendanceToUnified } from "@/features/attendance/domain/unified-attendance-report";
 import { resolveReportBrand } from "@/components/print/report-branding";
+import { buildReportingHref } from "@/features/reporting/domain/report-links";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import {
+  classifyReportPeriod,
+  formatReportPeriodLabel,
+} from "@/lib/report-period";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 function shiftDate(date: string, days: number): string {
@@ -203,16 +209,21 @@ export function NativeAttendanceReport({
     ],
   );
 
-  const periodLabel = useMemo(() => {
-    if (start === end) return prettyDate(start);
-    return `${prettyDate(start)} – ${prettyDate(end)}`;
-  }, [start, end]);
+  const periodLabel = useMemo(
+    () => formatReportPeriodLabel(start, end),
+    [start, end],
+  );
+  const periodKind = useMemo(
+    () => classifyReportPeriod(start, end),
+    [start, end],
+  );
 
   const unifiedReport = useMemo(() => {
     return normalizeNativeAttendanceToUnified(rows, {
       organization: brand.organizationName,
       branch: brand.branchName || source.locationName,
       reportingPeriod: periodLabel,
+      reportingPeriodKind: periodKind,
       timeZone: source.timeZone,
       truncated: view?.truncated === true,
     });
@@ -223,8 +234,27 @@ export function NativeAttendanceReport({
     brand.branchName,
     source.locationName,
     periodLabel,
+    periodKind,
     source.timeZone,
   ]);
+
+  // Pre-fills the Reporting Center with what is on screen. A link carries no authority: the
+  // Reporting Center re-verifies everything server-side.
+  const reportingHref = buildReportingHref({
+    view: "attendance",
+    organizationIds: source.organizationId
+      ? [source.organizationId]
+      : undefined,
+    locationIds: [source.locationId],
+    employeeKeys: (isMultiSelect
+      ? selectedProfileIds
+      : profileId
+        ? [profileId]
+        : []
+    ).map((id) => `profile:${id}`),
+    startDate: start,
+    endDate: end,
+  });
 
   function applyRange(a: string, b: string) {
     setStart(a);
@@ -448,6 +478,12 @@ export function NativeAttendanceReport({
                 <Printer className="mr-1.5 size-4" aria-hidden="true" />
                 Print Statements
               </Button>
+              <Link
+                href={reportingHref}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Open in Reporting Center
+              </Link>
             </div>
             {source.canManage ? (
               <div className="flex flex-wrap gap-2">
@@ -591,8 +627,8 @@ export function NativeAttendanceReport({
           <CardContent className="pt-5">
             <p className="text-sm font-semibold">No attendance recorded</p>
             <p className="text-muted-foreground text-sm">
-              {prettyDate(start)} – {prettyDate(end)} at {source.locationName}.
-              Clock-ins made in The Lineup appear here.
+              {periodLabel} at {source.locationName}. Clock-ins made in The
+              Lineup appear here.
             </p>
           </CardContent>
         </Card>

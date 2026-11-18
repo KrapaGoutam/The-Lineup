@@ -15,6 +15,7 @@ import { AppearanceSwitch } from "@/components/appearance-switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LocationAdministration } from "@/features/locations/components/location-administration";
+import { ReportingCenterEntry } from "@/features/reporting/components/reporting-center-entry";
 import { SystemAdministrationEntry } from "@/features/organizations/components/system-administration-entry";
 import { KioskManagementPage } from "@/features/kiosk/components/kiosk-management-page";
 import { useManageableKioskLocations } from "@/features/kiosk/components/use-manageable-kiosk-locations";
@@ -141,6 +142,9 @@ export function SettingsPage({
     ...(showTeam ? [{ href: "#settings-team", label: "Team" }] : []),
     ...(recoveryUser && ["owner", "manager"].includes(recoveryUser.designation)
       ? [{ href: "#settings-recovery", label: "Account recovery" }]
+      : []),
+    ...(isManager && !demoMode
+      ? [{ href: "#settings-reporting", label: "Reporting" }]
       : []),
     ...(showPayRates
       ? [{ href: "#settings-pay-rates", label: "Pay rates" }]
@@ -275,6 +279,12 @@ export function SettingsPage({
                   onClick={() => onGoToTab("schedule")}
                 />
               ) : null}
+            </div>
+          ) : null}
+
+          {isManager && !demoMode ? (
+            <div id="settings-reporting">
+              <ReportingCenterEntry />
             </div>
           ) : null}
 

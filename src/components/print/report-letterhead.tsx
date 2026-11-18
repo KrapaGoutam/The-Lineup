@@ -49,6 +49,9 @@ export type ReportLetterheadProps = {
   reportTitle: string;
   /** e.g. "September 2026". */
   periodName: string;
+  /** Heading above `periodName`. Defaults to "Pay Period" (payroll surfaces). Attendance and
+   * combined reports pass "Attendance Period" / "Report Period" so the two are never confused. */
+  periodLabel?: string;
   /** Omit to hide the "EMPLOYEE" block entirely -- for an all-staff
    * summary table with no single employee to name. */
   employeeName?: string;
@@ -76,6 +79,7 @@ export type ReportLetterheadProps = {
 export function ReportLetterhead({
   reportTitle,
   periodName,
+  periodLabel = "Pay Period",
   employeeName,
   employeeRole,
   brand,
@@ -154,7 +158,7 @@ export function ReportLetterhead({
         </div>
         <div className="text-right">
           <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">
-            Pay Period
+            {periodLabel}
           </p>
           <p className="text-sm font-semibold text-black">{periodName}</p>
         </div>

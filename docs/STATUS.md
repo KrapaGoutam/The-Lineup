@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.7 — Combined Attendance & Payroll Reporting Center (feature branch, PR open)
+
+`feature/v2-007-combined-reporting` (base `development` `1729688`, after PR #354 and #355) adds a standalone `/reporting` Reporting Center: organization / branch / employee / content / period / output filters, a Letter combined report (cover, executive summary, all-employee register, individual statements, attendance details, adjustments & payments ledger), CSV export and print gating for incomplete reports. Read-only over existing payroll snapshots and attendance; no migration, no hosted contact. An independent review found that PostgREST's 1,000-row response cap silently truncated payroll, ledger and native attendance reads; fixed with exact-count paging and proven against real PostgREST. Real-RLS suite 28/28, full Vitest 4,598 passed, Chromium PDF pages inspected (a dark-theme print background defect was found and fixed). Firefox/Safari/physical print and hosted DEV acceptance remain open. Merge needs separate owner approval. See [the handoff](features/v2-0-5-6-7-reporting-foundation/HANDOFF.md).
+
 ## V2.0.4 — Combined Table Allocation (feature branch)
 
 `feature/v2-0-4-combined-table-allocation` (base `development` `1c5373e`, after the V2.0.2/V2.0.3 release to `main`) adds a **Combined** view inside the existing Table Allocation module: Split Screen / Floor Focus / Rotation Focus, branch floor plan with a compact grid, a Quick Table Picker, a branch-employee "+ Server" picker, rotation controls, a shared selection panel and a Dine-in Today metric (also on the Dashboard). No migration, server-action or RLS change. Local gates: format/lint/typecheck, full Vitest, webpack build, and demo-mode Playwright (desktop, tablet, phone). PR, DEV acceptance and release are pending owner approval. See [the handoff](features/v2-0-4-combined-table-allocation/HANDOFF.md).

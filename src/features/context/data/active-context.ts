@@ -18,6 +18,7 @@ import type {
 } from "@/features/context/domain/active-context";
 import type {
   AvailableContextSummary,
+  EligibleContext,
   ExplicitLocationSelection,
 } from "@/features/context/domain/active-context";
 import {
@@ -414,6 +415,51 @@ export async function listCurrentEligibleContexts(
   } catch (error) {
     unstable_rethrow(error);
     console.error("listCurrentEligibleContexts", error);
+    return { status: "error", reason: "context_list_failed" };
+  }
+}
+
+export type EligibleContextAccessResult =
+  | {
+      readonly status: "ok";
+      readonly profileId: string;
+      readonly contexts: readonly EligibleContext[];
+    }
+  | { readonly status: "unauthenticated" }
+  | { readonly status: "error"; readonly reason: string };
+
+/**
+ * V2.0.7 reporting: the same canonical enumeration as `listCurrentEligibleContexts`, but
+ * WITH the per-(organization, location) `AccessResolution` the pure resolver computed. It
+ * is for SERVER-SIDE authorization only: the capability detail must never be sent to the
+ * browser. Built from the same authenticated facts, so a failed query is an `error`, never
+ * an empty (and therefore "nothing authorized but fine") list. Never throws.
+ */
+export async function listCurrentEligibleContextsWithAccess(
+  options: { readonly client?: SupabaseClient<Database> } = {},
+): Promise<EligibleContextAccessResult> {
+  try {
+    const supabase = options.client ?? (await createClient());
+    const auth = await authenticate(supabase);
+    if (!auth.ok) {
+      return auth.result.status === "error"
+        ? { status: "error", reason: auth.result.reason }
+        : { status: "unauthenticated" };
+    }
+    const facts = await gatherFacts(
+      supabase,
+      auth.profileId,
+      allAccessibleScope,
+    );
+    if (isFailure(facts)) return { status: "error", reason: facts.failed };
+    return {
+      status: "ok",
+      profileId: auth.profileId,
+      contexts: listEligibleContexts(facts),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("listCurrentEligibleContextsWithAccess", error);
     return { status: "error", reason: "context_list_failed" };
   }
 }
