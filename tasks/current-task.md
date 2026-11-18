@@ -1,20 +1,18 @@
-# Release Group 1 — Batch C (V2.0.7) Combined Reporting Center — IN PROGRESS (C1 done)
+# Release Group 1 — Batch C (V2.0.7) Combined Reporting Center — PR OPEN FOR REVIEW
 
-Plan and decisions: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
-Branch `feature/v2-007-combined-reporting`, worktree `.tmp/v2-007-combined-reporting`, baseline `1729688` (origin/development after PR #355 merge commit; PR #354 = `fbf44a1`).
+Plan, decisions, permission model, evidence and deferrals: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
+Branch `feature/v2-007-combined-reporting`, worktree `.tmp/v2-007-combined-reporting`, baseline `1729688` (PR #355 merge). Final head SHA and CI run ids: PR comment.
 
-- [x] Preconditions: PR #354 and #355 merged (owner-authorized merge commit for #355, head `0a8eaa7` verified green).
-- [x] C0.1 year in period labels (`src/lib/report-period.ts`, 13 tests under 3 time zones) + non-monthly title.
-- [x] C0.2 print wording corrected in HANDOFF (do at C3 final doc pass).
-- [x] C0.3 Neon normalizer wired through the authorized combined read path (explicit `external` mode only).
-- [x] C1 domain: report-types, report-authority (fail-closed), report-composer (integer cents/seconds), 41 tests.
-- [x] C1 server: loadReportingAuthorities, loadRoster, readAttendance, readPayroll, reporting actions, 38 tests.
-- [ ] C2 Reporting Center UI + document sections (cover, summary, register, statements, attendance detail, ledger) + print CSS + CSV.
-- [ ] C3 browser PDF/print checks, independent review, full gate, PR.
+- [x] Preconditions: PR #354 and #355 merged (owner-authorized merge commit for #355).
+- [x] C0.1 year in period labels; C0.2 print wording corrected; C0.3 Neon wired (explicit `external` mode only).
+- [x] C1 authority + scoped readers + composer (integer cents/seconds, no recalculation).
+- [x] C2 /reporting route, builder, document (cover, summary, register, statements, attendance, ledger), CSV, print gating.
+- [x] C3 real-RLS suite (28), Chromium PDF + visual inspection, independent review (10 findings fixed), full local gate.
+- [ ] Exact-head CI green, owner review and merge (not authorized yet). V2.0.8 NOT started.
 
 ## Current State & Next Step
 
-C1 complete (all reporting tests pass; `tsc` clean except the pre-existing generated `LayoutProps` typegen error). Next: C2 — add the "reports" tab (src/lib/app-tab.ts, module-navigation.ts, restaurant-operations-app.tsx), build `src/features/reporting/components/*`.
+All work committed on the feature branch. Next: owner review of the PR; merge needs separate approval.
 
 ---
 

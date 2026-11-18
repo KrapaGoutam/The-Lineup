@@ -1,143 +1,139 @@
 # Release Group 1 — Reporting Foundation (V2.0.5 / V2.0.6 / V2.0.7)
 
 Single authoritative handoff for this release group (repository convention: `docs/features/<slug>/HANDOFF.md`).
-Order is strict: **A (V2.0.5) → B (V2.0.6) → C (V2.0.7)**. B starts only after A is merged; C only after B is merged into `development`.
+Order is strict: **A (V2.0.5) → B (V2.0.6) → C (V2.0.7)**.
 
 ## Identity
 
-| Item                      | Value                                                                                                                                                                                                                  |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository                | `KrapaGoutam/The-Lineup`                                                                                                                                                                                               |
-| Integration branch        | `development` @ `fbf44a1` (PR #354 merged; V2.0.5 timezone fix)                                                                                                                                                        |
-| Production                | `main` — untouched, no changes authorized                                                                                                                                                                              |
-| Environment               | Local worktree only. Neon (external Monks) never touched in the correction pass. No Supabase DEV writes. No payroll/financial records touched.                                                                         |
-| Current batch             | **B — V2.0.6** (PR #355 reviewed and corrected; awaiting exact-head CI and owner merge decision)                                                                                                                       |
-| Batch A branch / commit   | `fix/v2-005-monks-neon-timezone` / PR #354 merged at `fbf44a1a2cc5158bf372e43967562b88a70bd68f`                                                                                                                        |
-| Batch B branch / worktree | `feature/v2-006-monthly-attendance-reports` / `.tmp/v2-006-monthly-attendance-reports`                                                                                                                                 |
-| Batch B PR                | #355 → `development`                                                                                                                                                                                                   |
-| Batch B reviewed head     | `c5cd729abad91fb823cf723914d97dae832efd36` (Antigravity implementation; CI `application` failed at `format:check`, run `44355259400`; `browser-smoke` passed)                                                          |
-| Batch B corrected head    | The commit that contains this file, i.e. the PR #355 head after the correction push. A commit cannot contain its own hash; the exact SHA and CI run ids are recorded in the PR #355 comment and the completion report. |
+| Item                    | Value                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `KrapaGoutam/The-Lineup`                                                                                                                             |
+| Integration branch      | `development`                                                                                                                                        |
+| Production              | `main` — untouched, no changes authorized                                                                                                            |
+| Batch A                 | PR #354 merged at `fbf44a1a2cc5158bf372e43967562b88a70bd68f` (V2.0.5 Neon timezone)                                                                  |
+| Batch B                 | PR #355 merged at `1729688416f74cba0fe25daaa48597c471d8ed32` (owner-authorized merge commit; head `0a8eaa70887d13be51db4ac43fff58222e665765`)        |
+| Batch C baseline        | `1729688416f74cba0fe25daaa48597c471d8ed32` (= `origin/development` after the PR #355 merge)                                                          |
+| Batch C branch/worktree | `feature/v2-007-combined-reporting` / `.tmp/v2-007-combined-reporting`                                                                               |
+| Batch C PR              | Recorded in the PR itself. The exact final head SHA and CI run ids are in the PR comment (a commit cannot contain its own hash).                     |
+| Environment             | Local worktree only. No hosted database contact, no migration, no Neon write, no Production change. Real-RLS evidence is the disposable local stack. |
 
-## Batch A — V2.0.5 Monks Neon timezone
+## Batch A — V2.0.5 Monks Neon timezone (merged)
 
-Merged to `development` via PR #354 (`fbf44a1a2cc5158bf372e43967562b88a70bd68f`) after passing independent review and CI gate.
-Evidence retained: Neon clock columns are `timestamp without time zone` (local wall time); fix at the Neon data boundary
-(`::text` + `neonWallTimeToInstantIso`, America/Chicago); 13 new tests pass under `TZ=UTC / America/Chicago / Asia/Tokyo`;
-read-only live probe OK; typecheck/lint/prettier clean; exact-head CI green; independent review PASS.
+Neon clock columns are `timestamp without time zone` (local wall time); fixed at the Neon data boundary (`::text` + `neonWallTimeToInstantIso`, America/Chicago). 13 tests under `TZ=UTC / America/Chicago / Asia/Tokyo`; PR #354.
 
-## Batch B — V2.0.6 Monthly Attendance Reports, Statements & Dynamic Branding
+## Batch B — V2.0.6 Monthly attendance reports, statements & dynamic branding (merged)
 
-### What Antigravity delivered (commit `c5cd729`)
+Delivered: month/range/preset filters, single/multiple/all employees, the `UnifiedAttendanceReport` contract (integer seconds, `hoursBasis`, `isPartial`, unresolved count), `UnifiedAttendancePrintDialog`, `resolveReportBrand` + `ReportLetterhead`. The independent review corrected: Webster address (Texas, not New York), per-shift rounding before summing, gross-hours fallback, voided shifts counted, a misleading "Page X of Y", silent truncation, caller-supplied logo markup, an unbounded `profileIds` list.
 
-- **B1 filters**: `AttendanceMonthNav`, presets (This month / Last month / This week / Last week / Today), custom range, single / multiple / all employees (`profileIds` on `getNativeAttendanceReportAction` and `listNativeAttendance`), manager roster via `listLocationEmployeesAction`.
-- **B2 unified contract**: `UnifiedAttendanceReport` with `normalizeNativeAttendanceToUnified` and `normalizeNeonAttendanceToUnified`.
-- **B3 print**: `UnifiedAttendancePrintDialog` (All / Selected / Single), `.print-timesheet-table` header repeat and row-break rules in `globals.css`.
-- **B4 branding**: `resolveReportBrand` + `ReportLetterhead`.
+### Verification wording (corrected in V2.0.7 — C0.2)
 
-### Independent review findings (this pass)
+Batch B's earlier text called some print behaviour "verified". The evidence actually was narrower, and is restated here without inflation:
 
-| #   | Severity | Finding                                                                                                                                                                                                                                                            | Status                                                      |
-| --- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| F1  | CI       | `HANDOFF.md` failed `prettier --check` (CI run `44355259400`).                                                                                                                                                                                                     | Fixed (file re-formatted with pinned Prettier 3.6.2)        |
-| F2  | High     | Monks Webster letterhead printed **"Webster, New York"**. The restaurant is in Webster, Texas. The error pre-dated B (original `report-letterhead.tsx`) and had been copied into the new resolver and tests.                                                       | Fixed                                                       |
-| F3  | High     | Native normalizer rounded each shift to 0.1h **before** summing (10 × 1h57m30s printed 20.0h; exact 19.58h).                                                                                                                                                       | Fixed                                                       |
-| F4  | High     | Native normalizer **fell back to gross elapsed seconds** when net payable was null, so a shift with an unclassified break was reported as payable hours. This contradicts the native model (`summarizeNativeReport`: net only, unresolved counted, never guessed). | Fixed                                                       |
-| F5  | Medium   | Voided sessions were counted as shifts and hours on the statement (native model excludes them).                                                                                                                                                                    | Fixed (excluded and counted separately)                     |
-| F6  | High     | Footer printed `Page {n} of {employee-section count}`; an employee spanning two physical pages produced wrong numbers.                                                                                                                                             | Fixed (removed; see decision)                               |
-| F7  | High     | A truncated read (2,000-row limit, newest-first) was passed silently into the statement, so oldest days of the month were missing and totals were wrong while looking complete.                                                                                    | Fixed (printing blocked)                                    |
-| F8  | Medium   | `ResolveBrandInput.logoMarkup` fed `dangerouslySetInnerHTML` from caller input (not exploitable today; no caller passed it, but it invited raw-HTML injection).                                                                                                    | Fixed (input removed; only trusted constants)               |
-| F9  | Medium   | `profileIds` had no length bound (unbounded IN-list).                                                                                                                                                                                                              | Fixed (max 200, UUID-validated)                             |
-| F10 | Low      | Liquor Tap city/state was guessed from the location name (`nasa` → "Houston, Texas", otherwise "League City, Texas").                                                                                                                                              | Fixed (address taken from the location record; no guessing) |
-| F11 | Low      | Empty multi-select silently meant "all employees"; copy was "All employees (no filter)".                                                                                                                                                                           | Fixed (explicit wording)                                    |
-| F12 | Info     | Handoff claimed the Neon normalizer was part of the delivered UI. It is **not wired to any component**; only the native source feeds the new statement UI.                                                                                                         | Documented (see Functional coverage)                        |
+- **Chromium checked** (Playwright, US Letter, print media): a 4-page PDF, MediaBox 612 × 792 pt; computed styles for `thead`, `tr`, white background; no dialog chrome.
+- **Physical multipage pagination was not fully verified in Batch B.** Header repetition on a continuation page was confirmed from computed CSS only.
+- **Pixel-level inspection of pages 2+ was outstanding in Batch B** (no PDF rasteriser was available). It was performed in V2.0.7 for the _combined report_ only (see "Print acceptance" below); the older Attendance/Payroll print dialogs have not been re-inspected.
+- **Safari and Firefox were not verified.** In V2.0.7: WebKit print-media _styles_ were checked (no PDF/pagination is possible through Playwright); Firefox is not installed on the build machine.
+- The Neon normalizer `normalizeNeonAttendanceToUnified` was **not wired to any UI** in Batch B. It is now used by the combined read path (see C0.3).
 
-Non-issues confirmed: RLS and tenant isolation (see Security), `profileIds` cannot widen access, SVG logo constant is trusted and only that constant reaches raw HTML, US Letter `@page`, header repeat and row-break CSS.
+## Batch C — V2.0.7 Combined Attendance & Payroll Reporting (implemented; PR open for review)
 
-### Corrected files
+This is a **reporting and document-composition release.** It reads existing payroll snapshots, payments, adjustments and attendance. It creates, recalculates, reassigns or deletes nothing. No migration. Shelved migration 92 was not touched.
 
-- `src/features/attendance/domain/unified-attendance-report.ts` — integer-second aggregation, hours basis, unresolved/voided/partial handling.
-- `src/features/attendance/domain/unified-attendance-report.precision.test.ts` (new) — 10 regression tests.
-- `src/components/print/report-branding.ts` (+ test) — correct Monks address, location-address-first, no name guessing, no caller logo markup.
-- `src/components/print/report-letterhead.tsx` (+ test) — street address line, no `logoMarkup` pass-through.
-- `src/features/attendance/components/unified-attendance-print-dialog.tsx` (+ test) — no page counts, partial-report block, totals row, hours basis.
-- `src/features/attendance/components/native-attendance-report.tsx` (+ test) — location address to brand, `truncated` to report, clearer clear/empty copy, truncation banner text.
-- `src/features/attendance/actions/native-report-actions.ts` (+ test) — `profileIds.max(200)`, location address on the source view.
-- `src/features/attendance/data/native-report-data.test.ts` — IN-list keeps the location scope.
-- `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`, `tasks/current-task.md`.
+### Closed follow-ups
+
+- **C0.1 Year in period labels.** `src/lib/report-period.ts`: day → `Mon, Nov 30, 2026`; whole month → `November 2026`; same-year range → `Sun, Nov 1 – Mon, Nov 30, 2026`; cross-year → both years. Only a whole month is titled "Monthly Staff Attendance Timesheet"; anything else is "Staff Attendance Statement". 18 tests, run under three time zones.
+- **C0.2 Print terminology.** Corrected above.
+- **C0.3 Neon integration.** Neon attendance is read through the existing `getAttendanceRows` (so the V2.0.5 wall-time conversion is unchanged) and the existing normalizer, **only** for a branch whose `attendance_mode` is explicitly `external`. An unconfigured (`NULL`) branch is **not** read from Neon (the single Neon database belongs to one tenant). The existing Monks attendance interface is untouched.
 
 ### Decisions
 
-**Financial precision.** Canonical unit is integer seconds. Native hours = `netPayableSeconds` of closed, non-voided sessions only (identical to `summarizeNativeReport().resolvedNetPayableSeconds`). Open sessions and sessions with an open/unclassified break contribute no hours and are counted as _unresolved_; gross elapsed is never substituted. Neon hours = source `hours_worked`, converted once to whole seconds and summed as integers (source gross/net policy is the source's own and is labelled as such). Rounding to 0.01h happens only in `formatHoursDisplay`. The statement prints the hours basis and the unresolved-shift count. The payroll financial source of truth, snapshots and paid amounts are untouched.
+1. **Standalone `/reporting` route**, not a new shell tab. `AppTab` is compile-time-bound to the module registry (a tab needs a registered module and, for per-location enablement, a database module key — a migration). Entry points: Settings (managers, real mode), Attendance ("Open in Reporting Center" with the on-screen filters) and Payroll. A link only **pre-fills** the builder.
+2. **Financial truth is the stored snapshot.** `base = payroll_periods.gross_cents`; `balance = computeBalanceCents` verbatim (base − confirmed payments − Σ adjustment deltas). The register shows "Adjustments" as the _effect on the amount owed_ (`−Σ delta`, matching the existing ledger lines) and "Gross" as base + that effect. Draft payments are listed, never counted. Hours on a payroll row come from the snapshot; attendance hours are shown beside them. **A difference is reported as an exception, never reconciled.**
+3. **Integer cents and integer seconds** everywhere; rounding only in display helpers.
+4. **Identity is never merged by name or bare number.** Cross-source merge only through a verified `attendance_identity_links` row or an identical authenticated profile id. An unlinked external person stays separate and is reported ("unmapped").
+5. **Conflicting payroll records** (two sources for one person-organization-month) are all shown, none enters any total, and the report is marked incomplete.
+6. **Cross-organization totals are labelled informational aggregates;** each organization keeps its own subtotals and branding.
+7. **Org-level payroll** (no `location_id`): attributed to the organization's sole branch when it has exactly one; otherwise shown as "Organization-level", and only when the user chose every branch they can report on.
+8. **Incomplete means no print and no export.** Any blocking exception (failed/truncated read) or source conflict disables Print and CSV and shows an alert.
+9. **Export is CSV** (register, attendance, ledger, exceptions), formula-injection-safe via the shared writer. Print/PDF and CSV are produced from the server-authorized payload; there is no separate export or PDF endpoint to protect.
+10. **Payment method is not recorded** in the payroll ledger, so none is printed.
 
-**Print pagination.** "Page X of Y" removed. Browsers expose no reliable physical page count to HTML, and `@page` margin-box counters are Chromium-only. Each employee still starts on a new page (`break-after: page`); long tables repeat their header and never split a row. Physical page numbering is deferred (see Deferred).
+### Permission model
 
-**Truncation.** When the read hits its row limit the report is flagged `isPartial`. The print dialog then renders no statement at all (so browser print cannot output one), disables Print and explains how to narrow the range. The on-screen banner says the same. No pagination rewrite was needed: a 92-day range cap and 2,000-row limit remain.
+`loadReportingAuthorities` (server) combines, per (organization, branch): the canonical three-layer resolver, the live `attendance_can_manage` database predicate, and the per-branch Attendance/Payroll module verdicts (`checkModuleAccess`, built in the Server Action because only Server Actions may import the module-enforcement entry). Any failure lowers authority.
 
-**Branding.** Order: canonical `locations.address` → verified constants (Monks Webster address `1416 FM 528 Rd, Suite D, Webster, TX 77598`, logo, `monkswebster.com`, used only for the Webster branch) → nothing. Another Monks branch with no address does not inherit Webster's. Liquor Tap League City / NASA are identified by branch name only, never receive Monks branding, website or logo, and print no address until one is on the location record.
+| Caller                           | Attendance | Payroll                              | Scope                  |
+| -------------------------------- | ---------- | ------------------------------------ | ---------------------- |
+| Overall owner/manager            | all        | all                                  | org-wide, every tenant |
+| Org owner / general manager      | all        | all                                  | org-wide, own org      |
+| Branch manager / assistant (≥ 2) | all        | all (mirrors DB `payroll_*` level 2) | own branch only        |
+| Staff                            | self       | self (own **locked** records only)   | own branch             |
+| Module off at a branch           | none       | none                                 | per module, per branch |
+| Revoked / unassigned             | none       | none                                 | refused                |
 
-### Security findings
+A selection naming any organization, branch or employee outside this authority is **refused as a whole** with a non-disclosing message. Every row read is checked a second time against the caller's per-branch authority (defense in depth beyond RLS).
 
-- Reads go through `attendance_session_summaries` (`security_invoker = true`), so base-table RLS applies: a member reads **own** rows, or any row at a location where `private.attendance_can_manage_location` holds; a restrictive module-enforcement policy only removes access. `profileIds`/`profileId` are an extra `AND` and can only narrow.
-- Action path: `resolveContext` verifies session, active member, primary location and the R1 stale-tab `expectedLocationId`; the location is the server-verified one, never client-supplied. Roster action requires `attendance_can_manage`.
-- Existing pgTAP `0073_attendance_v2_foundation` already covers (RLS, existing assertions): unrelated org member sees nothing; foreign-organization user sees nothing; an employee sees only their own sessions; a b1 manager reads b1 but not b4. Because access is evaluated per request, loss of a location assignment removes access on the next call. pgTAP was **not re-run** in this pass (no DB change).
-- New focused tests: IN-list keeps location scope; oversized or non-UUID `profileIds` rejected before any read; truncation surfaced.
-- Only the repo-controlled `THE_MONKS_LOGO_MARKUP` constant can reach `dangerouslySetInnerHTML`; tests assert caller markup is ignored.
+### Report contract (summary)
 
-### Functional coverage (honest status)
+`CombinedReport`: `reference`, `generatedAt`, `period` (attendance range **and** payroll accounting months), `organizations`, `branches`, `employees`, `attendanceSlices/Rows`, `payrollEntries` (source, branch attribution, base/adjustments/gross/payments/balance, payment state, `includedInTotals`), `register`, `ledger`, `summary`, `byOrganization`, `byBranch`, `exceptions`, `completeness`. Output may be split by organization or branch: the split happens **before** totals, so each sub-report has its own totals, exceptions and completeness.
 
-| Capability                                                   | Status                                                                                                                                                    |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| This month / Last month / explicit month-year / custom range | Implemented (UI tests cover presets; month nav from B1)                                                                                                   |
-| Single / multiple / all authorized employees                 | Implemented for managers (native source); staff see only themselves                                                                                       |
-| Native internal attendance statement                         | Implemented and print-verified                                                                                                                            |
-| External Monks (Neon) attendance statement                   | **Partial**: `normalizeNeonAttendanceToUnified` exists and is tested but is **not wired** to the Neon workspace UI. Existing Neon print path is unchanged |
-| Empty results, missing punches, overnight, DST               | Domain tests (overnight stays on service date; 25h DST fall-back keeps real elapsed seconds). No DST payroll reconciliation performed                     |
-| Organization branding                                        | Implemented with the limits above                                                                                                                         |
-| Physical page numbering                                      | Not provided (deferred)                                                                                                                                   |
+### Review findings and corrections (independent code review, high effort)
 
-### Verification evidence
+Ten findings; all fixed with tests:
 
-- Antigravity (reused where still valid): 35 attendance/print files / 403 tests; 4,375 repository tests (7 skipped); lint/typecheck clean; browser-smoke CI green on `c5cd729`.
-- This pass, targeted: `src/features/attendance`, `src/features/payroll`, `src/components/print`, `src/lib` — 68 files / 823 tests pass. `tsc --noEmit` and `eslint --max-warnings=0` (attendance, print) exit 0. Prettier verified on changed files.
-- **Real print check (Chromium via Playwright, US Letter, print media, temporary harness route since removed):** PDF = 4 pages, MediaBox 612 × 792 pt (Letter); a 61-row employee spans 2 pages, two others 1 page each (4 total, matching section breaks); no horizontal overflow of tables; `thead` = `table-header-group`, `tr` `break-inside: avoid`; no dialog chrome, buttons or inputs visible in print; white background; no "Page n of" text; letterhead shows `1416 FM 528 Rd, Suite D` / `Webster, TX 77598`. **Not verified:** pixel-level inspection of PDF pages 2+ (no PDF rasteriser on this machine), so header repetition on a continuation page is confirmed from computed CSS only; Safari and Firefox print engines not tested.
-- Exact-head GitHub CI for the corrected head: see PR #355 comment.
+1. **PostgREST `max_rows` (1000) silently capped payroll, ledger and native attendance reads**, so the "limit + 1" truncation guards could never fire (the V2.0.6 native reader had the same latent flaw). New `src/lib/postgrest-paging.ts` pages with an exact count; proven against real PostgREST (1,196 shifts and 1,150 periods returned in full; 2,392 shifts reported incomplete).
+2. Split-by-organization/branch dropped a group whose read failed. Fixed.
+3. Self-only attendance ignored an employee selection. Fixed.
+4. An info-level "not configured" note blocked printing. Completeness now follows severity.
+5. A non-manager opening an employee link was stuck. Fixed.
+6. Org-level payroll inclusion was judged from the content-narrowed branch set. Now judged from the branches chosen.
+7. External (Neon) people were not scoped to the selected external branch; branch-less attendance never matched payroll. Fixed.
+8. Sequential reads → bounded concurrency. 9. Duplicate profile-name lookup → shared chunked helper with failure reporting. 10. Default periods used "the first branch's" zone → one explicit, displayed reporting zone; month iteration single-sourced.
 
-### Merge status
+Found during implementation (not by the reviewer): identity links were loaded only for external-mode organizations, so old Neon-keyed payroll in an organization that later moved to internal attendance showed its linked person as "unmapped". Links are now loaded for every organization in scope.
 
-PR #355 is open against `development`. Not merged. Required: green exact-head CI, independent review result, and owner approval for the merge commit (repository merge-commit convention).
+### Test evidence
 
-### Files in the original delivery
+- Focused: 262 tests across the reporting domain/data/actions/components, `report-period`, paging, print-stylesheet and attendance data (all pass). Full repository: **340 files / 4,598 tests passed (7 skipped, as baseline)**.
+- Reporting + period tests re-run under `TZ=UTC`, `America/Chicago`, `Asia/Tokyo` (394 tests at that checkpoint): all pass. DST days (2026-03-08 spring-forward, 2026-11-01 fall-back), a month-end overnight shift and a year boundary are covered.
+- **Real-RLS suite** `tests/local/combined-reporting.local.test.ts` (28 tests, real Supabase Auth JWTs, disposable loopback stack at ledger 97; the two newer migrations — internal-attendance default and table-allocation retention — do not touch these policies): role matrix (Overall, org GM, branch manager, assistant, staff, revoked, foreign-org manager); cross-organization / cross-branch / cross-employee forgery refused; staff see only their own locked payroll and attendance; exact snapshot arithmetic from stored rows (base 60,000 − confirmed 20,000 − (−1,000) = 41,000; draft 5,000 not counted); org-level record rules; split by branch; **read-only proof (row counts of every financial and attendance table unchanged)**; completeness beyond `max_rows`. Residue check after the run: 0 organizations, 0 users, enforcement `staged`.
+- Gates run locally: `format:check`, `lint`, `typecheck` (with typegen), `npm test`, `CI=1 npm run build`, `check-nonprod-env`. Browser smoke (desktop, demo mode): see PR comment for the final result.
 
-`report-branding.ts`/`.test.ts`, `report-letterhead.tsx`/`.test.tsx`, `unified-attendance-report.ts`/`.test.ts`, `unified-attendance-print-dialog.tsx`/`.test.tsx`, `native-report-data.ts`, `native-report-actions.ts`/`.test.ts`, `native-attendance-report.tsx`/`.test.tsx`, `attendance-workspace.test.tsx`, `globals.css`, `tasks/current-task.md`.
+### Print acceptance (physical output)
 
-### Deferred
+Method: temporary harness route (removed, never committed) rendering fixtures → Chromium `page.pdf()` (Letter, `preferCSSPageSize`, print media, **dark OS color scheme**) → page text extracted per page and pages rasterised in Chromium for visual inspection.
 
-- Physical page numbering (needs `@page` margin boxes with a supported fallback or server-side PDF).
-- Wiring the Neon normalizer to the Monks attendance workspace statement.
-- Pixel-level PDF inspection and Safari/Firefox print checks.
-- Historical DST payroll reconciliation (no payroll or snapshot recalculation was attempted).
-- Address on Liquor Tap location records (needed to print their address).
+| Case                                   | Pages | Result                                                                                                     |
+| -------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------- |
+| One-page employee (attendance view)    | 4     | cover, summary, statement, attendance details; all 612 × 792 pt                                            |
+| Multipage employee (70 shifts)         | 6     | details table spans pages 4–6; header row repeats on 5 and 6; total row shares the last page with ≥ 2 rows |
+| All-employee register (60 employees)   | 69    | register spans several pages with repeated headers; one statement page per employee                        |
+| Combined, 2 organizations / 3 branches | 9     | neutral cover; per-organization letterheads on each statement (Liquor Tap / Monk's Webster address)        |
+| Long ledger (82 entries)               | 5     | header repeated on pages 3–5; totals after the last entry                                                  |
+| Empty report                           | 2     | cover + "No records" page                                                                                  |
 
-## Batch C — V2.0.7 Combined Attendance & Payroll Reporting (planned, not started)
+Defect found and fixed by this inspection: under the **dark theme** the root `<html>` kept the dark app background in print (only `<body>` was forced white), so a PDF with "Background graphics" on would carry dark page margins. `html, body` are now forced white in the shared print block (this also corrects the older print surfaces). A control PDF showed no such artifact, confirming the cause.
 
-The earlier proposal (`feature/v2-007-payroll-enhancements`) was too narrow and is superseded.
-Preferred branch: `feature/v2-007-combined-reporting`. Starts only after PR #355 is merged into `development`.
+Also from inspection: negative amounts no longer rely on red alone; the ledger shows separate payment and adjustment totals.
 
-Scope:
+**Still not verified:** Firefox (not installed); Safari (WebKit checked for print-media styles only — it does not support named pages, so it falls back to the shared 8 mm `@page` margin instead of 12 mm); a physical printer; duplex behaviour; pages of the older Attendance/Payroll print dialogs. Physical page numbering is intentionally not printed.
 
-- Reporting Center navigation.
-- Authorized organization and branch aggregation.
-- All / selected / individual employees.
-- Attendance only, Payroll only, or Both.
-- Combined or separate document output.
-- Cover and executive summary.
-- All-employee payroll register.
-- Individual employee statements.
-- Attendance detail pages.
-- Adjustments and payment ledger.
-- Financial source attribution and reconciliation.
-- Role / capability authorization.
+### Financial reconciliation
 
-Inputs from Batch B to reuse: `resolveReportBrand` / `ReportLetterhead`, the `UnifiedAttendanceReport` contract (seconds-based, with `hoursBasis`, `isPartial`, `totalUnresolvedShifts`), and the print-isolation CSS. Payroll remains the financial source of truth; attendance hours are never converted into paid amounts here.
+Report totals equal the sum of the stored snapshots, payments and adjustments for the selected records (real-DB test). Nothing was recalculated; where payroll hours and current attendance differ the report prints both and a warning. No duplicate source is summed. Historical payroll, Neon and Production were not touched.
 
-Next action: owner decision on PR #355 merge, then a Batch C discovery pass.
+### Files changed
+
+New: `src/features/reporting/**` (domain: types, authority, composer, partition, views, links; data: authority loader, scoped readers; actions; components: Reporting Center, document, sections, entry), `src/app/reporting/{page,loading}.tsx`, `src/lib/{report-period,postgrest-paging}.ts`, `src/app/print-stylesheet.test.ts`, `tests/local/combined-reporting.local.test.ts`. Modified: `globals.css` (print), `report-letterhead.tsx` (optional period heading), unified attendance report/dialog/native report (period kind, year labels, paged reader), `active-context.ts` (access-bearing eligible contexts, server-only), settings/attendance/payroll entry links, `enforcement-coverage.test.ts` (reasoned exemption), `tasks/current-task.md`, `docs/STATUS.md`.
+
+### Open items and deferrals
+
+- Firefox/Safari/physical print verification (above).
+- Existing helpers not paged: `listLocationEmployees` / identity-link lists (a single branch or organization would need > 1,000 rows; not realistic today). `listLocationEmployees` also sends one `IN` list of profile ids.
+- XLSX export (CSV only). Payment method (not stored). Combined-report PDF is browser print, not a server-generated PDF.
+- Hosted DEV acceptance with real data and a Preview smoke are not done (no hosted contact was authorized).
+- The Reporting Center is manager-oriented in the UI; staff self-reporting works on the server but has no navigation entry beyond the link from Attendance.
+
+### Next owner decision
+
+Review and merge the PR into `development` (separate approval; this batch did not merge it). Then decide on hosted DEV acceptance and whether XLSX / server-side PDF belong in V2.0.8+. V2.0.8 was not started.
