@@ -121,3 +121,12 @@ describe("month helpers", () => {
     expect(inclusiveDayCount("2025-12-31", "2026-01-01")).toBe(2);
   });
 });
+
+describe("formatPeriodMonth", () => {
+  it("labels a payroll accounting month with its year", async () => {
+    const { formatPeriodMonth } = await import("./report-period");
+    expect(formatPeriodMonth("2026-11-01")).toBe("November 2026");
+    expect(formatPeriodMonth("2026-01-01")).toBe("January 2026");
+    expect(formatPeriodMonth("garbage")).toBe("garbage");
+  });
+});

@@ -229,7 +229,9 @@ describe("generateCombinedReportAction — authorization is re-verified on the s
     expect(both.ok).toBe(true);
     expect(
       both.ok &&
-        both.data.exceptions.some((x) => x.code === "payroll_not_authorized"),
+        both.data.reports[0]!.exceptions.some(
+          (x) => x.code === "payroll_not_authorized",
+        ),
     ).toBe(true);
     // Payroll is still asked of the reader, which re-checks every row itself; the reader is
     // given only branches the caller has Payroll authority at.
@@ -255,10 +257,9 @@ describe("generateCombinedReportAction — authorization is re-verified on the s
       NASA,
       WEBSTER,
     ]);
-    expect(res.ok && res.data.organizations.map((o) => o.name)).toEqual([
-      "Liquor Tap",
-      "The Monk's",
-    ]);
+    expect(
+      res.ok && res.data.reports[0]!.organizations.map((o) => o.name),
+    ).toEqual(["Liquor Tap", "The Monk's"]);
   });
 
   it("attendance-only does not read payroll; payroll-only does not read attendance", async () => {
@@ -286,7 +287,7 @@ describe("generateCombinedReportAction — authorization is re-verified on the s
       ],
     });
     const res = await generateCombinedReportAction(BASE);
-    expect(res.ok && res.data.completeness.complete).toBe(false);
+    expect(res.ok && res.data.reports[0]!.completeness.complete).toBe(false);
   });
 
   it("never returns a writing path: only the read functions are invoked", async () => {

@@ -140,3 +140,11 @@ export function inclusiveDayCount(start: string, end: string): number | null {
   if (!parseIsoDate(start) || !parseIsoDate(end) || start > end) return null;
   return Math.round((at(end).getTime() - at(start).getTime()) / 86_400_000) + 1;
 }
+
+/** "November 2026" for a `YYYY-MM-01` payroll accounting month (or any date in the month). */
+export function formatPeriodMonth(periodMonth: string): string {
+  const bounds = monthBounds(periodMonth);
+  return bounds
+    ? formatReportPeriodLabel(bounds.start, bounds.end)
+    : periodMonth;
+}

@@ -25,6 +25,7 @@ import {
   type CapabilityLevel,
 } from "../domain/report-authority";
 import { composeCombinedReport } from "../domain/report-composer";
+import { partitionComposeInput } from "../domain/report-partition";
 import {
   REPORT_MAX_EMPLOYEE_SELECTION,
   REPORT_MAX_RANGE_DAYS,
@@ -40,6 +41,11 @@ export type ReportingActionResult<T> =
       readonly error: string;
       readonly sessionInvalid?: true;
     };
+
+/** One report, or several when the output is split by organization or branch. */
+export interface ReportBundle {
+  readonly reports: readonly CombinedReport[];
+}
 
 export interface ReportingOptionsBranch {
   readonly id: string;
@@ -230,7 +236,7 @@ export async function getReportingOptionsAction(): Promise<
  */
 export async function generateCombinedReportAction(
   input: unknown,
-): Promise<ReportingActionResult<CombinedReport>> {
+): Promise<ReportingActionResult<ReportBundle>> {
   try {
     const parsed = filtersSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: INVALID };
@@ -346,7 +352,7 @@ export async function generateCombinedReportAction(
       ).values(),
     ].sort((a, b) => a.name.localeCompare(b.name));
 
-    const report = composeCombinedReport({
+    const composeInput = {
       generatedAt: new Date().toISOString(),
       filters,
       organizations,
@@ -358,8 +364,11 @@ export async function generateCombinedReportAction(
       neonUsers: roster.neonUsers,
       actorNames: payroll?.actorNames ?? {},
       issues,
-    });
-    return { ok: true, data: report };
+    };
+    const reports = partitionComposeInput(composeInput, filters.output).map(
+      (part) => composeCombinedReport(part),
+    );
+    return { ok: true, data: { reports } };
   } catch (err: unknown) {
     console.error("generateCombinedReportAction unexpected error", err);
     return {

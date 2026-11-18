@@ -26,6 +26,7 @@ import { computeBalanceCents } from "@/features/payroll/domain/calculate-payroll
 import type { UnifiedAttendanceReport } from "@/features/attendance/domain/unified-attendance-report";
 import {
   classifyReportPeriod,
+  formatPeriodMonth,
   formatReportPeriodLabel,
   monthBounds,
 } from "@/lib/report-period";
@@ -188,10 +189,7 @@ function payrollMonthsFor(start: string, end: string): string[] {
   return months;
 }
 
-function monthLabel(periodMonth: string): string {
-  const b = monthBounds(periodMonth);
-  return b ? formatReportPeriodLabel(b.start, b.end) : periodMonth;
-}
+const monthLabel = formatPeriodMonth;
 
 function emptyTotals(): MutableTotals {
   return {
