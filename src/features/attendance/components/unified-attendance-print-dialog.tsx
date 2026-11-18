@@ -12,6 +12,7 @@ import type {
   UnifiedEmployeeSection,
 } from "../domain/unified-attendance-report";
 import { triggerPrintWithFilename } from "@/lib/print-utils";
+import { attendanceStatementTitle } from "@/lib/report-period";
 
 export interface UnifiedAttendancePrintDialogProps {
   readonly report: UnifiedAttendanceReport;
@@ -230,7 +231,9 @@ export function UnifiedAttendancePrintDialog({
                 >
                   {/* Dynamic Branded Letterhead */}
                   <ReportLetterhead
-                    reportTitle="Monthly Staff Attendance Timesheet"
+                    reportTitle={attendanceStatementTitle(
+                      report.reportingPeriodKind ?? "custom",
+                    )}
                     periodName={report.reportingPeriod}
                     employeeName={section.employeeName}
                     employeeRole={section.employeeRole}

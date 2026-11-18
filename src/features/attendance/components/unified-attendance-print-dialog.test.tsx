@@ -204,4 +204,56 @@ describe("UnifiedAttendancePrintDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /Print/i }));
     expect(triggerPrintWithFilename).not.toHaveBeenCalled();
   });
+
+  it("titles a whole-month statement 'Monthly' and shows the year in the period (C0.1)", () => {
+    const month = normalizeNativeAttendanceToUnified(ROWS, {
+      ...OPTIONS,
+      reportingPeriod: "November 2026",
+      reportingPeriodKind: "month",
+    });
+    render(
+      <UnifiedAttendancePrintDialog
+        report={month}
+        onClose={vi.fn()}
+        initialTarget="emp-1"
+      />,
+    );
+    const area = within(
+      document.getElementById("attendance-statement-print-area")!,
+    );
+    expect(area.getByText("Monthly Staff Attendance Timesheet")).toBeVisible();
+    expect(area.getAllByText(/November 2026/).length).toBeGreaterThan(0);
+  });
+
+  it("does not call a custom range a monthly timesheet", () => {
+    const custom = normalizeNativeAttendanceToUnified(ROWS, {
+      ...OPTIONS,
+      reportingPeriod: "Sun, Nov 1 – Sun, Nov 15, 2026",
+      reportingPeriodKind: "custom",
+    });
+    render(
+      <UnifiedAttendancePrintDialog
+        report={custom}
+        onClose={vi.fn()}
+        initialTarget="emp-1"
+      />,
+    );
+    const area = within(
+      document.getElementById("attendance-statement-print-area")!,
+    );
+    expect(area.queryByText(/Monthly Staff Attendance Timesheet/)).toBeNull();
+    expect(area.getByText("Staff Attendance Statement")).toBeVisible();
+    expect(area.getAllByText(/Nov 15, 2026/).length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the neutral title when the period kind is unknown", () => {
+    render(
+      <UnifiedAttendancePrintDialog
+        report={sampleReport}
+        onClose={vi.fn()}
+        initialTarget="emp-1"
+      />,
+    );
+    expect(screen.queryByText(/Monthly Staff Attendance Timesheet/)).toBeNull();
+  });
 });

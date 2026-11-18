@@ -39,6 +39,10 @@ import {
 import { normalizeNativeAttendanceToUnified } from "@/features/attendance/domain/unified-attendance-report";
 import { resolveReportBrand } from "@/components/print/report-branding";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import {
+  classifyReportPeriod,
+  formatReportPeriodLabel,
+} from "@/lib/report-period";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 function shiftDate(date: string, days: number): string {
@@ -203,16 +207,21 @@ export function NativeAttendanceReport({
     ],
   );
 
-  const periodLabel = useMemo(() => {
-    if (start === end) return prettyDate(start);
-    return `${prettyDate(start)} – ${prettyDate(end)}`;
-  }, [start, end]);
+  const periodLabel = useMemo(
+    () => formatReportPeriodLabel(start, end),
+    [start, end],
+  );
+  const periodKind = useMemo(
+    () => classifyReportPeriod(start, end),
+    [start, end],
+  );
 
   const unifiedReport = useMemo(() => {
     return normalizeNativeAttendanceToUnified(rows, {
       organization: brand.organizationName,
       branch: brand.branchName || source.locationName,
       reportingPeriod: periodLabel,
+      reportingPeriodKind: periodKind,
       timeZone: source.timeZone,
       truncated: view?.truncated === true,
     });
@@ -223,6 +232,7 @@ export function NativeAttendanceReport({
     brand.branchName,
     source.locationName,
     periodLabel,
+    periodKind,
     source.timeZone,
   ]);
 
@@ -591,8 +601,8 @@ export function NativeAttendanceReport({
           <CardContent className="pt-5">
             <p className="text-sm font-semibold">No attendance recorded</p>
             <p className="text-muted-foreground text-sm">
-              {prettyDate(start)} – {prettyDate(end)} at {source.locationName}.
-              Clock-ins made in The Lineup appear here.
+              {periodLabel} at {source.locationName}. Clock-ins made in The
+              Lineup appear here.
             </p>
           </CardContent>
         </Card>

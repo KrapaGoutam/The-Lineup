@@ -1,4 +1,5 @@
 import { formatBusinessTime } from "@/lib/date-time";
+import type { ReportPeriodKind } from "@/lib/report-period";
 import { calendarWeekday } from "./attendance-metrics";
 import type { NeonAttendanceRow, NeonUser } from "../data/attendance-data";
 import type { NativeReportRow } from "./native-report";
@@ -84,6 +85,8 @@ export interface UnifiedAttendanceReport {
   readonly organization: string;
   readonly branch: string;
   readonly reportingPeriod: string;
+  /** Whether the period is a day, a whole calendar month or a custom range (C0.1). */
+  readonly reportingPeriodKind?: ReportPeriodKind;
   readonly attendanceSource: string;
   readonly timeZone: string;
   /** What the hours on this statement mean (printed on the statement). */
@@ -149,6 +152,7 @@ function buildReport(
     readonly organization: string;
     readonly branch: string;
     readonly reportingPeriod: string;
+    readonly reportingPeriodKind?: ReportPeriodKind;
     readonly attendanceSource: string;
     readonly timeZone: string;
     readonly hoursBasis: string;
@@ -204,6 +208,7 @@ function buildReport(
     organization: meta.organization,
     branch: meta.branch,
     reportingPeriod: meta.reportingPeriod,
+    reportingPeriodKind: meta.reportingPeriodKind,
     attendanceSource: meta.attendanceSource,
     timeZone: meta.timeZone,
     hoursBasis: meta.hoursBasis,
@@ -234,6 +239,7 @@ export function normalizeNeonAttendanceToUnified(
     readonly organization?: string;
     readonly branch?: string;
     readonly reportingPeriod: string;
+    readonly reportingPeriodKind?: ReportPeriodKind;
     readonly timeZone: string;
     readonly users?: ReadonlyMap<number, NeonUser> | readonly NeonUser[];
     readonly truncated?: boolean;
@@ -321,6 +327,7 @@ export function normalizeNeonAttendanceToUnified(
     organization,
     branch,
     reportingPeriod,
+    reportingPeriodKind: options.reportingPeriodKind,
     attendanceSource: NEON_REPORT_SOURCE_LABEL,
     timeZone,
     hoursBasis: NEON_HOURS_BASIS_LABEL,
@@ -344,6 +351,7 @@ export function normalizeNativeAttendanceToUnified(
     readonly organization?: string;
     readonly branch?: string;
     readonly reportingPeriod: string;
+    readonly reportingPeriodKind?: ReportPeriodKind;
     readonly timeZone: string;
     readonly truncated?: boolean;
   },
@@ -430,6 +438,7 @@ export function normalizeNativeAttendanceToUnified(
     organization,
     branch,
     reportingPeriod,
+    reportingPeriodKind: options.reportingPeriodKind,
     attendanceSource: NATIVE_REPORT_SOURCE_LABEL,
     timeZone,
     hoursBasis: NATIVE_HOURS_BASIS_LABEL,
