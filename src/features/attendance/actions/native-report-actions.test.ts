@@ -250,6 +250,48 @@ describe("getNativeAttendanceReportAction", () => {
     );
   });
 
+  it("passes multiple profileIds through to listNativeAttendance", async () => {
+    signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
+    mocks.listNativeAttendance.mockResolvedValue({
+      ok: true,
+      rows: [],
+      truncated: false,
+    });
+    const profileIds = [PROFILE, "00000000-0000-0000-0000-0000000000c2"];
+    await getNativeAttendanceReportAction({ ...input, profileIds });
+    expect(mocks.listNativeAttendance).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ profileIds }),
+    );
+  });
+
+  it("rejects an oversized or malformed profileIds list before any read", async () => {
+    signedIn(supabaseDouble({ mode: "internal_the_lineup", canManage: true }));
+    const many = Array.from(
+      { length: 201 },
+      (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`,
+    );
+    for (const profileIds of [many, ["not-a-uuid"]]) {
+      const res = await getNativeAttendanceReportAction({
+        ...input,
+        profileIds,
+      });
+      expect(res.ok).toBe(false);
+    }
+    expect(mocks.listNativeAttendance).not.toHaveBeenCalled();
+  });
+
+  it("surfaces truncation so callers can refuse a partial statement", async () => {
+    signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
+    mocks.listNativeAttendance.mockResolvedValue({
+      ok: true,
+      rows: [],
+      truncated: true,
+    });
+    const res = await getNativeAttendanceReportAction(input);
+    expect(res.ok && res.data.truncated).toBe(true);
+  });
+
   describe("stale-tab binding (R1): the rows must be for the location on screen", () => {
     it("refuses to read when the location the UI shows is not the verified one", async () => {
       signedIn(

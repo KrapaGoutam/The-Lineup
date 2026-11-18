@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import {
+  normalizeLocationAddress,
+  type LocationAddress,
+} from "@/features/locations/domain/location";
 import { getPrimaryLocation } from "@/features/locations/data/primary-location";
 import { guardModule } from "@/features/modules/data/module-enforcement";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
@@ -63,6 +67,7 @@ const NO_LOCATION =
   "Choose a location first. Attendance is shown for one location at a time.";
 const INVALID_REQUEST = "That attendance request is invalid.";
 const MAX_RANGE_DAYS = 92;
+const MAX_PROFILE_FILTER = 200;
 
 const slugSchema = z
   .string()
@@ -139,6 +144,11 @@ export interface AttendanceSourceView {
   readonly timeZone: string;
   /** The caller's own authority at this location; the database still enforces it. */
   readonly canManage: boolean;
+  readonly organizationId?: string;
+  readonly organizationName?: string;
+  readonly organizationSlug?: string;
+  /** Canonical `locations.address` (normalized) for the printed letterhead. */
+  readonly locationAddress?: LocationAddress;
 }
 
 /** Which attendance source applies to the verified location, and what the caller can do. */
@@ -151,16 +161,22 @@ export async function getAttendanceSourceAction(input: {
 
     const resolved = await resolveContext(parsed.data.restaurantSlug);
     if (!resolved.ok) return resolved;
-    const { supabase, location } = resolved.ctx;
+    const { supabase, location, organizationId } = resolved.ctx;
 
-    const [{ data: row, error }, { data: canManage }] = await Promise.all([
-      supabase
-        .from("locations")
-        .select("name, attendance_mode, time_zone")
-        .eq("id", location.id)
-        .maybeSingle(),
-      supabase.rpc("attendance_can_manage", { p_location_id: location.id }),
-    ]);
+    const [{ data: row, error }, { data: canManage }, { data: orgRow }] =
+      await Promise.all([
+        supabase
+          .from("locations")
+          .select("name, attendance_mode, time_zone, address")
+          .eq("id", location.id)
+          .maybeSingle(),
+        supabase.rpc("attendance_can_manage", { p_location_id: location.id }),
+        supabase
+          .from("organizations")
+          .select("id, name, slug")
+          .eq("id", organizationId)
+          .maybeSingle(),
+      ]);
     if (error || !row) {
       return { ok: false, error: "Unable to read this location." };
     }
@@ -176,6 +192,12 @@ export async function getAttendanceSourceAction(input: {
         locationName: row.name,
         timeZone: row.time_zone,
         canManage: canManage === true,
+        organizationId: orgRow?.id ?? organizationId,
+        organizationName: orgRow?.name ?? "The Lineup",
+        organizationSlug: orgRow?.slug ?? parsed.data.restaurantSlug,
+        locationAddress: normalizeLocationAddress(
+          (row.address ?? undefined) as LocationAddress | undefined,
+        ),
       },
     };
   } catch (err: unknown) {
@@ -198,6 +220,13 @@ const reportInputSchema = z
     startDate: dateSchema,
     endDate: dateSchema,
     profileId: uuidSchema.nullable().optional(),
+    // Narrowing filter only (RLS decides visibility). Bounded so a crafted request cannot
+    // send an unbounded IN-list.
+    profileIds: z
+      .array(uuidSchema)
+      .max(MAX_PROFILE_FILTER)
+      .nullable()
+      .optional(),
     /** The location the UI is showing; compared with the verified one (R1), never trusted. */
     expectedLocationId: uuidSchema.optional(),
   })
@@ -221,6 +250,7 @@ export async function getNativeAttendanceReportAction(input: {
   startDate: string;
   endDate: string;
   profileId?: string | null;
+  profileIds?: string[] | null;
   expectedLocationId?: string;
 }): Promise<ActionResult<NativeReportView>> {
   try {
@@ -257,6 +287,7 @@ export async function getNativeAttendanceReportAction(input: {
       endDate: parsed.data.endDate,
       timeZone: row.time_zone,
       profileId: parsed.data.profileId ?? null,
+      profileIds: parsed.data.profileIds ?? null,
     });
     if (!result.ok) return { ok: false, error: result.error };
 

@@ -1,18 +1,34 @@
-# Release Group 1 — Batch A (V2.0.5) Monks Neon timezone — IN REVIEW
+# Release Group 1 — Batch A (V2.0.5) Monks Neon timezone — MERGED TO DEVELOPMENT
 
 Full plan, root cause, evidence and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md` (single source of truth).
 Branch `fix/v2-005-monks-neon-timezone`, base `39ed0d4` (origin/development). Worktree `.tmp/v2-005-monks-neon-timezone`.
+Merged via PR #354 at merge commit `fbf44a1a2cc5158bf372e43967562b88a70bd68f`.
 
 - [x] Stage 0 baseline (development 39ed0d4, V2.0.4 merged via #348).
 - [x] Root cause: Neon clock columns are `timestamp without time zone` (local wall time); driver parsed in process TZ → 4:59 AM on UTC servers.
 - [x] Fix at Neon data boundary (`::text` + `neonWallTimeToInstantIso`, America/Chicago); contract unchanged; internal provider untouched.
 - [x] Tests: 13 new + existing, pass under TZ=UTC / America/Chicago / Asia/Tokyo; live read-only probe OK; typecheck/lint/prettier clean.
-- [ ] Open PR to `development`; exact-head CI; independent review; merge.
-- [ ] Batch B (V2.0.6) — blocked until Batch A merged.
+- [x] Open PR #354 to `development`; exact-head CI passed; independent review PASS; owner-authorized merge commit `fbf44a1a2cc5158bf372e43967562b88a70bd68f`.
+- [x] Batch B (V2.0.6) baseline established at `fbf44a1`.
+
+---
+
+# Release Group 1 — Batch B (V2.0.6) Monthly Attendance Reports & Dynamic Branding — PR #355 CORRECTED, AWAITING CI + MERGE DECISION
+
+Full plan, review findings, decisions and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
+Branch `feature/v2-006-monthly-attendance-reports` (PR #355 → `development`), base `fbf44a1`. Worktree `.tmp/v2-006-monthly-attendance-reports`.
+Reviewed head `c5cd729`; corrections are in the commit that follows it on the same branch.
+
+- [x] B0–B6 implemented by Antigravity (filters, unified contract, print dialog, dynamic branding, safeguards, tests).
+- [x] Review corrections: Prettier on HANDOFF.md; Monks address (Webster, TX 77598); integer-second aggregation with no gross-hours fallback; voided excluded; "Page X of Y" removed; truncated reports cannot be printed; no caller-supplied logo markup; `profileIds` bounded; clearer empty-multi-select copy.
+- [x] Targeted tests (68 files / 823 tests), tsc, eslint, and a real Chromium Letter PDF check passed locally.
+- [ ] Exact-head GitHub CI green on the corrected head (see PR #355 comment for the run id).
+- [ ] Independent review result and owner approval, then merge commit into `development`.
 
 ## Current State & Next Step
 
-Batch A code complete and committed on its branch. Next: push, open PR, wait for CI, review, merge; only then start Batch B from the new `development` HEAD.
+Corrections committed and pushed to PR #355. Next: confirm exact-head CI, then owner merge decision.
+Do not start V2.0.7 (`feature/v2-007-combined-reporting`, Combined Attendance & Payroll Reporting) until PR #355 is merged into `development`.
 
 ---
 
