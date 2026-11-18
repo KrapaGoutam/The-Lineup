@@ -36,11 +36,9 @@ const NUM = "text-right font-mono tabular-nums whitespace-nowrap";
 
 export function Money({ cents }: { cents: number | null }) {
   if (cents === null) return <span aria-label="not applicable">—</span>;
-  return (
-    <span className={cents < 0 ? "text-red-800" : undefined}>
-      {formatCents(cents)}
-    </span>
-  );
+  // The sign (a real minus) carries the meaning; colour alone never does (print is often
+  // black and white, and colour-only cues fail for colour-blind readers).
+  return <span>{formatCents(cents)}</span>;
 }
 
 function SectionTitle({ children, id }: { children: ReactNode; id?: string }) {
@@ -856,10 +854,18 @@ export function LedgerSection({ report }: { report: CombinedReport }) {
             ))}
             <tr className="report-total-row border-t border-gray-400 font-bold">
               <td className={TD} colSpan={5}>
-                Confirmed payments / adjustments effect ({t.entries} entries)
+                Total confirmed payments (effect on amount owed)
               </td>
               <td className={`${TD} ${NUM}`} colSpan={2}>
-                <Money cents={-t.confirmedPaymentsCents} /> /{" "}
+                <Money cents={-t.confirmedPaymentsCents} />
+              </td>
+            </tr>
+            <tr className="report-total-row font-bold">
+              <td className={TD} colSpan={5}>
+                Total adjustments (effect on amount owed) — {t.entries} entries
+                listed
+              </td>
+              <td className={`${TD} ${NUM}`} colSpan={2}>
                 <Money cents={t.adjustmentEffectCents} />
               </td>
             </tr>

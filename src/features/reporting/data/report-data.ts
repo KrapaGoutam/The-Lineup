@@ -219,10 +219,15 @@ export async function loadRoster(
   ];
   let neonUsers: NeonUser[] | null = null;
 
-  for (const orgId of externalOrgs) {
-    const orgExternal = authorities.filter(
-      (a) => a.organizationId === orgId && a.attendanceMode === "external",
-    );
+  // Verified identity links for EVERY organization in scope, not only those with an
+  // external branch: payroll records keyed by an external (Neon) id outlive a switch to
+  // internal attendance, and their owner is still identified through the verified link.
+  // (RLS lets a manager read the organization's links and anyone else only their own.)
+  const linkRowsByOrg = new Map<
+    string,
+    Array<{ neonUserId: number; profileId: string }>
+  >();
+  for (const orgId of new Set(authorities.map((a) => a.organizationId))) {
     const links = await listAttendanceIdentityLinks(supabase, {
       organizationId: orgId,
     });
@@ -231,15 +236,14 @@ export async function loadRoster(
         issue(
           "source_unavailable",
           "warning",
-          `External identity links for ${orgExternal[0]!.organizationName} could not be loaded; external employees stay unlinked.`,
-          {
-            organizationId: orgId,
-          },
+          `Identity links for ${authorities.find((a) => a.organizationId === orgId)!.organizationName} could not be loaded; people recorded under an external id stay unlinked in this report.`,
+          { organizationId: orgId },
         ),
       );
     }
-    const linkRows = links.ok ? links.data : [];
-    for (const l of linkRows) {
+    const rows = links.ok ? links.data : [];
+    linkRowsByOrg.set(orgId, rows);
+    for (const l of rows) {
       identityLinks.push({
         organizationId: orgId,
         neonUserId: l.neonUserId,
@@ -247,6 +251,13 @@ export async function loadRoster(
       });
       if (l.profileId === profileId) ownNeonIds[orgId] = l.neonUserId;
     }
+  }
+
+  for (const orgId of externalOrgs) {
+    const orgExternal = authorities.filter(
+      (a) => a.organizationId === orgId && a.attendanceMode === "external",
+    );
+    const linkRows = linkRowsByOrg.get(orgId) ?? [];
 
     const managesAll = orgExternal.filter((a) => a.attendance === "all");
     const orgWide = managesAll.some((a) => a.orgWide);

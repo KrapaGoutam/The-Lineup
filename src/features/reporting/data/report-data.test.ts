@@ -614,6 +614,26 @@ describe("loadRoster — who the caller may select", () => {
     expect(mocks.getActiveNeonUsers).not.toHaveBeenCalled();
   });
 
+  it("loads verified identity links for an INTERNAL organization too, so old external-keyed payroll still resolves to its linked person", async () => {
+    mocks.listAttendanceIdentityLinks.mockResolvedValue({
+      ok: true,
+      data: [
+        { profileId: "p-ava", neonUserId: 7, linkedBy: "x", linkedAt: "" },
+      ],
+    });
+    const roster = await loadRoster(
+      db({ profiles: [{ id: ME, display_name: "Me" }] }).client,
+      ME,
+      [auth({ orgWide: true })],
+    );
+    expect(mocks.listAttendanceIdentityLinks).toHaveBeenCalledTimes(1);
+    expect(roster.identityLinks).toEqual([
+      { organizationId: TAP, neonUserId: 7, profileId: "p-ava" },
+    ]);
+    // internal organization: the external clock is never consulted
+    expect(mocks.getActiveNeonUsers).not.toHaveBeenCalled();
+  });
+
   it("an unreachable external clock is a blocking issue, not an empty roster", async () => {
     mocks.getActiveNeonUsers.mockResolvedValue({ ok: false, error: "x" });
     const roster = await loadRoster(

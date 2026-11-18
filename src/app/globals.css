@@ -213,6 +213,9 @@ a {
     user-select: text !important;
   }
 
+  /* The root element too: under the dark theme `html` keeps the dark app background, which
+     a browser prints behind the page (and in its margins) when "Background graphics" is on. */
+  html,
   body {
     background: white !important;
     color: #111827 !important;
@@ -315,7 +318,9 @@ a {
 @media print {
   .report-document {
     page: report;
-    background: white !important;
+    /* Paper is already white: painting a white rectangle only adds a hairline seam in some
+       PDF viewers. */
+    background: transparent !important;
     color: #111827 !important;
     width: 100% !important;
     max-width: none !important;
