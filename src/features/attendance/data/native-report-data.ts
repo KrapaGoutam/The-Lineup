@@ -82,6 +82,7 @@ export async function listNativeAttendance(
     readonly endDate: string;
     readonly timeZone: string;
     readonly profileId?: string | null;
+    readonly profileIds?: readonly string[] | null;
   },
 ): Promise<NativeReportReadResult> {
   try {
@@ -95,7 +96,11 @@ export async function listNativeAttendance(
       .order("clock_in_at", { ascending: false })
       .limit(NATIVE_REPORT_ROW_LIMIT + 1);
 
-    if (params.profileId) query = query.eq("profile_id", params.profileId);
+    if (params.profileIds && params.profileIds.length > 0) {
+      query = query.in("profile_id", [...params.profileIds]);
+    } else if (params.profileId) {
+      query = query.eq("profile_id", params.profileId);
+    }
 
     const { data, error } = await query;
     if (error) {

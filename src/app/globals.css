@@ -252,6 +252,15 @@ a {
     color: #6b7280 !important;
   }
 
+  .print-timesheet-table thead {
+    display: table-header-group !important;
+  }
+
+  .print-timesheet-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
   /* One printed page per employee -- applied to every "roster" print
      job's per-employee wrapper (Attendance's PrintableReport, the
      Payroll batch dialog). `:last-child` never forces a trailing blank

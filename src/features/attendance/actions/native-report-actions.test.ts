@@ -250,6 +250,21 @@ describe("getNativeAttendanceReportAction", () => {
     );
   });
 
+  it("passes multiple profileIds through to listNativeAttendance", async () => {
+    signedIn(supabaseDouble({ mode: "internal_the_lineup" }));
+    mocks.listNativeAttendance.mockResolvedValue({
+      ok: true,
+      rows: [],
+      truncated: false,
+    });
+    const profileIds = [PROFILE, "00000000-0000-0000-0000-0000000000c2"];
+    await getNativeAttendanceReportAction({ ...input, profileIds });
+    expect(mocks.listNativeAttendance).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ profileIds }),
+    );
+  });
+
   describe("stale-tab binding (R1): the rows must be for the location on screen", () => {
     it("refuses to read when the location the UI shows is not the verified one", async () => {
       signedIn(

@@ -61,4 +61,73 @@ describe("ReportLetterhead", () => {
     expect(container.querySelectorAll("img")).toHaveLength(0);
     expect(container.querySelectorAll("svg")).toHaveLength(1);
   });
+
+  it("renders Liquor Tap League City with organization-name fallback and no SVG logo", () => {
+    const { container } = render(
+      <ReportLetterhead
+        reportTitle="Monthly Attendance Timesheet"
+        periodName="October 2026"
+        employeeName="Jack Taylor"
+        brand={{
+          organizationName: "Liquor Tap",
+          organizationSlug: "liquor-tap",
+          locationName: "League City",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Liquor Tap" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Liquor Tap - League City")).toBeInTheDocument();
+    expect(screen.getByText("League City, Texas")).toBeInTheDocument();
+    expect(screen.getByText("Jack Taylor")).toBeInTheDocument();
+    expect(screen.getByText("October 2026")).toBeInTheDocument();
+    // No unverified logo asset -> uses text mark
+    expect(container.querySelectorAll("svg")).toHaveLength(0);
+    expect(screen.getByText("LT")).toBeInTheDocument();
+  });
+
+  it("renders Liquor Tap NASA with correct branch title", () => {
+    render(
+      <ReportLetterhead
+        reportTitle="Monthly Attendance Timesheet"
+        periodName="October 2026"
+        brand={{
+          organizationName: "Liquor Tap",
+          organizationSlug: "liquor-tap",
+          locationName: "NASA",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Liquor Tap" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Liquor Tap - NASA")).toBeInTheDocument();
+    expect(screen.getByText("Houston, Texas")).toBeInTheDocument();
+  });
+
+  it("renders The Lineup platform fallback", () => {
+    render(
+      <ReportLetterhead
+        reportTitle="System Attendance Audit"
+        periodName="November 2026"
+        brand={{
+          organizationName: "The Lineup",
+          organizationSlug: "the-lineup",
+          locationName: "Operations",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "The Lineup" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("The Lineup - Operations")).toBeInTheDocument();
+    expect(
+      screen.getByText("Restaurant Management Platform"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("TL")).toBeInTheDocument();
+  });
 });
