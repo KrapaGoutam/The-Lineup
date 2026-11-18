@@ -130,3 +130,39 @@ describe("formatPeriodMonth", () => {
     expect(formatPeriodMonth("garbage")).toBe("garbage");
   });
 });
+
+describe("monthsInRange (single source for the payroll months a report reads AND displays)", () => {
+  it("lists every touched month, across a year boundary", async () => {
+    const { monthsInRange } = await import("./report-period");
+    expect(monthsInRange("2026-11-15", "2026-11-20")).toEqual(["2026-11-01"]);
+    expect(monthsInRange("2025-12-15", "2026-01-15")).toEqual([
+      "2025-12-01",
+      "2026-01-01",
+    ]);
+    expect(monthsInRange("2026-01-31", "2026-04-01")).toEqual([
+      "2026-01-01",
+      "2026-02-01",
+      "2026-03-01",
+      "2026-04-01",
+    ]);
+    expect(monthsInRange("bad", "2026-01-01")).toEqual([]);
+  });
+});
+
+describe("pickReportingTimeZone", () => {
+  it("is the most common zone, ties alphabetical, never 'whichever branch is first'", async () => {
+    const { pickReportingTimeZone } = await import("./report-period");
+    expect(
+      pickReportingTimeZone([
+        "Asia/Tokyo",
+        "America/Chicago",
+        "America/Chicago",
+      ]),
+    ).toBe("America/Chicago");
+    expect(pickReportingTimeZone(["Asia/Tokyo", "America/Chicago"])).toBe(
+      "America/Chicago",
+    );
+    expect(pickReportingTimeZone(["Asia/Tokyo"])).toBe("Asia/Tokyo");
+    expect(pickReportingTimeZone([])).toBe("America/Chicago");
+  });
+});

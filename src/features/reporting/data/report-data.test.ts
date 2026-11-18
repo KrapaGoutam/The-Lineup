@@ -73,12 +73,20 @@ function periodRow(over: PeriodRow): PeriodRow {
 }
 
 /** Chainable double: each table resolves to canned rows (RLS is simulated by the test). */
-function db(tables: {
-  payroll_periods?: PeriodRow[];
-  payroll_payments?: PeriodRow[];
-  payroll_adjustments?: PeriodRow[];
-  profiles?: PeriodRow[];
-}) {
+/**
+ * Chainable double. It emulates PostgREST's response cap: however many rows a `range` asks
+ * for, at most `cap` come back, and the exact total is reported separately (as
+ * `count: "exact"` does). RLS is simulated by the test choosing the rows.
+ */
+function db(
+  tables: {
+    payroll_periods?: PeriodRow[];
+    payroll_payments?: PeriodRow[];
+    payroll_adjustments?: PeriodRow[];
+    profiles?: PeriodRow[];
+  },
+  cap = 1000,
+) {
   const calls: Array<{ table: string; filters: Array<[string, unknown]> }> = [];
   const from = vi.fn((table: string) => {
     const rec = { table, filters: [] as Array<[string, unknown]> };
@@ -86,15 +94,29 @@ function db(tables: {
     const rows =
       (tables as Record<string, PeriodRow[] | undefined>)[table] ?? [];
     const b: Record<string, unknown> = {};
+    let window: [number, number] | null = null;
     for (const m of ["select", "order", "limit"]) b[m] = () => b;
+    b.range = (from: number, to: number) => {
+      window = [from, to];
+      return b;
+    };
     for (const m of ["eq", "in"]) {
       b[m] = (col: string, val: unknown) => {
         rec.filters.push([`${m}:${col}`, val]);
         return b;
       };
     }
-    b.then = (resolve: (v: unknown) => void) =>
-      resolve({ data: rows, error: null });
+    b.then = (resolve: (v: unknown) => void) => {
+      if (!window)
+        return resolve({ data: rows, error: null, count: rows.length });
+      const [from, to] = window;
+      const end = Math.min(to, from + cap - 1);
+      resolve({
+        data: rows.slice(from, end + 1),
+        error: null,
+        count: rows.length,
+      });
+    };
     return b;
   });
   return { client: { from } as never, calls };
@@ -118,6 +140,7 @@ function ctx(over: Partial<ReadContext> & { client: never }): ReadContext {
     profileId: ME,
     authorities,
     selected: over.selected ?? authorities,
+    matched: over.matched ?? over.selected ?? authorities,
     orgLocationCounts: over.orgLocationCounts ?? { [TAP]: authorities.length },
     filters: over.filters ?? {
       content: "both",
@@ -374,6 +397,27 @@ describe("readPayroll — a second, independent authority check on every row", (
     ).toBe(true);
   });
 
+  it("org-level payroll is shown when every branch was chosen even if one branch has Payroll off", async () => {
+    const orgWide = (id: string, name: string, payroll: "all" | "none") =>
+      auth({ locationId: id, locationName: name, orgWide: true, payroll });
+    const league = orgWide(LEAGUE, "League City", "all");
+    const nasa = orgWide(NASA, "NASA", "none"); // Payroll module off here
+    const row = periodRow({ id: 5, location_id: null, profile_id: OTHER });
+    const res = await readPayroll(
+      ctx({
+        client: db({ payroll_periods: [row] }).client,
+        authorities: [league, nasa],
+        selected: [league], // content-narrowed (payroll)
+        matched: [league, nasa], // …but the user chose BOTH branches
+        orgLocationCounts: { [TAP]: 2 },
+      }),
+    );
+    expect(res.periods).toHaveLength(1);
+    expect(
+      res.issues.some((i) => i.code === "org_level_payroll_excluded"),
+    ).toBe(false);
+  });
+
   it("a branch manager (not org-wide) never receives an org-level record", async () => {
     const { client } = db({
       payroll_periods: [
@@ -415,7 +459,63 @@ describe("readPayroll — a second, independent authority check on every row", (
       .flatMap((c) => c.filters)
       .filter(([k]) => k === "in:payroll_period_id")
       .map(([, v]) => (v as number[]).length);
-    expect(lists).toEqual([200, 200, 50]);
+    expect(lists).toEqual([100, 100, 100, 100, 50]);
+  });
+
+  it("reads ALL periods even though the server caps every response at 1,000 rows", async () => {
+    const many = Array.from({ length: 1750 }, (_, i) =>
+      periodRow({ id: i + 1, profile_id: `p-${i}` }),
+    );
+    const { client } = db({ payroll_periods: many }, 1000);
+    const res = await readPayroll(ctx({ client }));
+    expect(res.periods).toHaveLength(1750);
+    expect(res.issues.some((i) => i.code === "payroll_truncated")).toBe(false);
+  });
+
+  it("reads a ledger larger than one response without dropping payments", async () => {
+    const periods = Array.from({ length: 5 }, (_, i) =>
+      periodRow({ id: i + 1, profile_id: `p-${i}` }),
+    );
+    // 5 periods × 300 draft payments = 1,500 rows behind a 1,000-row cap
+    const payments = periods.flatMap((p) =>
+      Array.from({ length: 300 }, (_, k) => ({
+        id: (p.id as number) * 1000 + k,
+        payroll_period_id: p.id,
+        amount_cents: 100,
+        payment_date: "2026-11-15",
+        comment: null,
+        status: "draft",
+        created_by: "m-1",
+        confirmed_by: null,
+        confirmed_at: null,
+        reverses_payment_id: null,
+      })),
+    );
+    const { client } = db(
+      { payroll_periods: periods, payroll_payments: payments, profiles: [] },
+      1000,
+    );
+    const res = await readPayroll(ctx({ client }));
+    expect(res.periods.reduce((n, p) => n + p.payments.length, 0)).toBe(1500);
+    expect(res.issues.some((i) => i.severity === "blocking")).toBe(false);
+  });
+
+  it("an unreadable ledger page is blocking, and the payroll figures are not presented as complete", async () => {
+    const { client } = db({ payroll_periods: [periodRow({ id: 1 })] });
+    const real = (
+      client as unknown as { from: (t: string) => Record<string, unknown> }
+    ).from;
+    (client as unknown as { from: (t: string) => unknown }).from = (
+      t: string,
+    ) => {
+      const b = real(t);
+      if (t !== "payroll_payments") return b;
+      b.then = (resolve: (v: unknown) => void) =>
+        resolve({ data: null, error: { code: "x" }, count: null });
+      return b;
+    };
+    const res = await readPayroll(ctx({ client }));
+    expect(res.issues.some((i) => i.severity === "blocking")).toBe(true);
   });
 
   it("covers every month a cross-year range touches", async () => {
@@ -439,7 +539,19 @@ describe("readPayroll — a second, independent authority check on every row", (
 });
 
 describe("readAttendance", () => {
-  it("self-level reads only the caller's own native rows, regardless of the employee filter", async () => {
+  it("self-level reads only the caller's own native rows", async () => {
+    await readAttendance(
+      ctx({
+        client: db({}).client,
+        authorities: [auth({ attendance: "self", payroll: "self" })],
+      }),
+    );
+    expect(mocks.listNativeAttendance.mock.calls[0]![1].profileIds).toEqual([
+      ME,
+    ]);
+  });
+
+  it("self attendance is NOT pulled into a report scoped to a different employee", async () => {
     await readAttendance(
       ctx({
         client: db({}).client,
@@ -452,9 +564,47 @@ describe("readAttendance", () => {
         },
       }),
     );
-    expect(mocks.listNativeAttendance.mock.calls[0]![1].profileIds).toEqual([
-      ME,
-    ]);
+    expect(mocks.listNativeAttendance).not.toHaveBeenCalled();
+    await readAttendance(
+      ctx({
+        client: db({}).client,
+        authorities: [auth({ attendance: "self", payroll: "self" })],
+        filters: {
+          content: "attendance",
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          employeeKeys: [`profile:${ME}`],
+        },
+      }),
+    );
+    expect(mocks.listNativeAttendance).toHaveBeenCalledTimes(1);
+  });
+
+  it("an external branch the caller only has SELF access to never exposes people managed elsewhere", async () => {
+    const monksSelf = auth({
+      organizationId: MONKS,
+      organizationName: "The Monk's",
+      locationId: "loc-b",
+      locationName: "Branch B",
+      attendanceMode: "external",
+      attendance: "self",
+      payroll: "self",
+    });
+    await readAttendance(
+      ctx({
+        client: db({}).client,
+        authorities: [monksSelf],
+        orgLocationCounts: { [MONKS]: 2 },
+        roster: {
+          ...EMPTY_ROSTER,
+          // the caller manages another external branch, so staff 7 and 8 are visible org-wide…
+          neonVisible: { [MONKS]: [7, 8, 9] },
+          ownNeonIds: { [MONKS]: 9 },
+        },
+      }),
+    );
+    // …but a self-only selection reads only the caller's own external identity.
+    expect(mocks.getAttendanceRows.mock.calls[0]![0].userIds).toEqual([9]);
   });
 
   it("never reads an external source for a branch that is not explicitly 'external' (no cross-tenant Neon leak)", async () => {

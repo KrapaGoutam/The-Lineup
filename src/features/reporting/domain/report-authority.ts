@@ -122,6 +122,11 @@ export type SelectionResult =
   | {
       readonly ok: true;
       readonly locations: readonly LocationAuthority[];
+      /**
+       * Every authorized branch the request matched, BEFORE narrowing to the requested
+       * content. "All branches of an organization were chosen" is judged from this.
+       */
+      readonly matched: readonly LocationAuthority[];
       /** Locations in the selection where the requested content is not authorized. */
       readonly notAuthorizedFor: ReadonlyArray<{
         readonly location: LocationAuthority;
@@ -270,7 +275,7 @@ export function resolveReportSelection(
     };
   }
 
-  return { ok: true, locations: usable, notAuthorizedFor };
+  return { ok: true, locations: usable, matched: selected, notAuthorizedFor };
 }
 
 /** Whether `employeeKey` is selectable given the authorized roster (forgery check). */

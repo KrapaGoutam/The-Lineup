@@ -148,3 +148,38 @@ export function formatPeriodMonth(periodMonth: string): string {
     ? formatReportPeriodLabel(bounds.start, bounds.end)
     : periodMonth;
 }
+
+/** Every payroll accounting month (`YYYY-MM-01`) a date range touches, in order (bounded at 24). */
+export function monthsInRange(start: string, end: string): string[] {
+  const first = monthBounds(start)?.start;
+  const last = monthBounds(end)?.start;
+  if (!first || !last) return [];
+  const months: string[] = [];
+  let year = Number(first.slice(0, 4));
+  let month = Number(first.slice(5, 7));
+  let cursor = first;
+  while (cursor <= last && months.length < 24) {
+    months.push(cursor);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+    cursor = `${year}-${String(month).padStart(2, "0")}-01`;
+  }
+  return months;
+}
+
+/**
+ * The ONE time zone default periods ("this month", "last month") are computed in: the most
+ * common zone among the caller's branches (ties broken alphabetically), never merely whichever
+ * branch happens to sort first. Falls back to America/Chicago when there is none.
+ */
+export function pickReportingTimeZone(zones: readonly string[]): string {
+  const count = new Map<string, number>();
+  for (const z of zones) count.set(z, (count.get(z) ?? 0) + 1);
+  const best = [...count.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )[0];
+  return best ? best[0] : "America/Chicago";
+}

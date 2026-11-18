@@ -29,6 +29,7 @@ import {
   formatPeriodMonth,
   formatReportPeriodLabel,
   monthBounds,
+  monthsInRange,
 } from "@/lib/report-period";
 import {
   INFORMATIONAL_AGGREGATE_NOTE,
@@ -167,26 +168,6 @@ function paymentState(
   if (balanceCents < 0) return "overpaid";
   if (balanceCents === 0) return "paid";
   return confirmedCents > 0 ? "partially_paid" : "unpaid";
-}
-
-function payrollMonthsFor(start: string, end: string): string[] {
-  const months: string[] = [];
-  const first = monthBounds(start)?.start;
-  const last = monthBounds(end)?.start;
-  if (!first || !last) return months;
-  let year = Number(first.slice(0, 4));
-  let month = Number(first.slice(5, 7));
-  let cursor: string = first;
-  while (cursor <= last && months.length < 24) {
-    months.push(cursor);
-    month += 1;
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
-    cursor = `${year}-${String(month).padStart(2, "0")}-01`;
-  }
-  return months;
 }
 
 const monthLabel = formatPeriodMonth;
@@ -544,7 +525,11 @@ export function composeCombinedReport(input: ComposeInput): CombinedReport {
         if (
           r.employeeKey === e.employeeKey &&
           r.organizationId === e.organizationId &&
-          (e.locationId === null || r.locationId === e.locationId) &&
+          // A record carrying no branch (external clock or org-level payroll) matches by
+          // person and month; two recorded branches must agree.
+          (e.locationId === null ||
+            r.locationId === null ||
+            r.locationId === e.locationId) &&
           r.businessDate.startsWith(e.periodMonth.slice(0, 7))
         ) {
           consumed.add(r.id);
@@ -889,10 +874,10 @@ export function composeCombinedReport(input: ComposeInput): CombinedReport {
   const reasons = exceptions
     .filter(
       (x) =>
-        x.severity === "blocking" ||
-        x.code === "payroll_source_conflict" ||
-        x.code === "source_unavailable" ||
-        x.code === "payroll_truncated",
+        // Completeness follows SEVERITY, not code: a "not configured" note on one branch
+        // (info) must not block printing, while a failed or truncated read (blocking) must.
+        // A source conflict leaves records out of the totals, so it also makes it incomplete.
+        x.severity === "blocking" || x.code === "payroll_source_conflict",
     )
     .map((x) => x.message);
 
@@ -903,7 +888,7 @@ export function composeCombinedReport(input: ComposeInput): CombinedReport {
   const unmapped = employeeList.length - verified;
 
   const periodKind = classifyReportPeriod(filters.startDate, filters.endDate);
-  const payrollMonths = payrollMonthsFor(filters.startDate, filters.endDate);
+  const payrollMonths = monthsInRange(filters.startDate, filters.endDate);
   const period = {
     startDate: filters.startDate,
     endDate: filters.endDate,

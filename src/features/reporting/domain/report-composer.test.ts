@@ -669,6 +669,82 @@ describe("cross-organization output", () => {
   });
 });
 
+describe("completeness follows severity (review finding)", () => {
+  it("an info-level 'attendance not configured' note does NOT make the report incomplete", () => {
+    const r = compose({
+      attendance: [nativeSlice(TAP, LEAGUE, [nativeRow({})])],
+      issues: [
+        {
+          code: "source_unavailable",
+          severity: "info",
+          message:
+            "Attendance is not configured for NASA, so none is included.",
+          organizationId: TAP.id,
+          locationId: NASA.id,
+        },
+      ],
+    });
+    expect(r.completeness.complete).toBe(true);
+  });
+
+  it("a blocking failed read does", () => {
+    const r = compose({
+      issues: [
+        { code: "source_unavailable", severity: "blocking", message: "x" },
+      ],
+    });
+    expect(r.completeness.complete).toBe(false);
+  });
+
+  it("a warning does not, a source conflict does", () => {
+    const warn = compose({
+      issues: [
+        { code: "source_unavailable", severity: "warning", message: "names" },
+      ],
+    });
+    expect(warn.completeness.complete).toBe(true);
+  });
+});
+
+describe("branch-less attendance matches payroll by person and month", () => {
+  it("organization-level (null-branch) attendance feeds the payroll row of a recorded branch — no false hours warning", () => {
+    const r = compose({
+      organizations: [MONKS],
+      branches: [WEBSTER],
+      identityLinks: [
+        { organizationId: MONKS.id, neonUserId: 7, profileId: "p-ava" },
+      ],
+      attendance: [
+        {
+          organizationId: MONKS.id,
+          locationId: null,
+          provider: "external_neon" as const,
+          report: neonSlice(
+            [neonRow({ hoursWorked: 6 })],
+            [{ id: 7, fullName: "Ava Cruz" }],
+          ).report,
+        },
+      ],
+      payroll: [
+        period({
+          organizationId: MONKS.id,
+          locationId: WEBSTER.id,
+          profileId: "p-ava",
+          hoursSnapshot: 6,
+        }),
+      ],
+    });
+    const row = r.register.find((x) => x.payrollPeriodMonth === "2026-11-01")!;
+    expect(row.attendanceSeconds).toBe(21600);
+    expect(r.exceptions.some((x) => x.code === "payroll_hours_differ")).toBe(
+      false,
+    );
+    expect(
+      r.register.some((x) => x.financialStatus === "No payroll record"),
+    ).toBe(false);
+  });
+});
+
 describe("DST and local business dates (America/Chicago)", () => {
   it("keeps real elapsed time and local clock times across the spring-forward day", () => {
     const r = compose({

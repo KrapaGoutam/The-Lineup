@@ -96,6 +96,7 @@ const OPTIONS: ReportingOptions = {
   thisMonth: { start: "2026-11-01", end: "2026-11-30" },
   lastMonth: { start: "2026-10-01", end: "2026-10-31" },
   today: "2026-11-18",
+  timeZone: "America/Chicago",
 };
 
 function ok(report = build()) {
@@ -132,6 +133,30 @@ describe("view tabs follow the caller's capabilities", () => {
     expect(
       screen.queryByRole("option", { name: "Attendance and Payroll" }),
     ).toBeNull();
+  });
+
+  it("a self-only caller opening a link with an employee key is never stuck in 'selected' mode", async () => {
+    ok();
+    render(
+      <ReportingCenter
+        options={{ ...OPTIONS, canManage: false }}
+        initial={{ employeeKeys: ["profile:not-in-the-list"] }}
+      />,
+    );
+    // No error, no stale notice, and Generate works (the server narrows to their own record).
+    expect(screen.queryByText(/isn't available to you here/)).toBeNull();
+    const generate = screen.getByRole("button", { name: /Generate report/ });
+    expect(generate).toBeEnabled();
+    fireEvent.click(generate);
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalled());
+    expect(mocks.generate.mock.calls[0]![0].employeeKeys).toBeNull();
+  });
+
+  it("shows which time zone 'this month' and 'last month' use", () => {
+    render(<ReportingCenter options={OPTIONS} initial={{}} />);
+    expect(
+      screen.getByText(/use the America\/Chicago time zone/),
+    ).toBeInTheDocument();
   });
 
   it("a self-only caller is told so and is not offered an employee picker", () => {

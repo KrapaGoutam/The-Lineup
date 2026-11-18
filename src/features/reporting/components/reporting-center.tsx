@@ -92,13 +92,16 @@ export function ReportingCenter({
     new Set((initial.locationIds ?? []).filter((id) => branchIds.has(id))),
   );
   const linkedEmployees = initial.employeeKeys ?? [];
+  // Only a manager can pick employees; for everyone else the server already narrows the
+  // report to their own record, and there is no control to leave "selected" mode again.
   const [employeeMode, setEmployeeMode] = useState<"all" | "selected">(
-    linkedEmployees.length > 0 ? "selected" : "all",
+    options.canManage && linkedEmployees.length > 0 ? "selected" : "all",
   );
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(
     new Set(linkedEmployees.filter((k) => employeeKeys.has(k))),
   );
   const unavailableLinkedEmployee =
+    options.canManage &&
     linkedEmployees.length > 0 &&
     linkedEmployees.some((k) => !employeeKeys.has(k));
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -551,7 +554,8 @@ export function ReportingCenter({
                 : formatReportPeriodLabel(range.start, range.end)}
             </span>
             . Payroll accounting periods are whole calendar months and are shown
-            separately in the report.
+            separately in the report. &quot;This month&quot; and &quot;Last
+            month&quot; use the {options.timeZone} time zone.
           </p>
           {rangeError ? (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">

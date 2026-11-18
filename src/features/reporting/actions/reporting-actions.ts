@@ -7,13 +7,18 @@ import {
   readModuleEnforcementMode,
 } from "@/features/modules/data/module-enforcement";
 import { createClient } from "@/lib/supabase/server";
-import { monthBounds, shiftMonth } from "@/lib/report-period";
+import {
+  monthBounds,
+  pickReportingTimeZone,
+  shiftMonth,
+} from "@/lib/report-period";
 
 import {
   loadReportingAuthorities,
   type ModuleUsable,
 } from "../data/reporting-authority";
 import {
+  fetchProfileNames,
   loadRoster,
   readAttendance,
   readPayroll,
@@ -80,6 +85,8 @@ export interface ReportingOptions {
   readonly thisMonth: { readonly start: string; readonly end: string };
   readonly lastMonth: { readonly start: string; readonly end: string };
   readonly today: string;
+  /** The zone "this month" / "last month" were computed in. */
+  readonly timeZone: string;
 }
 
 /**
@@ -179,7 +186,10 @@ export async function getReportingOptionsAction(): Promise<
         slug: a.organizationSlug,
       });
     }
-    const today = todayIn(auth.authorities[0]?.timeZone ?? "America/Chicago");
+    const timeZone = pickReportingTimeZone(
+      auth.authorities.map((a) => a.timeZone),
+    );
+    const today = todayIn(timeZone);
     const thisMonth = monthBounds(today) ?? { start: today, end: today };
     const lastMonth = shiftMonth(today, -1) ?? thisMonth;
 
@@ -214,6 +224,7 @@ export async function getReportingOptionsAction(): Promise<
         thisMonth,
         lastMonth,
         today,
+        timeZone,
       },
     };
   } catch (err: unknown) {
@@ -270,6 +281,7 @@ export async function generateCombinedReportAction(
       profileId: auth.profileId,
       authorities: auth.authorities,
       selected: selection.locations,
+      matched: selection.matched,
       orgLocationCounts: auth.orgLocationCounts,
       filters,
       roster,
@@ -306,12 +318,15 @@ export async function generateCombinedReportAction(
       .map((p) => p.profileId)
       .filter((id): id is string => !!id && !profileNames[id]);
     if (missing.length > 0) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", [...new Set(missing)].slice(0, 200));
-      for (const p of data ?? []) {
-        profileNames[p.id] = p.display_name?.trim() || "Employee";
+      const looked = await fetchProfileNames(supabase, missing);
+      Object.assign(profileNames, looked.names);
+      if (looked.failed) {
+        issues.push({
+          code: "source_unavailable",
+          severity: "warning",
+          message:
+            "Some employee names could not be loaded, so those rows show a placeholder name.",
+        });
       }
     }
 

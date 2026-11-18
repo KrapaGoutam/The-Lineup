@@ -542,6 +542,165 @@ describe("real reports — isolation, scope and financial correctness", () => {
   });
 });
 
+describe("completeness beyond PostgREST's max_rows (1,000) — real PostgREST", () => {
+  // Found by the independent review: PostgREST silently caps every response at max_rows, so a
+  // reader that asks for "limit + 1" rows can never see that it was cut short.
+  const SHIFTS_PER_DAY = 13;
+  const DAYS = 92; // 2026-08-01 .. 2026-10-31
+  const bigSessions: string[] = [];
+
+  it("an All-employees attendance report returns EVERY shift when there are more than 1,000", async () => {
+    const rows: Array<Record<string, unknown>> = [];
+    for (let d = 0; d < DAYS; d++) {
+      const date = new Date(Date.UTC(2026, 7, 1 + d))
+        .toISOString()
+        .slice(0, 10);
+      for (let k = 0; k < SHIFTS_PER_DAY; k++) {
+        const start = Date.parse(`${date}T08:00:00Z`) + k * 40 * 60 * 1000;
+        const id = randomUUID();
+        bigSessions.push(id);
+        rows.push({
+          id,
+          organization_id: fx.orgA.id,
+          location_id: fx.locA,
+          profile_id: fx.staffA.id,
+          service_date: date,
+          status: "completed",
+          clock_in_at: new Date(start).toISOString(),
+          clock_out_at: new Date(start + 1800 * 1000).toISOString(),
+          gross_elapsed_seconds: 1800,
+          total_break_seconds: 0,
+          created_by: fx.staffA.id,
+        });
+      }
+    }
+    expect(rows.length).toBeGreaterThan(1000);
+    for (let i = 0; i < rows.length; i += 500) {
+      must(
+        await fx.admin
+          .from("attendance_sessions")
+          .insert(rows.slice(i, i + 500) as never),
+      );
+    }
+
+    const res = await report(fx.orgAGM, {
+      organizationIds: [fx.orgA.id],
+      locationIds: [fx.locA],
+      content: "attendance",
+      startDate: "2026-08-01",
+      endDate: "2026-10-31",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const r = res.reports[0]!;
+    expect(r.attendanceRows).toHaveLength(rows.length); // all 1,196, not 1,000
+    expect(r.summary.attendanceSeconds).toBe(rows.length * 1800);
+    expect(r.completeness.complete).toBe(true);
+    expect(r.attendanceSlices.every((x) => !x.isPartial)).toBe(true);
+  }, 120_000);
+
+  it("more shifts than the report may hold is REPORTED as incomplete, never returned as if whole", async () => {
+    // 1,196 + enough extra to pass the 2,000-row ceiling for one branch.
+    const extra: Array<Record<string, unknown>> = [];
+    for (let d = 0; d < DAYS; d++) {
+      const date = new Date(Date.UTC(2026, 7, 1 + d))
+        .toISOString()
+        .slice(0, 10);
+      for (let k = 0; k < SHIFTS_PER_DAY; k++) {
+        const start = Date.parse(`${date}T18:00:00Z`) + k * 40 * 60 * 1000;
+        const id = randomUUID();
+        bigSessions.push(id);
+        extra.push({
+          id,
+          organization_id: fx.orgA.id,
+          location_id: fx.locA,
+          profile_id: fx.staffA.id,
+          service_date: date,
+          status: "completed",
+          clock_in_at: new Date(start).toISOString(),
+          clock_out_at: new Date(start + 1800 * 1000).toISOString(),
+          gross_elapsed_seconds: 1800,
+          total_break_seconds: 0,
+          created_by: fx.staffA.id,
+        });
+      }
+    }
+    for (let i = 0; i < extra.length; i += 500) {
+      must(
+        await fx.admin
+          .from("attendance_sessions")
+          .insert(extra.slice(i, i + 500) as never),
+      );
+    }
+    const res = await report(fx.orgAGM, {
+      organizationIds: [fx.orgA.id],
+      locationIds: [fx.locA],
+      content: "attendance",
+      startDate: "2026-08-01",
+      endDate: "2026-10-31",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const r = res.reports[0]!;
+    expect(r.completeness.complete).toBe(false);
+    expect(r.attendanceSlices.some((x) => x.isPartial)).toBe(true);
+    expect(r.exceptions.some((x) => x.code === "attendance_truncated")).toBe(
+      true,
+    );
+  }, 120_000);
+
+  it("an All-employees payroll report returns EVERY period when there are more than 1,000", async () => {
+    const base = 5_000_000 + Math.floor(Math.random() * 100_000);
+    const rows = Array.from({ length: 1150 }, (_, i) => ({
+      organization_id: fx.orgA.id,
+      location_id: fx.locA,
+      neon_user_id: base + i,
+      period_month: "2026-09-01",
+      hours_snapshot: 1,
+      rate_cents_snapshot: 1000,
+      gross_cents: 1000,
+      status: "locked",
+      generated_by: fx.orgAGM.id,
+    }));
+    for (let i = 0; i < rows.length; i += 500) {
+      must(
+        await fx.admin
+          .from("payroll_periods")
+          .insert(rows.slice(i, i + 500) as never),
+      );
+    }
+    const res = await report(fx.orgAGM, {
+      organizationIds: [fx.orgA.id],
+      locationIds: [fx.locA],
+      content: "payroll",
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const r = res.reports[0]!;
+    expect(r.payrollEntries).toHaveLength(1150); // not silently cut at 1,000
+    expect(r.summary.baseCents).toBe(1150 * 1000);
+    expect(r.completeness.complete).toBe(true);
+  }, 120_000);
+
+  it("cleans up the bulk rows", async () => {
+    for (let i = 0; i < bigSessions.length; i += 200) {
+      must(
+        await fx.admin
+          .from("attendance_sessions")
+          .delete()
+          .in("id", bigSessions.slice(i, i + 200)),
+      );
+    }
+    const { count } = await fx.admin
+      .from("attendance_sessions")
+      .select("*", { count: "exact", head: true })
+      .in("id", bigSessions.slice(0, 200));
+    expect(count).toBe(0);
+  }, 120_000);
+});
+
 describe("reports are read-only", () => {
   it("running every kind of report changes no financial or attendance record", async () => {
     const before = await counts();

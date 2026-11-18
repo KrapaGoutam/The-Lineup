@@ -41,6 +41,22 @@ export function partitionComposeInput(
       locationId: p.locationId,
     });
   }
+  // A selected organization or branch that has NO rows but did report a problem (a failed
+  // or truncated read, an authorization note) still gets its own report, so the problem is
+  // never silently absent from every sub-report.
+  for (const x of input.issues) {
+    if (x.severity === "info" || !x.organizationId) continue;
+    const locationId =
+      mode === "by_branch"
+        ? x.locationId === undefined
+          ? null
+          : x.locationId
+        : null;
+    const key = groupKey(mode, x.organizationId, locationId);
+    if (!groups.has(key)) {
+      groups.set(key, { organizationId: x.organizationId, locationId });
+    }
+  }
   if (groups.size === 0) return [input]; // nothing to split: one honest, empty report
 
   const orgName = (id: string) =>

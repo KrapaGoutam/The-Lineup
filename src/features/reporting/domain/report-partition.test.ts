@@ -194,7 +194,52 @@ describe("partitionComposeInput", () => {
   });
 
   it("an empty report is returned whole instead of vanishing", () => {
-    const empty = { ...INPUT, attendance: [], payroll: [] };
+    const empty = { ...INPUT, attendance: [], payroll: [], issues: [] };
     expect(partitionComposeInput(empty, "by_organization")).toEqual([empty]);
+  });
+
+  it("an organization with NO rows but a blocking problem still gets its own (incomplete) report", () => {
+    const failing: ComposeInput = {
+      ...INPUT,
+      // Org Monk's has no data because its read failed
+      attendance: INPUT.attendance!.filter(
+        (s) => s.organizationId === "org-tap",
+      ),
+      payroll: INPUT.payroll!.filter((p) => p.organizationId === "org-tap"),
+      issues: [
+        {
+          code: "source_unavailable",
+          severity: "blocking",
+          message: "Monk's payroll could not be loaded",
+          organizationId: "org-monks",
+        },
+      ],
+    };
+    const parts = partitionComposeInput(failing, "by_organization");
+    expect(parts.map((p) => p.organizations.map((o) => o.name).join())).toEqual(
+      ["Liquor Tap", "The Monk's"],
+    );
+    const monks = composeCombinedReport(parts[1]!);
+    expect(monks.completeness.complete).toBe(false);
+    expect(monks.completeness.reasons).toEqual([
+      "Monk's payroll could not be loaded",
+    ]);
+  });
+
+  it("an info-level note alone does not create an extra report", () => {
+    const quiet: ComposeInput = {
+      ...INPUT,
+      issues: [
+        {
+          code: "source_unavailable",
+          severity: "info",
+          message: "Attendance is not configured for NASA",
+          organizationId: "org-tap",
+          locationId: "loc-nasa",
+        },
+      ],
+    };
+    // groups come from data only (NASA already has data here, so the count is unchanged)
+    expect(partitionComposeInput(quiet, "by_organization")).toHaveLength(2);
   });
 });

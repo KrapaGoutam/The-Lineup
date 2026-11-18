@@ -16,9 +16,11 @@ import {
   normalizeNativeAttendanceToUnified,
   normalizeNeonAttendanceToUnified,
 } from "@/features/attendance/domain/unified-attendance-report";
+import { mapBounded, readAllPages } from "@/lib/postgrest-paging";
 import {
   classifyReportPeriod,
   formatReportPeriodLabel,
+  monthsInRange,
 } from "@/lib/report-period";
 import type { Database } from "@/types/database.generated";
 
@@ -44,7 +46,11 @@ import {
 type Client = SupabaseClient<Database>;
 
 const NEON_ROW_CAP = 5000;
-const IN_CHUNK = 200;
+// Small chunks: a chunk's payments/adjustments are also paged, but fewer ids keep each
+// round trip (and URL) small.
+const IN_CHUNK = 100;
+const LEDGER_MAX_ROWS = 20_000;
+const READ_CONCURRENCY = 4;
 const UNKNOWN_ORG_BRANCH = "Organization-level (no branch recorded)";
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -89,21 +95,23 @@ function issue(
   return { code, severity, message, ...extra };
 }
 
-async function fetchProfileNames(
+/** Display names for profile ids, in bounded chunks. `failed` = at least one chunk errored. */
+export async function fetchProfileNames(
   supabase: Client,
   ids: readonly string[],
-): Promise<Record<string, string>> {
+): Promise<{ names: Record<string, string>; failed: boolean }> {
   const names: Record<string, string> = {};
-  const unique = [...new Set(ids)];
-  for (const part of chunk(unique, 100)) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, display_name")
-      .in("id", part);
+  let failed = false;
+  const parts = chunk([...new Set(ids)], 100);
+  const results = await mapBounded(parts, READ_CONCURRENCY, async (part) =>
+    supabase.from("profiles").select("id, display_name").in("id", part),
+  );
+  for (const { data, error } of results) {
+    if (error) failed = true;
     for (const p of data ?? [])
       names[p.id] = p.display_name?.trim() || "Employee";
   }
-  return names;
+  return { names, failed };
 }
 
 /**
@@ -155,9 +163,14 @@ export async function loadRoster(
   const memberProfilesByLocation = new Map<string, string[]>();
 
   // Native / assigned members of every branch the caller manages attendance for.
-  for (const a of authorities) {
-    if (a.attendance !== "all" && a.payroll !== "all") continue;
-    const res = await listLocationEmployees(supabase, a.locationId);
+  const managed = authorities.filter(
+    (a) => a.attendance === "all" || a.payroll === "all",
+  );
+  const memberReads = await mapBounded(managed, READ_CONCURRENCY, (a) =>
+    listLocationEmployees(supabase, a.locationId),
+  );
+  for (const [index, a] of managed.entries()) {
+    const res = memberReads[index]!;
     if (!res.ok) {
       issues.push(
         issue(
@@ -191,7 +204,7 @@ export async function loadRoster(
   // The caller can always select themself where they have any access.
   if (authorities.length > 0) {
     const own = await fetchProfileNames(supabase, [profileId]);
-    const name = own[profileId] ?? "You";
+    const name = own.names[profileId] ?? "You";
     profileNames[profileId] = name;
     for (const a of authorities) {
       add(
@@ -227,10 +240,12 @@ export async function loadRoster(
     string,
     Array<{ neonUserId: number; profileId: string }>
   >();
-  for (const orgId of new Set(authorities.map((a) => a.organizationId))) {
-    const links = await listAttendanceIdentityLinks(supabase, {
-      organizationId: orgId,
-    });
+  const linkOrgs = [...new Set(authorities.map((a) => a.organizationId))];
+  const linkReads = await mapBounded(linkOrgs, READ_CONCURRENCY, (orgId) =>
+    listAttendanceIdentityLinks(supabase, { organizationId: orgId }),
+  );
+  for (const [index, orgId] of linkOrgs.entries()) {
+    const links = linkReads[index]!;
     if (!links.ok) {
       issues.push(
         issue(
@@ -359,8 +374,14 @@ export interface ReadContext {
   readonly profileId: string;
   /** Every branch the caller has any reporting authority at. */
   readonly authorities: readonly LocationAuthority[];
-  /** The branches selected for this report (already verified). */
+  /** The branches the request matched AND where the requested content is authorized. */
   readonly selected: readonly LocationAuthority[];
+  /**
+   * Every authorized branch the REQUEST matched, before narrowing to the requested content.
+   * "All branches of an organization are selected" is decided from this (what the user chose),
+   * never from `selected` (which also loses branches whose module is off).
+   */
+  readonly matched: readonly LocationAuthority[];
   readonly orgLocationCounts: Readonly<Record<string, number>>;
   readonly filters: Pick<
     ReportFilters,
@@ -404,58 +425,18 @@ export interface AttendanceReadResult {
 export async function readAttendance(
   ctx: ReadContext,
 ): Promise<AttendanceReadResult> {
-  const slices: AttendanceSliceInput[] = [];
   const issues: ReportException[] = [];
   const filter = employeeFilter(ctx);
   const { startDate, endDate } = ctx.filters;
   const label = formatReportPeriodLabel(startDate, endDate);
   const kind = classifyReportPeriod(startDate, endDate);
 
+  const native: LocationAuthority[] = [];
   const externalByOrg = new Map<string, LocationAuthority[]>();
   for (const a of ctx.selected) {
     if (a.attendance === "none") continue;
     if (a.attendanceMode === "internal_the_lineup") {
-      const profileIds =
-        a.attendance === "self"
-          ? [ctx.profileId]
-          : filter
-            ? [...filter.profiles]
-            : null;
-      if (profileIds !== null && profileIds.length === 0) continue; // selection names nobody here
-      const res = await listNativeAttendance(ctx.supabase, {
-        locationId: a.locationId,
-        startDate,
-        endDate,
-        timeZone: a.timeZone,
-        profileIds,
-      });
-      if (!res.ok) {
-        issues.push(
-          issue(
-            "source_unavailable",
-            "blocking",
-            `Attendance for ${a.organizationName} · ${a.locationName} could not be loaded.`,
-            {
-              organizationId: a.organizationId,
-              locationId: a.locationId,
-            },
-          ),
-        );
-        continue;
-      }
-      slices.push({
-        organizationId: a.organizationId,
-        locationId: a.locationId,
-        provider: "internal_the_lineup",
-        report: normalizeNativeAttendanceToUnified(res.rows, {
-          organization: a.organizationName,
-          branch: a.locationName,
-          reportingPeriod: label,
-          reportingPeriodKind: kind,
-          timeZone: a.timeZone,
-          truncated: res.truncated,
-        }),
-      });
+      native.push(a);
     } else if (a.attendanceMode === "external") {
       const list = externalByOrg.get(a.organizationId) ?? [];
       list.push(a);
@@ -475,12 +456,87 @@ export async function readAttendance(
     }
   }
 
+  // Native branches are independent reads: run them with bounded concurrency, keep order.
+  const nativeResults = await mapBounded(
+    native,
+    READ_CONCURRENCY,
+    async (a) => {
+      // `self` attendance is the caller's own record; an employee selection that does not
+      // include the caller must not pull it into a report scoped to someone else.
+      if (
+        a.attendance === "self" &&
+        filter &&
+        !filter.profiles.has(ctx.profileId)
+      ) {
+        return null;
+      }
+      const profileIds =
+        a.attendance === "self"
+          ? [ctx.profileId]
+          : filter
+            ? [...filter.profiles]
+            : null;
+      if (profileIds !== null && profileIds.length === 0) return null; // names nobody here
+      return {
+        a,
+        res: await listNativeAttendance(ctx.supabase, {
+          locationId: a.locationId,
+          startDate,
+          endDate,
+          timeZone: a.timeZone,
+          profileIds,
+        }),
+      };
+    },
+  );
+
+  const slices: AttendanceSliceInput[] = [];
+  for (const item of nativeResults) {
+    if (!item) continue;
+    const { a, res } = item;
+    if (!res.ok) {
+      issues.push(
+        issue(
+          "source_unavailable",
+          "blocking",
+          `Attendance for ${a.organizationName} · ${a.locationName} could not be loaded.`,
+          {
+            organizationId: a.organizationId,
+            locationId: a.locationId,
+          },
+        ),
+      );
+      continue;
+    }
+    slices.push({
+      organizationId: a.organizationId,
+      locationId: a.locationId,
+      provider: "internal_the_lineup",
+      report: normalizeNativeAttendanceToUnified(res.rows, {
+        organization: a.organizationName,
+        branch: a.locationName,
+        reportingPeriod: label,
+        reportingPeriodKind: kind,
+        timeZone: a.timeZone,
+        truncated: res.truncated,
+      }),
+    });
+  }
+
   for (const [orgId, selectedExternal] of externalByOrg) {
-    const visible = ctx.roster.neonVisible[orgId] ?? [];
+    let visible = [...(ctx.roster.neonVisible[orgId] ?? [])];
+    // The external clock records no branch, so its people are scoped by what the caller may
+    // see in the ORGANIZATION. When every selected external branch is only `self` for the
+    // caller, that means their own identity alone — managing some other branch must not
+    // widen a report the caller scoped to a branch they only have self access to.
+    if (selectedExternal.every((a) => a.attendance === "self")) {
+      const own = ctx.roster.ownNeonIds[orgId];
+      visible = own === undefined ? [] : visible.filter((id) => id === own);
+    }
     const wanted = filter
       ? (filter.neonByOrg.get(orgId) ?? new Set<number>())
       : null;
-    const ids = wanted ? visible.filter((id) => wanted.has(id)) : [...visible];
+    const ids = wanted ? visible.filter((id) => wanted.has(id)) : visible;
     if (ids.length === 0) continue;
 
     const allExternalHere = ctx.authorities.filter(
@@ -548,34 +604,29 @@ export async function readAttendance(
   return { slices, issues };
 }
 
-function monthsFor(startDate: string, endDate: string): string[] {
-  const out: string[] = [];
-  let y = Number(startDate.slice(0, 4));
-  let m = Number(startDate.slice(5, 7));
-  const endY = Number(endDate.slice(0, 4));
-  const endM = Number(endDate.slice(5, 7));
-  while ((y < endY || (y === endY && m <= endM)) && out.length < 24) {
-    out.push(`${y}-${String(m).padStart(2, "0")}-01`);
-    m += 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-  }
-  return out;
-}
-
 export interface PayrollReadResult {
   readonly periods: PayrollPeriodInput[];
   readonly issues: ReportException[];
   readonly actorNames: Record<string, string>;
 }
 
+type PeriodRow = Database["public"]["Tables"]["payroll_periods"]["Row"];
+type ResolvedPeriod = PeriodRow & {
+  attribution: BranchAttribution;
+  locationIdResolved: string | null;
+};
+
+const PERIOD_COLUMNS =
+  "id, organization_id, location_id, attendance_source, profile_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by";
+
 /**
  * Existing payroll snapshots with their ledgers — read only. Two independent checks apply
  * to every row: the database's RLS (which rows this session may read at all) and this
  * function's own authority check (which branch the row belongs to and whether the caller
  * has Payroll authority there). A row failing either is simply not part of the report.
+ *
+ * Every list is read COMPLETELY (paged against PostgREST's response cap) or reported as
+ * truncated/unavailable — a short list is never returned as if it were whole.
  */
 export async function readPayroll(
   ctx: ReadContext,
@@ -583,10 +634,11 @@ export async function readPayroll(
   const issues: ReportException[] = [];
   const periods: PayrollPeriodInput[] = [];
   const filter = employeeFilter(ctx);
-  const months = monthsFor(ctx.filters.startDate, ctx.filters.endDate);
+  const months = monthsInRange(ctx.filters.startDate, ctx.filters.endDate);
 
   const byLocation = new Map(ctx.authorities.map((a) => [a.locationId, a]));
   const selectedIds = new Set(ctx.selected.map((a) => a.locationId));
+  const matchedIds = new Set(ctx.matched.map((a) => a.locationId));
   const orgs = [
     ...new Set(
       ctx.selected
@@ -595,27 +647,26 @@ export async function readPayroll(
     ),
   ];
 
-  const rows: Array<
-    Database["public"]["Tables"]["payroll_periods"]["Row"] & {
-      attribution: BranchAttribution;
-      locationIdResolved: string | null;
-    }
-  > = [];
-  let excludedOrgLevel = 0;
-
-  for (const orgId of orgs) {
-    const { data, error } = await ctx.supabase
-      .from("payroll_periods")
-      .select(
-        "id, organization_id, location_id, attendance_source, profile_id, neon_user_id, period_month, hours_snapshot, rate_cents_snapshot, gross_cents, status, generated_at, generated_by, regenerated_at, regenerated_by, locked_at, locked_by",
-      )
-      .eq("organization_id", orgId)
-      .in("period_month", months)
-      .order("period_month", { ascending: true })
-      .order("id", { ascending: true })
-      .limit(REPORT_MAX_PAYROLL_PERIODS + 1);
-    if (error) {
-      issues.push(
+  async function readOrganization(orgId: string): Promise<{
+    rows: ResolvedPeriod[];
+    issues: ReportException[];
+    excludedOrgLevel: number;
+  }> {
+    const orgIssues: ReportException[] = [];
+    const paged = await readAllPages<PeriodRow>(
+      (from, to) =>
+        ctx.supabase
+          .from("payroll_periods")
+          .select(PERIOD_COLUMNS, { count: "exact" })
+          .eq("organization_id", orgId)
+          .in("period_month", months)
+          .order("period_month", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { maxRows: REPORT_MAX_PAYROLL_PERIODS },
+    );
+    if (!paged.ok) {
+      orgIssues.push(
         issue(
           "source_unavailable",
           "blocking",
@@ -623,10 +674,10 @@ export async function readPayroll(
           { organizationId: orgId },
         ),
       );
-      continue;
+      return { rows: [], issues: orgIssues, excludedOrgLevel: 0 };
     }
-    if ((data ?? []).length > REPORT_MAX_PAYROLL_PERIODS) {
-      issues.push(
+    if (paged.truncated) {
+      orgIssues.push(
         issue(
           "payroll_truncated",
           "blocking",
@@ -647,14 +698,15 @@ export async function readPayroll(
       ctx.orgLocationCounts[orgId] === 1 && orgAuthorities.length === 1
         ? orgAuthorities[0]!
         : null;
-    const selectedOfOrg = ctx.selected.filter(
-      (a) => a.organizationId === orgId,
-    );
+    // The user chose every branch of the organization they can report on (judged from what
+    // the request matched, not from the content-narrowed set).
     const allBranchesSelected =
-      selectedOfOrg.length > 0 &&
-      selectedOfOrg.length === (ctx.orgLocationCounts[orgId] ?? -1);
+      orgAuthorities.length > 0 &&
+      orgAuthorities.every((a) => matchedIds.has(a.locationId));
 
-    for (const row of (data ?? []).slice(0, REPORT_MAX_PAYROLL_PERIODS)) {
+    const rows: ResolvedPeriod[] = [];
+    let excludedOrgLevel = 0;
+    for (const row of paged.rows) {
       // Defense in depth: a row of another organization is never part of this one's report.
       if (row.organization_id !== orgId) continue;
       let locationId = row.location_id;
@@ -716,6 +768,16 @@ export async function readPayroll(
 
       rows.push({ ...row, attribution, locationIdResolved: locationId });
     }
+    return { rows, issues: orgIssues, excludedOrgLevel };
+  }
+
+  const perOrg = await mapBounded(orgs, 3, readOrganization);
+  const rows: ResolvedPeriod[] = [];
+  let excludedOrgLevel = 0;
+  for (const r of perOrg) {
+    rows.push(...r.rows);
+    issues.push(...r.issues);
+    excludedOrgLevel += r.excludedOrgLevel;
   }
 
   if (excludedOrgLevel > 0) {
@@ -729,38 +791,83 @@ export async function readPayroll(
     );
   }
 
-  // Ledgers, in bounded IN-lists (never one unbounded query).
+  // Ledgers: bounded IN-lists, each paged to completion (a chunk of periods can hold more
+  // payments/adjustments than one PostgREST response).
   const paymentsBy = new Map<number, PaymentRecord[]>();
   const adjustmentsBy = new Map<number, AdjustmentRecord[]>();
   const ids = rows.map((r) => r.id);
   const actorIds = new Set<string>();
-  for (const part of chunk(ids, IN_CHUNK)) {
-    const [pay, adj] = await Promise.all([
-      ctx.supabase
-        .from("payroll_payments")
-        .select(
-          "id, payroll_period_id, amount_cents, payment_date, comment, status, created_by, confirmed_by, confirmed_at, reverses_payment_id",
-        )
-        .in("payroll_period_id", part),
-      ctx.supabase
-        .from("payroll_adjustments")
-        .select(
-          "id, payroll_period_id, delta_cents, reason, created_at, created_by",
-        )
-        .in("payroll_period_id", part),
-    ]);
-    if (pay.error || adj.error) {
+
+  type PaymentRow = Pick<
+    Database["public"]["Tables"]["payroll_payments"]["Row"],
+    | "id"
+    | "payroll_period_id"
+    | "amount_cents"
+    | "payment_date"
+    | "comment"
+    | "status"
+    | "created_by"
+    | "confirmed_by"
+    | "confirmed_at"
+    | "reverses_payment_id"
+  >;
+  type AdjustmentRow = Pick<
+    Database["public"]["Tables"]["payroll_adjustments"]["Row"],
+    | "id"
+    | "payroll_period_id"
+    | "delta_cents"
+    | "reason"
+    | "created_at"
+    | "created_by"
+  >;
+  const ledgerChunks = await mapBounded(
+    chunk(ids, IN_CHUNK),
+    READ_CONCURRENCY,
+    async (part) => {
+      const [pay, adj] = await Promise.all([
+        readAllPages<PaymentRow>(
+          (from, to) =>
+            ctx.supabase
+              .from("payroll_payments")
+              .select(
+                "id, payroll_period_id, amount_cents, payment_date, comment, status, created_by, confirmed_by, confirmed_at, reverses_payment_id",
+                { count: "exact" },
+              )
+              .in("payroll_period_id", part)
+              .order("id", { ascending: true })
+              .range(from, to),
+          { maxRows: LEDGER_MAX_ROWS },
+        ),
+        readAllPages<AdjustmentRow>(
+          (from, to) =>
+            ctx.supabase
+              .from("payroll_adjustments")
+              .select(
+                "id, payroll_period_id, delta_cents, reason, created_at, created_by",
+                { count: "exact" },
+              )
+              .in("payroll_period_id", part)
+              .order("id", { ascending: true })
+              .range(from, to),
+          { maxRows: LEDGER_MAX_ROWS },
+        ),
+      ]);
+      return { pay, adj };
+    },
+  );
+  for (const { pay, adj } of ledgerChunks) {
+    if (!pay.ok || !adj.ok || pay.truncated || adj.truncated) {
       issues.push(
         issue(
           "source_unavailable",
           "blocking",
-          "Payments or adjustments could not be loaded. Payroll figures are incomplete.",
+          "Payments or adjustments could not be loaded completely. Payroll figures are incomplete.",
           {},
         ),
       );
-      continue;
     }
-    for (const p of pay.data ?? []) {
+    if (!pay.ok || !adj.ok) continue;
+    for (const p of pay.rows) {
       const list = paymentsBy.get(p.payroll_period_id) ?? [];
       list.push({
         id: p.id,
@@ -775,7 +882,7 @@ export async function readPayroll(
       });
       paymentsBy.set(p.payroll_period_id, list);
     }
-    for (const a of adj.data ?? []) {
+    for (const a of adj.rows) {
       const list = adjustmentsBy.get(a.payroll_period_id) ?? [];
       list.push({
         id: a.id,
@@ -839,8 +946,20 @@ export async function readPayroll(
     });
   }
 
-  const actorNames = actorIds.size
-    ? await fetchProfileNames(ctx.supabase, [...actorIds])
-    : {};
+  let actorNames: Record<string, string> = {};
+  if (actorIds.size > 0) {
+    const actors = await fetchProfileNames(ctx.supabase, [...actorIds]);
+    actorNames = actors.names;
+    if (actors.failed) {
+      issues.push(
+        issue(
+          "source_unavailable",
+          "warning",
+          "Some staff names on the payments ledger could not be loaded.",
+          {},
+        ),
+      );
+    }
+  }
   return { periods, issues, actorNames };
 }
