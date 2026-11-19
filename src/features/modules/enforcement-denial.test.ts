@@ -198,15 +198,45 @@ describe("a denied module never reaches the database", () => {
     );
   });
 
-  it("BE-23 Tips: finalize", async () => {
-    const { finalizeTipsAction } = await import(
-      "@/features/tips/actions/tips-actions"
-    );
-    const result = await finalizeTipsAction({
+  it("BE-23 Tips: save, void and recalculate are blocked before any database access", async () => {
+    const actions = await import("@/features/tips/actions/tips-actions");
+    const saved = await actions.saveTipIntervalAction({
       restaurantSlug: SLUG,
-      organizationId: ORG,
+      locationId: LOC,
+      serviceDate: "2026-11-18",
+      start: "11:00",
+      end: "13:00",
+      cashCents: 100,
+      cardCents: 0,
+      participantIds: [PROFILE],
+    });
+    expect(saved).toMatchObject({ ok: false, moduleUnavailable: true });
+    const voided = await actions.voidTipIntervalAction({
+      restaurantSlug: SLUG,
+      locationId: LOC,
+      intervalId: "7",
+      expectedRevision: 1,
+      reason: "wrong day",
+    });
+    expect(voided).toMatchObject({ ok: false, moduleUnavailable: true });
+    const recalculated = await actions.recalculateTipsAction({
+      restaurantSlug: SLUG,
       locationId: LOC,
       tipPoolId: 7,
+    });
+    expect(recalculated).toMatchObject({ ok: false, moduleUnavailable: true });
+    untouched();
+  });
+
+  it("BE-23b Tips: the range read (history) is blocked too", async () => {
+    const { getTipsRangeAction } = await import(
+      "@/features/tips/actions/tips-actions"
+    );
+    const result = await getTipsRangeAction({
+      restaurantSlug: SLUG,
+      locationId: LOC,
+      from: "2026-11-01",
+      to: "2026-11-30",
     });
     expect(result).toMatchObject({ ok: false, moduleUnavailable: true });
     untouched();

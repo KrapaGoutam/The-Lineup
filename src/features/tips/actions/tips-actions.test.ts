@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // V2-004.004: the module guard is covered by its own tests; action tests isolate it.
 vi.mock("@/features/modules/data/module-enforcement", () => ({
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   fetchClockedInRoster: vi.fn(),
   getTipsActor: vi.fn(),
+  loadTipsRange: vi.fn(),
   requireLiveSession: vi.fn(),
   rpc: vi.fn(),
 }));
@@ -24,15 +25,20 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/supabase/require-live-session", () => ({
   requireLiveSession: mocks.requireLiveSession,
 }));
+vi.mock("@/features/tips/data/tips-data", () => ({
+  loadTipsRange: mocks.loadTipsRange,
+}));
 vi.mock("@/features/tips/data/fetch-clocked-in-roster", () => ({
   fetchClockedInRoster: mocks.fetchClockedInRoster,
 }));
 
 import {
-  addTipIntervalAction,
-  finalizeTipsAction,
   getClockedInRosterAction,
+  getTipsRangeAction,
+  recalculateTipsAction,
   reopenTipsAction,
+  saveTipIntervalAction,
+  voidTipIntervalAction,
 } from "./tips-actions";
 
 const organizationId = "00000000-0000-0000-0000-000000029101";
@@ -224,148 +230,404 @@ describe("tips-actions", () => {
     });
   });
 
-  describe("addTipIntervalAction", () => {
-    it("refuses a non-manager", async () => {
-      mocks.getTipsActor.mockResolvedValue(serverCaller);
-      const result = await addTipIntervalAction({
-        restaurantSlug: "the-monks",
-        start: "11:00",
-        end: "14:00",
-        amountCents: 10000,
-        participantIds: ["p1"],
+  describe("saveTipIntervalAction", () => {
+    const p1 = "00000000-0000-4000-8000-0000000a0001";
+    const p2 = "00000000-0000-4000-8000-0000000a0002";
+    const valid = {
+      restaurantSlug: "the-monks",
+      serviceDate: "2026-11-18",
+      start: "11:00",
+      end: "13:00",
+      cashCents: 1001,
+      cardCents: 500,
+      participantIds: [p1, p2],
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-18T18:00:00Z"));
+      mocks.rpc.mockResolvedValue({
+        data: { interval_id: 7, tip_pool_id: 3, revision: 1 },
+        error: null,
       });
-      expect(result).toEqual({
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("refuses a non-manager before any database call", async () => {
+      mocks.getTipsActor.mockResolvedValue(serverCaller);
+      await expect(saveTipIntervalAction(valid)).resolves.toEqual({
         ok: false,
         error: "Only an owner, manager or assistant manager can do that.",
       });
+      expect(mocks.rpc).not.toHaveBeenCalled();
     });
 
-    it("refuses invalid amount or empty participants", async () => {
-      mocks.getTipsActor.mockResolvedValue(managerCaller);
-      const negAmount = await addTipIntervalAction({
-        restaurantSlug: "the-monks",
-        start: "11:00",
-        end: "14:00",
-        amountCents: -50,
-        participantIds: ["p1"],
-      });
-      expect(negAmount).toEqual({
-        ok: false,
-        error: "Tip amount must be a non-negative number of cents.",
-      });
+    it.each([
+      ["a non-uuid participant", { participantIds: ["not-a-uuid"] }],
+      ["a negative amount", { cashCents: -1 }],
+      ["a fractional amount", { cardCents: 1.5 }],
+      ["an absurd amount", { cashCents: 10_000_001 }],
+      ["a bad time", { start: "9:00" }],
+      ["no participants", { participantIds: [] }],
+      ["a malformed date", { serviceDate: "11/18/2026" }],
+    ])(
+      "rejects %s without touching the actor or database",
+      async (_name, patch) => {
+        await expect(
+          saveTipIntervalAction({ ...valid, ...patch }),
+        ).resolves.toEqual({
+          ok: false,
+          error: "That request is invalid.",
+        });
+        expect(mocks.getTipsActor).not.toHaveBeenCalled();
+        expect(mocks.rpc).not.toHaveBeenCalled();
+      },
+    );
 
-      const emptyPart = await addTipIntervalAction({
-        restaurantSlug: "the-monks",
-        start: "11:00",
-        end: "14:00",
-        amountCents: 5000,
-        participantIds: [],
+    it("an update needs the revision it was read at and a reason", async () => {
+      const noReason = await saveTipIntervalAction({
+        ...valid,
+        intervalId: "7",
+        expectedRevision: 1,
       });
-      expect(emptyPart).toEqual({
+      expect(noReason.ok).toBe(false);
+      expect(!noReason.ok && noReason.error).toContain("reason");
+      const noRevision = await saveTipIntervalAction({
+        ...valid,
+        intervalId: "7",
+        reason: "Counted again",
+      });
+      expect(noRevision).toEqual({
         ok: false,
-        error: "Choose at least one participant.",
+        error: "That request is invalid.",
       });
+      expect(mocks.rpc).not.toHaveBeenCalled();
     });
 
-    it("successfully delegates to atomic tips_add_interval RPC", async () => {
-      mocks.getTipsActor.mockResolvedValue(managerCaller);
-      mocks.rpc.mockResolvedValue({
-        data: { interval_id: 101, tip_pool_id: 501 },
-        error: null,
+    it("rejects a zero total", async () => {
+      const result = await saveTipIntervalAction({
+        ...valid,
+        cashCents: 0,
+        cardCents: 0,
       });
+      expect(result.ok).toBe(false);
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    });
 
-      const result = await addTipIntervalAction({
-        restaurantSlug: "the-monks",
-        start: "11:00",
-        end: "14:00",
-        amountCents: 25000,
-        participantIds: ["p1", "p2"],
-      });
-
+    it("creates: tenancy and zone come from the verified caller, instants from the location zone", async () => {
+      const result = await saveTipIntervalAction(valid);
       expect(result).toEqual({
         ok: true,
-        data: {
-          interval: {
-            id: "101",
-            start: "11:00",
-            end: "14:00",
-            amountCents: 25000,
-            participantIds: ["p1", "p2"],
-          },
-          tipPoolId: 501,
-        },
+        data: { intervalId: 7, tipPoolId: 3, revision: 1 },
       });
+      expect(mocks.rpc).toHaveBeenCalledWith("tips_save_interval", {
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+        p_service_date: "2026-11-18",
+        p_starts_at: "2026-11-18T17:00:00.000Z",
+        p_ends_at: "2026-11-18T19:00:00.000Z",
+        p_cash_cents: 1001,
+        p_card_cents: 500,
+        p_participant_ids: [p1, p2],
+        p_interval_id: undefined,
+        p_expected_revision: undefined,
+        p_reason: undefined,
+      });
+    });
+
+    it("a cross-midnight interval ends on the next calendar day", async () => {
+      await saveTipIntervalAction({ ...valid, start: "23:00", end: "01:00" });
       expect(mocks.rpc).toHaveBeenCalledWith(
-        "tips_add_interval",
+        "tips_save_interval",
         expect.objectContaining({
-          p_organization_id: organizationId,
-          p_location_id: locationId,
-          p_amount_cents: 25000,
-          p_participant_ids: ["p1", "p2"],
+          p_starts_at: "2026-11-19T05:00:00.000Z",
+          p_ends_at: "2026-11-19T07:00:00.000Z",
         }),
       );
     });
-  });
 
-  describe("finalizeTipsAction", () => {
-    it("refuses a non-manager", async () => {
-      mocks.getTipsActor.mockResolvedValue(serverCaller);
-      const result = await finalizeTipsAction({
-        restaurantSlug: "the-monks",
-        tipPoolId: 501,
+    it("updates: passes the interval, revision and reason through", async () => {
+      await saveTipIntervalAction({
+        ...valid,
+        intervalId: "7",
+        expectedRevision: 2,
+        reason: "  Counted again  ",
       });
-      expect(result).toEqual({
-        ok: false,
-        error: "Only an owner, manager or assistant manager can do that.",
-      });
+      expect(mocks.rpc).toHaveBeenCalledWith(
+        "tips_save_interval",
+        expect.objectContaining({
+          p_interval_id: 7,
+          p_expected_revision: 2,
+          p_reason: "Counted again",
+        }),
+      );
     });
 
-    it("successfully calls tips_finalize_pool RPC", async () => {
-      mocks.getTipsActor.mockResolvedValue(managerCaller);
-      mocks.rpc.mockResolvedValue({ data: null, error: null });
-
-      const result = await finalizeTipsAction({
-        restaurantSlug: "the-monks",
-        tipPoolId: 501,
+    it("refuses a stale workspace (another branch in the same tab) before any write", async () => {
+      const result = await saveTipIntervalAction({
+        ...valid,
+        locationId: "00000000-0000-4000-8000-00000000dead",
       });
-      expect(result).toEqual({ ok: true, data: null });
-      expect(mocks.rpc).toHaveBeenCalledWith("tips_finalize_pool", {
+      expect(result).toMatchObject({ ok: false, contextStale: true });
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    });
+
+    it("refuses service dates outside the window", async () => {
+      const old = await saveTipIntervalAction({
+        ...valid,
+        serviceDate: "2024-01-01",
+      });
+      const future = await saveTipIntervalAction({
+        ...valid,
+        serviceDate: "2026-12-25",
+      });
+      expect(old.ok).toBe(false);
+      expect(future.ok).toBe(false);
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    });
+
+    it("reports a concurrent edit as a conflict", async () => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0409",
+          message:
+            "This interval was changed by someone else. Reload and try again.",
+        },
+      });
+      const result = await saveTipIntervalAction({
+        ...valid,
+        intervalId: "7",
+        expectedRevision: 1,
+        reason: "x y z",
+      });
+      expect(result).toMatchObject({ ok: false, conflict: true });
+    });
+
+    it("hides Postgres-originated text even under an allowed SQLSTATE", async () => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "42501",
+          message: "permission denied for table tip_pools",
+        },
+      });
+      const result = await saveTipIntervalAction(valid);
+      expect(!result.ok && result.error).not.toContain("tip_pools");
+      expect(!result.ok && result.error).toContain("couldn't be saved");
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "22003", message: "integer out of range" },
+      });
+      const overflow = await saveTipIntervalAction(valid);
+      expect(!overflow.ok && overflow.error).not.toContain("out of range");
+    });
+
+    it("passes authored database errors through and hides unexpected ones", async () => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "22023", message: "Tip intervals cannot overlap." },
+      });
+      await expect(saveTipIntervalAction(valid)).resolves.toEqual({
+        ok: false,
+        error: "Tip intervals cannot overlap.",
+      });
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "XX000", message: 'relation "secret_table" exploded' },
+      });
+      const hidden = await saveTipIntervalAction(valid);
+      expect(!hidden.ok && hidden.error).not.toContain("secret_table");
+    });
+  });
+
+  describe("voidTipIntervalAction", () => {
+    const input = {
+      restaurantSlug: "the-monks",
+      intervalId: "7",
+      expectedRevision: 2,
+      reason: "Entered on the wrong day",
+    };
+
+    it("refuses a non-manager and a short reason", async () => {
+      mocks.getTipsActor.mockResolvedValue(serverCaller);
+      const denied = await voidTipIntervalAction(input);
+      expect(denied.ok).toBe(false);
+      mocks.getTipsActor.mockResolvedValue(managerCaller);
+      const short = await voidTipIntervalAction({ ...input, reason: "x" });
+      expect(!short.ok && short.error).toContain("reason");
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    });
+
+    it("voids with the revision and reason", async () => {
+      await expect(voidTipIntervalAction(input)).resolves.toEqual({
+        ok: true,
+        data: null,
+      });
+      expect(mocks.rpc).toHaveBeenCalledWith("tips_void_interval", {
         p_organization_id: organizationId,
         p_location_id: locationId,
-        p_tip_pool_id: 501,
+        p_interval_id: 7,
+        p_expected_revision: 2,
+        p_reason: "Entered on the wrong day",
+      });
+    });
+
+    it("surfaces a concurrent change as a conflict", async () => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "P0409", message: "changed" },
+      });
+      await expect(voidTipIntervalAction(input)).resolves.toMatchObject({
+        conflict: true,
       });
     });
   });
 
-  describe("reopenTipsAction", () => {
-    it("refuses a short reason", async () => {
+  describe("recalculateTipsAction", () => {
+    it("is manager-only and reports whether anything changed", async () => {
+      mocks.getTipsActor.mockResolvedValue(serverCaller);
+      const denied = await recalculateTipsAction({
+        restaurantSlug: "the-monks",
+        tipPoolId: 3,
+      });
+      expect(denied.ok).toBe(false);
       mocks.getTipsActor.mockResolvedValue(managerCaller);
+      mocks.rpc.mockResolvedValue({ data: { changed: true }, error: null });
+      await expect(
+        recalculateTipsAction({ restaurantSlug: "the-monks", tipPoolId: 3 }),
+      ).resolves.toEqual({ ok: true, data: { changed: true } });
+      expect(mocks.rpc).toHaveBeenCalledWith("tips_recalculate_pool", {
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+        p_tip_pool_id: 3,
+      });
+    });
+  });
+
+  describe("getTipsRangeAction", () => {
+    const base = {
+      restaurantSlug: "the-monks",
+      from: "2026-11-01",
+      to: "2026-11-30",
+    };
+    const loaded = {
+      ok: true,
+      range: { days: [] },
+      team: [],
+      selectableIds: [],
+    };
+
+    it("lets staff read (the database narrows to their own data) and binds to the verified location", async () => {
+      mocks.getTipsActor.mockResolvedValue(serverCaller);
+      mocks.loadTipsRange.mockResolvedValue(loaded);
+      const result = await getTipsRangeAction(base);
+      expect(result.ok).toBe(true);
+      expect(mocks.loadTipsRange).toHaveBeenCalledWith(expect.anything(), {
+        organizationId,
+        locationId,
+        from: "2026-11-01",
+        to: "2026-11-30",
+        includeRevisions: false,
+      });
+    });
+
+    it("passes the audit-trail request through for the database to honour", async () => {
+      mocks.loadTipsRange.mockResolvedValue(loaded);
+      await getTipsRangeAction({ ...base, includeRevisions: true });
+      expect(mocks.loadTipsRange).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ includeRevisions: true }),
+      );
+    });
+
+    it("rejects inverted and malformed ranges", async () => {
+      const inverted = await getTipsRangeAction({
+        ...base,
+        from: "2026-12-01",
+        to: "2026-11-01",
+      });
+      expect(inverted.ok).toBe(false);
+      await expect(
+        getTipsRangeAction({ ...base, from: "yesterday" }),
+      ).resolves.toEqual({ ok: false, error: "That request is invalid." });
+      expect(mocks.loadTipsRange).not.toHaveBeenCalled();
+    });
+
+    it("fails closed with the standard message when the read is unavailable", async () => {
+      mocks.loadTipsRange.mockResolvedValue({
+        ok: false,
+        reason: "access_denied",
+      });
+      const result = await getTipsRangeAction(base);
+      expect(!result.ok && result.error).toContain("don't have access");
+    });
+
+    it("refuses a caller with no verified Tips actor", async () => {
+      mocks.getTipsActor.mockResolvedValue(null);
+      const result = await getTipsRangeAction(base);
+      expect(result.ok).toBe(false);
+      expect(mocks.loadTipsRange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reopenTipsAction (audited correction of a legacy locked day)", () => {
+    it("refuses a short reason", async () => {
       const result = await reopenTipsAction({
         restaurantSlug: "the-monks",
-        tipPoolId: 501,
-        reason: "no",
+        tipPoolId: 3,
+        reason: "x",
       });
       expect(result).toEqual({
         ok: false,
         error: "Enter a short reason (at least 3 characters).",
       });
+      expect(mocks.rpc).not.toHaveBeenCalled();
     });
 
-    it("successfully calls tips_reopen_pool RPC", async () => {
-      mocks.getTipsActor.mockResolvedValue(managerCaller);
-      mocks.rpc.mockResolvedValue({ data: null, error: null });
-
+    it("refuses a non-manager", async () => {
+      mocks.getTipsActor.mockResolvedValue(serverCaller);
       const result = await reopenTipsAction({
         restaurantSlug: "the-monks",
-        tipPoolId: 501,
-        reason: "Late shift adjustment",
+        tipPoolId: 3,
+        reason: "Fix split",
       });
-      expect(result).toEqual({ ok: true, data: null });
+      expect(result.ok).toBe(false);
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    });
+
+    it("validates its inputs and never echoes raw database text", async () => {
+      const bad = await reopenTipsAction({
+        restaurantSlug: "Not A Slug!",
+        tipPoolId: 3,
+        reason: "Fix split",
+      });
+      expect(bad).toEqual({ ok: false, error: "That request is invalid." });
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "XX000", message: 'relation "secret" exploded' },
+      });
+      const hidden = await reopenTipsAction({
+        restaurantSlug: "the-monks",
+        tipPoolId: 3,
+        reason: "Fix split",
+      });
+      expect(!hidden.ok && hidden.error).not.toContain("secret");
+    });
+
+    it("calls tips_reopen_pool with the verified org/location", async () => {
+      await expect(
+        reopenTipsAction({
+          restaurantSlug: "the-monks",
+          tipPoolId: 3,
+          reason: "Fix split",
+        }),
+      ).resolves.toEqual({ ok: true, data: null });
       expect(mocks.rpc).toHaveBeenCalledWith("tips_reopen_pool", {
         p_organization_id: organizationId,
         p_location_id: locationId,
-        p_tip_pool_id: 501,
-        p_reason: "Late shift adjustment",
+        p_tip_pool_id: 3,
+        p_reason: "Fix split",
       });
     });
   });

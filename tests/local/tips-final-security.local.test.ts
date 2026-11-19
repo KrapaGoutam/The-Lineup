@@ -38,7 +38,14 @@ vi.mock("@/features/team/data/roster", () => ({
   },
 }));
 
-import { getTipsContext } from "@/features/tips/data/tips-data";
+import {
+  getTipsContext,
+  type TipsContext,
+} from "@/features/tips/data/tips-data";
+
+// V2.0.8: a day's intervals now come from the range read (live ones only).
+const liveOf = (ctx: TipsContext | null) =>
+  ctx?.today?.days.flatMap((d) => d.intervals.filter((i) => !i.voided)) ?? [];
 
 const CHI = "America/Chicago";
 const today = (zone = CHI) => zonedWallTimeFromInstant(new Date(), zone).date;
@@ -74,8 +81,8 @@ it("loader (manager): current workforce selectable, no foreign/unassigned people
   loaderAs(fx.manager, { id: fx.a, time_zone: CHI });
   const ctx = await getTipsContext(fx.org.id);
   expect(ctx?.unavailable).toBeUndefined();
-  expect(ctx?.intervals).toHaveLength(1);
-  expect(ctx?.intervals[0].amountCents).toBe(10001);
+  expect(liveOf(ctx)).toHaveLength(1);
+  expect(liveOf(ctx)[0].amountCents).toBe(10001);
   expect(ctx?.selectableIds).toEqual(
     expect.arrayContaining([fx.staff.id, fx.dual.id]),
   );
@@ -99,7 +106,7 @@ it("loader: a person who left the location stays in the name directory but is no
     expect(ctx!.team.map((m) => m.id)).toContain(fx.dual.id); // history readable
     expect(ctx!.selectableIds).not.toContain(fx.dual.id); // not offered again
     expect(ctx!.selectableIds).toContain(fx.staff.id);
-    expect(ctx!.intervals[0].participantIds).toContain(fx.dual.id); // frozen history
+    expect(liveOf(ctx)[0].participantIds).toContain(fx.dual.id); // frozen history
   } finally {
     must(
       await fx.admin.from("location_memberships").insert({
@@ -116,7 +123,7 @@ it("loader (staff): only their own row in the directory, their own interval, no 
   const ctx = await getTipsContext(fx.org.id);
   expect(ctx?.unavailable).toBeUndefined();
   expect(ctx!.team.map((m) => m.id)).toEqual([fx.staff.id]);
-  expect(ctx!.intervals).toHaveLength(1);
+  expect(liveOf(ctx)).toHaveLength(1);
   expect(ctx!.auditLog).toEqual([]);
 });
 
@@ -125,7 +132,7 @@ it("loader fails closed for a location the user does not belong to (no data, no 
   const denied = await getTipsContext(fx.org.id);
   expect(denied?.unavailable).toBe("access_denied");
   expect(denied?.team).toEqual([]);
-  expect(denied?.intervals).toEqual([]);
+  expect(denied?.today).toBeNull();
 
   loaderAs(fx.unassigned, { id: fx.a, time_zone: CHI });
   const unassigned = await getTipsContext(fx.org.id);
@@ -163,7 +170,7 @@ it("staff can read their own allocations (RLS helper is executable) and nobody e
   ]);
 });
 
-it("direct PostgREST writes cannot change a finalized pool; unauthorized callers change nothing", async () => {
+it("direct PostgREST writes are closed for every authenticated caller (RPC-only since V2.0.8); a finalized pool and unauthorized callers change nothing", async () => {
   const pool = must(
     await fx.admin
       .from("tip_pools")
@@ -219,14 +226,13 @@ it("direct PostgREST writes cannot change a finalized pool; unauthorized callers
     .update({ amount_cents: 1 })
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(updInterval.error).toBeNull();
-  expect(updInterval.data).toEqual([]);
+  expect(updInterval.error?.code).toBe("42501");
   const delInterval = await m
     .from("tip_intervals")
     .delete()
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(delInterval.data).toEqual([]);
+  expect(delInterval.error?.code).toBe("42501");
   const insPart = await m.from("tip_interval_participants").insert({
     organization_id: fx.org.id,
     tip_interval_id: intervalId,
@@ -238,7 +244,7 @@ it("direct PostgREST writes cannot change a finalized pool; unauthorized callers
     .update({ amount_cents: 1 })
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(updAlloc.data).toEqual([]);
+  expect(updAlloc.error?.code).toBe("42501");
   const insAlloc = await m.from("tip_allocations").insert({
     organization_id: fx.org.id,
     tip_pool_id: pool.id,
@@ -405,8 +411,9 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
     p_organization_id: fx.org.id,
     p_location_id: fx.a,
     p_service_date: day,
-    p_starts_at: new Date().toISOString(),
-    p_ends_at: new Date(Date.now() + 3600_000).toISOString(),
+    // Tomorrow's interval (the interval must start on its own service date).
+    p_starts_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+    p_ends_at: new Date(Date.now() + 25 * 3600_000).toISOString(),
     p_amount_cents: 700,
     p_participant_ids: [fx.staff.id],
   });
@@ -453,7 +460,7 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
   });
   expect(finRpc.error).toBeNull();
 
-  // Direct reopen on finalized pool affects 0 rows (reopen policy dropped)
+  // Direct reopen of a finalized pool is denied outright (use tips_reopen_pool)
   const directReopen = await fx.manager.client
     .from("tip_pools")
     .update({
@@ -463,7 +470,7 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
     })
     .eq("id", poolId)
     .select();
-  expect(directReopen.data).toHaveLength(0);
+  expect(directReopen.error?.code).toBe("42501");
   expect(
     must(
       await fx.admin

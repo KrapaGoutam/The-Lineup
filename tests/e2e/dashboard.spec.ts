@@ -142,7 +142,7 @@ test("manager can use all three operational modules", async ({ page }) => {
   await navigateToTab(page, "Tip Split");
   await expect(page.getByRole("heading", { name: "Tip split" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Finalize day" }),
+    page.getByRole("button", { name: "New distribution" }),
   ).toBeVisible();
 });
 
@@ -517,21 +517,17 @@ test("no reason field renders anywhere on the allocation board", async ({
   await expect(page.getByPlaceholder(/[Rr]eason/)).toHaveCount(0);
 });
 
-test("board locks once tips are finalized, and a manager can reopen it", async ({
+test("saving tips never locks the allocation board (there is no Finalize step)", async ({
   page,
 }) => {
   await signIn(page, "2468");
   await navigateToTab(page, "Tip Split");
-  await page.getByRole("button", { name: "Finalize day" }).click();
+  await expect(page.getByRole("button", { name: /finali[sz]e/i })).toHaveCount(
+    0,
+  );
+  await page.getByLabel("Cash tips").fill("40.00");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved.", { exact: true })).toBeVisible();
   await navigateToTab(page, /^Table Allocation$|^Allocation$/);
-  await expect(page.getByText(/board is locked for everyone/)).toBeVisible();
-
-  await page
-    .getByRole("button", { name: "Reopen tips for corrections" })
-    .click();
-  await page
-    .getByLabel("Reason for reopening tips")
-    .fill("Wrong table for Noah");
-  await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText(/board is locked for everyone/)).toHaveCount(0);
 });

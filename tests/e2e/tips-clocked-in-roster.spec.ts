@@ -69,7 +69,7 @@ function participantCheckbox(page: Page, shortName: string) {
   return page.getByRole("checkbox", { name: shortName, exact: true });
 }
 
-test("manager pulls the clocked-in team, finalizes, and the split stays frozen through a later attendance unlink", async ({
+test("manager pulls the clocked-in team, saves, and the saved split stays frozen through a later attendance unlink", async ({
   page,
 }) => {
   await signIn(page, "2468");
@@ -101,30 +101,27 @@ test("manager pulls the clocked-in team, finalizes, and the split stays frozen t
   await expect(participantCheckbox(page, "Sam")).not.toBeChecked();
   await expect(participantCheckbox(page, "Ivy")).not.toBeChecked();
 
-  await page.getByRole("textbox", { name: "Tips received" }).fill("100.00");
-  await page.getByRole("button", { name: "Add and calculate" }).click();
+  await page.getByLabel("Cash tips").fill("100.00");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved.", { exact: true })).toBeVisible();
 
-  await expect(page.getByText("Mia Chen")).toBeVisible();
-  await expect(page.getByText("Noah Diaz")).toBeVisible();
-  // Exactly two $50.00 figures on the whole page -- Mia's and Noah's own
-  // totals in "Estimated totals" -- nothing else on this view is ever
-  // $50.00.
+  await expect(page.getByText("Mia Chen").first()).toBeVisible();
+  await expect(page.getByText("Noah Diaz").first()).toBeVisible();
+  // Exactly two $50.00 figures -- Mia's and Noah's own totals in "Distribution".
   await expect(page.getByText("$50.00", { exact: true })).toHaveCount(2);
   await expect(
     page.getByText("$100.00", { exact: true }).first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Finalize day" }).click();
-  await expect(page.getByText("Finalized", { exact: true })).toBeVisible();
-  // Once finalized, the pull button (and every other edit control) is
-  // disabled -- there is nothing left to preset.
+  // There is no daily Finalize / Unlock step any more; the day simply stays editable.
   await expect(
-    page.getByRole("button", { name: "Pull clocked-in team" }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: /finali[sz]e|unlock|unfinali[sz]e/i }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Update" })).toHaveCount(0);
 
   // Now a real, disruptive attendance-side change: fully unlink Mia's
-  // attendance record. Reconciliation 2's own guarantee is that this
-  // must have zero effect on the already-finalized split.
+  // attendance record. The guarantee is that this
+  // must have zero effect on the already-saved split.
   await goToTab(page, "Team");
   await page
     .getByRole("button", { name: "Link Mia Chen's attendance record" })
@@ -136,7 +133,6 @@ test("manager pulls the clocked-in team, finalizes, and the split stays frozen t
   await page.getByRole("button", { name: "Done" }).click();
 
   await goToTab(page, "Tip Split");
-  await expect(page.getByText("Finalized", { exact: true })).toBeVisible();
   await expect(page.getByText("$50.00", { exact: true })).toHaveCount(2);
   await expect(
     page.getByText("$100.00", { exact: true }).first(),
@@ -148,8 +144,8 @@ test("manager pulls the clocked-in team, finalizes, and the split stays frozen t
   await signInOnCurrentPage(page, "1357"); // Mia Chen, server
   await goToTab(page, "Tip Split");
   await expect(page.getByText("My tip estimate")).toBeVisible();
-  // Two legitimate occurrences here (the headline total and the
-  // itemized single-interval breakdown below it) -- both must show the
-  // exact same frozen $50.00.
-  await expect(page.getByText("$50.00", { exact: true })).toHaveCount(2);
+  // The frozen snapshot, unaffected by the unlink: exactly $50.00, and only their own
+  // figures -- never a co-worker's name or amount.
+  await expect(page.getByText("$50.00", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Noah Diaz")).toHaveCount(0);
 });

@@ -12,6 +12,24 @@ export type TipIntervalAllocation = TipIntervalInput & {
 
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * The one definition of an even split in integer cents: everyone gets
+ * floor(amount / n) and the first `amount % n` people, in stable sorted-id
+ * order, get one extra cent. Mirrors `private.tips_interval_shares` in the database.
+ */
+export function splitCentsEvenly(
+  amountCents: number,
+  participantIds: readonly string[],
+): Array<{ participantId: string; amountCents: number }> {
+  const participants = [...new Set(participantIds)].sort();
+  const base = Math.floor(amountCents / participants.length);
+  const remainder = amountCents % participants.length;
+  return participants.map((participantId, index) => ({
+    participantId,
+    amountCents: base + (index < remainder ? 1 : 0),
+  }));
+}
+
 function minutes(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return hour * 60 + minute;
@@ -33,15 +51,10 @@ export function allocateTipInterval(
   if (participants.length === 0) {
     throw new Error("Choose at least one participant.");
   }
-  const base = Math.floor(interval.amountCents / participants.length);
-  const remainder = interval.amountCents % participants.length;
   return {
     ...interval,
     participantIds: participants,
-    allocations: participants.map((participantId, index) => ({
-      participantId,
-      amountCents: base + (index < remainder ? 1 : 0),
-    })),
+    allocations: splitCentsEvenly(interval.amountCents, participants),
   };
 }
 
