@@ -38,7 +38,14 @@ vi.mock("@/features/team/data/roster", () => ({
   },
 }));
 
-import { getTipsContext } from "@/features/tips/data/tips-data";
+import {
+  getTipsContext,
+  type TipsContext,
+} from "@/features/tips/data/tips-data";
+
+// V2.0.8: a day's intervals now come from the range read (live ones only).
+const liveOf = (ctx: TipsContext | null) =>
+  ctx?.today?.days.flatMap((d) => d.intervals.filter((i) => !i.voided)) ?? [];
 
 const CHI = "America/Chicago";
 const today = (zone = CHI) => zonedWallTimeFromInstant(new Date(), zone).date;
@@ -74,8 +81,8 @@ it("loader (manager): current workforce selectable, no foreign/unassigned people
   loaderAs(fx.manager, { id: fx.a, time_zone: CHI });
   const ctx = await getTipsContext(fx.org.id);
   expect(ctx?.unavailable).toBeUndefined();
-  expect(ctx?.intervals).toHaveLength(1);
-  expect(ctx?.intervals[0].amountCents).toBe(10001);
+  expect(liveOf(ctx)).toHaveLength(1);
+  expect(liveOf(ctx)[0].amountCents).toBe(10001);
   expect(ctx?.selectableIds).toEqual(
     expect.arrayContaining([fx.staff.id, fx.dual.id]),
   );
@@ -99,7 +106,7 @@ it("loader: a person who left the location stays in the name directory but is no
     expect(ctx!.team.map((m) => m.id)).toContain(fx.dual.id); // history readable
     expect(ctx!.selectableIds).not.toContain(fx.dual.id); // not offered again
     expect(ctx!.selectableIds).toContain(fx.staff.id);
-    expect(ctx!.intervals[0].participantIds).toContain(fx.dual.id); // frozen history
+    expect(liveOf(ctx)[0].participantIds).toContain(fx.dual.id); // frozen history
   } finally {
     must(
       await fx.admin.from("location_memberships").insert({
@@ -116,7 +123,7 @@ it("loader (staff): only their own row in the directory, their own interval, no 
   const ctx = await getTipsContext(fx.org.id);
   expect(ctx?.unavailable).toBeUndefined();
   expect(ctx!.team.map((m) => m.id)).toEqual([fx.staff.id]);
-  expect(ctx!.intervals).toHaveLength(1);
+  expect(liveOf(ctx)).toHaveLength(1);
   expect(ctx!.auditLog).toEqual([]);
 });
 
@@ -125,7 +132,7 @@ it("loader fails closed for a location the user does not belong to (no data, no 
   const denied = await getTipsContext(fx.org.id);
   expect(denied?.unavailable).toBe("access_denied");
   expect(denied?.team).toEqual([]);
-  expect(denied?.intervals).toEqual([]);
+  expect(denied?.today).toBeNull();
 
   loaderAs(fx.unassigned, { id: fx.a, time_zone: CHI });
   const unassigned = await getTipsContext(fx.org.id);

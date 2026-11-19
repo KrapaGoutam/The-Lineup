@@ -106,14 +106,13 @@ import { updateTeamDesignationAction } from "@/features/team/actions/team-action
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
 import type { RenameMemberResult } from "@/features/team/components/rename-member-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
+import { reopenTipsAction } from "@/features/tips/actions/tips-actions";
+import { TipsModule } from "@/features/tips/components/tips-module";
+import { createTipsApi } from "@/features/tips/data/tips-client-api";
 import {
-  addTipIntervalAction,
-  finalizeTipsAction,
-  getClockedInRosterAction,
-  reopenTipsAction,
-} from "@/features/tips/actions/tips-actions";
-import { TipWorkspace } from "@/features/tips/components/tip-workspace";
-import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
+  createDemoTipsApi,
+  createDemoTipsStore,
+} from "@/features/tips/domain/tips-demo-api";
 import type {
   TipsAuditEntry,
   TipsDayStatus,
@@ -789,6 +788,66 @@ function RestaurantOperationsAppInner({
     Record<string, number>
   >({});
 
+  // V2.0.8. Tips talks to the backend ONLY through this object. Real mode: the server
+  // actions (tenancy, authorization and audit are enforced there and in the database).
+  // Demo mode: an in-memory store that follows the same rules. It must stay referentially
+  // stable, because the history view reloads whenever it changes.
+  // Demo mode keeps its saved tip distributions here so they survive tab switches and
+  // signing in as a different demo person (real mode reads the database).
+  const [demoTipsStore] = useState(() => createDemoTipsStore());
+  const tipsViewerId = user?.profileId ?? "";
+  const tipsViewerIsManager = demoMode
+    ? user !== null && user.role !== "server"
+    : ["owner", "manager", "assistant_manager"].includes(
+        activeContext?.tasksDesignation ??
+          (user?.role === "server" ? "staff" : "manager"),
+      );
+  const tipsApi = useMemo(
+    () =>
+      demoMode
+        ? createDemoTipsApi({
+            store: demoTipsStore,
+            timeZone,
+            viewerId: tipsViewerId,
+            isManager: tipsViewerIsManager,
+            // Read-only suggestion, never a write: the demo resolves it from the
+            // attendance links Team writes, crossed against the demo clock-ins.
+            pullClockedIn: async () => {
+              const activeNeonUserIds = new Set(
+                demoNeonAttendance
+                  .filter(
+                    (row) =>
+                      row.date === tipsServiceDate &&
+                      row.clockIn &&
+                      !row.clockOut &&
+                      !row.autoClockedOut,
+                  )
+                  .map((row) => row.userId),
+              );
+              return Object.entries(demoAttendanceLinks)
+                .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
+                .map(([profileId]) => profileId);
+            },
+          })
+        : createTipsApi({
+            restaurantSlug,
+            expectedContext: workspaceExpectation,
+            locationId,
+          }),
+    [
+      demoMode,
+      demoTipsStore,
+      timeZone,
+      tipsViewerId,
+      tipsViewerIsManager,
+      tipsServiceDate,
+      demoAttendanceLinks,
+      restaurantSlug,
+      workspaceExpectation,
+      locationId,
+    ],
+  );
+
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
   );
@@ -829,12 +888,9 @@ function RestaurantOperationsAppInner({
   );
   const clock = useRestaurantClock(timeZone, operatingHours);
 
-  const [tipPoolId, setTipPoolId] = useState<number | null>(
-    () => initialTipsContext?.tipPoolId ?? null,
-  );
-  const [tipIntervals, setTipIntervals] = useState<TipIntervalInput[]>(
-    () => initialTipsContext?.intervals ?? [],
-  );
+  // Legacy lock state only: a day finalized by the earlier workflow still locks the
+  // allocation board until an audited correction reopens it. New days are never finalized.
+  const tipPoolId = initialTipsContext?.tipPoolId ?? null;
   const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>(
     () => initialTipsContext?.status ?? "estimating",
   );
@@ -1290,105 +1346,12 @@ function RestaurantOperationsAppInner({
     setShiftDefaults(nextShiftDefaults);
   }
 
-  async function addTipInterval(
-    interval: TipIntervalInput,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    if (demoMode) {
-      setTipIntervals((current) => [...current, interval]);
-      return { ok: true };
-    }
-    if (!locationId) return { ok: false, error: "Not ready yet." };
-    const result = await addTipIntervalAction({
-      restaurantSlug,
-      expectedContext: workspaceExpectation,
-      organizationId: currentUser.organizationId,
-      locationId,
-      timeZone,
-      serviceDate: tipsServiceDate,
-      start: interval.start,
-      end: interval.end,
-      amountCents: interval.amountCents,
-      participantIds: interval.participantIds,
-    });
-    if (!result.ok) {
-      if (result.sessionInvalid) forceSignOut();
-      return { ok: false, error: result.error };
-    }
-    setTipPoolId(result.data.tipPoolId);
-    setTipIntervals((current) => [...current, result.data.interval]);
-    return { ok: true };
-  }
-
-  // Feature 029. Read-only convenience lookup, never a write -- demo
-  // mode resolves it from the same in-memory demoAttendanceLinks map
-  // Team's own link dialog already writes to (empty until a manager
-  // deliberately links someone), crossed against demoNeonAttendance's
-  // fixture rows for tipsServiceDate; real mode re-derives everything
-  // server-side via getClockedInRosterAction.
-  async function pullClockedInTeam(): Promise<
-    { ok: true; data: string[] } | { ok: false; error: string }
-  > {
-    if (demoMode) {
-      const activeNeonUserIds = new Set(
-        demoNeonAttendance
-          .filter(
-            (row) =>
-              row.date === tipsServiceDate &&
-              row.clockIn &&
-              !row.clockOut &&
-              !row.autoClockedOut,
-          )
-          .map((row) => row.userId),
-      );
-      const profileIds = Object.entries(demoAttendanceLinks)
-        .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
-        .map(([profileId]) => profileId);
-      return { ok: true, data: profileIds };
-    }
-    const result = await getClockedInRosterAction({
-      restaurantSlug,
-      expectedContext: workspaceExpectation,
-    });
-    if (!result.ok) {
-      if (result.sessionInvalid) forceSignOut();
-      return { ok: false, error: result.error };
-    }
-    return { ok: true, data: result.data.profileIds };
-  }
-
-  async function finalizeTips() {
-    if (!demoMode) {
-      if (!locationId || tipPoolId === null) return;
-      const result = await finalizeTipsAction({
-        restaurantSlug,
-        expectedContext: workspaceExpectation,
-        organizationId: currentUser.organizationId,
-        locationId,
-        tipPoolId,
-      });
-      if (!result.ok) {
-        handleActionFailure(result.error, result.sessionInvalid);
-        return;
-      }
-    }
-    setTipsAuditLog((log) => [
-      ...log,
-      {
-        action: "finalized",
-        actorName: currentUser.name,
-        at: new Date().toISOString(),
-      },
-    ]);
-    setTipsStatus("finalized");
-  }
-
   async function reopenTips(reason: string) {
     if (!demoMode) {
       if (!locationId || tipPoolId === null) return;
       const result = await reopenTipsAction({
         restaurantSlug,
         expectedContext: workspaceExpectation,
-        organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
         reason,
@@ -2459,26 +2422,29 @@ function RestaurantOperationsAppInner({
               />
             ) : null}
             {tab === "tips" ? (
-              <TipWorkspace
-                user={user}
+              <TipsModule
+                key={locationId ?? "demo"}
                 team={tipsTeam}
                 selectableIds={tipsSelectableIds}
                 unavailableMessage={tipsUnavailableMessage}
-                status={tipsStatus}
-                intervals={tipIntervals}
-                onAddInterval={addTipInterval}
-                onFinalize={finalizeTips}
-                onReopen={reopenTips}
-                onPullClockedInTeam={pullClockedInTeam}
-                auditLog={tipsAuditLog}
-                isManager={
-                  demoMode
-                    ? user.role !== "server"
-                    : ["owner", "manager", "assistant_manager"].includes(
-                        activeContext?.tasksDesignation ??
-                          (user.role === "server" ? "staff" : "manager"),
-                      )
-                }
+                initialRange={initialTipsContext?.today ?? null}
+                today={tipsServiceDate}
+                timeZone={timeZone}
+                branchName={activeContext?.locationName ?? "This location"}
+                isManager={tipsViewerIsManager}
+                api={tipsApi}
+                onSessionInvalid={forceSignOut}
+                onLegacyReopened={() => {
+                  setTipsStatus("estimating");
+                  setTipsAuditLog((log) => [
+                    ...log,
+                    {
+                      action: "reopened",
+                      actorName: currentUser.name,
+                      at: new Date().toISOString(),
+                    },
+                  ]);
+                }}
               />
             ) : null}
             {tab === "team" && isManager ? (

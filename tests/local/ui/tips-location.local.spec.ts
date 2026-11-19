@@ -110,13 +110,20 @@ async function choosePeople(page: Page, names: string[]) {
 
 async function addInterval(
   page: Page,
-  input: { from: string; to: string; amount: string; people: string[] },
+  input: {
+    from: string;
+    to: string;
+    amount: string;
+    card?: string;
+    people: string[];
+  },
 ) {
-  await page.getByLabel("From").fill(input.from);
-  await page.getByLabel("To").fill(input.to);
-  await page.getByLabel("Tips received").fill(input.amount);
+  await page.getByLabel("From", { exact: true }).fill(input.from);
+  await page.getByLabel("To", { exact: true }).fill(input.to);
+  await page.getByLabel("Cash tips").fill(input.amount);
+  if (input.card) await page.getByLabel("Card tips").fill(input.card);
   await choosePeople(page, input.people);
-  await page.getByRole("button", { name: "Add and calculate" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 }
 
 const money = (cents: number) =>
@@ -210,8 +217,12 @@ test("manager at A: only Location A's current workforce is selectable; interval 
   await addInterval(page, {
     from: "11:00",
     to: "13:00",
-    amount: "100.01",
+    amount: "60.01",
+    card: "40.00",
     people: [NAMES.staff, NAMES.dual],
+  });
+  await expect(page.getByText("Saved.", { exact: true })).toBeVisible({
+    timeout: 30000,
   });
   await expect(
     page.getByText(money(10001), { exact: true }).first(),
@@ -222,20 +233,23 @@ test("manager at A: only Location A's current workforce is selectable; interval 
   const allocations = must(
     await fx.admin
       .from("tip_allocations")
-      .select("profile_id, amount_cents")
+      .select("profile_id, amount_cents, cash_cents, card_cents")
       .eq("tip_pool_id", pool!.id),
   )!;
   expect(allocations).toHaveLength(2);
   const cents = allocations.map((a) => a.amount_cents).sort();
   expect(cents).toEqual([5000, 5001]); // the odd cent is assigned, never lost
   expect(cents[0] + cents[1]).toBe(10001);
+  // Cash and card each reconcile to what was entered.
+  expect(allocations.reduce((n, x) => n + x.cash_cents, 0)).toBe(6001);
+  expect(allocations.reduce((n, x) => n + x.card_cents, 0)).toBe(4000);
   for (const a of allocations) {
     const who = a.profile_id === fx.staff.id ? NAMES.staff : NAMES.dual;
     await expect(
       page
         .getByText(who, { exact: true })
-        .locator("xpath=ancestor::div[1]")
-        .getByText(money(a.amount_cents)),
+        .locator("xpath=ancestor::div[2]")
+        .getByText(money(a.amount_cents), { exact: true }),
     ).toBeVisible();
   }
   await expect(page.getByText("Reconciled total")).toBeVisible();
@@ -250,37 +264,51 @@ test("manager at A: only Location A's current workforce is selectable; interval 
   ).toBeVisible();
 });
 
-test("manager finalizes then reopens with a reason; the audit trail is attributed and survives a reload", async ({
+test("a day finalized by the earlier workflow is locked; the audited correction unlocks it and the whole trail is attributed", async ({
   page,
   context,
 }) => {
+  // The Finalize button is gone from the product; this reproduces a legacy finalized day
+  // through the retained RPC (what the previously deployed app did).
+  const legacy = await poolAt(fx.a);
+  must(
+    await fx.manager.client.rpc("tips_finalize_pool", {
+      p_organization_id: fx.org.id,
+      p_location_id: fx.a,
+      p_tip_pool_id: legacy!.id,
+    }),
+  );
   await authenticate(context, fx.manager, fx.a);
   await page.goto(`/r/${fx.org.slug}`);
   await openTips(page);
 
-  await page.getByRole("button", { name: "Finalize day" }).click();
-  await expect(page.getByText("Finalized", { exact: true })).toBeVisible({
-    timeout: 30000,
-  });
+  await expect(page.getByText(/Locked legacy record/)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Add and calculate" }),
+    page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Void / })).toHaveCount(0);
   const finalized = await poolAt(fx.a);
   expect(finalized!.status).toBe("finalized");
   expect(finalized!.finalized_by).toBe(fx.manager.id);
-  await expect(page.getByText(/Last: finalized by Maya Manager/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Reopen for corrections" }).click();
-  await page.getByLabel("Reason for reopening tips").fill("Late cash tip");
+  await page.getByRole("button", { name: "Correct locked record" }).click();
+  await page
+    .getByLabel("Reason for correcting this locked record")
+    .fill("Late cash tip");
   await page.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText("Live estimate")).toBeVisible({ timeout: 30000 });
+  await expect(
+    page.getByText("Unlocked for correction. The reason is recorded."),
+  ).toBeVisible({ timeout: 30000 });
   expect((await poolAt(fx.a))!.status).toBe("draft");
 
+  // The earlier workflow's audit entries appear in the same change history after a reload.
   await page.reload();
   await openTips(page);
-  await expect(
-    page.getByText(/Last: reopened by Maya Manager — Late cash tip/),
-  ).toBeVisible();
+  await page.getByText(/^Change history/).click();
+  await expect(page.getByText("Finalized (earlier workflow)")).toBeVisible();
+  await expect(page.getByText("Reopened for correction")).toBeVisible();
+  await expect(page.getByText("Reason: Late cash tip")).toBeVisible();
   const events = must(
     await fx.admin
       .from("audit_events")
@@ -316,9 +344,9 @@ test("staff at A sees only their own estimate: no manager controls, no co-worker
     page.getByText("Across 1 confirmed work intervals"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Add and calculate" }),
+    page.getByRole("button", { name: "Save", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Finalize day" })).toHaveCount(
+  await expect(page.getByRole("button", { name: /finali[sz]e/i })).toHaveCount(
     0,
   );
   const text = await page.locator("body").innerText();
@@ -420,10 +448,10 @@ test("a stale browser cannot add Location A tips after its verified context move
   )!.length;
 
   await setLocationCookie(context, fx.b);
-  await page.getByLabel("From").fill("17:00");
-  await page.getByLabel("To").fill("18:00");
-  await page.getByLabel("Tips received").fill("9.99");
-  await page.getByRole("button", { name: "Add and calculate" }).click();
+  await page.getByLabel("From", { exact: true }).fill("17:00");
+  await page.getByLabel("To", { exact: true }).fill("18:00");
+  await page.getByLabel("Cash tips").fill("9.99");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(
     page.getByText(/Your active location changed/).first(),
@@ -438,7 +466,7 @@ test("a stale browser cannot add Location A tips after its verified context move
   ).toHaveLength(before);
 });
 
-test("Overall administrator with no tenant membership finalizes with real attribution", async ({
+test("Overall administrator with no tenant membership saves tips with real attribution", async ({
   page,
   context,
 }) => {
@@ -453,16 +481,27 @@ test("Overall administrator with no tenant membership finalizes with real attrib
   await authenticate(context, fx.overall, fx.a);
   await page.goto(`/r/${fx.org.slug}`);
   await openTips(page);
-  await page.getByRole("button", { name: "Finalize day" }).click();
-  await expect(page.getByText("Finalized", { exact: true })).toBeVisible({
+  await addInterval(page, {
+    from: "19:00",
+    to: "20:00",
+    amount: "10.00",
+    people: [NAMES.staff],
+  });
+  await expect(page.getByText("Saved.", { exact: true })).toBeVisible({
     timeout: 30000,
   });
-  const pool = await poolAt(fx.a);
-  expect(pool!.status).toBe("finalized");
-  expect(pool!.finalized_by).toBe(fx.overall.id);
-  await expect(
-    page.getByText(/Last: finalized by Olive Overall/),
-  ).toBeVisible();
+  const revision = must(
+    await fx.admin
+      .from("tip_revisions")
+      .select("editor_profile_id, action, location_id")
+      .eq("organization_id", fx.org.id)
+      .eq("action", "interval_created")
+      .order("id", { ascending: false })
+      .limit(1)
+      .single(),
+  )!;
+  expect(revision.editor_profile_id).toBe(fx.overall.id);
+  expect(revision.location_id).toBe(fx.a);
   expect(
     must(
       await fx.admin

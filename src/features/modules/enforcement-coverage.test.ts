@@ -93,6 +93,9 @@ const GUARDING_HELPERS: Record<
   "payroll/actions/native-payroll-actions.ts": [
     { helper: "authorize(", module: "payroll" },
   ],
+  // V2.0.8: one shared prelude (live session, verified actor, role, workspace expectation,
+  // module guard) for save / void / recalculate / range / reopen.
+  "tips/actions/tips-actions.ts": [{ helper: "authorize(", module: "tips" }],
 };
 
 function exportedActions(text: string): { name: string; body: string }[] {

@@ -25,13 +25,60 @@ vi.mock("@/features/tips/data/tips-actor", () => ({
 }));
 
 import {
-  addTipIntervalAction,
-  finalizeTipsAction,
   reopenTipsAction,
+  saveTipIntervalAction,
 } from "@/features/tips/actions/tips-actions";
 
 const today = (zone = "America/Chicago") =>
   zonedWallTimeFromInstant(new Date(), zone).date;
+
+type BoundActor = {
+  organizationId: string;
+  scope: { locationId: string; timeZone: string };
+};
+
+// V2.0.8: the single-amount "add interval" is now Save, with the amount tendered as cash.
+// Everything else (authorization, eligibility, locked days, module guard) is unchanged.
+function addTipIntervalAction(args: {
+  restaurantSlug: string;
+  expectedContext: unknown;
+  start: string;
+  end: string;
+  amountCents: number;
+  participantIds: string[];
+}) {
+  const actor = request.actor as BoundActor;
+  return saveTipIntervalAction({
+    restaurantSlug: args.restaurantSlug,
+    expectedContext: args.expectedContext,
+    serviceDate: today(actor.scope.timeZone),
+    start: args.start,
+    end: args.end,
+    cashCents: args.amountCents,
+    cardCents: 0,
+    participantIds: args.participantIds,
+  });
+}
+
+// The Finalize button is gone from the product, but days finalized by the earlier workflow
+// (and the retained RPC the previously deployed app calls) must keep working and stay
+// protected. This produces exactly that legacy state.
+async function finalizeTipsAction(args: {
+  restaurantSlug: string;
+  expectedContext: unknown;
+  tipPoolId: number;
+}) {
+  const actor = request.actor as BoundActor;
+  const client = request.client as TipsTestUser["client"];
+  const { error } = await client.rpc("tips_finalize_pool", {
+    p_organization_id: actor.organizationId,
+    p_location_id: actor.scope.locationId,
+    p_tip_pool_id: args.tipPoolId,
+  });
+  return error
+    ? { ok: false as const, error: error.message }
+    : { ok: true as const, data: null };
+}
 
 function bind(user: TipsTestUser, location: string, designation = "manager") {
   request.client = user.client;

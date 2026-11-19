@@ -48,10 +48,24 @@ const dayOk = {
   audit_log: [],
 };
 
-function rpcReturns(roster: unknown, day: unknown) {
-  mocks.rpc.mockImplementation(async (name: string) =>
-    name === "tips_location_roster" ? roster : day,
-  );
+const rangeOk = {
+  time_zone: "America/New_York",
+  from: "2026-11-07",
+  to: "2026-11-07",
+  viewer_level: 3,
+  pools: [],
+};
+
+function rpcReturns(
+  roster: unknown,
+  day: unknown,
+  range: unknown = { data: rangeOk, error: null },
+) {
+  mocks.rpc.mockImplementation(async (name: string) => {
+    if (name === "tips_location_roster") return roster;
+    if (name === "tips_get_range") return range;
+    return day;
+  });
 }
 
 describe("getTipsContext (V2-005.003 read boundary)", () => {
@@ -63,13 +77,22 @@ describe("getTipsContext (V2-005.003 read boundary)", () => {
     });
   });
 
-  it("reads only the two location-authorized RPCs, bound to the verified location", async () => {
+  it("reads only the location-authorized RPCs (roster, range, legacy day), bound to the verified location", async () => {
     rpcReturns({ data: rosterOk, error: null }, { data: dayOk, error: null });
     const context = await getTipsContext(organizationId);
     expect(context?.unavailable).toBeUndefined();
     expect(context?.tipPoolId).toBe(3);
     expect(context?.selectableIds).toEqual(["p-1"]);
-    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
+    expect(context?.today?.isManager).toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "tips_get_range",
+      expect.objectContaining({
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+        p_include_revisions: true,
+      }),
+    );
     expect(mocks.rpc).toHaveBeenCalledWith("tips_location_roster", {
       p_organization_id: organizationId,
       p_location_id: locationId,
@@ -93,6 +116,8 @@ describe("getTipsContext (V2-005.003 read boundary)", () => {
     ["roster", "XX000", "unavailable"],
     ["day", "PGRST202", "backend_not_ready"],
     ["day", "42501", "access_denied"],
+    ["range", "PGRST202", "backend_not_ready"],
+    ["range", "42501", "access_denied"],
   ])(
     "fails closed (no org-wide fallback, no data) when the %s RPC errors with %s",
     async (which, code, reason) => {
@@ -100,12 +125,13 @@ describe("getTipsContext (V2-005.003 read boundary)", () => {
       rpcReturns(
         which === "roster" ? error : { data: rosterOk, error: null },
         which === "day" ? error : { data: dayOk, error: null },
+        which === "range" ? error : { data: rangeOk, error: null },
       );
       const context = await getTipsContext(organizationId);
       expect(context?.unavailable).toBe(reason);
       expect(context?.team).toEqual([]);
       expect(context?.selectableIds).toEqual([]);
-      expect(context?.intervals).toEqual([]);
+      expect(context?.today).toBeNull();
       expect(context?.tipPoolId).toBeNull();
       expect(mocks.getOrganizationRoster).not.toHaveBeenCalled();
       expect(mocks.from).not.toHaveBeenCalled();
@@ -119,7 +145,18 @@ describe("getTipsContext (V2-005.003 read boundary)", () => {
     );
     const context = await getTipsContext(organizationId);
     expect(context?.unavailable).toBe("unavailable");
-    expect(context?.intervals).toEqual([]);
+    expect(context?.today).toBeNull();
+  });
+
+  it("fails closed on a malformed range payload", async () => {
+    rpcReturns(
+      { data: rosterOk, error: null },
+      { data: dayOk, error: null },
+      { data: { pools: "nope" }, error: null },
+    );
+    const context = await getTipsContext(organizationId);
+    expect(context?.unavailable).toBe("unavailable");
+    expect(context?.today).toBeNull();
   });
 
   it("returns null when no location is verified", async () => {
