@@ -65,23 +65,37 @@ async function safely<T>(
 
 // ── Attendance ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * The branch's attendance source. A database that predates the column is a legacy database
+ * (external by definition); any other failure is "unknown", never a guess.
+ */
+async function readAttendanceSource(
+  supabase: Supabase,
+  locationId: string,
+): Promise<ReturnType<typeof decideReportSource> | null> {
+  const location = await supabase
+    .from("locations")
+    .select("attendance_mode")
+    .eq("id", locationId)
+    .maybeSingle();
+  const legacy = location.error?.code === "42703";
+  if ((location.error && !legacy) || (!location.error && !location.data)) {
+    return null;
+  }
+  return decideReportSource(
+    legacy ? null : (location.data?.attendance_mode ?? null),
+  );
+}
+
 export function readAttendanceCard(
   supabase: Supabase,
   input: { organizationId: string; locationId: string },
 ): Promise<CardResult<AttendanceCard>> {
   return safely<AttendanceCard>("attendance", async () => {
-    const location = await supabase
-      .from("locations")
-      .select("attendance_mode")
-      .eq("id", input.locationId)
-      .maybeSingle();
-    // A database that predates the column is a legacy database: external by definition.
-    const legacy = location.error?.code === "42703";
-    if ((location.error && !legacy) || (!location.error && !location.data)) {
+    const source = await readAttendanceSource(supabase, input.locationId);
+    if (!source) {
       return unavailable("Couldn't confirm this branch's attendance source.");
     }
-    const mode = legacy ? null : (location.data?.attendance_mode ?? null);
-    const source = decideReportSource(mode);
 
     if (source.source === "disabled") {
       return unavailable("Attendance tracking is off for this branch.");
@@ -90,7 +104,9 @@ export function readAttendanceCard(
       // The external time clock identifies people, not branches, so a branch headcount
       // from it cannot be proven. Never invent one.
       return unavailable(
-        "This branch uses an external time clock that doesn't report by branch.",
+        source.source === "unconfigured"
+          ? "This branch hasn't chosen an attendance source, and the existing time clock doesn't report by branch."
+          : "This branch uses an external time clock that doesn't report by branch.",
       );
     }
 
@@ -122,6 +138,17 @@ export function readPayrollCard(
   input: { organizationId: string; locationId: string; serviceDate: string },
 ): Promise<CardResult<PayrollCard>> {
   return safely<PayrollCard>("payroll", async () => {
+    // Internal-attendance branches generate native periods that carry no branch column and
+    // have no list reader yet, so this card could only ever show an unproven zero for them.
+    const source = await readAttendanceSource(supabase, input.locationId);
+    if (!source) {
+      return unavailable("Couldn't confirm this branch's payroll source.");
+    }
+    if (source.source === "internal") {
+      return unavailable(
+        "Payroll for this branch's internal attendance isn't summarized here yet. Open Payroll.",
+      );
+    }
     // Only this branch's periods. Legacy periods with no branch are never pulled in:
     // widening the figure to other branches would be an invented number.
     const periods = await listPayrollPeriods(supabase, {

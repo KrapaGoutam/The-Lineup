@@ -111,6 +111,17 @@ describe("getPayrollBalancesForPeriods", () => {
     expect(Math.max(...c.calls.map((call) => call.ids.length))).toBe(50);
   });
 
+  it("chunk boundary: 50 periods is one chunk, 51 is two", async () => {
+    const make = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: i + 1, grossCents: 1 }));
+    const a = client({ payments: [], adjustments: [] });
+    await getPayrollBalancesForPeriods(supabase(a), { periods: make(50) });
+    expect(a.calls).toHaveLength(2);
+    const b = client({ payments: [], adjustments: [] });
+    await getPayrollBalancesForPeriods(supabase(b), { periods: make(51) });
+    expect(b.calls).toHaveLength(4);
+  });
+
   it("an empty period list reads nothing", async () => {
     const c = client({ payments: [], adjustments: [] });
     const result = await getPayrollBalancesForPeriods(supabase(c), {

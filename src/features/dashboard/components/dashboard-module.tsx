@@ -96,13 +96,22 @@ type Props = {
   /** The real URL for a module (keeps the branch and every other parameter). */
   hrefFor: (tab: AppTab) => string;
   onOpenTab: (tab: AppTab) => void;
+  /** Modules this viewer can actually open here (the shell's navigation policy). */
+  availableTabs: readonly AppTab[];
   onSessionInvalid: () => void;
+  /** The workspace changed under this tab: reload it. */
+  onContextStale: () => void;
 };
 
 type LoadState =
   | { status: "loading"; data: DashboardData | null }
   | { status: "ready"; data: DashboardData }
-  | { status: "error"; message: string; data: DashboardData | null };
+  | {
+      status: "error";
+      message: string;
+      stale: boolean;
+      data: DashboardData | null;
+    };
 
 /** A plain click navigates in-app; a modified click keeps the browser's own behavior. */
 function isPlainClick(event: React.MouseEvent): boolean {
@@ -119,7 +128,9 @@ export function DashboardModule({
   loader,
   hrefFor,
   onOpenTab,
+  availableTabs,
   onSessionInvalid,
+  onContextStale,
 }: Props) {
   const [state, setState] = useState<LoadState>({
     status: "loading",
@@ -127,27 +138,31 @@ export function DashboardModule({
   });
   // A slow earlier request must never overwrite a newer one.
   const seq = useRef(0);
+  // The shell passes plain functions whose identity changes on every render. Keep the
+  // latest in refs so a re-render never restarts the read (one read per open, no polling).
+  const sessionInvalidRef = useRef(onSessionInvalid);
+  useEffect(() => {
+    sessionInvalidRef.current = onSessionInvalid;
+  }, [onSessionInvalid]);
 
   /** Applies one finished request, unless a newer one has started since. */
-  const settle = useCallback(
-    (mine: number, result: DashboardActionResult) => {
-      if (mine !== seq.current) return;
-      if (result.ok) {
-        setState({ status: "ready", data: result.data });
-        return;
-      }
-      if (result.sessionInvalid) {
-        onSessionInvalid();
-        return;
-      }
-      setState((current) => ({
-        status: "error",
-        message: result.error,
-        data: current.data,
-      }));
-    },
-    [onSessionInvalid],
-  );
+  const settle = useCallback((mine: number, result: DashboardActionResult) => {
+    if (mine !== seq.current) return;
+    if (result.ok) {
+      setState({ status: "ready", data: result.data });
+      return;
+    }
+    if (result.sessionInvalid) {
+      sessionInvalidRef.current();
+      return;
+    }
+    setState((current) => ({
+      status: "error",
+      message: result.error,
+      stale: result.contextStale === true,
+      data: current.data,
+    }));
+  }, []);
 
   const request = useCallback(
     (): Promise<DashboardActionResult> =>
@@ -218,8 +233,10 @@ export function DashboardModule({
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => reload()}
-            disabled={busy}
+            onClick={() => {
+              if (!busy) reload();
+            }}
+            aria-disabled={busy}
           >
             <RefreshCw
               aria-hidden="true"
@@ -236,8 +253,12 @@ export function DashboardModule({
           className="border-destructive/30 bg-destructive/10 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm"
         >
           <span>{state.message}</span>
-          <Button variant="secondary" size="sm" onClick={() => reload()}>
-            Try again
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => (state.stale ? onContextStale() : reload())}
+          >
+            {state.stale ? "Reload workspace" : "Try again"}
           </Button>
         </div>
       ) : null}
@@ -256,7 +277,13 @@ export function DashboardModule({
                 <KpiCard
                   key={key}
                   cardKey={key}
-                  result={data.cards[key] as CardResult<never>}
+                  // A module the shell will not open for this viewer is never linked (and its
+                  // numbers are not shown), even if the server read succeeded.
+                  result={
+                    availableTabs.includes(CARD_META[key].tab)
+                      ? (data.cards[key] as CardResult<never>)
+                      : { status: "module_off" }
+                  }
                   data={data}
                   href={hrefFor(CARD_META[key].tab)}
                   onOpenTab={onOpenTab}
@@ -278,7 +305,11 @@ export function DashboardModule({
 
       {data ? (
         <QuickActions
-          actions={data.quickActions}
+          actions={data.quickActions.filter(
+            (action) =>
+              action.target.kind !== "tab" ||
+              availableTabs.includes(action.target.tab),
+          )}
           hrefFor={hrefFor}
           onOpenTab={onOpenTab}
         />
@@ -376,7 +407,6 @@ function KpiCard({
           onOpenTab(meta.tab);
         }}
         className="block h-full rounded-2xl focus-visible:outline-none"
-        aria-label={`${meta.title}. ${meta.open}`}
       >
         <CardContent className="flex h-full flex-col gap-1">
           {header}

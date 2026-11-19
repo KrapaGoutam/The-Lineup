@@ -2376,7 +2376,9 @@ function RestaurantOperationsAppInner({
                   tabHref(pathname, searchParams.toString(), target)
                 }
                 onOpenTab={setTab}
+                availableTabs={navigation.tabs}
                 onSessionInvalid={forceSignOut}
+                onContextStale={() => router.refresh()}
               />
             ) : null}
             {tab === "schedule" ? (

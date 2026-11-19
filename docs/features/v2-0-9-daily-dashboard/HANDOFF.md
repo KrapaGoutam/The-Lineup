@@ -23,6 +23,7 @@ Honesty: a source that cannot answer is `Unavailable` with a reason, never `0` /
 
 - **External attendance**: the external (Neon) clock identifies people, not branches, so a branch headcount from it cannot be proven. Branches in `external` or unconfigured mode show **Unavailable** with that reason. Only `internal_the_lineup` branches show a count. `disabled` shows Unavailable ("Attendance tracking is off").
 - "Today's recorded attendance" and "open clock-ins needing attention" are not shown: the native model does not distinguish a forgotten clock-out from an active shift reliably.
+- **Internal-attendance branches**: native payroll periods carry no branch column and have no list reader yet, so the Pending Payroll card is **Unavailable** for them (with a reason) instead of an unproven zero.
 - Payroll covers the `external_neon` periods the Payroll screen itself lists, for **this branch only**. Legacy periods with no branch (`location_id` null) are not pulled in. The outstanding balance covers all months of the branch (labelled "Across N periods at this branch"); the draft count is the current month only. Native (internal-attendance) payroll periods have no list reader yet, so they are not included.
 - "Today" is the branch-local calendar date, the same date the Tips module opens on. Tips after midnight that belong to the previous night's service date are entered on that earlier date (the existing service-date rule, unchanged), so they appear under that date in Tips, not in the new date's card.
 - Reads at or above the PostgREST 1,000-row cap (payroll periods, payments/adjustments per chunk, open sessions) report Unavailable rather than a possibly truncated number.
@@ -38,6 +39,8 @@ Honesty: a source that cannot answer is `Unavailable` with a reason, never `0` /
 - Dashboard is a navigation member only when the module configuration is readable and the branch is active (or demo): it fails closed with the rest of navigation, and a forged `?tab=dashboard` falls back. It is **never the default landing**: `fallback` skips it (Tasks → Allocation → … → Settings unchanged). Settings' "no operational modules" state treats it as non-operational.
 - Desktop: first secondary tab; mobile: in the More sheet.
 - Cards and shortcuts are real links (`<a href>`) built with `tabHref`, so the branch (`?location=`) and every other parameter are preserved; a plain click navigates in-app, a modified click keeps the browser's behavior. Back/Forward and reload use the existing history mirror. Disabled modules cannot be opened through links (existing navigation policy).
+- Cards and shortcuts are linked only when the shell's navigation policy will open that module for the viewer (`availableTabs`); otherwise a card shows "Turned off" and a shortcut is dropped. This also covers staged enforcement environments, where the server verdict allows every module but navigation hides unconfigured ones.
+- A stale workspace shows "Reload workspace" (not a retry that would re-send the same stale expectation). A parent re-render never restarts the read (callbacks are held in refs).
 - Date/month filters: no destination module reads one from the URL, so none is passed and none is claimed.
 - Reporting Center is a real route (`/reporting`), offered to management when Attendance or an authorized Payroll is on.
 
@@ -62,7 +65,7 @@ Demo has no database, so it renders a deterministic, clearly labelled "Sample da
 
 ## Evidence
 
-- Focused Vitest: dashboard model (25), dashboard action authorization/privacy (13), component (14), payroll balances/authority (8), `checkModulesAccess` (4), registry/navigation/shell navigation (updated, plus 5 new Dashboard cases), enforcement-coverage and module-isolation guards.
+- Focused Vitest: dashboard model (25), dashboard action authorization/privacy (13), readers (19, incl. the 1000-row guards and source selection), component (18), payroll balances/authority (8), `checkModulesAccess` (4), registry/navigation/shell navigation (updated, plus 5 new Dashboard cases), enforcement-coverage and module-isolation guards.
 - Demo Playwright `tests/e2e/daily-dashboard.spec.ts`: 9/9 on desktop, host-tablet and server-mobile (cards, shortcuts, deep links, Back/Forward, direct URL, staff privacy, no horizontal overflow).
 - `tsc`, ESLint (`--max-warnings=0`), Prettier and a cold webpack production build are green.
 - **Not run here** (belongs to Group 2 Phase C, the single integrated acceptance): hosted DEV real-database reconciliation of each figure against its module screen, and a production-build real-mode browser pass.

@@ -7,6 +7,14 @@ import type { DashboardActionResult } from "../actions/dashboard-actions";
 import type { DashboardData } from "../domain/dashboard-model";
 import { DashboardModule } from "./dashboard-module";
 
+const ALL_TABS: AppTab[] = [
+  "attendance",
+  "payroll",
+  "tips",
+  "barInventory",
+  "tasks",
+  "allocation",
+];
 const hrefFor = (tab: AppTab) => `/r/monks?location=loc&tab=${tab}`;
 
 function data(over: Partial<DashboardData> = {}): DashboardData {
@@ -74,6 +82,8 @@ function mount(
   handlers: {
     onOpenTab?: (tab: AppTab) => void;
     onSessionInvalid?: () => void;
+    onContextStale?: () => void;
+    availableTabs?: AppTab[];
   } = {},
 ) {
   return render(
@@ -81,7 +91,9 @@ function mount(
       loader={loader}
       hrefFor={hrefFor}
       onOpenTab={handlers.onOpenTab ?? vi.fn()}
+      availableTabs={handlers.availableTabs ?? ALL_TABS}
       onSessionInvalid={handlers.onSessionInvalid ?? vi.fn()}
+      onContextStale={handlers.onContextStale ?? vi.fn()}
     />,
   );
 }
@@ -298,10 +310,14 @@ describe("DashboardModule", () => {
       .mockResolvedValueOnce(ok(data()));
     mount(loader);
     const refresh = screen.getByRole("button", { name: /Refresh/ });
-    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(refresh); // ignored while a read is in flight
+    expect(loader).toHaveBeenCalledTimes(1);
     release(ok(data()));
     await screen.findByTestId("dashboard-card-attendance");
-    await waitFor(() => expect(refresh).toBeEnabled());
+    await waitFor(() =>
+      expect(refresh).toHaveAttribute("aria-disabled", "false"),
+    );
     fireEvent.click(refresh);
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
   });
@@ -327,7 +343,9 @@ describe("DashboardModule", () => {
         loader={async () => ok(current)}
         hrefFor={hrefFor}
         onOpenTab={vi.fn()}
+        availableTabs={ALL_TABS}
         onSessionInvalid={vi.fn()}
+        onContextStale={vi.fn()}
       />,
     );
     expect(
@@ -348,5 +366,73 @@ describe("DashboardModule", () => {
     mount(async () => ok(data({ cards: {} })));
     expect(await screen.findByTestId("dashboard-no-cards")).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-action-tasks")).toBeInTheDocument();
+  });
+
+  it("a parent re-render with new callback identities does NOT start another read", async () => {
+    const loader = vi.fn(async () => ok(data()));
+    const view = mount(loader);
+    await screen.findByTestId("dashboard-card-attendance");
+    for (let i = 0; i < 3; i++) {
+      view.rerender(
+        <DashboardModule
+          loader={loader}
+          hrefFor={hrefFor}
+          onOpenTab={() => {}}
+          availableTabs={ALL_TABS}
+          onSessionInvalid={() => {}}
+          onContextStale={() => {}}
+        />,
+      );
+    }
+    await Promise.resolve();
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stale workspace offers Reload workspace, not a Try again that would fail the same way", async () => {
+    const onContextStale = vi.fn();
+    mount(
+      async () => ({
+        ok: false,
+        error: "Refresh your workspace.",
+        contextStale: true,
+      }),
+      { onContextStale },
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Refresh your workspace.",
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reload workspace" }));
+    expect(onContextStale).toHaveBeenCalledTimes(1);
+  });
+
+  it("a card or shortcut whose module the shell will not open is shown off and never linked", async () => {
+    mount(async () => ok(data()), {
+      availableTabs: ["attendance", "tips"], // no payroll, stock, tasks
+    });
+    const payroll = await screen.findByTestId("dashboard-card-payroll");
+    expect(payroll).toHaveTextContent("Turned off");
+    expect(payroll.querySelector("a")).toBeNull();
+    expect(screen.queryByText("$1,234.56")).toBeNull();
+    expect(screen.getByTestId("dashboard-card-lowStock")).toHaveTextContent(
+      "Turned off",
+    );
+    expect(
+      screen.getByTestId("dashboard-card-tips").querySelector("a"),
+    ).not.toBeNull();
+    expect(screen.queryByTestId("dashboard-action-tasks")).toBeNull();
+    // The Reporting route is not a tab, so it stays.
+    expect(
+      screen.getByTestId("dashboard-action-reporting"),
+    ).toBeInTheDocument();
+  });
+
+  it("a card link announces its figure (no aria-label overriding the content)", async () => {
+    mount(async () => ok(data()));
+    const link = (
+      await screen.findByTestId("dashboard-card-lowStock")
+    ).querySelector("a")!;
+    expect(link).not.toHaveAttribute("aria-label");
+    expect(link).toHaveTextContent("Items needing ordering");
   });
 });
