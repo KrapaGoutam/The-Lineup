@@ -55,11 +55,12 @@ describe("location module navigation policy", () => {
       "recipes",
       "tips",
       "payroll",
+      "dashboard",
       "settings",
     ]);
     expect(policy().fallback).toBe("tasks");
   });
-  it("disabled and missing rows never enable modules; Settings remains available", () => {
+  it("disabled and missing rows never enable modules; Dashboard and Settings remain available", () => {
     expect(
       policy(
         buildModuleConfigSnapshot(
@@ -68,10 +69,10 @@ describe("location module navigation policy", () => {
           configs.map((c) => ({ ...c, isEnabled: false })),
         ),
       ).tabs,
-    ).toEqual(["settings"]);
+    ).toEqual(["dashboard", "settings"]);
     expect(
       policy(buildModuleConfigSnapshot(identity.locationId, "active", [])).tabs,
-    ).toEqual(["settings"]);
+    ).toEqual(["dashboard", "settings"]);
   });
   it.each<ModuleConfigReadResult>([
     { status: "unauthorized", reason: "unauthenticated" },

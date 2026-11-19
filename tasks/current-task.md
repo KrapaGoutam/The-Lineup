@@ -1,3 +1,20 @@
+# Release Group 2 — V2.0.9 Daily Operations Dashboard — IMPLEMENTED, PR OPEN FOR REVIEW
+
+Plan, KPI definitions, authorization, limits and evidence: `docs/features/v2-0-9-daily-dashboard/HANDOFF.md`.
+Branch `feature/v2-009-daily-dashboard`, worktree `.tmp/v2-009-daily-dashboard`, baseline `94f05eb9` (development after PR #358).
+
+- [x] B1 data and authority: read model, four KPI readers, batched payroll balances, per-module authority, one module-verdict read.
+- [x] B2 UI and navigation: Dashboard tab, four cards, role-based shortcuts, deep links, responsive layout.
+- [x] B3 integration: wired into the shell (real + demo), focused Vitest, demo Playwright 9/9 on three viewports, tsc/lint/prettier/webpack build.
+- [x] V2.0.8 handoff/STATUS baseline correction (DEV head was `20261116180009`; migrations 99 + 100; ledger 100).
+- [ ] Exact-head CI green, one independent review, owner merge (NOT authorized). Production/main untouched. Phase C (integrated acceptance) NOT started.
+
+## Current State & Next Step
+
+All work is committed on the feature branch. Next: exact-head CI, one focused independent review.
+
+---
+
 # Release Group 2 — V2.0.8 Editable Tips Management — PR OPEN FOR REVIEW
 
 Plan, invariants, evidence, migration decision and owner decisions: `docs/features/v2-0-8-editable-tips/HANDOFF.md`.

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   KeyRound,
+  LayoutDashboard,
   ListChecks,
   LogOut,
   Menu,
@@ -51,6 +52,9 @@ import {
   type AttendanceLinkOptions,
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceWorkspace } from "@/features/attendance/components/attendance-workspace";
+import { getDashboardAction } from "@/features/dashboard/actions/dashboard-actions";
+import { DashboardModule } from "@/features/dashboard/components/dashboard-module";
+import { buildDemoDashboard } from "@/features/dashboard/domain/dashboard-demo";
 import {
   demoNeonAttendance,
   demoNeonUsers,
@@ -160,6 +164,13 @@ import { Label } from "./ui/label";
 // Allocation (rotation) and Tasks. Schedule, Team, Attendance, Tip Split,
 // Payroll and Settings stay visible one tier down (and in the mobile "More"
 // sheet); the fixed 3-button mobile dock holds Allocation, Tasks and More.
+// V2.0.9: the read-only Daily Operations Dashboard. First of the secondary tier so it is one
+// click from any module; the default landing (Tasks) is unchanged.
+const dashboardTab = {
+  id: "dashboard" as const,
+  label: "Dashboard",
+  icon: LayoutDashboard,
+};
 const scheduleTab = {
   id: "schedule" as const,
   label: "Schedule",
@@ -848,6 +859,37 @@ function RestaurantOperationsAppInner({
     ],
   );
 
+  // V2.0.9. Real mode asks the server (which re-verifies everything); demo mode builds a
+  // clearly labelled sample. Stable identity so the Dashboard reads once per open.
+  const dashboardLoader = useMemo(
+    () =>
+      demoMode
+        ? async () => ({
+            ok: true as const,
+            data: buildDemoDashboard({
+              isManagement: tipsViewerIsManager,
+              serviceDate: tipsServiceDate,
+              timeZone,
+              organizationName: "The Monk's",
+              locationName: activeContext?.locationName ?? "Demo location",
+            }),
+          })
+        : () =>
+            getDashboardAction({
+              restaurantSlug,
+              expectedContext: workspaceExpectation,
+            }),
+    [
+      demoMode,
+      tipsViewerIsManager,
+      tipsServiceDate,
+      timeZone,
+      activeContext?.locationName,
+      restaurantSlug,
+      workspaceExpectation,
+    ],
+  );
+
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
   );
@@ -1111,6 +1153,7 @@ function RestaurantOperationsAppInner({
   // Schedule) is also exactly the manager-only/universal tab set the
   // avatar panel and mobile sheet need.
   const secondaryTabs = [
+    dashboardTab,
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
@@ -2325,6 +2368,17 @@ function RestaurantOperationsAppInner({
       >
         {!switchingTo ? (
           <>
+            {tab === "dashboard" ? (
+              <DashboardModule
+                key={locationId ?? "demo"}
+                loader={dashboardLoader}
+                hrefFor={(target) =>
+                  tabHref(pathname, searchParams.toString(), target)
+                }
+                onOpenTab={setTab}
+                onSessionInvalid={forceSignOut}
+              />
+            ) : null}
             {tab === "schedule" ? (
               <ScheduleWorkspace
                 user={user}

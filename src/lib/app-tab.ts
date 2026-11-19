@@ -1,4 +1,5 @@
 export type AppTab =
+  | "dashboard"
   | "schedule"
   | "allocation"
   | "tasks"
@@ -18,6 +19,7 @@ export type AppTab =
 export const DEFAULT_APP_TAB: AppTab = "tasks";
 
 const PARAM_BY_TAB: Record<AppTab, string> = {
+  dashboard: "dashboard",
   schedule: "schedule",
   allocation: "allocation",
   tasks: "tasks",
