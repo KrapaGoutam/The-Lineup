@@ -68,7 +68,7 @@ Demo has no database, so it renders a deterministic, clearly labelled "Sample da
 - Focused Vitest: dashboard model (25), dashboard action authorization/privacy (13), readers (19, incl. the 1000-row guards and source selection), component (18), payroll balances/authority (8), `checkModulesAccess` (4), registry/navigation/shell navigation (updated, plus 5 new Dashboard cases), enforcement-coverage and module-isolation guards.
 - Demo Playwright `tests/e2e/daily-dashboard.spec.ts`: 9/9 on desktop, host-tablet and server-mobile (cards, shortcuts, deep links, Back/Forward, direct URL, staff privacy, no horizontal overflow).
 - `tsc`, ESLint (`--max-warnings=0`), Prettier and a cold webpack production build are green.
-- **Not run here** (belongs to Group 2 Phase C, the single integrated acceptance): hosted DEV real-database reconciliation of each figure against its module screen, and a production-build real-mode browser pass.
+- Merged to `development` as PR #359 (`b3cedd8c`). Hosted DEV real-database reconciliation was done afterwards in Group 2 Phase C: see [PHASE_C.md](PHASE_C.md).
 
 ## Migration impact
 

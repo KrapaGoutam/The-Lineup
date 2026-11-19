@@ -1,4 +1,20 @@
-# Release Group 2 — V2.0.9 Daily Operations Dashboard — IMPLEMENTED, PR OPEN FOR REVIEW
+# Release Group 2 — Phase C integrated acceptance — PASSED on DEV; Production NOT released
+
+Evidence: `docs/features/v2-0-9-daily-dashboard/PHASE_C.md`. Release record: `docs/releases/group-2-release-readiness.md`.
+PR #359 merged to `development` as `b3cedd8c` (head `c91b2a9`). `main` is still `27b8988`; Production untouched; hosted DEV ledger still 100.
+
+- [x] PR #359 merged (merge commit).
+- [x] Phase C: Tips save/update/recalculate/void/history + Dashboard attendance/payroll/tips/low stock, manager vs staff, branch and organization boundaries, disabled modules, quick actions, deep links, Back/Forward, reload, phone viewport.
+- [x] Group 2 readiness recorded (migration 99 then 100, then the application).
+- [ ] Owner final release authorization (Production migrations + deploy + merge to `main`): NOT given.
+
+## Current State & Next Step
+
+Phase C docs and the Phase C spec/fixture are committed on `chore/group2-phase-c`. Next (owner): decide the consolidated Production release. Not started: Production migrations, Production deploy, merge to `main`, Release Group 3.
+
+---
+
+# Release Group 2 — V2.0.9 Daily Operations Dashboard — MERGED to development (PR #359, b3cedd8c)
 
 Plan, KPI definitions, authorization, limits and evidence: `docs/features/v2-0-9-daily-dashboard/HANDOFF.md`.
 Branch `feature/v2-009-daily-dashboard`, worktree `.tmp/v2-009-daily-dashboard`, baseline `94f05eb9` (development after PR #358).
