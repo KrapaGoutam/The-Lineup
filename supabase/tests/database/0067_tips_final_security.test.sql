@@ -295,17 +295,17 @@ select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-
 select lives_ok(
   $$ select public.tips_add_interval(
        '00000000-0000-4000-8000-000000067010'::uuid, '00000000-0000-4000-8000-000000067011'::uuid,
-       current_date + 1, now(), now() + interval '1 hour', 900,
+       current_date + 1, ((current_date + 1)::timestamp + interval '12 hours') at time zone 'UTC', ((current_date + 1)::timestamp + interval '13 hours') at time zone 'UTC', 900,
        array['00000000-0000-4000-8000-000000067002'::uuid]) $$,
   'draft pool for tomorrow created through the RPC'
 );
-select lives_ok(
+select throws_ok(
   $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
      values ('00000000-0000-4000-8000-000000067010',
              (select i.id from public.tip_intervals i join public.tip_pools p on p.id = i.tip_pool_id
                where p.location_id = '00000000-0000-4000-8000-000000067011' and p.service_date = current_date + 1),
              '00000000-0000-4000-8000-000000067001') $$,
-  'direct participant insert of a current workforce member succeeds for the location manager'
+  '42501', null, 'direct participant insert is closed (writes are RPC-only since V2.0.8; eligibility is enforced inside tips_save_interval)'
 );
 select throws_ok(
   $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
@@ -337,10 +337,10 @@ select throws_ok(
      where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date + 1 $$,
   '42501', null, 'direct table finalize is refused (must use tips_finalize_pool RPC)'
 );
-select lives_ok(
+select throws_ok(
   $$ update public.tip_pools set status = 'draft', finalized_at = null, finalized_by = null
      where location_id = '00000000-0000-4000-8000-000000067011' and service_date = current_date $$,
-  'direct reopen on finalized pool affects no rows (reopen policy dropped)'
+  '42501', null, 'direct reopen of a finalized pool is denied (writes are RPC-only; use tips_reopen_pool)'
 );
 select throws_ok(
   $$ insert into public.tip_allocations(organization_id, tip_pool_id, profile_id, amount_cents)
@@ -366,8 +366,8 @@ select ok(
   pg_get_functiondef('public.tips_finalize_pool(uuid,uuid,bigint)'::regprocedure) ~* 'for update'
   and pg_get_functiondef('public.tips_reopen_pool(uuid,uuid,bigint,text)'::regprocedure) ~* 'for update'
   and pg_get_functiondef('public.recalculate_tip_pool(bigint)'::regprocedure) ~* 'for update'
-  and pg_get_functiondef('public.tips_add_interval(uuid,uuid,date,timestamptz,timestamptz,integer,uuid[])'::regprocedure) ~* 'for update',
-  'finalize, reopen, add-interval and recalculation lock the pool row (no finalize/edit interleaving)'
+  and pg_get_functiondef('public.tips_save_interval(uuid,uuid,date,timestamptz,timestamptz,integer,integer,uuid[],bigint,integer,text)'::regprocedure) ~* 'for update',
+  'finalize, reopen, save-interval and recalculation lock the pool row (no finalize/edit interleaving)'
 );
 select set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000067002', true);
 select set_config('request.jwt.claims', '{"session_id":"00000000-0000-4000-8000-000000067002"}', true);
@@ -398,15 +398,15 @@ select throws_ok(
              now(), now() + interval '1 hour', 500) $$,
   '42501', null, 'manager cannot insert an interval into a finalized pool'
 );
-select lives_ok(
-  $$ update public.tip_intervals set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, 'direct interval update is a no-op on finalized pools');
-select lives_ok($$ delete from public.tip_intervals where tip_pool_id = (select pool_id from before_state) $$, 'direct interval delete is a no-op on finalized pools');
+select throws_ok(
+  $$ update public.tip_intervals set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, '42501', null, 'direct interval update is denied on finalized pools (writes are RPC-only since V2.0.8)');
+select throws_ok($$ delete from public.tip_intervals where tip_pool_id = (select pool_id from before_state) $$, '42501', null, 'direct interval delete is denied on finalized pools (writes are RPC-only since V2.0.8)');
 select throws_ok(
   $$ insert into public.tip_interval_participants(organization_id, tip_interval_id, profile_id)
      values ('00000000-0000-4000-8000-000000067010', (select id from public.tip_intervals limit 1), '00000000-0000-4000-8000-000000067002') $$,
   '42501', null, 'manager cannot add a participant to a finalized interval'
 );
-select lives_ok($$ delete from public.tip_interval_participants where tip_interval_id in (select id from public.tip_intervals where tip_pool_id = (select pool_id from before_state)) $$, 'direct participant delete is a no-op on finalized pools');
+select throws_ok($$ delete from public.tip_interval_participants where tip_interval_id in (select id from public.tip_intervals where tip_pool_id = (select pool_id from before_state)) $$, '42501', null, 'direct participant delete is denied on finalized pools (writes are RPC-only since V2.0.8)');
 select throws_ok(
   $$ insert into public.tip_allocations(organization_id, tip_pool_id, profile_id, amount_cents)
      values ('00000000-0000-4000-8000-000000067010',
@@ -414,8 +414,8 @@ select throws_ok(
              '00000000-0000-4000-8000-000000067002', 999999) $$,
   '42501', null, 'manager cannot insert an allocation into a finalized pool'
 );
-select lives_ok($$ update public.tip_allocations set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, 'direct allocation update is a no-op on finalized pools');
-select lives_ok($$ delete from public.tip_allocations where tip_pool_id = (select pool_id from before_state) $$, 'direct allocation delete is a no-op on finalized pools');
+select throws_ok($$ update public.tip_allocations set amount_cents = 1 where tip_pool_id = (select pool_id from before_state) $$, '42501', null, 'direct allocation update is denied on finalized pools (writes are RPC-only since V2.0.8)');
+select throws_ok($$ delete from public.tip_allocations where tip_pool_id = (select pool_id from before_state) $$, '42501', null, 'direct allocation delete is denied on finalized pools (writes are RPC-only since V2.0.8)');
 select throws_ok(
   $$ select public.tips_add_interval(
        '00000000-0000-4000-8000-000000067010'::uuid, '00000000-0000-4000-8000-000000067011'::uuid,

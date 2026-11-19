@@ -160,6 +160,45 @@ export async function checkModuleAccess(
 }
 
 /**
+ * Verdicts for several modules at one verified location with ONE enforcement-mode read
+ * and ONE configuration read (instead of one of each per module). Same rules and same
+ * deny-by-default behaviour as `checkModuleAccess`; used by read-only overviews that
+ * need to know which modules are usable before deciding what to read.
+ */
+export async function checkModulesAccess(
+  modules: readonly string[],
+  target: Omit<ModuleGuardTarget, "module">,
+  deps: ModuleGuardDeps = {},
+): Promise<Record<string, ModuleAccessVerdict>> {
+  const mode = await (
+    deps.readMode ?? (() => readModuleEnforcementMode(deps.client))
+  )();
+  let configs: Promise<ModuleConfigReadResult> | null = null;
+  const readConfigs = (locationId: string) => {
+    configs ??= (
+      deps.readConfigs ??
+      ((id: string) => readLocationModuleConfigs(id, deps.client))
+    )(locationId);
+    return configs;
+  };
+  const verdicts = await Promise.all(
+    modules.map(async (module) => {
+      let verdict: ModuleAccessVerdict;
+      try {
+        verdict = await checkModuleAccess(
+          { ...target, module },
+          { ...deps, readMode: async () => mode, readConfigs },
+        );
+      } catch {
+        verdict = { allowed: false, code: "configuration_unavailable" };
+      }
+      return [module, verdict] as const;
+    }),
+  );
+  return Object.fromEntries(verdicts);
+}
+
+/**
  * The shape every module action can return as-is: it is structurally an
  * `{ ok: false; error: string }` branch of each action's own result union.
  * `moduleUnavailable` lets a client explain why; `sessionInvalid` /

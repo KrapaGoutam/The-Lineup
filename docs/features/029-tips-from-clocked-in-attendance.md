@@ -64,3 +64,5 @@ When creating a tip split at shift change or closing, a manager can click "Pull 
 
 - Unit: Snapshot isolation test — verify that mutating mock attendance data after tip calculation has zero effect on persisted tip interval participants.
 - E2E: Manager clicks "Pull clocked-in team", verifies participants, finalizes split, alters an attendance entry, and asserts tip amounts remain unchanged.
+
+> **V2.0.8:** unchanged and still a suggestion only. A saved distribution is never changed by later attendance corrections, and the manager approves the participant list; the finalize-based freeze wording above is superseded by "saved distributions are never recalculated from attendance" (see [V2.0.8 handoff](v2-0-8-editable-tips/HANDOFF.md)).

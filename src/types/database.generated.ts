@@ -5859,6 +5859,8 @@ export type Database = {
         Row: {
           amount_cents: number;
           calculated_at: string;
+          card_cents: number;
+          cash_cents: number;
           id: number;
           organization_id: string;
           profile_id: string;
@@ -5867,6 +5869,8 @@ export type Database = {
         Insert: {
           amount_cents: number;
           calculated_at?: string;
+          card_cents?: number;
+          cash_cents?: number;
           id?: never;
           organization_id: string;
           profile_id: string;
@@ -5875,6 +5879,8 @@ export type Database = {
         Update: {
           amount_cents?: number;
           calculated_at?: string;
+          card_cents?: number;
+          cash_cents?: number;
           id?: never;
           organization_id?: string;
           profile_id?: string;
@@ -5950,33 +5956,54 @@ export type Database = {
       tip_intervals: {
         Row: {
           amount_cents: number;
+          card_cents: number;
+          cash_cents: number;
           created_at: string;
           ends_at: string;
           id: number;
           note: string | null;
           organization_id: string;
+          revision: number;
           starts_at: string;
           tip_pool_id: number;
+          updated_at: string;
+          void_reason: string | null;
+          voided_at: string | null;
+          voided_by: string | null;
         };
         Insert: {
           amount_cents: number;
+          card_cents?: number;
+          cash_cents?: number;
           created_at?: string;
           ends_at: string;
           id?: never;
           note?: string | null;
           organization_id: string;
+          revision?: number;
           starts_at: string;
           tip_pool_id: number;
+          updated_at?: string;
+          void_reason?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
         };
         Update: {
           amount_cents?: number;
+          card_cents?: number;
+          cash_cents?: number;
           created_at?: string;
           ends_at?: string;
           id?: never;
           note?: string | null;
           organization_id?: string;
+          revision?: number;
           starts_at?: string;
           tip_pool_id?: number;
+          updated_at?: string;
+          void_reason?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
         };
         Relationships: [
           {
@@ -6046,6 +6073,69 @@ export type Database = {
           },
           {
             foreignKeyName: "tip_pools_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tip_revisions: {
+        Row: {
+          action: string;
+          affected_profile_ids: string[];
+          after_state: Json | null;
+          before_state: Json | null;
+          created_at: string;
+          editor_profile_id: string | null;
+          id: number;
+          location_id: string;
+          organization_id: string;
+          reason: string | null;
+          source: string;
+          tip_interval_id: number | null;
+          tip_pool_id: number;
+        };
+        Insert: {
+          action: string;
+          affected_profile_ids?: string[];
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          editor_profile_id?: string | null;
+          id?: never;
+          location_id: string;
+          organization_id: string;
+          reason?: string | null;
+          source: string;
+          tip_interval_id?: number | null;
+          tip_pool_id: number;
+        };
+        Update: {
+          action?: string;
+          affected_profile_ids?: string[];
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          editor_profile_id?: string | null;
+          id?: never;
+          location_id?: string;
+          organization_id?: string;
+          reason?: string | null;
+          source?: string;
+          tip_interval_id?: number | null;
+          tip_pool_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tip_revisions_location_id_organization_id_fkey";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "tip_revisions_organization_id_fkey";
             columns: ["organization_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -7403,6 +7493,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      tips_get_range: {
+        Args: {
+          p_from: string;
+          p_include_revisions?: boolean;
+          p_location_id: string;
+          p_organization_id: string;
+          p_to: string;
+        };
+        Returns: Json;
+      };
       tips_location_authorized: {
         Args: { p_location_id: string; p_organization_id: string };
         Returns: boolean;
@@ -7417,6 +7517,14 @@ export type Database = {
           roles: Database["public"]["Enums"]["app_role"][];
         }[];
       };
+      tips_recalculate_pool: {
+        Args: {
+          p_location_id: string;
+          p_organization_id: string;
+          p_tip_pool_id: number;
+        };
+        Returns: Json;
+      };
       tips_reopen_pool: {
         Args: {
           p_location_id: string;
@@ -7425,6 +7533,32 @@ export type Database = {
           p_tip_pool_id: number;
         };
         Returns: undefined;
+      };
+      tips_save_interval: {
+        Args: {
+          p_card_cents: number;
+          p_cash_cents: number;
+          p_ends_at: string;
+          p_expected_revision?: number;
+          p_interval_id?: number;
+          p_location_id: string;
+          p_organization_id: string;
+          p_participant_ids: string[];
+          p_reason?: string;
+          p_service_date: string;
+          p_starts_at: string;
+        };
+        Returns: Json;
+      };
+      tips_void_interval: {
+        Args: {
+          p_expected_revision: number;
+          p_interval_id: number;
+          p_location_id: string;
+          p_organization_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
       };
       transition_location_lifecycle: {
         Args: {

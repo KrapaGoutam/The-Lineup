@@ -10,6 +10,7 @@ import { serializeModuleNavigation } from "@/features/modules/domain/module-navi
 import type { ConfigurableModuleKey } from "@/features/modules/domain/module-registry";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+const dashboardAction = vi.hoisted(() => vi.fn());
 const unread = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ ok: true, unread: 4 }),
 );
@@ -31,6 +32,9 @@ vi.mock("@/features/context/components/use-context-switch", () => ({
     switchError: null,
     dismissSwitchError: vi.fn(),
   }),
+}));
+vi.mock("@/features/dashboard/actions/dashboard-actions", () => ({
+  getDashboardAction: dashboardAction,
 }));
 vi.mock("@/features/tasks/actions/tasks-actions", () => ({
   getTasksUnreadCountAction: unread,
@@ -282,5 +286,130 @@ describe("module navigation shell", () => {
       screen.getByRole("button", { name: "Refresh module availability" }),
     );
     expect(router.refresh).toHaveBeenCalled();
+  });
+});
+
+describe("Dashboard navigation (V2.0.9)", () => {
+  const payload = {
+    ok: true as const,
+    data: {
+      organizationName: "Test",
+      locationName: "A",
+      timeZone: "America/Chicago",
+      serviceDate: "2026-11-19",
+      generatedAt: "2026-11-19T18:00:00Z",
+      isManagement: true,
+      cards: {
+        lowStock: {
+          status: "ok" as const,
+          data: { needsOrdering: 3, critical: 1, low: 2 },
+        },
+      },
+      quickActions: [
+        {
+          id: "tasks",
+          label: "Tasks",
+          description: "Open Management Today",
+          target: { kind: "tab" as const, tab: "tasks" as const },
+        },
+      ],
+    },
+  };
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/r/test?location=loc");
+    vi.clearAllMocks();
+    dashboardAction.mockResolvedValue(payload);
+  });
+
+  it("offers a Dashboard entry, opens it through ?tab= and asks the server with the workspace expectation", async () => {
+    render(
+      <RestaurantOperationsApp
+        {...props}
+        moduleNavigation={snapshot(["tasks", "bar_inventory"])}
+      />,
+    );
+    // The default landing is unchanged.
+    expect(await screen.findByTestId("workspace-tasks")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Dashboard" })[0],
+    );
+    expect(await screen.findByTestId("dashboard-module")).toBeInTheDocument();
+    expect(window.location.search).toBe("?location=loc&tab=dashboard");
+    expect(dashboardAction).toHaveBeenCalledWith({
+      restaurantSlug: "test",
+      expectedContext: identity,
+    });
+    expect(
+      await screen.findByTestId("dashboard-card-lowStock-value"),
+    ).toHaveTextContent("3");
+    // The card link keeps the verified branch and names the real module.
+    const href = screen
+      .getByTestId("dashboard-card-lowStock")
+      .querySelector("a")!
+      .getAttribute("href");
+    expect(href).toBe("/r/test?location=loc&tab=bar-inventory");
+  });
+
+  it("a shortcut navigates to its module and preserves the branch", async () => {
+    window.history.replaceState(null, "", "/r/test?location=loc&tab=dashboard");
+    render(
+      <RestaurantOperationsApp
+        {...props}
+        moduleNavigation={snapshot(["tasks"])}
+      />,
+    );
+    expect(await screen.findByTestId("dashboard-module")).toBeInTheDocument();
+    await userEvent.click(await screen.findByTestId("dashboard-action-tasks"));
+    expect(await screen.findByTestId("workspace-tasks")).toBeInTheDocument();
+    expect(window.location.search).toBe("?location=loc");
+  });
+
+  it("a direct dashboard URL works after a reload", async () => {
+    window.history.replaceState(null, "", "/r/test?location=loc&tab=dashboard");
+    render(
+      <RestaurantOperationsApp
+        {...props}
+        moduleNavigation={snapshot(["tasks"])}
+      />,
+    );
+    expect(await screen.findByTestId("dashboard-module")).toBeInTheDocument();
+  });
+
+  it("no Dashboard entry, and a forged ?tab=dashboard is rejected, when module availability cannot be verified", async () => {
+    window.history.replaceState(null, "", "/r/test?location=loc&tab=dashboard");
+    render(
+      <RestaurantOperationsApp
+        {...props}
+        moduleNavigation={snapshot([], {
+          status: "unavailable",
+          reason: "database_error",
+        })}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.queryByTestId("dashboard-module")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dashboard" })).toBeNull();
+    expect(dashboardAction).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(window.location.search).toBe("?location=loc&tab=settings"),
+    );
+  });
+
+  it("a dead session from the dashboard read signs the user out", async () => {
+    window.history.replaceState(null, "", "/r/test?location=loc&tab=dashboard");
+    dashboardAction.mockResolvedValue({
+      ok: false,
+      error: "gone",
+      sessionInvalid: true,
+    });
+    render(
+      <RestaurantOperationsApp
+        {...props}
+        moduleNavigation={snapshot(["tasks"])}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("dashboard-module")).toBeNull(),
+    );
   });
 });

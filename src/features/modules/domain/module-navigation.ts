@@ -46,6 +46,9 @@ const NAVIGATION_ORDER: readonly AppTab[] = [
   "recipes",
   "tips",
   "payroll",
+  // V2.0.9: membership only. The Dashboard never becomes the default landing: `fallback`
+  // below skips it, so Tasks -> Allocation -> ... -> Settings is exactly as before.
+  "dashboard",
   "settings",
 ];
 
@@ -88,6 +91,14 @@ export function moduleNavigationPolicy(
   }
   const tabs = NAVIGATION_ORDER.filter((tab) => {
     if (tab === "settings") return true;
+    // The Dashboard is system-required but still fails closed with the rest of
+    // navigation: it needs a readable configuration of an ACTIVE location (or demo).
+    if (tab === "dashboard") {
+      return (
+        access.demoMode ||
+        (result?.status === "ok" && result.lifecycle === "active")
+      );
+    }
     if ((tab === "team" || tab === "barInventory") && !access.isManager)
       return false;
     if (tab === "payroll" && access.demoMode) return false;
@@ -99,7 +110,7 @@ export function moduleNavigationPolicy(
   });
   return {
     tabs,
-    fallback: tabs[0] ?? "settings",
+    fallback: tabs.find((tab) => tab !== "dashboard") ?? "settings",
     configurationStatus: access.demoMode ? "demo" : (result?.status ?? "stale"),
   };
 }

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   KeyRound,
+  LayoutDashboard,
   ListChecks,
   LogOut,
   Menu,
@@ -51,6 +52,9 @@ import {
   type AttendanceLinkOptions,
 } from "@/features/attendance/actions/attendance-actions";
 import { AttendanceWorkspace } from "@/features/attendance/components/attendance-workspace";
+import { getDashboardAction } from "@/features/dashboard/actions/dashboard-actions";
+import { DashboardModule } from "@/features/dashboard/components/dashboard-module";
+import { buildDemoDashboard } from "@/features/dashboard/domain/dashboard-demo";
 import {
   demoNeonAttendance,
   demoNeonUsers,
@@ -106,14 +110,13 @@ import { updateTeamDesignationAction } from "@/features/team/actions/team-action
 import type { ResetPasscodeResult } from "@/features/team/components/passcode-reset-dialog";
 import type { RenameMemberResult } from "@/features/team/components/rename-member-dialog";
 import { TeamWorkspace } from "@/features/team/components/team-workspace";
+import { reopenTipsAction } from "@/features/tips/actions/tips-actions";
+import { TipsModule } from "@/features/tips/components/tips-module";
+import { createTipsApi } from "@/features/tips/data/tips-client-api";
 import {
-  addTipIntervalAction,
-  finalizeTipsAction,
-  getClockedInRosterAction,
-  reopenTipsAction,
-} from "@/features/tips/actions/tips-actions";
-import { TipWorkspace } from "@/features/tips/components/tip-workspace";
-import type { TipIntervalInput } from "@/features/tips/domain/calculate-tip-splits";
+  createDemoTipsApi,
+  createDemoTipsStore,
+} from "@/features/tips/domain/tips-demo-api";
 import type {
   TipsAuditEntry,
   TipsDayStatus,
@@ -161,6 +164,13 @@ import { Label } from "./ui/label";
 // Allocation (rotation) and Tasks. Schedule, Team, Attendance, Tip Split,
 // Payroll and Settings stay visible one tier down (and in the mobile "More"
 // sheet); the fixed 3-button mobile dock holds Allocation, Tasks and More.
+// V2.0.9: the read-only Daily Operations Dashboard. First of the secondary tier so it is one
+// click from any module; the default landing (Tasks) is unchanged.
+const dashboardTab = {
+  id: "dashboard" as const,
+  label: "Dashboard",
+  icon: LayoutDashboard,
+};
 const scheduleTab = {
   id: "schedule" as const,
   label: "Schedule",
@@ -789,6 +799,97 @@ function RestaurantOperationsAppInner({
     Record<string, number>
   >({});
 
+  // V2.0.8. Tips talks to the backend ONLY through this object. Real mode: the server
+  // actions (tenancy, authorization and audit are enforced there and in the database).
+  // Demo mode: an in-memory store that follows the same rules. It must stay referentially
+  // stable, because the history view reloads whenever it changes.
+  // Demo mode keeps its saved tip distributions here so they survive tab switches and
+  // signing in as a different demo person (real mode reads the database).
+  const [demoTipsStore] = useState(() => createDemoTipsStore());
+  const tipsViewerId = user?.profileId ?? "";
+  const tipsViewerIsManager = demoMode
+    ? user !== null && user.role !== "server"
+    : ["owner", "manager", "assistant_manager"].includes(
+        activeContext?.tasksDesignation ??
+          (user?.role === "server" ? "staff" : "manager"),
+      );
+  const tipsApi = useMemo(
+    () =>
+      demoMode
+        ? createDemoTipsApi({
+            store: demoTipsStore,
+            timeZone,
+            viewerId: tipsViewerId,
+            isManager: tipsViewerIsManager,
+            // Read-only suggestion, never a write: the demo resolves it from the
+            // attendance links Team writes, crossed against the demo clock-ins.
+            pullClockedIn: async () => {
+              const activeNeonUserIds = new Set(
+                demoNeonAttendance
+                  .filter(
+                    (row) =>
+                      row.date === tipsServiceDate &&
+                      row.clockIn &&
+                      !row.clockOut &&
+                      !row.autoClockedOut,
+                  )
+                  .map((row) => row.userId),
+              );
+              return Object.entries(demoAttendanceLinks)
+                .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
+                .map(([profileId]) => profileId);
+            },
+          })
+        : createTipsApi({
+            restaurantSlug,
+            expectedContext: workspaceExpectation,
+            locationId,
+          }),
+    [
+      demoMode,
+      demoTipsStore,
+      timeZone,
+      tipsViewerId,
+      tipsViewerIsManager,
+      tipsServiceDate,
+      demoAttendanceLinks,
+      restaurantSlug,
+      workspaceExpectation,
+      locationId,
+    ],
+  );
+
+  // V2.0.9. Real mode asks the server (which re-verifies everything); demo mode builds a
+  // clearly labelled sample. Stable identity so the Dashboard reads once per open.
+  const dashboardLoader = useMemo(
+    () =>
+      demoMode
+        ? async () => ({
+            ok: true as const,
+            data: buildDemoDashboard({
+              isManagement: tipsViewerIsManager,
+              serviceDate: tipsServiceDate,
+              timeZone,
+              organizationName: "The Monk's",
+              locationName: activeContext?.locationName ?? "Demo location",
+            }),
+          })
+        : () =>
+            getDashboardAction({
+              restaurantSlug,
+              expectedContext: workspaceExpectation,
+            }),
+    [
+      demoMode,
+      tipsViewerIsManager,
+      tipsServiceDate,
+      timeZone,
+      activeContext?.locationName,
+      restaurantSlug,
+      workspaceExpectation,
+    ],
+  );
+
   const [operatingHours, setOperatingHours] = useState<DayHours[]>(
     () => initialScheduleContext?.operatingHours ?? DEMO_OPERATING_HOURS,
   );
@@ -829,12 +930,9 @@ function RestaurantOperationsAppInner({
   );
   const clock = useRestaurantClock(timeZone, operatingHours);
 
-  const [tipPoolId, setTipPoolId] = useState<number | null>(
-    () => initialTipsContext?.tipPoolId ?? null,
-  );
-  const [tipIntervals, setTipIntervals] = useState<TipIntervalInput[]>(
-    () => initialTipsContext?.intervals ?? [],
-  );
+  // Legacy lock state only: a day finalized by the earlier workflow still locks the
+  // allocation board until an audited correction reopens it. New days are never finalized.
+  const tipPoolId = initialTipsContext?.tipPoolId ?? null;
   const [tipsStatus, setTipsStatus] = useState<TipsDayStatus>(
     () => initialTipsContext?.status ?? "estimating",
   );
@@ -1055,6 +1153,7 @@ function RestaurantOperationsAppInner({
   // Schedule) is also exactly the manager-only/universal tab set the
   // avatar panel and mobile sheet need.
   const secondaryTabs = [
+    dashboardTab,
     scheduleTab,
     ...(isManager ? [teamTab] : []),
     attendanceTab,
@@ -1290,105 +1389,12 @@ function RestaurantOperationsAppInner({
     setShiftDefaults(nextShiftDefaults);
   }
 
-  async function addTipInterval(
-    interval: TipIntervalInput,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    if (demoMode) {
-      setTipIntervals((current) => [...current, interval]);
-      return { ok: true };
-    }
-    if (!locationId) return { ok: false, error: "Not ready yet." };
-    const result = await addTipIntervalAction({
-      restaurantSlug,
-      expectedContext: workspaceExpectation,
-      organizationId: currentUser.organizationId,
-      locationId,
-      timeZone,
-      serviceDate: tipsServiceDate,
-      start: interval.start,
-      end: interval.end,
-      amountCents: interval.amountCents,
-      participantIds: interval.participantIds,
-    });
-    if (!result.ok) {
-      if (result.sessionInvalid) forceSignOut();
-      return { ok: false, error: result.error };
-    }
-    setTipPoolId(result.data.tipPoolId);
-    setTipIntervals((current) => [...current, result.data.interval]);
-    return { ok: true };
-  }
-
-  // Feature 029. Read-only convenience lookup, never a write -- demo
-  // mode resolves it from the same in-memory demoAttendanceLinks map
-  // Team's own link dialog already writes to (empty until a manager
-  // deliberately links someone), crossed against demoNeonAttendance's
-  // fixture rows for tipsServiceDate; real mode re-derives everything
-  // server-side via getClockedInRosterAction.
-  async function pullClockedInTeam(): Promise<
-    { ok: true; data: string[] } | { ok: false; error: string }
-  > {
-    if (demoMode) {
-      const activeNeonUserIds = new Set(
-        demoNeonAttendance
-          .filter(
-            (row) =>
-              row.date === tipsServiceDate &&
-              row.clockIn &&
-              !row.clockOut &&
-              !row.autoClockedOut,
-          )
-          .map((row) => row.userId),
-      );
-      const profileIds = Object.entries(demoAttendanceLinks)
-        .filter(([, neonUserId]) => activeNeonUserIds.has(neonUserId))
-        .map(([profileId]) => profileId);
-      return { ok: true, data: profileIds };
-    }
-    const result = await getClockedInRosterAction({
-      restaurantSlug,
-      expectedContext: workspaceExpectation,
-    });
-    if (!result.ok) {
-      if (result.sessionInvalid) forceSignOut();
-      return { ok: false, error: result.error };
-    }
-    return { ok: true, data: result.data.profileIds };
-  }
-
-  async function finalizeTips() {
-    if (!demoMode) {
-      if (!locationId || tipPoolId === null) return;
-      const result = await finalizeTipsAction({
-        restaurantSlug,
-        expectedContext: workspaceExpectation,
-        organizationId: currentUser.organizationId,
-        locationId,
-        tipPoolId,
-      });
-      if (!result.ok) {
-        handleActionFailure(result.error, result.sessionInvalid);
-        return;
-      }
-    }
-    setTipsAuditLog((log) => [
-      ...log,
-      {
-        action: "finalized",
-        actorName: currentUser.name,
-        at: new Date().toISOString(),
-      },
-    ]);
-    setTipsStatus("finalized");
-  }
-
   async function reopenTips(reason: string) {
     if (!demoMode) {
       if (!locationId || tipPoolId === null) return;
       const result = await reopenTipsAction({
         restaurantSlug,
         expectedContext: workspaceExpectation,
-        organizationId: currentUser.organizationId,
         locationId,
         tipPoolId,
         reason,
@@ -2362,6 +2368,19 @@ function RestaurantOperationsAppInner({
       >
         {!switchingTo ? (
           <>
+            {tab === "dashboard" ? (
+              <DashboardModule
+                key={locationId ?? "demo"}
+                loader={dashboardLoader}
+                hrefFor={(target) =>
+                  tabHref(pathname, searchParams.toString(), target)
+                }
+                onOpenTab={setTab}
+                availableTabs={navigation.tabs}
+                onSessionInvalid={forceSignOut}
+                onContextStale={() => router.refresh()}
+              />
+            ) : null}
             {tab === "schedule" ? (
               <ScheduleWorkspace
                 user={user}
@@ -2459,26 +2478,32 @@ function RestaurantOperationsAppInner({
               />
             ) : null}
             {tab === "tips" ? (
-              <TipWorkspace
-                user={user}
+              <TipsModule
+                key={locationId ?? "demo"}
                 team={tipsTeam}
                 selectableIds={tipsSelectableIds}
                 unavailableMessage={tipsUnavailableMessage}
-                status={tipsStatus}
-                intervals={tipIntervals}
-                onAddInterval={addTipInterval}
-                onFinalize={finalizeTips}
-                onReopen={reopenTips}
-                onPullClockedInTeam={pullClockedInTeam}
-                auditLog={tipsAuditLog}
-                isManager={
-                  demoMode
-                    ? user.role !== "server"
-                    : ["owner", "manager", "assistant_manager"].includes(
-                        activeContext?.tasksDesignation ??
-                          (user.role === "server" ? "staff" : "manager"),
-                      )
-                }
+                initialRange={initialTipsContext?.today ?? null}
+                today={tipsServiceDate}
+                timeZone={timeZone}
+                branchName={activeContext?.locationName ?? "This location"}
+                isManager={tipsViewerIsManager}
+                api={tipsApi}
+                onSessionInvalid={forceSignOut}
+                onLegacyReopened={(reopenedPoolId) => {
+                  // Only today's pool locks the allocation board; reopening an older
+                  // legacy day must not unlock it.
+                  if (reopenedPoolId !== tipPoolId) return;
+                  setTipsStatus("estimating");
+                  setTipsAuditLog((log) => [
+                    ...log,
+                    {
+                      action: "reopened",
+                      actorName: currentUser.name,
+                      at: new Date().toISOString(),
+                    },
+                  ]);
+                }}
               />
             ) : null}
             {tab === "team" && isManager ? (

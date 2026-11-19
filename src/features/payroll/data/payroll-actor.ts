@@ -19,6 +19,32 @@ export type PayrollActor = {
 };
 
 /**
+ * The ONE definition of who may manage payroll, shared by the Payroll actor and the
+ * Dashboard so the two can never disagree. Pure; capabilities come from the canonical
+ * resolver, never from a role label alone.
+ */
+export function derivePayrollAuthority(access: {
+  readonly capabilities: readonly string[];
+  readonly effectiveLevel: string | null;
+}): { isOrgManager: boolean; isLocationManager: boolean; canManage: boolean } {
+  const has = (capability: string) => access.capabilities.includes(capability);
+  const isOrgManager =
+    has("org:admin") || has("overall:owner") || has("overall:manage");
+  const isLocationManager =
+    isOrgManager ||
+    has("location:manage") ||
+    has("location:assistant_manage") ||
+    access.effectiveLevel === "owner" ||
+    access.effectiveLevel === "manager" ||
+    access.effectiveLevel === "assistant_manager";
+  return {
+    isOrgManager,
+    isLocationManager,
+    canManage: isOrgManager || isLocationManager,
+  };
+}
+
+/**
  * Resolves the genuine payroll actor for the authenticated user and route slug.
  * Hybrid model:
  *   - Overall/Org managers can manage payroll org-wide.
@@ -52,20 +78,9 @@ export async function getPayrollActor(
   if (authorized.error || authorized.data !== true) return null;
 
   const effectiveLevel = result.context.access.effectiveLevel;
-  const isOrgManager =
-    result.context.access.capabilities.includes("org:admin") ||
-    result.context.access.capabilities.includes("overall:owner") ||
-    result.context.access.capabilities.includes("overall:manage");
-
-  const isLocationManager =
-    isOrgManager ||
-    result.context.access.capabilities.includes("location:manage") ||
-    result.context.access.capabilities.includes("location:assistant_manage") ||
-    effectiveLevel === "owner" ||
-    effectiveLevel === "manager" ||
-    effectiveLevel === "assistant_manager";
-
-  const canManage = isOrgManager || isLocationManager;
+  const { isOrgManager, isLocationManager, canManage } = derivePayrollAuthority(
+    result.context.access,
+  );
 
   return {
     organizationId: result.context.organizationId,

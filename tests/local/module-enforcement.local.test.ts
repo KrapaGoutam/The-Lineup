@@ -456,7 +456,10 @@ describe("active enforcement with real sessions", () => {
       location_id: loc.A2,
       service_date: "2026-11-06",
     });
-    expect(tipsOk.error).toBeNull();
+    // V2.0.8: Tips tables are RPC-only for every authenticated caller, so a direct write is
+    // refused where Tips is Enabled too (the Enabled/Disabled verdict is exercised through
+    // the Tips RPCs and actions).
+    expect(tipsOk.error?.code).toBe("42501");
   });
 
   it("protected reads: a Disabled location's staged-era task is no longer returned", async () => {

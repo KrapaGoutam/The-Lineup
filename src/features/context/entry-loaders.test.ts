@@ -94,11 +94,13 @@ describe("initial loaders honour the verified scope (V2-003.001)", () => {
     expect(ctx?.locationId).toBe("loc-webster");
     expect(ctx?.timeZone).toBe("America/Chicago");
     expect(log.tables).not.toContain("locations");
-    // V2-005.003: Tips reads only the two location-authorized RPCs, each bound
-    // to the verified location; there are no direct table reads at all.
+    // V2-005.003 / V2.0.8: Tips reads only location-authorized RPCs (roster, today's
+    // range, and the legacy day lock state), each bound to the verified location; there
+    // are no direct table reads at all.
     expect(log.tables).toEqual([]);
     expect(log.rpcs.map((r) => r.name).sort()).toEqual([
       "tips_get_day_data",
+      "tips_get_range",
       "tips_location_roster",
     ]);
     for (const call of log.rpcs) {

@@ -100,17 +100,15 @@ export type TipsReadResult =
   | { ok: true; model: TipsReadModel }
   | { ok: false; reason: TipsUnavailableReason };
 
-export function buildTipsReadModel(input: {
-  roster: unknown;
-  dayData: unknown;
-  timeZone: string;
-}): TipsReadResult {
-  const roster = tipsRosterSchema.safeParse(input.roster);
-  const day = dayDataSchema.safeParse(input.dayData);
-  if (!roster.success || !day.success) {
-    return { ok: false, reason: "unavailable" };
-  }
-
+/**
+ * Name directory + the people who may be offered for a NEW interval, from the
+ * location-authorized roster RPC. Null when the payload is not the expected shape.
+ */
+export function buildTipsTeam(
+  rosterRaw: unknown,
+): { team: TeamMember[]; selectableIds: string[] } | null {
+  const roster = tipsRosterSchema.safeParse(rosterRaw);
+  if (!roster.success) return null;
   const team: TeamMember[] = roster.data.map((row, index) => {
     const designation = designationForRoles(row.roles ?? []);
     return {
@@ -126,6 +124,20 @@ export function buildTipsReadModel(input: {
   const selectableIds = roster.data
     .filter((row) => row.eligible && row.active)
     .map((row) => row.profile_id);
+  return { team, selectableIds };
+}
+
+export function buildTipsReadModel(input: {
+  roster: unknown;
+  dayData: unknown;
+  timeZone: string;
+}): TipsReadResult {
+  const people = buildTipsTeam(input.roster);
+  const day = dayDataSchema.safeParse(input.dayData);
+  if (!people || !day.success) {
+    return { ok: false, reason: "unavailable" };
+  }
+  const { team, selectableIds } = people;
 
   const nameById = new Map(team.map((member) => [member.id, member.name]));
 

@@ -94,11 +94,11 @@ test("new app on the old schema: Tips fails closed with a clear notice and no da
   );
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Add and calculate" }),
+    page.getByRole("button", { name: "Save", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Finalize day" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "New distribution" }),
+  ).toHaveCount(0);
   // Nothing from the organization-wide roster leaks as a fallback.
   const text = await page.locator("body").innerText();
   expect(text).not.toContain("Tips staff-a");
