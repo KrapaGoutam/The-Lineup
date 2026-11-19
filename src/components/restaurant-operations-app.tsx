@@ -2434,7 +2434,10 @@ function RestaurantOperationsAppInner({
                 isManager={tipsViewerIsManager}
                 api={tipsApi}
                 onSessionInvalid={forceSignOut}
-                onLegacyReopened={() => {
+                onLegacyReopened={(reopenedPoolId) => {
+                  // Only today's pool locks the allocation board; reopening an older
+                  // legacy day must not unlock it.
+                  if (reopenedPoolId !== tipPoolId) return;
                   setTipsStatus("estimating");
                   setTipsAuditLog((log) => [
                     ...log,

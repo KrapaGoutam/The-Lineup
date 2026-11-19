@@ -266,9 +266,9 @@ select lives_ok(
 select throws_ok(
   $$insert into public.shift_templates (organization_id, location_id, name, role_label, start_local, end_local) values ('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1','Dinner','server','17:00','22:00')$$,
   '42501', null, 'BE-DB-45: direct schedule write is denied where schedule is Disabled');
-select lives_ok(
+select throws_ok(
   $$insert into public.tip_pools (organization_id, location_id, service_date) values ('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b2', current_date)$$,
-  'BE-DB-46: direct tips write works where tips is Enabled');
+  '42501', null, 'BE-DB-46: direct tips writes are closed for every role since V2.0.8 (RPC-only); the Enabled/Disabled verdict for Tips is exercised through the RPCs');
 select throws_ok(
   $$insert into public.tip_pools (organization_id, location_id, service_date) values ('00000000-0000-0000-0000-0000000630a1','00000000-0000-0000-0000-0000000630b1', current_date + 1)$$,
   '42501', null, 'BE-DB-47: direct tips write is denied where tips is Disabled');

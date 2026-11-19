@@ -404,6 +404,25 @@ describe("tips-actions", () => {
       expect(result).toMatchObject({ ok: false, conflict: true });
     });
 
+    it("hides Postgres-originated text even under an allowed SQLSTATE", async () => {
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: {
+          code: "42501",
+          message: "permission denied for table tip_pools",
+        },
+      });
+      const result = await saveTipIntervalAction(valid);
+      expect(!result.ok && result.error).not.toContain("tip_pools");
+      expect(!result.ok && result.error).toContain("couldn't be saved");
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "22003", message: "integer out of range" },
+      });
+      const overflow = await saveTipIntervalAction(valid);
+      expect(!overflow.ok && overflow.error).not.toContain("out of range");
+    });
+
     it("passes authored database errors through and hides unexpected ones", async () => {
       mocks.rpc.mockResolvedValue({
         data: null,
@@ -575,6 +594,25 @@ describe("tips-actions", () => {
       });
       expect(result.ok).toBe(false);
       expect(mocks.rpc).not.toHaveBeenCalled();
+    });
+
+    it("validates its inputs and never echoes raw database text", async () => {
+      const bad = await reopenTipsAction({
+        restaurantSlug: "Not A Slug!",
+        tipPoolId: 3,
+        reason: "Fix split",
+      });
+      expect(bad).toEqual({ ok: false, error: "That request is invalid." });
+      mocks.rpc.mockResolvedValue({
+        data: null,
+        error: { code: "XX000", message: 'relation "secret" exploded' },
+      });
+      const hidden = await reopenTipsAction({
+        restaurantSlug: "the-monks",
+        tipPoolId: 3,
+        reason: "Fix split",
+      });
+      expect(!hidden.ok && hidden.error).not.toContain("secret");
     });
 
     it("calls tips_reopen_pool with the verified org/location", async () => {

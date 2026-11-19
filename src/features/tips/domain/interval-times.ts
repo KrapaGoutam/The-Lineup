@@ -56,8 +56,8 @@ export function resolveIntervalInstants(input: {
   if (endsAt.getTime() <= startsAt.getTime()) {
     throw new Error("Tip interval must end after it starts.");
   }
-  if (endsAt.getTime() - startsAt.getTime() > 24 * 3_600_000) {
-    throw new Error("A tip interval can last at most 24 hours.");
+  if (endsAt.getTime() - startsAt.getTime() > 25 * 3_600_000) {
+    throw new Error("A tip interval can last at most 25 hours.");
   }
   return { startsAt, endsAt, crossesMidnight };
 }

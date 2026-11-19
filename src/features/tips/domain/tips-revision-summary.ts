@@ -41,11 +41,11 @@ export const REVISION_TITLES: Record<string, string> = {
   pool_recalculated: "Recalculated",
   legacy_finalized: "Finalized (earlier workflow)",
   legacy_reopened: "Reopened for correction",
-  direct_interval_insert: "Added (older app)",
-  direct_interval_update: "Changed (older app)",
-  direct_interval_delete: "Deleted (older app)",
-  direct_participant_change: "Participants changed (older app)",
-  direct_pool_delete: "Day deleted (older app)",
+  direct_interval_insert: "Added (direct database change)",
+  direct_interval_update: "Changed (direct database change)",
+  direct_interval_delete: "Deleted (direct database change)",
+  direct_participant_change: "Participants changed (direct database change)",
+  direct_pool_delete: "Day deleted (direct database change)",
 };
 
 /**
@@ -97,6 +97,6 @@ export function summarizeRevision(
     case "pool_recalculated":
       return "Allocations were re-derived from the saved intervals.";
     default:
-      return "Changed directly in the database by an older app version.";
+      return "Changed directly in the database (a maintenance or service-role write, outside the app).";
   }
 }

@@ -170,7 +170,7 @@ it("staff can read their own allocations (RLS helper is executable) and nobody e
   ]);
 });
 
-it("direct PostgREST writes cannot change a finalized pool; unauthorized callers change nothing", async () => {
+it("direct PostgREST writes are closed for every authenticated caller (RPC-only since V2.0.8); a finalized pool and unauthorized callers change nothing", async () => {
   const pool = must(
     await fx.admin
       .from("tip_pools")
@@ -226,14 +226,13 @@ it("direct PostgREST writes cannot change a finalized pool; unauthorized callers
     .update({ amount_cents: 1 })
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(updInterval.error).toBeNull();
-  expect(updInterval.data).toEqual([]);
+  expect(updInterval.error?.code).toBe("42501");
   const delInterval = await m
     .from("tip_intervals")
     .delete()
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(delInterval.data).toEqual([]);
+  expect(delInterval.error?.code).toBe("42501");
   const insPart = await m.from("tip_interval_participants").insert({
     organization_id: fx.org.id,
     tip_interval_id: intervalId,
@@ -245,7 +244,7 @@ it("direct PostgREST writes cannot change a finalized pool; unauthorized callers
     .update({ amount_cents: 1 })
     .eq("tip_pool_id", pool.id)
     .select();
-  expect(updAlloc.data).toEqual([]);
+  expect(updAlloc.error?.code).toBe("42501");
   const insAlloc = await m.from("tip_allocations").insert({
     organization_id: fx.org.id,
     tip_pool_id: pool.id,
@@ -412,8 +411,9 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
     p_organization_id: fx.org.id,
     p_location_id: fx.a,
     p_service_date: day,
-    p_starts_at: new Date().toISOString(),
-    p_ends_at: new Date(Date.now() + 3600_000).toISOString(),
+    // Tomorrow's interval (the interval must start on its own service date).
+    p_starts_at: new Date(Date.now() + 24 * 3600_000).toISOString(),
+    p_ends_at: new Date(Date.now() + 25 * 3600_000).toISOString(),
     p_amount_cents: 700,
     p_participant_ids: [fx.staff.id],
   });
@@ -460,7 +460,7 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
   });
   expect(finRpc.error).toBeNull();
 
-  // Direct reopen on finalized pool affects 0 rows (reopen policy dropped)
+  // Direct reopen of a finalized pool is denied outright (use tips_reopen_pool)
   const directReopen = await fx.manager.client
     .from("tip_pools")
     .update({
@@ -470,7 +470,7 @@ it("direct pool PATCH cannot attribute a finalization to someone else, and alloc
     })
     .eq("id", poolId)
     .select();
-  expect(directReopen.data).toHaveLength(0);
+  expect(directReopen.error?.code).toBe("42501");
   expect(
     must(
       await fx.admin

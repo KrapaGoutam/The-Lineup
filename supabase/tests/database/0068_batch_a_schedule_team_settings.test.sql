@@ -78,10 +78,10 @@ select throws_ok(
 );
 
 -- Assertion 2: Manager cannot reopen finalized pool by direct UPDATE
-select lives_ok(
+select throws_ok(
   $$ update public.tip_pools set status = 'draft', finalized_at = null, finalized_by = null
      where id = 68102 $$,
-  'direct table update on finalized pool runs without exception'
+  '42501', null, 'direct table reopen of a finalized pool is denied (writes are RPC-only since V2.0.8)'
 );
 select is(
   (select status from public.tip_pools where id = 68102),

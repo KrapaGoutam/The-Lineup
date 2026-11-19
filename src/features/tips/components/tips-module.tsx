@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History, Plus, WalletCards, Clock3 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -86,22 +86,27 @@ export function TipsModule({
     [onSessionInvalid],
   );
 
+  // Only the newest load may update the screen: rapid date changes must not let an older
+  // response land last.
+  const loadSeq = useRef(0);
   const reload = useCallback(
-    async (date: string) => {
+    async (date: string): Promise<TipsRange | null> => {
+      const mine = ++loadSeq.current;
       const result = await api.loadRange({
         from: date,
         to: date,
         includeRevisions: isManager,
       });
+      if (mine !== loadSeq.current) return null;
       if (guard(result)) {
         setNotice({ tone: "error", text: result.error });
-        return false;
+        return null;
       }
       setRange(result.data.range);
       if (result.data.team) setTeam(result.data.team);
       if (result.data.selectableIds) setSelectable(result.data.selectableIds);
       setRefreshKey((k) => k + 1);
-      return true;
+      return result.data.range;
     },
     [api, guard, isManager],
   );
@@ -117,11 +122,14 @@ export function TipsModule({
   }, []);
 
   async function openDay(date: string) {
-    setEditing(null);
     setNotice(null);
+    const loaded = await reload(date);
+    // A failed load leaves the current day on screen (with the error notice) instead of
+    // showing a misleading empty day.
+    if (!loaded) return;
+    setEditing(null);
     setSelectedDate(date);
     setView("day");
-    await reload(date);
   }
 
   async function save(values: EditorSubmit): Promise<Outcome> {
@@ -133,12 +141,20 @@ export function TipsModule({
     });
     if (guard(result)) {
       if (result.conflict) {
-        await reload(selectedDate);
-        setEditing(null);
-        return {
-          ok: false,
-          error: `${result.error} The latest saved version is shown.`,
-        };
+        // The editor remounts with the latest saved values, so the message must live
+        // OUTSIDE it (the page notice); the user's unsaved edits are replaced.
+        const fresh = await reload(selectedDate);
+        const latest =
+          editing && fresh
+            ? (fresh.days
+                .find((d) => d.serviceDate === selectedDate)
+                ?.intervals.find((i) => i.id === editing.id && !i.voided) ??
+              null)
+            : null;
+        setEditing(latest);
+        const text = `${result.error} Your edits were not saved; the latest saved version is shown.`;
+        setNotice({ tone: "error", text });
+        return { ok: false, error: text };
       }
       return { ok: false, error: result.error };
     }

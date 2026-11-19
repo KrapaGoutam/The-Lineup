@@ -8,10 +8,14 @@ import {
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 /**
- * The previously deployed (pre-V2-005.003) app on `development` talks to Tips with
- * DIRECT table writes and `recalculate_tip_pool`, not the new RPCs. This replays that
- * exact sequence as real signed-in users against the NEW schema, so the migration can be
- * applied to hosted DEV before the new application code reaches it.
+ * Compatibility with older callers after V2.0.8.
+ *
+ * Production's deployed app reaches Tips only through RPCs, so V2.0.8 closes direct table
+ * writes for every authenticated caller (they would bypass void / revision / reconciliation
+ * semantics and, with Finalize gone, every day stays a draft). This suite pins both halves:
+ * direct writes are refused, and the retained RPC route (`tips_add_interval`,
+ * `recalculate_tip_pool`, `tips_finalize_pool`, `tips_reopen_pool`) still works end to end,
+ * with `tips_add_interval` now inheriting the new validation and audit.
  */
 
 let fx: TipsFixture;
@@ -25,49 +29,49 @@ afterAll(async () => {
   if (fx) await fx.teardown();
 });
 
-it("old app write sequence still works for a location manager: pool, interval, participants, recalculate, finalize, audit, reopen", async () => {
+it("direct table writes are refused for a location manager; nothing changes", async () => {
   const m = fx.manager.client;
-
-  // getOrCreate pool
-  const created = await m
-    .from("tip_pools")
-    .insert({
-      organization_id: fx.org.id,
-      location_id: fx.a,
-      service_date: today(),
-      status: "draft",
-    })
-    .select("id, status")
-    .single();
-  expect(created.error).toBeNull();
-  const poolId = created.data!.id;
-
-  // interval + participants (eligible workforce)
-  const interval = await m
-    .from("tip_intervals")
-    .insert({
-      organization_id: fx.org.id,
-      tip_pool_id: poolId,
-      starts_at: new Date().toISOString(),
-      ends_at: new Date(Date.now() + 2 * 3600_000).toISOString(),
-      amount_cents: 10001,
-    })
-    .select("id")
-    .single();
-  expect(interval.error).toBeNull();
-  const parts = await m.from("tip_interval_participants").insert(
-    [fx.staff.id, fx.dual.id].map((profile_id) => ({
-      organization_id: fx.org.id,
-      tip_interval_id: interval.data!.id,
-      profile_id,
-    })),
-  );
-  expect(parts.error).toBeNull();
-
-  const recalc = await m.rpc("recalculate_tip_pool", {
-    target_tip_pool_id: poolId,
+  const pool = await m.from("tip_pools").insert({
+    organization_id: fx.org.id,
+    location_id: fx.a,
+    service_date: today(),
+    status: "draft",
   });
-  expect(recalc.error).toBeNull();
+  expect(pool.error?.code).toBe("42501");
+  expect(
+    must(await fx.admin.from("tip_pools").select("id").eq("location_id", fx.a)),
+  ).toEqual([]);
+});
+
+it("the RPC route still works: add, recalculate, finalize, reopen, with audit and exact money", async () => {
+  const m = fx.manager.client;
+  const start = new Date();
+  const added = await m.rpc("tips_add_interval", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_service_date: today(),
+    p_starts_at: start.toISOString(),
+    p_ends_at: new Date(start.getTime() + 3_600_000).toISOString(),
+    p_amount_cents: 10001,
+    p_participant_ids: [fx.staff.id, fx.dual.id],
+  });
+  expect(added.error).toBeNull();
+  const poolId = (added.data as { tip_pool_id: number }).tip_pool_id;
+
+  // Delegation: the legacy call is audited like a Save, and the money is exact.
+  const revisions = must(
+    await fx.admin
+      .from("tip_revisions")
+      .select("action, source, editor_profile_id")
+      .eq("tip_pool_id", poolId),
+  )!;
+  expect(revisions).toEqual([
+    {
+      action: "interval_created",
+      source: "rpc",
+      editor_profile_id: fx.manager.id,
+    },
+  ]);
   const cents = must(
     await fx.admin
       .from("tip_allocations")
@@ -78,34 +82,28 @@ it("old app write sequence still works for a location manager: pool, interval, p
     .sort();
   expect(cents).toEqual([5000, 5001]);
 
-  // finalize: direct update is refused (42501) and direct audit insert is refused (42501)
-  const user = must(await m.auth.getUser())!.user!;
-  const fin = await m
-    .from("tip_pools")
-    .update({
-      status: "finalized",
-      finalized_at: new Date().toISOString(),
-      finalized_by: user.id,
-    })
-    .eq("id", poolId);
-  expect(fin.error?.code).toBe("42501");
-  const auditFin = await m.from("audit_events").insert({
-    organization_id: fx.org.id,
-    location_id: fx.a,
-    actor_profile_id: user.id,
-    action: "finalized",
-    entity_type: "tip_pool",
-    entity_id: String(poolId),
+  // It inherits the new validation: an overlapping interval is refused.
+  const overlap = await m.rpc("tips_add_interval", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.a,
+    p_service_date: today(),
+    p_starts_at: new Date(start.getTime() + 600_000).toISOString(),
+    p_ends_at: new Date(start.getTime() + 1_800_000).toISOString(),
+    p_amount_cents: 100,
+    p_participant_ids: [fx.staff.id],
   });
-  expect(auditFin.error?.code).toBe("42501");
+  expect(overlap.error?.message).toContain("cannot overlap");
 
-  // Finalization must use tips_finalize_pool RPC
-  const finalizeRpc = await m.rpc("tips_finalize_pool", {
+  expect(
+    (await m.rpc("recalculate_tip_pool", { target_tip_pool_id: poolId })).error,
+  ).toBeNull();
+
+  const finalized = await m.rpc("tips_finalize_pool", {
     p_organization_id: fx.org.id,
     p_location_id: fx.a,
     p_tip_pool_id: poolId,
   });
-  expect(finalizeRpc.error).toBeNull();
+  expect(finalized.error).toBeNull();
   expect(
     must(
       await fx.admin
@@ -116,59 +114,18 @@ it("old app write sequence still works for a location manager: pool, interval, p
     )!.status,
   ).toBe("finalized");
 
-  // reopen: direct update is refused (affects 0 rows)
-  const reopen = await m
-    .from("tip_pools")
-    .update({ status: "draft", finalized_at: null, finalized_by: null })
-    .eq("id", poolId)
-    .select();
-  expect(reopen.data).toHaveLength(0);
-
-  // Reopening must use tips_reopen_pool RPC
-  const reopenRpc = await m.rpc("tips_reopen_pool", {
+  const reopened = await m.rpc("tips_reopen_pool", {
     p_organization_id: fx.org.id,
     p_location_id: fx.a,
     p_tip_pool_id: poolId,
     p_reason: "old app reopen",
   });
-  expect(reopenRpc.error).toBeNull();
-  expect(
-    must(
-      await fx.admin
-        .from("tip_pools")
-        .select("status")
-        .eq("id", poolId)
-        .single(),
-    )!.status,
-  ).toBe("draft");
-
-  // old loader reads (manager)
-  const readPool = await m
-    .from("tip_pools")
-    .select("id, status")
-    .eq("location_id", fx.a)
-    .eq("service_date", today())
-    .maybeSingle();
-  expect(readPool.data?.id).toBe(poolId);
-  const readIntervals = await m
-    .from("tip_intervals")
-    .select("id, tip_interval_participants(profile_id)")
-    .eq("tip_pool_id", poolId);
-  expect(readIntervals.data).toHaveLength(1);
-  const readAudit = await m
-    .from("audit_events")
-    .select("action")
-    .eq("entity_type", "tip_pool")
-    .eq("entity_id", String(poolId));
-  expect(readAudit.data!.map((r) => r.action).sort()).toEqual([
-    "finalized",
-    "reopened",
-  ]);
-});
-
-it("old app staff view is unchanged: staff still read nothing directly from the manager-only tables", async () => {
-  const s = fx.staff.client;
-  expect((await s.from("tip_pools").select("id")).data).toEqual([]);
-  expect((await s.from("tip_intervals").select("id")).data).toEqual([]);
-  expect((await s.from("audit_events").select("id")).data).toEqual([]);
+  expect(reopened.error).toBeNull();
+  const events = must(
+    await fx.admin
+      .from("audit_events")
+      .select("action, reason")
+      .eq("entity_id", String(poolId)),
+  )!;
+  expect(events.map((e) => e.action).sort()).toEqual(["finalized", "reopened"]);
 });

@@ -236,6 +236,77 @@ describe("Tips module — manager workflow: Save → Update → Recalculate → 
   });
 });
 
+describe("Tips module — concurrent edit", () => {
+  it("shows the conflict message OUTSIDE the editor, loads the latest version and keeps the user informed", async () => {
+    const user = userEvent.setup();
+    const store = createDemoTipsStore();
+    const real = apiFor(store, "boss", true);
+    const seeded = await real.saveInterval({
+      serviceDate: TODAY,
+      start: "11:00",
+      end: "13:00",
+      cashCents: 10000,
+      cardCents: 0,
+      participantIds: ["mia", "noah"],
+    });
+    if (!seeded.ok) throw new Error("seed");
+    // Another manager changes the interval first, so this tab's revision is stale.
+    await real.saveInterval({
+      serviceDate: TODAY,
+      intervalId: String(seeded.data.intervalId),
+      expectedRevision: 1,
+      start: "11:00",
+      end: "13:00",
+      cashCents: 12000,
+      cardCents: 0,
+      participantIds: ["mia", "noah"],
+      reason: "Other manager",
+    });
+    let served = 0;
+    const staleApi: TipsApi = {
+      ...real,
+      // The first load (tab entry) returns the OLD revision, as a stale tab would have it.
+      loadRange: async (input) => {
+        const loaded = await real.loadRange(input);
+        if (!loaded.ok || served++ > 0) return loaded;
+        const range = structuredClone(loaded.data.range);
+        for (const day of range.days) {
+          for (const interval of day.intervals) {
+            interval.revision = 1;
+            interval.cashCents = 10000;
+            interval.amountCents = 10000;
+          }
+        }
+        return { ok: true, data: { range } };
+      },
+    };
+    render(
+      <TipsModule
+        team={team}
+        initialRange={null}
+        today={TODAY}
+        timeZone={TZ}
+        branchName="The Monks Webster"
+        isManager
+        api={staleApi}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Edit 11:00 to 13:00" }),
+    );
+    await user.type(
+      screen.getByLabelText("Reason for change"),
+      "Counted again",
+    );
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    const notice = await screen.findByRole("alert");
+    expect(notice).toHaveTextContent("changed by someone else");
+    expect(notice).toHaveTextContent("Your edits were not saved");
+    // The latest saved version (revision 2, $120.00) is what is now shown.
+    expect(await screen.findAllByText("$120.00")).not.toHaveLength(0);
+  });
+});
+
 describe("Tips module — locked legacy days", () => {
   it("is read-only and offers only the reasoned, audited correction (no Finalize/Unlock wording)", async () => {
     const user = userEvent.setup();
@@ -419,5 +490,38 @@ describe("Tips report document — print safety", () => {
     // Only the first section forces a page; each day stays together but flows.
     expect(report.querySelectorAll(".report-section")).toHaveLength(1);
     expect(report.querySelectorAll(".report-keep").length).toBeGreaterThan(1);
+  });
+
+  it("the staff report has no People column (staff only receive their own allocation, so the count would mislead)", async () => {
+    const store = createDemoTipsStore();
+    await apiFor(store, "boss", true).saveInterval({
+      serviceDate: TODAY,
+      start: "11:00",
+      end: "13:00",
+      cashCents: 1000,
+      cardCents: 0,
+      participantIds: ["mia", "noah"],
+    });
+    const staffApi = apiFor(store, "mia", false);
+    const loaded = await staffApi.loadRange({
+      from: TODAY,
+      to: TODAY,
+      includeRevisions: false,
+    });
+    if (!loaded.ok) throw new Error("load");
+    render(
+      <TipsModule
+        team={[team[0]]}
+        initialRange={loaded.data.range}
+        today={TODAY}
+        timeZone={TZ}
+        branchName="x"
+        isManager={false}
+        api={staffApi}
+      />,
+    );
+    const report = await screen.findByTestId("tips-report");
+    const daily = within(report).getByText("Daily summary").closest("table")!;
+    expect(within(daily).queryByText("People")).not.toBeInTheDocument();
   });
 });

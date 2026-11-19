@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(93);
+select plan(102);
 
 -- Fixture ---------------------------------------------------------------------------------
 -- M manager@A, AM assistant@A, S1..S3 staff@A, OLD staff@A (leaves later), SB staff@B, X nobody.
@@ -102,7 +102,7 @@ select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T16:00:00-05:00',
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T16:00:00-05:00', '2026-03-10T17:00:00-05:00', -1, 5, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22003', null, 'negative cash rejected');
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T16:00:00-05:00', '2026-03-10T17:00:00-05:00', 10000001, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22003', null, 'absurd amount rejected');
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T17:00:00-05:00', '2026-03-10T16:00:00-05:00', 100, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22023', null, 'end before start rejected');
-select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T10:00:00-05:00', '2026-03-11T11:00:00-05:00', 100, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22023', null, 'more than 24 hours rejected');
+select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T10:00:00-05:00', '2026-03-11T12:00:00-05:00', 100, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22023', null, 'more than 25 hours rejected (a fall-back day really has 25)');
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-11T01:00:00-05:00', '2026-03-11T02:00:00-05:00', 100, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22023', null, 'interval starting on another local date than the service date rejected');
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T16:00:00-05:00', '2026-03-10T17:00:00-05:00', 100, 0, array[]::uuid[], null) $$, '22023', null, 'no participants rejected');
 select throws_ok($$ select pg_temp.save(null, null, '2026-03-10T13:00:00-05:00', '2026-03-10T14:30:00-05:00', 100, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null) $$, '22023', 'Tip intervals cannot overlap.', 'overlapping interval rejected by the database');
@@ -199,14 +199,20 @@ select throws_ok($$ select public.tips_get_range('00000000-0000-4000-8000-000000
 select pg_temp.as_user('00000000-0000-4000-8000-000000091006');
 select throws_ok($$ select public.tips_get_range('00000000-0000-4000-8000-000000091010','00000000-0000-4000-8000-000000091011','2026-03-10','2026-03-10') $$, '42501', null, 'staff of Loc B cannot read Loc A');
 
--- 12. Direct-table writes (previously deployed app) are allowed but never invisible ----------------------------
+-- 12. Direct table writes are CLOSED for authenticated; privileged writes are still captured ---------------------
 select pg_temp.as_user('00000000-0000-4000-8000-000000091001');
 set local role authenticated;
-update public.tip_intervals set note = 'direct edit' where id = (select v from ids where k='i2');
-select throws_ok($$ update public.tip_intervals set amount_cents = 5 where id = (select v from ids where k='i2') $$, '23514', null, 'a direct write cannot desynchronise total and tender');
-select is((select count(*)::int from public.tip_revisions where source = 'direct' and action = 'direct_interval_update' and editor_profile_id = '00000000-0000-4000-8000-000000091001'), 1, 'a direct interval update is captured with its editor');
-select is((select after_state ->> 'note' from public.tip_revisions where action = 'direct_interval_update'), 'direct edit', 'with the before/after row');
+select throws_ok($$ update public.tip_intervals set note = 'direct edit' where id = (select v from ids where k='i2') $$, '42501', null, 'a manager cannot update an interval directly (RPC-only)');
+select throws_ok($$ update public.tip_intervals set voided_at = now(), voided_by = '00000000-0000-4000-8000-000000091001', void_reason = 'sneaky' where id = (select v from ids where k='i2') $$, '42501', null, 'a manager cannot void directly (bypassing revision and recalculation)');
+select throws_ok($$ delete from public.tip_pools where id = (select tip_pool_id from public.tip_intervals where id = (select v from ids where k='i2')) $$, '42501', null, 'a manager cannot delete a whole day directly');
+select throws_ok($$ insert into public.tip_intervals(organization_id, tip_pool_id, starts_at, ends_at, amount_cents) values ('00000000-0000-4000-8000-000000091010', (select tip_pool_id from public.tip_intervals where id = (select v from ids where k='i2')), now(), now() + interval '1 hour', 100) $$, '42501', null, 'a manager cannot insert an interval directly');
+select throws_ok($$ delete from public.tip_interval_participants where tip_interval_id = (select v from ids where k='i2') $$, '42501', null, 'a manager cannot change participants directly');
 reset role;
+-- A privileged (service-role / migration) write still happens, and is never invisible.
+update public.tip_intervals set note = 'direct edit' where id = (select v from ids where k='i2');
+select is((select count(*)::int from public.tip_revisions where source = 'direct' and action = 'direct_interval_update' and editor_profile_id = '00000000-0000-4000-8000-000000091001'), 1, 'a privileged direct interval update is captured with its editor');
+select is((select after_state ->> 'note' from public.tip_revisions where action = 'direct_interval_update'), 'direct edit', 'with the before/after row');
+select throws_ok($$ update public.tip_intervals set amount_cents = 5 where id = (select v from ids where k='i2') $$, '23514', null, 'even a privileged write cannot desynchronise total and tender');
 select pg_temp.as_user('00000000-0000-4000-8000-000000091003');
 set local role authenticated;
 select is((select count(*)::int from public.tip_revisions), 0, 'RLS: staff read zero audit rows');
@@ -216,6 +222,13 @@ set local role authenticated;
 select cmp_ok((select count(*)::int from public.tip_revisions), '>=', 8, 'RLS: a location manager reads the audit rows of their location');
 select throws_ok($$ insert into public.tip_revisions(organization_id, location_id, tip_pool_id, action, source) values ('00000000-0000-4000-8000-000000091010','00000000-0000-4000-8000-000000091011',1,'interval_created','rpc') $$, '42501', null, 'RLS: nobody can forge an audit row');
 reset role;
+
+-- 12b. Overlap is judged across adjacent service dates; the legacy RPC delegates to the same rules ---------------------
+select pg_temp.as_user('00000000-0000-4000-8000-000000091001');
+select lives_ok($$ select pg_temp.save(null, null, '2026-03-20T22:00:00-05:00', '2026-03-21T00:30:00-05:00', 500, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null, '2026-03-20') $$, 'a late interval running past midnight saves on its service date');
+select throws_ok($$ select pg_temp.save(null, null, '2026-03-21T00:00:00-05:00', '2026-03-21T01:00:00-05:00', 500, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null, '2026-03-21') $$, '22023', 'Tip intervals cannot overlap.', 'an interval on the NEXT service date that overlaps the previous day''s after-midnight interval is rejected (no double pay)');
+select lives_ok($$ select pg_temp.save(null, null, '2026-03-21T00:30:00-05:00', '2026-03-21T01:30:00-05:00', 500, 0, array['00000000-0000-4000-8000-000000091003']::uuid[], null, '2026-03-21') $$, 'back-to-back across the day boundary is allowed');
+select throws_ok($$ select public.tips_add_interval('00000000-0000-4000-8000-000000091010','00000000-0000-4000-8000-000000091011','2026-03-10','2026-03-10T12:30:00-05:00','2026-03-10T13:30:00-05:00',500,array['00000000-0000-4000-8000-000000091003']::uuid[]) $$, '22023', 'Tip intervals cannot overlap.', 'the legacy tips_add_interval delegates to tips_save_interval and inherits its overlap rule');
 
 -- 13. Legacy rows and locked days ---------------------------------------------------------------------------------
 insert into public.tip_pools(id, organization_id, location_id, service_date, status)

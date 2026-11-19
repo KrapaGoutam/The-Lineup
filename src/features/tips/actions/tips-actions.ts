@@ -175,6 +175,9 @@ async function authorize(
 
 const MANAGER_ONLY = "Only an owner, manager or assistant manager can do that.";
 const SAFE_DB_CODES = new Set(["42501", "22003", "22023", "P0002", "P0409"]);
+// Postgres-originated text (as opposed to the messages our functions raise on purpose).
+const INTERNAL_DB_TEXT =
+  /permission denied|row-level security|violates|relation "|column "|function |out of range|syntax|constraint/i;
 
 /** Authored database messages pass through; anything unexpected becomes a generic one. */
 function rpcFailure(error: {
@@ -190,7 +193,12 @@ function rpcFailure(error: {
       conflict: true,
     };
   }
-  if (error.code && SAFE_DB_CODES.has(error.code) && error.message) {
+  if (
+    error.code &&
+    SAFE_DB_CODES.has(error.code) &&
+    error.message &&
+    !INTERNAL_DB_TEXT.test(error.message)
+  ) {
     return { ok: false, error: error.message };
   }
   return {
@@ -505,7 +513,15 @@ export async function reopenTipsAction(
       error: "Enter a short reason (at least 3 characters).",
     };
   }
-  const auth = await authorize(input, {
+  const parsed = z
+    .object({
+      ...baseShape,
+      tipPoolId: z.number().int().positive(),
+      reason: z.string().trim().max(500),
+    })
+    .safeParse({ ...input, reason });
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+  const auth = await authorize(parsed.data, {
     manager: true,
     deniedMessage: MANAGER_ONLY,
     signedOutMessage: "You need to sign in to correct tips.",
@@ -515,12 +531,12 @@ export async function reopenTipsAction(
   const { error } = await auth.supabase.rpc("tips_reopen_pool", {
     p_organization_id: auth.caller.organizationId,
     p_location_id: auth.location.id,
-    p_tip_pool_id: input.tipPoolId,
-    p_reason: reason,
+    p_tip_pool_id: parsed.data.tipPoolId,
+    p_reason: parsed.data.reason,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return rpcFailure(error);
 
-  refresh(input.restaurantSlug);
+  refresh(parsed.data.restaurantSlug);
   return { ok: true, data: null };
 }
 

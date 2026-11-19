@@ -49,9 +49,9 @@ alter table public.tip_allocations
     check (cash_cents >= 0 and card_cents >= 0 and cash_cents + card_cents <= amount_cents);
 
 -- 2. Append-only revision log ----------------------------------------------------------
--- tip_pool_id / tip_interval_id / location_id / editor are plain columns on purpose: the
--- audit must survive the deletion of a draft pool, and must not block profile or location
--- housekeeping. Rows are only ever inserted by the SECURITY DEFINER code in this file.
+-- tip_pool_id / tip_interval_id / editor are plain columns on purpose (the audit must survive
+-- the deletion of a pool and must not block profile housekeeping); organization and location
+-- carry composite FKs like every other location-scoped table. Rows are only ever inserted by the SECURITY DEFINER code in this file.
 create table public.tip_revisions (
   id bigint generated always as identity primary key,
   organization_id uuid not null references public.organizations (id) on delete cascade,
@@ -213,6 +213,11 @@ begin
 
   perform private.assert_location_module_enabled(v_pool.location_id, 'tips');
 
+  if (select coalesce(sum(amount_cents), 0) from public.tip_intervals
+      where tip_pool_id = target_tip_pool_id and voided_at is null) > 2000000000 then
+    raise exception 'The tips for one day cannot exceed $20,000,000.00.' using errcode = '22003';
+  end if;
+
   delete from public.tip_allocations
   where tip_pool_id = target_tip_pool_id;
 
@@ -231,10 +236,19 @@ $$;
 revoke all on function public.recalculate_tip_pool(bigint) from public, anon;
 grant execute on function public.recalculate_tip_pool(bigint) to authenticated;
 
--- 5. Path-independent capture of DIRECT table writes -------------------------------------
--- The previously deployed app writes tip_pools / tip_intervals / tip_interval_participants
--- directly. Those writes stay allowed (rollout compatibility) but can no longer be
--- invisible: every direct change is recorded with its before/after row. The RPCs set the
+-- 4b. Close the direct-write path ----------------------------------------------------------
+-- The deployed application (Production main) reaches Tips ONLY through SECURITY DEFINER
+-- RPCs; nothing reads or writes these tables directly. With Finalize removed every day stays
+-- a draft, so leaving table DML open would let any branch manager bypass the void / revision
+-- / reconciliation semantics (set voided_at directly, delete a whole day) outside the audited
+-- RPCs. Reads stay (RLS select policies); every write goes through the RPCs.
+revoke insert, update, delete on public.tip_pools, public.tip_intervals,
+  public.tip_interval_participants, public.tip_allocations from authenticated;
+
+-- 5. Capture of PRIVILEGED direct writes (defence in depth) ------------------------------
+-- Authenticated users can no longer write these tables (4b), but service-role scripts and
+-- migrations still can. Those writes are never invisible: every direct change is recorded
+-- with its before/after row. The RPCs set the
 -- transaction-local flag app.tips_rpc so they are not double-recorded (they write their own
 -- richer revision). A cascade (pool or organization delete) runs at trigger depth > 1 and
 -- is skipped, so housekeeping is not blocked.
@@ -372,8 +386,8 @@ begin
   end if;
 
   if p_starts_at is null or p_ends_at is null or p_ends_at <= p_starts_at
-     or p_ends_at - p_starts_at > interval '24 hours' then
-    raise exception 'Tip interval must end after it starts and last at most 24 hours.' using errcode = '22023';
+     or p_ends_at - p_starts_at > interval '25 hours' then
+    raise exception 'Tip interval must end after it starts and last at most 25 hours.' using errcode = '22023';
   end if;
 
   select l.time_zone into v_tz
@@ -403,20 +417,34 @@ begin
 
   perform set_config('app.tips_rpc', 'on', true);
 
-  -- Serialize every writer of this day on the pool row.
+  -- Serialize every writer around this day: lock the existing pools of the previous, same and
+  -- next service date in date order (an interval may run past midnight into the next day, so
+  -- overlap must be judged across adjacent days; one fixed order cannot deadlock).
+  perform 1 from public.tip_pools
+  where location_id = p_location_id and organization_id = p_organization_id
+    and service_date between p_service_date - 1 and p_service_date + 1
+  order by service_date
+  for update;
+
   select id, organization_id, location_id, status into v_pool
   from public.tip_pools
   where location_id = p_location_id and organization_id = p_organization_id
-    and service_date = p_service_date
-  for update;
+    and service_date = p_service_date;
 
   if v_pool.id is null then
     if p_interval_id is not null then
       raise exception 'Tip interval not found for this day.' using errcode = 'P0002';
     end if;
+    -- Two first saves of a day can race: the loser re-reads the winner's row instead of
+    -- failing on the unique index.
     insert into public.tip_pools (organization_id, location_id, service_date, status)
     values (p_organization_id, p_location_id, p_service_date, 'draft')
-    returning id, organization_id, location_id, status into v_pool;
+    on conflict (location_id, service_date) do nothing;
+    select id, organization_id, location_id, status into v_pool
+    from public.tip_pools
+    where location_id = p_location_id and organization_id = p_organization_id
+      and service_date = p_service_date
+    for update;
   end if;
 
   if v_pool.status <> 'draft' then
@@ -443,8 +471,12 @@ begin
   end if;
 
   if exists (
-    select 1 from public.tip_intervals o
-    where o.tip_pool_id = v_pool.id
+    select 1
+    from public.tip_intervals o
+    join public.tip_pools op on op.id = o.tip_pool_id
+    where op.location_id = p_location_id
+      and op.organization_id = p_organization_id
+      and op.service_date between p_service_date - 1 and p_service_date + 1
       and o.voided_at is null
       and o.id is distinct from p_interval_id
       and o.starts_at < p_ends_at
@@ -836,6 +868,40 @@ end;
 $$;
 revoke all on function public.tips_get_range(uuid, uuid, date, date, boolean) from public, anon;
 grant execute on function public.tips_get_range(uuid, uuid, date, date, boolean) to authenticated;
+
+-- 9b. The legacy single-amount RPC now DELEGATES to tips_save_interval ------------------------
+-- Same signature and return shape, so nothing that calls it breaks, but it inherits every new
+-- rule (amount caps, overlap across adjacent days, service-date check, locked days, eligibility)
+-- and writes the audit revision. The amount is recorded as cash.
+create or replace function public.tips_add_interval(
+  p_organization_id uuid,
+  p_location_id uuid,
+  p_service_date date,
+  p_starts_at timestamptz,
+  p_ends_at timestamptz,
+  p_amount_cents integer,
+  p_participant_ids uuid[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_saved jsonb;
+begin
+  v_saved := public.tips_save_interval(
+    p_organization_id, p_location_id, p_service_date, p_starts_at, p_ends_at,
+    p_amount_cents, 0, p_participant_ids
+  );
+  return jsonb_build_object(
+    'interval_id', v_saved -> 'interval_id',
+    'tip_pool_id', v_saved -> 'tip_pool_id'
+  );
+end;
+$$;
+revoke all on function public.tips_add_interval(uuid, uuid, date, timestamptz, timestamptz, integer, uuid[]) from public, anon;
+grant execute on function public.tips_add_interval(uuid, uuid, date, timestamptz, timestamptz, integer, uuid[]) to authenticated;
 
 -- 10. Legacy day reader: hide voided intervals --------------------------------------------
 -- Same contract and shape as 20261107194700; the only change is `voided_at is null`.

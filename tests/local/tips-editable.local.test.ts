@@ -333,7 +333,7 @@ it("overlap and a locked legacy day are rejected by the database", async () => {
   expect(again).toMatchObject({ ok: true, data: { changed: false } });
 });
 
-it("a direct table write by the previously deployed app is allowed but captured in the audit", async () => {
+it("direct table writes are refused for a manager (RPC-only); a privileged direct write is still captured in the audit", async () => {
   const pool = must(
     await fx.admin
       .from("tip_pools")
@@ -345,12 +345,36 @@ it("a direct table write by the previously deployed app is allowed but captured 
   const interval = must(
     await fx.admin
       .from("tip_intervals")
-      .select("id")
+      .select("id, voided_at")
       .eq("tip_pool_id", pool.id)
       .is("voided_at", null)
       .limit(1)
       .single(),
   )!;
+  const m = fx.manager.client;
+
+  // A manager cannot bypass void / revision / reconciliation, and cannot delete a day.
+  const edit = await m
+    .from("tip_intervals")
+    .update({ note: "sneaky" })
+    .eq("id", interval.id);
+  expect(edit.error?.code).toBe("42501");
+  const sneakyVoid = await m
+    .from("tip_intervals")
+    .update({
+      voided_at: new Date().toISOString(),
+      voided_by: fx.manager.id,
+      void_reason: "sneaky void",
+    })
+    .eq("id", interval.id);
+  expect(sneakyVoid.error?.code).toBe("42501");
+  const wipe = await m.from("tip_pools").delete().eq("id", pool.id);
+  expect(wipe.error?.code).toBe("42501");
+  expect(
+    must(await fx.admin.from("tip_pools").select("id").eq("id", pool.id)),
+  ).toHaveLength(1);
+
+  // A privileged (service-role) write still happens and is never invisible.
   const before = must(
     await fx.admin
       .from("tip_revisions")
@@ -358,25 +382,21 @@ it("a direct table write by the previously deployed app is allowed but captured 
       .eq("source", "direct")
       .eq("tip_pool_id", pool.id),
   )!;
-
-  const update = await fx.manager.client
-    .from("tip_intervals")
-    .update({ note: "old app edit" })
-    .eq("id", interval.id);
-  expect(update.error).toBeNull();
-
+  must(
+    await fx.admin
+      .from("tip_intervals")
+      .update({ note: "maintenance edit" })
+      .eq("id", interval.id),
+  );
   const after = must(
     await fx.admin
       .from("tip_revisions")
-      .select("action, editor_profile_id")
+      .select("action, after_state")
       .eq("source", "direct")
       .eq("tip_pool_id", pool.id),
   )!;
   expect(after.length).toBe(before.length + 1);
-  expect(after.at(-1)).toMatchObject({
-    action: "direct_interval_update",
-    editor_profile_id: fx.manager.id,
-  });
+  expect(after.at(-1)).toMatchObject({ action: "direct_interval_update" });
 });
 
 it("tenant and location isolation: a foreign user and staff of another branch see nothing", async () => {

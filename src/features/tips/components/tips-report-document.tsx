@@ -186,12 +186,16 @@ export function TipsReportDocument({
             <div className="report-keep">
               <Table
                 caption="Daily summary"
-                head={["Day", "People", "Cash", "Card", "Not split", "Total"]}
+                head={
+                  isManager
+                    ? ["Day", "People", "Cash", "Card", "Not split", "Total"]
+                    : ["Day", "Cash", "Card", "Not split", "Total"]
+                }
               >
                 {daily.map((row) => (
                   <tr key={row.key} className="border-border border-b">
                     <td className="py-1.5 pr-3">{formatReportDate(row.key)}</td>
-                    <td className={num}>{row.people}</td>
+                    {isManager ? <td className={num}>{row.people}</td> : null}
                     <MoneyCells
                       cash={row.cashCents}
                       card={row.cardCents}

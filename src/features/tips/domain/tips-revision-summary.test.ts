@@ -110,6 +110,6 @@ describe("summarizeRevision", () => {
     ).toContain("Updated");
     expect(
       summarizeRevision(revision("direct_interval_update", {}, {}), TZ, nameOf),
-    ).toContain("older app");
+    ).toContain("directly in the database");
   });
 });
