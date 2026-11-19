@@ -1,5 +1,7 @@
 # Feature 004 — Interval-based tip split
 
+> **V2.0.8 update:** the Finalize step described below no longer exists. Saved distributions stay editable (Update with a reason), cash and card are tracked separately, and every change is audited. Only days finalized by the earlier workflow remain locked (audited reopen to correct). See [V2.0.8 Editable Tips](v2-0-8-editable-tips/HANDOFF.md).
+
 Status: wired to hosted Supabase (Feature 015, Phase D). In real mode, `tip-workspace.tsx` no longer owns interval state itself — it reads `getTipsContext()` (a Server Component read of today's `tip_pools`/`tip_intervals`/`tip_interval_participants` plus the resolved audit log) and writes through `addTipIntervalAction`/`finalizeTipsAction`/`reopenTipsAction`, each calling `recalculate_tip_pool` or the finalize/reopen policy as appropriate; `NEXT_PUBLIC_DEMO_MODE=true` still runs the original in-memory `useState` path unchanged. A tip pool is created lazily on the first interval add for a service date, not pre-seeded. See `docs/AUDIT.md` (2026-09-05) for the pre-Phase-D state.
 
 ## User outcome

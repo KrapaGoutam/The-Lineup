@@ -1,3 +1,20 @@
+# Release Group 2 — V2.0.8 Editable Tips Management — PR OPEN FOR REVIEW
+
+Plan, invariants, evidence, migration decision and owner decisions: `docs/features/v2-0-8-editable-tips/HANDOFF.md`.
+Branch `feature/v2-008-editable-tips`, worktree `.tmp/v2-008-editable-tips`, baseline `27b8988` (== Production main == development after the fast-forward sync).
+
+- [x] Preflight, baseline sync, isolated worktree.
+- [x] Migration `20261119120000_editable_tips.sql` (local only), pgTAP 0091 (93) + sweep re-pin; full pgTAP 94 files / 3,868.
+- [x] Domain, actions, data, UI (editor, review, history, staff view, Letter print); Finalize UX removed.
+- [x] Tests: Tips Vitest, real-JWT (28), real-mode Playwright 21/21, demo Playwright 52/52, PDF visually inspected (2 defects fixed).
+- [ ] Exact-head CI green, one independent review, owner review/merge (NOT authorized). Hosted DEV apply NOT authorized. V2.0.9 NOT started.
+
+## Current State & Next Step
+
+All work is on the feature branch. Next: exact-head CI, one focused independent review, then owner decisions listed in the handoff.
+
+---
+
 # Release Group 1 — Batch C (V2.0.7) Combined Reporting Center — PR OPEN FOR REVIEW
 
 Plan, decisions, permission model, evidence and deferrals: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
