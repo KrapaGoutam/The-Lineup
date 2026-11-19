@@ -196,7 +196,7 @@ export function TipIntervalEditor({
             <p className="text-muted-foreground text-xs">
               {mode === "edit"
                 ? "Change the details, give a reason, then Update. The previous values are kept in the change history."
-                : "Enter cash and card tips for a period and confirm who worked it. An end time before the start runs past midnight."}
+                : "Enter cash and card tips for a period and confirm who worked it. An end time before the start runs past midnight. Times belong to the service date shown, so tips after midnight that belong to the previous night go on that night's date."}
             </p>
           </div>
         </div>

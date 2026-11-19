@@ -96,10 +96,10 @@ A migration **was** genuinely required: cash/card, a concurrency token, soft voi
 
 ## Remaining limitations / decisions for the owner
 
-1. **Board lock behaviour change.** Finalize used to lock the Table Allocation board at end of day. With no Finalize step, saving tips never locks the board. Days finalized by the earlier workflow still lock it until corrected. Decide whether an end-of-day board lock should exist some other way.
-2. **Payroll readiness counter.** The DB-only `warnings.tip_pools_not_finalized` count (not shown in any UI) will now be non-zero for every saved day. Left untouched to avoid editing a payroll function; consider retiring it in a payroll batch.
+1. **Board lock — DECIDED (owner): no new lock.** Saving or updating tips never locks Table Allocation, and no Finalize/Unlock control exists. Days finalized by the earlier workflow keep their lock until the audited correction (covered by the demo spec and the real-mode legacy-lock spec).
+2. **Payroll readiness counter — DECIDED (owner): document only.** The DB-only `warnings.tip_pools_not_finalized` count (shown in no UI) is now non-zero for every saved day. Left untouched; retire it in a future payroll cleanup batch. No unrelated payroll SQL is changed here.
 3. **Cross-branch review.** History is per verified branch (switch branch with the existing switcher); the printed report names the branch. A combined multi-branch Tips view (and Reporting Center integration) is deferred.
-4. **Interval start must be on its own service date.** A tip interval wholly after midnight (00:30–02:00 for Friday's service) cannot be saved on Friday's day; it belongs to the next service date, and the editor does not yet explain this. Needs an owner decision on the after-midnight service model.
+4. **After-midnight intervals — DECIDED (owner): keep the service-date rule.** An interval starts on the service date shown; tips after midnight that belong to the previous night go on that night's date. The editor now says so; persisted time semantics and the database contract are unchanged.
 5. **Cash/card for history** cannot be back-filled (the data was never captured); legacy days show "Not split".
 6. Week starts Monday; changing it is a one-line domain change.
 7. Hosted DEV apply, PR merge and the Group 2 Production release are separate approvals (Group 2 releases after V2.0.9 and one consolidated acceptance gate).
@@ -113,3 +113,20 @@ Verdict: APPROVE WITH CHANGES, no P0. Accepted and fixed in this PR:
 - **P3** race on the first save of a day; day-total overflow gives a clear error; raw Postgres text never reaches the user and `reopenTipsAction` validates its input; 25-hour cap for fall-back days; request sequencing and failed-load handling in the module; the staff report no longer shows a misleading People column; migration comment corrected.
 
 Not changed (recorded): the editor still pre-checks the first four selectable people (pre-existing; the manager approves the list); `participant_count` and a day's `updated_at` are visible to staff who took part (no identity or amount leaks); TS/SQL split parity is pinned by worked examples plus a TS-only property test, not a randomized cross-language test; concurrency is tested sequentially (stale revision), not with two racing sessions.
+
+## Hosted DEV migration and compatibility checklist (STOP: needs explicit owner approval)
+
+Nothing below has been run. Migration `20261119120000_editable_tips.sql` is applied to the local stack only.
+
+**Order (migration first):** 1) approval, 2) read-only preflight, 3) backup, 4) dry run, 5) apply, 6) post-checks, 7) existing-app smoke, 8) PR #358 Preview (new app) smoke, 9) only then merge, 10) never to `main`/Production in this batch.
+
+1. **Approval and target.** DEV only, with the hard-coded DEV project-ref guard of the existing apply tooling. The `deploy-migrations` CI job only runs from `main`, so DEV uses the documented manual one-transaction route.
+2. **Read-only preflight.** DEV ledger head is the migration immediately before this one (`20261117140000`) with nothing pending in between; `tip_*` row counts; Tips module enabled at the smoke branch (enforcement mode and configs); no scripts or integrations write the tip tables directly (repo check: none in `src`, `tests` or `scripts` besides service-role fixtures).
+3. **Backup.** Data snapshot of `tip_pools`, `tip_intervals`, `tip_interval_participants`, `tip_allocations` and the `audit_events` rows with `entity_type = 'tip_pool'`, with counts recorded.
+4. **Dry run** in one transaction ending in a deliberate `RAISE` that returns verify JSON: new columns present; every existing interval satisfies the tender CHECK (`cash+card = 0` or `= amount`) and `revision >= 1`; row counts unchanged; `authenticated` has SELECT only on the five tip tables and `anon` nothing; `tips_add_interval` still executable by `authenticated`, not `anon`; all new functions have `search_path = ''`.
+5. **Apply** the exact file verbatim in one transaction with its `schema_migrations` row; ledger +1.
+6. **Post-checks:** counts equal the snapshot; legacy allocations unchanged (legacy rows show no tender, same totals); `tips_get_range` and `tips_get_day_data` answer for a DEV manager.
+7. **Existing-app compatibility (before the new app is anywhere):** the currently deployed DEV app is RPC-only (`tips_get_day_data`, `tips_location_roster`, `tips_add_interval`, `tips_finalize_pool`, `tips_reopen_pool`, `recalculate_tip_pool`); all are retained with the same signatures. Smoke it once: open Tips, add an interval, confirm it shows.
+8. **One targeted authenticated smoke on the PR #358 Preview** (new app on DEV): a manager Saves cash + card, Updates with a reason, Voids, opens History and the print preview; a staff user sees only their own figures; Table Allocation is **not** locked after Save. Use a synthetic service date; revision rows are append-only, and any service-role cleanup is itself captured as a `direct` revision (expected).
+9. **Risks:** (a) direct table writes are closed, so any out-of-repo client writing the tip tables directly would get `42501` (none known); (b) a stale-revision conflict uses SQLSTATE `P0409`, never `40001`; (c) the new app fails closed with a clear notice if deployed before the migration.
+10. **Rollback precautions:** take the step-3 snapshot first. The documented rollback (drop the 4 new RPCs, the triggers and `tip_revisions`; restore `recalculate_tip_pool`, `tips_get_day_data` and the original `tips_add_interval` from `20261107194700`; re-grant table DML; drop the added columns) is only safe while no row uses `cash_cents`, `card_cents` or `voided_at`. After real use prefer a forward fix. Because the migration also revokes table DML and replaces `tips_add_interval`, a rollback must restore those two items explicitly.

@@ -87,6 +87,10 @@ describe("Tips module — manager workflow: Save → Update → Recalculate → 
     expect(
       within(preview).getByText(/could not be divided evenly/),
     ).toBeVisible();
+    // The service-date rule is explained where the times are entered.
+    expect(
+      screen.getByText(/Times belong to the service date shown/),
+    ).toBeVisible();
   });
 
   it("Save persists, reconciles, and offers no Finalize / Unlock anywhere", async () => {
