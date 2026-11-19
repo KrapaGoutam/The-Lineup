@@ -21,6 +21,8 @@ import {
 const EXPECTED: ReadonlyArray<
   readonly [ModuleKey, string, AppTab, "optional" | "system_required", string]
 > = [
+  // V2.0.9: system-required overview, no database key, sorts first.
+  ["dashboard", "Dashboard", "dashboard", "system_required", "hybrid"],
   [
     "table_allocation",
     "Table Allocation",
@@ -88,7 +90,9 @@ describe("module registry (V2-004.001)", () => {
       MODULES.filter((m) => m.requirement === "system_required").map(
         (m) => m.key,
       ),
-    ).toEqual(["settings"]);
+    ).toEqual(["dashboard", "settings"]);
+    expect(isConfigurableModuleKey("dashboard")).toBe(false);
+    expect(isModuleKey("dashboard")).toBe(true);
   });
 
   it("only configurable modules are eligible for location configuration", () => {
@@ -151,7 +155,8 @@ describe("module registry (V2-004.001)", () => {
     expect(Object.isFrozen(CONFIGURABLE_MODULES)).toBe(true);
     expect(Object.isFrozen(MODULE_KEYS)).toBe(true);
     expect(Object.isFrozen(CONFIGURABLE_MODULE_KEYS)).toBe(true);
-    expect(MODULE_KEYS[0]).toBe("table_allocation");
+    expect(MODULE_KEYS[0]).toBe("dashboard");
+    expect(CONFIGURABLE_MODULE_KEYS[0]).toBe("table_allocation");
     expect(MODULE_KEYS.at(-1)).toBe("settings");
   });
 });

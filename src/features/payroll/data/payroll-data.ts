@@ -1033,32 +1033,111 @@ export async function getPayrollBalance(
   if (!paymentsResult.ok) return paymentsResult;
   if (!adjustmentsResult.ok) return adjustmentsResult;
 
-  const confirmedPaymentsCents = paymentsResult.data
+  return {
+    ok: true,
+    data: summarizePeriodLedger({
+      grossCents: input.period.grossCents,
+      payments: paymentsResult.data,
+      adjustments: adjustmentsResult.data,
+    }),
+  };
+}
+
+/**
+ * The single place a period's ledger rows become a balance: confirmed payments reduce it,
+ * draft payments never do, every adjustment applies. `getPayrollBalance` (one period) and
+ * `getPayrollBalancesForPeriods` (many, for the Dashboard) both go through here, so the
+ * two can never disagree.
+ */
+export function summarizePeriodLedger(input: {
+  grossCents: number;
+  payments: ReadonlyArray<Pick<PayrollPayment, "status" | "amountCents">>;
+  adjustments: ReadonlyArray<Pick<PayrollAdjustment, "deltaCents">>;
+}): PayrollBalance {
+  const confirmedPaymentsCents = input.payments
     .filter((payment) => payment.status === "confirmed")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
-  const draftPaymentsCents = paymentsResult.data
+  const draftPaymentsCents = input.payments
     .filter((payment) => payment.status === "draft")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
-  const adjustmentsCents = adjustmentsResult.data.reduce(
+  const adjustmentsCents = input.adjustments.reduce(
     (sum, adjustment) => sum + adjustment.deltaCents,
     0,
   );
-
   const balanceCents = computeBalanceCents({
-    grossCents: input.period.grossCents,
+    grossCents: input.grossCents,
     confirmedPaymentsCents,
     adjustmentsCents,
   });
-
   return {
-    ok: true,
-    data: {
-      grossCents: input.period.grossCents,
-      confirmedPaymentsCents,
-      draftPaymentsCents,
-      adjustmentsCents,
-      balanceCents,
-      fullyPaid: isFullyPaid(balanceCents),
-    },
+    grossCents: input.grossCents,
+    confirmedPaymentsCents,
+    draftPaymentsCents,
+    adjustmentsCents,
+    balanceCents,
+    fullyPaid: isFullyPaid(balanceCents),
   };
+}
+
+const BALANCE_CHUNK = 50;
+const READ_CAP = 1000;
+
+/**
+ * Balances for many periods in a bounded number of reads (two per chunk of 50 periods)
+ * instead of two per period. Read-only. Fails closed: a read that comes back exactly at
+ * the PostgREST row cap may have been truncated, so it is reported as unavailable rather
+ * than as a smaller (wrong) balance.
+ */
+export async function getPayrollBalancesForPeriods(
+  supabase: TypedSupabaseClient,
+  input: { periods: ReadonlyArray<Pick<PayrollPeriod, "id" | "grossCents">> },
+): Promise<PayrollResult<Map<number, PayrollBalance>>> {
+  const balances = new Map<number, PayrollBalance>();
+  for (let i = 0; i < input.periods.length; i += BALANCE_CHUNK) {
+    const chunk = input.periods.slice(i, i + BALANCE_CHUNK);
+    const ids = chunk.map((period) => period.id);
+    const [payments, adjustments] = await Promise.all([
+      supabase
+        .from("payroll_payments")
+        .select("payroll_period_id, amount_cents, status")
+        .in("payroll_period_id", ids)
+        .limit(READ_CAP),
+      supabase
+        .from("payroll_adjustments")
+        .select("payroll_period_id, delta_cents")
+        .in("payroll_period_id", ids)
+        .limit(READ_CAP),
+    ]);
+    if (payments.error || adjustments.error) {
+      console.error("getPayrollBalancesForPeriods failed", {
+        payments: payments.error?.code,
+        adjustments: adjustments.error?.code,
+      });
+      return { ok: false, error: UNAVAILABLE_ERROR };
+    }
+    if (
+      (payments.data?.length ?? 0) >= READ_CAP ||
+      (adjustments.data?.length ?? 0) >= READ_CAP
+    ) {
+      return { ok: false, error: UNAVAILABLE_ERROR };
+    }
+    for (const period of chunk) {
+      balances.set(
+        period.id,
+        summarizePeriodLedger({
+          grossCents: period.grossCents,
+          payments: (payments.data ?? [])
+            .filter((row) => row.payroll_period_id === period.id)
+            .map((row) => ({
+              status: row.status as "draft" | "confirmed",
+              amountCents: row.amount_cents,
+            })),
+          adjustments: (adjustments.data ?? [])
+            .filter((row) => row.payroll_period_id === period.id)
+            .map((row) => ({ deltaCents: row.delta_cents })),
+        }),
+      );
+    }
+  }
+  return { ok: true, data: balances };
 }

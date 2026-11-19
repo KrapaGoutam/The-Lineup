@@ -42,7 +42,7 @@ export type ConfigurableModuleKey =
   Database["public"]["Enums"]["location_module_key"];
 
 /** Modules no location can disable. Never stored. */
-export type SystemModuleKey = "settings";
+export type SystemModuleKey = "settings" | "dashboard";
 
 export type ModuleKey = ConfigurableModuleKey | SystemModuleKey;
 
@@ -197,6 +197,20 @@ export const MODULE_REGISTRY = {
     locationConfigurable: true,
     scope: "organization",
     organizationDependencies: ["recipe_book"],
+    hostsAccountRecovery: false,
+  },
+  // V2.0.9. The Daily Operations Dashboard is a read-only overview, never a
+  // data owner: it has no database key and no location can disable it. Every
+  // card it shows is individually gated by the module that owns the data.
+  dashboard: {
+    key: "dashboard",
+    sortOrder: 5,
+    label: "Dashboard",
+    appTab: "dashboard",
+    requirement: "system_required",
+    locationConfigurable: false,
+    scope: "hybrid",
+    organizationDependencies: [],
     hostsAccountRecovery: false,
   },
   settings: {

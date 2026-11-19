@@ -104,8 +104,10 @@ export function SettingsPage({
   const showTeam = isManager && (availableTabs?.includes("team") ?? true);
   const showSchedule =
     isManager && (availableTabs?.includes("schedule") ?? true);
+  // The Dashboard is system-required and not an operational module.
   const settingsOnly =
-    availableTabs?.every((tab) => tab === "settings") ?? false;
+    availableTabs?.every((tab) => tab === "settings" || tab === "dashboard") ??
+    false;
   const configFailed =
     configurationStatus && !["ok", "demo"].includes(configurationStatus);
 

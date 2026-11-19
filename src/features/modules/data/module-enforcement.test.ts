@@ -17,6 +17,7 @@ import {
 import type { ConfigurableModuleKey } from "../domain/module-registry";
 import {
   checkModuleAccess,
+  checkModulesAccess,
   guardModule,
   readModuleEnforcementMode,
 } from "./module-enforcement";
@@ -266,5 +267,73 @@ describe("checkModuleAccess / guardModule", () => {
       readMode: async () => ({ status: "invalid" }),
     });
     return expect(verdictPromise).resolves.toMatchObject({ allowed: false });
+  });
+});
+
+describe("checkModulesAccess (V2.0.9 batched verdicts)", () => {
+  it("reads the switch and the configuration ONCE and decides each module as checkModuleAccess would", async () => {
+    const readMode = vi.fn(async () => ACTIVE);
+    const readConfigs = vi.fn(async () =>
+      buildModuleConfigSnapshot(LOC, "active", [
+        cfg("tasks", true),
+        cfg("tips", false),
+      ]),
+    );
+    const verdicts = await checkModulesAccess(
+      ["tasks", "tips", "payroll", "settings"],
+      { organizationId: ORG, location: { id: LOC } },
+      { readMode, readConfigs },
+    );
+    expect(readMode).toHaveBeenCalledTimes(1);
+    expect(readConfigs).toHaveBeenCalledTimes(1);
+    expect(readConfigs).toHaveBeenCalledWith(LOC);
+    expect(verdicts.tasks).toMatchObject({ allowed: true });
+    expect(verdicts.tips).toEqual({ allowed: false, code: "module_disabled" });
+    expect(verdicts.payroll).toEqual({
+      allowed: false,
+      code: "module_missing",
+    });
+    // System-required modules are never gated.
+    expect(verdicts.settings).toMatchObject({ allowed: true });
+  });
+
+  it("stays staged-compatible: nothing is read for locations while the switch is staged", async () => {
+    const readConfigs = vi.fn();
+    const verdicts = await checkModulesAccess(
+      ["tasks", "payroll"],
+      { organizationId: ORG, location: { id: LOC } },
+      { readMode: async () => STAGED, readConfigs },
+    );
+    expect(readConfigs).not.toHaveBeenCalled();
+    expect(verdicts.tasks).toMatchObject({ allowed: true });
+    expect(verdicts.payroll).toMatchObject({ allowed: true });
+  });
+
+  it("a configuration read that throws denies every enforced module (fail closed)", async () => {
+    const verdicts = await checkModulesAccess(
+      ["tasks", "tips"],
+      { organizationId: ORG, location: { id: LOC } },
+      {
+        readMode: async () => ACTIVE,
+        readConfigs: async () => {
+          throw new Error("boom");
+        },
+      },
+    );
+    expect(verdicts.tasks.allowed).toBe(false);
+    expect(verdicts.tips.allowed).toBe(false);
+  });
+
+  it("a request naming a different location is denied (stale), never substituted", async () => {
+    const verdicts = await checkModulesAccess(
+      ["tasks"],
+      {
+        organizationId: ORG,
+        location: { id: LOC },
+        claimedLocationId: "00000000-0000-0000-0000-0000000000ff",
+      },
+      { readMode: async () => ACTIVE, readConfigs: async () => enabledTasks },
+    );
+    expect(verdicts.tasks).toEqual({ allowed: false, code: "stale_context" });
   });
 });
