@@ -1,26 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Printer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
   getNativeAttendanceReportAction,
+  listLocationEmployeesAction,
   type AttendanceSourceView,
   type NativeReportView,
 } from "@/features/attendance/actions/native-report-actions";
 import { AttendanceBulkEntryDialog } from "@/features/attendance/components/attendance-bulk-entry-dialog";
 import { AttendanceCorrectionDialog } from "@/features/attendance/components/attendance-correction-dialog";
 import { AttendanceManualEntryDialog } from "@/features/attendance/components/attendance-manual-entry-dialog";
+import { AttendanceMonthNav } from "@/features/attendance/components/attendance-month-nav";
 import { PayrollReadinessPanel } from "@/features/attendance/components/payroll-readiness-panel";
+import { UnifiedAttendancePrintDialog } from "@/features/attendance/components/unified-attendance-print-dialog";
 import {
   formatWorkedDuration,
   formatWorkedHours,
 } from "@/features/attendance/domain/attendance-session";
+import { resolvePeriodRange } from "@/features/attendance/domain/attendance-report";
 import {
   classifySessionState,
   crossesLocalMidnight,
@@ -31,7 +37,14 @@ import {
   timeZoneAbbreviation,
   type NativeReportRow,
 } from "@/features/attendance/domain/native-report";
+import { normalizeNativeAttendanceToUnified } from "@/features/attendance/domain/unified-attendance-report";
+import { resolveReportBrand } from "@/components/print/report-branding";
+import { buildReportingHref } from "@/features/reporting/domain/report-links";
 import { getWeekDates } from "@/features/schedules/domain/shift-planning";
+import {
+  classifyReportPeriod,
+  formatReportPeriodLabel,
+} from "@/lib/report-period";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 function shiftDate(date: string, days: number): string {
@@ -66,9 +79,19 @@ export function NativeAttendanceReport({
   const today = zonedWallTimeFromInstant(new Date(), timeZone).date;
   const thisWeek = getWeekDates(today);
 
+  const [maxYear, maxMonth] = useMemo(() => {
+    const [y, m] = today.split("-").map(Number);
+    return [y, m];
+  }, [today]);
+
+  const [navYear, setNavYear] = useState(maxYear);
+  const [navMonth, setNavMonth] = useState(maxMonth);
+
   const [start, setStart] = useState(thisWeek[0]);
   const [end, setEnd] = useState(thisWeek[6]);
   const [profileId, setProfileId] = useState<string>("");
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [view, setView] = useState<NativeReportView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,8 +102,34 @@ export function NativeAttendanceReport({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showBulkEntry, setShowBulkEntry] = useState(false);
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
 
   const rangeValid = start !== "" && end !== "" && start <= end;
+
+  useEffect(() => {
+    if (!source.canManage) return;
+    if (typeof listLocationEmployeesAction !== "function") return;
+    let cancelled = false;
+    async function loadStaff() {
+      const res = await listLocationEmployeesAction({
+        restaurantSlug,
+        expectedLocationId: source.locationId,
+      });
+      if (!cancelled && res.ok) {
+        setEmployees((known) => {
+          const map = new Map(known);
+          for (const emp of res.data) {
+            map.set(emp.profileId, emp.displayName);
+          }
+          return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        });
+      }
+    }
+    void loadStaff();
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantSlug, source.locationId, source.canManage]);
 
   useEffect(() => {
     if (!rangeValid) return;
@@ -91,7 +140,12 @@ export function NativeAttendanceReport({
         restaurantSlug,
         startDate: start,
         endDate: end,
-        profileId: profileId || null,
+        profileId: !isMultiSelect ? profileId || null : null,
+        profileIds: isMultiSelect
+          ? selectedProfileIds.length > 0
+            ? selectedProfileIds
+            : null
+          : null,
         // R1: the server refuses if the persisted location is no longer the one shown here.
         expectedLocationId: source.locationId,
       });
@@ -120,6 +174,8 @@ export function NativeAttendanceReport({
     start,
     end,
     profileId,
+    isMultiSelect,
+    selectedProfileIds,
     reloadKey,
     rangeValid,
   ]);
@@ -131,11 +187,74 @@ export function NativeAttendanceReport({
 
   const employeeNames = useMemo(() => new Map(employees), [employees]);
 
-  const rows = view?.rows ?? [];
+  const rows = useMemo(() => view?.rows ?? [], [view?.rows]);
   const totals = view?.totals;
   const longOpen = rows.filter(
     (r) => classifySessionState(r, today) === "open_across_midnight",
   );
+
+  const brand = useMemo(
+    () =>
+      resolveReportBrand({
+        organizationName: source.organizationName,
+        organizationSlug: source.organizationSlug,
+        locationName: source.locationName,
+        locationAddress: source.locationAddress,
+      }),
+    [
+      source.organizationName,
+      source.organizationSlug,
+      source.locationName,
+      source.locationAddress,
+    ],
+  );
+
+  const periodLabel = useMemo(
+    () => formatReportPeriodLabel(start, end),
+    [start, end],
+  );
+  const periodKind = useMemo(
+    () => classifyReportPeriod(start, end),
+    [start, end],
+  );
+
+  const unifiedReport = useMemo(() => {
+    return normalizeNativeAttendanceToUnified(rows, {
+      organization: brand.organizationName,
+      branch: brand.branchName || source.locationName,
+      reportingPeriod: periodLabel,
+      reportingPeriodKind: periodKind,
+      timeZone: source.timeZone,
+      truncated: view?.truncated === true,
+    });
+  }, [
+    rows,
+    view?.truncated,
+    brand.organizationName,
+    brand.branchName,
+    source.locationName,
+    periodLabel,
+    periodKind,
+    source.timeZone,
+  ]);
+
+  // Pre-fills the Reporting Center with what is on screen. A link carries no authority: the
+  // Reporting Center re-verifies everything server-side.
+  const reportingHref = buildReportingHref({
+    view: "attendance",
+    organizationIds: source.organizationId
+      ? [source.organizationId]
+      : undefined,
+    locationIds: [source.locationId],
+    employeeKeys: (isMultiSelect
+      ? selectedProfileIds
+      : profileId
+        ? [profileId]
+        : []
+    ).map((id) => `profile:${id}`),
+    startDate: start,
+    endDate: end,
+  });
 
   function applyRange(a: string, b: string) {
     setStart(a);
@@ -146,52 +265,58 @@ export function NativeAttendanceReport({
     <div className="flex flex-col gap-4">
       <Card>
         <CardContent className="flex flex-col gap-4 pt-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="nat-start">From</Label>
-              <Input
-                id="nat-start"
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <AttendanceMonthNav
+                year={navYear}
+                month={navMonth}
+                maxYear={maxYear}
+                maxMonth={maxMonth}
+                onChange={({ year, month }) => {
+                  setNavYear(year);
+                  setNavMonth(month);
+                  const { start: mStart, end: mEnd } = resolvePeriodRange(
+                    { type: "month", year, month },
+                    today,
+                  );
+                  applyRange(mStart, mEnd);
+                }}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="nat-end">To</Label>
-              <Input
-                id="nat-end"
-                type="date"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-              />
-            </div>
-            {source.canManage ? (
-              <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-                <Label htmlFor="nat-emp">Employee</Label>
-                <Select
-                  id="nat-emp"
-                  value={profileId}
-                  onChange={(e) => setProfileId(e.target.value)}
-                >
-                  <option value="">All employees</option>
-                  {employees.map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => applyRange(today, today)}
+                onClick={() => {
+                  setNavYear(maxYear);
+                  setNavMonth(maxMonth);
+                  const { start: mStart, end: mEnd } = resolvePeriodRange(
+                    { type: "this-month" },
+                    today,
+                  );
+                  applyRange(mStart, mEnd);
+                }}
               >
-                Today
+                This month
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const prevMonth = maxMonth === 1 ? 12 : maxMonth - 1;
+                  const prevYear = maxMonth === 1 ? maxYear - 1 : maxYear;
+                  setNavYear(prevYear);
+                  setNavMonth(prevMonth);
+                  const { start: mStart, end: mEnd } = resolvePeriodRange(
+                    { type: "previous-month" },
+                    today,
+                  );
+                  applyRange(mStart, mEnd);
+                }}
+              >
+                Last month
               </Button>
               <Button
                 type="button"
@@ -214,6 +339,151 @@ export function NativeAttendanceReport({
               >
                 Last week
               </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => applyRange(today, today)}
+              >
+                Today
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nat-start">From</Label>
+              <Input
+                id="nat-start"
+                type="date"
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nat-end">To</Label>
+              <Input
+                id="nat-end"
+                type="date"
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+              />
+            </div>
+            {source.canManage ? (
+              <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="nat-emp">
+                    {isMultiSelect ? "Filter Multiple Employees" : "Employee"}
+                  </Label>
+                  <button
+                    type="button"
+                    className="text-primary text-xs hover:underline"
+                    onClick={() => {
+                      if (!isMultiSelect) {
+                        setIsMultiSelect(true);
+                        setSelectedProfileIds(profileId ? [profileId] : []);
+                      } else {
+                        setIsMultiSelect(false);
+                        setSelectedProfileIds([]);
+                      }
+                    }}
+                  >
+                    {isMultiSelect
+                      ? "Single employee mode"
+                      : "Select multiple..."}
+                  </button>
+                </div>
+                {!isMultiSelect ? (
+                  <Select
+                    id="nat-emp"
+                    value={profileId}
+                    onChange={(e) => setProfileId(e.target.value)}
+                  >
+                    <option value="">All employees</option>
+                    {employees.map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <div className="border-border bg-card flex flex-col gap-2 rounded-lg border p-2 text-xs">
+                    <div className="text-muted-foreground flex items-center justify-between">
+                      <span>
+                        {selectedProfileIds.length === 0
+                          ? "No one selected — showing ALL employees"
+                          : `${selectedProfileIds.length} employee${selectedProfileIds.length === 1 ? "" : "s"} selected`}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() =>
+                            setSelectedProfileIds(employees.map(([id]) => id))
+                          }
+                        >
+                          Select all
+                        </button>
+                        <span>·</span>
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => setSelectedProfileIds([])}
+                        >
+                          Clear (show all)
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex max-h-36 flex-col gap-1 overflow-y-auto">
+                      {employees.map(([id, name]) => {
+                        const isChecked = selectedProfileIds.includes(id);
+                        return (
+                          <label
+                            key={id}
+                            className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1"
+                          >
+                            <input
+                              type="checkbox"
+                              className="border-muted-foreground/40 size-3.5 rounded"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedProfileIds((prev) =>
+                                  isChecked
+                                    ? prev.filter((p) => p !== id)
+                                    : [...prev, id],
+                                );
+                              }}
+                            />
+                            <span className="truncate">{name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowPrintDialog(true)}
+                disabled={rows.length === 0}
+                aria-label="Print attendance statements"
+              >
+                <Printer className="mr-1.5 size-4" aria-hidden="true" />
+                Print Statements
+              </Button>
+              <Link
+                href={reportingHref}
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                Open in Reporting Center
+              </Link>
             </div>
             {source.canManage ? (
               <div className="flex flex-wrap gap-2">
@@ -339,8 +609,10 @@ export function NativeAttendanceReport({
           role="status"
           className="border-warn/30 bg-warn/10 text-warn rounded-xl border p-3 text-sm"
         >
-          Showing the most recent records only. Narrow the dates or pick an
-          employee to see the rest; totals above cover the rows shown.
+          Showing the most recent records only: this range has more shifts than
+          can be loaded at once. Totals cover only the rows shown, and
+          statements cannot be printed until you narrow the dates or pick
+          specific employees.
         </div>
       ) : null}
 
@@ -355,8 +627,8 @@ export function NativeAttendanceReport({
           <CardContent className="pt-5">
             <p className="text-sm font-semibold">No attendance recorded</p>
             <p className="text-muted-foreground text-sm">
-              {prettyDate(start)} – {prettyDate(end)} at {source.locationName}.
-              Clock-ins made in The Lineup appear here.
+              {periodLabel} at {source.locationName}. Clock-ins made in The
+              Lineup appear here.
             </p>
           </CardContent>
         </Card>
@@ -519,6 +791,15 @@ export function NativeAttendanceReport({
           timeZone={timeZone}
           onClose={() => setShowBulkEntry(false)}
           onCreated={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
+
+      {showPrintDialog ? (
+        <UnifiedAttendancePrintDialog
+          report={unifiedReport}
+          brand={brand}
+          onClose={() => setShowPrintDialog(false)}
+          initialTarget={!isMultiSelect && profileId ? profileId : "all"}
         />
       ) : null}
     </div>

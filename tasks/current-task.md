@@ -1,3 +1,55 @@
+# Release Group 1 — Batch C (V2.0.7) Combined Reporting Center — PR OPEN FOR REVIEW
+
+Plan, decisions, permission model, evidence and deferrals: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
+Branch `feature/v2-007-combined-reporting`, worktree `.tmp/v2-007-combined-reporting`, baseline `1729688` (PR #355 merge). Final head SHA and CI run ids: PR comment.
+
+- [x] Preconditions: PR #354 and #355 merged (owner-authorized merge commit for #355).
+- [x] C0.1 year in period labels; C0.2 print wording corrected; C0.3 Neon wired (explicit `external` mode only).
+- [x] C1 authority + scoped readers + composer (integer cents/seconds, no recalculation).
+- [x] C2 /reporting route, builder, document (cover, summary, register, statements, attendance, ledger), CSV, print gating.
+- [x] C3 real-RLS suite (28), Chromium PDF + visual inspection, independent review (10 findings fixed), full local gate.
+- [ ] Exact-head CI green, owner review and merge (not authorized yet). V2.0.8 NOT started.
+
+## Current State & Next Step
+
+All work committed on the feature branch. Next: owner review of the PR; merge needs separate approval.
+
+---
+
+# Release Group 1 — Batch A (V2.0.5) Monks Neon timezone — MERGED TO DEVELOPMENT
+
+Full plan, root cause, evidence and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md` (single source of truth).
+Branch `fix/v2-005-monks-neon-timezone`, base `39ed0d4` (origin/development). Worktree `.tmp/v2-005-monks-neon-timezone`.
+Merged via PR #354 at merge commit `fbf44a1a2cc5158bf372e43967562b88a70bd68f`.
+
+- [x] Stage 0 baseline (development 39ed0d4, V2.0.4 merged via #348).
+- [x] Root cause: Neon clock columns are `timestamp without time zone` (local wall time); driver parsed in process TZ → 4:59 AM on UTC servers.
+- [x] Fix at Neon data boundary (`::text` + `neonWallTimeToInstantIso`, America/Chicago); contract unchanged; internal provider untouched.
+- [x] Tests: 13 new + existing, pass under TZ=UTC / America/Chicago / Asia/Tokyo; live read-only probe OK; typecheck/lint/prettier clean.
+- [x] Open PR #354 to `development`; exact-head CI passed; independent review PASS; owner-authorized merge commit `fbf44a1a2cc5158bf372e43967562b88a70bd68f`.
+- [x] Batch B (V2.0.6) baseline established at `fbf44a1`.
+
+---
+
+# Release Group 1 — Batch B (V2.0.6) Monthly Attendance Reports & Dynamic Branding — PR #355 CORRECTED, AWAITING CI + MERGE DECISION
+
+Full plan, review findings, decisions and recovery: `docs/features/v2-0-5-6-7-reporting-foundation/HANDOFF.md`.
+Branch `feature/v2-006-monthly-attendance-reports` (PR #355 → `development`), base `fbf44a1`. Worktree `.tmp/v2-006-monthly-attendance-reports`.
+Reviewed head `c5cd729`; corrections are in the commit that follows it on the same branch.
+
+- [x] B0–B6 implemented by Antigravity (filters, unified contract, print dialog, dynamic branding, safeguards, tests).
+- [x] Review corrections: Prettier on HANDOFF.md; Monks address (Webster, TX 77598); integer-second aggregation with no gross-hours fallback; voided excluded; "Page X of Y" removed; truncated reports cannot be printed; no caller-supplied logo markup; `profileIds` bounded; clearer empty-multi-select copy.
+- [x] Targeted tests (68 files / 823 tests), tsc, eslint, and a real Chromium Letter PDF check passed locally.
+- [ ] Exact-head GitHub CI green on the corrected head (see PR #355 comment for the run id).
+- [ ] Independent review result and owner approval, then merge commit into `development`.
+
+## Current State & Next Step
+
+Corrections committed and pushed to PR #355. Next: confirm exact-head CI, then owner merge decision.
+Do not start V2.0.7 (`feature/v2-007-combined-reporting`, Combined Attendance & Payroll Reporting) until PR #355 is merged into `development`.
+
+---
+
 # Security Upgrade: Next.js & eslint-config-next 16.4.6 — MERGING TO DEVELOPMENT
 
 Full plan, decisions and recovery: `docs/features/security-nextjs-16-4-6-upgrade/HANDOFF.md` (single source of truth).

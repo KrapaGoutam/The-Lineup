@@ -81,9 +81,10 @@ describe("mapSummaryRow", () => {
   });
 });
 
-function chain(result: { data: unknown; error: unknown }) {
+function chain(result: { data: unknown; error: unknown; count?: number }) {
   const calls: Array<[string, unknown[]]> = [];
   const builder: Record<string, unknown> = {};
+  let offset = 0;
   for (const m of ["select", "eq", "gte", "lte", "order", "in"]) {
     builder[m] = (...args: unknown[]) => {
       calls.push([m, args]);
@@ -94,7 +95,16 @@ function chain(result: { data: unknown; error: unknown }) {
     calls.push(["limit", args]);
     return builder;
   };
-  builder.then = (resolve: (v: unknown) => void) => resolve(result);
+  // Pagination: the first range returns the canned rows, later ranges are empty.
+  builder.range = (...args: unknown[]) => {
+    calls.push(["range", args]);
+    offset = Number(args[0]);
+    return builder;
+  };
+  builder.then = (resolve: (v: unknown) => void) =>
+    resolve(
+      offset > 0 ? { data: [], error: null, count: result.count } : result,
+    );
   return { builder, calls };
 }
 
@@ -129,6 +139,26 @@ describe("listNativeAttendance", () => {
     expect(res.ok && res.truncated).toBe(false);
   });
 
+  it("keeps the location scope when filtering by several employees (IN only narrows)", async () => {
+    const view = chain({ data: [], error: null });
+    const from = vi.fn(() => view.builder);
+    const foreign = "someone-from-another-location-or-org";
+    await listNativeAttendance(
+      { from } as unknown as SupabaseClient<Database>,
+      {
+        locationId: "l1",
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        timeZone: "UTC",
+        profileIds: ["p1", foreign],
+      },
+    );
+    // Location + date scope are always applied; the IN-list is an extra AND condition,
+    // so a foreign id can never add rows (RLS also removes anything not visible).
+    expect(view.calls).toContainEqual(["eq", ["location_id", "l1"]]);
+    expect(view.calls).toContainEqual(["in", ["profile_id", ["p1", foreign]]]);
+  });
+
   it("does not add an employee filter when none is requested", async () => {
     const view = chain({ data: [], error: null });
     const from = vi.fn(() => view.builder);
@@ -150,7 +180,7 @@ describe("listNativeAttendance", () => {
     const many = Array.from({ length: NATIVE_REPORT_ROW_LIMIT + 1 }, (_, i) =>
       summary({ session_id: `s${i}` }),
     );
-    const view = chain({ data: many, error: null });
+    const view = chain({ data: many, error: null, count: many.length });
     const profiles = chain({ data: [], error: null });
     const from = vi.fn((t: string) =>
       t === "profiles" ? profiles.builder : view.builder,

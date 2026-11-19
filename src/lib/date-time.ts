@@ -10,11 +10,13 @@
 // with NO `timeZone` option -- silently falling back to whatever timezone
 // the *rendering environment* (the viewer's own browser, since that
 // component is "use client") happens to be in, not the restaurant's actual
-// business timezone. `clock_in`/`clock_out` were never the problem (Neon's
-// driver already parses them into correct, genuinely timezone-aware
-// `timestamptz` instants -- confirmed reading attendance-data.ts) -- the
-// bug was purely a missing `timeZone` at the one formatting call that
-// forgot to pass one.
+// business timezone. That missing `timeZone` was a real bug, but it was NOT
+// the whole story for the Monks (Neon) source: V2.0.5 later found Neon's
+// `clock_in`/`clock_out` are zone-less `timestamp` columns holding local wall
+// time, which the driver mis-parsed in the server's process zone. That is now
+// resolved at the data boundary -- see
+// `features/attendance/domain/neon-timestamp.ts`. By the time an ISO string
+// reaches this module it is a genuine instant.
 //
 // `Intl.DateTimeFormat`'s own `timeZone` option is the right tool for this
 // direction (instant -> local wall time): unlike the reverse direction

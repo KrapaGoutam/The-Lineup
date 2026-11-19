@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getNativeAttendanceReportAction: vi.fn(),
   getAttendanceSessionDetailAction: vi.fn(),
   correctAttendanceSessionAction: vi.fn(),
+  listLocationEmployeesAction: vi.fn(async () => ({ ok: true, data: [] })),
 }));
 
 vi.mock("@/features/attendance/actions/native-report-actions", () => mocks);

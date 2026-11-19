@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { readAllPages } from "@/lib/postgrest-paging";
 import type { Database } from "@/types/database.generated";
 
 import {
@@ -82,30 +83,42 @@ export async function listNativeAttendance(
     readonly endDate: string;
     readonly timeZone: string;
     readonly profileId?: string | null;
+    readonly profileIds?: readonly string[] | null;
   },
 ): Promise<NativeReportReadResult> {
   try {
-    let query = supabase
-      .from("attendance_session_summaries")
-      .select("*")
-      .eq("location_id", params.locationId)
-      .gte("service_date", params.startDate)
-      .lte("service_date", params.endDate)
-      .order("service_date", { ascending: false })
-      .order("clock_in_at", { ascending: false })
-      .limit(NATIVE_REPORT_ROW_LIMIT + 1);
+    // PostgREST caps every response at `max_rows` (1000), so a single `.limit(2001)` can
+    // never reveal truncation. Page with an exact count instead; the order is total
+    // (session id last) so pages never overlap or skip.
+    const build = () => {
+      let query = supabase
+        .from("attendance_session_summaries")
+        .select("*", { count: "exact" })
+        .eq("location_id", params.locationId)
+        .gte("service_date", params.startDate)
+        .lte("service_date", params.endDate)
+        .order("service_date", { ascending: false })
+        .order("clock_in_at", { ascending: false })
+        .order("session_id", { ascending: false });
+      if (params.profileIds && params.profileIds.length > 0) {
+        query = query.in("profile_id", [...params.profileIds]);
+      } else if (params.profileId) {
+        query = query.eq("profile_id", params.profileId);
+      }
+      return query;
+    };
 
-    if (params.profileId) query = query.eq("profile_id", params.profileId);
-
-    const { data, error } = await query;
-    if (error) {
-      console.error("listNativeAttendance error", { code: error.code });
+    const paged = await readAllPages<SummaryRow>(
+      (from, to) => build().range(from, to),
+      { maxRows: NATIVE_REPORT_ROW_LIMIT },
+    );
+    if (!paged.ok) {
+      console.error("listNativeAttendance error");
       return { ok: false, error: "Attendance data unavailable. Try again." };
     }
 
-    const all = data ?? [];
-    const truncated = all.length > NATIVE_REPORT_ROW_LIMIT;
-    const page = truncated ? all.slice(0, NATIVE_REPORT_ROW_LIMIT) : all;
+    const truncated = paged.truncated;
+    const page = paged.rows;
 
     const profileIds = [
       ...new Set(page.map((r) => r.profile_id).filter(Boolean)),
