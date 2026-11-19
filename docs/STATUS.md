@@ -1,8 +1,12 @@
 # Project Status & Milestone Tracker
 
-## V2.0.9 — Daily Operations Dashboard (feature branch, PR to `development`)
+## Release Group 2 — Phase C integrated acceptance: PASS on hosted DEV; Production NOT released
 
-`feature/v2-009-daily-dashboard` (base `development` `94f05eb9`, V2.0.8 merged) adds a read-only **Dashboard** tab (`?tab=dashboard`): Today's Attendance, Pending Payroll, Today's Tips and Low Stock cards plus role-based shortcuts, built from existing readers and rules (no new calculations, no write, **no migration**). Per-request authorization: live session, verified context, one module-verdict read, then each card's own location authority; staff see only their own tips. Honest states: unavailable sources show "Unavailable", never 0 / $0.00; external-clock attendance (no branch provenance) is Unavailable. Never the default landing. Not merged; not promoted. See [the handoff](features/v2-0-9-daily-dashboard/HANDOFF.md).
+V2.0.8 Tips and V2.0.9 Dashboard were exercised together on hosted DEV (ledger 100, no database change): Tips save, update, stale-conflict, recalculate, void and history, then each Dashboard card reconciled to raw-table arithmetic as manager and as staff, across two branches and two organizations, with deep links, Back/Forward, reload and a phone viewport. One check is NOT TESTED on DEV (confirmed-payment netting; unit-proven). Group 2 is **ready for the consolidated Production release** (migration 99 then 100, then the application); that needs the owner's separate final authorization. Evidence: [Phase C](features/v2-0-9-daily-dashboard/PHASE_C.md); release record: [Group 2 readiness](releases/group-2-release-readiness.md).
+
+## V2.0.9 — Daily Operations Dashboard (MERGED to `development`, PR #359 `b3cedd8c`)
+
+`feature/v2-009-daily-dashboard` (base `development` `94f05eb9`, V2.0.8 merged) adds a read-only **Dashboard** tab (`?tab=dashboard`): Today's Attendance, Pending Payroll, Today's Tips and Low Stock cards plus role-based shortcuts, built from existing readers and rules (no new calculations, no write, **no migration**). Per-request authorization: live session, verified context, one module-verdict read, then each card's own location authority; staff see only their own tips. Honest states: unavailable sources show "Unavailable", never 0 / $0.00; external-clock attendance (no branch provenance) is Unavailable. Never the default landing. Merged to `development` (PR #359, merge commit `b3cedd8c`); not promoted to `main`. See [the handoff](features/v2-0-9-daily-dashboard/HANDOFF.md).
 
 ## V2.0.8 — Editable Tips Management (feature branch, PR to `development`)
 
