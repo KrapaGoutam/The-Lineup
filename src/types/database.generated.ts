@@ -5297,6 +5297,80 @@ export type Database = {
         };
         Relationships: [];
       };
+      task_checklist_items: {
+        Row: {
+          archived_at: string | null;
+          archived_by: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+          created_at: string;
+          created_by: string;
+          id: string;
+          organization_id: string;
+          sort_order: number;
+          task_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          organization_id: string;
+          sort_order?: number;
+          task_id: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          organization_id?: string;
+          sort_order?: number;
+          task_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_checklist_items_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_completed_by_fkey";
+            columns: ["completed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_task_fk";
+            columns: ["task_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
       task_events: {
         Row: {
           actor_profile_id: string | null;
@@ -5589,6 +5663,8 @@ export type Database = {
       };
       tasks: {
         Row: {
+          archived_at: string | null;
+          archived_by: string | null;
           assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason: string | null;
           cancel_reason: string | null;
@@ -5596,6 +5672,7 @@ export type Database = {
           cancelled_by: string | null;
           category: string;
           checklist_instance_id: string | null;
+          checklist_rev: number;
           completed_at: string | null;
           completed_by: string | null;
           completion_note: string | null;
@@ -5625,6 +5702,8 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason?: string | null;
           cancel_reason?: string | null;
@@ -5632,6 +5711,7 @@ export type Database = {
           cancelled_by?: string | null;
           category?: string;
           checklist_instance_id?: string | null;
+          checklist_rev?: number;
           completed_at?: string | null;
           completed_by?: string | null;
           completion_note?: string | null;
@@ -5661,6 +5741,8 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason?: string | null;
           cancel_reason?: string | null;
@@ -5668,6 +5750,7 @@ export type Database = {
           cancelled_by?: string | null;
           category?: string;
           checklist_instance_id?: string | null;
+          checklist_rev?: number;
           completed_at?: string | null;
           completed_by?: string | null;
           completion_note?: string | null;
@@ -5697,6 +5780,13 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "tasks_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "tasks_cancelled_by_profile_fk";
             columns: ["cancelled_by"];
@@ -7321,6 +7411,10 @@ export type Database = {
         Args: { p_new_due_date: string; p_task_ids: string[] };
         Returns: number;
       };
+      task_checklist_step_set: {
+        Args: { p_done: boolean; p_step_id: string; p_task_id: string };
+        Returns: undefined;
+      };
       task_complete: {
         Args: { p_note?: string; p_task_id: string };
         Returns: undefined;
@@ -7330,6 +7424,7 @@ export type Database = {
           p_assignee_ids: string[];
           p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
           p_category: string;
+          p_checklist?: Json;
           p_due_date: string;
           p_due_time: string;
           p_due_window: Database["public"]["Enums"]["task_due_window"];
@@ -7343,6 +7438,7 @@ export type Database = {
         };
         Returns: string[];
       };
+      task_delete: { Args: { p_task_id: string }; Returns: string };
       task_notifications_mark_location_read: {
         Args: {
           p_ids?: number[];
@@ -7423,9 +7519,12 @@ export type Database = {
       task_update: {
         Args: {
           p_category: string;
+          p_checklist?: Json;
           p_due_date: string;
           p_due_time: string;
           p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_expected_checklist_rev?: number;
+          p_expected_updated_at?: string;
           p_instructions: string;
           p_priority: Database["public"]["Enums"]["task_priority"];
           p_start_date: string;
@@ -7686,7 +7785,12 @@ export type Database = {
         | "carried_forward"
         | "recurrence_created"
         | "recurrence_changed"
-        | "checklist_generated";
+        | "checklist_generated"
+        | "status_changed"
+        | "checklist_edited"
+        | "checklist_step_checked"
+        | "checklist_step_unchecked"
+        | "archived";
       task_kind: "task" | "opening" | "closing";
       task_notification_type:
         | "assigned"
@@ -7928,6 +8032,11 @@ export const Constants = {
         "recurrence_created",
         "recurrence_changed",
         "checklist_generated",
+        "status_changed",
+        "checklist_edited",
+        "checklist_step_checked",
+        "checklist_step_unchecked",
+        "archived",
       ],
       task_kind: ["task", "opening", "closing"],
       task_notification_type: [
