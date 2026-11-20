@@ -14,6 +14,7 @@ import { getTasksSnapshot } from "@/features/tasks/data/tasks-data";
 import {
   taskCommandSchema,
   type SeriesInput,
+  type StepInput,
   type TaskCommand,
 } from "@/features/tasks/domain/task-commands";
 import type { OpeningReminderPromptData } from "@/features/tasks/domain/opening-reminder-popup";
@@ -28,7 +29,12 @@ import { createClient } from "@/lib/supabase/server";
  * longer the one it would operate on (V2-003.005). No mutation was attempted.
  */
 export type TasksActionResult =
-  | { ok: true; data: TasksSnapshot }
+  | {
+      ok: true;
+      data: TasksSnapshot;
+      /** `delete` only: "deleted" (no history) or "archived" (history kept). */
+      outcome?: string;
+    }
   | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
 
 const slugSchema = z
@@ -102,6 +108,11 @@ function seriesArgs(i: SeriesInput) {
   };
 }
 
+/** Checklist steps as the RPCs take them: existing steps keep their id. */
+function stepsArg(steps: readonly StepInput[]) {
+  return steps.map((step) => ({ id: step.id ?? null, title: step.title }));
+}
+
 /** Every failure the database raises is already a plain-language sentence. */
 function friendly(message: string | undefined): string {
   return message && message.length < 200
@@ -114,6 +125,7 @@ async function runCommand(
   organizationId: string,
   locationId: string,
   command: TaskCommand,
+  out: { outcome?: string },
 ): Promise<string | null> {
   const target =
     "taskId" in command
@@ -156,6 +168,7 @@ async function runCommand(
         p_due_date: i.dueDate ?? null,
         p_due_time: i.dueTime ?? null,
         p_due_window: i.dueWindow ?? null,
+        p_checklist: i.checklist ? stepsArg(i.checklist) : null,
       });
       return error?.message ?? null;
     }
@@ -171,6 +184,9 @@ async function runCommand(
         p_due_date: i.dueDate ?? null,
         p_due_time: i.dueTime ?? null,
         p_due_window: i.dueWindow ?? null,
+        p_expected_updated_at: command.expectedUpdatedAt ?? null,
+        p_checklist: command.checklist ? stepsArg(command.checklist) : null,
+        p_expected_checklist_rev: command.expectedChecklistRev ?? null,
       });
       return error?.message ?? null;
     }
@@ -200,6 +216,22 @@ async function runCommand(
     case "reopen": {
       const { error } = await supabase.rpc("task_reopen", {
         p_task_id: command.taskId,
+      });
+      return error?.message ?? null;
+    }
+    case "delete": {
+      const { data, error } = await supabase.rpc("task_delete", {
+        p_task_id: command.taskId,
+      });
+      if (error) return error.message;
+      out.outcome = typeof data === "string" ? data : undefined;
+      return null;
+    }
+    case "stepSet": {
+      const { error } = await supabase.rpc("task_checklist_step_set", {
+        p_task_id: command.taskId,
+        p_step_id: command.stepId,
+        p_done: command.done,
       });
       return error?.message ?? null;
     }
@@ -370,11 +402,13 @@ export async function runTaskCommandAction(input: {
   });
   if (blocked) return blocked;
 
+  const out: { outcome?: string } = {};
   const failure = await runCommand(
     supabase,
     caller.organizationId,
     workspace.location.id,
     parsed.data.command,
+    out,
   );
   if (failure) return { ok: false, error: friendly(failure) };
 
@@ -384,7 +418,7 @@ export async function runTaskCommandAction(input: {
     caller.scope,
   );
   if (!snapshot) return { ok: false, error: "Tasks could not be loaded." };
-  return { ok: true, data: snapshot };
+  return { ok: true, data: snapshot, outcome: out.outcome };
 }
 
 export type TaskHistoryActionResult =

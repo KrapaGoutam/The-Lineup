@@ -1,3 +1,21 @@
+# V2.0.13 Batch A — Existing Tasks, Checklists, CRUD, Status — IMPLEMENTED (local), draft PR for review
+
+Plan, rules, evidence, rollback and Batch B seam: `docs/features/v2-0-13-tasks-chores/HANDOFF.md`.
+Branch `feature/v2-013-tasks-chores`, worktree `.tmp/v2-013-tasks-chores`, base `development` `5aa3a81f`.
+
+- [x] A1 focused Tasks audit (components, RPCs, RLS seams, tests, demo engine twin).
+- [x] A2 migrations (`20261120090000`, `20261120090100`): steps table, archive, conflict tokens, status transitions, `task_delete`, `task_checklist_step_set`; pgTAP 0092 (64) + 0088 re-pin.
+- [x] A2 app: All Tasks, Checklists, checklist editor/panel, reassign and delete dialogs, status control, demo-engine parity.
+- [x] A3 validation: full pgTAP, real-JWT local suites (24), full Vitest, Playwright 51/51 on three viewports against a production build, screenshots inspected.
+- [ ] Owner review of the draft PR; hosted-DEV rehearsal/apply of the two migrations (NOT authorized); exact-head CI.
+- [ ] Batch B (Chore Wheel + Task Settings) and Batch C (cycles, History) — NOT started. No merge to `development`/`main`, no Production.
+
+## Current State & Next Step
+
+All Batch A work is committed on the feature branch. Next: owner review, then (when authorized) the hosted-DEV migration rehearsal, then Batch B per the handoff.
+
+---
+
 # Release Group 2 — Phase C integrated acceptance — PASSED on DEV; Production NOT released
 
 Evidence: `docs/features/v2-0-9-daily-dashboard/PHASE_C.md`. Release record: `docs/releases/group-2-release-readiness.md`.

@@ -15,6 +15,7 @@ import type {
   TaskCommand,
   TaskCreateInput,
   TaskFields,
+  StepInput,
 } from "./task-commands";
 import { addDaysToDate, canViewTask, canWorkTask } from "./task-rules";
 import {
@@ -28,6 +29,7 @@ import {
   type AssignmentMode,
   type PersonRef,
   type TaskEventView,
+  type TaskStepView,
   type TaskTeamMember,
   type TaskView,
   type TaskViewer,
@@ -63,6 +65,8 @@ export type TasksState = {
   instances: InstanceRecord[];
   rules: RecurrenceRuleView[];
   notifications: NotificationRecord[];
+  /** V2.0.13: archived tasks stay in `tasks` (history) but leave the active register. */
+  archivedTaskIds?: string[];
   seq: number;
 };
 
@@ -345,6 +349,12 @@ function createOne(
     sortOrder: 0,
     createdBy: actorRef(ctx),
     createdAt: ctx.now.toISOString(),
+    updatedAt: ctx.now.toISOString(),
+    checklistRev: 0,
+    steps: (() => {
+      const built = replaceSteps([], input.checklist ?? [], `${id}-s0`);
+      return built.ok ? built.value.steps : [];
+    })(),
   };
   let next: TasksState = {
     ...state,
@@ -369,6 +379,61 @@ function createOne(
   return next;
 }
 
+const ARCHIVED_EDIT = "Archived tasks cannot be edited.";
+const ARCHIVED_CHANGE = "Archived tasks cannot be changed.";
+const EDIT_CONFLICT =
+  "Someone else changed this task. Close it and open it again to see the latest version.";
+const CHECKLIST_CONFLICT =
+  "Someone else changed this checklist. Close it and open it again to see the latest version.";
+const STEP_UNAVAILABLE = "That checklist step is not available.";
+
+function isArchived(state: TasksState, taskId: string): boolean {
+  return state.archivedTaskIds?.includes(taskId) ?? false;
+}
+
+/**
+ * Makes a task's live steps equal `input`, in order -- the in-memory twin of
+ * private.tasks_checklist_replace. Steps keep their id and completion state.
+ */
+export function replaceSteps(
+  current: readonly TaskStepView[],
+  input: readonly StepInput[],
+  idPrefix: string,
+): CommandResult<{ steps: TaskStepView[]; changed: boolean }> {
+  if (input.length > 50) return fail("A checklist can have up to 50 steps.");
+  const seen = new Set<string>();
+  const steps: TaskStepView[] = [];
+  let changed = false;
+  for (const [index, item] of input.entries()) {
+    const title = item.title.trim();
+    if (title.length < 1 || title.length > 160) {
+      return fail("Every checklist step needs a title (up to 160 characters).");
+    }
+    const position = index + 1;
+    if (item.id) {
+      const existing = current.find((step) => step.id === item.id);
+      if (!existing || seen.has(item.id)) return fail(STEP_UNAVAILABLE);
+      seen.add(item.id);
+      if (existing.title !== title || existing.sortOrder !== position) {
+        changed = true;
+      }
+      steps.push({ ...existing, title, sortOrder: position });
+    } else {
+      changed = true;
+      steps.push({
+        id: `${idPrefix}-${position}`,
+        title,
+        sortOrder: position,
+        done: false,
+        completedBy: null,
+        completedAt: null,
+      });
+    }
+  }
+  if (current.some((step) => !seen.has(step.id))) changed = true;
+  return ok({ steps, changed });
+}
+
 /** Applies one command exactly as the corresponding RPC would. */
 export function applyCommand(
   state: TasksState,
@@ -390,6 +455,8 @@ export function applyCommand(
         ctx,
       );
       if (!people.ok) return people;
+      const checklistCheck = replaceSteps([], input.checklist ?? [], "check");
+      if (!checklistCheck.ok) return checklistCheck;
       if (input.eachPerson) {
         if (input.assignmentMode !== "multiple") {
           return fail("Each-person completion needs a multi-person task.");
@@ -409,8 +476,15 @@ export function applyCommand(
     case "update": {
       const task = find(command.taskId);
       if (!task || !manager) return fail(MANAGER_ONLY);
+      if (isArchived(state, task.id)) return fail(ARCHIVED_EDIT);
       if (task.status === "completed" || task.status === "cancelled") {
         return fail("Completed or cancelled tasks cannot be edited.");
+      }
+      if (
+        command.expectedUpdatedAt &&
+        command.expectedUpdatedAt !== task.updatedAt
+      ) {
+        return fail(EDIT_CONFLICT);
       }
       const invalid = validateFields(command.input);
       if (invalid) return fail(invalid);
@@ -435,18 +509,49 @@ export function applyCommand(
         dueTime: f.dueTime,
         dueWindow: f.dueWindow,
       };
-      if (JSON.stringify(before) === JSON.stringify(after)) return ok(state);
+      const fieldsChanged = JSON.stringify(before) !== JSON.stringify(after);
+      let steps = task.steps;
+      let stepsChanged = false;
+      if (command.checklist) {
+        if (task.kind !== "task") {
+          return fail("Only ordinary tasks have a checklist.");
+        }
+        if (
+          command.expectedChecklistRev !== null &&
+          command.expectedChecklistRev !== undefined &&
+          command.expectedChecklistRev !== task.checklistRev
+        ) {
+          return fail(CHECKLIST_CONFLICT);
+        }
+        const replaced = replaceSteps(
+          task.steps,
+          command.checklist,
+          `${task.id}-s${task.checklistRev + 1}`,
+        );
+        if (!replaced.ok) return replaced;
+        steps = replaced.value.steps;
+        stepsChanged = replaced.value.changed;
+      }
+      if (!fieldsChanged && !stepsChanged) return ok(state);
       const updated: TaskView = {
         ...task,
         ...after,
         dueAt: computeDueAt(after, ctx.timeZone),
+        steps,
+        checklistRev: task.checklistRev + (stepsChanged ? 1 : 0),
+        updatedAt: ctx.now.toISOString(),
       };
-      return ok(
-        pushEvent(replaceTask(state, updated), ctx, task.id, "edited", {
-          before,
-          after,
-        }),
-      );
+      let edited = replaceTask(state, updated);
+      if (fieldsChanged) {
+        edited = pushEvent(edited, ctx, task.id, "edited", { before, after });
+      }
+      if (stepsChanged) {
+        edited = pushEvent(edited, ctx, task.id, "checklist_edited", {
+          steps: steps.length,
+          revision: updated.checklistRev,
+        });
+      }
+      return ok(edited);
     }
 
     case "assign": {
@@ -473,6 +578,7 @@ export function applyCommand(
         ...task,
         assignmentMode: command.assignmentMode,
         assignees: people.value,
+        updatedAt: ctx.now.toISOString(),
       };
       let reassigned = pushEvent(
         replaceTask(state, updated),
@@ -504,11 +610,40 @@ export function applyCommand(
       if (!task || !canWorkTask(ctx.actor, task)) {
         return fail("That task does not exist or you cannot update it.");
       }
+      if (isArchived(state, task.id)) return fail(ARCHIVED_CHANGE);
       if (task.status === command.status) return ok(state);
+      // Reopening a completed task straight into Not Started / In Progress.
+      if (task.status === "completed") {
+        if (command.status !== "open" && command.status !== "in_progress") {
+          return fail("That status change is not allowed.");
+        }
+        if (!manager && task.completedBy?.profileId !== ctx.actor.profileId) {
+          return fail(
+            "Only the person who completed this task or a manager can reopen it.",
+          );
+        }
+        const reopened: TaskView = {
+          ...task,
+          status: command.status,
+          completedBy: null,
+          completedAt: null,
+          completionNote: null,
+          updatedAt: ctx.now.toISOString(),
+        };
+        return ok(
+          pushEvent(replaceTask(state, reopened), ctx, task.id, "reopened", {
+            from: "completed",
+            to: command.status,
+            previous_completed_by: task.completedBy?.profileId ?? null,
+            previous_completed_at: task.completedAt,
+          }),
+        );
+      }
       const allowed =
         (task.status === "open" &&
           (command.status === "in_progress" || command.status === "blocked")) ||
-        (task.status === "in_progress" && command.status === "blocked") ||
+        (task.status === "in_progress" &&
+          (command.status === "open" || command.status === "blocked")) ||
         (task.status === "blocked" &&
           (command.status === "open" || command.status === "in_progress"));
       if (!allowed) return fail("That status change is not allowed.");
@@ -521,11 +656,14 @@ export function applyCommand(
           ? "blocked"
           : task.status === "blocked"
             ? "unblocked"
-            : "started";
+            : command.status === "in_progress"
+              ? "started"
+              : "status_changed";
       const updated: TaskView = {
         ...task,
         status: command.status,
         blockedReason: command.status === "blocked" ? reason : null,
+        updatedAt: ctx.now.toISOString(),
       };
       return ok(
         pushEvent(replaceTask(state, updated), ctx, task.id, event, {
@@ -558,6 +696,7 @@ export function applyCommand(
         completedBy: actorRef(ctx),
         completedAt: ctx.now.toISOString(),
         completionNote: note,
+        updatedAt: ctx.now.toISOString(),
       };
       let completed = pushEvent(
         replaceTask(state, updated),
@@ -603,6 +742,7 @@ export function applyCommand(
         return fail("That task does not exist or you cannot update it.");
       }
       if (task.status !== "completed") return ok(state);
+      if (isArchived(state, task.id)) return fail(ARCHIVED_CHANGE);
       if (!manager && task.completedBy?.profileId !== ctx.actor.profileId) {
         return fail(
           "Only the person who completed this task or a manager can reopen it.",
@@ -614,6 +754,7 @@ export function applyCommand(
         completedBy: null,
         completedAt: null,
         completionNote: null,
+        updatedAt: ctx.now.toISOString(),
       };
       return ok(
         pushEvent(replaceTask(state, updated), ctx, task.id, "reopened", {
@@ -635,12 +776,101 @@ export function applyCommand(
         status: "cancelled",
         blockedReason: null,
         cancelledAt: ctx.now.toISOString(),
+        updatedAt: ctx.now.toISOString(),
       };
       return ok(
         pushEvent(replaceTask(state, updated), ctx, task.id, "cancelled", {
           from: task.status,
           reason: command.reason?.trim() || null,
         }),
+      );
+    }
+
+    case "delete": {
+      const task = find(command.taskId);
+      if (!task || !manager) return fail(MANAGER_ONLY);
+      if (task.kind !== "task") {
+        return fail(
+          "Opening and Closing checklist items cannot be deleted here.",
+        );
+      }
+      if (isArchived(state, task.id)) {
+        return { ok: true, value: state, outcome: "archived" };
+      }
+      // Permanently deletable only when nothing worth keeping exists.
+      const hasHistory = state.events.some(
+        (e) => e.taskId === task.id && e.type !== "created",
+      );
+      if (task.status === "open" && !task.recurrenceRuleId && !hasHistory) {
+        return {
+          ok: true,
+          outcome: "deleted",
+          value: {
+            ...state,
+            tasks: state.tasks.filter((t) => t.id !== task.id),
+            events: state.events.filter((e) => e.taskId !== task.id),
+            notifications: state.notifications.filter(
+              (n) => n.taskId !== task.id,
+            ),
+          },
+        };
+      }
+      const active = ["open", "in_progress", "blocked"].includes(task.status);
+      const archived: TaskView = {
+        ...task,
+        status: active ? "cancelled" : task.status,
+        blockedReason: active ? null : task.blockedReason,
+        cancelledAt: active ? ctx.now.toISOString() : task.cancelledAt,
+        updatedAt: ctx.now.toISOString(),
+      };
+      let next = replaceTask(state, archived);
+      next = {
+        ...next,
+        archivedTaskIds: [...(state.archivedTaskIds ?? []), task.id],
+      };
+      next = pushEvent(next, ctx, task.id, "archived", {
+        from: task.status,
+        reason: null,
+      });
+      return { ok: true, value: next, outcome: "archived" };
+    }
+
+    case "stepSet": {
+      const task = find(command.taskId);
+      if (!task || !canWorkTask(ctx.actor, task)) {
+        return fail("That task does not exist or you cannot update it.");
+      }
+      if (
+        isArchived(state, task.id) ||
+        task.status === "completed" ||
+        task.status === "cancelled"
+      ) {
+        return fail("Reopen the task to change its checklist.");
+      }
+      const step = task.steps.find((s) => s.id === command.stepId);
+      if (!step) return fail(STEP_UNAVAILABLE);
+      // First tick wins; the original completer is never overwritten.
+      if (step.done === command.done) return ok(state);
+      const steps = task.steps.map((s) =>
+        s.id !== step.id
+          ? s
+          : command.done
+            ? {
+                ...s,
+                done: true,
+                completedBy: actorRef(ctx),
+                completedAt: ctx.now.toISOString(),
+              }
+            : { ...s, done: false, completedBy: null, completedAt: null },
+      );
+      return ok(
+        pushEvent(
+          replaceTask(state, { ...task, steps }),
+          ctx,
+          task.id,
+          command.done ? "checklist_step_checked" : "checklist_step_unchecked",
+          { step_id: step.id, title: step.title },
+        ),
       );
     }
 
@@ -819,7 +1049,10 @@ export function buildSnapshot(
     today: ctx.today,
     generatedAt: ctx.now.toISOString(),
     tasks: state.tasks.filter(
-      (t) => t.kind === "task" && canViewTask(ctx.actor, t),
+      (t) =>
+        t.kind === "task" &&
+        canViewTask(ctx.actor, t) &&
+        !isArchived(state, t.id),
     ),
     checklists: [...state.instances]
       .sort((a, b) => b.serviceDate.localeCompare(a.serviceDate))
@@ -1000,6 +1233,9 @@ export function materializeRule(
       sortOrder: 0,
       createdBy: rule.createdBy,
       createdAt: ctx.now.toISOString(),
+      updatedAt: ctx.now.toISOString(),
+      checklistRev: 0,
+      steps: [],
     };
     next = { ...next, seq: next.seq + 1, tasks: [...next.tasks, task] };
     next = pushEvent(next, ctx, id, "created", {

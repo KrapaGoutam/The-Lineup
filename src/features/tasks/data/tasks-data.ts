@@ -20,6 +20,7 @@ import {
   mapTaskRow,
   mapTemplateRow,
   TASK_ROW_COLUMNS,
+  TASK_STEP_EMBED,
   NOTIFICATION_ROW_COLUMNS,
   SERIES_ROW_COLUMNS,
   mapNotificationRow,
@@ -122,10 +123,12 @@ export async function getTasksSnapshot(
   const [tasksResult, categoriesResult, roster] = await Promise.all([
     supabase
       .from("tasks")
-      .select(TASK_ROW_COLUMNS)
+      .select(`${TASK_ROW_COLUMNS}${TASK_STEP_EMBED}`)
       .eq("organization_id", organizationId)
       .eq("location_id", location.id)
       .eq("kind", "task")
+      // V2.0.13: archived tasks leave the active register (history keeps them).
+      .is("archived_at", null)
       .or(`status.in.(open,in_progress,blocked),updated_at.gte.${cutoff}`)
       .order("created_at", { ascending: false })
       .limit(MAX_TASKS)

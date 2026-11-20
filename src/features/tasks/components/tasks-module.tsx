@@ -31,6 +31,8 @@ type Props = {
   expectedContext?: WorkspaceExpectation | null;
   /** Lets the app shell keep its Tasks tab badge in step with the inbox. */
   onUnreadChange?: (unread: number) => void;
+  /** Active organization and branch shown in the All Tasks header. */
+  contextLabel?: string | null;
 };
 
 /**
@@ -46,6 +48,7 @@ export function TasksModule({
   onSessionInvalid,
   expectedContext = null,
   onUnreadChange,
+  contextLabel = null,
 }: Props) {
   const reportStale = useReportStaleContext();
   const viewer = useMemo(
@@ -68,5 +71,5 @@ export function TasksModule({
   useEffect(() => {
     if (unread !== undefined) onUnreadChange?.(unread);
   }, [unread, onUnreadChange]);
-  return <TasksWorkspace controller={controller} />;
+  return <TasksWorkspace controller={controller} contextLabel={contextLabel} />;
 }

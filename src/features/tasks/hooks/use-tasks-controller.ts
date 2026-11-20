@@ -29,7 +29,9 @@ import type {
 } from "@/features/tasks/domain/task-types";
 import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
-export type TaskRunResult = { ok: true } | { ok: false; error: string };
+export type TaskRunResult =
+  | { ok: true; /** `delete`: "deleted" or "archived". */ outcome?: string }
+  | { ok: false; error: string };
 
 export type TaskHistoryLoadResult =
   | { ok: true; data: TaskHistoryData }
@@ -234,7 +236,7 @@ export function useTasksController({
           });
           if (!result.ok) return { ok: false, error: result.error };
           demo.setState(result.value);
-          return { ok: true };
+          return { ok: true, outcome: result.outcome };
         }
 
         const result = await runTaskCommandAction({
@@ -245,7 +247,7 @@ export function useTasksController({
         if (result.ok) {
           setRemote(result.data);
           setLoadError(null);
-          return { ok: true };
+          return { ok: true, outcome: result.outcome };
         }
         if (result.sessionInvalid) onSessionInvalid?.();
         if (result.contextStale) onContextStale?.();

@@ -137,6 +137,9 @@ export function generateDailyChecklists(
         sortOrder: index + 1,
         createdBy: { profileId: ctx.actor.profileId, name: ctx.actor.name },
         createdAt: ctx.now.toISOString(),
+        updatedAt: ctx.now.toISOString(),
+        checklistRev: 0,
+        steps: [],
       };
     });
 

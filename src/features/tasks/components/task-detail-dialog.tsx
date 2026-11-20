@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -28,8 +29,17 @@ import {
   type TaskView,
   type TaskViewer,
 } from "../domain/task-types";
+import {
+  QUICK_STATUS_LABELS,
+  canTickSteps,
+  quickStatusOf,
+  type QuickStatus,
+} from "../domain/task-register";
+import { useStepToggle } from "../hooks/use-step-toggle";
 import type { TaskRunResult } from "../hooks/use-tasks-controller";
 import { AssigneePicker } from "./assignee-picker";
+import { ChecklistPanel } from "./checklist-panel";
+import { DeleteTaskPanel } from "./delete-task-dialog";
 import { canToggleTask } from "./task-row";
 
 type Props = {
@@ -48,7 +58,7 @@ type Props = {
   run: (command: TaskCommand) => Promise<TaskRunResult>;
 };
 
-type Panel = null | "complete" | "block" | "reassign" | "cancel";
+type Panel = null | "complete" | "block" | "reassign" | "cancel" | "delete";
 
 const textareaClass =
   "border-input bg-background/70 text-foreground placeholder:text-muted-foreground focus-visible:border-primary/60 focus-visible:ring-ring/40 min-h-20 w-full rounded-xl border px-3 py-2.5 text-sm transition outline-none focus-visible:ring-2";
@@ -68,6 +78,11 @@ const EVENT_LABELS: Record<string, string> = {
   recurrence_created: "Recurrence created",
   recurrence_changed: "Recurrence changed",
   checklist_generated: "Checklist generated",
+  status_changed: "Status changed",
+  checklist_edited: "Checklist edited",
+  checklist_step_checked: "Step checked",
+  checklist_step_unchecked: "Step unchecked",
+  archived: "Archived",
 };
 
 function eventDetail(
@@ -100,7 +115,15 @@ function eventDetail(
     case "carried_forward":
       return `Due ${String(p.from_due_date ?? "—")} → ${String(p.to_due_date)}`;
     case "cancelled":
+    case "archived":
       return p.reason ? `Reason: ${String(p.reason)}` : null;
+    case "status_changed":
+      return `${String(p.from)} → ${String(p.to)}`;
+    case "checklist_edited":
+      return `${String(p.steps ?? 0)} steps`;
+    case "checklist_step_checked":
+    case "checklist_step_unchecked":
+      return p.title ? String(p.title) : null;
     case "edited": {
       const after = (p.after ?? {}) as Record<string, unknown>;
       const before = (p.before ?? {}) as Record<string, unknown>;
@@ -149,6 +172,18 @@ export function TaskDetailDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { pendingStepIds, toggleStep } = useStepToggle(run);
+  const quick = quickStatusOf(task);
+  const canMove = canToggleTask(task, viewer);
+
+  function moveTo(status: QuickStatus) {
+    if (status === quick) return;
+    void act(
+      status === "completed"
+        ? { type: "complete", taskId: task.id }
+        : { type: "setStatus", taskId: task.id, status },
+    );
+  }
 
   async function act(command: TaskCommand, closeAfter = false) {
     if (busy) return;
@@ -247,6 +282,39 @@ export function TaskDetailDialog({
           </>
         ) : null}
       </dl>
+
+      {canMove ? (
+        <div
+          role="group"
+          aria-label="Task status"
+          className="flex flex-wrap gap-1.5"
+        >
+          {(Object.keys(QUICK_STATUS_LABELS) as QuickStatus[]).map((status) => (
+            <button
+              key={status}
+              type="button"
+              aria-pressed={quick === status}
+              disabled={busy}
+              onClick={() => moveTo(status)}
+              className={cn(
+                "focus-visible:ring-ring min-h-11 rounded-xl border px-4 text-sm font-semibold outline-none focus-visible:ring-2 disabled:opacity-50",
+                quick === status
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-surface text-foreground",
+              )}
+            >
+              {QUICK_STATUS_LABELS[status]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <ChecklistPanel
+        task={task}
+        canTick={canTickSteps(task, viewer)}
+        pendingStepIds={pendingStepIds}
+        onToggle={(step) => void toggleStep(task, step)}
+      />
 
       {error ? (
         <p role="alert" className="text-destructive text-sm">
@@ -375,27 +443,47 @@ export function TaskDetailDialog({
         </div>
       ) : null}
 
-      {manager && active && panel === null ? (
+      {manager && task.kind === "task" && panel === null ? (
         <div className="border-border flex flex-wrap gap-2 border-t pt-3">
-          <Button variant="outline" onClick={() => onEdit(task)}>
-            {series ? "Edit this occurrence" : "Edit"}
-          </Button>
-          {series && onEditSeries ? (
-            <Button variant="outline" onClick={() => onEditSeries(series)}>
-              Edit series…
-            </Button>
+          {active ? (
+            <>
+              <Button variant="outline" onClick={() => onEdit(task)}>
+                {series ? "Edit this occurrence" : "Edit"}
+              </Button>
+              {series && onEditSeries ? (
+                <Button variant="outline" onClick={() => onEditSeries(series)}>
+                  Edit series…
+                </Button>
+              ) : null}
+              <Button variant="outline" onClick={() => setPanel("reassign")}>
+                Reassign…
+              </Button>
+              <Button
+                variant="ghost"
+                className="text-destructive"
+                onClick={() => setPanel("cancel")}
+              >
+                Cancel task…
+              </Button>
+            </>
           ) : null}
-          <Button variant="outline" onClick={() => setPanel("reassign")}>
-            Reassign…
-          </Button>
           <Button
             variant="ghost"
             className="text-destructive"
-            onClick={() => setPanel("cancel")}
+            onClick={() => setPanel("delete")}
           >
-            Cancel task…
+            Delete…
           </Button>
         </div>
+      ) : null}
+
+      {panel === "delete" ? (
+        <DeleteTaskPanel
+          task={task}
+          run={run}
+          onCancel={() => setPanel(null)}
+          onDone={onClose}
+        />
       ) : null}
 
       {panel === "reassign" ? (

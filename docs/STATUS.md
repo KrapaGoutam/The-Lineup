@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.13 Batch A — Tasks, Checklists, CRUD and Status (feature branch, draft PR; NOT merged)
+
+`feature/v2-013-tasks-chores` (base `development` `5aa3a81f`) extends the existing Tasks module: an **All Tasks** register (search, status chips, row status/reassign/delete), a **Checklists** tab, ordinary-task **checklist steps** (new `task_checklist_items`, ticking never completes the parent), every Not Started / In Progress / Completed transition, **delete-or-archive** (history-free tasks are removed, anything with history is archived) and **edit-conflict detection**. Two additive migrations (`20261120090000`, `20261120090100`), local only: hosted DEV, Production and `main` untouched. Local evidence: pgTAP 0092 (64) and full suite, real-JWT local suites 24/24, Vitest 4,821, Playwright 51/51 on desktop/tablet/phone against a production build. Batch B (Chore Wheel, Task Settings) and C (cycles, History) not started. See [the handoff](features/v2-0-13-tasks-chores/HANDOFF.md).
+
 ## Release Group 2 — Phase C integrated acceptance: PASS on hosted DEV; Production NOT released
 
 V2.0.8 Tips and V2.0.9 Dashboard were exercised together on hosted DEV (ledger 100, no database change): Tips save, update, stale-conflict, recalculate, void and history, then each Dashboard card reconciled to raw-table arithmetic as manager and as staff, across two branches and two organizations, with deep links, Back/Forward, reload and a phone viewport. One check is NOT TESTED on DEV (confirmed-payment netting; unit-proven). Group 2 is **ready for the consolidated Production release** (migration 99 then 100, then the application); that needs the owner's separate final authorization. Evidence: [Phase C](features/v2-0-9-daily-dashboard/PHASE_C.md); release record: [Group 2 readiness](releases/group-2-release-readiness.md).

@@ -59,6 +59,9 @@ export function makeTask(overrides: Partial<TaskView> = {}): TaskView {
     sortOrder: 0,
     createdBy: null,
     createdAt: "2026-10-30T00:00:00Z",
+    updatedAt: "2026-10-30T00:00:00Z",
+    checklistRev: 0,
+    steps: [],
     ...overrides,
   };
 }
