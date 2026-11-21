@@ -38,7 +38,7 @@ test("History lists a completed task with who was assigned and who completed it,
   }
   await page.getByRole("button", { name: "History", exact: true }).click();
 
-  const history = page.getByRole("region", { name: "Completed task history" });
+  const history = page.getByRole("region", { name: "Task history" });
   await expect(history).toBeVisible();
   const row = history.getByRole("listitem").filter({
     hasText: "Refill ice bins",
@@ -49,15 +49,13 @@ test("History lists a completed task with who was assigned and who completed it,
   await expect(row).toContainText("Regular");
   await expect(
     history.getByRole("heading", { level: 2 }).first(),
-  ).toContainText(/\d{4} · \d+ tasks?/);
+  ).toContainText(/\d{4} · \d+ items?/);
+  // Grouped Month → Completed / Not completed, with the real status kept.
+  await expect(history.getByTestId("history-completed").first()).toBeVisible();
 
   // Search narrows; a miss explains itself.
-  await page
-    .getByRole("searchbox", { name: "Search task history" })
-    .fill("zzz");
-  await expect(
-    page.getByText("No completed tasks match your search."),
-  ).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search history" }).fill("zzz");
+  await expect(page.getByText("Nothing matches these filters.")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(row).toBeVisible();
 

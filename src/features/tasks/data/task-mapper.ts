@@ -11,6 +11,7 @@ import type {
   TaskKind,
   TaskPriority,
   TaskStatus,
+  TaskStepView,
   TaskView,
 } from "../domain/task-types";
 import { parseOpeningReminder } from "../domain/opening-reminder";
@@ -41,7 +42,20 @@ export type TaskRow = {
   sort_order: number;
   created_by: string;
   created_at: string;
+  updated_at: string;
+  checklist_rev: number;
   task_assignments: { profile_id: string }[];
+  /** Present only when read with TASK_STEP_EMBED (ordinary tasks). */
+  task_checklist_items?: TaskStepRow[];
+};
+
+export type TaskStepRow = {
+  id: string;
+  title: string;
+  sort_order: number;
+  completed_by: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
 };
 
 export type TaskEventRow = {
@@ -54,7 +68,11 @@ export type TaskEventRow = {
 };
 
 export const TASK_ROW_COLUMNS =
-  "id, kind, title, instructions, category, priority, status, assignment_mode, start_date, due_date, due_time, due_window, due_at, blocked_reason, completed_by, completed_at, completion_note, cancelled_at, group_id, recurrence_rule_id, checklist_instance_id, sort_order, created_by, created_at, task_assignments(profile_id)";
+  "id, kind, title, instructions, category, priority, status, assignment_mode, start_date, due_date, due_time, due_window, due_at, blocked_reason, completed_by, completed_at, completion_note, cancelled_at, group_id, recurrence_rule_id, checklist_instance_id, sort_order, created_by, created_at, updated_at, checklist_rev, task_assignments(profile_id)";
+
+/** Live checklist steps of an ordinary task (V2.0.13). Archived steps are filtered out. */
+export const TASK_STEP_EMBED =
+  ", task_checklist_items(id, title, sort_order, completed_by, completed_at, archived_at)";
 
 function person(
   profileId: string | null,
@@ -78,6 +96,9 @@ export function collectProfileIds(
     ids.add(row.created_by);
     if (row.completed_by) ids.add(row.completed_by);
     for (const a of row.task_assignments) ids.add(a.profile_id);
+    for (const step of row.task_checklist_items ?? []) {
+      if (step.completed_by) ids.add(step.completed_by);
+    }
   }
   for (const event of events) {
     if (event.actor_profile_id) ids.add(event.actor_profile_id);
@@ -118,7 +139,28 @@ export function mapTaskRow(
     sortOrder: row.sort_order,
     createdBy: person(row.created_by, names),
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    checklistRev: row.checklist_rev,
+    steps: mapStepRows(row.task_checklist_items ?? [], names),
   };
+}
+
+/** Live steps only, in order, numbered 1..n. */
+export function mapStepRows(
+  rows: readonly TaskStepRow[],
+  names: ReadonlyMap<string, string>,
+): TaskStepView[] {
+  return rows
+    .filter((step) => step.archived_at === null)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((step, index) => ({
+      id: step.id,
+      title: step.title,
+      sortOrder: index + 1,
+      done: step.completed_at !== null,
+      completedBy: person(step.completed_by, names),
+      completedAt: step.completed_at,
+    }));
 }
 
 export function mapEventRow(

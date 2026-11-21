@@ -361,7 +361,7 @@ export function buildTodayGroups(
 // Labels
 // ---------------------------------------------------------------------
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  open: "Open",
+  open: "Not Started",
   in_progress: "In progress",
   blocked: "Blocked",
   completed: "Completed",

@@ -1,3 +1,5 @@
+import { DEMO_ORGANIZATION_ID } from "@/lib/demo-data";
+import { createDemoChoreState } from "./demo-chores";
 import type { TaskCommand, TaskCreateInput } from "./task-commands";
 import {
   applyCommand,
@@ -186,5 +188,8 @@ export function createDemoTasksState(
   const restroom = state.tasks.find((t) => t.title === "Check restroom");
   if (restroom) run("mia", { type: "complete", taskId: restroom.id });
 
-  return state;
+  return {
+    ...state,
+    chores: createDemoChoreState(now, DEMO_ORGANIZATION_ID, team),
+  };
 }

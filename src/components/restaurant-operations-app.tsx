@@ -2436,6 +2436,11 @@ function RestaurantOperationsAppInner({
                 expectedContext={workspaceExpectation}
                 onSessionInvalid={forceSignOut}
                 onUnreadChange={demoMode ? undefined : setRealTasksUnread}
+                contextLabel={
+                  activeContext
+                    ? `${activeContext.organizationName} · ${activeContext.locationName}`
+                    : null
+                }
                 demo={
                   demoMode
                     ? {

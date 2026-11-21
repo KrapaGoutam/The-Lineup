@@ -29,7 +29,22 @@ export const taskFieldsSchema = z.object({
 });
 export type TaskFields = z.infer<typeof taskFieldsSchema>;
 
+/** A checklist step as the editor submits it: existing steps keep their id. */
+export const stepInputSchema = z.object({
+  id: idSchema.nullable().optional(),
+  title: z
+    .string()
+    .trim()
+    .min(1, "Every checklist step needs a title.")
+    .max(160),
+});
+export type StepInput = z.infer<typeof stepInputSchema>;
+export const MAX_CHECKLIST_STEPS = 50;
+const checklistSchema = z.array(stepInputSchema).max(MAX_CHECKLIST_STEPS);
+
 export const taskCreateSchema = taskFieldsSchema.extend({
+  /** V2.0.13: optional initial checklist (copied to each fanned-out task). */
+  checklist: checklistSchema.optional(),
   assignmentMode: z.enum(ASSIGNMENT_MODES),
   assigneeIds: z.array(idSchema).max(50),
   /** "Each person required": fan out into one individual task per person. */
@@ -85,6 +100,11 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("update"),
     taskId: idSchema,
     input: taskFieldsSchema,
+    /** The updatedAt the editor loaded; a mismatch is an edit conflict. */
+    expectedUpdatedAt: z.string().max(40).nullable().optional(),
+    /** Omitted = leave the checklist alone; present = this is the new list. */
+    checklist: checklistSchema.optional(),
+    expectedChecklistRev: z.number().int().nullable().optional(),
   }),
   z.object({
     type: z.literal("assign"),
@@ -104,6 +124,14 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
     note: z.string().trim().max(500).nullable().optional(),
   }),
   z.object({ type: z.literal("reopen"), taskId: idSchema }),
+  /** Permanently deletes a history-free task, otherwise archives it. */
+  z.object({ type: z.literal("delete"), taskId: idSchema }),
+  z.object({
+    type: z.literal("stepSet"),
+    taskId: idSchema,
+    stepId: idSchema,
+    done: z.boolean(),
+  }),
   z.object({
     type: z.literal("cancel"),
     taskId: idSchema,
@@ -139,5 +167,5 @@ export const taskCommandSchema = z.discriminatedUnion("type", [
 export type TaskCommand = z.infer<typeof taskCommandSchema>;
 
 export type CommandResult<T> =
-  | { ok: true; value: T }
+  | { ok: true; value: T; outcome?: string }
   | { ok: false; error: string };

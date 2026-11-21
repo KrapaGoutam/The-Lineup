@@ -5,10 +5,12 @@ import {
   Check,
   CircleAlert,
   Flag,
+  ListChecks,
   LoaderCircle,
   Play,
   Users,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,7 @@ import {
 } from "../domain/task-rules";
 import type { TaskView, TaskViewer } from "../domain/task-types";
 import { isTasksManager } from "../domain/task-types";
+import { stepProgress } from "../domain/task-register";
 
 type Props = {
   task: TaskView;
@@ -35,6 +38,10 @@ type Props = {
   showAssignees?: boolean;
   /** History view: the checkbox is informational only. */
   readOnly?: boolean;
+  /** All Tasks register: show a short preview of the instructions. */
+  showPreview?: boolean;
+  /** Extra controls under the task (status picker, row actions). */
+  footer?: ReactNode;
   onToggle: (task: TaskView) => void;
   onOpen: (task: TaskView) => void;
 };
@@ -63,6 +70,8 @@ export function TaskRow({
   categoryName,
   showAssignees = false,
   readOnly = false,
+  showPreview = false,
+  footer,
   onToggle,
   onOpen,
 }: Props) {
@@ -71,6 +80,7 @@ export function TaskRow({
   const overdue = isOverdue(task, now);
   const toggleable = !readOnly && canToggleTask(task, viewer);
   const verb = done ? "Reopen" : "Mark complete";
+  const steps = stepProgress(task);
 
   return (
     <li
@@ -106,77 +116,91 @@ export function TaskRow({
         ) : null}
       </button>
 
-      <button
-        type="button"
-        onClick={() => onOpen(task)}
-        className="focus-visible:ring-ring -m-1 min-w-0 flex-1 rounded-lg p-1 text-left outline-none focus-visible:ring-2"
-      >
-        <span
-          className={cn(
-            "block text-[15px] leading-snug font-semibold",
-            (done || cancelled) && "text-muted-foreground line-through",
-          )}
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpen(task)}
+          className="focus-visible:ring-ring -m-1 block w-[calc(100%+0.5rem)] min-w-0 rounded-lg p-1 text-left outline-none focus-visible:ring-2"
         >
-          {task.title}
-        </span>
-        <span className="text-muted-foreground mt-0.5 block text-xs">
-          {cancelled
-            ? "Cancelled"
-            : done
-              ? `Completed${task.completedBy ? ` by ${task.completedBy.name}` : ""}`
-              : dueText(task, today)}
-          {" · "}
-          {categoryName}
-          {showAssignees && staffLabel(task) ? (
-            <>
-              {" · "}
-              <span data-testid="task-staff">{staffLabel(task)}</span>
-            </>
-          ) : null}
-        </span>
-        <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          {overdue ? (
-            <Badge tone="danger">
-              <CircleAlert className="size-3.5" aria-hidden="true" />
-              Overdue
-            </Badge>
-          ) : null}
-          {task.status === "blocked" ? (
-            <Badge tone="warning">
-              <Ban className="size-3.5" aria-hidden="true" />
-              Blocked
-            </Badge>
-          ) : null}
-          {task.status === "in_progress" ? (
-            <Badge tone="accent">
-              <Play className="size-3.5" aria-hidden="true" />
-              In progress
-            </Badge>
-          ) : null}
-          {task.priority !== "normal" && !done && !cancelled ? (
-            <Badge tone={task.priority === "urgent" ? "danger" : "warning"}>
-              <Flag className="size-3.5" aria-hidden="true" />
-              {PRIORITY_LABELS[task.priority]}
-            </Badge>
-          ) : null}
-          {task.kind === "task" && task.assignmentMode !== "individual" ? (
-            <Badge>
-              <Users className="size-3.5" aria-hidden="true" />
-              {taskTypeLabel(task)}
-            </Badge>
-          ) : null}
-        </span>
-        {task.status === "blocked" && task.blockedReason ? (
-          <span className="text-warn mt-1.5 block text-xs">
-            Blocked: {task.blockedReason}
+          <span
+            className={cn(
+              "block text-[15px] leading-snug font-semibold",
+              (done || cancelled) && "text-muted-foreground line-through",
+            )}
+          >
+            {task.title}
           </span>
-        ) : null}
-        {done && task.completionNote ? (
-          <span className="text-muted-foreground mt-1.5 block text-xs italic">
-            “{task.completionNote}”
+          <span className="text-muted-foreground mt-0.5 block text-xs">
+            {cancelled
+              ? "Cancelled"
+              : done
+                ? `Completed${task.completedBy ? ` by ${task.completedBy.name}` : ""}`
+                : dueText(task, today)}
+            {" · "}
+            {categoryName}
+            {showAssignees && staffLabel(task) ? (
+              <>
+                {" · "}
+                <span data-testid="task-staff">{staffLabel(task)}</span>
+              </>
+            ) : null}
           </span>
-        ) : null}
-      </button>
+          {showPreview && task.instructions ? (
+            <span className="text-muted-foreground mt-1 line-clamp-2 block text-xs">
+              {task.instructions}
+            </span>
+          ) : null}
+          <span className="mt-2 flex flex-wrap items-center gap-1.5">
+            {steps.total > 0 ? (
+              <Badge tone={steps.done === steps.total ? "success" : "neutral"}>
+                <ListChecks className="size-3.5" aria-hidden="true" />
+                {steps.done} of {steps.total} steps
+              </Badge>
+            ) : null}
+            {overdue ? (
+              <Badge tone="danger">
+                <CircleAlert className="size-3.5" aria-hidden="true" />
+                Overdue
+              </Badge>
+            ) : null}
+            {task.status === "blocked" ? (
+              <Badge tone="warning">
+                <Ban className="size-3.5" aria-hidden="true" />
+                Blocked
+              </Badge>
+            ) : null}
+            {task.status === "in_progress" ? (
+              <Badge tone="accent">
+                <Play className="size-3.5" aria-hidden="true" />
+                In progress
+              </Badge>
+            ) : null}
+            {task.priority !== "normal" && !done && !cancelled ? (
+              <Badge tone={task.priority === "urgent" ? "danger" : "warning"}>
+                <Flag className="size-3.5" aria-hidden="true" />
+                {PRIORITY_LABELS[task.priority]}
+              </Badge>
+            ) : null}
+            {task.kind === "task" && task.assignmentMode !== "individual" ? (
+              <Badge>
+                <Users className="size-3.5" aria-hidden="true" />
+                {taskTypeLabel(task)}
+              </Badge>
+            ) : null}
+          </span>
+          {task.status === "blocked" && task.blockedReason ? (
+            <span className="text-warn mt-1.5 block text-xs">
+              Blocked: {task.blockedReason}
+            </span>
+          ) : null}
+          {done && task.completionNote ? (
+            <span className="text-muted-foreground mt-1.5 block text-xs italic">
+              “{task.completionNote}”
+            </span>
+          ) : null}
+        </button>
+        {footer}
+      </div>
     </li>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import type { TaskView } from "../domain/task-types";
 import type { TasksController } from "../hooks/use-tasks-controller";
 import { TaskRow } from "./task-row";
@@ -10,6 +12,9 @@ type Props = {
   categoryName: (slug: string) => string;
   showAssignees?: boolean;
   readOnly?: boolean;
+  showPreview?: boolean;
+  /** Extra per-task controls (All Tasks status picker and actions). */
+  renderFooter?: (task: TaskView) => ReactNode;
   emptyText: string;
   onToggle: (task: TaskView) => void;
   onOpen: (task: TaskView) => void;
@@ -22,6 +27,8 @@ export function TaskList({
   categoryName,
   showAssignees,
   readOnly,
+  showPreview,
+  renderFooter,
   emptyText,
   onToggle,
   onOpen,
@@ -50,6 +57,8 @@ export function TaskList({
           categoryName={categoryName(task.category)}
           showAssignees={showAssignees}
           readOnly={readOnly}
+          showPreview={showPreview}
+          footer={renderFooter?.(task)}
           onToggle={onToggle}
           onOpen={onOpen}
         />
