@@ -512,7 +512,7 @@ select pg_temp.run_mode('st1',  '00000000-0000-4000-8000-000000082005','random',
 select is((select count(*)::int from rpc_out where outcome like 'ERR:42883%'), 0,
   'SW-R1 the generated argument lists matched every function signature (no sweep call missed its guard on a signature error)');
 
-select is((select count(*)::int from fn_list), 137, 'SW-R2 the sweep covered exactly the 137 (118 at Stage B + team_set_member_active + team_add_member + V2.0.8 tips_save_interval/tips_void_interval/tips_recalculate_pool/tips_get_range + V2.0.13 task_delete/task_checklist_step_set + Batch B 11 chore_* RPCs) authenticated-callable non-trigger public functions (a new RPC changes this count and needs review)');
+select is((select count(*)::int from fn_list), 141, 'SW-R2 the sweep covered exactly the 141 (118 at Stage B + team_set_member_active + team_add_member + V2.0.8 tips_save_interval/tips_void_interval/tips_recalculate_pool/tips_get_range + V2.0.13 task_delete/task_checklist_step_set + Batch B 11 chore_* RPCs + Batch C chore_cycle_close, chore_cycle_start, chore_cycle_correct, chore_cycles_sweep) authenticated-callable non-trigger public functions (a new RPC changes this count and needs review)');
 
 select is((select coalesce(array_agg(distinct proname::text order by proname::text), '{}') from rpc_out
             where mode = 'xorg' and outcome like 'OK:%' and outcome not in ('OK:false','OK:0')),

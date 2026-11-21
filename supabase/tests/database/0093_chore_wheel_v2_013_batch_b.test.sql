@@ -59,15 +59,15 @@ select is((select count(*)::int from information_schema.role_table_grants
   where grantee in ('authenticated','anon','PUBLIC') and table_schema='public' and table_name like 'chore\_%' and privilege_type <> 'SELECT'),0,'clients hold no write privilege on any chore table');
 select is((select count(*)::int from information_schema.role_table_grants
   where grantee='anon' and table_schema='public' and table_name like 'chore\_%'),0,'anon holds no privilege on any chore table');
-select ok(not has_function_privilege('anon','public.chore_cell_set(uuid,uuid,uuid,boolean)','execute')
-  and has_function_privilege('authenticated','public.chore_cell_set(uuid,uuid,uuid,boolean)','execute'),'chore_cell_set grants');
+select ok(not has_function_privilege('anon','public.chore_cell_set(uuid,uuid,uuid,boolean,uuid)','execute')
+  and has_function_privilege('authenticated','public.chore_cell_set(uuid,uuid,uuid,boolean,uuid)','execute'),'chore_cell_set grants');
 select is((select count(*)::int from pg_proc p where p.pronamespace='public'::regnamespace and p.proname like 'chore\_%'
   and has_function_privilege('anon',p.oid,'execute')),0,'anon can execute no chore RPC');
 select is((select count(*)::int from pg_proc p where p.pronamespace='public'::regnamespace and p.proname like 'chore\_%'
-  and has_function_privilege('authenticated',p.oid,'execute')),11,'exactly eleven chore RPCs are callable by signed-in users');
+  and has_function_privilege('authenticated',p.oid,'execute')),15,'exactly fifteen chore RPCs are callable by signed-in users (eleven from Batch B + four from Batch C)');
 select ok(not has_function_privilege('authenticated','private.chore_board_authorize(uuid,boolean,text,boolean,boolean)','execute')
   and not has_function_privilege('authenticated','private.chore_emit(public.chore_boards,uuid,uuid,uuid,text,jsonb)','execute'),'internal helpers are private');
-select ok(pg_get_function_arguments('public.chore_cell_set(uuid,uuid,uuid,boolean)'::regprocedure) !~* 'actor|profile|user',
+select ok(pg_get_function_arguments('public.chore_cell_set(uuid,uuid,uuid,boolean,uuid)'::regprocedure) !~* 'actor|profile|user',
   'chore_cell_set takes no actor argument (the actor is always auth.uid())');
 select is((select count(*)::int from pg_trigger where tgrelid='public.chore_events'::regclass and tgname='chore_events_append_only'),1,'audit table is append-only (trigger present)');
 
