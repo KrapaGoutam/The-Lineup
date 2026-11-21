@@ -512,7 +512,7 @@ select pg_temp.run_mode('st1',  '00000000-0000-4000-8000-000000082005','random',
 select is((select count(*)::int from rpc_out where outcome like 'ERR:42883%'), 0,
   'SW-R1 the generated argument lists matched every function signature (no sweep call missed its guard on a signature error)');
 
-select is((select count(*)::int from fn_list), 126, 'SW-R2 the sweep covered exactly the 126 (118 at Stage B + team_set_member_active + team_add_member + V2.0.8 tips_save_interval/tips_void_interval/tips_recalculate_pool/tips_get_range + V2.0.13 task_delete/task_checklist_step_set) authenticated-callable non-trigger public functions (a new RPC changes this count and needs review)');
+select is((select count(*)::int from fn_list), 137, 'SW-R2 the sweep covered exactly the 137 (118 at Stage B + team_set_member_active + team_add_member + V2.0.8 tips_save_interval/tips_void_interval/tips_recalculate_pool/tips_get_range + V2.0.13 task_delete/task_checklist_step_set + Batch B 11 chore_* RPCs) authenticated-callable non-trigger public functions (a new RPC changes this count and needs review)');
 
 select is((select coalesce(array_agg(distinct proname::text order by proname::text), '{}') from rpc_out
             where mode = 'xorg' and outcome like 'OK:%' and outcome not in ('OK:false','OK:0')),
@@ -565,14 +565,14 @@ select is((select coalesce(array_agg(l.proname::text order by l.proname::text), 
 
 select is((select coalesce(array_agg(l.proname::text order by l.proname::text), '{}') from passes l
             where l.persona = 'am1' and not exists (select 1 from passes a where a.persona = 'st1' and a.proname = l.proname)),
-  array['attendance_correct_session','checklist_template_save','checklist_template_set_active','inventory_bootstrap','inventory_bulk_count',
+  array['attendance_correct_session','checklist_template_save','checklist_template_set_active','chore_board_reorder','inventory_bootstrap','inventory_bulk_count',
         'inventory_date_group_import_commit','inventory_date_lot_save','inventory_freshness_rule_save','inventory_import_commit','inventory_import_stage',
         'inventory_order_draft_clear','inventory_order_draft_fill','inventory_order_draft_mark_sent','inventory_order_draft_open','inventory_order_draft_save',
         'inventory_order_draft_sync','inventory_saved_view_save','inventory_stock_adjust','inventory_stock_set_levels','inventory_storage_area_archive',
         'inventory_storage_area_upsert','inventory_storage_placement_delete','inventory_storage_placement_reorder','inventory_storage_placement_set',
         'inventory_storage_shelf_delete','inventory_storage_shelf_upsert','recalculate_tip_pool','task_assign','task_cancel','task_create','task_delete',
         'task_series_create','task_series_stop','task_series_update','task_update','tips_add_interval','tips_finalize_pool','tips_recalculate_pool','tips_reopen_pool','tips_save_interval'],
-  'SW-R10 the staff-to-assistant step is exactly the 40 pinned management RPCs (attendance corrections, checklist/task authoring incl. V2.0.13 task_delete, inventory stock+orders, tips pool close/reopen + V2.0.8 save/recalculate); staff holds none of them');
+  'SW-R10 the staff-to-assistant step is exactly the 41 pinned management RPCs (attendance corrections, checklist/task authoring incl. V2.0.13 task_delete, Batch B chore_board_reorder, inventory stock+orders, tips pool close/reopen + V2.0.8 save/recalculate); staff holds none of them');
 
 select is((select count(*)::int from passes where persona = 'st1' and proname in (select proname from rpc_out where mode = 'own' and persona = 'st1' and proname like 'kiosk_%' escape '' and proname <> 'kiosk_list_manageable_locations')), 0,
   'SW-R10b staff passes no kiosk management RPC');
