@@ -186,19 +186,37 @@ export function useChoreController({
       const current = demoRef.current;
       if (current) {
         const base = demoStateRef.current ?? current.state;
+        const engineCtx = {
+          viewer,
+          team: current.team,
+          organizationId: current.organizationId,
+          locationId: DEMO_CHORE_LOCATION_ID,
+          now: new Date(),
+          timeZone: current.timeZone,
+        };
         const result = applyChoreCommand(
           base.chores ?? emptyChoreState(),
           command,
-          {
-            viewer,
-            team: current.team,
-            organizationId: current.organizationId,
-            locationId: DEMO_CHORE_LOCATION_ID,
-            now: new Date(),
-            timeZone: current.timeZone,
-          },
+          engineCtx,
         );
-        if (!result.ok) return { ok: false, error: result.error };
+        if (!result.ok) {
+          // Demo twin of "server truth wins": a refused tick on a run that has already
+          // ended is followed by the roll-forward the real refresh performs, so the
+          // person sees the current run and can check the cell again.
+          if (/already ended/.test(result.error)) {
+            const rolled = applyChoreCommand(
+              base.chores ?? emptyChoreState(),
+              { type: "cyclesSweep" },
+              engineCtx,
+            );
+            if (rolled.ok) {
+              const next = { ...base, chores: rolled.value };
+              demoStateRef.current = next;
+              current.setState(next);
+            }
+          }
+          return { ok: false, error: result.error };
+        }
         const next = { ...base, chores: result.value };
         demoStateRef.current = next;
         current.setState(next);

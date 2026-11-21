@@ -57,6 +57,21 @@ export function periodKey(
   return start === null ? null : `${recurrence.slice(0, 1)}:${start}`;
 }
 
+/**
+ * Has the period this run belongs to already ended? Mirror of
+ * `private.chore_run_period_ended`: only an AUTO-reset daily / weekly board rolls over, so
+ * only there is an open run stale. `today` is the LOCATION's calendar day. The database
+ * refuses ticks on a stale run (F-1) and the sweep expires it with this same rule.
+ */
+export function runPeriodEnded(board: ChoreBoardView, today: string): boolean {
+  if (!board.cycle || board.resetIntent !== "automatic_after_completion") {
+    return false;
+  }
+  const mine = periodStart(board.recurrenceIntent, board.cycle.businessDate);
+  const current = periodStart(board.recurrenceIntent, today);
+  return mine !== null && current !== null && mine < current;
+}
+
 export const RECURRENCE_BEHAVIOR: Record<RecurrenceIntent, string> = {
   continuous: "A new run starts as soon as the last one is finished.",
   daily: "One run per business day, in this location's time zone.",

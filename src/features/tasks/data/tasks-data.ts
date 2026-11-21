@@ -115,6 +115,22 @@ export async function getTasksSnapshot(
     );
   }
 
+  // V2.0.13 chore boards of THIS (verified) location: close a complete auto-reset run,
+  // expire a stale daily / weekly run, open the current period's run. The database
+  // decides from its own clock and the LOCATION's time zone, checks membership itself,
+  // names no board / time / outcome, skips boards another transaction is working on,
+  // and is idempotent, so repeated or concurrent loads are harmless. Best-effort like
+  // the sweeps above: a failure (including a database that does not have the chore
+  // tables yet) is logged and never blocks Tasks. This is an on-demand reconcile, NOT
+  // an unattended scheduler: nothing rolls over while nobody loads Tasks / Chore Wheel.
+  const choreSweep = await supabase.rpc("chore_cycles_sweep", {
+    p_organization_id: organizationId,
+    p_location_id: location.id,
+  });
+  if (choreSweep.error) {
+    console.error("getTasksSnapshot: chore_cycles_sweep", choreSweep.error);
+  }
+
   const historyFrom = addDaysToDate(
     today,
     -(manager ? MANAGER_HISTORY_DAYS : STAFF_HISTORY_DAYS),

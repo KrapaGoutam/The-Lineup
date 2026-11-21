@@ -4,6 +4,7 @@ import {
   applyCorrections,
   freezeBoard,
   periodStart,
+  runPeriodEnded,
   runReadiness,
   summarizeRun,
   type RunCloseInfo,
@@ -750,6 +751,14 @@ function apply(
       if (command.cycleId && command.cycleId !== board.cycle?.id) {
         refuse("This run has already ended. Reload to see the current run.");
       }
+      // F-1: a daily / weekly run whose day or week has ended is stale even while it is
+      // still open. Refuse (nothing is written); the refresh rolls the run, then the
+      // person checks the cell again in the current one. Tick and untick alike.
+      if (runPeriodEnded(board, localToday(ctx))) {
+        refuse(
+          "This run has already ended for its day. Reload to see the current run, then check it again.",
+        );
+      }
       const present = findCompletion(board, row.id, column.id);
       if (command.done) {
         if (row.mode === "any_one") {
@@ -958,11 +967,7 @@ function apply(
             s = replaceBoard(s2, closed);
             board = closed;
             changed += 1;
-          } else if (
-            current !== null &&
-            (periodStart(board.recurrenceIntent, board.cycle.businessDate) ??
-              today) < current
-          ) {
+          } else if (runPeriodEnded(board, today)) {
             const [s2, closed] = finishRun(s, board, ctx, {
               status: "expired",
               trigger: "expired",

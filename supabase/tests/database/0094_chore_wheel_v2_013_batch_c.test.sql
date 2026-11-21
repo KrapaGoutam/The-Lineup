@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(144);
+select plan(173);
 
 -- V2.0.13 Batch C: independent run closure, recurrence sweep, immutable snapshots,
 -- append-only corrections. Cast (org 1: locations A and B; org 2: C):
@@ -279,14 +279,20 @@ select is((select count(*)::int from public.chore_cycles where board_id=current_
 select pg_temp.mk('Daily done','daily','automatic_after_completion');
 reset role;
 select set_config('app.dd',pg_temp.bid('Daily done')::text,true);
-update public.chore_cycles set business_date = business_date - 1 where board_id=current_setting('app.dd')::uuid and status='open';
 select pg_temp.tick('00000000-0000-4000-8000-000000094002',current_setting('app.dd')::uuid,'Bucket 1','Ann');
 select pg_temp.tick('00000000-0000-4000-8000-000000094002',current_setting('app.dd')::uuid,'Bucket 2','Ann');
 select pg_temp.tick('00000000-0000-4000-8000-000000094003',current_setting('app.dd')::uuid,'Bucket 1','Bea');
-select is(pg_temp.tick('00000000-0000-4000-8000-000000094003',current_setting('app.dd')::uuid,'Bucket 2','Bea'),'checked_closed','yesterday''s daily run completes (late) and closes');
 reset role;
-select is((select count(*)::int from public.chore_cycles where board_id=current_setting('app.dd')::uuid and status='open'),0,'it does not restart itself');
-select is(public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021'),1,'the sweep starts the new day''s run (one)');
+update public.chore_cycles set business_date = business_date - 1 where board_id=current_setting('app.dd')::uuid and status='open';
+-- Yesterday's run (3 of 4) becomes complete WITHOUT a tick: Bea's column is removed. (A tick can no
+-- longer finish a stale run; see F-1 below.)
+select pg_temp.act('00000000-0000-4000-8000-000000094001');
+select public.chore_column_set_state(pg_temp.cid(current_setting('app.dd')::uuid,'Bea'),'archived');
+reset role;
+select is((select count(*)::int from public.chore_cycles where board_id=current_setting('app.dd')::uuid and status='open'),1,'a structure edit that completes a stale run does not close it by itself');
+select is(public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021'),2,'the sweep closes the complete stale run as Completed and starts the new day''s run');
+select is((select status||'/'||closed_by_kind||'/'||close_trigger from public.chore_cycles where board_id=current_setting('app.dd')::uuid and sequence=1),'completed/system/automatic','yesterday''s run is Completed by the system, not Expired');
+select is((select count(*)::int from public.chore_cycles where board_id=current_setting('app.dd')::uuid and sequence=2 and status='open' and opened_by_kind='system'),1,'and the current day''s run is open');
 -- Weekly: ISO week (Monday) in the location's calendar.
 select is(private.chore_period_start('weekly',date '2026-11-22'),date '2026-11-16','a Sunday belongs to the week that started the Monday before');
 select is(private.chore_period_start('weekly',date '2026-11-16'),date '2026-11-16','a Monday starts its own week');
@@ -385,6 +391,106 @@ select pg_temp.act('00000000-0000-4000-8000-000000094001');
 select ok((select count(*) from public.chore_cycle_snapshot_cells where cycle_id=current_setting('app.mc1')::uuid)=4,'a manager reads the frozen cells');
 select ok((select count(*) from public.chore_cycle_snapshots)>=4,'a manager reads run summaries across boards (cross-cycle history)');
 reset role;
+
+-- 12. F-1: a stale daily / weekly run refuses ticks at the database boundary -----------------
+-- Deterministic: the "day boundary" is simulated by re-dating the OPEN run relative to the
+-- location's own local date, never by comparing now() with an arbitrary offset.
+create function pg_temp.try_tick(p_who text, b uuid, r text, c text, p_done boolean default true) returns text language plpgsql as $f$
+begin
+  perform pg_temp.tick(p_who, b, r, c, p_done);
+  return 'ok';
+exception when others then
+  return sqlstate;
+end $f$;
+
+select pg_temp.mk('F1 daily','daily','automatic_after_completion');
+reset role;
+select set_config('app.f1',pg_temp.bid('F1 daily')::text,true);
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1')::uuid,'Bucket 1','Ann'),'ok','F-1 daily: a tick in the current day''s run is accepted');
+reset role;
+select set_config('app.f1c1',pg_temp.cyc(current_setting('app.f1')::uuid)::text,true);
+-- The business day rolls over while the tablet stays open: the run is still 'open'.
+update public.chore_cycles set business_date = private.chore_local_date('00000000-0000-4000-8000-000000094021') - 1
+  where id = current_setting('app.f1c1')::uuid;
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094003',current_setting('app.f1')::uuid,'Bucket 1','Bea'),'P0001','F-1 daily: the first tick after the boundary is refused with the stale-run error');
+reset role;
+select is((select count(*)::int from public.chore_completions where cycle_id=current_setting('app.f1c1')::uuid),1,'F-1: the refused tick wrote no completion (only the earlier valid one remains)');
+select is((select count(*)::int from public.chore_events where cycle_id=current_setting('app.f1c1')::uuid and event_type='cell_checked'),1,'F-1: and no audit event was recorded for it');
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1')::uuid,'Bucket 1','Ann',false),'P0001','F-1: an UNTICK on the stale run is refused too (the old record is not edited either)');
+reset role;
+select is((select count(*)::int from public.chore_completions where cycle_id=current_setting('app.f1c1')::uuid),1,'F-1: the earlier valid completion is intact');
+-- The refresh path (the sweep) rolls the run; the cell can then be checked in the NEW run.
+select is(public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021'),2,'F-1 recovery: the sweep expires the stale run and opens the current one');
+select is((select status from public.chore_cycles where id=current_setting('app.f1c1')::uuid),'expired','F-1: the old run is Expired (not Completed)');
+select is((select count(*)::int from public.chore_cycle_snapshot_cells where cycle_id=current_setting('app.f1c1')::uuid),1,'F-1 integrity: the frozen old run holds only its own valid cell, not the refused new-day tick');
+select is((select count(*)::int from public.chore_events where cycle_id=current_setting('app.f1c1')::uuid and event_type='cell_checked' and actor_profile_id='00000000-0000-4000-8000-000000094002'),1,'F-1 audit: the valid completion keeps its attribution');
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094003',current_setting('app.f1')::uuid,'Bucket 1','Bea'),'ok','F-1 recovery: the same cell is accepted in the new run');
+reset role;
+select is((select count(*)::int from public.chore_completions where cycle_id=pg_temp.cyc(current_setting('app.f1')::uuid)),1,'F-1: it was recorded against the new run');
+select is(public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021'),0,'F-1: repeating the sweep changes nothing (no duplicate run or snapshot)');
+select is((select count(*)::int from public.chore_cycles where board_id=current_setting('app.f1')::uuid)||'/'||(select count(*)::int from public.chore_cycle_snapshots where board_id=current_setting('app.f1')::uuid),'2/1','F-1: exactly two runs and one snapshot');
+
+-- Authorization still comes first: another location's staff gets the same denial as for any board.
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094004',current_setting('app.f1')::uuid,'Bucket 1','Bea'),'42501','F-1: authorization is checked before the stale-run rule (another location is denied, no oracle)');
+reset role;
+
+-- Weekly: the ISO week (Monday) of the location, not the calendar day.
+select pg_temp.mk('F1 weekly','weekly','automatic_after_completion');
+reset role;
+select set_config('app.f1w',pg_temp.bid('F1 weekly')::text,true);
+update public.chore_cycles set business_date = private.chore_period_start('weekly',private.chore_local_date('00000000-0000-4000-8000-000000094021'))
+  where board_id=current_setting('app.f1w')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1w')::uuid,'Bucket 1','Ann'),'ok','F-1 weekly: a run that started earlier IN THIS week is not stale');
+reset role;
+update public.chore_cycles set business_date = private.chore_period_start('weekly',private.chore_local_date('00000000-0000-4000-8000-000000094021')) - 1
+  where board_id=current_setting('app.f1w')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094003',current_setting('app.f1w')::uuid,'Bucket 1','Bea'),'P0001','F-1 weekly: a run from the previous week (the Sunday before this Monday) is stale');
+reset role;
+select is(public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021'),2,'F-1 weekly: the sweep rolls it');
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094003',current_setting('app.f1w')::uuid,'Bucket 1','Bea'),'ok','F-1 weekly: the tick is accepted in the new week''s run');
+reset role;
+
+-- Time zones: the location's calendar day decides, not UTC. Two zones 25 hours apart.
+update public.locations set time_zone='Pacific/Kiritimati' where id='00000000-0000-4000-8000-000000094021';
+select pg_temp.mk('F1 tz east','daily','automatic_after_completion');
+reset role;
+select set_config('app.f1e',pg_temp.bid('F1 tz east')::text,true);
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1e')::uuid,'Bucket 1','Ann'),'ok','F-1 tz (UTC+14): a run opened today (local) is accepted');
+reset role;
+update public.chore_cycles set business_date = (now() at time zone 'UTC')::date where board_id=current_setting('app.f1e')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094003',current_setting('app.f1e')::uuid,'Bucket 1','Bea'),
+  case when (now() at time zone 'Pacific/Kiritimati')::date > (now() at time zone 'UTC')::date then 'P0001' else 'ok' end,
+  'F-1 tz (UTC+14): a run dated with the UTC day is stale exactly when the LOCAL day is already later');
+reset role;
+update public.chore_cycles set business_date = (now() at time zone 'Pacific/Kiritimati')::date - 1 where board_id=current_setting('app.f1e')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1e')::uuid,'Bucket 2','Ann'),'P0001','F-1 tz (UTC+14): the previous local day is stale');
+reset role;
+update public.locations set time_zone='Pacific/Pago_Pago' where id='00000000-0000-4000-8000-000000094021';
+select pg_temp.mk('F1 tz west','daily','automatic_after_completion');
+reset role;
+select set_config('app.f1x',pg_temp.bid('F1 tz west')::text,true);
+update public.chore_cycles set business_date = (now() at time zone 'UTC')::date where board_id=current_setting('app.f1x')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1x')::uuid,'Bucket 1','Ann'),
+  case when (now() at time zone 'Pacific/Pago_Pago')::date > (now() at time zone 'UTC')::date then 'P0001' else 'ok' end,
+  'F-1 tz (UTC-11): the UTC day is accepted (or stale) according to the LOCAL day, never the UTC day alone');
+reset role;
+update public.chore_cycles set business_date = (now() at time zone 'Pacific/Pago_Pago')::date - 1 where board_id=current_setting('app.f1x')::uuid and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',current_setting('app.f1x')::uuid,'Bucket 2','Ann'),'P0001','F-1 tz (UTC-11): the previous local day is stale');
+reset role;
+update public.locations set time_zone='America/Chicago' where id='00000000-0000-4000-8000-000000094021';
+
+-- Boards that never roll are never stale.
+select pg_temp.mk('F1 continuous','continuous','automatic_after_completion');
+select pg_temp.mk('F1 manual daily','daily','manual_restart');
+reset role;
+update public.chore_cycles set business_date = business_date - 5 where board_id in (pg_temp.bid('F1 continuous'),pg_temp.bid('F1 manual daily')) and status='open';
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',pg_temp.bid('F1 continuous'),'Bucket 1','Ann'),'ok','F-1 compat: a continuous board has no period, an old run still accepts ticks');
+reset role;
+select is(pg_temp.try_tick('00000000-0000-4000-8000-000000094002',pg_temp.bid('F1 manual daily'),'Bucket 1','Ann'),'ok','F-1 compat: a manual-reset daily board never expires, so it is never refused (it would be stuck otherwise)');
+reset role;
+select public.chore_cycles_sweep('00000000-0000-4000-8000-000000094010','00000000-0000-4000-8000-000000094021');
+select is((select count(*)::int||'/'||count(*) filter (where status='open')::int from public.chore_cycles where board_id in (pg_temp.bid('F1 continuous'),pg_temp.bid('F1 manual daily'))),'2/2','F-1 compat: and the sweep leaves those two boards alone (one open run each, nothing expired): same definition of stale');
+select ok(not has_function_privilege('authenticated','private.chore_run_period_ended(public.chore_boards,public.chore_cycles)','execute'),'F-1: the period helper is private');
 
 -- 11. Audit stays append-only ----------------------------------------------------------------
 select throws_ok($$update public.chore_events set payload='{}' where id=(select min(id) from public.chore_events)$$,'23514',null,'the audit trail cannot be edited');

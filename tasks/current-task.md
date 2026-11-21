@@ -1,3 +1,19 @@
+# V2.0.13 Final Gate 1.1 — F-1 boundary-tick fix + Tasks-load sweep — IMPLEMENTED (local), draft PR #363
+
+Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 1.1"). Batch C migration amended in place (still local-only; hosted DEV ledger 100 re-verified read-only).
+
+- [x] F-1: `chore_cell_set` refuses ticks/unticks on a stale auto-reset daily/weekly run (`private.chore_run_period_ended`, location-local period, shared with the sweep); demo engine + controller mirror; pgTAP 0094 173 assertions (mutation-checked), real-JWT 14, unit tests.
+- [x] Tasks-load sweep: `getTasksSnapshot` calls `chore_cycles_sweep` (verified location, best-effort, idempotent); no external scheduler.
+- [x] D-13 read-only: PR preview → DEV ref `opmujepkemwcdxxorhfd` (unmigrated); production → PROD ref; migrate DEV before any development deploy/merge.
+- [x] Gates: full pgTAP 97 files / 4,243; real-JWT 48 (Tasks suites); Vitest 4,880; focused Playwright 74 passed / 4 skipped by design; `npm run check` clean.
+- [ ] Exact-head CI on the pushed head; separate approvals still required for DEV backup, isolated rehearsal, hosted apply, authenticated acceptance, ready-for-review, merge. Production untouched.
+
+## Current State & Next Step
+
+Final Gate 1.1 is committed on `feature/v2-013-tasks-chores`. Next: owner decides the remaining approvals; the first hosted step is a DEV backup + isolated restore rehearsal of the four migrations (not authorized yet).
+
+---
+
 # V2.0.13 Batch C — run closure, recurrence, immutable snapshots, unified History — IMPLEMENTED (local), draft PR #363
 
 Plan, rules, evidence, limitations and hosted prerequisites: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch C"). Same branch/worktree; migration `20261122090000_chore_wheel_v2_013_batch_c.sql` (local only).

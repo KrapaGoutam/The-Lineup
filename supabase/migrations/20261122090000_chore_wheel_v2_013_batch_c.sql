@@ -379,6 +379,21 @@ returns date language sql immutable set search_path = '' as $$
 $$;
 revoke all on function private.chore_period_start(text, date) from public, anon, authenticated;
 
+-- Has the period this run belongs to already ended? Only an AUTO-reset daily / weekly
+-- board rolls over (the sweep expires such a run), so only there is a run "stale". The
+-- calendar day / ISO week is the LOCATION's (never UTC, never a browser clock). A
+-- manual-reset board never expires, and continuous / manual boards have no period, so
+-- they are never stale. The tick (F-1) and the sweep share this one definition.
+create function private.chore_run_period_ended(p_board public.chore_boards, p_cycle public.chore_cycles)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select p_board.reset_intent = 'automatic_after_completion'
+    and coalesce(
+      private.chore_period_start(p_board.recurrence_intent, p_cycle.business_date)
+        < private.chore_period_start(p_board.recurrence_intent, private.chore_local_date(p_board.location_id)),
+      false);
+$$;
+revoke all on function private.chore_run_period_ended(public.chore_boards, public.chore_cycles) from public, anon, authenticated;
+
 -- The same counting rules as src/features/tasks/domain/chore-rules.ts (boardProgress):
 -- all columns = chores x applicable live columns; selected = only the selected live
 -- columns; any one = ONE check per chore, done when any live column completed it.
@@ -583,6 +598,14 @@ begin
   select * into cy from public.chore_cycles where id = v_cycle for update;
   if cy.status <> 'open' or (p_expected_cycle_id is not null and p_expected_cycle_id <> cy.id) then
     raise exception 'This run has already ended. Reload to see the current run.' using errcode = 'P0001';
+  end if;
+  -- F-1: a daily / weekly run whose day / week has ended is stale even though it is still
+  -- 'open' (the sweep has not rolled it yet). Writing to it would put a new-period check
+  -- into the old run's frozen record. Refuse -- nothing is written, the transaction
+  -- rolls back -- and let the refresh (which runs the sweep) show the current run; the
+  -- person then checks the cell again in the new run. Applies to tick AND untick.
+  if private.chore_run_period_ended(b, cy) then
+    raise exception 'This run has already ended for its day. Reload to see the current run, then check it again.' using errcode = 'P0001';
   end if;
 
   select * into w from public.chore_rows
@@ -848,8 +871,7 @@ begin
           perform private.chore_start_run(b, 'system', null, null);
           v_has_open := true;
         end if;
-      elsif v_cur is not null
-            and private.chore_period_start(b.recurrence_intent, cy.business_date) < v_cur then
+      elsif private.chore_run_period_ended(b, cy) then
         perform private.chore_finish_cycle(b, cy.id, 'expired', 'expired', null, 'system', null);
         v_has_open := false;
         v_count := v_count + 1;

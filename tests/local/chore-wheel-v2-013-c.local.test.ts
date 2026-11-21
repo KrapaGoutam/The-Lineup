@@ -36,6 +36,7 @@ import {
   getChoreSnapshotAction,
   runChoreCommandAction,
 } from "@/features/tasks/actions/chore-actions";
+import { getTasksSnapshotAction } from "@/features/tasks/actions/tasks-actions";
 import type { ChoreCommand } from "@/features/tasks/domain/chore-commands";
 import type { ChoreBoardView } from "@/features/tasks/domain/chore-types";
 
@@ -630,4 +631,245 @@ it("a board with no required work never closes by itself", async () => {
   expect(r.outcome).toBe("checked");
   await snap(MGR());
   expect(await cyclesOf(b.id)).toHaveLength(1);
+});
+
+// ---------------------------------------------------------------------------------------
+// Final Gate 1.1: F-1 (stale run refuses ticks) and the Tasks-load sweep
+// ---------------------------------------------------------------------------------------
+/** The location's calendar day (the database uses the location time zone, never UTC), shifted by `days`. */
+function localDay(timeZone: string, days: number): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone }).format(
+    new Date(),
+  );
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+const backdate = async (boardId: string, timeZone: string, days = -1) =>
+  must(
+    await fx.admin
+      .from("chore_cycles")
+      .update({ business_date: localDay(timeZone, days) })
+      .eq("board_id", boardId)
+      .eq("status", "open"),
+  );
+const cellEvents = async (cycleId: string) =>
+  must(
+    await fx.admin
+      .from("chore_events")
+      .select("id")
+      .eq("cycle_id", cycleId)
+      .eq("event_type", "cell_checked"),
+  )!.length;
+const tasksLoad = (who: Who) =>
+  as(who, (expectedContext) =>
+    getTasksSnapshotAction({ restaurantSlug: fx.org.slug, expectedContext }),
+  );
+
+it("F-1: the first tick after the day boundary is refused through the real action, writes nothing, and the refresh recovers", async () => {
+  const b = await makeBoard("F1 real", { recurrenceIntent: "daily" });
+  await ok(tick(STAFF(), b, "Bucket 1", "Staff")); // valid, same day
+  const old = (await cyclesOf(b.id))[0];
+  await backdate(b.id, "America/Chicago"); // the tablet stays open across midnight
+
+  const refused = await tick(DUAL(), b, "Bucket 1", "Dual");
+  expect(refused.ok).toBe(false);
+  if (!refused.ok) expect(refused.error).toMatch(/already ended for its day/);
+  const untick = await run(STAFF(), {
+    type: "cellSet",
+    ...cell(b, "Bucket 1", "Staff"),
+    done: false,
+    cycleId: b.cycle!.id,
+  });
+  expect(untick.ok).toBe(false); // the old record is not edited either
+  const left = must(
+    await fx.admin
+      .from("chore_completions")
+      .select("completed_by")
+      .eq("cycle_id", old.id),
+  )!;
+  expect(left).toHaveLength(1);
+  expect(left[0].completed_by).toBe(fx.staff.id);
+  expect(await cellEvents(old.id)).toBe(1); // no audit row for the refused tick
+
+  // Recovery = the refresh (which runs the sweep), then the person checks again.
+  const fresh = await boardOf("F1 real");
+  expect(fresh.cycle?.sequence).toBe(2);
+  expect(fresh.cycle?.openedBySystem).toBe(true);
+  expect(fresh.completions).toHaveLength(0);
+  await ok(tick(DUAL(), fresh, "Bucket 1", "Dual"));
+  const cycles = await cyclesOf(b.id);
+  expect(cycles.map((c) => [c.sequence, c.status])).toEqual([
+    [1, "expired"],
+    [2, "open"],
+  ]);
+  // Historical integrity: the frozen old run has only its own valid cell.
+  const frozen = must(
+    await fx.admin
+      .from("chore_cycle_snapshot_cells")
+      .select("completed_by")
+      .eq("cycle_id", old.id),
+  )!;
+  expect(frozen.map((c) => c.completed_by)).toEqual([fx.staff.id]);
+  expect((await snapshotsOf(b.id))[0].final_status).toBe("expired");
+});
+
+it("F-1: a weekly run from the previous week refuses ticks; one started earlier in the current week does not", async () => {
+  const b = await makeBoard("F1 weekly real", { recurrenceIntent: "weekly" });
+  // Monday of the location's current ISO week.
+  const today = new Date(`${localDay("America/Chicago", 0)}T00:00:00Z`);
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7));
+  must(
+    await fx.admin
+      .from("chore_cycles")
+      .update({ business_date: monday.toISOString().slice(0, 10) })
+      .eq("board_id", b.id)
+      .eq("status", "open"),
+  );
+  expect((await tick(STAFF(), b, "Bucket 1", "Staff")).ok).toBe(true);
+  const lastSunday = new Date(monday);
+  lastSunday.setUTCDate(monday.getUTCDate() - 1);
+  must(
+    await fx.admin
+      .from("chore_cycles")
+      .update({ business_date: lastSunday.toISOString().slice(0, 10) })
+      .eq("board_id", b.id)
+      .eq("status", "open"),
+  );
+  const refused = await tick(DUAL(), b, "Bucket 1", "Dual");
+  expect(refused.ok).toBe(false);
+  await snap();
+  expect((await boardOf("F1 weekly real")).cycle?.sequence).toBe(2);
+});
+
+it("F-1: a stale tick racing the sweep never commits a completion, never duplicates a run or a snapshot", async () => {
+  for (let round = 0; round < 4; round += 1) {
+    const b = await makeBoard(`F1 race ${round}`, {
+      recurrenceIntent: "daily",
+    });
+    await ok(tick(STAFF(), b, "Bucket 1", "Staff"));
+    await backdate(b.id, "America/Chicago");
+    const oldId = b.cycle!.id;
+    const [stale, , ,] = await Promise.all([
+      tick(DUAL(), b, "Bucket 1", "Dual"),
+      snap(MGR()),
+      tasksLoad(STAFF()),
+      snap(DUAL()),
+    ]);
+    expect(stale.ok).toBe(false);
+    await snap(); // whichever side lost the lock race, the board now settles
+    const cycles = await cyclesOf(b.id);
+    expect(cycles.map((c) => [c.sequence, c.status, c.opened_by_kind])).toEqual(
+      [
+        [1, "expired", "user"],
+        [2, "open", "system"],
+      ],
+    );
+    expect(await snapshotsOf(b.id)).toHaveLength(1);
+    const frozen = must(
+      await fx.admin
+        .from("chore_cycle_snapshot_cells")
+        .select("completed_by")
+        .eq("cycle_id", oldId),
+    )!;
+    expect(frozen.map((c) => c.completed_by)).toEqual([fx.staff.id]);
+  }
+});
+
+it("Tasks load: the ordinary Tasks snapshot reconciles stale boards of ITS location only, without opening the Chore Wheel", async () => {
+  const a = await makeBoard("Load A", { recurrenceIntent: "daily" });
+  await ok(tick(STAFF(), a, "Bucket 1", "Staff"));
+  await backdate(a.id, "America/Chicago");
+
+  // A stale board at the OTHER location (manager of both).
+  const atB = (command: ChoreCommand) =>
+    run({ user: fx.manager, location: fx.b, designation: "manager" }, command);
+  await ok(atB(settings("Load B", { recurrenceIntent: "daily" })));
+  const bBoard = must(
+    await fx.admin
+      .from("chore_boards")
+      .select("id")
+      .eq("name", "Load B")
+      .single(),
+  )!;
+  await backdate(bBoard.id, "America/New_York", -2);
+
+  // Staff at A load the normal Tasks screen (NOT the Chore Wheel).
+  const loaded = await tasksLoad(STAFF());
+  expect(loaded.ok).toBe(true);
+  expect((await cyclesOf(a.id)).map((c) => [c.sequence, c.status])).toEqual([
+    [1, "expired"],
+    [2, "open"],
+  ]);
+  // Location B was not touched by a load at A.
+  expect(
+    (await cyclesOf(bBoard.id)).map((c) => [c.sequence, c.status]),
+  ).toEqual([[1, "open"]]);
+  // Repeated loads are idempotent (no duplicate run).
+  await tasksLoad(STAFF());
+  await tasksLoad(MGR());
+  expect(await cyclesOf(a.id)).toHaveLength(2);
+
+  // The load at B rolls B's board.
+  const loadedB = await tasksLoad({
+    user: fx.manager,
+    location: fx.b,
+    designation: "manager",
+  });
+  expect(loadedB.ok).toBe(true);
+  expect(
+    (await cyclesOf(bBoard.id)).map((c) => [c.sequence, c.status]),
+  ).toEqual([
+    [1, "expired"],
+    [2, "open"],
+  ]);
+});
+
+it("Tasks load: the sweep is called once per load with the verified location, and a sweep failure never blocks Tasks", async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const real = fx.staff.client;
+  const broken = new Proxy(real, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+      if (prop === "rpc") {
+        return (name: string, args: Record<string, unknown>) => {
+          if (name === "chore_cycles_sweep") {
+            calls.push(args);
+            return Promise.resolve({
+              data: null,
+              error: { message: "boom", code: "XX000" },
+            });
+          }
+          return (target.rpc as (n: string, a: unknown) => unknown)(name, args);
+        };
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const who: Who = {
+    user: { ...fx.staff, client: broken as never },
+    location: fx.a,
+    designation: "staff",
+  };
+  const result = await tasksLoad(who);
+  expect(result.ok).toBe(true); // a recoverable chore problem is not a Tasks failure
+  expect(result.ok && Array.isArray(result.data.tasks)).toBe(true);
+  expect(calls).toEqual([
+    { p_organization_id: fx.org.id, p_location_id: fx.a },
+  ]);
+  expect(
+    spy.mock.calls.some((c) => String(c[0]).includes("chore_cycles_sweep")),
+  ).toBe(true);
+  spy.mockRestore();
+});
+
+it("Tasks load: no client-supplied location can aim the sweep at another location (the RPC re-checks membership)", async () => {
+  // Staff of location A names location B directly: refused, nothing rolled.
+  const direct = await fx.staff.client.rpc("chore_cycles_sweep", {
+    p_organization_id: fx.org.id,
+    p_location_id: fx.b,
+  });
+  expect(direct.error?.code).toBe("42501");
 });

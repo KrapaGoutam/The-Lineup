@@ -219,6 +219,45 @@ describe("useChoreController (real mode)", () => {
     expect(result.current.pendingCells.size).toBe(0);
   });
 
+  it("F-1: a tick refused because the run ended is shown as refused, re-reads the server (which rolls the run) and is NOT silently replayed", async () => {
+    const { result } = setup();
+    await waitFor(() => expect(result.current.snapshot).not.toBeNull());
+    const reads = actions.getChoreSnapshotAction.mock.calls.length;
+    actions.runChoreCommandAction.mockResolvedValue({
+      ok: false,
+      error:
+        "This run has already ended for its day. Reload to see the current run, then check it again.",
+    });
+    let res: unknown;
+    await act(async () => {
+      res = await result.current.setCell(
+        "b1",
+        "row1",
+        "col1",
+        true,
+        "cycle-old",
+      );
+    });
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "This run has already ended for its day. Reload to see the current run, then check it again.",
+    });
+    // The write named the run on screen; it was attempted exactly once (no auto-retry).
+    expect(actions.runChoreCommandAction).toHaveBeenCalledTimes(1);
+    expect(actions.runChoreCommandAction.mock.calls[0]?.[0]).toMatchObject({
+      command: { type: "cellSet", cycleId: "cycle-old", done: true },
+    });
+    // The snapshot is re-read, which is where the server rolls the run forward.
+    await waitFor(() =>
+      expect(actions.getChoreSnapshotAction.mock.calls.length).toBeGreaterThan(
+        reads,
+      ),
+    );
+    expect(result.current.snapshot?.boards[0]?.completions).toHaveLength(0);
+    expect(result.current.pendingCells.size).toBe(0);
+  });
+
   it("reverts when the request itself throws, and re-reads the truth", async () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.snapshot).not.toBeNull());

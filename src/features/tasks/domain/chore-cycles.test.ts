@@ -10,6 +10,7 @@ import {
   periodKey,
   periodStart,
   recurrenceSummary,
+  runPeriodEnded,
   runReadiness,
 } from "./chore-cycles";
 import { boardProgress } from "./chore-rules";
@@ -607,5 +608,133 @@ describe("snapshots stay frozen; corrections append", () => {
       ["Ann", false],
       ["Bea", true],
     ]);
+  });
+});
+
+describe("F-1: a stale daily / weekly run refuses ticks (demo twin of chore_cell_set)", () => {
+  const STALE = /already ended for its day/;
+
+  it("daily: the first tick after the business-day boundary is refused and nothing is written; the sweep then recovers", () => {
+    const s = new Sim();
+    const b = s.make("Daily", "daily", "automatic_after_completion");
+    s.tick(b, "R1", "Ann", ANN); // valid, same day
+    s.now = "2026-11-11T18:00:00Z"; // the next business day; the tablet was not refreshed
+    const staleCycle = s.board(b).cycle!.id;
+    const { col, row } = s.ids(b);
+
+    expect(
+      s.fail(
+        {
+          type: "cellSet",
+          boardId: b,
+          rowId: row("R1"),
+          columnId: col("Bea"),
+          done: true,
+          cycleId: staleCycle,
+        },
+        BEA,
+      ),
+    ).toMatch(STALE);
+    // Untick is a write to the old record too.
+    expect(
+      s.fail(
+        {
+          type: "cellSet",
+          boardId: b,
+          rowId: row("R1"),
+          columnId: col("Ann"),
+          done: false,
+          cycleId: staleCycle,
+        },
+        ANN,
+      ),
+    ).toMatch(STALE);
+    expect(s.board(b).completions).toHaveLength(1); // only the earlier valid cell
+
+    // Recovery: the refresh runs the sweep; the same cell now lands in the NEW run.
+    s.do({ type: "cyclesSweep" });
+    expect(s.state.history).toHaveLength(1);
+    expect(s.state.history[0].summary.status).toBe("expired");
+    expect(s.state.history[0].board.completions).toHaveLength(1); // the refused tick is not in the frozen run
+    expect(s.state.history[0].board.completions[0].completedByName).toBe("Ann");
+    expect(s.board(b).cycle?.sequence).toBe(2);
+    expect(s.board(b).completions).toHaveLength(0);
+    expect(s.tick(b, "R1", "Bea", BEA)).toBe("checked");
+    expect(s.board(b).completions).toHaveLength(1);
+    expect(s.board(b).completions[0].completedByName).toBe("Bea");
+  });
+
+  it("weekly: stale only after the ISO week ends (a run from earlier in the same week is fine)", () => {
+    const s = new Sim();
+    s.now = "2026-11-10T18:00:00Z"; // Tuesday, week of Mon Nov 9
+    const b = s.make("Weekly", "weekly", "automatic_after_completion");
+    s.now = "2026-11-15T18:00:00Z"; // Sunday, same week
+    expect(s.tick(b, "R1", "Ann", ANN)).toBe("checked");
+    s.now = "2026-11-16T18:00:00Z"; // Monday: new week
+    expect(
+      s.fail(
+        {
+          type: "cellSet",
+          boardId: b,
+          rowId: s.ids(b).row("R1"),
+          columnId: s.ids(b).col("Bea"),
+          done: true,
+          cycleId: s.board(b).cycle!.id,
+        },
+        BEA,
+      ),
+    ).toMatch(STALE);
+  });
+
+  it("uses the LOCATION's day: 23:30 Chicago is still the same day, 01:30 Chicago is the next", () => {
+    const s = new Sim();
+    s.now = "2026-11-11T03:30:00Z"; // Nov 10, 21:30 Chicago
+    const b = s.make("Late", "daily", "automatic_after_completion");
+    s.now = "2026-11-11T05:30:00Z"; // 23:30 Chicago: UTC day already Nov 11, local day Nov 10
+    expect(s.tick(b, "R1", "Ann", ANN)).toBe("checked");
+    s.now = "2026-11-11T07:30:00Z"; // 01:30 Chicago: Nov 11
+    expect(
+      s.fail(
+        {
+          type: "cellSet",
+          boardId: b,
+          rowId: s.ids(b).row("R1"),
+          columnId: s.ids(b).col("Bea"),
+          done: true,
+          cycleId: s.board(b).cycle!.id,
+        },
+        BEA,
+      ),
+    ).toMatch(STALE);
+  });
+
+  it("boards that never roll are never stale: continuous, manual and manual-reset daily", () => {
+    const s = new Sim();
+    const cont = s.make("Cont", "continuous", "automatic_after_completion");
+    const manual = s.make("Man", "manual", "automatic_after_completion");
+    const daily = s.make("DailyManual", "daily", "manual_restart");
+    s.now = "2026-12-20T18:00:00Z"; // weeks later
+    for (const id of [cont, manual, daily]) {
+      expect(s.tick(id, "R1", "Ann", ANN)).toBe("checked");
+    }
+    expect(s.do({ type: "cyclesSweep" })).toBe("0");
+  });
+
+  it("the tick and the sweep share one rule (runPeriodEnded)", () => {
+    const s = new Sim();
+    const b = s.make("Daily", "daily", "automatic_after_completion");
+    const board = s.board(b);
+    expect(runPeriodEnded(board, "2026-11-10")).toBe(false);
+    expect(runPeriodEnded(board, "2026-11-11")).toBe(true);
+    expect(
+      runPeriodEnded({ ...board, resetIntent: "manual_restart" }, "2027-01-01"),
+    ).toBe(false);
+    expect(
+      runPeriodEnded(
+        { ...board, recurrenceIntent: "continuous" },
+        "2027-01-01",
+      ),
+    ).toBe(false);
+    expect(runPeriodEnded({ ...board, cycle: null }, "2027-01-01")).toBe(false);
   });
 });
