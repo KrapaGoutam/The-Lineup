@@ -222,7 +222,9 @@ create table public.chore_cycle_snapshots (
   constraint chore_cycle_snapshots_board_fk
     foreign key (board_id, organization_id) references public.chore_boards (id, organization_id) on delete cascade,
   constraint chore_cycle_snapshots_location_fk
-    foreign key (location_id, organization_id) references public.locations (id, organization_id),
+    -- CASCADE only resolves the order of an organization teardown: a location that still has
+    -- boards cannot be deleted at all (chore_boards_location_fk), so no history is ever lost this way.
+    foreign key (location_id, organization_id) references public.locations (id, organization_id) on delete cascade,
   constraint chore_cycle_snapshots_actor check (closed_by_kind = 'user' or closed_by is null),
   constraint chore_cycle_snapshots_outcome check (
     (outcome = 'completed') = (final_status = 'completed'))
