@@ -123,8 +123,8 @@ select throws_ok(
        '00000000-0000-4000-8000-000000066010'::uuid,
        '00000000-0000-4000-8000-000000066011'::uuid,
        current_date,
-       now() + interval '3 hours',
-       now() + interval '5 hours',
+       date_trunc('day', now()) + interval '3 hours',
+       date_trunc('day', now()) + interval '5 hours',
        5000,
        array['00000000-0000-4000-8000-000000066003'::uuid]
      ) $$,
