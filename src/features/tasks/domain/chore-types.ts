@@ -34,7 +34,7 @@ export const STAFF_ACCESS_LABELS: Record<StaffAccess, string> = {
   any_workforce: "Anyone on the team can update any column (shared tablet)",
 };
 
-/** RESERVED: stored on the template for the automatic cycles (Batch C), enforced by nothing yet. */
+/** How a board's runs repeat. Daily and weekly follow the LOCATION's calendar (not UTC); per-shift is not available. */
 export const RECURRENCE_INTENTS = [
   "continuous",
   "daily",
@@ -47,7 +47,7 @@ export type RecurrenceIntent = (typeof RECURRENCE_INTENTS)[number];
 export const RECURRENCE_INTENT_LABELS: Record<RecurrenceIntent, string> = {
   continuous: "Continuous",
   daily: "Daily",
-  per_shift: "Per shift",
+  per_shift: "Per shift (not available yet)",
   weekly: "Weekly",
   manual: "Manual",
 };
@@ -115,6 +115,9 @@ export type ChoreCycleView = {
   id: string;
   sequence: number;
   openedAt: string;
+  /** Location-local business day the run belongs to (YYYY-MM-DD). */
+  businessDate: string;
+  openedBySystem: boolean;
 };
 
 export type ChoreBoardView = {
@@ -134,6 +137,8 @@ export type ChoreBoardView = {
   /** Optimistic-concurrency token for settings edits. */
   version: number;
   cycle: ChoreCycleView | null;
+  /** Most recent finished run (shown while the board is between runs). */
+  lastRun?: ChoreRunSummary | null;
   columns: ChoreColumnView[];
   rows: ChoreRowView[];
   completions: ChoreCompletionView[];
@@ -151,4 +156,87 @@ export type ChoreViewer = {
   profileId: string;
   name: string;
   isManager: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// Batch C: runs, immutable snapshots, corrections
+// ---------------------------------------------------------------------------
+
+/** Run status. "open" is the live run; the rest are FINISHED and frozen. */
+export const RUN_STATUSES = [
+  "open",
+  "completed",
+  "cancelled",
+  "expired",
+] as const;
+export type RunStatus = (typeof RUN_STATUSES)[number];
+
+export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
+  open: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  expired: "Expired (not completed)",
+};
+
+export type RunCloseTrigger = "manual" | "automatic" | "cancelled" | "expired";
+
+/** One run of a board: what History lists. Finished runs come from their frozen snapshot. */
+export type ChoreRunSummary = {
+  cycleId: string;
+  boardId: string;
+  /** The board name when the run closed (renames never rewrite it). */
+  boardName: string;
+  sequence: number;
+  status: RunStatus;
+  /** Completed vs Not Completed (open, cancelled and expired are Not Completed). */
+  completed: boolean;
+  /** Location-local business day; History groups by its month. */
+  businessDate: string;
+  requiredTotal: number;
+  requiredDone: number;
+  optionalTotal: number;
+  optionalDone: number;
+  openedAt: string;
+  closedAt: string | null;
+  /** "user" = a manager, "system" = automatic (never an employee who ticked the last cell). */
+  closedByKind: "user" | "system" | null;
+  closedByName: string | null;
+  closeTrigger: RunCloseTrigger | null;
+  note: string | null;
+  /** The configuration changed after the first cell of the run was checked. */
+  structureChanged: boolean;
+};
+
+export type ChoreCorrectionView = {
+  id: number;
+  rowId: string;
+  columnId: string;
+  doneBefore: boolean;
+  doneAfter: boolean;
+  beforeCompletedByName: string | null;
+  beforeCompletedAt: string | null;
+  reason: string;
+  correctedByName: string;
+  createdAt: string;
+};
+
+/**
+ * A finished run exactly as it was: titles, labels, order, assignees and cells are
+ * COPIES, so a later template edit never changes it. `board` reuses the live board
+ * shape so the same counting rules apply (rows / columns that were not live at close
+ * carry isActive = false and never count).
+ */
+export type ChoreRunDetail = {
+  summary: ChoreRunSummary;
+  /** Frozen structure + cells. Cells are the ORIGINAL recorded events, never corrected ones. */
+  board: ChoreBoardView;
+  corrections: ChoreCorrectionView[];
+  /** Whether this viewer may append a correction (manager and the board allows it). */
+  canCorrect: boolean;
+};
+
+export type ChoreHistoryData = {
+  runs: ChoreRunSummary[];
+  /** More finished runs exist than were loaded. */
+  truncated: boolean;
 };

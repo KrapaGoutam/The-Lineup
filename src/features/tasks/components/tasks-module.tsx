@@ -84,6 +84,7 @@ export function TasksModule({
             setState: demo.setState,
             team: demo.team,
             organizationId: demo.organizationId,
+            timeZone: demo.timeZone,
           }
         : null,
     [demo],

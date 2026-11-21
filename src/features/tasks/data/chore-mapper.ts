@@ -1,4 +1,9 @@
 import type {
+  ChoreCorrectionView,
+  ChoreRunDetail,
+  ChoreRunSummary,
+  RunCloseTrigger,
+  RunStatus,
   ChoreAssignmentView,
   ChoreBoardView,
   ChoreColumnView,
@@ -34,6 +39,8 @@ export type ChoreCycleRow = {
   board_id: string;
   sequence: number;
   opened_at: string;
+  business_date: string;
+  opened_by_kind: string;
 };
 export type ChoreColumnRow = {
   id: string;
@@ -75,7 +82,8 @@ export type ChoreAssignmentRow = {
 
 export const CHORE_BOARD_COLUMNS =
   "id, organization_id, location_id, name, description, is_active, archived_at, sort_order, staff_access, manager_override, default_requirement_mode, recurrence_intent, reset_intent, version";
-export const CHORE_CYCLE_COLUMNS = "id, board_id, sequence, opened_at";
+export const CHORE_CYCLE_COLUMNS =
+  "id, board_id, sequence, opened_at, business_date, opened_by_kind";
 export const CHORE_COLUMN_COLUMNS =
   "id, board_id, label, profile_id, sort_order, is_active, archived_at";
 export const CHORE_ROW_COLUMNS =
@@ -148,6 +156,8 @@ export function mapChoreBoards(input: ChoreRows): ChoreBoardView[] {
       id: c.id,
       sequence: c.sequence,
       openedAt: c.opened_at,
+      businessDate: c.business_date,
+      openedBySystem: c.opened_by_kind === "system",
     });
   }
   const columns = group(input.columns);
@@ -223,4 +233,209 @@ export function mapChoreBoards(input: ChoreRows): ChoreBoardView[] {
       assignments: mappedAssignments,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Batch C: finished runs (immutable snapshots) and their corrections
+// ---------------------------------------------------------------------------
+
+export type ChoreSnapshotRow = {
+  cycle_id: string;
+  board_id: string;
+  board_name: string;
+  sequence: number;
+  final_status: string;
+  outcome: string;
+  close_trigger: string;
+  business_date: string;
+  structure_changed: boolean;
+  required_total: number;
+  required_done: number;
+  optional_total: number;
+  optional_done: number;
+  opened_at: string;
+  closed_at: string;
+  closed_by_kind: string;
+  closed_by_name: string | null;
+  note: string | null;
+};
+export const CHORE_SNAPSHOT_COLUMNS =
+  "cycle_id, board_id, board_name, sequence, final_status, outcome, close_trigger, business_date, structure_changed, required_total, required_done, optional_total, optional_done, opened_at, closed_at, closed_by_kind, closed_by_name, note";
+
+/** Header fields only; the matrix tables below are manager-only reads. */
+export type ChoreSnapshotDetailRow = ChoreSnapshotRow & {
+  staff_access: string;
+  manager_override: boolean;
+  recurrence_intent: string;
+  reset_intent: string;
+  organization_id: string;
+  location_id: string;
+};
+export const CHORE_SNAPSHOT_DETAIL_COLUMNS = `${CHORE_SNAPSHOT_COLUMNS}, staff_access, manager_override, recurrence_intent, reset_intent, organization_id, location_id`;
+
+export type ChoreSnapshotRowRow = {
+  row_id: string;
+  title: string;
+  instructions: string | null;
+  is_required: boolean;
+  requirement_mode: string;
+  sort_order: number;
+  selected_column_ids: string[];
+  was_live: boolean;
+};
+export const CHORE_SNAPSHOT_ROW_COLUMNS =
+  "row_id, title, instructions, is_required, requirement_mode, sort_order, selected_column_ids, was_live";
+export type ChoreSnapshotColumnRow = {
+  column_id: string;
+  label: string;
+  profile_id: string | null;
+  profile_name: string | null;
+  sort_order: number;
+  was_live: boolean;
+};
+export const CHORE_SNAPSHOT_COLUMN_COLUMNS =
+  "column_id, label, profile_id, profile_name, sort_order, was_live";
+export type ChoreSnapshotCellRow = {
+  row_id: string;
+  column_id: string;
+  completed_by: string;
+  completed_by_name: string;
+  completed_at: string;
+  entered_as: string;
+};
+export const CHORE_SNAPSHOT_CELL_COLUMNS =
+  "row_id, column_id, completed_by, completed_by_name, completed_at, entered_as";
+export type ChoreCorrectionRow = {
+  id: number;
+  row_id: string;
+  column_id: string;
+  done_before: boolean;
+  done_after: boolean;
+  before_completed_by_name: string | null;
+  before_completed_at: string | null;
+  reason: string;
+  corrected_by_name: string;
+  created_at: string;
+};
+export const CHORE_CORRECTION_COLUMNS =
+  "id, row_id, column_id, done_before, done_after, before_completed_by_name, before_completed_at, reason, corrected_by_name, created_at";
+
+const RUN_STATUSES_OK: readonly RunStatus[] = [
+  "completed",
+  "cancelled",
+  "expired",
+];
+const TRIGGERS: readonly RunCloseTrigger[] = [
+  "manual",
+  "automatic",
+  "cancelled",
+  "expired",
+];
+
+export function mapRunSummary(r: ChoreSnapshotRow): ChoreRunSummary {
+  const status = oneOf<RunStatus>(RUN_STATUSES_OK, r.final_status, "cancelled");
+  return {
+    cycleId: r.cycle_id,
+    boardId: r.board_id,
+    boardName: r.board_name,
+    sequence: r.sequence,
+    status,
+    completed: r.outcome === "completed",
+    businessDate: r.business_date,
+    requiredTotal: r.required_total,
+    requiredDone: r.required_done,
+    optionalTotal: r.optional_total,
+    optionalDone: r.optional_done,
+    openedAt: r.opened_at,
+    closedAt: r.closed_at,
+    closedByKind: r.closed_by_kind === "user" ? "user" : "system",
+    closedByName: r.closed_by_name,
+    closeTrigger: oneOf<RunCloseTrigger>(TRIGGERS, r.close_trigger, "manual"),
+    note: r.note,
+    structureChanged: r.structure_changed,
+  };
+}
+
+export function mapCorrection(r: ChoreCorrectionRow): ChoreCorrectionView {
+  return {
+    id: r.id,
+    rowId: r.row_id,
+    columnId: r.column_id,
+    doneBefore: r.done_before,
+    doneAfter: r.done_after,
+    beforeCompletedByName: r.before_completed_by_name,
+    beforeCompletedAt: r.before_completed_at,
+    reason: r.reason,
+    correctedByName: r.corrected_by_name,
+    createdAt: r.created_at,
+  };
+}
+
+/**
+ * Pure: the snapshot tables of ONE finished run -> a frozen board in the live shape,
+ * so the same counting rules and the same matrix vocabulary apply. Nothing here reads
+ * the current template: rows, labels, order and assignees are the copies taken at close.
+ */
+export function mapRunDetail(input: {
+  header: ChoreSnapshotDetailRow;
+  rows: readonly ChoreSnapshotRowRow[];
+  columns: readonly ChoreSnapshotColumnRow[];
+  cells: readonly ChoreSnapshotCellRow[];
+  corrections: readonly ChoreCorrectionRow[];
+  canCorrect: boolean;
+}): ChoreRunDetail {
+  const { header } = input;
+  const summary = mapRunSummary(header);
+  const board: ChoreBoardView = {
+    id: header.board_id,
+    organizationId: header.organization_id,
+    locationId: header.location_id,
+    name: header.board_name,
+    description: null,
+    isActive: true,
+    archived: false,
+    sortOrder: 0,
+    staffAccess: oneOf(ACCESS, header.staff_access, "own_column"),
+    managerOverride: header.manager_override,
+    defaultMode: "all_columns",
+    recurrenceIntent: oneOf(RECURRENCE, header.recurrence_intent, "continuous"),
+    resetIntent: oneOf(RESET, header.reset_intent, "manual_restart"),
+    version: 0,
+    cycle: null,
+    columns: input.columns.map((c) => ({
+      id: c.column_id,
+      label: c.label,
+      profileId: c.profile_id,
+      sortOrder: c.sort_order,
+      isActive: c.was_live,
+      archived: false,
+    })),
+    rows: input.rows.map((r) => ({
+      id: r.row_id,
+      title: r.title,
+      instructions: r.instructions,
+      isRequired: r.is_required,
+      mode: oneOf(MODES, r.requirement_mode, "all_columns"),
+      selectedColumnIds: r.selected_column_ids,
+      sortOrder: r.sort_order,
+      isActive: r.was_live,
+      archived: false,
+    })),
+    completions: input.cells.map((c) => ({
+      rowId: c.row_id,
+      columnId: c.column_id,
+      completedBy: c.completed_by,
+      completedByName: c.completed_by_name,
+      completedAt: c.completed_at,
+      enteredAs: oneOf(ENTRY, c.entered_as, "self"),
+    })),
+    assignments: [],
+    lastRun: null,
+  };
+  return {
+    summary,
+    board,
+    corrections: input.corrections.map(mapCorrection),
+    canCorrect: input.canCorrect,
+  };
 }

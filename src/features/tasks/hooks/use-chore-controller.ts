@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 import {
+  getChoreHistoryAction,
+  getChoreRunDetailAction,
   getChoreSnapshotAction,
   runChoreCommandAction,
 } from "@/features/tasks/actions/chore-actions";
@@ -11,11 +13,15 @@ import type { ChoreCommand } from "@/features/tasks/domain/chore-commands";
 import {
   applyChoreCommand,
   buildChoreSnapshot,
+  choreRunDetail,
   emptyChoreState,
+  listChoreRuns,
   type ChoreState,
 } from "@/features/tasks/domain/chore-engine";
 import { cellKey, withCellOverlay } from "@/features/tasks/domain/chore-rules";
 import type {
+  ChoreHistoryData,
+  ChoreRunDetail,
   ChoreSnapshot,
   ChoreViewer,
 } from "@/features/tasks/domain/chore-types";
@@ -25,6 +31,13 @@ import type { TaskTeamMember } from "@/features/tasks/domain/task-types";
 
 export type ChoreRunResult =
   | { ok: true; outcome?: string }
+  | { ok: false; error: string };
+
+export type ChoreHistoryResult =
+  | { ok: true; data: ChoreHistoryData }
+  | { ok: false; error: string };
+export type ChoreRunDetailResult =
+  | { ok: true; data: ChoreRunDetail }
   | { ok: false; error: string };
 
 export type ChoreController = {
@@ -44,8 +57,17 @@ export type ChoreController = {
     rowId: string,
     columnId: string,
     done: boolean,
+    /** The run on screen: a tick that names a finished run is refused (stale tab). */
+    cycleId?: string | null,
   ) => Promise<ChoreRunResult>;
   refresh: () => Promise<void>;
+  /** Finished runs (frozen snapshots), bounded by month and optionally one board. */
+  loadHistory: (filter: {
+    month: string | null;
+    boardId: string | null;
+  }) => Promise<ChoreHistoryResult>;
+  /** One finished run: its frozen matrix and corrections (managers only). */
+  loadRunDetail: (cycleId: string) => Promise<ChoreRunDetailResult>;
 };
 
 type DemoBinding = {
@@ -53,6 +75,8 @@ type DemoBinding = {
   setState: (next: TasksState) => void;
   team: readonly TaskTeamMember[];
   organizationId: string;
+  /** IANA zone of the demo location (daily / weekly periods follow it). */
+  timeZone?: string;
 };
 
 type Options = {
@@ -171,6 +195,7 @@ export function useChoreController({
             organizationId: current.organizationId,
             locationId: DEMO_CHORE_LOCATION_ID,
             now: new Date(),
+            timeZone: current.timeZone,
           },
         );
         if (!result.ok) return { ok: false, error: result.error };
@@ -216,6 +241,7 @@ export function useChoreController({
       rowId: string,
       columnId: string,
       done: boolean,
+      cycleId?: string | null,
     ): Promise<ChoreRunResult> => {
       const key = cellKey(boardId, rowId, columnId);
       if (writing.current.has(key)) {
@@ -225,7 +251,14 @@ export function useChoreController({
       setPending((p) => new Set(p).add(key));
       setOverlay((o) => new Map(o).set(key, done));
       try {
-        return await run({ type: "cellSet", boardId, rowId, columnId, done });
+        return await run({
+          type: "cellSet",
+          boardId,
+          rowId,
+          columnId,
+          done,
+          cycleId: cycleId ?? null,
+        });
       } finally {
         // Success: the returned snapshot already holds the new state. Failure:
         // dropping the overlay reverts the cell to what the server last said.
@@ -247,6 +280,81 @@ export function useChoreController({
 
   const ensureLoaded = useCallback(() => setEnabled(true), []);
 
+  // Demo twin of the on-load sweep the real snapshot read runs: roll the boards of
+  // this location forward once when the Chore Wheel is first opened.
+  const demoSwept = useRef(false);
+  useEffect(() => {
+    if (!demo || !enabled || demoSwept.current) return;
+    demoSwept.current = true;
+    void run({ type: "cyclesSweep" });
+  }, [demo, enabled, run]);
+
+  const loadHistory = useCallback(
+    async (filter: {
+      month: string | null;
+      boardId: string | null;
+    }): Promise<ChoreHistoryResult> => {
+      const current = demoRef.current;
+      if (current) {
+        const state = demoStateRef.current ?? current.state;
+        return {
+          ok: true,
+          data: listChoreRuns(
+            state.chores ?? emptyChoreState(),
+            viewer,
+            filter,
+          ),
+        };
+      }
+      try {
+        const result = await getChoreHistoryAction({
+          restaurantSlug,
+          expectedContext,
+          month: filter.month,
+          boardId: filter.boardId,
+        });
+        if (result.ok) return { ok: true, data: result.data };
+        if (result.sessionInvalid) onSessionInvalid?.();
+        if (result.contextStale) onContextStale?.();
+        return { ok: false, error: result.error };
+      } catch {
+        return { ok: false, error: "Chore history could not be loaded." };
+      }
+    },
+    [viewer, restaurantSlug, expectedContext, onSessionInvalid, onContextStale],
+  );
+
+  const loadRunDetail = useCallback(
+    async (cycleId: string): Promise<ChoreRunDetailResult> => {
+      const current = demoRef.current;
+      if (current) {
+        const state = demoStateRef.current ?? current.state;
+        const detail = choreRunDetail(
+          state.chores ?? emptyChoreState(),
+          viewer,
+          cycleId,
+        );
+        return detail
+          ? { ok: true, data: detail }
+          : { ok: false, error: "That run could not be found." };
+      }
+      try {
+        const result = await getChoreRunDetailAction({
+          restaurantSlug,
+          expectedContext,
+          cycleId,
+        });
+        if (result.ok) return { ok: true, data: result.data };
+        if (result.sessionInvalid) onSessionInvalid?.();
+        if (result.contextStale) onContextStale?.();
+        return { ok: false, error: result.error };
+      } catch {
+        return { ok: false, error: "That run could not be loaded." };
+      }
+    },
+    [viewer, restaurantSlug, expectedContext, onSessionInvalid, onContextStale],
+  );
+
   return {
     snapshot,
     loading: !demo && enabled && loading && remote === null,
@@ -257,6 +365,8 @@ export function useChoreController({
     run,
     setCell,
     refresh,
+    loadHistory,
+    loadRunDetail,
   };
 }
 

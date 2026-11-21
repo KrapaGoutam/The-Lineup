@@ -3,8 +3,28 @@ import "server-only";
 import type { VerifiedLocationScope } from "@/features/context/domain/active-context";
 import { createClient } from "@/lib/supabase/server";
 
-import type { ChoreSnapshot, ChoreViewer } from "../domain/chore-types";
+import type {
+  ChoreHistoryData,
+  ChoreRunDetail,
+  ChoreRunSummary,
+  ChoreSnapshot,
+  ChoreViewer,
+} from "../domain/chore-types";
 import {
+  CHORE_CORRECTION_COLUMNS,
+  CHORE_SNAPSHOT_CELL_COLUMNS,
+  CHORE_SNAPSHOT_COLUMNS,
+  CHORE_SNAPSHOT_COLUMN_COLUMNS,
+  CHORE_SNAPSHOT_DETAIL_COLUMNS,
+  CHORE_SNAPSHOT_ROW_COLUMNS,
+  mapRunDetail,
+  mapRunSummary,
+  type ChoreCorrectionRow,
+  type ChoreSnapshotCellRow,
+  type ChoreSnapshotColumnRow,
+  type ChoreSnapshotDetailRow,
+  type ChoreSnapshotRow,
+  type ChoreSnapshotRowRow,
   CHORE_ASSIGNMENT_COLUMNS,
   CHORE_BOARD_COLUMNS,
   CHORE_COLUMN_COLUMNS,
@@ -61,6 +81,18 @@ export async function getChoreSnapshot(
 ): Promise<ChoreSnapshot | null> {
   if (scope.organizationId !== organizationId) return null;
   const supabase = await createClient();
+
+  // Roll the boards of this location forward first (close a complete auto-reset run,
+  // expire a stale daily / weekly run, open the current period's run). The database
+  // decides from its own clock and the LOCATION's time zone; it is idempotent and any
+  // member's load may run it. Best-effort: a failure only means no roll this load.
+  const swept = await supabase.rpc("chore_cycles_sweep", {
+    p_organization_id: organizationId,
+    p_location_id: scope.locationId,
+  });
+  if (swept.error) {
+    console.error("getChoreSnapshot: chore_cycles_sweep", swept.error.message);
+  }
 
   const boards = await readAll<ChoreBoardRow>((from, to) =>
     supabase
@@ -146,15 +178,162 @@ export async function getChoreSnapshot(
     : [];
   if (!rowColumns || !completions || !assignments) return null;
 
-  return {
-    boards: mapChoreBoards({
-      boards,
-      cycles,
-      columns,
-      rows,
-      rowColumns,
-      completions,
-      assignments,
+  const mapped = mapChoreBoards({
+    boards,
+    cycles,
+    columns,
+    rows,
+    rowColumns,
+    completions,
+    assignments,
+  });
+  // A board between runs (daily board already completed today, a closed run not yet
+  // restarted) shows its most recent finished run instead of an empty matrix.
+  const between = mapped.filter((b) => b.cycle === null && !b.archived);
+  const lastRuns = await Promise.all(
+    between.map(async (b) => {
+      const { data, error } = await supabase
+        .from("chore_cycle_snapshots")
+        .select(CHORE_SNAPSHOT_COLUMNS)
+        .eq("board_id", b.id)
+        .order("sequence", { ascending: false })
+        .limit(1)
+        .overrideTypes<ChoreSnapshotRow[], { merge: false }>();
+      if (error) {
+        console.error("getChoreSnapshot: last run", error.message);
+        return [b.id, null] as const;
+      }
+      return [b.id, data?.[0] ? mapRunSummary(data[0]) : null] as const;
     }),
+  );
+  const lastByBoard = new Map<string, ChoreRunSummary | null>(lastRuns);
+  return {
+    boards: mapped.map((b) => ({
+      ...b,
+      lastRun: lastByBoard.get(b.id) ?? null,
+    })),
   };
+}
+
+const HISTORY_LIMIT = 300;
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function nextMonthStart(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12
+    ? `${y + 1}-01-01`
+    : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+}
+
+/**
+ * Finished runs of the verified location, newest business day first. One bounded
+ * read of the frozen headers (never the cells): `month` ("YYYY-MM") narrows it to
+ * that month's business days, `boardId` to one template. RLS decides what the
+ * caller may see; the filters below only narrow it.
+ */
+export async function getChoreHistory(
+  organizationId: string,
+  scope: VerifiedLocationScope,
+  filter: { month: string | null; boardId: string | null },
+): Promise<ChoreHistoryData | null> {
+  if (scope.organizationId !== organizationId) return null;
+  if (filter.month !== null && !MONTH.test(filter.month)) return null;
+  const supabase = await createClient();
+  let query = supabase
+    .from("chore_cycle_snapshots")
+    .select(CHORE_SNAPSHOT_COLUMNS)
+    .eq("organization_id", organizationId)
+    .eq("location_id", scope.locationId);
+  if (filter.boardId) query = query.eq("board_id", filter.boardId);
+  if (filter.month) {
+    query = query
+      .gte("business_date", `${filter.month}-01`)
+      .lt("business_date", nextMonthStart(filter.month));
+  }
+  const { data, error } = await query
+    .order("business_date", { ascending: false })
+    .order("sequence", { ascending: false })
+    .limit(HISTORY_LIMIT + 1)
+    .overrideTypes<ChoreSnapshotRow[], { merge: false }>();
+  if (error) {
+    console.error("getChoreHistory", error.message);
+    return null;
+  }
+  const rows = data ?? [];
+  return {
+    runs: rows.slice(0, HISTORY_LIMIT).map(mapRunSummary),
+    truncated: rows.length > HISTORY_LIMIT,
+  };
+}
+
+/**
+ * ONE finished run with its frozen matrix and corrections. Managers only (the matrix
+ * tables are manager-only reads); a run of another location or organization simply
+ * does not come back, so the caller learns nothing about it.
+ */
+export async function getChoreRunDetail(
+  organizationId: string,
+  scope: VerifiedLocationScope,
+  viewer: ChoreViewer,
+  cycleId: string,
+): Promise<ChoreRunDetail | null> {
+  if (scope.organizationId !== organizationId || !viewer.isManager) return null;
+  const supabase = await createClient();
+  const header = await supabase
+    .from("chore_cycle_snapshots")
+    .select(CHORE_SNAPSHOT_DETAIL_COLUMNS)
+    .eq("cycle_id", cycleId)
+    .eq("organization_id", organizationId)
+    .eq("location_id", scope.locationId)
+    .maybeSingle<ChoreSnapshotDetailRow>();
+  if (header.error || !header.data) return null;
+  const [rows, columns, cells, corrections, board] = await Promise.all([
+    supabase
+      .from("chore_cycle_snapshot_rows")
+      .select(CHORE_SNAPSHOT_ROW_COLUMNS)
+      .eq("cycle_id", cycleId)
+      .order("sort_order", { ascending: true })
+      .overrideTypes<ChoreSnapshotRowRow[], { merge: false }>(),
+    supabase
+      .from("chore_cycle_snapshot_columns")
+      .select(CHORE_SNAPSHOT_COLUMN_COLUMNS)
+      .eq("cycle_id", cycleId)
+      .order("sort_order", { ascending: true })
+      .overrideTypes<ChoreSnapshotColumnRow[], { merge: false }>(),
+    supabase
+      .from("chore_cycle_snapshot_cells")
+      .select(CHORE_SNAPSHOT_CELL_COLUMNS)
+      .eq("cycle_id", cycleId)
+      .overrideTypes<ChoreSnapshotCellRow[], { merge: false }>(),
+    supabase
+      .from("chore_cycle_corrections")
+      .select(CHORE_CORRECTION_COLUMNS)
+      .eq("cycle_id", cycleId)
+      .order("id", { ascending: true })
+      .overrideTypes<ChoreCorrectionRow[], { merge: false }>(),
+    supabase
+      .from("chore_boards")
+      .select("manager_override, archived_at")
+      .eq("id", header.data.board_id)
+      .maybeSingle(),
+  ]);
+  if (rows.error || columns.error || cells.error || corrections.error) {
+    console.error(
+      "getChoreRunDetail",
+      rows.error?.message ??
+        columns.error?.message ??
+        cells.error?.message ??
+        corrections.error?.message,
+    );
+    return null;
+  }
+  return mapRunDetail({
+    header: header.data,
+    rows: rows.data ?? [],
+    columns: columns.data ?? [],
+    cells: cells.data ?? [],
+    corrections: corrections.data ?? [],
+    // The RPC re-checks this; the flag only decides whether the control is offered.
+    canCorrect: board.data?.manager_override === true,
+  });
 }

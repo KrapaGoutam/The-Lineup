@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 
+import { RECURRENCE_BEHAVIOR, RESET_BEHAVIOR } from "../domain/chore-cycles";
+import { boardProgress } from "../domain/chore-rules";
 import {
   RECURRENCE_INTENTS,
   RECURRENCE_INTENT_LABELS,
@@ -48,6 +49,8 @@ export function ChoreRulesSection({ controller, board }: Props) {
     mode,
     n: board.rows.filter((r) => !r.archived && r.mode === mode).length,
   }));
+  // No required work = a run that can never complete (it never closes or resets by itself).
+  const noRequiredWork = boardProgress(board).required === 0;
   const dirty =
     defaultMode !== board.defaultMode ||
     recurrence !== board.recurrenceIntent ||
@@ -111,17 +114,20 @@ export function ChoreRulesSection({ controller, board }: Props) {
           </Select>
         </Field>
 
-        <fieldset className="border-border space-y-3 rounded-2xl border border-dashed p-3">
-          <legend className="flex items-center gap-2 px-1 text-sm font-semibold">
-            Automatic cycles{" "}
-            <Badge tone="warning">Reserved — not active yet</Badge>
+        <fieldset className="border-border space-y-3 rounded-2xl border p-3">
+          <legend className="px-1 text-sm font-semibold">
+            Repeat and reset
           </legend>
           <p className="text-muted-foreground text-xs">
-            These choices are saved with the board for the automatic cycles
-            planned for a later release. Today nothing repeats or resets on its
-            own: the board stays open until you change it.
+            Each board runs on its own. When one board&apos;s run finishes only
+            that board&apos;s run is closed and saved to History; every other
+            board is left exactly as it is.
           </p>
-          <Field id="rules-recurrence" label="Intended repeat">
+          <Field
+            id="rules-recurrence"
+            label="Repeat"
+            hint={RECURRENCE_BEHAVIOR[recurrence]}
+          >
             <Select
               id="rules-recurrence"
               value={recurrence}
@@ -130,13 +136,21 @@ export function ChoreRulesSection({ controller, board }: Props) {
               }
             >
               {RECURRENCE_INTENTS.map((r) => (
-                <option key={r} value={r}>
+                <option
+                  key={r}
+                  value={r}
+                  disabled={r === "per_shift" && board.recurrenceIntent !== r}
+                >
                   {RECURRENCE_INTENT_LABELS[r]}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field id="rules-reset" label="Intended reset">
+          <Field
+            id="rules-reset"
+            label="When the run is complete"
+            hint={RESET_BEHAVIOR[reset]}
+          >
             <Select
               id="rules-reset"
               value={reset}
@@ -149,6 +163,25 @@ export function ChoreRulesSection({ controller, board }: Props) {
               ))}
             </Select>
           </Field>
+          {reset === "automatic_after_completion" &&
+          (recurrence === "daily" || recurrence === "weekly") ? (
+            <p className="text-muted-foreground text-xs">
+              The next {recurrence === "daily" ? "day" : "week"} starts a new
+              run when someone opens Tasks at this location. Days nobody opens
+              Tasks are not filled in afterwards.
+            </p>
+          ) : null}
+          {noRequiredWork ? (
+            <p
+              role="status"
+              data-testid="no-required-work"
+              className="border-warn/30 bg-warn/10 rounded-xl border px-3 py-2 text-sm"
+            >
+              This board has no required chores, so a run can never complete. It
+              will not close or reset by itself. Add a required chore and at
+              least one person.
+            </p>
+          ) : null}
         </fieldset>
 
         <ErrorLine message={error} />

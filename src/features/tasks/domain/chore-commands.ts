@@ -74,7 +74,34 @@ export const choreCommandSchema = z.discriminatedUnion("type", [
     rowId: id,
     columnId: id,
     done: z.boolean(),
+    /** The run the screen shows. A tick that names a finished run is refused (stale tab). */
+    cycleId: id.nullish(),
   }),
+  // Batch C: close / start / correct a run. The server re-evaluates everything; the
+  // client only names the run it is looking at.
+  z.object({
+    type: z.literal("cycleClose"),
+    boardId: id,
+    cycleId: id,
+    outcome: z.enum(["completed", "cancelled"]),
+    note: z.string().trim().max(300).nullable(),
+    startNext: z.boolean(),
+  }),
+  z.object({ type: z.literal("cycleStart"), boardId: id }),
+  z.object({
+    type: z.literal("cycleCorrect"),
+    cycleId: id,
+    rowId: id,
+    columnId: id,
+    done: z.boolean(),
+    reason: z
+      .string()
+      .trim()
+      .min(3, "Give a reason for the correction (at least 3 characters).")
+      .max(300),
+  }),
+  /** Demo only: the on-load sweep (real mode runs it inside the snapshot read). */
+  z.object({ type: z.literal("cyclesSweep") }),
 ]);
 
 export type ChoreCommand = z.infer<typeof choreCommandSchema>;

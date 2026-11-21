@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { recurrenceSummary } from "../domain/chore-cycles";
 import {
   boardProgress,
   isBoardLive,
@@ -16,6 +17,7 @@ import {
 import type { ChoreController } from "../hooks/use-chore-controller";
 import { ChoreMatrix } from "./chore-matrix";
 import { ChorePersonList } from "./chore-person-list";
+import { ChoreRunPanel } from "./chore-run-panel";
 
 const PHONE_QUERY = "(max-width: 767px)";
 
@@ -40,6 +42,10 @@ type Props = {
   contextLabel?: string | null;
   /** Managers get a direct entry into Tasks → Manage. */
   onManage?: (boardId: string | null) => void;
+  /** Opens Tasks → History on one board's finished runs. */
+  onOpenHistory?: (boardId: string) => void;
+  /** Board to show first (e.g. coming from an in-progress run in History). */
+  initialBoardId?: string | null;
 };
 
 /**
@@ -51,11 +57,14 @@ export function ChoreWheelView({
   controller,
   contextLabel = null,
   onManage,
+  onOpenHistory,
+  initialBoardId = null,
 }: Props) {
   const { snapshot, viewer, pendingCells, ensureLoaded } = controller;
   const phone = useIsPhone();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialBoardId);
   const [notice, setNotice] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     ensureLoaded();
@@ -75,8 +84,20 @@ export function ChoreWheelView({
   async function toggle(rowId: string, columnId: string, done: boolean) {
     if (!board) return;
     setNotice(null);
-    const result = await controller.setCell(board.id, rowId, columnId, done);
+    setInfo(null);
+    const result = await controller.setCell(
+      board.id,
+      rowId,
+      columnId,
+      done,
+      board.cycle?.id ?? null,
+    );
     if (!result.ok) setNotice(result.error);
+    else if (result.outcome === "checked_closed") {
+      setInfo(
+        `Run ${board.cycle?.sequence ?? ""} is complete and was saved to History.`,
+      );
+    }
   }
 
   if (controller.loadError && !snapshot) {
@@ -161,10 +182,14 @@ export function ChoreWheelView({
           </h2>
           <p className="text-muted-foreground text-sm">
             {contextLabel ? `${contextLabel} · ` : ""}
-            {board.cycle
-              ? `Cycle ${board.cycle.sequence}`
-              : "No open cycle"} · {peopleCount}{" "}
-            {peopleCount === 1 ? "column" : "columns"}
+            {board.cycle ? `Run ${board.cycle.sequence}` : "No open run"} ·{" "}
+            {peopleCount} {peopleCount === 1 ? "column" : "columns"}
+          </p>
+          <p
+            className="text-muted-foreground text-xs"
+            data-testid="chore-recurrence"
+          >
+            {recurrenceSummary(board.recurrenceIntent, board.resetIntent)}
           </p>
           {board.description ? (
             <p className="text-muted-foreground mt-1 text-sm">
@@ -187,39 +212,52 @@ export function ChoreWheelView({
         </div>
       </header>
 
-      <div
-        data-testid="chore-summary"
-        className="border-border grid grid-cols-2 gap-3 rounded-2xl border p-3 sm:grid-cols-4"
-      >
-        <Stat id="required" label="Required checks" value={progress.required} />
-        <Stat id="completed" label="Completed" value={progress.completed} />
-        <Stat id="remaining" label="Remaining" value={progress.remaining} />
-        <Stat id="percent" label="Complete" value={`${progress.percent}%`} />
-        <div className="col-span-2 sm:col-span-4">
-          <div
-            role="progressbar"
-            aria-label={`${board.name} completion`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progress.percent}
-            className="bg-muted h-2.5 overflow-hidden rounded-full"
-          >
+      {board.cycle ? (
+        <div
+          data-testid="chore-summary"
+          className="border-border grid grid-cols-2 gap-3 rounded-2xl border p-3 sm:grid-cols-4"
+        >
+          <Stat
+            id="required"
+            label="Required checks"
+            value={progress.required}
+          />
+          <Stat id="completed" label="Completed" value={progress.completed} />
+          <Stat id="remaining" label="Remaining" value={progress.remaining} />
+          <Stat id="percent" label="Complete" value={`${progress.percent}%`} />
+          <div className="col-span-2 sm:col-span-4">
             <div
-              className={cn(
-                "h-full rounded-full transition-[width] motion-reduce:transition-none",
-                progress.percent === 100 ? "bg-ok" : "bg-primary",
-              )}
-              style={{ width: `${progress.percent}%` }}
-            />
+              role="progressbar"
+              aria-label={`${board.name} completion`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress.percent}
+              className="bg-muted h-2.5 overflow-hidden rounded-full"
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] motion-reduce:transition-none",
+                  progress.percent === 100 ? "bg-ok" : "bg-primary",
+                )}
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
+            {progress.optionalTotal > 0 ? (
+              <p className="text-muted-foreground mt-1.5 text-xs">
+                Optional: {progress.optionalCompleted} of{" "}
+                {progress.optionalTotal} (not counted above)
+              </p>
+            ) : null}
           </div>
-          {progress.optionalTotal > 0 ? (
-            <p className="text-muted-foreground mt-1.5 text-xs">
-              Optional: {progress.optionalCompleted} of {progress.optionalTotal}{" "}
-              (not counted above)
-            </p>
-          ) : null}
         </div>
-      </div>
+      ) : null}
+
+      <ChoreRunPanel
+        board={board}
+        viewer={viewer}
+        run={controller.run}
+        onOpenHistory={onOpenHistory}
+      />
 
       {!live ? (
         <p
@@ -247,7 +285,24 @@ export function ChoreWheelView({
         </div>
       ) : null}
 
-      {phone ? (
+      {info ? (
+        <div
+          role="status"
+          data-testid="chore-info"
+          className="border-ok/30 bg-ok/10 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-sm"
+        >
+          <span>{info}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setInfo(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {!board.cycle ? null : phone ? (
         <ChorePersonList
           board={board}
           viewer={viewer}

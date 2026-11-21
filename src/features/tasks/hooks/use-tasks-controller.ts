@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getTaskHistoryAction,
+  getTaskHistoryFeedAction,
   getTasksSnapshotAction,
   runTaskCommandAction,
 } from "@/features/tasks/actions/tasks-actions";
@@ -18,11 +19,13 @@ import {
   sweepNotifications,
   type TasksState,
 } from "@/features/tasks/domain/task-engine";
+import type { FeedTask } from "@/features/tasks/domain/history-feed";
 import {
   demoHistoryEntries,
   type TaskHistoryData,
 } from "@/features/tasks/domain/task-history";
 import type {
+  TaskEventView,
   TaskTeamMember,
   TaskViewer,
   TasksSnapshot,
@@ -31,6 +34,17 @@ import { zonedWallTimeFromInstant } from "@/lib/timezone";
 
 export type TaskRunResult =
   | { ok: true; /** `delete`: "deleted" or "archived". */ outcome?: string }
+  | { ok: false; error: string };
+
+export type TaskHistoryFeedResult =
+  | {
+      ok: true;
+      data: {
+        tasks: FeedTask[];
+        events: TaskEventView[];
+        truncated: boolean;
+      };
+    }
   | { ok: false; error: string };
 
 export type TaskHistoryLoadResult =
@@ -51,6 +65,8 @@ export type TasksController = {
   refresh: () => Promise<void>;
   /** Read-only completed-task history for Tasks → History. */
   loadHistory: () => Promise<TaskHistoryLoadResult>;
+  /** V2.0.13 Batch C: tasks for the unified History, optionally bounded to a "YYYY-MM" month. */
+  loadHistoryFeed: (month: string | null) => Promise<TaskHistoryFeedResult>;
 };
 
 type DemoBinding = {
@@ -272,6 +288,55 @@ export function useTasksController({
     ],
   );
 
+  const loadHistoryFeed = useCallback(
+    async (month: string | null): Promise<TaskHistoryFeedResult> => {
+      if (demo) {
+        // Demo keeps everything in memory: every task the viewer can see. The
+        // History view applies the same month / status rules on the client.
+        const visible = demoSnapshot
+          ? [
+              ...demoSnapshot.tasks,
+              ...demoSnapshot.checklists.flatMap((c) => c.items),
+            ]
+          : [];
+        const tasks = visible
+          .filter((t) => t.status === "completed" || t.kind === "task")
+          .map(
+            (task): FeedTask => ({
+              task,
+              assignedAt: null,
+              archived: false,
+            }),
+          );
+        return {
+          ok: true,
+          data: { tasks, events: demo.state.events, truncated: false },
+        };
+      }
+      try {
+        const result = await getTaskHistoryFeedAction({
+          restaurantSlug,
+          expectedContext,
+          month,
+        });
+        if (result.ok) return { ok: true, data: result.data };
+        if (result.sessionInvalid) onSessionInvalid?.();
+        if (result.contextStale) onContextStale?.();
+        return { ok: false, error: result.error };
+      } catch {
+        return { ok: false, error: "Task history could not be loaded." };
+      }
+    },
+    [
+      demo,
+      demoSnapshot,
+      restaurantSlug,
+      expectedContext,
+      onSessionInvalid,
+      onContextStale,
+    ],
+  );
+
   const loadHistory = useCallback(async (): Promise<TaskHistoryLoadResult> => {
     if (demo) {
       // Same rows the Today / Opening / Closing screens already show this
@@ -321,5 +386,6 @@ export function useTasksController({
     run,
     refresh,
     loadHistory,
+    loadHistoryFeed,
   };
 }

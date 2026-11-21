@@ -87,11 +87,7 @@ export function AllTasksView({
   const filtering = filter !== "all" || query.trim() !== "";
 
   function setStatus(task: TaskView, status: QuickStatus) {
-    void execute(
-      status === "completed"
-        ? { type: "complete", taskId: task.id }
-        : { type: "setStatus", taskId: task.id, status },
-    );
+    void execute(statusCommand(task, status));
   }
 
   return (
@@ -175,7 +171,17 @@ export function AllTasksView({
   );
 }
 
-type RowActionsProps = {
+/** The one command behind every "change status" control (All Tasks and History share it). */
+export function statusCommand(
+  task: TaskView,
+  status: QuickStatus,
+): TaskCommand {
+  return status === "completed"
+    ? { type: "complete", taskId: task.id }
+    : { type: "setStatus", taskId: task.id, status };
+}
+
+export type RowActionsProps = {
   task: TaskView;
   controller: TasksController;
   manager: boolean;
@@ -184,11 +190,15 @@ type RowActionsProps = {
   onEdit: (task: TaskView) => void;
   onReassign: (task: TaskView) => void;
   onDelete: (task: TaskView) => void;
+  /** Disable the delete control (archived records in History). */
+  deleteDisabled?: boolean;
+  /** Explain why Edit / Reassign are missing on a completed task (History). */
+  showReopenHint?: boolean;
 };
 
 const touch = "h-11 min-h-11";
 
-function RowActions({
+export function RowActions({
   task,
   controller,
   manager,
@@ -197,6 +207,8 @@ function RowActions({
   onEdit,
   onReassign,
   onDelete,
+  deleteDisabled = false,
+  showReopenHint = false,
 }: RowActionsProps) {
   const pending = controller.pendingIds.has(task.id);
   const current = quickStatusOf(task);
@@ -270,11 +282,18 @@ function RowActions({
           size="sm"
           className={cn(touch, "text-destructive")}
           aria-label={`Delete: ${task.title}`}
+          disabled={deleteDisabled}
           onClick={() => onDelete(task)}
         >
           <Trash2 aria-hidden="true" />
           Delete
         </Button>
+      ) : null}
+      {showReopenHint && manager && task.status === "completed" ? (
+        <p className="text-muted-foreground basis-full text-xs">
+          Move it back to In Progress or Not Started to edit or reassign it. The
+          earlier completion stays in the task&apos;s activity.
+        </p>
       ) : null}
     </div>
   );

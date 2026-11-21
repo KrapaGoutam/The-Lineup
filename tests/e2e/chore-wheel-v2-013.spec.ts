@@ -243,10 +243,11 @@ test("manager: builds a board end to end (create, people, chores, rules, access)
     "Mop the line",
   );
 
-  // Completion rules: the reserved controls are labelled as not active.
+  // Completion rules: repeat and reset are live settings with plain-language behaviour.
   await page.getByRole("button", { name: "Completion Rules" }).click();
-  await expect(page.getByText("Reserved — not active yet")).toBeVisible();
-  await page.getByLabel("Intended repeat").selectOption("weekly");
+  await expect(page.getByText("Repeat and reset")).toBeVisible();
+  await expect(page.getByText("Reserved — not active yet")).toHaveCount(0);
+  await page.getByLabel("Repeat", { exact: true }).selectOption("weekly");
   await page.getByRole("button", { name: "Save rules" }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Saved." }),

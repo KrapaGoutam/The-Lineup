@@ -5,13 +5,21 @@ import { z } from "zod";
 import { assertWorkspaceExpectation } from "@/features/context/data/workspace-expectation";
 import { STALE_CONTEXT_MESSAGE } from "@/features/context/domain/workspace-expectation";
 import { guardModule } from "@/features/modules/data/module-enforcement";
-import { getChoreSnapshot } from "@/features/tasks/data/chore-data";
+import {
+  getChoreHistory,
+  getChoreRunDetail,
+  getChoreSnapshot,
+} from "@/features/tasks/data/chore-data";
 import { getTasksActor } from "@/features/tasks/data/tasks-actor";
 import {
   choreCommandSchema,
   type ChoreCommand,
 } from "@/features/tasks/domain/chore-commands";
-import type { ChoreSnapshot } from "@/features/tasks/domain/chore-types";
+import type {
+  ChoreHistoryData,
+  ChoreRunDetail,
+  ChoreSnapshot,
+} from "@/features/tasks/domain/chore-types";
 import { isTasksManager } from "@/features/tasks/domain/task-types";
 import { requireLiveSession } from "@/lib/supabase/require-live-session";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +32,11 @@ export type ChoreActionResult =
   | {
       ok: true;
       data: ChoreSnapshot;
-      /** `cellSet` only: "checked", "unchecked" or "unchanged". */
+      /**
+       * `cellSet`: "checked", "unchecked", "unchanged" or "checked_closed" (the tick
+       * finished an auto-reset run). `cycleClose`: "closed" or "already_closed".
+       * `cycleStart`: "started" or "already_open". `cycleCorrect`: "corrected" or "unchanged".
+       */
       outcome?: string;
     }
   | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
@@ -104,7 +116,7 @@ async function boardsAreHere(
 /** Resolves the board of a column / chore id, then applies the same check. */
 async function childBoardId(
   supabase: Supabase,
-  table: "chore_columns" | "chore_rows",
+  table: "chore_columns" | "chore_rows" | "chore_cycles",
   id: string,
 ): Promise<string | null> {
   const found = await supabase
@@ -136,6 +148,11 @@ async function runCommand(
   }
   if (command.type === "rowSetState") {
     const board = await childBoardId(supabase, "chore_rows", command.rowId);
+    if (!board) return NOT_HERE;
+    boardIds = [board];
+  }
+  if (command.type === "cycleCorrect") {
+    const board = await childBoardId(supabase, "chore_cycles", command.cycleId);
     if (!board) return NOT_HERE;
     boardIds = [board];
   }
@@ -239,12 +256,177 @@ async function runCommand(
         p_row_id: command.rowId,
         p_column_id: command.columnId,
         p_done: command.done,
+        p_expected_cycle_id: command.cycleId ?? null,
       });
       if (error) return error.message;
       out.outcome = typeof data === "string" ? data : undefined;
       return null;
     }
+    case "cycleClose": {
+      const { data, error } = await supabase.rpc("chore_cycle_close", {
+        p_board_id: command.boardId,
+        p_expected_cycle_id: command.cycleId,
+        p_outcome: command.outcome,
+        p_note: command.note,
+        p_start_next: command.startNext,
+      });
+      if (error) return error.message;
+      out.outcome = resultOf(data);
+      return null;
+    }
+    case "cycleStart": {
+      const { data, error } = await supabase.rpc("chore_cycle_start", {
+        p_board_id: command.boardId,
+      });
+      if (error) return error.message;
+      out.outcome = resultOf(data);
+      return null;
+    }
+    case "cycleCorrect": {
+      const { data, error } = await supabase.rpc("chore_cycle_correct", {
+        p_cycle_id: command.cycleId,
+        p_row_id: command.rowId,
+        p_column_id: command.columnId,
+        p_done: command.done,
+        p_reason: command.reason,
+      });
+      if (error) return error.message;
+      out.outcome = typeof data === "string" ? data : undefined;
+      return null;
+    }
+    case "cyclesSweep": {
+      const { error } = await supabase.rpc("chore_cycles_sweep", {
+        p_organization_id: organizationId,
+        p_location_id: locationId,
+      });
+      return error?.message ?? null;
+    }
   }
+}
+
+/** The jsonb the cycle RPCs return carries a short `result` word. */
+function resultOf(data: unknown): string | undefined {
+  if (data && typeof data === "object" && "result" in data) {
+    const result = (data as { result?: unknown }).result;
+    return typeof result === "string" ? result : undefined;
+  }
+  return undefined;
+}
+
+export type ChoreHistoryActionResult =
+  | { ok: true; data: ChoreHistoryData }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
+
+export type ChoreRunDetailActionResult =
+  | { ok: true; data: ChoreRunDetail }
+  | { ok: false; error: string; sessionInvalid?: true; contextStale?: true };
+
+/**
+ * What a read action needs before the module gate: live session, verified caller and
+ * workspace. The module gate itself is called by each exported action (the
+ * enforcement-coverage test requires it in the action body).
+ */
+async function readerFor(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+}) {
+  const supabase = await createClient();
+  const invalid = await requireLiveSession(supabase);
+  if (invalid) return { ok: false as const, result: invalid };
+  const caller = await getTasksActor(input.restaurantSlug);
+  if (!caller) {
+    return {
+      ok: false as const,
+      result: {
+        ok: false as const,
+        error: "You need to sign in to see chore history.",
+      },
+    };
+  }
+  const workspace = await checkWorkspace(input.expectedContext, caller);
+  if (!workspace.ok) return { ok: false as const, result: workspace.result };
+  return {
+    ok: true as const,
+    caller,
+    location: workspace.location,
+    viewer: {
+      profileId: caller.viewer.profileId,
+      name: caller.viewer.name,
+      isManager: isTasksManager(caller.viewer.designation),
+    },
+  };
+}
+
+/** Finished chore runs for the History tab: bounded, by month and (optionally) by board. */
+export async function getChoreHistoryAction(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+  /** "YYYY-MM" or null for the most recent runs of any month. */
+  month: string | null;
+  boardId: string | null;
+}): Promise<ChoreHistoryActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown(),
+      month: z
+        .string()
+        .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+        .nullable(),
+      boardId: z.string().trim().min(1).max(64).nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+  const reader = await readerFor(parsed.data);
+  if (!reader.ok) return reader.result;
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: reader.caller.organizationId,
+    location: reader.location,
+  });
+  if (blocked) return blocked;
+  const data = await getChoreHistory(
+    reader.caller.organizationId,
+    reader.caller.scope,
+    { month: parsed.data.month, boardId: parsed.data.boardId },
+  );
+  if (!data) return { ok: false, error: "Chore history could not be loaded." };
+  return { ok: true, data };
+}
+
+/** One finished run with its frozen matrix and corrections (managers only). */
+export async function getChoreRunDetailAction(input: {
+  restaurantSlug: string;
+  expectedContext?: unknown;
+  cycleId: string;
+}): Promise<ChoreRunDetailActionResult> {
+  const parsed = z
+    .object({
+      restaurantSlug: slugSchema,
+      expectedContext: z.unknown(),
+      cycleId: z.string().trim().min(1).max(64),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That request is invalid." };
+  const reader = await readerFor(parsed.data);
+  if (!reader.ok) return reader.result;
+  const blocked = await guardModule({
+    module: "tasks",
+    organizationId: reader.caller.organizationId,
+    location: reader.location,
+  });
+  if (blocked) return blocked;
+  if (!reader.viewer.isManager) {
+    return { ok: false, error: "Only a manager can open a finished run." };
+  }
+  const data = await getChoreRunDetail(
+    reader.caller.organizationId,
+    reader.caller.scope,
+    reader.viewer,
+    parsed.data.cycleId,
+  );
+  if (!data) return { ok: false, error: "That run could not be found." };
+  return { ok: true, data };
 }
 
 /** Authoritative read of the Chore Wheel for the verified workspace. */

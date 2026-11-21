@@ -12,6 +12,7 @@ import {
   DEFAULT_TASK_CATEGORIES,
   isTasksManager,
   type RecurrenceRuleView,
+  type TaskEventView,
   type TaskView,
 } from "../domain/task-types";
 import type { ChoreController } from "../hooks/use-chore-controller";
@@ -28,7 +29,7 @@ import { ChecklistView } from "./checklist-view";
 import { ChecklistsView } from "./checklists-view";
 import { DeleteTaskDialog } from "./delete-task-dialog";
 import { HandoffPanel } from "./handoff-panel";
-import { HistoryView } from "./history-view";
+import { HistoryView, type HistoryPreset } from "./history-view";
 import { NotificationsDialog } from "./notifications-dialog";
 import { MyTasksView } from "./my-tasks-view";
 import { ReassignDialog } from "./reassign-dialog";
@@ -89,6 +90,15 @@ export function TasksWorkspace({
   // Tasks section and back. Only managers can change it.
   const [todayScope, setTodayScope] = useState<TodayScope>(ALL_STAFF_SCOPE);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  // A task opened from History may be older than the snapshot window: keep the row
+  // History loaded so the dialog still opens, and the activity History loaded for it.
+  const [openFallback, setOpenFallback] = useState<TaskView | null>(null);
+  // Board the Chore Wheel opens on (set when coming from a run in History).
+  const [wheelBoardId, setWheelBoardId] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<TaskEventView[]>([]);
+  const [historyPreset, setHistoryPreset] = useState<HistoryPreset | null>(
+    null,
+  );
   const [form, setForm] = useState<{
     task?: TaskView;
     series?: RecurrenceRuleView;
@@ -147,9 +157,20 @@ export function TasksWorkspace({
       snapshot.checklists
         .flatMap((c) => c.items)
         .find((t) => t.id === openTaskId) ??
-      null
+      (openFallback?.id === openTaskId ? openFallback : null)
     );
-  }, [snapshot, openTaskId]);
+  }, [snapshot, openTaskId, openFallback]);
+
+  // The dialog's activity: the snapshot's plus whatever History loaded (deduplicated).
+  const dialogEvents = useMemo(() => {
+    if (!snapshot) return [];
+    if (historyEvents.length === 0) return snapshot.events;
+    const seen = new Set(snapshot.events.map((e) => e.id));
+    return [
+      ...snapshot.events,
+      ...historyEvents.filter((e) => !seen.has(e.id)),
+    ];
+  }, [snapshot, historyEvents]);
 
   const tabs: TasksTab[] = (
     manager
@@ -355,6 +376,8 @@ export function TasksWorkspace({
           ) : null}
           {tab === "chores" && chores ? (
             <ChoreWheelView
+              key={wheelBoardId ?? "default"}
+              initialBoardId={wheelBoardId}
               controller={chores}
               contextLabel={contextLabel}
               onManage={
@@ -366,6 +389,10 @@ export function TasksWorkspace({
                     }
                   : undefined
               }
+              onOpenHistory={(boardId) => {
+                setHistoryPreset({ scope: "chores", boardId });
+                setTab("history");
+              }}
             />
           ) : null}
           {tab === "manage" && manager ? (
@@ -443,7 +470,29 @@ export function TasksWorkspace({
               onGoToManage={() => setTab("manage")}
             />
           ) : null}
-          {tab === "history" ? <HistoryView controller={controller} /> : null}
+          {tab === "history" ? (
+            <HistoryView
+              // A new preset (board's "Run history") starts a fresh filter state.
+              key={`${historyPreset?.scope ?? ""}:${historyPreset?.boardId ?? ""}`}
+              controller={controller}
+              chores={chores}
+              preset={historyPreset}
+              categoryName={categoryName}
+              execute={execute}
+              onOpen={(task) => {
+                setOpenFallback(task);
+                setOpenTaskId(task.id);
+              }}
+              onEdit={(task) => setForm({ task })}
+              onReassign={setReassignTask}
+              onDelete={setDeleteTask}
+              onFeedEvents={setHistoryEvents}
+              onOpenBoard={(boardId) => {
+                setWheelBoardId(boardId);
+                setTab("chores");
+              }}
+            />
+          ) : null}
           {tab === "mine" ? (
             <MyTasksView
               controller={controller}
@@ -464,7 +513,7 @@ export function TasksWorkspace({
           today={snapshot.today}
           timeZone={snapshot.timeZone}
           categoryName={categoryName(openTask.category)}
-          events={snapshot.events}
+          events={dialogEvents}
           series={snapshot.series.find(
             (r) => r.id === openTask.recurrenceRuleId,
           )}

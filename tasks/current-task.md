@@ -1,3 +1,19 @@
+# V2.0.13 Batch C — run closure, recurrence, immutable snapshots, unified History — IMPLEMENTED (local), draft PR #363
+
+Plan, rules, evidence, limitations and hosted prerequisites: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch C"). Same branch/worktree; migration `20261122090000_chore_wheel_v2_013_batch_c.sql` (local only).
+
+- [x] C1 closure + recurrence: locked exactly-once close, automatic/manual reset, cancel, start, daily/weekly sweep (location time zone), zero-required guard; pgTAP `0094` (144) + real-JWT race tests.
+- [x] C2 immutable snapshots (5 tables, freeze triggers), append-only corrections, system actor; demo twin engine parity.
+- [x] C3 unified History (All / Tasks / Chore Wheel, Month → Completed / Not completed, filters, saved-run dialog, task actions reused from All Tasks).
+- [x] C4 validation: full pgTAP 97 files / 4,214; real-JWT 42 (Batch C 8); Vitest 360 files / 4,874; Playwright 104 passed (4 skipped by design) on three viewports; `npm run check` + build clean.
+- [ ] Exact-head CI on the pushed head, owner review of PR #363, hosted-DEV rehearsal/apply of FOUR migrations (NOT authorized). No merge to `development`/`main`, Production untouched, no scheduler beyond the on-demand sweep, `per_shift` unavailable.
+
+## Current State & Next Step
+
+Batch C is committed on `feature/v2-013-tasks-chores` and pushed to draft PR #363. Next: exact-head CI, owner decisions (sweep vs background job, per-shift, corrections switch, reopen-before-edit), then — only when authorized — the hosted-DEV backup/rehearsal/apply of the four pending migrations and real-mode acceptance.
+
+---
+
 # V2.0.13 Batch B — Chore Wheel, customizable boards, Tasks-local settings — IMPLEMENTED (local), draft PR #363
 
 Plan, rules, evidence, rollback and the **Batch C seam**: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch B", "# Batch C seam"). Same branch/worktree as Batch A below; migration `20261121090000_chore_wheel_v2_013_batch_b.sql` (local only).

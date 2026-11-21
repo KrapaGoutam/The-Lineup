@@ -30,7 +30,13 @@ function board(done: boolean): ChoreBoardView {
     recurrenceIntent: "continuous",
     resetIntent: "manual_restart",
     version: 1,
-    cycle: { id: "c1", sequence: 1, openedAt: "2026-11-20T00:00:00Z" },
+    cycle: {
+      id: "c1",
+      sequence: 1,
+      openedAt: "2026-11-20T00:00:00Z",
+      businessDate: "2026-11-20",
+      openedBySystem: false,
+    },
     columns: [
       {
         id: "col1",
@@ -270,9 +276,11 @@ describe("useChoreController (real mode)", () => {
     const sent = actions.runChoreCommandAction.mock.calls[0]?.[0] as {
       command: Record<string, unknown>;
     };
+    // The run on screen is named (a stale tab is refused); still no actor, location or time.
     expect(Object.keys(sent.command).sort()).toEqual([
       "boardId",
       "columnId",
+      "cycleId",
       "done",
       "rowId",
       "type",
