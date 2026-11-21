@@ -324,9 +324,11 @@ Result: backup verified, restore byte-faithful, rehearsal passed. Evidence lives
 - Not proven: real GoTrue/PostgREST (isolated copy has no auth server; probes used real DEV identities with true role switching and `auth.sessions` rows in the copy), the Supabase CLI `db push` runner against hosted (covered indirectly by CI/local CLI replays), provider-side PITR/restore of hosted DEV, Storage bytes.
 
 ### Environment mapping (read-only; env values were NOT decrypted)
+
 PR previews AND the `development` branch deployments are Preview-target builds whose client bundle points at DEV `opmujepkemwcdxxorhfd`; the production domain points at PROD `ftadewtkjlaotfdvtjcv`. A branch-scoped `development` Preview env set exists. `database.yml` `deploy-migrations` runs only by manual dispatch on `main` with an isolation receipt, so merging to `development` does NOT migrate DEV.
 
 ### Hosted DEV migration runbook (Gate 3; needs separate owner approval)
+
 1. Pre-flight (read-only): HEAD and the four SHA-256 (event_types `fda35a9ae240a522c90b9bdc32f0b28dfac0294e9c28ad5fb7b41436b9a20410`, batch_a `b5bddb22a2cb1f10674a06304053fa17c57025b93d2924db6bb6a1e0baecad3f`, batch_b `22b4b94828d142686330cfc3aa99ed871da40c71e9b1758870455b163a7794c8`, batch_c `c7d60ea808aca72b86a13b74337109953f391ec66f2023c39349b58e2ad57441`); DEV ledger still 100/`20261119120000`, 0 chore tables; catalog digests equal the Gate 2 baseline (any drift = stop).
 2. Fresh backup + verify + isolated restore parity immediately before (same tooling; Gate 2 backup is the fallback). Keep both.
 3. Apply: bundle dir (config.toml + all 104 migrations; first 100 hashes and version-list digest must equal the live ledger), `supabase --workdir <bundle> link --project-ref opmujepkemwcdxxorhfd` with the DEV token, `migration list --linked` (exactly four pending), `db push --linked --dry-run`, `db push --linked`. Expect seconds. Do not use `deploy-migrations` (main-only).
@@ -336,6 +338,7 @@ PR previews AND the `development` branch deployments are Preview-target builds w
 7. Still owed after apply: authenticated real-mode DEV acceptance (needs owner-approved module configs; DEV has 29 configs, enforcement staged), then ready-for-review, merge, and (separately) Production.
 
 ### Remaining approvals (none granted by Gate 2)
+
 Hosted DEV migration; real authenticated DEV acceptance; ready-for-review; merge; Production release.
 
 ## Final Gate 3 — hosted DEV migration (3A) and real authenticated acceptance (3B) (2026-11-21)
@@ -343,6 +346,7 @@ Hosted DEV migration; real authenticated DEV acceptance; ready-for-review; merge
 Owner approval recorded (AskUserQuestion, this session): 3A = fresh DEV backup (temporary `cli_login_postgres` refresh accepted) + apply the four rehearsed migrations; 3B = real authenticated acceptance in "The Monk's DEV" / "DEV Location" with NO module-config or access changes and `G3-` fixtures only. No merge, no Production. Evidence outside the repo: `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G3-20261121\` (`gate3a-receipt.json`, `g3b-*-results.json`, backup `dev-20261121T151723Z.zip.dpapi`).
 
 ### 3A — PASS
+
 - Preflight: HEAD 2b84cab, PR #363 open/draft, four migration SHA-256 identical to Gate 2, no new upstream migrations, hosted DEV catalog byte-identical to the Gate 2 baseline (ledger 100).
 - Fresh backup verified (6 components, source stable during capture, isolated restore parity 126 tables). Gate 2 backup kept.
 - Applied one at a time with `supabase db push --linked` from a hash-checked workdir: 20261120090000, 20261120090100, 20261121090000, 20261122090000 -> ledger 104. Per-step read-only verification passed.
@@ -350,6 +354,7 @@ Owner approval recorded (AskUserQuestion, this session): 3A = fresh DEV backup (
 - Security/structure: hosted functions (382), policies (221), tables (106), triggers (88), indexes (548) identical to a replay of the same migrations on the fresh restore; security contract identical; 6 constraints differ only by parenthesization from dump/restore round trip.
 
 ### 3B — PASS with documented gaps (Preview of HEAD 2b84cab, built against DEV)
+
 - Real GoTrue sessions via the Preview passcode login: TestOwner, TestManager, TestServer1, TestServer2 (PIN auto-submits at 4 digits; storage states deleted afterwards).
 - Tasks/Checklists (RPC + UI): create with checklist, step check (attributed to the real user), edit/reorder/add/remove steps, stale-edit and stale-checklist refusals, reassignment, statuses, accepted rules (Completed cannot be edited/reassigned until reopened; only the completer or a manager may reopen), archive/delete, audit events, location scoping, forged ids and anonymous denied.
 - Chore Wheel (RPC + UI): three independent boards (Mango Lassi / Gulab Jamun / Rasmalai) plus a continuous board; columns/rows CRUD, reorder, reassign, duplicate, archive; own-column vs manager override; automatic closure (continuous -> immediate system-opened successor; weekly -> next period), manual-restart boards stay open at 100% until a manager closes them, unfinished runs cannot be closed as Completed, idempotent repeat close, append-only corrections (manager only, reason required), snapshots immutable and label-stable, sweep idempotent and location-scoped, direct table writes denied.
@@ -359,4 +364,5 @@ Owner approval recorded (AskUserQuestion, this session): 3A = fresh DEV backup (
 - Cleanup: every `G3-` board archived, every `G3-` task archived; the 69 original tasks hash-identical. Retained by design (append-only): 10 archived boards, 13 runs (9 still open on archived boards), 4 snapshots, 1 correction, 85 chore events, 11 completions, 4 archived tasks with events/notifications.
 
 ### Remaining approvals (none granted)
+
 PR ready-for-review; merge to `development`; Production release.
