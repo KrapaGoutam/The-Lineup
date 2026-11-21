@@ -14,9 +14,16 @@ import {
   type RecurrenceRuleView,
   type TaskView,
 } from "../domain/task-types";
+import type { ChoreController } from "../hooks/use-chore-controller";
 import type { TasksController } from "../hooks/use-tasks-controller";
 import { AllTasksView } from "./all-tasks-view";
 import { AssignedView } from "./assigned-view";
+import {
+  ChoreSettings,
+  CHORE_SETTINGS_LABELS,
+  type ChoreSettingsSection,
+} from "./chore-settings";
+import { ChoreWheelView } from "./chore-wheel-view";
 import { ChecklistView } from "./checklist-view";
 import { ChecklistsView } from "./checklists-view";
 import { DeleteTaskDialog } from "./delete-task-dialog";
@@ -36,6 +43,7 @@ export type TasksTab =
   | "mine"
   | "all"
   | "checklists"
+  | "chores"
   | "opening"
   | "closing"
   | "assigned"
@@ -44,6 +52,8 @@ export type TasksTab =
 
 type Props = {
   controller: TasksController;
+  /** V2.0.13 Batch B: the Chore Wheel data source (absent: the tab is not offered). */
+  chores?: ChoreController;
   /** Active organization and branch for the All Tasks header (real mode). */
   contextLabel?: string | null;
 };
@@ -53,6 +63,7 @@ const TAB_LABELS: Record<TasksTab, string> = {
   mine: "My Tasks",
   all: "All Tasks",
   checklists: "Checklists",
+  chores: "Chore Wheel",
   opening: "Opening",
   closing: "Closing",
   assigned: "Assigned",
@@ -66,7 +77,11 @@ const TAB_LABELS: Record<TasksTab, string> = {
  * component never keeps its own copy of task state, so whatever the server
  * last returned is always what is on screen.
  */
-export function TasksWorkspace({ controller, contextLabel = null }: Props) {
+export function TasksWorkspace({
+  controller,
+  chores,
+  contextLabel = null,
+}: Props) {
   const { snapshot, viewer, run } = controller;
   const manager = isTasksManager(viewer.designation);
   const [tab, setTab] = useState<TasksTab>("today");
@@ -84,6 +99,11 @@ export function TasksWorkspace({ controller, contextLabel = null }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [showInbox, setShowInbox] = useState(false);
+  // Tasks → Manage has the existing setup panels plus the chore board settings.
+  const [manageSection, setManageSection] = useState<
+    "setup" | ChoreSettingsSection
+  >("setup");
+  const [manageBoardId, setManageBoardId] = useState<string | null>(null);
 
   const categories = snapshot?.categories ?? DEFAULT_TASK_CATEGORIES;
   const categoryName = useCallback(
@@ -131,19 +151,31 @@ export function TasksWorkspace({ controller, contextLabel = null }: Props) {
     );
   }, [snapshot, openTaskId]);
 
-  const tabs: TasksTab[] = manager
-    ? [
-        "today",
-        "mine",
-        "all",
-        "checklists",
-        "opening",
-        "closing",
-        "assigned",
-        "manage",
-        "history",
-      ]
-    : ["today", "mine", "all", "checklists", "opening", "closing", "history"];
+  const tabs: TasksTab[] = (
+    manager
+      ? [
+          "today",
+          "mine",
+          "all",
+          "checklists",
+          "chores",
+          "opening",
+          "closing",
+          "assigned",
+          "manage",
+          "history",
+        ]
+      : [
+          "today",
+          "mine",
+          "all",
+          "checklists",
+          "chores",
+          "opening",
+          "closing",
+          "history",
+        ]
+  ).filter((id) => id !== "chores" || chores !== undefined) as TasksTab[];
 
   return (
     <section aria-label="Tasks" className="space-y-5">
@@ -321,20 +353,84 @@ export function TasksWorkspace({ controller, contextLabel = null }: Props) {
               onOpen={(task) => setOpenTaskId(task.id)}
             />
           ) : null}
+          {tab === "chores" && chores ? (
+            <ChoreWheelView
+              controller={chores}
+              contextLabel={contextLabel}
+              onManage={
+                manager
+                  ? (boardId) => {
+                      setManageBoardId(boardId);
+                      setManageSection("boards");
+                      setTab("manage");
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
           {tab === "manage" && manager ? (
             <div className="space-y-5">
-              <SeriesPanel
-                controller={controller}
-                execute={execute}
-                onEdit={(series) => setForm({ series })}
-              />
-              <TemplatesPanel controller={controller} execute={execute} />
-              <HandoffPanel
-                controller={controller}
-                categoryName={categoryName}
-                onOpen={(task) => setOpenTaskId(task.id)}
-                execute={execute}
-              />
+              {chores ? (
+                <nav
+                  aria-label="Manage sections"
+                  className="-mx-1 overflow-x-auto px-1"
+                >
+                  <div className="flex gap-1.5">
+                    {(
+                      [
+                        "setup",
+                        "boards",
+                        "people",
+                        "chores",
+                        "rules",
+                        "access",
+                      ] as const
+                    ).map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-current={manageSection === id ? "page" : undefined}
+                        onClick={() => setManageSection(id)}
+                        className={cn(
+                          "focus-visible:ring-ring min-h-11 rounded-xl px-4 text-sm font-semibold whitespace-nowrap outline-none focus-visible:ring-2",
+                          manageSection === id
+                            ? "bg-primary text-primary-foreground"
+                            : "border-border bg-surface text-foreground border",
+                        )}
+                      >
+                        {id === "setup"
+                          ? "Task setup"
+                          : CHORE_SETTINGS_LABELS[id]}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
+              ) : null}
+              {manageSection === "setup" || !chores ? (
+                <>
+                  <SeriesPanel
+                    controller={controller}
+                    execute={execute}
+                    onEdit={(series) => setForm({ series })}
+                  />
+                  <TemplatesPanel controller={controller} execute={execute} />
+                  <HandoffPanel
+                    controller={controller}
+                    categoryName={categoryName}
+                    onOpen={(task) => setOpenTaskId(task.id)}
+                    execute={execute}
+                  />
+                </>
+              ) : (
+                <ChoreSettings
+                  controller={chores}
+                  team={snapshot.team}
+                  section={manageSection}
+                  onSectionChange={setManageSection}
+                  boardId={manageBoardId}
+                  onBoardChange={setManageBoardId}
+                />
+              )}
             </div>
           ) : null}
           {tab === "opening" || tab === "closing" ? (

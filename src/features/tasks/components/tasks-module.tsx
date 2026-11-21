@@ -7,7 +7,8 @@ import { useReportStaleContext } from "@/features/context/components/context-syn
 import type { WorkspaceExpectation } from "@/features/context/domain/workspace-expectation";
 
 import type { TasksState } from "../domain/task-engine";
-import type { TaskTeamMember } from "../domain/task-types";
+import { isTasksManager, type TaskTeamMember } from "../domain/task-types";
+import { useChoreController } from "../hooks/use-chore-controller";
 import { useTasksController } from "../hooks/use-tasks-controller";
 import { TasksWorkspace } from "./tasks-workspace";
 
@@ -67,9 +68,43 @@ export function TasksModule({
     expectedContext,
     onContextStale: reportStale,
   });
+  const choreViewer = useMemo(
+    () => ({
+      profileId: user.profileId,
+      name: user.name,
+      isManager: isTasksManager(user.designation),
+    }),
+    [user.profileId, user.name, user.designation],
+  );
+  const choreDemo = useMemo(
+    () =>
+      demo
+        ? {
+            state: demo.state,
+            setState: demo.setState,
+            team: demo.team,
+            organizationId: demo.organizationId,
+          }
+        : null,
+    [demo],
+  );
+  const chores = useChoreController({
+    demo: choreDemo,
+    restaurantSlug,
+    viewer: choreViewer,
+    onSessionInvalid,
+    expectedContext,
+    onContextStale: reportStale,
+  });
   const unread = controller.snapshot?.unreadCount;
   useEffect(() => {
     if (unread !== undefined) onUnreadChange?.(unread);
   }, [unread, onUnreadChange]);
-  return <TasksWorkspace controller={controller} contextLabel={contextLabel} />;
+  return (
+    <TasksWorkspace
+      controller={controller}
+      chores={chores}
+      contextLabel={contextLabel}
+    />
+  );
 }

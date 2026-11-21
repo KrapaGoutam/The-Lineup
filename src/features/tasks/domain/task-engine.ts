@@ -3,6 +3,7 @@ import {
   zonedWallTimeToInstant,
 } from "@/lib/timezone";
 
+import type { ChoreState } from "./chore-engine";
 import {
   openingReminderDedupeKey,
   type OpeningReminder,
@@ -67,6 +68,8 @@ export type TasksState = {
   notifications: NotificationRecord[];
   /** V2.0.13: archived tasks stay in `tasks` (history) but leave the active register. */
   archivedTaskIds?: string[];
+  /** V2.0.13 Batch B: demo-mode Chore Wheel boards (real mode reads the database). */
+  chores?: ChoreState;
   seq: number;
 };
 

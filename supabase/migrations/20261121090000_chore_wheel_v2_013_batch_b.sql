@@ -31,7 +31,9 @@ begin;
 -- ---------------------------------------------------------------------
 create table public.chore_boards (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
+  -- Cascade keeps organization removal (fixtures, tenant teardown) working: the
+  -- children below cascade from the board, and chore_events allows cascade deletes.
+  organization_id uuid not null references public.organizations (id) on delete cascade,
   location_id uuid not null,
   name text not null check (length(trim(name)) between 1 and 80),
   description text check (description is null or length(description) <= 500),

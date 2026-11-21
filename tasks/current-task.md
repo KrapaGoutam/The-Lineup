@@ -1,3 +1,20 @@
+# V2.0.13 Batch B — Chore Wheel, customizable boards, Tasks-local settings — IMPLEMENTED (local), draft PR #363
+
+Plan, rules, evidence, rollback and the **Batch C seam**: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch B", "# Batch C seam"). Same branch/worktree as Batch A below; migration `20261121090000_chore_wheel_v2_013_batch_b.sql` (local only).
+
+- [x] B0 Batch A review gate: CI failure = clock-dependent Tips test `0066` (baseline, fixed narrowly in `57e7560`); `LayoutProps` = missing generated route types only; no Batch A blocker.
+- [x] B1 database: 8 tables (template / cycle / columns / assignments / rows / selected columns / completions / audit), 11 RPCs, RLS select-only, authorize-before-validate; pgTAP `0093` (129) + sweep re-pin (137 functions, 41 management RPCs); generated types.
+- [x] B2 domain: types, pure rules (all / selected / any-one counting, cell states, tick authority mirror), command schema, demo twin engine + demo seed.
+- [x] B3 application: loader (paged, open cycle), actions (verified-location guard), controller (revert-on-error ticks, in-flight guard, demo stale-state guard), Chore Wheel (matrix + phone list), Manage sections (Boards, People / Columns, Chores / Rows, Completion Rules, Access).
+- [x] B4 validation: full pgTAP 96 files / 4,070 on a clean replay; real-JWT 10/10 (+ Batch A 24); Vitest 358 files / 4,854; Playwright 13 + 51 existing on three viewports against a production build; `npm run check` + build clean.
+- [ ] Exact-head CI on the pushed Batch B head, owner review of PR #363, rehearsed hosted-DEV apply of the three migrations (NOT authorized), Batch C (NOT started). No merge to `development`/`main`, Production untouched.
+
+## Current State & Next Step
+
+Batch B is committed on `feature/v2-013-tasks-chores`. Next: exact-head CI, owner review, then (when authorized) the hosted-DEV migration rehearsal; Batch C only after that.
+
+---
+
 # V2.0.13 Batch A — Existing Tasks, Checklists, CRUD, Status — IMPLEMENTED (local), draft PR for review
 
 Plan, rules, evidence, rollback and Batch B seam: `docs/features/v2-0-13-tasks-chores/HANDOFF.md`.

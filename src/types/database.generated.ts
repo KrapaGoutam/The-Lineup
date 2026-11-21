@@ -1244,6 +1244,13 @@ export type Database = {
             referencedColumns: ["id", "organization_id"];
           },
           {
+            foreignKeyName: "chore_boards_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "chore_boards_updated_by_fkey";
             columns: ["updated_by"];
             isOneToOne: false;
