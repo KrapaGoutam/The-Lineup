@@ -310,3 +310,53 @@ Owner decisions applied (Final Gate 1): **D-01** on-demand sweep retained and ad
 ## Remaining approvals (none granted by Gate 1.1)
 
 Hosted-DEV backup; isolated restore + rehearsal to ledger 104; hosted-DEV application of the four migrations; real authenticated DEV acceptance; PR #363 ready-for-review; merge to `development`; any Production step.
+
+## Final Gate 2 — DEV backup, isolated restore, four-migration rehearsal (2026-11-21; hosted DEV NOT changed)
+
+Result: backup verified, restore byte-faithful, rehearsal passed. Evidence lives OUTSIDE the repo (owner-only, DPAPI-encrypted): `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G2-20261121\` (`gate2-receipt.json`, `rehearsal-steps.json`, `probe-results.json`, `recovery-results.json`, `inventory-diff.json`, scripts). No backup, secret or operational data is in git.
+
+- Source: hosted DEV `opmujepkemwcdxxorhfd`, ledger 100 / latest `20261119120000`, none of the four V2.0.13 versions, 0 `chore_*` tables, repo first-100 versions == ledger (no drift), `development` adds no migrations beyond this branch.
+- Backup: `supabase db dump --linked` x6 (roles, schema, data, history, managed schema), DPAPI CurrentUser zip, SHA-256 of ciphertext in the receipt; source tables/catalog byte-identical before and after capture (stable). Side effect to disclose: the CLI refreshes the existing temporary `cli_login_postgres` role on DEV (5-minute expiry); it already existed from earlier approved backups. Excluded by the standard CLI: Storage object bytes, platform settings/secrets, role passwords, `auth.schema_migrations`/`storage.migrations`.
+- Restore: isolated container (network none, no ports, tmpfs data, pg_cron has 0 jobs): 126 tables row-digest identical, FK anti-joins clean, function/policy/ACL/RLS catalog digests identical to hosted.
+- Migrations (psql harness as `postgres` + ledger row; ~0.5-0.6 s each): 1 `20261120090000` PASS, 2 `20261120090100` PASS, 3 `20261121090000` PASS, 4 `20261122090000` PASS -> ledger 104. Pre-existing tables: no row lost; only `public.tasks` gains `archived_at`, `archived_by`, `checklist_rev` (existing-column digest identical). +14 tables, +42 functions, -2 (`task_create`/`task_update` replaced by signatures whose new parameters are defaulted, so old named-argument callers still work), 2 changed (`task_reopen`, `task_set_status`), +15 policies, 0 existing policies changed, enum keeps all old values.
+- Tests on the migrated populated copy: pgTAP 0092 64/64, 0093 129/129, 0094 173/173, 0088 sweep 67/67, 0088 PIN 22/22; real-identity concurrency/authorization probes 31/31 (F-1 daily/weekly/manual/continuous; six concurrent rounds; 8 parallel sweeps; cross-location, cross-organization, anon, direct-write denial; old-signature `task_create`/`task_update`); recovery 10/10.
+- 38 assertions in 7 OLDER suites (0027, 0029, 0041, 0042, 0059, 0063, 0085) fail on the populated DEV copy because they assume a clean database (global counts, "estate fully configured", image default ACLs). They fail IDENTICALLY (same assertions) on the pre-migration control, so none is caused by V2.0.13; do not read them as regressions.
+- Not proven: real GoTrue/PostgREST (isolated copy has no auth server; probes used real DEV identities with true role switching and `auth.sessions` rows in the copy), the Supabase CLI `db push` runner against hosted (covered indirectly by CI/local CLI replays), provider-side PITR/restore of hosted DEV, Storage bytes.
+
+### Environment mapping (read-only; env values were NOT decrypted)
+PR previews AND the `development` branch deployments are Preview-target builds whose client bundle points at DEV `opmujepkemwcdxxorhfd`; the production domain points at PROD `ftadewtkjlaotfdvtjcv`. A branch-scoped `development` Preview env set exists. `database.yml` `deploy-migrations` runs only by manual dispatch on `main` with an isolation receipt, so merging to `development` does NOT migrate DEV.
+
+### Hosted DEV migration runbook (Gate 3; needs separate owner approval)
+1. Pre-flight (read-only): HEAD and the four SHA-256 (event_types `fda35a9ae240a522c90b9bdc32f0b28dfac0294e9c28ad5fb7b41436b9a20410`, batch_a `b5bddb22a2cb1f10674a06304053fa17c57025b93d2924db6bb6a1e0baecad3f`, batch_b `22b4b94828d142686330cfc3aa99ed871da40c71e9b1758870455b163a7794c8`, batch_c `c7d60ea808aca72b86a13b74337109953f391ec66f2023c39349b58e2ad57441`); DEV ledger still 100/`20261119120000`, 0 chore tables; catalog digests equal the Gate 2 baseline (any drift = stop).
+2. Fresh backup + verify + isolated restore parity immediately before (same tooling; Gate 2 backup is the fallback). Keep both.
+3. Apply: bundle dir (config.toml + all 104 migrations; first 100 hashes and version-list digest must equal the live ledger), `supabase --workdir <bundle> link --project-ref opmujepkemwcdxxorhfd` with the DEV token, `migration list --linked` (exactly four pending), `db push --linked --dry-run`, `db push --linked`. Expect seconds. Do not use `deploy-migrations` (main-only).
+4. Post-checks (read-only): ledger 104/`20261122090000`; 14 new tables RLS-enabled, select-only for `authenticated`, no anon/PUBLIC grants; functions 342->382; existing tables unchanged except `tasks` +3 columns; Tasks `select` counts unchanged.
+5. ONLY THEN merge PR #363 / allow any `development` deploy. A V2.0.13 app on an unmigrated DEV breaks Tasks create/update (`p_checklist`) and the Chore Wheel. Existing PR previews of this branch already run against unmigrated DEV.
+6. Failure handling: migrations 2-4 carry their own BEGIN/COMMIT and migration 1 is a single idempotent statement; a failing file leaves NO trace (proven) and is retried after a forward-fix. Never delete enum values. An interrupted sequence is safe (after 1: harmless; after 2: Tasks works, chore RPCs absent). Restoring hosted DEV itself is NOT proven; prefer forward-fix and treat restore as a separately approved procedure.
+7. Still owed after apply: authenticated real-mode DEV acceptance (needs owner-approved module configs; DEV has 29 configs, enforcement staged), then ready-for-review, merge, and (separately) Production.
+
+### Remaining approvals (none granted by Gate 2)
+Hosted DEV migration; real authenticated DEV acceptance; ready-for-review; merge; Production release.
+
+## Final Gate 3 — hosted DEV migration (3A) and real authenticated acceptance (3B) (2026-11-21)
+
+Owner approval recorded (AskUserQuestion, this session): 3A = fresh DEV backup (temporary `cli_login_postgres` refresh accepted) + apply the four rehearsed migrations; 3B = real authenticated acceptance in "The Monk's DEV" / "DEV Location" with NO module-config or access changes and `G3-` fixtures only. No merge, no Production. Evidence outside the repo: `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G3-20261121\` (`gate3a-receipt.json`, `g3b-*-results.json`, backup `dev-20261121T151723Z.zip.dpapi`).
+
+### 3A — PASS
+- Preflight: HEAD 2b84cab, PR #363 open/draft, four migration SHA-256 identical to Gate 2, no new upstream migrations, hosted DEV catalog byte-identical to the Gate 2 baseline (ledger 100).
+- Fresh backup verified (6 components, source stable during capture, isolated restore parity 126 tables). Gate 2 backup kept.
+- Applied one at a time with `supabase db push --linked` from a hash-checked workdir: 20261120090000, 20261120090100, 20261121090000, 20261122090000 -> ledger 104. Per-step read-only verification passed.
+- Data: 127 pre-existing tables unchanged except `tasks` (+3 additive columns, existing-column digest identical); the 69 original tasks and 56 events are identical by id; 14 new tables.
+- Security/structure: hosted functions (382), policies (221), tables (106), triggers (88), indexes (548) identical to a replay of the same migrations on the fresh restore; security contract identical; 6 constraints differ only by parenthesization from dump/restore round trip.
+
+### 3B — PASS with documented gaps (Preview of HEAD 2b84cab, built against DEV)
+- Real GoTrue sessions via the Preview passcode login: TestOwner, TestManager, TestServer1, TestServer2 (PIN auto-submits at 4 digits; storage states deleted afterwards).
+- Tasks/Checklists (RPC + UI): create with checklist, step check (attributed to the real user), edit/reorder/add/remove steps, stale-edit and stale-checklist refusals, reassignment, statuses, accepted rules (Completed cannot be edited/reassigned until reopened; only the completer or a manager may reopen), archive/delete, audit events, location scoping, forged ids and anonymous denied.
+- Chore Wheel (RPC + UI): three independent boards (Mango Lassi / Gulab Jamun / Rasmalai) plus a continuous board; columns/rows CRUD, reorder, reassign, duplicate, archive; own-column vs manager override; automatic closure (continuous -> immediate system-opened successor; weekly -> next period), manual-restart boards stay open at 100% until a manager closes them, unfinished runs cannot be closed as Completed, idempotent repeat close, append-only corrections (manager only, reason required), snapshots immutable and label-stable, sweep idempotent and location-scoped, direct table writes denied.
+- History UI: month grouping, All/Tasks/Chore Wheel, per-board filter, saved-run detail. Phone: person-focused view, no manage controls for staff, no horizontal overflow. Tablet: scrollable matrix with sticky first column.
+- Measured on the Preview: Tasks load median 5.3 s, Chore Wheel ready 4.0 s, History 4.0 s, sweep RPC ~105 ms, UI write round trips 1.3-4.0 s. Measured, not optimised.
+- Not verified live: F-1 and daily/weekly rollover (need a time boundary or a DB backdate; covered by Gate 2 and CI), same-organization cross-location denial (the org has one location), a second-organization real login, a branch-only manager, Safari/WebKit, screen reader, tablet is viewport emulation.
+- Cleanup: every `G3-` board archived, every `G3-` task archived; the 69 original tasks hash-identical. Retained by design (append-only): 10 archived boards, 13 runs (9 still open on archived boards), 4 snapshots, 1 correction, 85 chore events, 11 completions, 4 archived tasks with events/notifications.
+
+### Remaining approvals (none granted)
+PR ready-for-review; merge to `development`; Production release.

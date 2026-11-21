@@ -1,3 +1,35 @@
+# V2.0.13 Final Gate 3 — hosted DEV migration + real authenticated acceptance — PASSED (3A PASS, 3B PASS with documented gaps), draft PR #363
+
+Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 3"). Hosted DEV is now at ledger 104 (four V2.0.13 migrations applied 2026-11-21). Evidence outside the repo: `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G3-20261121\`.
+
+- [x] 3A backup verified, four migrations applied one at a time, data preserved, structure == rehearsal
+- [x] 3B real sessions (Owner/Manager/Server1/Server2): Tasks + Checklists, 3+1 independent boards, closure/reset/corrections, History, security denials, phone/tablet/desktop
+- [x] G3- fixtures archived; original 69 tasks unchanged
+- [ ] Not verified live: F-1/rollover time boundary, same-org cross-location, second-org login, Safari/screen reader
+- [ ] Owner decisions: PR ready-for-review, merge to development, Production release (none authorized)
+
+## Current State & Next Step
+
+Nothing is pending in code. Next is the owner decision on ready-for-review and merge; hosted DEV already has the schema, so a development deploy is now compatible.
+
+---
+
+# V2.0.13 Final Gate 2 — DEV backup + isolated four-migration rehearsal — PASSED (hosted DEV unchanged), draft PR #363
+
+Detail and the Gate 3 runbook: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 2"). Evidence outside the repo in `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G2-20261121\`.
+
+- [x] Backup verified (6 components, DPAPI, source stable), restore parity (126 tables, catalog digests) PASS
+- [x] Four migrations applied to the isolated copy (ledger 100 -> 104), no data loss, tasks +3 additive columns
+- [x] pgTAP 0092/0093/0094/0088 pass; 31/31 concurrency + real-identity authz probes; 10/10 recovery scenarios
+- [x] Hosted DEV re-read: identical to baseline, ledger 100; Production untouched; nothing committed or pushed in Gate 2
+- [ ] Owner approval for Gate 3 (hosted DEV apply per runbook), then real acceptance, ready-for-review, merge
+
+## Current State & Next Step
+
+Rehearsal complete; awaiting owner decision. First hosted step is the runbook in HANDOFF.md (fresh backup, then `db push --linked`).
+
+---
+
 # V2.0.13 Final Gate 1.1 — F-1 boundary-tick fix + Tasks-load sweep — IMPLEMENTED (local), draft PR #363
 
 Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 1.1"). Batch C migration amended in place (still local-only; hosted DEV ledger 100 re-verified read-only).
