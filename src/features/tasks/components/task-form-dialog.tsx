@@ -27,8 +27,18 @@ import {
 } from "../domain/task-types";
 import type { TaskRunResult } from "../hooks/use-tasks-controller";
 import { AssigneePicker } from "./assignee-picker";
+import {
+  ChecklistEditor,
+  checklistChanged,
+  draftsFromSteps,
+  newDraftKey,
+  stepInputsFromDrafts,
+  type StepDraft,
+} from "./checklist-editor";
 
 type Props = {
+  /** Open as "New checklist": a task that starts with a first empty step. */
+  checklistFirst?: boolean;
   /** Editing a single task (this occurrence only when it belongs to a series). */
   task?: TaskView;
   /** Editing a whole series: "this and future occurrences". */
@@ -62,6 +72,7 @@ const textareaClass =
  * reassign flow so every reassignment is its own audited event.
  */
 export function TaskFormDialog({
+  checklistFirst = false,
   task,
   series,
   team,
@@ -92,6 +103,13 @@ export function TaskFormDialog({
     series?.assigneeIds ?? [],
   );
   const [eachPerson, setEachPerson] = useState(false);
+  const [steps, setSteps] = useState<StepDraft[]>(() =>
+    task
+      ? draftsFromSteps(task.steps)
+      : checklistFirst
+        ? [{ key: newDraftKey(), id: null, title: "" }]
+        : [],
+  );
 
   const [repeat, setRepeat] = useState<Repeat>(series?.frequency ?? "none");
   const [startsOn, setStartsOn] = useState(series?.startsOn ?? today);
@@ -155,8 +173,19 @@ export function TaskFormDialog({
         dueTime: dueTime || null,
         dueWindow: dueWindow || null,
       };
+      const stepInputs = stepInputsFromDrafts(steps);
       command = task
-        ? { type: "update", taskId: task.id, input: fields }
+        ? {
+            type: "update",
+            taskId: task.id,
+            input: fields,
+            // The version this editor opened with: a newer one is a conflict.
+            expectedUpdatedAt: task.updatedAt,
+            expectedChecklistRev: task.checklistRev,
+            ...(checklistChanged(steps, task.steps)
+              ? { checklist: stepInputs }
+              : {}),
+          }
         : {
             type: "create",
             input: {
@@ -164,6 +193,7 @@ export function TaskFormDialog({
               assignmentMode: mode,
               assigneeIds,
               eachPerson: mode === "multiple" && eachPerson,
+              ...(stepInputs.length > 0 ? { checklist: stepInputs } : {}),
             },
           };
     }
@@ -180,7 +210,9 @@ export function TaskFormDialog({
       ? task?.recurrenceRuleId
         ? "Edit this occurrence"
         : "Edit task"
-      : "New task";
+      : checklistFirst
+        ? "New checklist"
+        : "New task";
   const description = editingSeries
     ? "Changes apply to this and future occurrences that haven't started. Completed and past occurrences are never changed."
     : editingTask
@@ -221,6 +253,14 @@ export function TaskFormDialog({
             onChange={(event) => setInstructions(event.target.value)}
           />
         </div>
+
+        {!repeating && !editingSeries ? (
+          <ChecklistEditor
+            steps={steps}
+            onChange={setSteps}
+            disabled={saving}
+          />
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">

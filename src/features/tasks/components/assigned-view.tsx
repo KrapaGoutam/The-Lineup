@@ -32,7 +32,7 @@ type TypeFilter = "all" | "individual" | "team";
 
 const STATUS_CHIPS: { id: StatusChip; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "open", label: "Open" },
+  { id: "open", label: "Not Started" },
   { id: "in_progress", label: "In progress" },
   { id: "blocked", label: "Blocked" },
   { id: "overdue", label: "Overdue" },

@@ -69,6 +69,17 @@ export type TaskCategory = { slug: string; name: string };
 
 export type PersonRef = { profileId: string; name: string };
 
+/** V2.0.13: one step of an ordinary task's checklist (live steps only). */
+export type TaskStepView = {
+  id: string;
+  title: string;
+  /** 1-based position among the live steps. */
+  sortOrder: number;
+  done: boolean;
+  completedBy: PersonRef | null;
+  completedAt: string | null;
+};
+
 /** One row of the read model. Dates are location-local; instants are ISO. */
 export type TaskView = {
   id: string;
@@ -98,6 +109,12 @@ export type TaskView = {
   sortOrder: number;
   createdBy: PersonRef | null;
   createdAt: string;
+  /** Last change instant, exactly as the database sent it (edit-conflict token). */
+  updatedAt: string;
+  /** Bumped whenever the step list is edited (edit-conflict token for steps). */
+  checklistRev: number;
+  /** Checklist steps of an ordinary task; always empty for Opening/Closing items. */
+  steps: TaskStepView[];
 };
 
 /** Manager-only audit timeline row. */

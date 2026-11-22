@@ -1,3 +1,102 @@
+# V2.0.13 Final Gate 3 — hosted DEV migration + real authenticated acceptance — PASSED (3A PASS, 3B PASS with documented gaps), draft PR #363
+
+Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 3"). Hosted DEV is now at ledger 104 (four V2.0.13 migrations applied 2026-11-21). Evidence outside the repo: `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G3-20261121\`.
+
+- [x] 3A backup verified, four migrations applied one at a time, data preserved, structure == rehearsal
+- [x] 3B real sessions (Owner/Manager/Server1/Server2): Tasks + Checklists, 3+1 independent boards, closure/reset/corrections, History, security denials, phone/tablet/desktop
+- [x] G3- fixtures archived; original 69 tasks unchanged
+- [ ] Not verified live: F-1/rollover time boundary, same-org cross-location, second-org login, Safari/screen reader
+- [ ] Owner decisions: PR ready-for-review, merge to development, Production release (none authorized)
+
+## Current State & Next Step
+
+Nothing is pending in code. Next is the owner decision on ready-for-review and merge; hosted DEV already has the schema, so a development deploy is now compatible.
+
+---
+
+# V2.0.13 Final Gate 2 — DEV backup + isolated four-migration rehearsal — PASSED (hosted DEV unchanged), draft PR #363
+
+Detail and the Gate 3 runbook: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 2"). Evidence outside the repo in `%LOCALAPPDATA%\TheLineup-DEV-Backups\V2-0-13-G2-20261121\`.
+
+- [x] Backup verified (6 components, DPAPI, source stable), restore parity (126 tables, catalog digests) PASS
+- [x] Four migrations applied to the isolated copy (ledger 100 -> 104), no data loss, tasks +3 additive columns
+- [x] pgTAP 0092/0093/0094/0088 pass; 31/31 concurrency + real-identity authz probes; 10/10 recovery scenarios
+- [x] Hosted DEV re-read: identical to baseline, ledger 100; Production untouched; nothing committed or pushed in Gate 2
+- [ ] Owner approval for Gate 3 (hosted DEV apply per runbook), then real acceptance, ready-for-review, merge
+
+## Current State & Next Step
+
+Rehearsal complete; awaiting owner decision. First hosted step is the runbook in HANDOFF.md (fresh backup, then `db push --linked`).
+
+---
+
+# V2.0.13 Final Gate 1.1 — F-1 boundary-tick fix + Tasks-load sweep — IMPLEMENTED (local), draft PR #363
+
+Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 1.1"). Batch C migration amended in place (still local-only; hosted DEV ledger 100 re-verified read-only).
+
+- [x] F-1: `chore_cell_set` refuses ticks/unticks on a stale auto-reset daily/weekly run (`private.chore_run_period_ended`, location-local period, shared with the sweep); demo engine + controller mirror; pgTAP 0094 173 assertions (mutation-checked), real-JWT 14, unit tests.
+- [x] Tasks-load sweep: `getTasksSnapshot` calls `chore_cycles_sweep` (verified location, best-effort, idempotent); no external scheduler.
+- [x] D-13 read-only: PR preview → DEV ref `opmujepkemwcdxxorhfd` (unmigrated); production → PROD ref; migrate DEV before any development deploy/merge.
+- [x] Gates: full pgTAP 97 files / 4,243; real-JWT 48 (Tasks suites); Vitest 4,880; focused Playwright 74 passed / 4 skipped by design; `npm run check` clean.
+- [ ] Exact-head CI on the pushed head; separate approvals still required for DEV backup, isolated rehearsal, hosted apply, authenticated acceptance, ready-for-review, merge. Production untouched.
+
+## Current State & Next Step
+
+Final Gate 1.1 is committed on `feature/v2-013-tasks-chores`. Next: owner decides the remaining approvals; the first hosted step is a DEV backup + isolated restore rehearsal of the four migrations (not authorized yet).
+
+---
+
+# V2.0.13 Batch C — run closure, recurrence, immutable snapshots, unified History — IMPLEMENTED (local), draft PR #363
+
+Plan, rules, evidence, limitations and hosted prerequisites: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch C"). Same branch/worktree; migration `20261122090000_chore_wheel_v2_013_batch_c.sql` (local only).
+
+- [x] C1 closure + recurrence: locked exactly-once close, automatic/manual reset, cancel, start, daily/weekly sweep (location time zone), zero-required guard; pgTAP `0094` (144) + real-JWT race tests.
+- [x] C2 immutable snapshots (5 tables, freeze triggers), append-only corrections, system actor; demo twin engine parity.
+- [x] C3 unified History (All / Tasks / Chore Wheel, Month → Completed / Not completed, filters, saved-run dialog, task actions reused from All Tasks).
+- [x] C4 validation: full pgTAP 97 files / 4,214; real-JWT 42 (Batch C 8); Vitest 360 files / 4,874; Playwright 104 passed (4 skipped by design) on three viewports; `npm run check` + build clean.
+- [ ] Exact-head CI on the pushed head, owner review of PR #363, hosted-DEV rehearsal/apply of FOUR migrations (NOT authorized). No merge to `development`/`main`, Production untouched, no scheduler beyond the on-demand sweep, `per_shift` unavailable.
+
+## Current State & Next Step
+
+Batch C is committed on `feature/v2-013-tasks-chores` and pushed to draft PR #363. Next: exact-head CI, owner decisions (sweep vs background job, per-shift, corrections switch, reopen-before-edit), then — only when authorized — the hosted-DEV backup/rehearsal/apply of the four pending migrations and real-mode acceptance.
+
+---
+
+# V2.0.13 Batch B — Chore Wheel, customizable boards, Tasks-local settings — IMPLEMENTED (local), draft PR #363
+
+Plan, rules, evidence, rollback and the **Batch C seam**: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("# Batch B", "# Batch C seam"). Same branch/worktree as Batch A below; migration `20261121090000_chore_wheel_v2_013_batch_b.sql` (local only).
+
+- [x] B0 Batch A review gate: CI failure = clock-dependent Tips test `0066` (baseline, fixed narrowly in `57e7560`); `LayoutProps` = missing generated route types only; no Batch A blocker.
+- [x] B1 database: 8 tables (template / cycle / columns / assignments / rows / selected columns / completions / audit), 11 RPCs, RLS select-only, authorize-before-validate; pgTAP `0093` (129) + sweep re-pin (137 functions, 41 management RPCs); generated types.
+- [x] B2 domain: types, pure rules (all / selected / any-one counting, cell states, tick authority mirror), command schema, demo twin engine + demo seed.
+- [x] B3 application: loader (paged, open cycle), actions (verified-location guard), controller (revert-on-error ticks, in-flight guard, demo stale-state guard), Chore Wheel (matrix + phone list), Manage sections (Boards, People / Columns, Chores / Rows, Completion Rules, Access).
+- [x] B4 validation: full pgTAP 96 files / 4,070 on a clean replay; real-JWT 10/10 (+ Batch A 24); Vitest 358 files / 4,854; Playwright 13 + 51 existing on three viewports against a production build; `npm run check` + build clean.
+- [ ] Exact-head CI on the pushed Batch B head, owner review of PR #363, rehearsed hosted-DEV apply of the three migrations (NOT authorized), Batch C (NOT started). No merge to `development`/`main`, Production untouched.
+
+## Current State & Next Step
+
+Batch B is committed on `feature/v2-013-tasks-chores`. Next: exact-head CI, owner review, then (when authorized) the hosted-DEV migration rehearsal; Batch C only after that.
+
+---
+
+# V2.0.13 Batch A — Existing Tasks, Checklists, CRUD, Status — IMPLEMENTED (local), draft PR for review
+
+Plan, rules, evidence, rollback and Batch B seam: `docs/features/v2-0-13-tasks-chores/HANDOFF.md`.
+Branch `feature/v2-013-tasks-chores`, worktree `.tmp/v2-013-tasks-chores`, base `development` `5aa3a81f`.
+
+- [x] A1 focused Tasks audit (components, RPCs, RLS seams, tests, demo engine twin).
+- [x] A2 migrations (`20261120090000`, `20261120090100`): steps table, archive, conflict tokens, status transitions, `task_delete`, `task_checklist_step_set`; pgTAP 0092 (64) + 0088 re-pin.
+- [x] A2 app: All Tasks, Checklists, checklist editor/panel, reassign and delete dialogs, status control, demo-engine parity.
+- [x] A3 validation: full pgTAP, real-JWT local suites (24), full Vitest, Playwright 51/51 on three viewports against a production build, screenshots inspected.
+- [ ] Owner review of the draft PR; hosted-DEV rehearsal/apply of the two migrations (NOT authorized); exact-head CI.
+- [ ] Batch B (Chore Wheel + Task Settings) and Batch C (cycles, History) — NOT started. No merge to `development`/`main`, no Production.
+
+## Current State & Next Step
+
+All Batch A work is committed on the feature branch. Next: owner review, then (when authorized) the hosted-DEV migration rehearsal, then Batch B per the handoff.
+
+---
+
 # Release Group 2 — Phase C integrated acceptance — PASSED on DEV; Production NOT released
 
 Evidence: `docs/features/v2-0-9-daily-dashboard/PHASE_C.md`. Release record: `docs/releases/group-2-release-readiness.md`.

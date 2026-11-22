@@ -1157,6 +1157,996 @@ export type Database = {
           },
         ];
       };
+      chore_boards: {
+        Row: {
+          archived_at: string | null;
+          archived_by: string | null;
+          created_at: string;
+          created_by: string;
+          default_requirement_mode: string;
+          description: string | null;
+          id: string;
+          is_active: boolean;
+          location_id: string;
+          manager_override: boolean;
+          name: string;
+          organization_id: string;
+          recurrence_intent: string;
+          reset_intent: string;
+          sort_order: number;
+          staff_access: string;
+          structure_version: number;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+        };
+        Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          default_requirement_mode?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          location_id: string;
+          manager_override?: boolean;
+          name: string;
+          organization_id: string;
+          recurrence_intent?: string;
+          reset_intent?: string;
+          sort_order?: number;
+          staff_access?: string;
+          structure_version?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          default_requirement_mode?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          location_id?: string;
+          manager_override?: boolean;
+          name?: string;
+          organization_id?: string;
+          recurrence_intent?: string;
+          reset_intent?: string;
+          sort_order?: number;
+          staff_access?: string;
+          structure_version?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_boards_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_boards_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_boards_location_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_boards_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_boards_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chore_column_assignments: {
+        Row: {
+          assigned_at: string;
+          assigned_by: string;
+          board_id: string;
+          column_id: string;
+          ended_at: string | null;
+          ended_by: string | null;
+          id: number;
+          organization_id: string;
+          profile_id: string | null;
+        };
+        Insert: {
+          assigned_at?: string;
+          assigned_by: string;
+          board_id: string;
+          column_id: string;
+          ended_at?: string | null;
+          ended_by?: string | null;
+          id?: never;
+          organization_id: string;
+          profile_id?: string | null;
+        };
+        Update: {
+          assigned_at?: string;
+          assigned_by?: string;
+          board_id?: string;
+          column_id?: string;
+          ended_at?: string | null;
+          ended_by?: string | null;
+          id?: never;
+          organization_id?: string;
+          profile_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_column_assignments_assigned_by_fkey";
+            columns: ["assigned_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_column_assignments_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_column_assignments_column_fk";
+            columns: ["column_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_columns";
+            referencedColumns: ["id", "board_id"];
+          },
+          {
+            foreignKeyName: "chore_column_assignments_ended_by_fkey";
+            columns: ["ended_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_column_assignments_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chore_columns: {
+        Row: {
+          archived_at: string | null;
+          archived_by: string | null;
+          board_id: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          is_active: boolean;
+          label: string;
+          organization_id: string;
+          profile_id: string | null;
+          sort_order: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          board_id: string;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          is_active?: boolean;
+          label: string;
+          organization_id: string;
+          profile_id?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          board_id?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          is_active?: boolean;
+          label?: string;
+          organization_id?: string;
+          profile_id?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_columns_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_columns_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_columns_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_columns_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_columns_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chore_completions: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          completed_at: string;
+          completed_by: string;
+          completed_by_name: string;
+          cycle_id: string;
+          entered_as: string;
+          id: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          completed_at?: string;
+          completed_by: string;
+          completed_by_name: string;
+          cycle_id: string;
+          entered_as: string;
+          id?: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          completed_at?: string;
+          completed_by?: string;
+          completed_by_name?: string;
+          cycle_id?: string;
+          entered_as?: string;
+          id?: string;
+          organization_id?: string;
+          row_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_completions_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_completions_column_fk";
+            columns: ["column_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_columns";
+            referencedColumns: ["id", "board_id"];
+          },
+          {
+            foreignKeyName: "chore_completions_completed_by_fkey";
+            columns: ["completed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_completions_cycle_fk";
+            columns: ["cycle_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycles";
+            referencedColumns: ["id", "board_id"];
+          },
+          {
+            foreignKeyName: "chore_completions_row_fk";
+            columns: ["row_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_rows";
+            referencedColumns: ["id", "board_id"];
+          },
+        ];
+      };
+      chore_cycle_corrections: {
+        Row: {
+          before_completed_at: string | null;
+          before_completed_by_name: string | null;
+          board_id: string;
+          column_id: string;
+          corrected_by: string;
+          corrected_by_name: string;
+          created_at: string;
+          cycle_id: string;
+          done_after: boolean;
+          done_before: boolean;
+          id: number;
+          organization_id: string;
+          reason: string;
+          row_id: string;
+        };
+        Insert: {
+          before_completed_at?: string | null;
+          before_completed_by_name?: string | null;
+          board_id: string;
+          column_id: string;
+          corrected_by: string;
+          corrected_by_name: string;
+          created_at?: string;
+          cycle_id: string;
+          done_after: boolean;
+          done_before: boolean;
+          id?: never;
+          organization_id: string;
+          reason: string;
+          row_id: string;
+        };
+        Update: {
+          before_completed_at?: string | null;
+          before_completed_by_name?: string | null;
+          board_id?: string;
+          column_id?: string;
+          corrected_by?: string;
+          corrected_by_name?: string;
+          created_at?: string;
+          cycle_id?: string;
+          done_after?: boolean;
+          done_before?: boolean;
+          id?: never;
+          organization_id?: string;
+          reason?: string;
+          row_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycle_corrections_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_corrections_column_fk";
+            columns: ["cycle_id", "column_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshot_columns";
+            referencedColumns: ["cycle_id", "column_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_corrections_corrected_by_fkey";
+            columns: ["corrected_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_corrections_row_fk";
+            columns: ["cycle_id", "row_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshot_rows";
+            referencedColumns: ["cycle_id", "row_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_corrections_snap_fk";
+            columns: ["cycle_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshots";
+            referencedColumns: ["cycle_id"];
+          },
+        ];
+      };
+      chore_cycle_snapshot_cells: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          completed_at: string;
+          completed_by: string;
+          completed_by_name: string;
+          cycle_id: string;
+          entered_as: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          completed_at: string;
+          completed_by: string;
+          completed_by_name: string;
+          cycle_id: string;
+          entered_as: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          completed_at?: string;
+          completed_by?: string;
+          completed_by_name?: string;
+          cycle_id?: string;
+          entered_as?: string;
+          organization_id?: string;
+          row_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycle_snapshot_cells_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_cells_column_fk";
+            columns: ["cycle_id", "column_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshot_columns";
+            referencedColumns: ["cycle_id", "column_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_cells_completed_by_fkey";
+            columns: ["completed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_cells_row_fk";
+            columns: ["cycle_id", "row_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshot_rows";
+            referencedColumns: ["cycle_id", "row_id"];
+          },
+        ];
+      };
+      chore_cycle_snapshot_columns: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          cycle_id: string;
+          label: string;
+          organization_id: string;
+          profile_id: string | null;
+          profile_name: string | null;
+          sort_order: number;
+          was_live: boolean;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          cycle_id: string;
+          label: string;
+          organization_id: string;
+          profile_id?: string | null;
+          profile_name?: string | null;
+          sort_order: number;
+          was_live: boolean;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          cycle_id?: string;
+          label?: string;
+          organization_id?: string;
+          profile_id?: string | null;
+          profile_name?: string | null;
+          sort_order?: number;
+          was_live?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycle_snapshot_columns_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_columns_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_columns_snap_fk";
+            columns: ["cycle_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshots";
+            referencedColumns: ["cycle_id"];
+          },
+        ];
+      };
+      chore_cycle_snapshot_rows: {
+        Row: {
+          board_id: string;
+          cycle_id: string;
+          instructions: string | null;
+          is_required: boolean;
+          organization_id: string;
+          requirement_mode: string;
+          row_id: string;
+          selected_column_ids: string[];
+          sort_order: number;
+          title: string;
+          was_live: boolean;
+        };
+        Insert: {
+          board_id: string;
+          cycle_id: string;
+          instructions?: string | null;
+          is_required: boolean;
+          organization_id: string;
+          requirement_mode: string;
+          row_id: string;
+          selected_column_ids?: string[];
+          sort_order: number;
+          title: string;
+          was_live: boolean;
+        };
+        Update: {
+          board_id?: string;
+          cycle_id?: string;
+          instructions?: string | null;
+          is_required?: boolean;
+          organization_id?: string;
+          requirement_mode?: string;
+          row_id?: string;
+          selected_column_ids?: string[];
+          sort_order?: number;
+          title?: string;
+          was_live?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycle_snapshot_rows_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshot_rows_snap_fk";
+            columns: ["cycle_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycle_snapshots";
+            referencedColumns: ["cycle_id"];
+          },
+        ];
+      };
+      chore_cycle_snapshots: {
+        Row: {
+          board_id: string;
+          board_name: string;
+          business_date: string;
+          close_trigger: string;
+          closed_at: string;
+          closed_by: string | null;
+          closed_by_kind: string;
+          closed_by_name: string | null;
+          created_at: string;
+          cycle_id: string;
+          final_status: string;
+          location_id: string;
+          manager_override: boolean;
+          note: string | null;
+          opened_at: string;
+          opened_by_kind: string;
+          optional_done: number;
+          optional_total: number;
+          organization_id: string;
+          outcome: string;
+          period_key: string | null;
+          recurrence_intent: string;
+          required_done: number;
+          required_total: number;
+          reset_intent: string;
+          sequence: number;
+          staff_access: string;
+          structure_changed: boolean;
+          structure_version: number;
+        };
+        Insert: {
+          board_id: string;
+          board_name: string;
+          business_date: string;
+          close_trigger: string;
+          closed_at: string;
+          closed_by?: string | null;
+          closed_by_kind: string;
+          closed_by_name?: string | null;
+          created_at?: string;
+          cycle_id: string;
+          final_status: string;
+          location_id: string;
+          manager_override: boolean;
+          note?: string | null;
+          opened_at: string;
+          opened_by_kind: string;
+          optional_done: number;
+          optional_total: number;
+          organization_id: string;
+          outcome: string;
+          period_key?: string | null;
+          recurrence_intent: string;
+          required_done: number;
+          required_total: number;
+          reset_intent: string;
+          sequence: number;
+          staff_access: string;
+          structure_changed: boolean;
+          structure_version: number;
+        };
+        Update: {
+          board_id?: string;
+          board_name?: string;
+          business_date?: string;
+          close_trigger?: string;
+          closed_at?: string;
+          closed_by?: string | null;
+          closed_by_kind?: string;
+          closed_by_name?: string | null;
+          created_at?: string;
+          cycle_id?: string;
+          final_status?: string;
+          location_id?: string;
+          manager_override?: boolean;
+          note?: string | null;
+          opened_at?: string;
+          opened_by_kind?: string;
+          optional_done?: number;
+          optional_total?: number;
+          organization_id?: string;
+          outcome?: string;
+          period_key?: string | null;
+          recurrence_intent?: string;
+          required_done?: number;
+          required_total?: number;
+          reset_intent?: string;
+          sequence?: number;
+          staff_access?: string;
+          structure_changed?: boolean;
+          structure_version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycle_snapshots_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshots_closed_by_fkey";
+            columns: ["closed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshots_cycle_fk";
+            columns: ["cycle_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_cycles";
+            referencedColumns: ["id", "board_id"];
+          },
+          {
+            foreignKeyName: "chore_cycle_snapshots_location_fk";
+            columns: ["location_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      chore_cycles: {
+        Row: {
+          board_id: string;
+          business_date: string;
+          close_note: string | null;
+          close_trigger: string | null;
+          closed_at: string | null;
+          closed_by: string | null;
+          closed_by_kind: string | null;
+          id: string;
+          opened_at: string;
+          opened_by: string | null;
+          opened_by_kind: string;
+          organization_id: string;
+          period_key: string | null;
+          sequence: number;
+          status: string;
+          structure_version_start: number | null;
+        };
+        Insert: {
+          board_id: string;
+          business_date: string;
+          close_note?: string | null;
+          close_trigger?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          closed_by_kind?: string | null;
+          id?: string;
+          opened_at?: string;
+          opened_by?: string | null;
+          opened_by_kind?: string;
+          organization_id: string;
+          period_key?: string | null;
+          sequence: number;
+          status?: string;
+          structure_version_start?: number | null;
+        };
+        Update: {
+          board_id?: string;
+          business_date?: string;
+          close_note?: string | null;
+          close_trigger?: string | null;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          closed_by_kind?: string | null;
+          id?: string;
+          opened_at?: string;
+          opened_by?: string | null;
+          opened_by_kind?: string;
+          organization_id?: string;
+          period_key?: string | null;
+          sequence?: number;
+          status?: string;
+          structure_version_start?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_cycles_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_cycles_closed_by_fkey";
+            columns: ["closed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_cycles_opened_by_fkey";
+            columns: ["opened_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chore_events: {
+        Row: {
+          actor_kind: string;
+          actor_profile_id: string | null;
+          board_id: string;
+          column_id: string | null;
+          created_at: string;
+          cycle_id: string | null;
+          event_type: string;
+          id: number;
+          organization_id: string;
+          payload: Json;
+          row_id: string | null;
+        };
+        Insert: {
+          actor_kind?: string;
+          actor_profile_id?: string | null;
+          board_id: string;
+          column_id?: string | null;
+          created_at?: string;
+          cycle_id?: string | null;
+          event_type: string;
+          id?: never;
+          organization_id: string;
+          payload?: Json;
+          row_id?: string | null;
+        };
+        Update: {
+          actor_kind?: string;
+          actor_profile_id?: string | null;
+          board_id?: string;
+          column_id?: string | null;
+          created_at?: string;
+          cycle_id?: string | null;
+          event_type?: string;
+          id?: never;
+          organization_id?: string;
+          payload?: Json;
+          row_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_events_actor_profile_id_fkey";
+            columns: ["actor_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_events_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
+      chore_row_columns: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          organization_id: string;
+          row_id: string;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          organization_id?: string;
+          row_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_row_columns_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_row_columns_column_fk";
+            columns: ["column_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_columns";
+            referencedColumns: ["id", "board_id"];
+          },
+          {
+            foreignKeyName: "chore_row_columns_row_fk";
+            columns: ["row_id", "board_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_rows";
+            referencedColumns: ["id", "board_id"];
+          },
+        ];
+      };
+      chore_rows: {
+        Row: {
+          archived_at: string | null;
+          archived_by: string | null;
+          board_id: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          instructions: string | null;
+          is_active: boolean;
+          is_required: boolean;
+          organization_id: string;
+          requirement_mode: string;
+          sort_order: number;
+          title: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          board_id: string;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          instructions?: string | null;
+          is_active?: boolean;
+          is_required?: boolean;
+          organization_id: string;
+          requirement_mode?: string;
+          sort_order?: number;
+          title: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          board_id?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          instructions?: string | null;
+          is_active?: boolean;
+          is_required?: boolean;
+          organization_id?: string;
+          requirement_mode?: string;
+          sort_order?: number;
+          title?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chore_rows_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_rows_board_fk";
+            columns: ["board_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "chore_boards";
+            referencedColumns: ["id", "organization_id"];
+          },
+          {
+            foreignKeyName: "chore_rows_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chore_rows_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       dining_areas: {
         Row: {
           area_order: number;
@@ -2941,7 +3931,7 @@ export type Database = {
           {
             foreignKeyName: "kiosk_sessions_device_id_fkey";
             columns: ["device_id"];
-            isOneToOne: false;
+            isOneToOne: true;
             referencedRelation: "kiosk_devices";
             referencedColumns: ["id"];
           },
@@ -5297,6 +6287,80 @@ export type Database = {
         };
         Relationships: [];
       };
+      task_checklist_items: {
+        Row: {
+          archived_at: string | null;
+          archived_by: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+          created_at: string;
+          created_by: string;
+          id: string;
+          organization_id: string;
+          sort_order: number;
+          task_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          organization_id: string;
+          sort_order?: number;
+          task_id: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          organization_id?: string;
+          sort_order?: number;
+          task_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "task_checklist_items_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_completed_by_fkey";
+            columns: ["completed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_checklist_items_task_fk";
+            columns: ["task_id", "organization_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id", "organization_id"];
+          },
+        ];
+      };
       task_events: {
         Row: {
           actor_profile_id: string | null;
@@ -5589,6 +6653,8 @@ export type Database = {
       };
       tasks: {
         Row: {
+          archived_at: string | null;
+          archived_by: string | null;
           assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason: string | null;
           cancel_reason: string | null;
@@ -5596,6 +6662,7 @@ export type Database = {
           cancelled_by: string | null;
           category: string;
           checklist_instance_id: string | null;
+          checklist_rev: number;
           completed_at: string | null;
           completed_by: string | null;
           completion_note: string | null;
@@ -5625,6 +6692,8 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason?: string | null;
           cancel_reason?: string | null;
@@ -5632,6 +6701,7 @@ export type Database = {
           cancelled_by?: string | null;
           category?: string;
           checklist_instance_id?: string | null;
+          checklist_rev?: number;
           completed_at?: string | null;
           completed_by?: string | null;
           completion_note?: string | null;
@@ -5661,6 +6731,8 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           assignment_mode?: Database["public"]["Enums"]["task_assignment_mode"];
           blocked_reason?: string | null;
           cancel_reason?: string | null;
@@ -5668,6 +6740,7 @@ export type Database = {
           cancelled_by?: string | null;
           category?: string;
           checklist_instance_id?: string | null;
+          checklist_rev?: number;
           completed_at?: string | null;
           completed_by?: string | null;
           completion_note?: string | null;
@@ -5697,6 +6770,13 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "tasks_archived_by_fkey";
+            columns: ["archived_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "tasks_cancelled_by_profile_fk";
             columns: ["cancelled_by"];
@@ -6696,6 +7776,110 @@ export type Database = {
         Args: { p_active: boolean; p_template_id: string };
         Returns: undefined;
       };
+      chore_board_duplicate: {
+        Args: { p_board_id: string; p_name: string };
+        Returns: string;
+      };
+      chore_board_reorder: {
+        Args: {
+          p_board_ids: string[];
+          p_location_id: string;
+          p_organization_id: string;
+        };
+        Returns: undefined;
+      };
+      chore_board_save: {
+        Args: {
+          p_board_id: string;
+          p_default_mode: string;
+          p_description: string;
+          p_expected_version: number;
+          p_location_id: string;
+          p_manager_override: boolean;
+          p_name: string;
+          p_organization_id: string;
+          p_recurrence_intent: string;
+          p_reset_intent: string;
+          p_staff_access: string;
+        };
+        Returns: string;
+      };
+      chore_board_set_state: {
+        Args: { p_board_id: string; p_state: string };
+        Returns: undefined;
+      };
+      chore_cell_set: {
+        Args: {
+          p_board_id: string;
+          p_column_id: string;
+          p_done: boolean;
+          p_expected_cycle_id?: string;
+          p_row_id: string;
+        };
+        Returns: string;
+      };
+      chore_column_save: {
+        Args: {
+          p_board_id: string;
+          p_column_id: string;
+          p_label: string;
+          p_profile_id: string;
+        };
+        Returns: string;
+      };
+      chore_column_set_state: {
+        Args: { p_column_id: string; p_state: string };
+        Returns: undefined;
+      };
+      chore_columns_reorder: {
+        Args: { p_board_id: string; p_column_ids: string[] };
+        Returns: undefined;
+      };
+      chore_cycle_close: {
+        Args: {
+          p_board_id: string;
+          p_expected_cycle_id: string;
+          p_note: string;
+          p_outcome: string;
+          p_start_next: boolean;
+        };
+        Returns: Json;
+      };
+      chore_cycle_correct: {
+        Args: {
+          p_column_id: string;
+          p_cycle_id: string;
+          p_done: boolean;
+          p_reason: string;
+          p_row_id: string;
+        };
+        Returns: string;
+      };
+      chore_cycle_start: { Args: { p_board_id: string }; Returns: Json };
+      chore_cycles_sweep: {
+        Args: { p_location_id: string; p_organization_id: string };
+        Returns: number;
+      };
+      chore_row_save: {
+        Args: {
+          p_board_id: string;
+          p_column_ids: string[];
+          p_instructions: string;
+          p_mode: string;
+          p_required: boolean;
+          p_row_id: string;
+          p_title: string;
+        };
+        Returns: string;
+      };
+      chore_row_set_state: {
+        Args: { p_row_id: string; p_state: string };
+        Returns: undefined;
+      };
+      chore_rows_reorder: {
+        Args: { p_board_id: string; p_row_ids: string[] };
+        Returns: undefined;
+      };
       finish_personal_pin_change: {
         Args: {
           p_apply: boolean;
@@ -7321,6 +8505,10 @@ export type Database = {
         Args: { p_new_due_date: string; p_task_ids: string[] };
         Returns: number;
       };
+      task_checklist_step_set: {
+        Args: { p_done: boolean; p_step_id: string; p_task_id: string };
+        Returns: undefined;
+      };
       task_complete: {
         Args: { p_note?: string; p_task_id: string };
         Returns: undefined;
@@ -7330,6 +8518,7 @@ export type Database = {
           p_assignee_ids: string[];
           p_assignment_mode: Database["public"]["Enums"]["task_assignment_mode"];
           p_category: string;
+          p_checklist?: Json;
           p_due_date: string;
           p_due_time: string;
           p_due_window: Database["public"]["Enums"]["task_due_window"];
@@ -7343,6 +8532,7 @@ export type Database = {
         };
         Returns: string[];
       };
+      task_delete: { Args: { p_task_id: string }; Returns: string };
       task_notifications_mark_location_read: {
         Args: {
           p_ids?: number[];
@@ -7423,9 +8613,12 @@ export type Database = {
       task_update: {
         Args: {
           p_category: string;
+          p_checklist?: Json;
           p_due_date: string;
           p_due_time: string;
           p_due_window: Database["public"]["Enums"]["task_due_window"];
+          p_expected_checklist_rev?: number;
+          p_expected_updated_at?: string;
           p_instructions: string;
           p_priority: Database["public"]["Enums"]["task_priority"];
           p_start_date: string;
@@ -7686,7 +8879,12 @@ export type Database = {
         | "carried_forward"
         | "recurrence_created"
         | "recurrence_changed"
-        | "checklist_generated";
+        | "checklist_generated"
+        | "status_changed"
+        | "checklist_edited"
+        | "checklist_step_checked"
+        | "checklist_step_unchecked"
+        | "archived";
       task_kind: "task" | "opening" | "closing";
       task_notification_type:
         | "assigned"
@@ -7928,6 +9126,11 @@ export const Constants = {
         "recurrence_created",
         "recurrence_changed",
         "checklist_generated",
+        "status_changed",
+        "checklist_edited",
+        "checklist_step_checked",
+        "checklist_step_unchecked",
+        "archived",
       ],
       task_kind: ["task", "opening", "closing"],
       task_notification_type: [

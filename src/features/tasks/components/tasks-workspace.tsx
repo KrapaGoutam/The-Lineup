@@ -12,15 +12,27 @@ import {
   DEFAULT_TASK_CATEGORIES,
   isTasksManager,
   type RecurrenceRuleView,
+  type TaskEventView,
   type TaskView,
 } from "../domain/task-types";
+import type { ChoreController } from "../hooks/use-chore-controller";
 import type { TasksController } from "../hooks/use-tasks-controller";
+import { AllTasksView } from "./all-tasks-view";
 import { AssignedView } from "./assigned-view";
+import {
+  ChoreSettings,
+  CHORE_SETTINGS_LABELS,
+  type ChoreSettingsSection,
+} from "./chore-settings";
+import { ChoreWheelView } from "./chore-wheel-view";
 import { ChecklistView } from "./checklist-view";
+import { ChecklistsView } from "./checklists-view";
+import { DeleteTaskDialog } from "./delete-task-dialog";
 import { HandoffPanel } from "./handoff-panel";
-import { HistoryView } from "./history-view";
+import { HistoryView, type HistoryPreset } from "./history-view";
 import { NotificationsDialog } from "./notifications-dialog";
 import { MyTasksView } from "./my-tasks-view";
+import { ReassignDialog } from "./reassign-dialog";
 import { SeriesPanel } from "./series-panel";
 import { TaskDetailDialog } from "./task-detail-dialog";
 import { TaskFormDialog } from "./task-form-dialog";
@@ -30,6 +42,9 @@ import { TodayView } from "./today-view";
 export type TasksTab =
   | "today"
   | "mine"
+  | "all"
+  | "checklists"
+  | "chores"
   | "opening"
   | "closing"
   | "assigned"
@@ -38,11 +53,18 @@ export type TasksTab =
 
 type Props = {
   controller: TasksController;
+  /** V2.0.13 Batch B: the Chore Wheel data source (absent: the tab is not offered). */
+  chores?: ChoreController;
+  /** Active organization and branch for the All Tasks header (real mode). */
+  contextLabel?: string | null;
 };
 
 const TAB_LABELS: Record<TasksTab, string> = {
   today: "Today",
   mine: "My Tasks",
+  all: "All Tasks",
+  checklists: "Checklists",
+  chores: "Chore Wheel",
   opening: "Opening",
   closing: "Closing",
   assigned: "Assigned",
@@ -56,7 +78,11 @@ const TAB_LABELS: Record<TasksTab, string> = {
  * component never keeps its own copy of task state, so whatever the server
  * last returned is always what is on screen.
  */
-export function TasksWorkspace({ controller }: Props) {
+export function TasksWorkspace({
+  controller,
+  chores,
+  contextLabel = null,
+}: Props) {
   const { snapshot, viewer, run } = controller;
   const manager = isTasksManager(viewer.designation);
   const [tab, setTab] = useState<TasksTab>("today");
@@ -64,12 +90,30 @@ export function TasksWorkspace({ controller }: Props) {
   // Tasks section and back. Only managers can change it.
   const [todayScope, setTodayScope] = useState<TodayScope>(ALL_STAFF_SCOPE);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  // A task opened from History may be older than the snapshot window: keep the row
+  // History loaded so the dialog still opens, and the activity History loaded for it.
+  const [openFallback, setOpenFallback] = useState<TaskView | null>(null);
+  // Board the Chore Wheel opens on (set when coming from a run in History).
+  const [wheelBoardId, setWheelBoardId] = useState<string | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<TaskEventView[]>([]);
+  const [historyPreset, setHistoryPreset] = useState<HistoryPreset | null>(
+    null,
+  );
   const [form, setForm] = useState<{
     task?: TaskView;
     series?: RecurrenceRuleView;
+    checklistFirst?: boolean;
   } | null>(null);
+  const [reassignTask, setReassignTask] = useState<TaskView | null>(null);
+  const [deleteTask, setDeleteTask] = useState<TaskView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [showInbox, setShowInbox] = useState(false);
+  // Tasks → Manage has the existing setup panels plus the chore board settings.
+  const [manageSection, setManageSection] = useState<
+    "setup" | ChoreSettingsSection
+  >("setup");
+  const [manageBoardId, setManageBoardId] = useState<string | null>(null);
 
   const categories = snapshot?.categories ?? DEFAULT_TASK_CATEGORIES;
   const categoryName = useCallback(
@@ -81,6 +125,15 @@ export function TasksWorkspace({ controller }: Props) {
     async (command: TaskCommand) => {
       const result = await run(command);
       setNotice(result.ok ? null : result.error);
+      if (result.ok && command.type === "delete") {
+        setInfo(
+          result.outcome === "deleted"
+            ? "Task deleted."
+            : "Task archived. It left the active list; its history is kept.",
+        );
+      } else if (result.ok) {
+        setInfo(null);
+      }
       return result;
     },
     [run],
@@ -104,13 +157,46 @@ export function TasksWorkspace({ controller }: Props) {
       snapshot.checklists
         .flatMap((c) => c.items)
         .find((t) => t.id === openTaskId) ??
-      null
+      (openFallback?.id === openTaskId ? openFallback : null)
     );
-  }, [snapshot, openTaskId]);
+  }, [snapshot, openTaskId, openFallback]);
 
-  const tabs: TasksTab[] = manager
-    ? ["today", "mine", "opening", "closing", "assigned", "manage", "history"]
-    : ["today", "mine", "opening", "closing", "history"];
+  // The dialog's activity: the snapshot's plus whatever History loaded (deduplicated).
+  const dialogEvents = useMemo(() => {
+    if (!snapshot) return [];
+    if (historyEvents.length === 0) return snapshot.events;
+    const seen = new Set(snapshot.events.map((e) => e.id));
+    return [
+      ...snapshot.events,
+      ...historyEvents.filter((e) => !seen.has(e.id)),
+    ];
+  }, [snapshot, historyEvents]);
+
+  const tabs: TasksTab[] = (
+    manager
+      ? [
+          "today",
+          "mine",
+          "all",
+          "checklists",
+          "chores",
+          "opening",
+          "closing",
+          "assigned",
+          "manage",
+          "history",
+        ]
+      : [
+          "today",
+          "mine",
+          "all",
+          "checklists",
+          "chores",
+          "opening",
+          "closing",
+          "history",
+        ]
+  ).filter((id) => id !== "chores" || chores !== undefined) as TasksTab[];
 
   return (
     <section aria-label="Tasks" className="space-y-5">
@@ -208,6 +294,22 @@ export function TasksWorkspace({ controller }: Props) {
         </div>
       ) : null}
 
+      {info ? (
+        <div
+          role="status"
+          className="border-border bg-muted/50 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-sm"
+        >
+          <span>{info}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-xs underline"
+            onClick={() => setInfo(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       {controller.loadError && !snapshot ? (
         <div className="border-border rounded-2xl border p-6 text-center">
           <p className="text-sm">{controller.loadError}</p>
@@ -241,6 +343,29 @@ export function TasksWorkspace({ controller }: Props) {
               onGoToAssigned={manager ? () => setTab("assigned") : undefined}
             />
           ) : null}
+          {tab === "all" ? (
+            <AllTasksView
+              controller={controller}
+              categoryName={categoryName}
+              contextLabel={contextLabel}
+              execute={execute}
+              onToggle={toggle}
+              onOpen={(task) => setOpenTaskId(task.id)}
+              onEdit={(task) => setForm({ task })}
+              onReassign={setReassignTask}
+              onDelete={setDeleteTask}
+            />
+          ) : null}
+          {tab === "checklists" ? (
+            <ChecklistsView
+              controller={controller}
+              categoryName={categoryName}
+              execute={execute}
+              onOpen={(task) => setOpenTaskId(task.id)}
+              onEdit={(task) => setForm({ task })}
+              onNew={() => setForm({ checklistFirst: true })}
+            />
+          ) : null}
           {tab === "assigned" && manager ? (
             <AssignedView
               controller={controller}
@@ -249,20 +374,90 @@ export function TasksWorkspace({ controller }: Props) {
               onOpen={(task) => setOpenTaskId(task.id)}
             />
           ) : null}
+          {tab === "chores" && chores ? (
+            <ChoreWheelView
+              key={wheelBoardId ?? "default"}
+              initialBoardId={wheelBoardId}
+              controller={chores}
+              contextLabel={contextLabel}
+              onManage={
+                manager
+                  ? (boardId) => {
+                      setManageBoardId(boardId);
+                      setManageSection("boards");
+                      setTab("manage");
+                    }
+                  : undefined
+              }
+              onOpenHistory={(boardId) => {
+                setHistoryPreset({ scope: "chores", boardId });
+                setTab("history");
+              }}
+            />
+          ) : null}
           {tab === "manage" && manager ? (
             <div className="space-y-5">
-              <SeriesPanel
-                controller={controller}
-                execute={execute}
-                onEdit={(series) => setForm({ series })}
-              />
-              <TemplatesPanel controller={controller} execute={execute} />
-              <HandoffPanel
-                controller={controller}
-                categoryName={categoryName}
-                onOpen={(task) => setOpenTaskId(task.id)}
-                execute={execute}
-              />
+              {chores ? (
+                <nav
+                  aria-label="Manage sections"
+                  className="-mx-1 overflow-x-auto px-1"
+                >
+                  <div className="flex gap-1.5">
+                    {(
+                      [
+                        "setup",
+                        "boards",
+                        "people",
+                        "chores",
+                        "rules",
+                        "access",
+                      ] as const
+                    ).map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-current={manageSection === id ? "page" : undefined}
+                        onClick={() => setManageSection(id)}
+                        className={cn(
+                          "focus-visible:ring-ring min-h-11 rounded-xl px-4 text-sm font-semibold whitespace-nowrap outline-none focus-visible:ring-2",
+                          manageSection === id
+                            ? "bg-primary text-primary-foreground"
+                            : "border-border bg-surface text-foreground border",
+                        )}
+                      >
+                        {id === "setup"
+                          ? "Task setup"
+                          : CHORE_SETTINGS_LABELS[id]}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
+              ) : null}
+              {manageSection === "setup" || !chores ? (
+                <>
+                  <SeriesPanel
+                    controller={controller}
+                    execute={execute}
+                    onEdit={(series) => setForm({ series })}
+                  />
+                  <TemplatesPanel controller={controller} execute={execute} />
+                  <HandoffPanel
+                    controller={controller}
+                    categoryName={categoryName}
+                    onOpen={(task) => setOpenTaskId(task.id)}
+                    execute={execute}
+                  />
+                </>
+              ) : (
+                <ChoreSettings
+                  controller={chores}
+                  team={snapshot.team}
+                  section={manageSection}
+                  onSectionChange={setManageSection}
+                  boardId={manageBoardId}
+                  onBoardChange={setManageBoardId}
+                />
+              )}
             </div>
           ) : null}
           {tab === "opening" || tab === "closing" ? (
@@ -275,7 +470,29 @@ export function TasksWorkspace({ controller }: Props) {
               onGoToManage={() => setTab("manage")}
             />
           ) : null}
-          {tab === "history" ? <HistoryView controller={controller} /> : null}
+          {tab === "history" ? (
+            <HistoryView
+              // A new preset (board's "Run history") starts a fresh filter state.
+              key={`${historyPreset?.scope ?? ""}:${historyPreset?.boardId ?? ""}`}
+              controller={controller}
+              chores={chores}
+              preset={historyPreset}
+              categoryName={categoryName}
+              execute={execute}
+              onOpen={(task) => {
+                setOpenFallback(task);
+                setOpenTaskId(task.id);
+              }}
+              onEdit={(task) => setForm({ task })}
+              onReassign={setReassignTask}
+              onDelete={setDeleteTask}
+              onFeedEvents={setHistoryEvents}
+              onOpenBoard={(boardId) => {
+                setWheelBoardId(boardId);
+                setTab("chores");
+              }}
+            />
+          ) : null}
           {tab === "mine" ? (
             <MyTasksView
               controller={controller}
@@ -296,7 +513,7 @@ export function TasksWorkspace({ controller }: Props) {
           today={snapshot.today}
           timeZone={snapshot.timeZone}
           categoryName={categoryName(openTask.category)}
-          events={snapshot.events}
+          events={dialogEvents}
           series={snapshot.series.find(
             (r) => r.id === openTask.recurrenceRuleId,
           )}
@@ -328,6 +545,7 @@ export function TasksWorkspace({ controller }: Props) {
       {snapshot && form ? (
         <TaskFormDialog
           key={form.task?.id ?? form.series?.id ?? "new"}
+          checklistFirst={form.checklistFirst}
           task={form.task}
           series={form.series}
           team={snapshot.team}
@@ -335,6 +553,25 @@ export function TasksWorkspace({ controller }: Props) {
           today={snapshot.today}
           onClose={() => setForm(null)}
           onSubmit={execute}
+        />
+      ) : null}
+
+      {snapshot && reassignTask ? (
+        <ReassignDialog
+          key={reassignTask.id}
+          task={reassignTask}
+          team={snapshot.team}
+          run={execute}
+          onClose={() => setReassignTask(null)}
+        />
+      ) : null}
+
+      {deleteTask ? (
+        <DeleteTaskDialog
+          key={deleteTask.id}
+          task={deleteTask}
+          run={execute}
+          onClose={() => setDeleteTask(null)}
         />
       ) : null}
     </section>

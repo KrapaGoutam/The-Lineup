@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, ListFilter, Search, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,129 +9,266 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { summarizeRun } from "../domain/chore-cycles";
+import { isBoardLive } from "../domain/chore-rules";
+import { RUN_STATUS_LABELS, type ChoreRunSummary } from "../domain/chore-types";
 import {
-  DATE_PRESETS,
-  DATE_PRESET_LABELS,
-  DEFAULT_HISTORY_FILTERS,
-  activeFilterCount,
+  DEFAULT_FEED_FILTERS,
+  HISTORY_SCOPE_LABELS,
+  activeFeedFilterCount,
+  basisLabel,
+  buildHistoryItems,
+  feedMonths,
+  feedStatusOptions,
+  filterHistoryItems,
+  groupHistoryItems,
+  type FeedFilters,
+  type FeedTask,
+  type HistoryItem,
+  type HistoryScope,
+} from "../domain/history-feed";
+import {
   assignedToLabel,
-  availableMonths,
-  filterHistory,
   formatAssignedStamp,
   formatHistoryStamp,
-  groupByMonth,
-  hasActiveFilters,
   historyTypeLabel,
   peopleIn,
-  type DatePreset,
-  type HistoryFilters,
-  type HistorySort,
-  type TaskHistoryData,
-  type TaskHistoryEntry,
 } from "../domain/task-history";
-import type { TaskKind } from "../domain/task-types";
-import type { TasksController } from "../hooks/use-tasks-controller";
+import { STATUS_LABELS } from "../domain/task-rules";
+import type { TaskCommand } from "../domain/task-commands";
+import type { TaskEventView, TaskView } from "../domain/task-types";
+import type { ChoreController } from "../hooks/use-chore-controller";
+import type {
+  TaskRunResult,
+  TasksController,
+} from "../hooks/use-tasks-controller";
+import { RowActions, statusCommand } from "./all-tasks-view";
+import { ChoreRunDetailDialog } from "./chore-run-detail";
+import { formatBusinessDate, formatRunStamp } from "./chore-run-format";
+
+export type HistoryPreset = { scope?: HistoryScope; boardId?: string };
 
 type Props = {
   controller: TasksController;
+  /** Chore Wheel data source; absent: the Chore Wheel scope is not offered. */
+  chores?: ChoreController;
+  categoryName: (slug: string) => string;
+  execute: (command: TaskCommand) => Promise<TaskRunResult>;
+  onOpen: (task: TaskView) => void;
+  onEdit: (task: TaskView) => void;
+  onReassign: (task: TaskView) => void;
+  onDelete: (task: TaskView) => void;
+  /** Hands the activity of older tasks to the shared detail dialog. */
+  onFeedEvents?: (events: TaskEventView[]) => void;
+  /** Jump to the live board of an in-progress run. */
+  onOpenBoard?: (boardId: string) => void;
+  /** Opened from a board's "Run history" button. */
+  preset?: HistoryPreset | null;
 };
 
-type Load =
+type TaskLoad =
   | { state: "loading" }
   | { state: "error"; message: string }
-  | { state: "ready"; data: TaskHistoryData };
+  | { state: "ready"; tasks: FeedTask[]; truncated: boolean };
+type RunLoad =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "error"; message: string }
+  | { state: "ready"; runs: ChoreRunSummary[]; truncated: boolean };
 
-const TYPE_OPTIONS: { value: "all" | TaskKind; label: string }[] = [
-  { value: "all", label: "All types" },
-  { value: "task", label: "Regular" },
-  { value: "opening", label: "Opening" },
-  { value: "closing", label: "Closing" },
-];
-
-// Desktop columns: Completed | Task | Assigned To | Completed By | Assigned | Type.
+// Desktop columns: Date | Task | Assigned To | Completed By | Assigned | Type.
 // Below `lg` each record stacks, so nothing ever needs horizontal scrolling.
 const ROW_GRID =
   "lg:grid lg:grid-cols-[10rem_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_7.5rem_5.5rem] lg:items-center lg:gap-x-4";
 
 /**
- * Tasks → History. A read-only audit log of completed work, newest first and
- * grouped by the month it was completed. It only displays what is persisted:
- * "Assigned to" and "Completed by" are separate facts, and a missing value is
- * shown as missing rather than filled in from the other.
+ * Tasks → History: ordinary tasks and chore-wheel runs in one place, grouped by
+ * month and then Completed / Not completed. The task rows are the same rows as All
+ * Tasks (same status control, edit, reassign and delete, same server rules); run
+ * rows open the frozen snapshot of that run. The grouping rule for each kind is in
+ * `domain/history-feed.ts` and is stated on every row ("Completed", "Due",
+ * "Created", "Business day").
  */
-export function HistoryView({ controller }: Props) {
+export function HistoryView({
+  controller,
+  chores,
+  categoryName,
+  execute,
+  onOpen,
+  onEdit,
+  onReassign,
+  onDelete,
+  onFeedEvents,
+  onOpenBoard,
+  preset = null,
+}: Props) {
   const snapshot = controller.snapshot;
   const timeZone = snapshot?.timeZone ?? "UTC";
-  const today = snapshot?.today ?? "";
+  const manager = controller.viewer.designation !== "staff";
 
-  const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [filters, setFilters] = useState<HistoryFilters>(
-    DEFAULT_HISTORY_FILTERS,
-  );
+  const [filters, setFilters] = useState<FeedFilters>(() => ({
+    ...DEFAULT_FEED_FILTERS,
+    scope: preset?.scope ?? "all",
+    boardId: preset?.boardId ?? "all",
+  }));
   const [showFilters, setShowFilters] = useState(false);
-  // Only months the user explicitly toggled; the rest follow the default.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(
     () => new Map(),
   );
+  const [taskLoad, setTaskLoad] = useState<TaskLoad>({ state: "loading" });
+  const [runLoad, setRunLoad] = useState<RunLoad>({ state: "idle" });
+  const [openRun, setOpenRun] = useState<string | null>(null);
+  const [known, setKnown] = useState<ReadonlySet<string>>(() => new Set());
+  const [retry, setRetry] = useState(0);
 
-  // The loader's identity changes with the controller's snapshot; History
-  // fetches on open (and on retry), not every time that happens.
-  const loadRef = useRef(controller.loadHistory);
+  const monthParam = filters.month === "all" ? null : filters.month;
+  const boardParam = filters.boardId === "all" ? null : filters.boardId;
+  const wantTasks = filters.scope !== "chores";
+  const wantRuns = chores !== undefined && filters.scope !== "tasks";
+
+  // The loaders' identity changes with their controllers; History re-reads when the
+  // inputs change or after the Tasks snapshot was refreshed (every mutation does).
+  const feedLoader = useRef(controller.loadHistoryFeed);
+  const runLoader = useRef(chores?.loadHistory);
+  const eventsSink = useRef(onFeedEvents);
   useEffect(() => {
-    loadRef.current = controller.loadHistory;
-  }, [controller.loadHistory]);
-
-  const fetchHistory = useCallback(async () => {
-    setLoad({ state: "loading" });
-    const result = await loadRef.current();
-    setLoad(
-      result.ok
-        ? { state: "ready", data: result.data }
-        : { state: "error", message: result.error },
-    );
-  }, []);
+    feedLoader.current = controller.loadHistoryFeed;
+    runLoader.current = chores?.loadHistory;
+    eventsSink.current = onFeedEvents;
+  });
 
   useEffect(() => {
-    // Subscribing to the data source on open; the state update is the result.
+    if (!wantTasks) return;
+    let live = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchHistory();
-  }, [fetchHistory]);
+    setTaskLoad((current) =>
+      current.state === "ready" ? current : { state: "loading" },
+    );
+    void feedLoader.current(monthParam).then((result) => {
+      if (!live) return;
+      if (result.ok) {
+        eventsSink.current?.(result.data.events);
+        setTaskLoad({
+          state: "ready",
+          tasks: result.data.tasks,
+          truncated: result.data.truncated,
+        });
+      } else {
+        setTaskLoad({ state: "error", message: result.error });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantTasks, monthParam, snapshot, retry]);
 
-  const entries = useMemo(
-    () => (load.state === "ready" ? load.data.entries : []),
-    [load],
+  useEffect(() => {
+    chores?.ensureLoaded();
+  }, [chores]);
+  const choreSnapshot = chores?.snapshot ?? null;
+  useEffect(() => {
+    if (!wantRuns) return;
+    let live = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRunLoad((current) =>
+      current.state === "ready" ? current : { state: "loading" },
+    );
+    void runLoader
+      .current?.({ month: monthParam, boardId: boardParam })
+      .then((result) => {
+        if (!live) return;
+        setRunLoad(
+          result.ok
+            ? {
+                state: "ready",
+                runs: result.data.runs,
+                truncated: result.data.truncated,
+              }
+            : { state: "error", message: result.error },
+        );
+      });
+    return () => {
+      live = false;
+    };
+  }, [wantRuns, monthParam, boardParam, choreSnapshot, retry]);
+
+  // In-progress runs come from the live Chore Wheel snapshot (same counting rules).
+  const openRuns = useMemo<ChoreRunSummary[]>(() => {
+    if (!wantRuns || !choreSnapshot) return [];
+    return choreSnapshot.boards
+      .filter(
+        (b) =>
+          b.cycle !== null &&
+          !b.archived &&
+          (manager || isBoardLive(b)) &&
+          (boardParam === null || b.id === boardParam),
+      )
+      .map((b) => summarizeRun(b, null, false));
+  }, [wantRuns, choreSnapshot, boardParam, manager]);
+
+  const tasks = useMemo<FeedTask[]>(
+    () => (wantTasks && taskLoad.state === "ready" ? taskLoad.tasks : []),
+    [wantTasks, taskLoad],
   );
+  const finishedRuns = useMemo<ChoreRunSummary[]>(
+    () => (wantRuns && runLoad.state === "ready" ? runLoad.runs : []),
+    [wantRuns, runLoad],
+  );
+  const items = useMemo(
+    () =>
+      buildHistoryItems({
+        tasks,
+        runs: [...openRuns, ...finishedRuns],
+        timeZone,
+      }),
+    [tasks, openRuns, finishedRuns, timeZone],
+  );
+
+  // Months seen so far stay selectable after a month filter narrows the read.
+  useEffect(() => {
+    const months = items.map((i) => i.month);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setKnown((current) => {
+      if (months.every((m) => current.has(m))) return current;
+      return new Set([...current, ...months]);
+    });
+  }, [items]);
 
   const visible = useMemo(
-    () => filterHistory(entries, filters, { today, timeZone }),
-    [entries, filters, today, timeZone],
+    () => filterHistoryItems(items, filters),
+    [items, filters],
   );
   const groups = useMemo(
-    () => groupByMonth(visible, timeZone),
-    [visible, timeZone],
+    () => groupHistoryItems(visible, filters.sort),
+    [visible, filters.sort],
   );
-  const months = useMemo(
-    () => availableMonths(entries, timeZone),
-    [entries, timeZone],
+  const months = useMemo(() => feedMonths(items, [...known]), [items, known]);
+  const statuses = useMemo(() => feedStatusOptions(items), [items]);
+  const people = useMemo(
+    () =>
+      peopleIn(
+        tasks.map((t) => ({
+          ...t.task,
+          assignedAt: t.assignedAt,
+          completedAt: t.task.completedAt ?? "",
+        })),
+        (e) => [...e.assignees, ...(e.completedBy ? [e.completedBy] : [])],
+      ),
+    [tasks],
   );
-  const assigners = useMemo(
-    () => peopleIn(entries, (e) => e.assignees),
-    [entries],
-  );
-  const completers = useMemo(
-    () => peopleIn(entries, (e) => (e.completedBy ? [e.completedBy] : [])),
-    [entries],
-  );
+  const boards = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const b of choreSnapshot?.boards ?? []) byId.set(b.id, b.name);
+    for (const r of finishedRuns) byId.set(r.boardId, r.boardName);
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [choreSnapshot, finishedRuns]);
 
-  const set = <K extends keyof HistoryFilters>(
-    key: K,
-    value: HistoryFilters[K],
-  ) => setFilters((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof FeedFilters>(key: K, value: FeedFilters[K]) =>
+    setFilters((current) => ({ ...current, [key]: value }));
 
-  const filterCount = activeFilterCount(filters);
-  const narrowed = hasActiveFilters(filters);
-  const newestKey = months[0]?.key;
-
+  const filterCount = activeFeedFilterCount(filters);
+  const narrowed = filterCount > 0 || filters.search.trim() !== "";
+  const newestKey = groups[0]?.key;
   const isOpen = (key: string) =>
     toggled.get(key) ?? (narrowed || key === newestKey);
   const toggleMonth = (key: string) =>
@@ -139,44 +276,57 @@ export function HistoryView({ controller }: Props) {
 
   if (!snapshot) return null;
 
-  if (load.state === "loading") {
-    return (
-      <p
-        role="status"
-        className="text-muted-foreground p-6 text-center text-sm"
-      >
-        Loading task history…
-      </p>
-    );
-  }
+  const loading =
+    (wantTasks && taskLoad.state === "loading" && tasks.length === 0) ||
+    (wantRuns && runLoad.state === "loading" && finishedRuns.length === 0);
+  const failures = [
+    wantTasks && taskLoad.state === "error" ? taskLoad.message : null,
+    wantRuns && runLoad.state === "error" ? runLoad.message : null,
+  ].filter((m): m is string => m !== null);
+  const truncated =
+    (taskLoad.state === "ready" && taskLoad.truncated) ||
+    (runLoad.state === "ready" && runLoad.truncated);
 
-  if (load.state === "error") {
-    return (
-      <div
-        role="alert"
-        className="border-border rounded-2xl border p-6 text-center"
-      >
-        <p className="text-sm">{load.message}</p>
-        <Button
-          className="mt-3"
-          variant="secondary"
-          onClick={() => void fetchHistory()}
-        >
-          Try again
-        </Button>
-      </div>
-    );
-  }
+  const scopes: HistoryScope[] = chores
+    ? ["all", "tasks", "chores"]
+    : ["all", "tasks"];
 
   const emptyText =
-    entries.length === 0
-      ? "No completed tasks yet."
-      : filterCount > 0
-        ? "No task history matches these filters."
-        : "No completed tasks match your search.";
+    items.length === 0
+      ? filters.scope === "chores"
+        ? "No chore runs yet."
+        : filters.scope === "tasks"
+          ? "No task history yet."
+          : "No history yet."
+      : "Nothing matches these filters.";
+
+  const afterTaskChange = (command: TaskCommand) => execute(command);
 
   return (
-    <section aria-label="Completed task history" className="space-y-4">
+    <section aria-label="Task history" className="space-y-4">
+      <div
+        role="group"
+        aria-label="History type"
+        className="flex flex-wrap gap-2"
+      >
+        {scopes.map((scope) => (
+          <button
+            key={scope}
+            type="button"
+            aria-pressed={filters.scope === scope}
+            onClick={() => set("scope", scope)}
+            className={cn(
+              "focus-visible:ring-ring min-h-11 rounded-full border px-4 text-sm font-semibold outline-none focus-visible:ring-2",
+              filters.scope === scope
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-surface text-foreground",
+            )}
+          >
+            {HISTORY_SCOPE_LABELS[scope]}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">
           <Search
@@ -185,13 +335,26 @@ export function HistoryView({ controller }: Props) {
           />
           <Input
             type="search"
-            aria-label="Search task history"
-            placeholder="Search task history…"
+            aria-label="Search history"
+            placeholder="Search history…"
             className="pl-9"
             value={filters.search}
             onChange={(event) => set("search", event.target.value)}
           />
         </div>
+        <Select
+          aria-label="Month"
+          className="w-auto min-w-40"
+          value={filters.month}
+          onChange={(event) => set("month", event.target.value)}
+        >
+          <option value="all">All months</option>
+          {months.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </Select>
         <Button
           variant="outline"
           aria-expanded={showFilters}
@@ -210,7 +373,9 @@ export function HistoryView({ controller }: Props) {
           aria-label="Sort order"
           className="w-auto min-w-36"
           value={filters.sort}
-          onChange={(event) => set("sort", event.target.value as HistorySort)}
+          onChange={(event) =>
+            set("sort", event.target.value as FeedFilters["sort"])
+          }
         >
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
@@ -220,7 +385,8 @@ export function HistoryView({ controller }: Props) {
             variant="ghost"
             onClick={() =>
               setFilters((current) => ({
-                ...DEFAULT_HISTORY_FILTERS,
+                ...DEFAULT_FEED_FILTERS,
+                scope: current.scope,
                 sort: current.sort,
               }))
             }
@@ -238,106 +404,97 @@ export function HistoryView({ controller }: Props) {
           aria-label="History filters"
           className="border-border bg-card grid gap-3 rounded-2xl border p-4 sm:grid-cols-2 lg:grid-cols-3"
         >
-          <FilterField label="Assigned to">
+          <FilterField label="Status">
             <Select
-              value={filters.assignedTo}
-              onChange={(event) => set("assignedTo", event.target.value)}
+              value={filters.status}
+              onChange={(event) => set("status", event.target.value)}
+            >
+              <option value="all">Any status</option>
+              {statuses.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </FilterField>
+          <FilterField label="Employee">
+            <Select
+              value={filters.employee}
+              disabled={filters.scope === "chores"}
+              onChange={(event) => set("employee", event.target.value)}
             >
               <option value="all">Anyone</option>
-              {assigners.map((p) => (
+              {people.map((p) => (
                 <option key={p.profileId} value={p.profileId}>
                   {p.name}
                 </option>
               ))}
             </Select>
           </FilterField>
-          <FilterField label="Completed by">
-            <Select
-              value={filters.completedBy}
-              onChange={(event) => set("completedBy", event.target.value)}
-            >
-              <option value="all">Anyone</option>
-              {completers.map((p) => (
-                <option key={p.profileId} value={p.profileId}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-          <FilterField label="Task type">
-            <Select
-              value={filters.type}
-              onChange={(event) =>
-                set("type", event.target.value as HistoryFilters["type"])
-              }
-            >
-              {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-          <FilterField label="Completed">
-            <Select
-              value={filters.datePreset}
-              onChange={(event) =>
-                set("datePreset", event.target.value as DatePreset)
-              }
-            >
-              {DATE_PRESETS.map((preset) => (
-                <option key={preset} value={preset}>
-                  {DATE_PRESET_LABELS[preset]}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-          <FilterField label="Month">
-            <Select
-              value={filters.month}
-              onChange={(event) => set("month", event.target.value)}
-            >
-              <option value="all">All months</option>
-              {months.map((m) => (
-                <option key={m.key} value={m.key}>
-                  {m.label}
-                </option>
-              ))}
-            </Select>
-          </FilterField>
-          {filters.datePreset === "custom" ? (
-            <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-1">
-              <FilterField label="From">
-                <Input
-                  type="date"
-                  value={filters.from}
-                  max={filters.to || undefined}
-                  onChange={(event) => set("from", event.target.value)}
-                />
-              </FilterField>
-              <FilterField label="To">
-                <Input
-                  type="date"
-                  value={filters.to}
-                  min={filters.from || undefined}
-                  onChange={(event) => set("to", event.target.value)}
-                />
-              </FilterField>
-            </div>
+          {chores ? (
+            <FilterField label="Chore board">
+              <Select
+                value={filters.boardId}
+                disabled={filters.scope === "tasks"}
+                onChange={(event) => set("boardId", event.target.value)}
+              >
+                <option value="all">All boards</option>
+                {boards.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+            </FilterField>
           ) : null}
+          <p className="text-muted-foreground text-xs sm:col-span-2 lg:col-span-3">
+            Employee applies to tasks (assigned or completed by); a chore run
+            belongs to the whole board. Choosing a board shows only that
+            board&apos;s runs.
+          </p>
         </div>
       ) : null}
 
       <p className="text-muted-foreground text-sm" aria-live="polite">
-        {visible.length === 1
-          ? "1 completed task"
-          : `${visible.length} completed tasks`}
-        {load.data.truncated
-          ? ` · showing the most recent ${entries.length} completions`
+        {summaryLine(visible)}
+        {truncated
+          ? " · showing the most recent records; choose a month for older ones"
           : ""}
+        <span className="sr-only">
+          . Tasks are grouped by the month they were completed, or for work not
+          completed by the month it is due (or created if it has no due date).
+          Runs are grouped by their business day.
+        </span>
       </p>
 
-      {groups.length === 0 ? (
+      {failures.map((message) => (
+        <div
+          key={message}
+          role="alert"
+          className="border-destructive/30 bg-destructive/10 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-sm"
+        >
+          <span className="text-destructive">{message}</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setTaskLoad({ state: "loading" });
+              setRetry((n) => n + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      ))}
+
+      {loading ? (
+        <p
+          role="status"
+          className="text-muted-foreground p-6 text-center text-sm"
+        >
+          Loading history…
+        </p>
+      ) : groups.length === 0 ? (
         <p className="border-border text-muted-foreground rounded-2xl border border-dashed p-6 text-center text-sm">
           {emptyText}
         </p>
@@ -346,6 +503,7 @@ export function HistoryView({ controller }: Props) {
           {groups.map((group) => {
             const open = isOpen(group.key);
             const panelId = `task-history-month-${group.key}`;
+            const count = group.completed.length + group.notCompleted.length;
             return (
               <section
                 key={group.key}
@@ -369,37 +527,57 @@ export function HistoryView({ controller }: Props) {
                       {group.label}
                       <span className="text-muted-foreground font-normal">
                         {" "}
-                        · {group.entries.length}{" "}
-                        {group.entries.length === 1 ? "task" : "tasks"}
+                        · {count} {count === 1 ? "item" : "items"}
                       </span>
                     </span>
                   </button>
                 </h2>
                 {open ? (
                   <div id={panelId} className="border-border border-t">
-                    <div
-                      aria-hidden="true"
-                      className={cn(
-                        ROW_GRID,
-                        "text-muted-foreground hidden px-4 py-2 text-xs font-semibold tracking-wide uppercase",
-                      )}
-                    >
-                      <span>Completed</span>
-                      <span>Task</span>
-                      <span>Assigned to</span>
-                      <span>Completed by</span>
-                      <span>Assigned</span>
-                      <span>Type</span>
-                    </div>
-                    <ul className="divide-border divide-y">
-                      {group.entries.map((entry) => (
-                        <HistoryRow
-                          key={entry.id}
-                          entry={entry}
+                    <Bucket
+                      title="Completed"
+                      testId="history-completed"
+                      items={group.completed}
+                      render={(item) => (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
                           timeZone={timeZone}
+                          controller={controller}
+                          categoryName={categoryName}
+                          execute={afterTaskChange}
+                          manager={manager}
+                          onOpen={onOpen}
+                          onEdit={onEdit}
+                          onReassign={onReassign}
+                          onDelete={onDelete}
+                          onOpenRun={setOpenRun}
+                          onOpenBoard={onOpenBoard}
                         />
-                      ))}
-                    </ul>
+                      )}
+                    />
+                    <Bucket
+                      title="Not completed"
+                      testId="history-not-completed"
+                      items={group.notCompleted}
+                      render={(item) => (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          timeZone={timeZone}
+                          controller={controller}
+                          categoryName={categoryName}
+                          execute={afterTaskChange}
+                          manager={manager}
+                          onOpen={onOpen}
+                          onEdit={onEdit}
+                          onReassign={onReassign}
+                          onDelete={onDelete}
+                          onOpenRun={setOpenRun}
+                          onOpenBoard={onOpenBoard}
+                        />
+                      )}
+                    />
                   </div>
                 ) : null}
               </section>
@@ -407,7 +585,48 @@ export function HistoryView({ controller }: Props) {
           })}
         </div>
       )}
+
+      {openRun && chores ? (
+        <ChoreRunDetailDialog
+          cycleId={openRun}
+          controller={chores}
+          timeZone={timeZone}
+          onClose={() => setOpenRun(null)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function summaryLine(visible: readonly HistoryItem[]): string {
+  const tasks = visible.filter((i) => i.source === "task").length;
+  const runs = visible.length - tasks;
+  const parts = [
+    `${tasks} ${tasks === 1 ? "task" : "tasks"}`,
+    `${runs} chore ${runs === 1 ? "run" : "runs"}`,
+  ];
+  return parts.join(" · ");
+}
+
+function Bucket({
+  title,
+  testId,
+  items,
+  render,
+}: {
+  title: string;
+  testId: string;
+  items: readonly HistoryItem[];
+  render: (item: HistoryItem) => React.ReactNode;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div data-testid={testId}>
+      <h3 className="bg-muted/40 text-muted-foreground px-4 py-2 text-xs font-semibold tracking-wide uppercase">
+        {title} · {items.length}
+      </h3>
+      <ul className="divide-border divide-y">{items.map(render)}</ul>
+    </div>
   );
 }
 
@@ -428,43 +647,189 @@ function FilterField({
   );
 }
 
-/**
- * One completed task. Purely informational: there are no row actions.
- * DOM order is the stacked (mobile / tablet) reading order; on `lg` the
- * `order-*` classes lay the same cells out as table columns.
- */
-function HistoryRow({
-  entry,
-  timeZone,
-}: {
-  entry: TaskHistoryEntry;
+type RowProps = {
+  item: HistoryItem;
   timeZone: string;
-}) {
+  controller: TasksController;
+  categoryName: (slug: string) => string;
+  execute: (command: TaskCommand) => Promise<TaskRunResult>;
+  manager: boolean;
+  onOpen: (task: TaskView) => void;
+  onEdit: (task: TaskView) => void;
+  onReassign: (task: TaskView) => void;
+  onDelete: (task: TaskView) => void;
+  onOpenRun: (cycleId: string) => void;
+  onOpenBoard?: (boardId: string) => void;
+};
+
+function ItemRow(props: RowProps) {
+  return props.item.source === "task" ? (
+    <TaskHistoryRow {...props} item={props.item} />
+  ) : (
+    <RunRow {...props} item={props.item} />
+  );
+}
+
+/**
+ * One task. Same fields as before (assigned to / completed by are separate stored
+ * facts), plus its status for work that is not completed, and the same actions as
+ * All Tasks underneath.
+ */
+function TaskHistoryRow({
+  item,
+  timeZone,
+  controller,
+  execute,
+  manager,
+  onOpen,
+  onEdit,
+  onReassign,
+  onDelete,
+}: RowProps & { item: Extract<HistoryItem, { source: "task" }> }) {
+  const { task, assignedAt, archived } = item.entry;
+  const when =
+    item.basis === "completed" && task.completedAt
+      ? formatHistoryStamp(task.completedAt, timeZone)
+      : formatBusinessDate(item.basisDate);
   return (
-    <li className={cn(ROW_GRID, "flex flex-col gap-1 px-4 py-3 text-sm")}>
-      <p className="font-semibold lg:order-2">{entry.title}</p>
-      <p className="min-w-0 lg:order-3">
-        <span className="text-muted-foreground lg:sr-only">Assigned to: </span>
-        {assignedToLabel(entry)}
-      </p>
-      <p className="min-w-0 lg:order-4">
-        <span className="text-muted-foreground lg:sr-only">Completed by: </span>
-        {entry.completedBy?.name ?? "—"}
-      </p>
-      <p className="tabular-nums lg:order-1">
-        <span className="text-muted-foreground lg:sr-only">Completed: </span>
-        {formatHistoryStamp(entry.completedAt, timeZone)}
-      </p>
-      <p className="tabular-nums lg:order-5">
-        <span className="text-muted-foreground lg:sr-only">Assigned: </span>
-        {formatAssignedStamp(entry.assignedAt, entry.completedAt, timeZone)}
-      </p>
-      <p className="lg:order-6">
-        <span className="text-muted-foreground lg:sr-only">Type: </span>
-        <Badge tone={entry.kind === "task" ? "neutral" : "accent"}>
-          {historyTypeLabel(entry.kind)}
-        </Badge>
-      </p>
+    <li className="px-4 py-3 text-sm" data-testid="history-task-row">
+      <div className={cn(ROW_GRID, "flex flex-col gap-1")}>
+        <p className="min-w-0 lg:order-2">
+          <button
+            type="button"
+            onClick={() => onOpen(task)}
+            className="focus-visible:ring-ring rounded text-left font-semibold underline-offset-2 outline-none hover:underline focus-visible:ring-2"
+          >
+            {task.title}
+          </button>{" "}
+          {!item.completed ? (
+            <Badge tone={task.status === "blocked" ? "danger" : "warning"}>
+              {STATUS_LABELS[task.status]}
+            </Badge>
+          ) : null}
+          {archived ? <Badge tone="neutral">Archived</Badge> : null}
+        </p>
+        <p className="min-w-0 lg:order-3">
+          <span className="text-muted-foreground lg:sr-only">
+            Assigned to:{" "}
+          </span>
+          {assignedToLabel(task)}
+        </p>
+        <p className="min-w-0 lg:order-4">
+          <span className="text-muted-foreground lg:sr-only">
+            Completed by:{" "}
+          </span>
+          {task.completedBy?.name ?? "—"}
+        </p>
+        <p className="tabular-nums lg:order-1">
+          <span className="text-muted-foreground">
+            {basisLabel(item)}
+            <span className="lg:sr-only">: </span>
+          </span>
+          <span className="lg:block">{when}</span>
+        </p>
+        <p className="tabular-nums lg:order-5">
+          <span className="text-muted-foreground lg:sr-only">Assigned: </span>
+          {task.completedAt
+            ? formatAssignedStamp(assignedAt, task.completedAt, timeZone)
+            : assignedAt
+              ? formatHistoryStamp(assignedAt, timeZone)
+              : "—"}
+        </p>
+        <p className="lg:order-6">
+          <span className="text-muted-foreground lg:sr-only">Type: </span>
+          <Badge tone={task.kind === "task" ? "neutral" : "accent"}>
+            {historyTypeLabel(task.kind)}
+          </Badge>
+        </p>
+      </div>
+      {task.kind === "task" && !archived ? (
+        <RowActions
+          task={task}
+          controller={controller}
+          manager={manager}
+          showReopenHint
+          onSetStatus={(t, status) => void execute(statusCommand(t, status))}
+          onOpen={onOpen}
+          onEdit={onEdit}
+          onReassign={onReassign}
+          onDelete={onDelete}
+        />
+      ) : null}
+    </li>
+  );
+}
+
+function RunRow({
+  item,
+  timeZone,
+  manager,
+  onOpenRun,
+  onOpenBoard,
+}: RowProps & { item: Extract<HistoryItem, { source: "chore" }> }) {
+  const run = item.run;
+  const open = run.status === "open";
+  return (
+    <li className="px-4 py-3 text-sm" data-testid="history-run-row">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <p className="font-semibold">
+            {run.boardName} — Run {run.sequence}{" "}
+            <Badge
+              tone={run.completed ? "success" : open ? "accent" : "warning"}
+            >
+              {RUN_STATUS_LABELS[run.status]}
+            </Badge>{" "}
+            <Badge tone="neutral">Chore Wheel</Badge>
+          </p>
+          <p className="text-muted-foreground">
+            {run.requiredDone} of {run.requiredTotal} required
+            {run.optionalTotal > 0
+              ? ` · optional ${run.optionalDone} of ${run.optionalTotal}`
+              : ""}
+            {" · Business day "}
+            {formatBusinessDate(run.businessDate)}
+            {run.closedAt
+              ? ` · finished ${formatRunStamp(run.closedAt, timeZone)}`
+              : ` · started ${formatRunStamp(run.openedAt, timeZone)}`}
+          </p>
+          <p className="text-muted-foreground">
+            {open
+              ? "Still open on the Chore Wheel."
+              : run.closedByKind === "system"
+                ? run.status === "expired"
+                  ? "Closed automatically at the end of its day."
+                  : "Closed automatically when every required check was done."
+                : `Closed by ${run.closedByName ?? "a manager"}.`}
+            {run.note ? ` Reason: ${run.note}` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {open ? (
+            onOpenBoard ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11"
+                onClick={() => onOpenBoard(run.boardId)}
+              >
+                Open board
+              </Button>
+            ) : null
+          ) : manager ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11"
+              aria-label={`Open saved run: ${run.boardName} run ${run.sequence}`}
+              onClick={() => onOpenRun(run.cycleId)}
+              data-testid="history-open-run"
+            >
+              View saved run
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </li>
   );
 }
