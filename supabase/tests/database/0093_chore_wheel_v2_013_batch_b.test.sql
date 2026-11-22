@@ -161,7 +161,11 @@ select pg_temp.act('00000000-0000-4000-8000-000000093005');
 select throws_ok($$select public.chore_cell_set(current_setting('app.board')::uuid,current_setting('app.rLassi')::uuid,current_setting('app.cAnn')::uuid,false)$$,'42501',null,'another organization cannot untick a cell of A');
 select is((select count(*)::int from public.chore_completions),0,'another organization reads no completion');
 select pg_temp.act('00000000-0000-4000-8000-000000093001');
-select throws_ok($$select public.chore_cell_set(current_setting('app.board')::uuid,current_setting('app.rLassi')::uuid,current_setting('app.cAnn')::uuid,false)$$,'42501',null,'a manager cannot untick someone else''s cell unless the board allows it');
+-- V2.0.13 follow-up: management authority over the location no longer needs the board's override for the ACTIVE run.
+select is((select public.chore_cell_set(current_setting('app.board')::uuid,current_setting('app.rLassi')::uuid,current_setting('app.cAnn')::uuid,false)),'unchecked','a manager can untick someone else''s cell without the board override (override now only gates closed-run corrections)');
+-- Restore Ann's check (not an assertion) so the override-on section below starts from the same state.
+select pg_temp.act('00000000-0000-4000-8000-000000093002');
+select public.chore_cell_set(current_setting('app.board')::uuid,current_setting('app.rLassi')::uuid,current_setting('app.cAnn')::uuid,true);
 
 -- any-one chore: one winner
 select pg_temp.act('00000000-0000-4000-8000-000000093002');

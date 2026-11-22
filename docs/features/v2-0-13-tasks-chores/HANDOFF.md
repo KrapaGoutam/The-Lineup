@@ -366,3 +366,24 @@ Owner approval recorded (AskUserQuestion, this session): 3A = fresh DEV backup (
 ### Remaining approvals (none granted)
 
 PR ready-for-review; merge to `development`; Production release.
+
+## Follow-up — Manager and assistant-manager authority over the ACTIVE run (migration `20261123090000`)
+
+**Decision (owner):** managers and authorized assistant managers must not need a per-board "Manager Override" switch to check or uncheck chores on the current run.
+
+**Behavior.** Who may check/uncheck an applicable, active cell on the active run (identity is `auth.uid()`, never a parameter):
+
+| Actor                                                                                                                           | Own column | Other person's column                  | Unassigned position  |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------- | -------------------- |
+| Assigned employee                                                                                                               | yes        | no (unless the board is any-workforce) | yes (eligible staff) |
+| Other staff                                                                                                                     | no         | no                                     | yes (eligible staff) |
+| Manager / assistant manager with authority at THIS location (`private.tasks_is_manager`, the existing location-scoped resolver) | yes        | **yes, no board switch**               | yes                  |
+| Manager of another location or organization; assistant manager without authority here                                           | no         | no                                     | no                   |
+
+Unchanged: not-applicable cells stay refused for everyone, completion-rule semantics, run locking, the F-1 stale-period refusal, immutable snapshots, and **closed-run corrections still require the board override + a reason** (`chore_cycle_correct`). The switch is now labelled "Managers can correct closed runs".
+
+**Audit.** `completed_by` stays the real actor and `entered_as = manager_correction` marks management authority; the column keeps its assigned person. Check and uncheck events additionally carry `assigned_profile_id`. An uncheck removes only the current-state row and appends a `cell_unchecked` event (actor, timestamp, previous completer); the original `cell_checked` event is never rewritten.
+
+**Change set.** New forward-only migration `20261123090000_chore_manager_active_cell_authority.sql` (`CREATE OR REPLACE` of `chore_cell_set`, same signature/ACL; the four applied V2.0.13 migrations are untouched), plus `chore-rules.ts`, the demo engine, and the switch copy. Tests: new pgTAP `0095` (40), updated `0093` (the old "manager needs the override" assertion), 4 new/updated unit tests, and a real-JWT test (actor attribution, append-only events, race, closed-run correction still gated). Mutation-checked: `0095` fails against the old function.
+
+**Rollout.** The migration is NOT applied to hosted DEV or Production by this change; it needs its own approved gate. Until it is applied, an updated app shows manager cells as enabled but the database still refuses them without the override.

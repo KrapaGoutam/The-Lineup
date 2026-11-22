@@ -740,7 +740,9 @@ function apply(
       if (column.profileId === ctx.viewer.profileId) as = "self";
       else if (column.profileId === null) as = "position";
       else if (board.staffAccess === "any_workforce") as = "shared";
-      else if (board.managerOverride && ctx.viewer.isManager) {
+      else if (ctx.viewer.isManager) {
+        // Management authority over this location; the board switch no longer gates the
+        // active run (it still gates closed-run corrections).
         as = "manager_correction";
       } else {
         return refuse("You can only update your own column on this board.");

@@ -873,3 +873,119 @@ it("Tasks load: no client-supplied location can aim the sweep at another locatio
   });
   expect(direct.error?.code).toBe("42501");
 });
+
+// ---------------------------------------------------------------------------------------
+// Manager authority over the ACTIVE run without the board override (real sessions)
+// ---------------------------------------------------------------------------------------
+it("override OFF: a manager checks and unchecks a staff member's cell as themselves; other staff cannot; a manager/assignee race is safe; history is append-only", async () => {
+  const b = await makeBoard(
+    "Manager authority",
+    {
+      recurrenceIntent: "continuous",
+      resetIntent: "manual_restart",
+      managerOverride: false,
+    },
+    ["Bucket 1", "Bucket 2"],
+  );
+  expect(b.managerOverride).toBe(false);
+
+  // Other staff are still limited to their own column.
+  expect((await tick(DUAL(), b, "Bucket 1", "Staff")).ok).toBe(false);
+
+  // The assignee checks her own cell, then the manager unchecks and re-checks it.
+  await ok(tick(STAFF(), b, "Bucket 1", "Staff"));
+  const base = cell(b, "Bucket 1", "Staff");
+  await ok(
+    run(MGR(), { type: "cellSet", ...base, done: false, cycleId: b.cycle!.id }),
+  );
+  await ok(tick(MGR(), b, "Bucket 1", "Staff"));
+  const now = must(
+    await fx.admin
+      .from("chore_completions")
+      .select("completed_by, entered_as, column_id")
+      .eq("cycle_id", b.cycle!.id)
+      .eq("row_id", base.rowId),
+  )!;
+  expect(now).toHaveLength(1);
+  expect(now[0]).toMatchObject({
+    completed_by: fx.manager.id, // the REAL actor, never the assignee
+    entered_as: "manager_correction",
+    column_id: base.columnId, // the cell still belongs to the staff member's column
+  });
+  const col = must(
+    await fx.admin
+      .from("chore_columns")
+      .select("profile_id")
+      .eq("id", base.columnId)
+      .single(),
+  )!;
+  expect(col.profile_id).toBe(fx.staff.id);
+
+  // Append-only audit: the original check is still there; the reversal names both people.
+  const events = must(
+    await fx.admin
+      .from("chore_events")
+      .select("event_type, actor_profile_id, payload, id")
+      .eq("board_id", b.id)
+      .in("event_type", ["cell_checked", "cell_unchecked"])
+      .order("id"),
+  )!;
+  expect(events.map((e) => e.event_type)).toEqual([
+    "cell_checked",
+    "cell_unchecked",
+    "cell_checked",
+  ]);
+  expect(events[0]!.actor_profile_id).toBe(fx.staff.id);
+  expect(events[1]).toMatchObject({ actor_profile_id: fx.manager.id });
+  expect(events[1]!.payload).toMatchObject({
+    entered_as: "manager_correction",
+    assigned_profile_id: fx.staff.id,
+    previous_completed_by: fx.manager.id === fx.staff.id ? null : fx.staff.id,
+  });
+
+  // A race on one cell (assignee vs manager): exactly one completion row, no error.
+  const race = cell(b, "Bucket 2", "Staff");
+  const [r1, r2] = await Promise.all([
+    run(STAFF(), {
+      type: "cellSet",
+      ...race,
+      done: true,
+      cycleId: b.cycle!.id,
+    }),
+    run(MGR(), { type: "cellSet", ...race, done: true, cycleId: b.cycle!.id }),
+  ]);
+  expect(r1.ok && r2.ok).toBe(true);
+  const raced = must(
+    await fx.admin
+      .from("chore_completions")
+      .select("completed_by")
+      .eq("cycle_id", b.cycle!.id)
+      .eq("row_id", race.rowId)
+      .eq("column_id", race.columnId),
+  )!;
+  expect(raced).toHaveLength(1);
+
+  // Closed runs stay behind the board switch: a correction is still refused with it off.
+  const ready = await boardOf("Manager authority");
+  await ok(tick(DUAL(), ready, "Bucket 1", "Dual"));
+  await ok(tick(DUAL(), ready, "Bucket 2", "Dual"));
+  await ok(
+    run(MGR(), {
+      type: "cycleClose",
+      boardId: b.id,
+      cycleId: b.cycle!.id,
+      outcome: "completed",
+      note: null,
+      startNext: false,
+    }),
+  );
+  const closed = (await cyclesOf(b.id))[0]!;
+  const corrected = await run(MGR(), {
+    type: "cycleCorrect",
+    cycleId: closed.id,
+    ...cell(b, "Bucket 1", "Staff"),
+    done: false,
+    reason: "override is off",
+  });
+  expect(corrected.ok).toBe(false);
+});

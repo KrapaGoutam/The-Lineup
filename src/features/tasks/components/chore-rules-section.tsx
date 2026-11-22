@@ -264,11 +264,13 @@ export function ChoreAccessSection({ controller, board }: Props) {
             onChange={(e) => setOverride(e.target.checked)}
           />
           <span className="pt-2">
-            Managers can correct other people&apos;s columns
+            Managers can correct closed runs
             <span className="text-muted-foreground block text-xs">
-              Off by default. When on, a manager can check or uncheck another
-              person&apos;s item; it is recorded as a manager entry under the
-              manager&apos;s own name.
+              Off by default. Managers and assistant managers can always check
+              or uncheck any applicable item on the current run; it is recorded
+              as a manager entry under their own name. When this is on they can
+              also add a correction to a run that has already closed (the
+              original record is kept).
             </span>
           </span>
         </label>
