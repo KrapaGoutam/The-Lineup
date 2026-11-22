@@ -1,5 +1,9 @@
 # Project Status & Milestone Tracker
 
+## V2.0.13 follow-up — manager/assistant-manager active-run authority (migration `20261123090000`, not yet applied to DEV or Production)
+
+Managers and authorized assistant managers can check/uncheck any applicable cell on the active run without the board override (closed-run corrections still need it). Forward-only migration, pgTAP `0095`, real-JWT and unit tests. Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Follow-up").
+
 ## V2.0.13 Tasks, Checklists & Chore Wheel — hosted DEV migrated and accepted (PR #363, base `development`)
 
 All three batches (A Tasks/Checklists, B multi-board Chore Wheel, C run closure/recurrence/snapshots/History incl. F-1 and the Tasks-load sweep) are on `feature/v2-013-tasks-chores`. Hosted DEV (`opmujepkemwcdxxorhfd`) has the four migrations applied (ledger 104, 2026-11-21) after a verified backup and an isolated rehearsal (Gates 2-3); real authenticated acceptance passed with documented gaps (F-1/rollover time boundary, same-org cross-location, second-org login, Safari/screen reader not verified live). Performance is a measured baseline, not optimised. **Production and `main` are untouched**; Production needs its own backup, rehearsal, migration plan and approval. Detail: `docs/features/v2-0-13-tasks-chores/HANDOFF.md` ("Final Gate 2", "Final Gate 3").

@@ -24,6 +24,7 @@ const team: TaskTeamMember[] = [
   { profileId: "ann", name: "Ann Lee", designation: "staff" },
   { profileId: "bea", name: "Bea Cruz", designation: "staff" },
   { profileId: "cy", name: "Cy Dane", designation: "staff" },
+  { profileId: "dee", name: "Dee Park", designation: "assistant_manager" },
 ];
 const NOW = new Date("2026-11-20T15:00:00Z");
 
@@ -285,44 +286,64 @@ describe("cell completion authority (demo twin of the RPC)", () => {
     expect(board(s).completions[0]!.completedBy).toBe("ann");
   });
 
-  it("only allows a manager to correct another's cell when the board explicitly permits", () => {
-    const { boardId } = seeded();
-    let s = seeded().s;
-    s = run(s, "manager-maya", row(boardId, "A"));
+  it("lets a manager or authorized assistant manager check and uncheck an applicable cell WITHOUT the board override; other staff stay on their own column", () => {
+    const { boardId, s: base } = seeded(); // managerOverride defaults to OFF
+    let s = run(base, "manager-maya", row(boardId, "A"));
     const r = board(s).rows[0]!;
     const ann = board(s).columns[0]!;
-    s = run(s, "ann", {
-      type: "cellSet",
-      boardId,
-      rowId: r.id,
-      columnId: ann.id,
-      done: true,
-    });
-    expect(
-      refused(s, "manager-maya", {
-        type: "cellSet",
-        boardId,
-        rowId: r.id,
-        columnId: ann.id,
-        done: false,
-      }),
-    ).toMatch(/your own column/);
+    const tick = (who: string, done: boolean, columnId = ann.id) =>
+      ({ type: "cellSet", boardId, rowId: r.id, columnId, done }) as const;
 
-    const { s: s2, boardId: b2 } = seeded({ managerOverride: true });
-    let t = run(s2, "manager-maya", row(b2, "A"));
-    const r2 = board(t).rows[0]!;
-    const ann2 = board(t).columns[0]!;
-    t = run(t, "manager-maya", {
-      type: "cellSet",
-      boardId: b2,
-      rowId: r2.id,
-      columnId: ann2.id,
-      done: true,
+    // Other staff: refused on someone else's column.
+    expect(refused(s, "cy", tick("cy", true))).toMatch(/your own column/);
+    // The assignee checks her own cell.
+    s = run(s, "ann", tick("ann", true));
+    expect(board(s).completions[0]).toMatchObject({
+      completedBy: "ann",
+      enteredAs: "self",
     });
-    expect(board(t).completions[0]).toMatchObject({
+    // The manager unchecks it with the override OFF.
+    expect(board(s).managerOverride).toBe(false);
+    s = run(s, "manager-maya", tick("manager-maya", false));
+    expect(board(s).completions).toHaveLength(0);
+    // The manager checks it: the column stays Ann's, the actor is the manager.
+    s = run(s, "manager-maya", tick("manager-maya", true));
+    expect(board(s).completions[0]).toMatchObject({
+      columnId: ann.id,
       completedBy: "manager-maya",
       enteredAs: "manager_correction",
     });
+    expect(board(s).columns[0]!.profileId).toBe("ann");
+    // An assistant manager (an authorized viewer here) may do the same.
+    s = run(s, "dee", tick("dee", false));
+    s = run(s, "dee", tick("dee", true));
+    expect(board(s).completions[0]).toMatchObject({
+      completedBy: "dee",
+      enteredAs: "manager_correction",
+    });
+  });
+
+  it("never lets management authority check a cell that does not apply to the column", () => {
+    const { boardId, s: base } = seeded();
+    const s = run(
+      base,
+      "manager-maya",
+      row(boardId, "Bea only", {
+        mode: "selected_columns",
+        columnIds: [board(base).columns[1]!.id],
+      }),
+    );
+    const r = board(s).rows[0]!;
+    const [ann] = board(s).columns;
+    const out = refused(s, "manager-maya", {
+      type: "cellSet",
+      boardId,
+      rowId: r.id,
+      columnId: ann!.id,
+      done: true,
+    });
+    expect(out).toMatch(/does not apply/);
+    expect(board(s).completions).toHaveLength(0);
   });
 
   it("gives an any-one chore a single winner", () => {
@@ -649,6 +670,35 @@ describe("tick hints and views", () => {
     expect(defaultColumnFor(viewer("bea"), b)?.id).toBe(bea!.id);
     expect(defaultColumnFor(viewer("manager-maya"), b)?.id).toBe(ann!.id);
     expect(columnProgress(b, ann!)).toEqual({ total: 1, done: 0 });
+  });
+
+  it("enables another person's applicable cell for management, with the override OFF, and never for staff or a non-applicable cell", () => {
+    const { boardId } = seeded();
+    let s = seeded().s;
+    s = run(s, "manager-maya", row(boardId, "A"));
+    const b = board(s);
+    expect(b.managerOverride).toBe(false);
+    const r = b.rows[0]!;
+    const [ann] = b.columns;
+    for (const who of ["manager-maya", "dee"]) {
+      expect(canTickCell(viewer(who), b, r, ann!)).toEqual({
+        allowed: true,
+        as: "manager_correction",
+      });
+    }
+    expect(canTickCell(viewer("cy"), b, r, ann!)).toMatchObject({
+      allowed: false,
+    });
+    // A selected-columns chore that excludes Ann stays disabled for a manager.
+    const sel = {
+      ...r,
+      mode: "selected_columns" as const,
+      selectedColumnIds: [],
+    };
+    expect(canTickCell(viewer("manager-maya"), b, sel, ann!)).toMatchObject({
+      allowed: false,
+      reason: "This chore does not apply here.",
+    });
   });
 
   it("seeds the demo board from the brief through the same engine", () => {

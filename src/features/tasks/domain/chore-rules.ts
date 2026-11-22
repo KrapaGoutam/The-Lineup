@@ -215,7 +215,11 @@ export function canTickCell(
   if (board.staffAccess === "any_workforce") {
     return { allowed: true, as: "shared" };
   }
-  if (board.managerOverride && viewer.isManager) {
+  // Management authority over this location (a manager or an authorized assistant
+  // manager; `isManager` comes from the same location-scoped capability the server
+  // uses). No board switch is needed for the ACTIVE run; the override now only
+  // governs corrections to a closed run. Not-applicable cells were refused above.
+  if (viewer.isManager) {
     return { allowed: true, as: "manager_correction" };
   }
   return {
