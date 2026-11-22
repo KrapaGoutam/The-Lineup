@@ -253,13 +253,11 @@ test("manager: builds a board end to end (create, people, chores, rules, access)
     page.getByRole("status").filter({ hasText: "Saved." }),
   ).toBeVisible();
 
-  // Access: allow manager corrections.
+  // Access: the switch is OFF by default and now only governs corrections to a CLOSED run.
   await page.getByRole("button", { name: "Access / Permissions" }).click();
-  await page.getByLabel(/Managers can correct other people/).check();
-  await page.getByRole("button", { name: "Save access" }).click();
   await expect(
-    page.getByRole("status").filter({ hasText: "Saved." }),
-  ).toBeVisible();
+    page.getByLabel(/Managers can correct closed runs/),
+  ).not.toBeChecked();
 
   // The Chore Wheel now runs the new board: 2 required chores x 2 columns, except
   // the selected-people chore (1) and the optional chore (not counted) => 2 + 1 = 3.
@@ -276,7 +274,8 @@ test("manager: builds a board end to end (create, people, chores, rules, access)
     }),
   ).toBeVisible();
 
-  // The override is on, so the manager can tick a column that is not theirs.
+  // The override is OFF, yet the manager (management authority over this location) can
+  // tick a column that is not theirs on the active run.
   const grill = cell(page, "Scrape the grill", "Mia \(grill\)");
   await grill.click();
   await expect(grill).toHaveAttribute("aria-checked", "true");
